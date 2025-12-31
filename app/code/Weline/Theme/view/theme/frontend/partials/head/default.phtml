@@ -21,7 +21,12 @@ $meta = $this->getData('meta') ?? [];
 $layout = $this->getData('layout') ?? [];
 // 主题相关数据由 ControllerFetchFileBefore Observer 设置
 $themeData = $this->getData('theme') ?? [];
+
+// 获取 frontend 基础 URL 用于 base 标签
+$frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 ?>
+<!-- Base URL 设置：所有相对链接将基于此路径 -->
+<base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
 <!-- 
     Theme Head Partial - 只负责加载 Theme 资源
     注意：
@@ -33,17 +38,19 @@ $themeData = $this->getData('theme') ?? [];
 // 主题相关数据由 ControllerFetchFileBefore Observer 设置
 // 模板中直接使用 theme 对象中的数据，不进行任何提取或获取操作
 $themeData = $this->getData('theme') ?? [];
+
 $area = $themeData['area'] ?? 'frontend';
 $welineThemeColorMode = $themeData['colorMode'] ?? 'default';
 $layoutType = $themeData['layoutType'] ?? null;
 $layoutOption = $themeData['layoutOption'] ?? null;
 $theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 
+
 // 注意：变量和色盘配置现在通过生成的布局CSS文件加载，不再单独引用
 // 布局CSS文件在编译时自动生成，包含所有CSS变量和色盘配置
 ?>
 <!-- 主题CSS（基础样式，不包含变量） -->
-<theme:css>Weline_Theme::theme/{{theme.area}}/assets/css/theme.css</theme:css>
+<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
 <?php
 // 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
 // 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
@@ -84,7 +91,20 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
 <!-- 注意：jQuery 等 Frontend JS 由 Frontend 模块的 head.phtml 负责加载 -->
 <?php
 // 获取基础URL和当前语言
+$isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
+
+// 根据环境设置模块配置URL和基础URL
+if ($isDev) {
+    // 开发模式
+    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+} else {
+    // 生产模式
+    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+}
+
 $currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
 $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
@@ -102,6 +122,8 @@ $envConfig = [
 $themeConfigPayload = [
     'env' => $envConfig,
     'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
@@ -136,15 +158,18 @@ $this->setData('envConfig', $envConfig);
 <script data-no-extract="true">
     (function() {
         // 合并到全局配置（与Frontend模块的配置合并）
-        // 注意：Frontend模块的head.phtml已经设置了modulesConfigUrl等配置
-        // 这里只合并Theme模块的配置，保留Frontend模块的配置
+        // 如果 Frontend 模块的 head.phtml 未运行，手动暴露 modulesConfigUrl
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        // 使用Object.assign合并，保留Frontend模块已设置的配置（如modulesConfigUrl）
+        // 使用Object.assign合并，保留Frontend模块已设置的配置
         const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
-        // Object.assign会保留目标对象中源对象没有的属性，所以modulesConfigUrl会被保留
         Object.assign(window.__WelineThemeConfig, themeConfig);
+        
+        // 关键：确保全局变量 modulesConfigUrl 也被设置，支持 theme.js 直接访问
+        if (window.__WelineThemeConfig.modulesConfigUrl) {
+            window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        }
     })();
 </script>
 <!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
@@ -189,6 +214,18 @@ html {
         -webkit-text-size-adjust: 100%;
     }
 }
+
+/* ========================================
+   开发模式：基础样式收集
+   这些样式会被提取系统收集到生成的布局CSS文件中
+   ======================================== */
+
+/* weline-main-content 基础样式（开发模式下需要被收集） */
+.weline-main-content {
+    flex: 1;
+    width: 100%;
+    min-height: 80vh;
+}
 </style>
 
 <script>
@@ -224,5 +261,17 @@ html {
             document.head.appendChild(link);
         });
     }
+
+    // 监听来自Visual Editor的postMessage (Live Preview支持)
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
+            const cssVars = event.data.cssVars || {};
+            const root = document.documentElement;
+            for (const [varName, value] of Object.entries(cssVars)) {
+                root.style.setProperty(varName, value);
+            }
+            console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
+        }
+    });
 })();
 </script>

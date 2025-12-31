@@ -6,7 +6,7 @@
  * 字段
  * @meta.name {default="Footer底部片段",name="Footer底部片段",description="Footer底部片段，用于描述片段的名称"}
  * @meta.description {default="页面底部区域（链接、版权信息等）",name="页面底部区域（链接、版权信息等）",description="页面底部区域（链接、版权信息等），用于描述片段的用途"}
- * @param.copyright {default="© {year} Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
+ * @param.copyright {default="© 2025 Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
  * @param.links {default=[{"title":"关于我们","items":[{"text":"公司简介","url":"/about"},{"text":"联系我们","url":"/contact"},{"text":"加入我们","url":"/careers"}]},{"title":"帮助中心","items":[{"text":"使用指南","url":"/help"},{"text":"常见问题","url":"/faq"},{"text":"服务条款","url":"/terms"}]},{"title":"客户服务","items":[{"text":"在线客服","url":"/support"},{"text":"意见反馈","url":"/feedback"},{"text":"隐私政策","url":"/privacy"}]}],name="链接数组",description="链接数组，用于设置页面底部的链接列表，格式：[{\"title\":\"标题\",\"items\":[{\"text\":\"链接文字\",\"url\":\"链接地址\"}]}]"}
  * @param.showBackToTop {default=true,name="是否显示返回顶部",description="是否显示返回顶部按钮，用于控制返回顶部按钮的显示"}
  * @param.socialMedia {default=[{"name":"微信公众号","icon":"fab fa-weixin","url":"#","color":"#07c160"},{"name":"微博","icon":"fab fa-weibo","url":"#","color":"#e6162d"},{"name":"抖音","icon":"fab fa-tiktok","url":"#","color":"#000000"},{"name":"B站","icon":"fab fa-bilibili","url":"#","color":"#fb7299"},{"name":"小红书","icon":"fab fa-instagram","url":"#","color":"#ff2442"}],name="官媒配置",description="官媒配置，用于设置官方社交媒体链接，格式：[{\"name\":\"名称\",\"icon\":\"图标类名\",\"url\":\"链接地址\",\"color\":\"主题色\"}]"}
@@ -45,6 +45,10 @@ if (!is_array($socialMedia)) {
 }
 $showSocialMedia = $meta['showSocialMedia'] ?? true;
 $class = $meta['class'] ?? '';
+
+// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
+// 直接使用colors数组，无需重复读取和处理
+$colors = $this->getData('colors') ?? [];
 ?>
 <footer id="footer" class="weline-footer <?= htmlspecialchars($class) ?>" data-layout="default" data-layout-type="default" data-layout-option="default">
     <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
@@ -59,6 +63,57 @@ $class = $meta['class'] ?? '';
     
     <div class="footer-container">
         <w:hook>Weline_Theme::frontend::partials::footer::content-before</w:hook>
+        
+        <!-- Footer链接内容区域 - 支持hook覆盖 -->
+        <?php
+        // 如果没有hook内容，使用默认的亚马逊风格链接
+        // 如果$links为空，使用默认样例数据
+        if (empty($links) || !is_array($links)) {
+            $links = [
+                [
+                    'title' => __('了解我们'),
+                    'items' => [
+                        ['text' => __('关于我们'), 'url' => '/about'],
+                        ['text' => __('职业机会'), 'url' => '/careers'],
+                        ['text' => __('新闻中心'), 'url' => '/news'],
+                        ['text' => __('投资者关系'), 'url' => '/investors'],
+                        ['text' => __('设备与服务'), 'url' => '/devices'],
+                    ]
+                ],
+                [
+                    'title' => __('赚钱'),
+                    'items' => [
+                        ['text' => __('在网站上销售'), 'url' => '/sell'],
+                        ['text' => __('销售您的应用'), 'url' => '/sell-apps'],
+                        ['text' => __('成为合作伙伴'), 'url' => '/partner'],
+                        ['text' => __('广告'), 'url' => '/advertising'],
+                        ['text' => __('自助出版'), 'url' => '/self-publish'],
+                    ]
+                ],
+                [
+                    'title' => __('付款产品'),
+                    'items' => [
+                        ['text' => __('商店卡'), 'url' => '/store-card'],
+                        ['text' => __('购物积分'), 'url' => '/rewards'],
+                        ['text' => __('货币转换器'), 'url' => '/currency'],
+                        ['text' => __('礼品卡'), 'url' => '/gift-cards'],
+                    ]
+                ],
+                [
+                    'title' => __('需要帮助？'),
+                    'items' => [
+                        ['text' => __('COVID-19和网站'), 'url' => '/covid'],
+                        ['text' => __('您的账户'), 'url' => '/account'],
+                        ['text' => __('配送率和政策'), 'url' => '/shipping'],
+                        ['text' => __('退货和换货'), 'url' => '/returns'],
+                        ['text' => __('管理您的内容和设备'), 'url' => '/manage-content'],
+                        ['text' => __('帮助'), 'url' => '/help'],
+                    ]
+                ],
+            ];
+        }
+        ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::links<else/>
         <?php if (!empty($links) && is_array($links)): ?>
             <div class="footer-content">
                 <w:hook>Weline_Theme::frontend::partials::footer::section-before</w:hook>
@@ -87,9 +142,26 @@ $class = $meta['class'] ?? '';
                 <w:hook>Weline_Theme::frontend::partials::footer::section-after</w:hook>
             </div>
         <?php endif; ?>
+        </w:hook>
         
         <w:hook>Weline_Theme::frontend::partials::footer::content-after</w:hook>
         
+        <!-- 社交媒体区域 - 支持hook覆盖 -->
+        <?php
+        // 如果没有hook内容，使用默认的社交媒体链接
+        if ($showSocialMedia) {
+            if (empty($socialMedia) || !is_array($socialMedia)) {
+                $socialMedia = [
+                    ['name' => __('微信公众号'), 'icon' => 'fab fa-weixin', 'url' => '#', 'color' => '#07c160'],
+                    ['name' => __('微博'), 'icon' => 'fab fa-weibo', 'url' => '#', 'color' => '#e6162d'],
+                    ['name' => __('抖音'), 'icon' => 'fab fa-tiktok', 'url' => '#', 'color' => '#000000'],
+                    ['name' => __('B站'), 'icon' => 'fab fa-bilibili', 'url' => '#', 'color' => '#fb7299'],
+                    ['name' => __('小红书'), 'icon' => 'fab fa-instagram', 'url' => '#', 'color' => '#ff2442'],
+                ];
+            }
+        }
+        ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::social-media<else/>
         <?php if ($showSocialMedia && !empty($socialMedia) && is_array($socialMedia)): ?>
             <w:hook>Weline_Theme::frontend::partials::footer::social-media-before</w:hook>
             <div class="footer-social-media">
@@ -116,6 +188,7 @@ $class = $meta['class'] ?? '';
             
             <w:hook>Weline_Theme::frontend::partials::footer::social-media-after</w:hook>
         <?php endif; ?>
+        </w:hook>
         
         <div class="footer-bottom">
             <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
@@ -135,21 +208,39 @@ $class = $meta['class'] ?? '';
 
 <?php
 // 加载布局特定的JS文件（在footer中加载）
-// 从 theme 对象中读取所有主题相关数据
-$theme = $this->getData('theme') ?? [];
-$area = $theme['area'] ?? 'frontend';
-$layoutType = $theme['layoutType'] ?? $this->getData('layoutType') ?? '';
-$layoutOption = $theme['layoutOption'] ?? $this->getData('layoutOption') ?? 'default';
-$requestPath = $this->request->getPathInfo() ?? '';
-if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
-    $area = 'backend';
-}
+// 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 
-if ($layoutType && $layoutOption) {
-    $this->setData('area', $area);
-    ?>
-<theme:js>Weline_Theme::theme/{{area}}/assets/js/layouts/{{layoutType}}/{{layoutOption}}.js</theme:js>
+// 加载生成的布局JS文件（包含所有partials的JS）
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+    try {
+        $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme, $this);
+        ?>
+<!-- 布局JS（包含所有partials的JavaScript）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
+<script src="<?= htmlspecialchars($jsUrl) ?>"></script>
 <?php
+    } catch (\Exception $e) {
+        // 如果获取URL失败，记录错误
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Footer Partial: 无法获取布局JS URL', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } catch (\Exception $logError) {
+                // 忽略日志错误
+            }
+        }
+    }
 }
 ?>
 
@@ -159,12 +250,12 @@ if ($layoutType && $layoutOption) {
    ======================================== */
 
 .weline-footer {
-    background-color: #131921;
-    color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     padding: 3rem 0 1.5rem;
-    margin-top: 4rem;
+    margin-top: auto; /* 使用flexbox的margin-top: auto，让footer始终在底部 */
     position: relative;
-    border-top: 1px solid #3a4552;
+    border-top: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
 }
 
 .footer-container {
@@ -179,19 +270,28 @@ if ($layoutType && $layoutOption) {
     gap: 2rem;
     margin-bottom: 2rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid #3a4552;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
+}
+
+/* 隐藏可能意外显示的hook名称文本 */
+.footer-content > *:first-child:not(.footer-section):not(ul):not(li):not(h3):not(a) {
+    display: none;
 }
 
 .footer-section {
     text-align: left;
+    min-width: 0; /* 防止grid溢出 */
 }
 
 .footer-section h3 {
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     font-size: 1rem;
     font-weight: 700;
     margin: 0 0 1rem;
     letter-spacing: 0.5px;
+    line-height: 1.4;
+    text-decoration: none;
+    cursor: default;
 }
 
 .footer-section ul {
@@ -208,15 +308,16 @@ if ($layoutType && $layoutOption) {
 }
 
 .footer-section a {
-    color: #ddd;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
     text-decoration: none;
     font-size: 0.875rem;
+    font-weight: normal;
     transition: color 0.2s ease, text-decoration 0.2s ease;
     display: inline-block;
 }
 
 .footer-section a:hover {
-    color: #ff9900;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
     text-decoration: underline;
 }
 
@@ -224,12 +325,12 @@ if ($layoutType && $layoutOption) {
 .footer-social-media {
     text-align: center;
     padding: 2rem 0;
-    border-bottom: 1px solid #3a4552;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
     margin-bottom: 1.5rem;
 }
 
 .social-media-title {
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     font-size: 1rem;
     font-weight: 700;
     margin-bottom: 1rem;
@@ -249,18 +350,18 @@ if ($layoutType && $layoutOption) {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background-color: #232f3e;
-    border: 1px solid #3a4552;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#3a4552') ?>;
     border-radius: 4px;
-    color: #ddd;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
     text-decoration: none;
     font-size: 0.875rem;
     transition: all 0.2s ease;
 }
 
 .social-media-link:hover {
-    border-color: #ff9900;
-    color: #ff9900;
+    border-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
     background-color: rgba(255, 153, 0, 0.1);
 }
 
@@ -275,7 +376,7 @@ if ($layoutType && $layoutOption) {
 
 .footer-bottom p {
     margin: 0;
-    color: #ddd;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ddd') ?>;
     font-size: 0.875rem;
 }
 
@@ -286,8 +387,8 @@ if ($layoutType && $layoutOption) {
     right: 2rem;
     width: 48px;
     height: 48px;
-    background-color: #ff9900;
-    color: #111;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
     border: none;
     border-radius: 50%;
     cursor: pointer;
@@ -308,7 +409,7 @@ if ($layoutType && $layoutOption) {
 }
 
 .back-to-top:hover {
-    background-color: #e68900;
+    background-color: <?= htmlspecialchars($colors['primaryDark'] ?? '#e68900') ?>;
     transform: translateY(-4px);
     box-shadow: 0 6px 16px rgba(255, 153, 0, 0.5);
 }
@@ -333,7 +434,7 @@ if ($layoutType && $layoutOption) {
 @media (max-width: 768px) {
     .weline-footer {
         padding: 2rem 0 1rem;
-        margin-top: 2rem;
+        margin-top: auto; /* 移动端也使用flexbox的margin-top: auto */
     }
     
     .footer-container {

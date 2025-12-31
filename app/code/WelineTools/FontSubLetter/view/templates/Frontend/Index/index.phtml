@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?> - <?= $subtitle ?></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        .upload-area {
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 60px 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+        }
+        .upload-area:hover {
+            border-color: #667eea;
+            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+            transform: translateY(-2px);
+        }
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: linear-gradient(145deg, #d4edda, #c3e6cb);
+            transform: scale(1.02);
+        }
+        .character-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+            gap: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        .character-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 45px;
+            height: 45px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 18px;
+            font-weight: 500;
+            background: white;
+        }
+        .character-item:hover {
+            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+            border-color: #667eea;
+            transform: scale(1.1);
+        }
+        .character-item.selected {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            border-color: #667eea;
+            transform: scale(1.1);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+        .progress-container {
+            display: none;
+        }
+        .file-info {
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #dee2e6;
+        }
+        .feature-card {
+            background: linear-gradient(145deg, #ffffff, #f8f9fa);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .btn-gradient {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-gradient:hover {
+            background: linear-gradient(145deg, #5a6fd8, #6a4190);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        .hero-section {
+            text-align: center;
+            padding: 40px 0;
+        }
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: #6c757d;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="main-container p-5">
+                    <!-- 英雄区域 -->
+                    <div class="hero-section">
+                        <h1 class="hero-title">
+                            <i class="bi bi-fonts"></i>
+                            <?= $title ?>
+                        </h1>
+                        <p class="hero-subtitle"><?= $subtitle ?></p>
+                        <p class="lead text-muted">
+                            <?= __('专业的在线字体压缩工具，支持多种字体格式，智能字符提取，高效字体压缩') ?>
+                        </p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <!-- 上传区域 -->
+                            <div class="feature-card">
+                                <h4 class="mb-4">
+                                    <i class="bi bi-cloud-upload text-primary"></i> 
+                                    <?= __('上传字体文件') ?>
+                                </h4>
+                                <div class="upload-area" id="uploadArea">
+                                    <i class="bi bi-cloud-upload display-1 text-muted mb-3"></i>
+                                    <h5 class="mb-3"><?= __('拖拽字体文件到此处或点击选择文件') ?></h5>
+                                    <p class="text-muted mb-0">
+                                        <?= __('支持格式') ?>: <strong><?= __('TTF, OTF, WOFF, WOFF2') ?></strong> | 
+                                        <?= __('最大文件大小') ?>: <strong><?= __('10MB') ?></strong>
+                                    </p>
+                                    <p class="text-muted mt-2 mb-0">
+                                        <small><i class="bi bi-info-circle"></i> <?= __('上传后可以重新上传新文件，失败后可以继续尝试') ?></small>
+                                    </p>
+                                    <p class="text-muted mt-1 mb-0">
+                                        <small><i class="bi bi-lightbulb"></i> <?= __('提示：失败后请重新选择文件，即使选择相同文件也可以') ?></small>
+                                    </p>
+                                    <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" style="display: none;">
+                                </div>
+
+                                <div class="progress-container" id="progressContainer">
+                                    <div class="progress mb-3" style="height: 8px;">
+                                        <div class="progress-bar bg-gradient" id="progressBar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <p class="text-center mb-0" id="progressText"><?= __('上传中...') ?></p>
+                                </div>
+
+                                <div class="file-info" id="fileInfo" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong><?= __('文件名') ?>:</strong> <span id="fileName"></span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong><?= __('格式') ?>:</strong> <span id="fileFormat"></span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong><?= __('大小') ?>:</strong> <span id="fileSize"></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-gradient btn-lg" id="extractBtn">
+                                            <i class="bi bi-search"></i> <?= __('提取字符') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 字符选择区域 -->
+                            <div class="feature-card" id="characterCard" style="display: none;">
+                                <h4 class="mb-4">
+                                    <i class="bi bi-list-check text-success"></i> 
+                                    <?= __('选择字符') ?>
+                                </h4>
+                                <div class="mb-4">
+                                    <button type="button" class="btn btn-outline-primary me-2" id="selectAllBtn">
+                                        <i class="bi bi-check-all"></i> <?= __('全选') ?>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary me-2" id="deselectAllBtn">
+                                        <i class="bi bi-x-circle"></i> <?= __('取消全选') ?>
+                                    </button>
+                                    <span class="badge bg-info fs-6">
+                                        <?= __('已选择') ?>: <span id="selectedCount">0</span> <?= __('个字符') ?>
+                                    </span>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label for="customChars" class="form-label fw-bold"><?= __('自定义字符') ?></label>
+                                    <textarea class="form-control" id="customChars" rows="3" 
+                                              placeholder="<?= __('请输入要包含的字符') ?>"></textarea>
+                                </div>
+                                
+                                <!-- Add generate button here -->
+                                <div class="mt-2 text-center">
+                                    <button type="button" class="btn btn-gradient btn-lg" id="generateBtnCustom">
+                                        <i class="bi bi-gear"></i> <?= __('生成字体') ?>
+                                    </button>
+                                </div>
+
+                                <div class="character-grid" id="characterGrid"></div>
+
+                                <div class="mt-4 text-center">
+                                    <button type="button" class="btn btn-gradient btn-lg" id="generateBtn">
+                                        <i class="bi bi-gear"></i> <?= __('生成字体') ?>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <!-- 使用说明 -->
+                            <div class="feature-card">
+                                <h5 class="mb-3">
+                                    <i class="bi bi-info-circle text-info"></i> 
+                                    <?= __('使用说明') ?>
+                                </h5>
+                                <ol class="mb-0">
+                                    <li class="mb-2"><?= __('1. 上传字体文件') ?></li>
+                                    <li class="mb-2"><?= __('2. 提取字体中的字符') ?></li>
+                                    <li class="mb-2"><?= __('3. 选择需要的字符') ?></li>
+                                    <li class="mb-2"><?= __('4. 生成子集字体并下载') ?></li>
+                                </ol>
+                            </div>
+
+                            <!-- 功能特性 -->
+                            <div class="feature-card">
+                                <h5 class="mb-3">
+                                    <i class="bi bi-star text-warning"></i> 
+                                    <?= __('功能特性') ?>
+                                </h5>
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle text-success"></i> 
+                                        <?= __('支持多种字体格式') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle text-success"></i> 
+                                        <?= __('智能字符提取') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle text-success"></i> 
+                                        <?= __('可视化字符选择') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle text-success"></i> 
+                                        <?= __('高效字体压缩') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle text-success"></i> 
+                                        <?= __('一键下载') ?>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- 技术优势 -->
+                            <div class="feature-card">
+                                <h5 class="mb-3">
+                                    <i class="bi bi-lightning text-warning"></i> 
+                                    <?= __('技术优势') ?>
+                                </h5>
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2">
+                                        <i class="bi bi-arrow-up-circle text-primary"></i> 
+                                        <?= __('压缩率高达80%') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-speedometer2 text-success"></i> 
+                                        <?= __('处理速度快') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-shield-check text-info"></i> 
+                                        <?= __('安全可靠') ?>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-globe text-warning"></i> 
+                                        <?= __('在线处理') ?>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentRecordId = null;
+        let selectedCharacters = new Set();
+
+        // 上传区域事件
+        document.getElementById('uploadArea').addEventListener('click', () => {
+            // 强制清空文件输入框，确保能触发change事件
+            const fileInput = document.getElementById('fontFile');
+            fileInput.value = '';
+            fileInput.click();
+        });
+
+        document.getElementById('uploadArea').addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        });
+
+        document.getElementById('uploadArea').addEventListener('dragleave', (e) => {
+            e.currentTarget.classList.remove('dragover');
+        });
+
+        document.getElementById('uploadArea').addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        // 文件选择事件处理
+        document.getElementById('fontFile').addEventListener('change', (e) => {
+            console.log('文件选择事件触发，文件数量:', e.target.files.length); // 调试信息
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            } else {
+                console.log('没有选择文件'); // 调试信息
+            }
+        });
+
+        // 添加文件输入框的点击事件监听，确保每次点击都能触发文件选择
+        document.getElementById('fontFile').addEventListener('click', (e) => {
+            console.log('文件输入框被点击'); // 调试信息
+            // 每次点击时清空值，确保能触发change事件
+            e.target.value = '';
+        });
+
+        // 文件上传处理
+        function handleFileUpload(file) {
+            console.log('开始上传文件:', file.name); // 调试信息
+            
+            // 检查文件是否有效
+            if (!file || file.size === 0) {
+                alert('<?= __('请选择有效的文件') ?>');
+                return;
+            }
+            
+            // 清除之前的状态
+            currentRecordId = null;
+            selectedCharacters.clear();
+            
+            const formData = new FormData();
+            formData.append('font_file', file);
+
+            showProgress();
+            
+            // 添加时间戳防止缓存
+            const url = '<?= $this->getUrl("*/frontend/upload") ?>' + '?t=' + Date.now();
+            
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                cache: 'no-cache' // 防止缓存
+            })
+            .then(response => {
+                console.log('服务器响应状态:', response.status); // 调试信息
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('服务器返回数据:', data); // 调试信息
+                hideProgress();
+                if (data.code === 200) {
+                    showFileInfo(data.data);
+                    currentRecordId = data.data.id;
+                    // 重置文件输入框，允许重新选择相同文件
+                    document.getElementById('fontFile').value = '';
+                } else {
+                    showErrorAndReset('<?= __('上传失败') ?>: ' + data.msg);
+                }
+            })
+            .catch(error => {
+                console.error('上传错误:', error); // 调试信息
+                showErrorAndReset('<?= __('上传失败') ?>: ' + error.message);
+            });
+        }
+
+        // 显示进度条
+        function showProgress() {
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressText').textContent = '<?= __('上传中...') ?>';
+        }
+
+        // 隐藏进度条
+        function hideProgress() {
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        // 显示错误信息并重置状态
+        function showErrorAndReset(message) {
+            hideProgress();
+            alert(message + '\n\n请重新选择文件进行上传。');
+            
+            // 重置上传状态，让用户可以继续尝试
+            resetUpload();
+            
+            // 高亮上传区域，提示用户可以重新选择
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.style.borderColor = '#dc3545';
+            uploadArea.style.backgroundColor = '#f8d7da';
+            
+            // 3秒后恢复正常样式
+            setTimeout(() => {
+                uploadArea.style.borderColor = '';
+                uploadArea.style.backgroundColor = '';
+            }, 3000);
+        }
+
+        // 显示文件信息
+        function showFileInfo(fileInfo) {
+            document.getElementById('fileName').textContent = fileInfo.filename;
+            document.getElementById('fileFormat').textContent = fileInfo.format.toUpperCase();
+            document.getElementById('fileSize').textContent = fileInfo.size;
+            document.getElementById('fileInfo').style.display = 'block';
+        }
+
+        // 提取字符
+        document.getElementById('extractBtn').addEventListener('click', () => {
+            if (!currentRecordId) return;
+
+            showProgress();
+            document.getElementById('progressText').textContent = '<?= __('提取字符中...') ?>';
+
+            fetch(`<?= $this->getUrl("*/frontend/extract") ?>?record_id=${currentRecordId}`)
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                if (data.code === 200) {
+                    showCharacterGrid(data.data.characters);
+                } else {
+                    showErrorAndReset('<?= __('提取失败') ?>: ' + data.msg);
+                }
+            })
+            .catch(error => {
+                showErrorAndReset('<?= __('提取失败') ?>: ' + error.message);
+            });
+        });
+
+        // 显示字符网格
+        function showCharacterGrid(characters) {
+            const grid = document.getElementById('characterGrid');
+            grid.innerHTML = '';
+
+            // 创建字体预览样式
+            const fontUrl = `<?= $this->getUrl("*/frontend/download") ?>?record_id=${currentRecordId}&preview=1`;
+            const fontFamily = 'CustomFont_' + currentRecordId;
+            
+            // 添加字体样式到页面
+            const style = document.createElement('style');
+            style.textContent = `
+                @font-face {
+                    font-family: '${fontFamily}';
+                    src: url('${fontUrl}') format('opentype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                .character-item {
+                    font-family: '${fontFamily}', sans-serif !important;
+                }
+            `;
+            document.head.appendChild(style);
+
+            characters.forEach(char => {
+                const item = document.createElement('div');
+                item.className = 'character-item';
+                item.textContent = char.value;
+                item.dataset.code = char.code;
+                item.style.fontFamily = `'${fontFamily}', sans-serif`;
+                item.addEventListener('click', () => toggleCharacter(char.code, char.value));
+                grid.appendChild(item);
+            });
+
+            document.getElementById('characterCard').style.display = 'block';
+            updateSelectedCount();
+            loadRememberedChars(); // 加载记住的字符
+        }
+
+        // 切换字符选择
+        function toggleCharacter(code, value) {
+            const item = document.querySelector(`[data-code="${code}"]`);
+            const customInput = document.getElementById('customChars');
+            let currentCustom = customInput.value;
+
+            if (selectedCharacters.has(code)) {
+                selectedCharacters.delete(code);
+                item.classList.remove('selected');
+                // 从自定义中移除
+                currentCustom = currentCustom.replace(value, '');
+            } else {
+                selectedCharacters.add(code);
+                item.classList.add('selected');
+                // 添加到自定义
+                if (!currentCustom.includes(value)) {
+                    currentCustom += value;
+                }
+            }
+
+            customInput.value = currentCustom;
+            updateSelectedCount();
+        }
+
+        // 更新选择计数
+        function updateSelectedCount() {
+            const customChars = document.getElementById('customChars').value.trim();
+            const customCount = customChars.length;
+            const total = selectedCharacters.size + customCount;
+            document.getElementById('selectedCount').textContent = total;
+        }
+
+        // 重置上传状态
+        function resetUpload() {
+            console.log('重置上传状态'); // 调试信息
+            
+            // 清除当前记录ID
+            currentRecordId = null;
+            
+            // 清除选择的字符
+            selectedCharacters.clear();
+            
+            // 隐藏文件信息
+            document.getElementById('fileInfo').style.display = 'none';
+            
+            // 隐藏字符选择区域
+            document.getElementById('characterCard').style.display = 'none';
+            
+            // 清除字符网格
+            document.getElementById('characterGrid').innerHTML = '';
+            
+            // 清除自定义字符输入
+            document.getElementById('customChars').value = '';
+            
+            // 重置选择计数
+            updateSelectedCount();
+            
+            // 重置文件输入框 - 强制清空值以触发change事件
+            const fileInput = document.getElementById('fontFile');
+            fileInput.value = '';
+            
+            // 移除已添加的字体样式
+            const existingStyles = document.querySelectorAll('style');
+            existingStyles.forEach(style => {
+                if (style.textContent.includes('CustomFont_')) {
+                    style.remove();
+                }
+            });
+            
+            console.log('上传状态重置完成'); // 调试信息
+        }
+
+        // 全选
+        document.getElementById('selectAllBtn').addEventListener('click', () => {
+            const customInput = document.getElementById('customChars');
+            let currentCustom = customInput.value;
+
+            document.querySelectorAll('.character-item').forEach(item => {
+                const code = item.dataset.code;
+                const value = item.textContent;
+                selectedCharacters.add(code);
+                item.classList.add('selected');
+                if (!currentCustom.includes(value)) {
+                    currentCustom += value;
+                }
+            });
+
+            customInput.value = currentCustom;
+            updateSelectedCount();
+        });
+
+        // 取消全选
+        document.getElementById('deselectAllBtn').addEventListener('click', () => {
+            selectedCharacters.clear();
+            document.querySelectorAll('.character-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.getElementById('customChars').value = '';
+            updateSelectedCount();
+        });
+
+        // 生成字体
+        document.getElementById('generateBtn').addEventListener('click', () => {
+            if (!currentRecordId) {
+                alert('<?= __('请先上传字体文件') ?>');
+                return;
+            }
+
+            const customChars = document.getElementById('customChars').value.trim();
+            const selectedCharsArray = Array.from(selectedCharacters);
+            
+            // 检查是否有自定义输入或选择的字符
+            if (selectedCharsArray.length === 0 && !customChars) {
+                alert('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                return;
+            }
+
+            let allChars = selectedCharsArray;
+            
+            if (customChars) {
+                const customCharCodes = Array.from(customChars).map(char => char.charCodeAt(0));
+                allChars = allChars.concat(customCharCodes);
+            }
+
+            showProgress();
+            document.getElementById('progressText').textContent = '<?= __('生成字体中...') ?>';
+
+            const formData = new FormData();
+            formData.append('record_id', currentRecordId);
+            formData.append('selected_chars', JSON.stringify(allChars));
+
+            fetch('<?= $this->getUrl("*/frontend/generate") ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                if (data.code === 200) {
+                    alert('<?= __('子集字体生成成功') ?>');
+                    // 可以添加下载链接
+                    const downloadUrl = `<?= $this->getUrl("*/frontend/download") ?>?record_id=${currentRecordId}`;
+                    window.open(downloadUrl, '_blank');
+                } else {
+                    showErrorAndReset('<?= __('生成失败') ?>: ' + data.msg);
+                }
+            })
+            .catch(error => {
+                showErrorAndReset('<?= __('生成失败') ?>: ' + error.message);
+            });
+        });
+
+        // 自定义字符输入事件
+        document.getElementById('customChars').addEventListener('input', updateSelectedCount);
+
+        // 新增：清理按钮
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'btn btn-outline-danger me-2';
+        clearBtn.id = 'clearBtn';
+        clearBtn.innerHTML = '<i class="bi bi-trash"></i> 清理记住的字符';
+        document.querySelector('.mb-4').appendChild(clearBtn);
+
+        clearBtn.addEventListener('click', () => {
+            if (confirm('确定要清理记住的字符信息吗？')) {
+                fetch('<?= $this->getUrl("*/frontend/clear-selected") ?>', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.code === 200) {
+                            alert('已清理');
+                            location.reload();
+                        } else {
+                            alert('清理失败: ' + data.msg);
+                        }
+                    });
+            }
+        });
+
+        // 新增：加载记住的字符
+        function loadRememberedChars() {
+            fetch('<?= $this->getUrl("*/frontend/get-selected") ?>')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200 && data.data) {
+                        const remembered = data.data;
+                        let customCharsValue = remembered.customChars || '';
+                        
+                        remembered.selectedChars.forEach(code => {
+                            selectedCharacters.add(code);
+                            const item = document.querySelector(`[data-code="${code}"]`);
+                            if (item) {
+                                item.classList.add('selected');
+                                const value = item.textContent;
+                                if (!customCharsValue.includes(value)) {
+                                    customCharsValue += value;
+                                }
+                            } else {
+                                // If no item found, still add the character
+                                const value = String.fromCharCode(code);
+                                if (!customCharsValue.includes(value)) {
+                                    customCharsValue += value;
+                                }
+                            }
+                        });
+                        
+                        document.getElementById('customChars').value = customCharsValue;
+                        
+                        updateSelectedCount();
+                    }
+                });
+        }
+
+        document.getElementById('generateBtnCustom').addEventListener('click', () => {
+            // Same logic as generateBtn
+            if (!currentRecordId) {
+                alert('<?= __('请先上传字体文件') ?>');
+                return;
+            }
+
+            const customChars = document.getElementById('customChars').value.trim();
+            const selectedCharsArray = Array.from(selectedCharacters);
+            
+            if (selectedCharsArray.length === 0 && !customChars) {
+                alert('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                return;
+            }
+
+            let allChars = selectedCharsArray;
+            
+            if (customChars) {
+                const customCharCodes = Array.from(customChars).map(char => char.charCodeAt(0));
+                allChars = allChars.concat(customCharCodes);
+            }
+
+            showProgress();
+            document.getElementById('progressText').textContent = '<?= __('生成字体中...') ?>';
+
+            const formData = new FormData();
+            formData.append('record_id', currentRecordId);
+            formData.append('selected_chars', JSON.stringify(allChars));
+
+            fetch('<?= $this->getUrl("*/frontend/generate") ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                if (data.code === 200) {
+                    alert('<?= __('子集字体生成成功') ?>');
+                    const downloadUrl = `<?= $this->getUrl("*/frontend/download") ?>?record_id=${currentRecordId}`;
+                    window.open(downloadUrl, '_blank');
+                } else {
+                    showErrorAndReset('<?= __('生成失败') ?>: ' + data.msg);
+                }
+            })
+            .catch(error => {
+                showErrorAndReset('<?= __('生成失败') ?>: ' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>

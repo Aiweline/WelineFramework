@@ -11,6 +11,9 @@
     "storage",
     "tabs"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://linkedin.com/*",
@@ -40,6 +43,8 @@
     "https://so.com/*",
     "https://www.sogou.com/*",
     "https://sogou.com/*",
+    "https://huggingface.co/*",
+    "https://*.huggingface.co/*",
     "<all_urls>"
   ],
   "background": {

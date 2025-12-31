@@ -29,14 +29,228 @@ $showUserMenu = $meta['showUserMenu'] ?? true;
 $class = $meta['class'] ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+
+// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
+// 直接使用colors数组，无需重复读取和处理
+$colors = $this->getData('colors') ?? [];
+
+// 默认导航数据（统一用于横向菜单和汉堡菜单）
+$defaultNavItems = [
+    [
+        'text' => __('电子产品'), 'url' => '/category/electronics',
+        'children' => [
+            [
+                'text' => __('手机通讯'), 'url' => '/category/electronics/phones',
+                'children' => [
+                    ['text' => __('智能手机'), 'url' => '/category/electronics/phones/smartphones'],
+                    ['text' => __('功能手机'), 'url' => '/category/electronics/phones/feature-phones'],
+                    ['text' => __('5G手机'), 'url' => '/category/electronics/phones/5g-phones'],
+                    ['text' => __('折叠手机'), 'url' => '/category/electronics/phones/foldable'],
+                    ['text' => __('手机壳'), 'url' => '/category/electronics/phones/cases'],
+                    ['text' => __('屏幕保护膜'), 'url' => '/category/electronics/phones/screen-protectors'],
+                    ['text' => __('充电器'), 'url' => '/category/electronics/phones/chargers'],
+                    ['text' => __('数据线'), 'url' => '/category/electronics/phones/cables'],
+                    ['text' => __('移动电源'), 'url' => '/category/electronics/phones/power-banks'],
+                    ['text' => __('手机耳机'), 'url' => '/category/electronics/phones/headphones'],
+                ]
+            ],
+            [
+                'text' => __('电脑办公'), 'url' => '/category/electronics/computers',
+                'children' => [
+                    ['text' => __('笔记本'), 'url' => '/category/electronics/computers/laptops'],
+                    ['text' => __('游戏本'), 'url' => '/category/electronics/computers/gaming-laptops'],
+                    ['text' => __('超极本'), 'url' => '/category/electronics/computers/ultrabooks'],
+                    ['text' => __('台式机'), 'url' => '/category/electronics/computers/desktops'],
+                    ['text' => __('一体机'), 'url' => '/category/electronics/computers/all-in-one'],
+                    ['text' => __('平板电脑'), 'url' => '/category/electronics/computers/tablets'],
+                    ['text' => __('显示器'), 'url' => '/category/electronics/computers/monitors'],
+                    ['text' => __('键盘'), 'url' => '/category/electronics/computers/keyboards'],
+                    ['text' => __('鼠标'), 'url' => '/category/electronics/computers/mice'],
+                    ['text' => __('摄像头'), 'url' => '/category/electronics/computers/webcams'],
+                    ['text' => __('存储设备'), 'url' => '/category/electronics/computers/storage'],
+                ]
+            ],
+            [
+                'text' => __('智能设备'), 'url' => '/category/electronics/smart-devices',
+                'children' => [
+                    ['text' => __('智能手表'), 'url' => '/category/electronics/smart-devices/smart-watches'],
+                    ['text' => __('运动手环'), 'url' => '/category/electronics/smart-devices/fitness-trackers'],
+                    ['text' => __('智能音箱'), 'url' => '/category/electronics/smart-devices/smart-speakers'],
+                    ['text' => __('智能照明'), 'url' => '/category/electronics/smart-devices/smart-lights'],
+                    ['text' => __('智能门锁'), 'url' => '/category/electronics/smart-devices/smart-locks'],
+                    ['text' => __('智能摄像头'), 'url' => '/category/electronics/smart-devices/smart-cameras'],
+                    ['text' => __('智能家居套装'), 'url' => '/category/electronics/smart-devices/smart-home'],
+                    ['text' => __('可穿戴设备'), 'url' => '/category/electronics/smart-devices/wearables'],
+                ]
+            ],
+            [
+                'text' => __('影音娱乐'), 'url' => '/category/electronics/audio-video',
+                'children' => [
+                    ['text' => __('无线耳机'), 'url' => '/category/electronics/audio-video/wireless-headphones'],
+                    ['text' => __('有线耳机'), 'url' => '/category/electronics/audio-video/wired-headphones'],
+                    ['text' => __('入耳式耳机'), 'url' => '/category/electronics/audio-video/earbuds'],
+                    ['text' => __('蓝牙音响'), 'url' => '/category/electronics/audio-video/speakers'],
+                    ['text' => __('Soundbar'), 'url' => '/category/electronics/audio-video/soundbars'],
+                    ['text' => __('单反相机'), 'url' => '/category/electronics/audio-video/dslr-cameras'],
+                    ['text' => __('微单相机'), 'url' => '/category/electronics/audio-video/mirrorless'],
+                    ['text' => __('运动相机'), 'url' => '/category/electronics/audio-video/action-cameras'],
+                    ['text' => __('游戏主机'), 'url' => '/category/electronics/audio-video/gaming-consoles'],
+                    ['text' => __('游戏配件'), 'url' => '/category/electronics/audio-video/gaming-accessories'],
+                ]
+            ],
+        ]
+    ],
+    [
+        'text' => __('服装服饰'), 'url' => '/category/clothing',
+        'children' => [
+            [
+                'text' => __('男装'), 'url' => '/category/clothing/men',
+                'children' => [
+                    ['text' => __('衬衫'), 'url' => '/category/clothing/men/shirts'],
+                    ['text' => __('T恤'), 'url' => '/category/clothing/men/t-shirts'],
+                    ['text' => __('Polo衫'), 'url' => '/category/clothing/men/polo-shirts'],
+                    ['text' => __('长裤'), 'url' => '/category/clothing/men/pants'],
+                    ['text' => __('短裤'), 'url' => '/category/clothing/men/shorts'],
+                    ['text' => __('外套'), 'url' => '/category/clothing/men/jackets'],
+                    ['text' => __('毛衣'), 'url' => '/category/clothing/men/sweaters'],
+                    ['text' => __('皮鞋'), 'url' => '/category/clothing/men/shoes'],
+                    ['text' => __('运动鞋'), 'url' => '/category/clothing/men/sneakers'],
+                    ['text' => __('皮带'), 'url' => '/category/clothing/men/belts'],
+                    ['text' => __('手表'), 'url' => '/category/clothing/men/watches'],
+                    ['text' => __('包袋'), 'url' => '/category/clothing/men/bags'],
+                ]
+            ],
+            [
+                'text' => __('女装'), 'url' => '/category/clothing/women',
+                'children' => [
+                    ['text' => __('连衣裙'), 'url' => '/category/clothing/women/dresses'],
+                    ['text' => __('上装'), 'url' => '/category/clothing/women/tops'],
+                    ['text' => __('衬衫'), 'url' => '/category/clothing/women/blouses'],
+                    ['text' => __('下装'), 'url' => '/category/clothing/women/bottoms'],
+                    ['text' => __('半身裙'), 'url' => '/category/clothing/women/skirts'],
+                    ['text' => __('外套'), 'url' => '/category/clothing/women/outerwear'],
+                    ['text' => __('大衣'), 'url' => '/category/clothing/women/coats'],
+                    ['text' => __('高跟鞋'), 'url' => '/category/clothing/women/heels'],
+                    ['text' => __('平底鞋'), 'url' => '/category/clothing/women/flats'],
+                    ['text' => __('靴子'), 'url' => '/category/clothing/women/boots'],
+                    ['text' => __('手提包'), 'url' => '/category/clothing/women/handbags'],
+                    ['text' => __('斜挎包'), 'url' => '/category/clothing/women/crossbody-bags'],
+                    ['text' => __('首饰'), 'url' => '/category/clothing/women/jewelry'],
+                ]
+            ],
+            [
+                'text' => __('童装'), 'url' => '/category/clothing/kids',
+                'children' => [
+                    ['text' => __('男童装'), 'url' => '/category/clothing/kids/boys'],
+                    ['text' => __('女童装'), 'url' => '/category/clothing/kids/girls'],
+                    ['text' => __('婴儿装'), 'url' => '/category/clothing/kids/baby'],
+                    ['text' => __('童鞋'), 'url' => '/category/clothing/kids/shoes'],
+                    ['text' => __('童装配饰'), 'url' => '/category/clothing/kids/accessories'],
+                    ['text' => __('校服'), 'url' => '/category/clothing/kids/school-uniforms'],
+                    ['text' => __('泳装'), 'url' => '/category/clothing/kids/swimwear'],
+                ]
+            ],
+            [
+                'text' => __('运动服饰'), 'url' => '/category/clothing/sports',
+                'children' => [
+                    ['text' => __('运动装'), 'url' => '/category/clothing/sports/athletic-wear'],
+                    ['text' => __('跑步装备'), 'url' => '/category/clothing/sports/running-gear'],
+                    ['text' => __('健身服'), 'url' => '/category/clothing/sports/fitness-wear'],
+                    ['text' => __('运动鞋'), 'url' => '/category/clothing/sports/sports-shoes'],
+                    ['text' => __('跑鞋'), 'url' => '/category/clothing/sports/running-shoes'],
+                    ['text' => __('篮球鞋'), 'url' => '/category/clothing/sports/basketball-shoes'],
+                    ['text' => __('户外装备'), 'url' => '/category/clothing/sports/outdoor'],
+                    ['text' => __('露营装备'), 'url' => '/category/clothing/sports/camping'],
+                ]
+            ],
+        ]
+    ],
+    [
+        'text' => __('家居用品'), 'url' => '/category/home',
+        'children' => [
+            [
+                'text' => __('家具'), 'url' => '/category/home/furniture',
+                'children' => [
+                    ['text' => __('沙发'), 'url' => '/category/home/furniture/sofas'],
+                    ['text' => __('沙发床'), 'url' => '/category/home/furniture/sofa-beds'],
+                    ['text' => __('餐桌'), 'url' => '/category/home/furniture/tables'],
+                    ['text' => __('茶几'), 'url' => '/category/home/furniture/coffee-tables'],
+                    ['text' => __('椅子'), 'url' => '/category/home/furniture/chairs'],
+                    ['text' => __('办公椅'), 'url' => '/category/home/furniture/office-chairs'],
+                    ['text' => __('床具'), 'url' => '/category/home/furniture/beds'],
+                    ['text' => __('衣柜'), 'url' => '/category/home/furniture/wardrobes'],
+                    ['text' => __('书柜'), 'url' => '/category/home/furniture/bookcases'],
+                ]
+            ],
+            [
+                'text' => __('家纺'), 'url' => '/category/home/textiles',
+                'children' => [
+                    ['text' => __('床上用品'), 'url' => '/category/home/textiles/bedding'],
+                    ['text' => __('床单被套'), 'url' => '/category/home/textiles/sheets'],
+                    ['text' => __('枕头'), 'url' => '/category/home/textiles/pillows'],
+                    ['text' => __('被子'), 'url' => '/category/home/textiles/quilts'],
+                    ['text' => __('窗帘'), 'url' => '/category/home/textiles/curtains'],
+                    ['text' => __('毛巾'), 'url' => '/category/home/textiles/towels'],
+                    ['text' => __('地毯'), 'url' => '/category/home/textiles/rugs'],
+                    ['text' => __('靠垫'), 'url' => '/category/home/textiles/cushions'],
+                ]
+            ],
+            [
+                'text' => __('厨房用品'), 'url' => '/category/home/kitchen',
+                'children' => [
+                    ['text' => __('锅具'), 'url' => '/category/home/kitchen/cookware'],
+                    ['text' => __('刀具'), 'url' => '/category/home/kitchen/knives'],
+                    ['text' => __('餐具'), 'url' => '/category/home/kitchen/dining'],
+                    ['text' => __('杯具'), 'url' => '/category/home/kitchen/cups'],
+                    ['text' => __('收纳'), 'url' => '/category/home/kitchen/storage'],
+                    ['text' => __('厨房工具'), 'url' => '/category/home/kitchen/kitchen-tools'],
+                    ['text' => __('小家电'), 'url' => '/category/home/kitchen/small-appliances'],
+                ]
+            ],
+            [
+                'text' => __('装饰用品'), 'url' => '/category/home/decor',
+                'children' => [
+                    ['text' => __('墙饰'), 'url' => '/category/home/decor/wall-art'],
+                    ['text' => __('花瓶'), 'url' => '/category/home/decor/vases'],
+                    ['text' => __('灯具'), 'url' => '/category/home/decor/lamps'],
+                    ['text' => __('镜子'), 'url' => '/category/home/decor/mirrors'],
+                    ['text' => __('绿植'), 'url' => '/category/home/decor/plants'],
+                ]
+            ],
+        ]
+    ],
+    ['text' => __('运动户外'), 'url' => '/category/sports'],
+    ['text' => __('图书音像'), 'url' => '/category/books'],
+    ['text' => __('食品饮料'), 'url' => '/category/food'],
+];
+
+if (empty($navItems)) {
+    $navItems = $defaultNavItems;
+}
 ?>
+<!-- Visual Editor Live Preview Listener -->
+<script>
+(function() {
+    window.addEventListener('message', function(event) {
+        // Accept messages from any origin (for iframe preview)
+        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
+            const cssVars = event.data.cssVars;
+            if (cssVars && typeof cssVars === 'object') {
+                const root = document.documentElement;
+                for (const [varName, value] of Object.entries(cssVars)) {
+                    root.style.setProperty(varName, value);
+                }
+                console.log('Theme colors updated via postMessage:', cssVars);
+            }
+        }
+    });
+})();
+</script>
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 
 <header class="weline-header <?= htmlspecialchars($class) ?>" data-layout="default" data-layout-type="default" role="banner">
     <w:hook>Weline_Theme::frontend::partials::header::before</w:hook>
-    
     <div class="header-container">
         <!-- 顶部栏：Logo + 配送地址 + 搜索 + 用户功能（参考亚马逊 nav-belt） -->
         <div class="header-belt">
@@ -44,7 +258,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                 <!-- Logo -->
                 <w:hook>Weline_Theme::frontend::partials::header::logo-before</w:hook>
                 <div class="header-logo">
-                    <a href="<?= $frontendUrl ?>" title="<lang>首页</lang>">
+                    <a href="/" title="<lang>首页</lang>">
                         <?php if ($logo): ?>
                             <img src="<?= htmlspecialchars($logo) ?>" alt="<lang>网站Logo</lang>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
                         <?php else: ?>
@@ -73,7 +287,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
             <w:hook>Weline_Theme::frontend::partials::header::search-before</w:hook>
             <?php if ($showSearch): ?>
                 <div class="header-search-wrapper">
-                    <form action="<?= $frontendUrl ?>search" method="get" class="header-search-form">
+                    <form action="/search" method="get" class="header-search-form">
                         <w:hook>
                             Weline_Theme::frontend::partials::header::search-form-before
                             <else/>
@@ -208,7 +422,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                 <?php if ($showUserMenu): ?>
                     <div class="header-action-item header-account" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="<lang>账户菜单</lang>">
                         <w:hook>header-account<else/>
-                            <a href="<?= $frontendUrl ?>account/login" class="action-link" title="<lang>账户</lang>" aria-label="<lang>账户及心愿单</lang>">
+                            <a href="/account/login" class="action-link" title="<lang>账户</lang>" aria-label="<lang>账户及心愿单</lang>">
                                 <span class="action-line-1"><lang>您好, 登录</lang></span>
                                 <span class="action-line-2"><lang>账户及心愿单</lang></span>
                             </a>
@@ -216,10 +430,10 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                         <div class="account-dropdown" role="menu" aria-label="<lang>账户菜单</lang>">
                             <ul>
                                 <w:hook>header-account-links<else/>
-                                    <li role="none"><a href="<?= $frontendUrl ?>account/dashboard" role="menuitem"><lang>账户</lang></a></li>
-                                    <li role="none"><a href="<?= $frontendUrl ?>account/orders" role="menuitem"><lang>我的订单</lang></a></li>
-                                    <li role="none"><a href="<?= $frontendUrl ?>account/settings" role="menuitem"><lang>账户设置</lang></a></li>
-                                    <li role="none"><a href="<?= $frontendUrl ?>account/logout" role="menuitem"><lang>退出登录</lang></a></li>
+                                    <li role="none"><a href="/account/dashboard" role="menuitem"><lang>账户</lang></a></li>
+                                    <li role="none"><a href="/account/orders" role="menuitem"><lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="/account/settings" role="menuitem"><lang>账户设置</lang></a></li>
+                                    <li role="none"><a href="/account/logout" role="menuitem"><lang>退出登录</lang></a></li>
                                 </w:hook>
                             </ul>
                         </div>
@@ -229,7 +443,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                 <!-- 订单 Hook -->
                 <div class="header-action-item">
                     <w:hook>header-orders<else/>
-                        <a href="<?= $frontendUrl ?>account/orders" class="action-link" title="<lang>我的订单</lang>">
+                        <a href="/account/orders" class="action-link" title="<lang>我的订单</lang>">
                             <span class="action-line-1"><lang>退货</lang></span>
                             <span class="action-line-2"><lang>与我的订单</lang></span>
                         </a>
@@ -267,7 +481,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                                 <div class="mini-cart-empty" id="mini-cart-empty">
                                     <i class="fas fa-shopping-cart" aria-hidden="true"></i>
                                     <p><lang>购物车是空的</lang></p>
-                                    <a href="<?= $frontendUrl ?>" class="btn btn-primary"><lang>继续购物</lang></a>
+                                    <a href="/" class="btn btn-primary"><lang>继续购物</lang></a>
                                 </div>
                                 <div class="mini-cart-items" id="mini-cart-items" style="display: none;">
                                     <ul class="mini-cart-list" role="list">
@@ -281,8 +495,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                                     <span class="total-amount" id="mini-cart-total">¥0.00</span>
                                 </div>
                                 <div class="mini-cart-actions">
-                                    <a href="<?= $frontendUrl ?>cart" class="btn btn-secondary"><lang>查看购物车</lang></a>
-                                    <a href="<?= $frontendUrl ?>checkout" class="btn btn-primary"><lang>去结算</lang></a>
+                                    <a href="/cart" class="btn btn-secondary"><lang>查看购物车</lang></a>
+                                    <a href="/checkout" class="btn btn-primary"><lang>去结算</lang></a>
                                 </div>
                             </div>
                         </div>
@@ -314,22 +528,24 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                         <ul class="categories-list" id="categories-list">
                             <?php 
                             // 递归函数：渲染菜单项（支持多级）
-                            $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem, $frontendUrl) {
+                            $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem) {
                                 $hasChildren = !empty($item['children']) && is_array($item['children']);
                                 ?>
                                 <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
-                                    <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
-                                        <?= htmlspecialchars($item['text'] ?? '') ?>
+                                    <div class="category-link-wrapper">
+                                        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
+                                            <?= htmlspecialchars($item['text'] ?? '') ?>
+                                        </a>
                                         <?php if ($hasChildren): ?>
-                                            <span class="category-arrow"></span>
+                                            <span class="category-arrow" role="button" aria-label="展开子菜单"></span>
                                         <?php endif; ?>
-                                    </a>
+                                    </div>
                                     <?php if ($hasChildren): ?>
                                         <ul class="category-submenu">
                                             <?php foreach ($item['children'] as $child): ?>
                                                 <?php $renderMenuItem($child, $level + 1); ?>
                                             <?php endforeach; ?>
-                                        </ul>
+                                         </ul>
                                     <?php endif; ?>
                                 </li>
                             <?php };
@@ -339,157 +555,33 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                             endforeach; 
                             ?>
                         </ul>
-                        <!-- 更多按钮（当分类放不下时显示） -->
-                        <li class="category-item category-more-item" id="category-more-item" style="display: none;">
-                            <a href="#" class="category-link category-more-link" id="category-more-link">
-                                <lang>更多</lang>
-                                <span class="category-arrow"></span>
-                            </a>
-                            <ul class="category-submenu category-more-submenu" id="category-more-submenu">
-                                <!-- 隐藏的分类项会动态移到这里 -->
-                            </ul>
-                        </li>
                     </nav>
-                <?php else: ?>
-                    <!-- 如果没有导航项，使用 Hook 提供分类菜单 -->
-                    <div class="categories-hook-wrapper">
-                        <div class="categories-hook-content">
-                            <w:hook>header-categories-menu</w:hook>
-                        </div>
-                        <!-- 如果没有 Hook 内容，显示模拟数据（带三级菜单示例） -->
-                        <nav class="categories-nav categories-nav-fallback">
-                            <ul class="categories-list" id="categories-list-fallback">
-                                <li class="category-item has-children">
-                                    <a href="<?= $frontendUrl ?>category/electronics" class="category-link">
-                                        <lang>电子产品</lang>
-                                        <span class="category-arrow"></span>
-                                    </a>
-                                    <ul class="category-submenu">
-                                        <li class="category-item has-children">
-                                            <a href="<?= $frontendUrl ?>category/electronics/phones" class="category-link">
-                                                <lang>手机</lang>
-                                                <span class="category-arrow"></span>
-                                            </a>
-                                            <ul class="category-submenu">
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/phones/smartphones" class="category-link"><lang>智能手机</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/phones/feature-phones" class="category-link"><lang>功能手机</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/phones/accessories" class="category-link"><lang>手机配件</lang></a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                        <li class="category-item has-children">
-                                            <a href="<?= $frontendUrl ?>category/electronics/computers" class="category-link">
-                                                <lang>电脑</lang>
-                                                <span class="category-arrow"></span>
-                                            </a>
-                                            <ul class="category-submenu">
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/computers/laptops" class="category-link"><lang>笔记本</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/computers/desktops" class="category-link"><lang>台式机</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/electronics/computers/tablets" class="category-link"><lang>平板电脑</lang></a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                        <li class="category-item">
-                                            <a href="<?= $frontendUrl ?>category/electronics/accessories" class="category-link"><lang>配件</lang></a>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="category-item has-children">
-                                    <a href="<?= $frontendUrl ?>category/clothing" class="category-link">
-                                        <lang>服装服饰</lang>
-                                        <span class="category-arrow"></span>
-                                    </a>
-                                    <ul class="category-submenu">
-                                        <li class="category-item has-children">
-                                            <a href="<?= $frontendUrl ?>category/clothing/men" class="category-link">
-                                                <lang>男装</lang>
-                                                <span class="category-arrow"></span>
-                                            </a>
-                                            <ul class="category-submenu">
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/men/shirts" class="category-link"><lang>衬衫</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/men/pants" class="category-link"><lang>裤子</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/men/shoes" class="category-link"><lang>鞋子</lang></a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                        <li class="category-item has-children">
-                                            <a href="<?= $frontendUrl ?>category/clothing/women" class="category-link">
-                                                <lang>女装</lang>
-                                                <span class="category-arrow"></span>
-                                            </a>
-                                            <ul class="category-submenu">
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/women/dresses" class="category-link"><lang>连衣裙</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/women/tops" class="category-link"><lang>上装</lang></a>
-                                                </li>
-                                                <li class="category-item">
-                                                    <a href="<?= $frontendUrl ?>category/clothing/women/shoes" class="category-link"><lang>女鞋</lang></a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                        <li class="category-item">
-                                            <a href="<?= $frontendUrl ?>category/clothing/kids" class="category-link"><lang>童装</lang></a>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="category-item">
-                                    <a href="<?= $frontendUrl ?>category/home" class="category-link"><lang>家居用品</lang></a>
-                                </li>
-                                <li class="category-item">
-                                    <a href="<?= $frontendUrl ?>category/sports" class="category-link"><lang>运动户外</lang></a>
-                                </li>
-                                <li class="category-item">
-                                    <a href="<?= $frontendUrl ?>category/books" class="category-link"><lang>图书音像</lang></a>
-                                </li>
-                                <li class="category-item">
-                                    <a href="<?= $frontendUrl ?>category/food" class="category-link"><lang>食品饮料</lang></a>
-                                </li>
-                            </ul>
-                            <!-- 更多按钮（当分类放不下时显示） -->
-                                <li class="category-item category-more-item" id="category-more-item-fallback" style="display: none;">
-                                    <a href="#" class="category-link category-more-link" id="category-more-link-fallback">
-                                        <lang>更多</lang>
-                                        <span class="category-arrow"></span>
-                                    </a>
-                                <ul class="category-submenu category-more-submenu" id="category-more-submenu-fallback">
-                                    <!-- 隐藏的分类项会动态移到这里 -->
-                                </ul>
-                            </li>
-                        </nav>
-                    </div>
                 <?php endif; ?>
                 </div>
+                </div>
                 <w:hook>Weline_Theme::frontend::partials::header::categories-after</w:hook>
-            </div>
             
-            <div class="header-nav-fill">
+            <div class="header-nav-fill" id="header-nav-fill">
                 <!-- 横向导航链接（今日特价、Prime Video等） -->
                 <w:hook>header-nav-links<else/>
                     <nav class="header-nav-links">
-                        <ul class="nav-links-list">
-                            <li><a href="<?= $frontendUrl ?>deals"><lang>今日特价</lang></a></li>
-                            <li><a href="<?= $frontendUrl ?>video"><lang>Prime Video</lang></a></li>
-                            <li><a href="<?= $frontendUrl ?>registry"><lang>礼品心愿单</lang></a></li>
-                            <li><a href="<?= $frontendUrl ?>gift-cards"><lang>礼品卡</lang></a></li>
-                            <li><a href="<?= $frontendUrl ?>help"><lang>客户服务</lang></a></li>
+                        <ul class="nav-links-list" id="nav-links-list">
+                            <li><a href="/deals"><lang>今日特价</lang></a></li>
+                            <li><a href="/video"><lang>Prime Video</lang></a></li>
+                            <li><a href="/registry"><lang>礼品心愿单</lang></a></li>
+                            <li><a href="/gift-cards"><lang>礼品卡</lang></a></li>
+                            <li><a href="/help"><lang>客户服务</lang></a></li>
                         </ul>
+                        <!-- 更多按钮 -->
+                        <div class="nav-more-wrapper" id="nav-more-wrapper" style="display: none;">
+                            <button class="nav-more-btn" id="nav-more-btn" aria-label="更多" aria-expanded="false">
+                                <span><lang>更多</lang></span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <ul class="nav-more-dropdown" id="nav-more-dropdown" role="menu" aria-hidden="true">
+                                <!-- 动态添加的菜单项 -->
+                            </ul>
+                        </div>
                     </nav>
                 </w:hook>
             </div>
@@ -513,23 +605,36 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
         </button>
     </div>
     <div class="categories-sidebar-content">
+        <!-- 侧边栏首部：快捷链接 (今日特价等，仅在手机端显示) -->
+        <div class="sidebar-shortcuts mobile-only">
+            <ul class="sidebar-shortcuts-list">
+                <li><a href="/deals"><i class="fas fa-bolt"></i> <lang>今日特价</lang></a></li>
+                <li><a href="/video"><i class="fas fa-play"></i> <lang>Prime Video</lang></a></li>
+                <li><a href="/registry"><i class="fas fa-gift"></i> <lang>礼品心愿单</lang></a></li>
+                <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <lang>礼品卡</lang></a></li>
+                <li><a href="/help"><i class="fas fa-question-circle"></i> <lang>客户服务</lang></a></li>
+            </ul>
+        </div>
+
         <nav class="categories-sidebar-nav" role="navigation" aria-label="<lang>分类导航</lang>">
             <ul class="categories-sidebar-list" id="categories-sidebar-list">
                 <?php 
                 // 使用相同的渲染函数生成侧边栏菜单
                 if (!empty($navItems)): 
-                    $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem, $frontendUrl) {
+                    $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem) {
                         $hasChildren = !empty($item['children']) && is_array($item['children']);
                         ?>
                         <li class="sidebar-category-item <?= $hasChildren ? 'has-children' : '' ?>">
-                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-category-link">
-                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                            <div class="sidebar-category-link-wrapper">
+                                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-category-link">
+                                    <?= htmlspecialchars($item['text'] ?? '') ?>
+                                </a>
                                 <?php if ($hasChildren): ?>
-                                    <i class="fas fa-chevron-right sidebar-category-arrow" aria-hidden="true"></i>
+                                    <i class="fas fa-chevron-right sidebar-category-arrow" role="button" aria-label="展开子菜单"></i>
                                 <?php endif; ?>
-                            </a>
+                            </div>
                             <?php if ($hasChildren): ?>
-                                <ul class="sidebar-category-submenu">
+                                <ul class="sidebar-category-submenu" data-level="<?= $level + 1 ?>">
                                     <?php foreach ($item['children'] as $child): ?>
                                         <?php $renderSidebarItem($child, $level + 1); ?>
                                     <?php endforeach; ?>
@@ -541,41 +646,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                     foreach ($navItems as $item): 
                         $renderSidebarItem($item);
                     endforeach; 
-                else: 
-                    // 使用模拟数据
-                    ?>
-                    <li class="sidebar-category-item has-children">
-                        <a href="<?= $frontendUrl ?>category/electronics" class="sidebar-category-link">
-                            <lang>电子产品</lang>
-                            <i class="fas fa-chevron-right sidebar-category-arrow" aria-hidden="true"></i>
-                        </a>
-                        <ul class="sidebar-category-submenu">
-                            <li class="sidebar-category-item has-children">
-                                <a href="<?= $frontendUrl ?>category/electronics/phones" class="sidebar-category-link">
-                                    <lang>手机</lang>
-                                    <i class="fas fa-chevron-right sidebar-category-arrow" aria-hidden="true"></i>
-                                </a>
-                                <ul class="sidebar-category-submenu">
-                                    <li class="sidebar-category-item">
-                                        <a href="<?= $frontendUrl ?>category/electronics/phones/smartphones" class="sidebar-category-link"><lang>智能手机</lang></a>
-                                    </li>
-                                    <li class="sidebar-category-item">
-                                        <a href="<?= $frontendUrl ?>category/electronics/phones/feature-phones" class="sidebar-category-link"><lang>功能手机</lang></a>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li class="sidebar-category-item">
-                                <a href="<?= $frontendUrl ?>category/electronics/computers" class="sidebar-category-link"><lang>电脑</lang></a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="sidebar-category-item">
-                        <a href="<?= $frontendUrl ?>category/clothing" class="sidebar-category-link"><lang>服装服饰</lang></a>
-                    </li>
-                    <li class="sidebar-category-item">
-                        <a href="<?= $frontendUrl ?>category/home" class="sidebar-category-link"><lang>家居用品</lang></a>
-                    </li>
-                <?php endif; ?>
+                endif; ?>
             </ul>
         </nav>
     </div>
@@ -597,8 +668,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     left: 50%;
     transform: translateX(-50%);
     padding: 0.5rem 1rem;
-    background: #ff9900;
-    color: #fff;
+    background: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     border-radius: 4px;
 }
@@ -606,17 +677,38 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 /* Header主容器 */
 .weline-header {
     width: 100%;
-    background-color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
     position: sticky;
     top: 0;
     z-index: 1000;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: visible; 
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* 粘性状态下应用精致的磨砂玻璃效果 */
+.weline-header.is-compact {
+    background-color: rgba(19, 25, 33, 0.9);
+    backdrop-filter: blur(15px) saturate(160%);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.weline-header.is-compact .header-belt {
+    min-height: 50px;
+    padding: 0.25rem 1rem;
+}
+
+.weline-header.is-compact .header-logo img {
+    height: 26px;
 }
 
 .header-container {
     width: 100%;
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
+    padding: 0;
+    overflow: visible; 
+    position: relative; 
 }
 
 /* ========== 顶部栏（nav-belt）- 亚马逊风格 ========== */
@@ -624,8 +716,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background-color: #131921;
-    color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgDark'] ?? '#131921') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     padding: 0.5rem 1rem;
     min-height: 60px;
     gap: 1rem;
@@ -647,7 +739,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 .header-logo a {
     display: flex;
     align-items: center;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
 }
 
@@ -660,7 +752,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 .logo-text {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 /* 配送地址选择器 */
@@ -673,7 +765,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     padding: 0.5rem;
     border: 1px solid transparent;
@@ -682,7 +774,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .location-link:hover {
-    border-color: #fff;
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 .location-text {
@@ -693,13 +785,13 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 
 .location-line-1 {
     font-size: 0.75rem;
-    color: #ccc;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ccc') ?>;
 }
 
 .location-line-2 {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 /* 搜索框区域 - 占据主要空间 */
@@ -736,19 +828,19 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     align-items: center;
     justify-content: space-between;
     padding: 0 0.75rem;
-    background-color: #f3f3f3;
-    border: 1px solid #ddd;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
     border-right: none;
     border-radius: 4px 0 0 4px;
     height: 100%;
     min-width: 120px;
     cursor: pointer;
     font-size: 0.75rem;
-    color: #565959;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
 }
 
 .search-category-facade:hover {
-    background-color: #e7e7e7;
+    background-color: <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
 }
 
 .search-category-label {
@@ -770,7 +862,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     width: 100%;
     height: 100%;
     padding: 0 1rem;
-    border: 1px solid #ddd;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
     border-left: none;
     border-right: none;
     font-size: 0.875rem;
@@ -779,15 +871,15 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .search-input:focus {
-    border-color: #ff9900;
+    border-color: <?= htmlspecialchars($colors['borderFocus'] ?? '#ff9900') ?>;
 }
 
 /* 搜索按钮 */
 .search-submit-btn {
     width: 45px;
     height: 100%;
-    background-color: #febd69;
-    border: 1px solid #ff9900;
+    background-color: <?= htmlspecialchars($colors['primaryLight'] ?? '#febd69') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
     border-left: none;
     border-radius: 0 4px 4px 0;
     cursor: pointer;
@@ -798,7 +890,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .search-submit-btn:hover {
-    background-color: #ff9900;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .search-submit-btn::after {
@@ -817,8 +909,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     top: 100%;
     left: 0;
     right: 0;
-    background-color: #fff;
-    border: 1px solid #ddd;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
     border-top: none;
     border-radius: 0 0 4px 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -836,8 +928,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     padding: 0.75rem 1rem;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #565959;
-    border-bottom: 1px solid #e7e7e7;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['bgTertiary'] ?? '#e7e7e7') ?>;
 }
 
 .search-suggestions-list {
@@ -853,7 +945,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .search-suggestions-list li:hover {
-    background-color: #f3f3f3;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
 }
 
 /* 右侧用户功能区 */
@@ -875,7 +967,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     flex-direction: column;
     align-items: flex-start;
     padding: 0.5rem;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     border: 1px solid transparent;
     border-radius: 2px;
@@ -885,18 +977,18 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .action-link:hover {
-    border-color: #fff;
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 .action-line-1 {
     font-size: 0.75rem;
-    color: #ccc;
+    color: <?= htmlspecialchars($colors['textLightSecondary'] ?? '#ccc') ?>;
 }
 
 .action-line-2 {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 /* 语言切换器 */
@@ -919,7 +1011,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 
 .language-switcher:hover,
 .currency-switcher:hover {
-    border-color: #fff;
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 .language-options,
@@ -927,8 +1019,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     position: absolute;
     top: 100%;
     right: 0;
-    background-color: #fff;
-    border: 1px solid #ddd;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
     border-radius: 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     min-width: 200px;
@@ -953,14 +1045,14 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    color: #111;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
     text-decoration: none;
     transition: background-color 0.2s ease;
 }
 
 .language-option:hover,
 .currency-option:hover {
-    background-color: #f3f3f3;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
 }
 
 .language-option.active .fa-check,
@@ -971,7 +1063,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 .language-option .fa-check,
 .currency-option .fa-check {
     display: none;
-    color: #ff9900;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 /* 账户菜单 */
@@ -983,8 +1075,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     position: absolute;
     top: 100%;
     right: 0;
-    background-color: #fff;
-    border: 1px solid #ddd;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
     border-radius: 4px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     min-width: 200px;
@@ -1015,14 +1107,14 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 .account-dropdown a {
     display: block;
     padding: 0.75rem 1rem;
-    color: #111;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
     text-decoration: none;
     transition: background-color 0.2s ease;
 }
 
 .account-dropdown a:hover {
-    background-color: #f3f3f3;
-    color: #ff9900;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 /* 购物车 */
@@ -1040,26 +1132,35 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     transition: border-color 0.2s ease;
     background: none;
     border: none;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     cursor: pointer;
 }
 
 .cart-link:hover {
-    border-color: #fff;
+    border-color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 .cart-count {
     position: absolute;
-    top: 0;
-    right: 0;
-    background-color: #ff9900;
-    color: #111;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.125rem 0.375rem;
-    border-radius: 10px;
-    min-width: 18px;
-    text-align: center;
+    top: -5px;
+    right: -10px;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.header-cart:hover .cart-count {
+    transform: scale(1.2);
 }
 
 .cart-icon {
@@ -1093,7 +1194,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     width: 400px;
     max-width: 90vw;
     max-height: calc(100vh - 60px);
-    background-color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
     box-shadow: -4px 0 8px rgba(0, 0, 0, 0.1);
     z-index: 1000;
     display: flex;
@@ -1112,28 +1213,28 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     align-items: center;
     justify-content: space-between;
     padding: 1rem;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
 }
 
 .mini-cart-title {
     margin: 0;
     font-size: 1.125rem;
     font-weight: 600;
-    color: #111;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
 }
 
 .mini-cart-close {
     background: none;
     border: none;
     font-size: 1.25rem;
-    color: #565959;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
     cursor: pointer;
     padding: 0.25rem;
     transition: color 0.2s ease;
 }
 
 .mini-cart-close:hover {
-    color: #111;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
 }
 
 .mini-cart-content {
@@ -1145,13 +1246,13 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 .mini-cart-empty {
     text-align: center;
     padding: 2rem 1rem;
-    color: #565959;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
 }
 
 .mini-cart-empty i {
     font-size: 3rem;
     margin-bottom: 1rem;
-    color: #ddd;
+    color: <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
 }
 
 .mini-cart-items {
@@ -1166,8 +1267,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 
 .mini-cart-footer {
     padding: 1rem;
-    border-top: 1px solid #ddd;
-    background-color: #f3f3f3;
+    border-top: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
 }
 
 .mini-cart-total {
@@ -1196,38 +1297,73 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 .mini-cart-actions .btn-primary {
-    background-color: #ff9900;
-    color: #111;
+    background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
 }
 
 .mini-cart-actions .btn-primary:hover {
-    background-color: #e68900;
+    background-color: <?= htmlspecialchars($colors['primaryDark'] ?? '#e68900') ?>;
 }
 
 .mini-cart-actions .btn-secondary {
-    background-color: #fff;
-    color: #111;
-    border: 1px solid #ddd;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
 }
 
 .mini-cart-actions .btn-secondary:hover {
-    background-color: #f3f3f3;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
 }
 
 /* ========== 底部导航栏（nav-main）- 亚马逊风格 ========== */
 .header-main-nav {
     display: flex;
     align-items: center;
-    background-color: #232f3e;
-    color: #fff;
-    padding: 0;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     min-height: 40px;
+    width: 100%; /* 锁定宽度，确保不会被内容撑开 */
+    max-width: 100vw;
+    overflow: visible; 
+    position: relative;
+    gap: 1.5rem;
 }
 
+/* 左侧分类区域 */
 .header-nav-left {
     display: flex;
     align-items: center;
-    flex: 1;
+    flex: 0 1 auto; /* 仅占据内容宽度，不强制填充 */
+    overflow: visible; 
+    white-space: nowrap;
+    position: relative;
+    min-width: 0;
+    z-index: 11;
+}
+
+@media (max-width: 768px) {
+    .header-nav-left {
+        overflow-x: auto; /* 手机端支持滑动 */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .header-nav-left::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* 右侧链接区域 - 自动宽度且靠右 */
+.header-nav-fill {
+    flex: 0 1 auto; /* 自动宽度 */
+    margin-left: auto; /* 核心：产生弹性间距并推向右侧 */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    position: relative;
+    overflow: visible; 
+    height: 40px;
+    z-index: 10;
+    min-width: fit-content;
 }
 
 /* 汉堡菜单 */
@@ -1238,12 +1374,17 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     padding: 0.5rem 1rem;
     background-color: transparent;
     border: none;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s ease;
+}
+
+/* 确保整个按钮区域都可以点击 - 让子元素不拦截点击事件 */
+.hamburger-menu-btn * {
+    pointer-events: none;
 }
 
 .hamburger-menu-btn:hover {
@@ -1259,13 +1400,34 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     flex: 1;
     display: flex;
     align-items: center;
+    overflow: visible; /* 允许megamenu溢出显示 */
+    position: relative; /* 为绝对定位的子菜单提供定位上下文 */
+}
+
+/* 渐变遮罩：提示有更多内容 (移至父容器以保持固定) */
+.header-categories::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 60px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.header-categories.has-overflow::after {
+    opacity: 1;
 }
 
 .categories-nav {
     display: flex;
     align-items: center;
     width: 100%;
-    overflow: hidden;
+    overflow: visible; /* 允许子菜单溢出显示 */
 }
 
 .categories-list {
@@ -1284,21 +1446,40 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     align-items: center;
 }
 
-.category-link {
+.category-link-wrapper {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+}
+
+.category-link {
     padding: 0.5rem 0.75rem;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     font-size: 0.875rem;
     white-space: nowrap;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
     border-radius: 2px;
+    cursor: pointer;
+    pointer-events: auto;
+    flex: 1;
 }
 
 .category-link:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.category-link-wrapper:hover .category-link {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 确保 hover 时文字颜色优先级最高 */
+.category-item:hover .category-link,
+.category-link-wrapper:hover .category-link,
+.category-link:hover {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .category-arrow {
@@ -1306,91 +1487,369 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     height: 0;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
-    border-top: 4px solid #fff;
-    margin-left: 0.25rem;
+    border-top: 4px solid <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    pointer-events: auto;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, border-top-color 0.2s ease;
 }
 
-/* 分类子菜单 */
-.category-submenu {
+.category-item.has-children:hover .category-arrow {
+    transform: rotate(180deg);
+    border-top-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.category-link-wrapper:hover .category-arrow {
+    border-top-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 分类子菜单 - Megamenu 样式（第一层，直接子菜单） */
+.category-item.has-children > .category-submenu {
     position: absolute;
     top: 100%;
     left: 0;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    min-width: 200px;
-    margin-top: 0.25rem;
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+    min-width: 1100px;
+    max-width: 1400px;
+    width: auto;
+    margin-top: 0.5rem;
+    display: none;
     opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
-    z-index: 1000;
+    transform: translateY(10px) scale(0.98);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1001;
     list-style: none;
     margin: 0;
-    padding: 0.5rem 0;
+    padding: 2rem;
+    grid-template-columns: repeat(4, minmax(220px, 1fr)); /* 固定4列，确保所有列都显示 */
+    gap: 2rem;
+    column-gap: 3rem;
+    grid-auto-flow: row; /* 确保按行排列 */
 }
 
-.category-item:hover .category-submenu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.category-submenu .category-link {
-    color: #111;
-    padding: 0.75rem 1rem;
-}
-
-.category-submenu .category-link:hover {
-    background-color: #f3f3f3;
-    color: #ff9900;
-}
-
-/* 更多按钮 */
-.category-more-item {
-    display: none;
-}
-
-.category-more-submenu {
-    position: absolute;
-    top: 100%;
+/* 当菜单项靠近右边缘时，megamenu 从右侧对齐 */
+.category-item:last-child .category-submenu,
+.category-item:nth-last-child(2) .category-submenu,
+.category-item:nth-last-child(3) .category-submenu {
+    left: auto;
     right: 0;
 }
 
-/* 横向导航链接 */
-.header-nav-fill {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
+/* 确保megamenu可以超出header-container边界显示 */
+.category-item.has-children > .category-submenu {
+    /* 如果megamenu超出右边界，自动调整到左侧对齐 */
+    max-width: calc(100vw - 2rem); /* 确保不超出视口 */
+    left: 0;
 }
 
+/* 当菜单项在右侧时，megamenu从右侧对齐 */
+.category-item:last-child.has-children > .category-submenu,
+.category-item:nth-last-child(2).has-children > .category-submenu {
+    left: auto;
+    right: 0;
+}
+
+/* 关键修改：只在鼠标悬停在菜单项链接容器上时显示子菜单
+   不要对li下面的category-submenu的元素hover生效 */
+.category-item.has-children > .category-link-wrapper:hover ~ .category-submenu,
+.category-item.has-children .category-link:hover ~ .category-submenu {
+    display: grid !important; /* 显示子菜单，使用grid布局 */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 当鼠标在父菜单项（category-item）上时，也显示子菜单
+   由于子菜单是绝对定位的，鼠标从category-link移动到子菜单时
+   仍然在父菜单项的范围内，所以hover状态不会丢失 */
+.category-item.has-children:hover > .category-submenu {
+    display: grid !important; /* 显示子菜单，使用grid布局 */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 确保category-item不会因为子菜单的hover而触发hover状态
+   只有category-link的hover才会触发 */
+.category-item.has-children {
+    position: relative;
+}
+
+/* 子菜单不会触发父菜单项的hover
+   但由于子菜单与父菜单项重叠，鼠标在子菜单上时，仍然在父菜单项的范围内
+   所以通过父菜单项的hover来保持子菜单显示 */
+.category-item.has-children > .category-submenu {
+    /* 子菜单可以响应鼠标事件，但不会影响父菜单的hover检测 */
+    pointer-events: auto;
+}
+
+/* Megamenu 列容器（第一层子菜单的直接子项） */
+.category-item.has-children > .category-submenu > .category-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 220px; /* 设置最小宽度，确保列有足够空间 */
+    max-width: 280px; /* 设置最大宽度，避免列过宽 */
+    width: 100%; /* 使用100%宽度，让网格布局控制 */
+    align-items: flex-start;
+    flex-shrink: 0; /* 防止列被压缩 */
+    overflow: visible; /* 确保内容不被裁剪 */
+}
+
+/* Megamenu 主分类标题（第一层子菜单中的列标题） */
+.category-item.has-children > .category-submenu > .category-item > .category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.5rem 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#e0e0e0') ?>;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: 100%;
+    display: block;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.category-item.has-children > .category-submenu > .category-item > .category-link:hover {
+    background-color: transparent;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    border-bottom-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* Megamenu 子分类链接（第二层及以下） */
+.category-submenu > .category-item > .category-submenu {
+    position: static;
+    display: block !important; /* 确保第二层子菜单是单列 */
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    min-width: auto;
+    max-width: none;
+    width: auto;
+    grid-template-columns: none !important; /* 移除网格布局 */
+    gap: 0;
+}
+
+/* Megamenu 子分类链接（第二层子菜单中的链接） */
+.category-item.has-children > .category-submenu > .category-item > .category-submenu .category-link {
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#666') ?>;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    font-weight: normal;
+    display: block;
+    transition: color 0.2s ease, padding-left 0.2s ease;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.category-item.has-children > .category-submenu > .category-item > .category-submenu .category-link:hover {
+    background-color: transparent;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 0.5rem;
+}
+
+/* 第三层及更深层级的菜单样式 */
+.category-submenu > .category-item > .category-submenu > .category-item {
+    position: relative;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 180px;
+    padding: 0.75rem 0;
+    margin-left: 0.5rem;
+    display:none;
+    visibility: hidden;
+    transform: translateX(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1002;
+    list-style: none;
+    display: block;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item:hover > .category-submenu {
+    display: block;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu .category-link {
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#666') ?>;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    display: block;
+}
+
+.category-submenu > .category-item > .category-submenu > .category-item > .category-submenu .category-link:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    padding-left: 1.25rem;
+}
+
+/* 移除子菜单中的箭头（在 megamenu 中不需要，但第三层可以显示） */
+.category-submenu > .category-item > .category-link .category-arrow {
+    display: none;
+}
+
+/* 第三层菜单项如果有子菜单，显示箭头 */
+.category-submenu > .category-item > .category-submenu > .category-item.has-children > .category-link::after {
+    content: '›';
+    float: right;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#999') ?>;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+
+
+/* 更多下拉菜单容器 */
 .header-nav-links {
     display: flex;
     align-items: center;
+    gap: 0;
+    height: 100%;
 }
 
 .nav-links-list {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.25rem;
     list-style: none;
     margin: 0;
-    padding: 0 1rem;
+    padding: 0 0 0 1rem;
+    flex-wrap: nowrap; /* 禁止换行 */
+}
+
+.nav-links-list li {
+    flex-shrink: 0; /* 禁止项被压缩 */
 }
 
 .nav-links-list a {
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     text-decoration: none;
     font-size: 0.875rem;
     white-space: nowrap;
     transition: color 0.2s ease;
+    padding: 0.5rem 0;
+    display: block;
 }
 
 .nav-links-list a:hover {
-    color: #ff9900;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
+
+/* 更多按钮 */
+.nav-more-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.nav-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+    border: none;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 2px;
+}
+
+.nav-more-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.nav-more-btn i {
+    font-size: 0.625rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-more-wrapper.active .nav-more-btn i {
+    transform: rotate(180deg);
+}
+
+/* 更多下拉菜单 */
+.nav-more-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0;
+    margin-top: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 1001;
+}
+
+.nav-more-wrapper.active .nav-more-dropdown,
+.nav-more-wrapper:hover .nav-more-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* hover时也显示箭头旋转 */
+.nav-more-wrapper:hover .nav-more-btn i {
+    transform: rotate(180deg);
+}
+
+.nav-more-dropdown li {
+    margin: 0;
+}
+
+.nav-more-dropdown a {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-more-dropdown a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 隐藏的菜单项 */
+.nav-links-list li.hidden {
+    display: none;
+}
+
+
 
 /* 侧边栏菜单（全部分类） */
 .categories-sidebar-overlay {
@@ -1418,14 +1877,14 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     width: 300px;
     max-width: 90vw;
     height: 100vh;
-    background-color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
     z-index: 1000;
     display: flex;
     flex-direction: column;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to allow flyout menu to overflow */
 }
 
 .categories-sidebar[aria-hidden="false"] {
@@ -1437,8 +1896,8 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     align-items: center;
     justify-content: space-between;
     padding: 1rem;
-    background-color: #232f3e;
-    color: #fff;
+    background-color: <?= htmlspecialchars($colors['bgDarkSecondary'] ?? '#232f3e') ?>;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
 }
 
 .categories-sidebar-title {
@@ -1451,20 +1910,68 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     background: none;
     border: none;
     font-size: 1.25rem;
-    color: #fff;
+    color: <?= htmlspecialchars($colors['textLight'] ?? '#fff') ?>;
     cursor: pointer;
     padding: 0.25rem;
     transition: color 0.2s ease;
 }
 
 .categories-sidebar-close:hover {
-    color: #ff9900;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .categories-sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 1rem 0;
+    padding: 0; /* 移除 padding，由内部元素控制 */
+}
+
+.sidebar-section-title {
+    padding: 1rem 1rem 0.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    letter-spacing: 1px;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+    margin: 0;
+}
+
+.sidebar-shortcuts {
+    border-bottom: 4px solid <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    padding-bottom: 0.5rem;
+    background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+}
+
+.sidebar-shortcuts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-shortcuts-list li a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+}
+
+.sidebar-shortcuts-list li a:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-shortcuts-list li a i {
+    width: 16px;
+    text-align: center;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+}
+
+.mobile-only {
+    display: none;
 }
 
 .categories-sidebar-nav {
@@ -1481,33 +1988,63 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     position: relative;
 }
 
-.sidebar-category-link {
+.sidebar-category-link-wrapper {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    color: #111;
-    text-decoration: none;
-    font-size: 0.875rem;
     transition: background-color 0.2s ease;
 }
 
+.sidebar-category-link-wrapper:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+}
+
+.sidebar-category-link {
+    color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
+    text-decoration: none;
+    font-size: 0.875rem;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
 .sidebar-category-link:hover {
-    background-color: #f3f3f3;
-    color: #ff9900;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-link:hover {
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .sidebar-category-arrow {
     font-size: 0.75rem;
-    color: #565959;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    cursor: pointer;
+    pointer-events: auto;
+    flex-shrink: 0;
+    padding: 0.25rem;
+    margin-left: 0.5rem;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-category-item.active .sidebar-category-arrow {
+    transform: rotate(90deg);
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+.sidebar-category-link-wrapper:hover .sidebar-category-arrow {
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .sidebar-category-submenu {
     display: none;
-    background-color: #f3f3f3;
+    background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
     list-style: none;
     margin: 0;
     padding: 0;
+    position: relative;
+    z-index: 1001; /* 确保子菜单层级足够高 */
 }
 
 .sidebar-category-item.has-children.active .sidebar-category-submenu {
@@ -1515,6 +2052,49 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 }
 
 /* ========== 响应式设计 ========== */
+@media (min-width: 769px) {
+    /* 桌面端：Hover 展开侧边栏子菜单（Flyout 模式） */
+    .sidebar-category-item:hover > .sidebar-category-submenu {
+        display: block;
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .sidebar-category-submenu {
+        position: fixed; /* 使用 fixed 定位，脱离 overflow:auto 的父容器 */
+        top: 0;
+        left: 300px; /* 默认二级菜单位置 (侧边栏宽 300px) */
+        width: 300px; /* 子菜单宽度 */
+        height: 100vh;
+        background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
+        box-shadow: 4px 0 8px rgba(0, 0, 0, 0.1);
+        overflow-y: auto;
+        border-left: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
+        z-index: 1002;
+        padding: 1rem 0;
+        /* 初始隐藏状态 */
+        display: none;
+    }
+
+    /* 三级菜单位置 (侧边栏 300px + 二级菜单 300px) */
+    .sidebar-category-submenu[data-level="3"] {
+        left: 600px;
+        z-index: 1003;
+    }
+
+    /* 四级菜单位置 (300px + 300px + 300px) */
+    .sidebar-category-submenu[data-level="4"] {
+        left: 900px;
+        z-index: 1004;
+    }
+
+    /* 选中状态样式增强 */
+    .sidebar-category-item:hover > .sidebar-category-link {
+        background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
+        color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+    }
+}
+
 @media (max-width: 1024px) {
     .header-search-wrapper {
         max-width: 600px;
@@ -1562,20 +2142,40 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
     }
     
     .header-main-nav {
-        flex-wrap: wrap;
+        flex-wrap: nowrap; /* 移动端也保持一行，靠滑动解决 */
     }
     
     .header-nav-fill {
-        display: none;
+        display: flex; /* 移动端也显示，以展示“更多”按钮 */
     }
     
     .categories-nav {
         overflow-x: auto;
+        overflow-y: visible; /* 允许子菜单垂直溢出显示 */
         -webkit-overflow-scrolling: touch;
     }
     
     .categories-list {
         flex-wrap: nowrap;
+    }
+    
+    /* 在小屏幕上，megamenu 调整为单列或双列布局 */
+    .categories-submenu {
+        min-width: 300px;
+        max-width: 500px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        column-gap: 1.5rem;
+        padding: 1rem;
+    }
+
+    .mobile-only {
+        display: block;
+    }
+
+    .categories-nav::after {
+        /* 在移动端默认显示渐变提示 */
+        opacity: 1;
     }
     
     .mini-cart {
@@ -1615,29 +2215,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 
 <script>
 (function() {
-    // 检测分类菜单 Hook 是否有内容，如果没有则显示 fallback
-    document.addEventListener('DOMContentLoaded', function() {
-        const hookWrapper = document.querySelector('.categories-hook-wrapper');
-        if (hookWrapper) {
-            const hookContent = hookWrapper.querySelector('.categories-hook-content');
-            const fallbackNav = hookWrapper.querySelector('.categories-nav-fallback');
-            
-            if (hookContent && fallbackNav) {
-                // 检查 hook 内容是否为空（去除空白字符）
-                const hookText = hookContent.textContent.trim();
-                const hookHasContent = hookContent.children.length > 0 || hookText.length > 0;
-                
-                if (!hookHasContent) {
-                    // Hook 没有内容，显示 fallback
-                    fallbackNav.style.display = 'block';
-                    hookContent.style.display = 'none';
-                } else {
-                    // Hook 有内容，隐藏 fallback
-                    fallbackNav.style.display = 'none';
-                    hookContent.style.display = 'block';
-                }
-            }
-        }
+
 
         // 移动端多级菜单点击展开/收起
         const isMobile = window.innerWidth <= 768;
@@ -1693,8 +2271,13 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                 }
             });
             
-            // 点击外部关闭建议
+            // 点击外部关闭建议（排除汉堡菜单）
             document.addEventListener('click', function(e) {
+                const hamburgerMenu = document.getElementById('hamburger-menu');
+                // 如果点击的是汉堡菜单或其子元素，不处理
+                if (hamburgerMenu && (hamburgerMenu.contains(e.target) || hamburgerMenu === e.target)) {
+                    return;
+                }
                 if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
                     hideSearchSuggestions();
                 }
@@ -1788,6 +2371,146 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
             }).slice(0, 8);
         }
         
+        // 导航链接"更多"按钮功能
+        const navLinksList = document.getElementById('nav-links-list');
+        const navMoreWrapper = document.getElementById('nav-more-wrapper');
+        const navMoreBtn = document.getElementById('nav-more-btn');
+        const navMoreDropdown = document.getElementById('nav-more-dropdown');
+        const headerNavFill = document.getElementById('header-nav-fill');
+        
+        if (navLinksList && navMoreWrapper && navMoreBtn && navMoreDropdown && headerNavFill) {
+            let resizeTimeout;
+            
+            // 检查并调整菜单项
+            function adjustNavLinks() {
+                // 重置所有菜单项
+                const allItems = navLinksList.querySelectorAll('li');
+                allItems.forEach(function(item) {
+                    item.classList.remove('hidden');
+                });
+                navMoreDropdown.innerHTML = '';
+                navMoreWrapper.style.display = 'none';
+                
+                // 等待DOM更新
+                requestAnimationFrame(function() {
+                    // 获取nav-links-list的实际宽度和可用宽度
+                    const navLinksListRect = navLinksList.getBoundingClientRect();
+                    const headerNavFillRect = headerNavFill.getBoundingClientRect();
+                    
+                    // 计算可用宽度（从nav-links-list左边缘到header-nav-fill右边缘）
+                    const availableWidth = headerNavFillRect.right - navLinksListRect.left;
+                    
+                    // 临时显示"更多"按钮以获取其宽度
+                    navMoreWrapper.style.display = 'flex';
+                    const moreBtnWidth = navMoreWrapper.getBoundingClientRect().width + 10; // 加一些边距
+                    navMoreWrapper.style.display = 'none';
+                    
+                    // 计算每个菜单项的宽度
+                    const items = Array.from(navLinksList.querySelectorAll('li'));
+                    let totalWidth = 0;
+                    let itemsToHide = [];
+                    
+                    // 获取gap值（从CSS中，gap: 1.25rem）
+                    const computedStyle = window.getComputedStyle(navLinksList);
+                    const gap = parseFloat(computedStyle.gap) || 20; // 默认20px
+                    
+                    // 计算可见项的总宽度
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const itemRect = item.getBoundingClientRect();
+                        const itemWidth = itemRect.width;
+                        const itemGap = i > 0 ? gap : 0;
+                        
+                        // 检查是否需要显示"更多"按钮
+                        if (totalWidth + itemWidth + itemGap + moreBtnWidth > availableWidth) {
+                            // 需要隐藏这个及之后的项
+                            itemsToHide = items.slice(i);
+                            break;
+                        }
+                        totalWidth += itemWidth + itemGap;
+                    }
+                    
+                    // 如果有需要隐藏的项，显示"更多"按钮并移动项
+                    if (itemsToHide.length > 0) {
+                        navMoreWrapper.style.display = 'flex';
+                        itemsToHide.forEach(function(item) {
+                            item.classList.add('hidden');
+                            // 创建下拉菜单项
+                            const dropdownItem = document.createElement('li');
+                            const link = item.querySelector('a');
+                            if (link) {
+                                dropdownItem.innerHTML = link.outerHTML;
+                                navMoreDropdown.appendChild(dropdownItem);
+                            }
+                        });
+                    } else {
+                        navMoreWrapper.style.display = 'none';
+                    }
+                });
+            }
+            
+            // 初始调整
+            adjustNavLinks();
+            
+            // 窗口大小变化时重新调整
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(adjustNavLinks, 100);
+            });
+            
+            let isClickActivated = false; // 标记是否通过点击激活
+            
+            // "更多"按钮点击事件
+            navMoreBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const isActive = navMoreWrapper.classList.contains('active');
+                
+                isClickActivated = !isActive; // 如果激活则为true，如果关闭则为false
+                
+                if (isActive) {
+                    navMoreWrapper.classList.remove('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'false');
+                    navMoreDropdown.setAttribute('aria-hidden', 'true');
+                } else {
+                    navMoreWrapper.classList.add('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'true');
+                    navMoreDropdown.setAttribute('aria-hidden', 'false');
+                }
+            });
+            
+            // hover事件：鼠标进入时展开（CSS会自动处理，这里更新aria属性）
+            navMoreWrapper.addEventListener('mouseenter', function() {
+                navMoreBtn.setAttribute('aria-expanded', 'true');
+                navMoreDropdown.setAttribute('aria-hidden', 'false');
+            });
+            
+            // 鼠标离开时：如果是通过点击激活的，保持展开；如果是hover，延迟关闭
+            let hoverTimeout;
+            navMoreWrapper.addEventListener('mouseleave', function() {
+                if (!isClickActivated) {
+                    // 如果不是点击激活的，延迟关闭（给用户时间移动到下拉菜单）
+                    hoverTimeout = setTimeout(function() {
+                        if (!navMoreWrapper.matches(':hover')) {
+                            navMoreWrapper.classList.remove('active');
+                            navMoreBtn.setAttribute('aria-expanded', 'false');
+                            navMoreDropdown.setAttribute('aria-hidden', 'true');
+                        }
+                    }, 200);
+                }
+            });
+            
+            // 点击外部关闭下拉菜单（仅在点击激活时）
+            document.addEventListener('click', function(e) {
+                if (!navMoreWrapper.contains(e.target) && isClickActivated) {
+                    navMoreWrapper.classList.remove('active');
+                    navMoreBtn.setAttribute('aria-expanded', 'false');
+                    navMoreDropdown.setAttribute('aria-hidden', 'true');
+                    isClickActivated = false;
+                }
+            });
+        }
+        
         // 汉堡菜单切换 - 侧边栏菜单
         const hamburgerMenu = document.getElementById('hamburger-menu');
         const categoriesSidebar = document.getElementById('categories-sidebar');
@@ -1795,15 +2518,39 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
         const categoriesSidebarClose = document.getElementById('categories-sidebar-close');
         
         if (hamburgerMenu && categoriesSidebar && categoriesSidebarOverlay) {
-            hamburgerMenu.addEventListener('click', function(e) {
+            // 使用一个标志来防止重复触发
+            let isProcessing = false;
+            
+            // 处理汉堡菜单点击的函数
+            function handleHamburgerClick(e) {
+                if (isProcessing) {
+                    return; // 如果正在处理，直接返回
+                }
+                
                 e.preventDefault();
-                const isExpanded = this.getAttribute('aria-expanded') === 'true';
+                e.stopPropagation(); // 阻止事件冒泡
+                e.stopImmediatePropagation(); // 阻止同一元素上的其他监听器
+                
+                isProcessing = true;
+                
+                const isExpanded = hamburgerMenu.getAttribute('aria-expanded') === 'true';
                 if (!isExpanded) {
                     showSidebar();
                 } else {
                     hideSidebar();
                 }
-            });
+                
+                // 短暂延迟后重置标志，防止快速连续点击
+                setTimeout(function() {
+                    isProcessing = false;
+                }, 100);
+            }
+            
+            // 优先使用 mousedown 事件，响应更快
+            hamburgerMenu.addEventListener('mousedown', handleHamburgerClick, true); // 使用捕获阶段
+            
+            // 同时监听 click 事件作为备用
+            hamburgerMenu.addEventListener('click', handleHamburgerClick, true); // 使用捕获阶段
             
             if (categoriesSidebarClose) {
                 categoriesSidebarClose.addEventListener('click', function(e) {
@@ -1822,11 +2569,29 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
             // 侧边栏菜单项点击展开/收起
             const sidebarItems = categoriesSidebar.querySelectorAll('.sidebar-category-item.has-children');
             sidebarItems.forEach(function(item) {
+                const linkWrapper = item.querySelector('.sidebar-category-link-wrapper');
                 const link = item.querySelector('.sidebar-category-link');
-                if (link) {
-                    link.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        item.classList.toggle('active');
+                const arrow = item.querySelector('.sidebar-category-arrow');
+                
+                if (linkWrapper) {
+                    // 点击容器（除了链接文字部分）时展开/收起
+                    linkWrapper.addEventListener('click', function(e) {
+                        // 如果点击的是链接文字，允许默认跳转
+                        if (link && (e.target === link || link.contains(e.target))) {
+                            return; // 允许链接正常跳转
+                        }
+                        
+                        // 如果点击的是箭头或其他区域，阻止默认行为并切换展开状态
+                        if (arrow && (e.target === arrow || arrow.contains(e.target))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            item.classList.toggle('active');
+                        } else if (window.innerWidth <= 768) {
+                            // 移动端：点击容器其他区域也展开/收起
+                            e.preventDefault();
+                            e.stopPropagation();
+                            item.classList.toggle('active');
+                        }
                     });
                 }
             });
@@ -1858,125 +2623,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
             document.body.style.overflow = '';
         }
 
-        // 自适应分类菜单：检测空间并动态调整
-        function adjustCategoriesMenu() {
-            // 只在桌面端执行（移动端不需要）
-            if (window.innerWidth <= 768) {
-                // 移动端：显示所有分类，隐藏"更多"按钮
-                document.querySelectorAll('.category-more-item').forEach(function(item) {
-                    item.style.display = 'none';
-                });
-                document.querySelectorAll('.category-item.category-hidden').forEach(function(item) {
-                    item.classList.remove('category-hidden');
-                    item.style.display = '';
-                });
-                return;
-            }
 
-            // 处理两个可能的列表（正常列表和 fallback 列表）
-            const lists = [
-                { list: document.getElementById('categories-list'), suffix: '' },
-                { list: document.getElementById('categories-list-fallback'), suffix: '-fallback' }
-            ].filter(function(obj) { return obj.list !== null; });
-
-            lists.forEach(function(obj) {
-                const list = obj.list;
-                const suffix = obj.suffix;
-
-                const moreItem = document.getElementById('category-more-item' + suffix);
-                const moreLink = document.getElementById('category-more-link' + suffix);
-                const moreSubmenu = document.getElementById('category-more-submenu' + suffix);
-
-                if (!moreItem || !moreLink || !moreSubmenu) return;
-
-                // 重置：显示所有分类项，隐藏"更多"按钮
-                const allItems = Array.from(list.querySelectorAll('.category-item:not(.category-more-item)'));
-                allItems.forEach(function(item) {
-                    item.classList.remove('category-hidden');
-                    item.style.display = '';
-                    item.style.visibility = '';
-                    item.style.position = '';
-                });
-                moreItem.style.display = 'none';
-                moreSubmenu.innerHTML = '';
-
-                // 获取容器可用宽度
-                const categoriesNav = list.closest('.categories-nav');
-                if (!categoriesNav) return;
-
-                const containerWidth = categoriesNav.offsetWidth;
-                if (containerWidth === 0) return; // 容器未渲染
-
-                // 估算"更多"按钮宽度（包括 gap）
-                const moreItemWidth = 80; // 估算值
-                const gap = 8; // var(--spacing-sm) 的估算值
-
-                // 计算每个分类项的宽度
-                let totalWidth = 0;
-                let visibleItems = [];
-                let hiddenItems = [];
-
-                allItems.forEach(function(item) {
-                    // 确保项目可见以测量宽度
-                    const originalDisplay = item.style.display;
-                    const originalVisibility = item.style.visibility;
-                    const originalPosition = item.style.position;
-                    
-                    item.style.display = 'block';
-                    item.style.visibility = 'visible';
-                    item.style.position = 'static';
-                    
-                    const itemWidth = item.offsetWidth + gap;
-                    
-                    // 恢复原始样式
-                    item.style.display = originalDisplay;
-                    item.style.visibility = originalVisibility;
-                    item.style.position = originalPosition;
-                    
-                    // 检查是否放得下（包括"更多"按钮的空间）
-                    const needMoreButton = hiddenItems.length > 0;
-                    const requiredWidth = totalWidth + itemWidth + (needMoreButton ? 0 : moreItemWidth);
-                    
-                    if (requiredWidth <= containerWidth) {
-                        totalWidth += itemWidth;
-                        visibleItems.push(item);
-                    } else {
-                        hiddenItems.push(item);
-                    }
-                });
-
-                // 如果有隐藏的分类，显示"更多"按钮
-                if (hiddenItems.length > 0) {
-                    moreItem.style.display = '';
-                    
-                    // 将隐藏的分类移到"更多"下拉菜单
-                    hiddenItems.forEach(function(item) {
-                        item.classList.add('category-hidden');
-                        item.style.display = 'none';
-                        
-                        // 克隆到"更多"菜单（保持原有结构，包括子菜单）
-                        const clonedItem = item.cloneNode(true);
-                        clonedItem.classList.remove('category-hidden');
-                        clonedItem.style.display = '';
-                        clonedItem.style.visibility = '';
-                        clonedItem.style.position = '';
-                        moreSubmenu.appendChild(clonedItem);
-                    });
-                }
-            });
-        }
-
-        // 初始化自适应菜单
-        adjustCategoriesMenu();
-
-        // 窗口大小改变时重新调整
-        let resizeTimer;
-        window.addEventListener('resize', function() {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(adjustCategoriesMenu, 100);
-        });
-
-        // 删除点击展开逻辑，"更多"按钮改为纯hover展开
 
         // 迷你购物车：点击展开/关闭
         const miniCartOverlay = document.getElementById('mini-cart-overlay');
@@ -2051,28 +2698,111 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
                 hideMiniCart();
             });
 
-            // 切换迷你购物车显示/隐藏的函数
-            function toggleMiniCart() {
-                if (headerCart.classList.contains('mini-cart-open')) {
-                    hideMiniCart();
-                } else {
-                    showMiniCart();
+        // 迷你购物车控制函数（保持原有逻辑）
+        function toggleMiniCart() {
+            if (headerCart.classList.contains('mini-cart-open')) {
+                hideMiniCart();
+            } else {
+                showMiniCart();
+            }
+        }
+
+        function showMiniCart() {
+            headerCart.classList.add('mini-cart-open');
+            headerCart.setAttribute('aria-expanded', 'true');
+        }
+
+        function hideMiniCart() {
+            headerCart.classList.remove('mini-cart-open');
+            headerCart.setAttribute('aria-expanded', 'false');
+        }
+        }
+
+        // --- 修复：导航条溢出检测与处理 ---
+        const mainNav = document.querySelector('.header-main-nav');
+        const navLeft = document.querySelector('.header-nav-left');
+        const navRight = document.querySelector('.header-nav-right');
+        const navFill = document.getElementById('header-nav-fill');
+        const navList = document.getElementById('nav-links-list');
+        const navMoreWrapper = document.getElementById('nav-more-wrapper');
+        const navMoreDropdown = document.getElementById('nav-more-dropdown');
+
+        if (mainNav && navList && navMoreWrapper) {
+            function checkNavFillOverflow() {
+                // 1. 获取最原始的、不可变的外层物理宽度
+                // 不要直接测量 mainNav，因为它可能被内部项撑开，要测量它的父容器
+                const headerContainer = mainNav.parentElement;
+                const totalPhysicalWidth = headerContainer.getBoundingClientRect().width;
+                
+                // 2. 先重置所有项显示，以便后续循环计算它们的真实宽度
+                const items = Array.from(navList.children);
+                items.forEach(item => {
+                    item.style.display = 'block';
+                    item.classList.remove('hidden');
+                });
+                navMoreWrapper.style.display = 'none';
+
+                // 3. 测量左右两侧已占用的空间
+                const leftWidth = navLeft ? navLeft.getBoundingClientRect().width : 0;
+                const rightWidth = navRight ? navRight.getBoundingClientRect().width : 0;
+                
+                // 4. 计算中间链接区域能拿到的真正“净空”
+                const baseGap = 30; // 区域间固定安全间隙
+                let availableForLinks = totalPhysicalWidth - leftWidth - rightWidth - baseGap;
+
+                // 5. 遍历计算
+                const moreBtnWidth = 90; // “更多”按钮预估宽
+                let currentAccumulatedWidth = 0;
+                let overflowIndices = [];
+                const itemGap = 20; // 链接项之间的间隙
+
+                items.forEach((item, index) => {
+                    // 在这一步，由于我们之前设为了 display: block，getBoundingClientRect 拿到的就是它们的自然宽度
+                    const itemWidth = item.getBoundingClientRect().width;
+                    currentAccumulatedWidth += itemWidth + itemGap; 
+                    
+                    if (currentAccumulatedWidth > availableForLinks) {
+                        overflowIndices.push(index);
+                    } else if (currentAccumulatedWidth > (availableForLinks - moreBtnWidth) && index < items.length - 1) {
+                        // 灵敏预测：如果剩下的空间不够放“更多”按钮，就开始折叠
+                        overflowIndices.push(index);
+                    }
+                });
+
+                // 6. 应用折叠结果
+                if (overflowIndices.length > 0) {
+                    // 只有这里显式设置为 flex
+                    navMoreWrapper.style.display = 'flex';
+                    navMoreDropdown.innerHTML = '';
+                    
+                    overflowIndices.forEach(index => {
+                        const item = items[index];
+                        item.style.display = 'none';
+                        item.classList.add('hidden');
+                        
+                        const link = item.querySelector('a');
+                        if (link) {
+                            const li = document.createElement('li');
+                            const newLink = link.cloneNode(true);
+                            li.appendChild(newLink);
+                            navMoreDropdown.appendChild(li);
+                        }
+                    });
                 }
             }
 
-            // 显示迷你购物车的函数（添加 class）
-            function showMiniCart() {
-                headerCart.classList.add('mini-cart-open');
-                // 更新 aria-expanded 属性
-                headerCart.setAttribute('aria-expanded', 'true');
-            }
+            // 使用 ResizeObserver 监听关键容器变化
+            const navResizeObserver = new ResizeObserver(() => {
+                requestAnimationFrame(checkNavFillOverflow);
+            });
+            navResizeObserver.observe(mainNav);
+            if (navLeft) navResizeObserver.observe(navLeft);
 
-            // 隐藏迷你购物车的函数（移除 class）
-            function hideMiniCart() {
-                headerCart.classList.remove('mini-cart-open');
-                // 更新 aria-expanded 属性
-                headerCart.setAttribute('aria-expanded', 'false');
-            }
+            // 同时绑定窗口缩放事件作为备用
+            window.addEventListener('resize', checkNavFillOverflow);
+
+            // 初始执行
+            setTimeout(checkNavFillOverflow, 100); // 稍微延迟以等待布局完全稳定
         }
     });
 })();

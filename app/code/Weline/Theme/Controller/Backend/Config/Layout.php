@@ -275,16 +275,7 @@ class Layout extends BackendController
         $area  = strtolower($area) ?: 'frontend';
         $scope = $scope ?: self::DEFAULT_SCOPE;
 
-        // 获取可用的scope列表
-        $scopeOptions = [];
-        if ($theme) {
-            $scopeOptions = [
-                'frontend' => ThemeConfigManager::getScopes($theme, 'frontend'),
-                'backend' => ThemeConfigManager::getScopes($theme, 'backend'),
-            ];
-        }
-
-        // 生成预览URL（与主题列表页一致）
+        // 生成预览URL
         $previewUrlFrontend = null;
         $previewUrlBackend = null;
         if ($theme) {
@@ -303,104 +294,28 @@ class Layout extends BackendController
             ]);
         }
 
-        // 确保 $theme 是对象，如果不是则设为 null
-        if ($theme && (!is_object($theme) || !method_exists($theme, 'getId'))) {
-            $theme = null;
+        // Check theme mode from Backend Config
+        /** @var \Weline\Backend\Block\ThemeConfig $themeConfigBlock */
+        $themeConfigBlock = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+        // Ensure init is called to load user config
+        if (method_exists($themeConfigBlock, '__init')) {
+            $themeConfigBlock->__init();
         }
         
-        // 使用 ThemeData 获取配置数据
-        $frontendLayoutOptions = [];
-        $backendLayoutOptions = [];
-        $frontendPartialsOptions = [];
-        $backendPartialsOptions = [];
-        $frontendColorOptions = [];
-        $backendColorOptions = [];
-        $frontendVariableOptions = [];
-        $backendVariableOptions = [];
-        $frontendComponentOptions = [];
-        $backendComponentOptions = [];
-        
-        $frontendLayoutConfig = [];
-        $backendLayoutConfig = [];
-        $frontendPartialsConfig = [];
-        $backendPartialsConfig = [];
-        $frontendColorConfig = null;
-        $backendColorConfig = null;
-        $frontendVariablesConfig = [];
-        $backendVariablesConfig = [];
-        
-        if ($theme) {
-            // 设置当前主题和区域到 ThemeData
-            ThemeData::setCurrentTheme($theme);
-            
-            // 获取前端配置选项
-            ThemeData::setCurrentArea('frontend');
-            $frontendLayoutOptions = ThemeData::getAvailableOptions('frontend', 'layouts');
-            $frontendPartialsOptions = ThemeData::getAvailableOptions('frontend', 'partials');
-            $frontendColorOptions = ThemeData::getAvailableOptions('frontend', 'colors');
-            $frontendVariableOptions = ThemeData::getAvailableOptions('frontend', 'variables');
-            $frontendComponentOptions = ThemeData::getAvailableOptions('frontend', 'components');
-            
-            // 获取前端当前配置
-            $frontendLayoutConfig = ThemeData::getLayoutConfig('frontend', $scope);
-            $frontendPartialsConfig = ThemeData::getPartialsConfig('frontend', $scope);
-            $frontendColorConfig = ThemeData::getColorConfig('frontend', $scope);
-            $frontendVariablesConfig = ThemeData::getVariablesConfig('frontend', $scope);
-            
-            // 获取后端配置选项
-            ThemeData::setCurrentArea('backend');
-            $backendLayoutOptions = ThemeData::getAvailableOptions('backend', 'layouts');
-            $backendPartialsOptions = ThemeData::getAvailableOptions('backend', 'partials');
-            $backendColorOptions = ThemeData::getAvailableOptions('backend', 'colors');
-            $backendVariableOptions = ThemeData::getAvailableOptions('backend', 'variables');
-            $backendComponentOptions = ThemeData::getAvailableOptions('backend', 'components');
-            
-            // 获取后端当前配置
-            $backendLayoutConfig = ThemeData::getLayoutConfig('backend', $scope);
-            $backendPartialsConfig = ThemeData::getPartialsConfig('backend', $scope);
-            $backendColorConfig = ThemeData::getColorConfig('backend', $scope);
-            $backendVariablesConfig = ThemeData::getVariablesConfig('backend', $scope);
-        }
-        
+        $backendThemeMode = $themeConfigBlock->getThemeConfig('theme-mode-switch');
+        $themeMode = $backendThemeMode ?: 'light';
+
         $this->assign('themes', $themes);
         $this->assign('theme', $theme);
         $this->assign('area', $area);
         $this->assign('scope', $scope);
-        $this->assign('scopeOptions', $scopeOptions);
+        $this->assign('scopeOptions', []);
         $this->assign('previewUrlFrontend', $previewUrlFrontend);
         $this->assign('previewUrlBackend', $previewUrlBackend);
-        
-        // 传递 ThemeData 获取的配置选项
-        $this->assign('frontendLayoutOptions', $frontendLayoutOptions);
-        $this->assign('backendLayoutOptions', $backendLayoutOptions);
-        $this->assign('frontendPartialsOptions', $frontendPartialsOptions);
-        $this->assign('backendPartialsOptions', $backendPartialsOptions);
-        $this->assign('frontendColorOptions', $frontendColorOptions);
-        $this->assign('backendColorOptions', $backendColorOptions);
-        $this->assign('frontendVariableOptions', $frontendVariableOptions);
-        $this->assign('backendVariableOptions', $backendVariableOptions);
-        $this->assign('frontendComponentOptions', $frontendComponentOptions);
-        $this->assign('backendComponentOptions', $backendComponentOptions);
-        
-        // 传递当前配置
-        $this->assign('frontendLayoutConfig', $frontendLayoutConfig);
-        $this->assign('backendLayoutConfig', $backendLayoutConfig);
-        $this->assign('frontendPartialsConfig', $frontendPartialsConfig);
-        $this->assign('backendPartialsConfig', $backendPartialsConfig);
-        $this->assign('frontendColorConfig', $frontendColorConfig);
-        $this->assign('backendColorConfig', $backendColorConfig);
-        $this->assign('frontendVariablesConfig', $frontendVariablesConfig);
-        $this->assign('backendVariablesConfig', $backendVariablesConfig);
-        
-        // 保存和获取参数的URL
-        $saveSelectionUrl = $this->getUrl('theme/backend/config/theme-config/saveSelection');
-        $getFileParamsUrl = $this->getUrl('theme/backend/config/theme-config/fileParams');
-        $saveFileParamsUrl = $this->getUrl('theme/backend/config/theme-config/saveFileParams');
-        $this->assign('saveSelectionUrl', $saveSelectionUrl);
-        $this->assign('getFileParamsUrl', $getFileParamsUrl);
-        $this->assign('saveFileParamsUrl', $saveFileParamsUrl);
+        $this->assign('themeMode', $themeMode);
 
-        return $this->fetch('Weline_Theme::templates/backend/config/edit-new.phtml');
+        // 使用新的可视化编辑器模板
+        return $this->fetch('Weline_Theme::templates/backend/config/visual-editor.phtml');
     }
 
     /**
@@ -432,6 +347,45 @@ class Layout extends BackendController
         $this->assign('scope', $scope);
 
         return $this->fetch('Weline_Theme::templates/backend/config/theme-meta-manager.phtml');
+    }
+
+    /**
+     * 保存主题配置
+     */
+    public function save()
+    {
+        $themeId = $this->request->getParam('theme_id');
+        $type = $this->request->getParam('type');
+        $category = $this->request->getParam('category');
+        $value = $this->request->getParam('value');
+        $key = $this->request->getParam('key');
+        $action = $this->request->getParam('action');
+        $params = $this->request->getParam('params', []);
+
+        /** @var \Weline\Theme\Helper\ThemeData $themeData */
+        $themeData = $this->container->get(\Weline\Theme\Helper\ThemeData::class);
+        $theme = $themeData->getTheme($themeId);
+
+        if (!$theme) {
+            return $this->json(['code' => 400, 'msg' => '主题未找到']);
+        }
+
+        try {
+            if ($action === 'reset' && $key) {
+                // Delete specific parameter configuration
+                $themeData->deleteParamValue($theme, $type, $category, $value, $key, $this->request->getParam('locale'));
+                return $this->json(['code' => 200, 'msg' => '已重置配置']);
+            }
+
+            // Standard save logic
+            if (!empty($params)) {
+                $themeData->setParamValues($theme, $type, $category, $value, $params, $this->request->getParam('locale'));
+            }
+            
+            return $this->json(['code' => 200, 'msg' => '保存成功']);
+        } catch (\Exception $e) {
+            return $this->json(['code' => 500, 'msg' => '保存失败: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -512,6 +466,53 @@ class Layout extends BackendController
         }
 
         return $this->fetchJson($this->success(__('配置保存成功')));
+    }
+
+    /**
+     * 上传主题资源（图片等）
+     */
+    public function postUpload()
+    {
+        $themeId = $this->request->getPost('theme_id');
+        if (!$themeId) {
+            return $this->json(['code' => 400, 'msg' => __('主题ID缺失')]);
+        }
+
+        $file = $this->request->getFile('file');
+        if (!$file) {
+            return $this->json(['code' => 400, 'msg' => __('未发现上传文件')]);
+        }
+
+        try {
+            // 简单验证
+            $allowTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!in_array($file['type'], $allowTypes)) {
+                return $this->json(['code' => 400, 'msg' => __('不支持的文件类型')]);
+            }
+
+            // 限制大小 (e.g., 5MB)
+            if ($file['size'] > 5 * 1024 * 1024) {
+                return $this->json(['code' => 400, 'msg' => __('文件太大，请限制在5MB以内')]);
+            }
+
+            $mediaDir = PUB . 'media' . DS . 'theme' . DS . 'param' . DS;
+            if (!is_dir($mediaDir)) {
+                mkdir($mediaDir, 0777, true);
+            }
+
+            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $newFileName = md5($file['name'] . time()) . '.' . $extension;
+            $targetPath = $mediaDir . $newFileName;
+
+            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                $url = '/media/theme/param/' . $newFileName;
+                return $this->json(['code' => 200, 'msg' => __('上传成功'), 'url' => $url]);
+            } else {
+                return $this->json(['code' => 500, 'msg' => __('文件保存失败')]);
+            }
+        } catch (\Exception $e) {
+            return $this->json(['code' => 500, 'msg' => __('上传出错: %1', $e->getMessage())]);
+        }
     }
 
     /**

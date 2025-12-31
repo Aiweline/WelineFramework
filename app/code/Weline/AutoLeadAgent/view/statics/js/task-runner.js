@@ -87,6 +87,9 @@ var AutoLeadAgentTaskRunner = (function () {
         useExtension: false             // 是否使用扩展进行爬取
     };
 
+    // 从后端获取的模块配置（包含 hf_model_id / hf_model_enabled 等），按页面生命周期缓存
+    var cachedAgentConfig = null;
+
     // 日志回调
     var logCallbacks = {
         inference: [],  // 推理日志
@@ -117,6 +120,101 @@ var AutoLeadAgentTaskRunner = (function () {
 
         // 检测浏览器扩展
         detectExtension();
+    }
+
+    /**
+     * 获取模块配置（包含 hf_model_id / hf_model_enabled 等）
+     * 结果按页面生命周期缓存，避免重复请求
+     */
+    async function getAgentConfig() {
+        if (cachedAgentConfig) {
+            return cachedAgentConfig;
+        }
+
+        try {
+            // /auto-lead-agent/backend/index -> /auto-lead-agent/backend/config/getConfig
+            var base = config.apiBaseUrl.replace(/\/index$/, '');
+            var url = base + '/config/getConfig';
+
+            var res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            var data = await res.json();
+            if (data && data.success && data.data) {
+                cachedAgentConfig = data.data;
+                return cachedAgentConfig;
+            } else {
+                console.warn('[TaskRunner] Failed to load agent config:', data && data.message);
+                return null;
+            }
+        } catch (e) {
+            console.error('[TaskRunner] Error loading agent config:', e);
+            return null;
+        }
+    }
+
+    /**
+     * 加载端侧推理模型（HFModelManager + ModelInference）
+     */
+    async function loadInferenceModel() {
+        // 如果已经通过 HFModelManager 加载过模型，则不重复加载
+        if (typeof HFModelManager !== 'undefined' &&
+            HFModelManager &&
+            typeof HFModelManager.isLoaded === 'function' &&
+            HFModelManager.isLoaded()) {
+            emitLog('inference', '端侧模型已加载，跳过重复加载');
+            return true;
+        }
+
+        state.status = TASK_STATUS.LOADING;
+        updateUIStatus(TASK_STATUS.LOADING);
+        updateModelStatus('loading', null, null);
+        emitLog('inference', '开始加载端侧推理模型（HFModelManager + ModelInference）...');
+
+        try {
+            var startTime = performance.now();
+
+            // 获取配置以初始化模型管理器
+            var agentConfig = await getAgentConfig();
+            var hfModelId = agentConfig && agentConfig.hf_model_id ? agentConfig.hf_model_id : null;
+            var cacheSize = agentConfig && agentConfig.hf_model_cache_size
+                ? parseInt(agentConfig.hf_model_cache_size, 10)
+                : 10240;
+
+            if (!hfModelId) {
+                throw new Error('未配置 Hugging Face 模型 ID');
+            }
+
+            if (typeof HFModelManager === 'undefined' || typeof ModelInference === 'undefined') {
+                throw new Error('HFModelManager 或 ModelInference 未在页面中加载');
+            }
+
+            // 初始化模型推理层
+            ModelInference.init({
+                apiBaseUrl: config.apiBaseUrl,
+                modelId: hfModelId,
+                cacheSize: cacheSize || 10240
+            });
+
+            // 触发实际模型加载（Chrome AI / WebLLM）
+            await HFModelManager.loadModel();
+
+            var loadTime = performance.now() - startTime;
+            emitLog('inference', '端侧模型加载完成，耗时: ' + loadTime.toFixed(0) + 'ms');
+
+            updateModelStatus('idle', loadTime, getMemoryUsage());
+            return true;
+        } catch (error) {
+            emitLog('inference', '端侧模型加载失败: ' + error.message, { error: error.stack });
+            state.status = TASK_STATUS.FAILED;
+            updateUIStatus(TASK_STATUS.FAILED);
+            updateModelStatus('error', null, null);
+            return false;
+        }
     }
 
     /**
@@ -244,8 +342,8 @@ var AutoLeadAgentTaskRunner = (function () {
                 });
             } else {
                 // 其他未知请求ID，发出警告
-                console.warn('[TaskRunner] 收到未知请求ID的响应:', requestId);
-                console.warn('[TaskRunner] 当前待处理的请求:', Object.keys(extensionPendingRequests));
+            console.warn('[TaskRunner] 收到未知请求ID的响应:', requestId);
+            console.warn('[TaskRunner] 当前待处理的请求:', Object.keys(extensionPendingRequests));
             }
         }
     }
@@ -1196,7 +1294,7 @@ var AutoLeadAgentTaskRunner = (function () {
                     return customerProfile;
                 },
 
-                // 分析店铺画像，生成搜索关键词（改进版：基于目标客户特征）
+                // 分析店铺画像，生成搜索关键词（改进版：偏向行为/搜索意图）
                 analyzeStoreProfile: function (profileJson) {
                     var profile = typeof profileJson === 'string' ? JSON.parse(profileJson) : profileJson;
 
@@ -1218,10 +1316,10 @@ var AutoLeadAgentTaskRunner = (function () {
                     // 步骤2：从店铺画像推断客户画像
                     var customerProfile = this.inferCustomerProfileFromStore(profile);
 
-                    // 步骤3：从客户画像生成搜索关键词
+                    // 步骤3：从客户画像 + 客户内容生成行为/搜索意图型关键词
                     var customerKeywords = [];
 
-                    // 客户特征关键词
+                    // 3.1 基于客户画像的基础特征词（性别 / 特征 / 需求 / 角色 / 场景）
                     customerProfile.gender.forEach(function (g) {
                         if (customerKeywords.indexOf(g) === -1) {
                             customerKeywords.push(g);
@@ -1234,37 +1332,79 @@ var AutoLeadAgentTaskRunner = (function () {
                         }
                     });
 
-                    // 客户需求关键词
                     customerProfile.needs.forEach(function (n) {
                         if (customerKeywords.indexOf(n) === -1) {
                             customerKeywords.push(n);
                         }
                     });
 
-                    // 客户角色关键词
                     customerProfile.roles.forEach(function (r) {
                         if (customerKeywords.indexOf(r) === -1) {
                             customerKeywords.push(r);
                         }
                     });
 
-                    // 场景关键词
                     customerProfile.scenarios.forEach(function (s) {
                         if (customerKeywords.indexOf(s) === -1) {
                             customerKeywords.push(s);
                         }
                     });
 
-                    // 如果客户画像关键词不足，从店铺关键词中提取有价值的
-                    if (customerKeywords.length < 5) {
-                        // 保留一些有价值的店铺关键词作为补充
-                        var valuableStoreKeywords = ['定制', '高端', '专业', '全球', '个性化', '品质'];
-                        valuableStoreKeywords.forEach(function (k) {
-                            if (storeKeywords.indexOf(k) !== -1 && customerKeywords.indexOf(k) === -1) {
-                                customerKeywords.push(k);
+                    // 3.2 将店铺画像转化为“客户可能在网上的行为 / 搜索意图”
+                    var customerContent = this.convertProfileToCustomerContent(profile, customerProfile);
+                    var behaviorKeywords = [];
+
+                    if (customerContent && Array.isArray(customerContent.searchIntents)) {
+                        behaviorKeywords = behaviorKeywords.concat(customerContent.searchIntents);
+                    }
+                    if (customerContent && Array.isArray(customerContent.comments)) {
+                        // 适当加入部分评论作为长尾搜索词
+                        behaviorKeywords = behaviorKeywords.concat(customerContent.comments.slice(0, 20));
+                    }
+
+                    // 如果行为意图太少，再根据画像特征生成行为型短语（如“爱买口红”“爱美做美甲”）
+                    if (behaviorKeywords.length < 10) {
+                        var traitBehaviorMap = {
+                            '爱美': ['爱买口红', '喜欢做美甲', '经常买护肤品', '爱看美妆博主', '喜欢试新口红颜色'],
+                            '时尚': ['喜欢买时尚女装', '追最新潮流单品', '爱逛时尚女装店', '喜欢搭配各种裙子'],
+                            '注重形象': ['爱做造型设计', '经常去美甲店', '喜欢买高跟鞋', '喜欢穿漂亮连衣裙'],
+                            '追求品质': ['偏好高端品牌女装', '愿意为好品质付费', '喜欢买真皮女鞋', '常逛精品女装店']
+                        };
+
+                        customerProfile.traits.forEach(function (t) {
+                            if (traitBehaviorMap[t]) {
+                                traitBehaviorMap[t].forEach(function (b) {
+                                    if (behaviorKeywords.indexOf(b) === -1) {
+                                        behaviorKeywords.push(b);
+                                    }
+                                });
                             }
                         });
                     }
+
+                    // 如果行为型关键词仍然不足，从店铺关键词中生成行为短语
+                    if (behaviorKeywords.length < 10) {
+                        var valuableStoreKeywords = ['女鞋', '女装', '口红', '美甲', '裙子', '高跟鞋', '护肤', '化妆', '定制', '高端', '专业', '全球', '个性化', '品质'];
+                        valuableStoreKeywords.forEach(function (k) {
+                            if (storeKeywords.indexOf(k) !== -1) {
+                                var phrases = [
+                                    '想买' + k,
+                                    '哪里可以买到' + k,
+                                    k + ' 哪家好',
+                                    k + ' 推荐',
+                                    '爱买' + k
+                                ];
+                                phrases.forEach(function (p) {
+                                    if (behaviorKeywords.indexOf(p) === -1) {
+                                        behaviorKeywords.push(p);
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    // 合并画像基础关键词与行为关键词
+                    customerKeywords = customerKeywords.concat(behaviorKeywords);
 
                     // 过滤无意义的关键词
                     var meaninglessWords = ['通用', '其他', '未知', '无', 'null', 'undefined', '', ' ', '·', '-', '_',
@@ -1290,9 +1430,9 @@ var AutoLeadAgentTaskRunner = (function () {
                         }
                     });
 
-                    // 如果关键词太少，添加一些通用但有用的词
+                    // 如果关键词太少，添加一些通用但有用的词（兜底）
                     if (uniqueKeywords.length < 3) {
-                        var fallbackKeywords = ['客户', '用户', '消费者', '专业人士'];
+                        var fallbackKeywords = ['需要女装', '想买女鞋', '寻找目标客户', '专业服务'];
                         fallbackKeywords.forEach(function (k) {
                             if (uniqueKeywords.indexOf(k) === -1) {
                                 uniqueKeywords.push(k);
@@ -1300,7 +1440,26 @@ var AutoLeadAgentTaskRunner = (function () {
                         });
                     }
 
-                    return uniqueKeywords.slice(0, 20);
+                    // 行为型关键词优先：包含动词 / 行为词的短语优先输出
+                    var behaviorFirstKeywords = [];
+                    uniqueKeywords.forEach(function (k) {
+                        if (/[买购找寻求看做约定报逛试穿]/.test(k) || /推荐|需要|哪里|哪家|好不好|体验|预约|报名/.test(k)) {
+                            if (behaviorFirstKeywords.indexOf(k) === -1) {
+                                behaviorFirstKeywords.push(k);
+                            }
+                        }
+                    });
+
+                    // 如果行为型关键词不够，再补充部分其它关键词，保证数量
+                    if (behaviorFirstKeywords.length < 20) {
+                        uniqueKeywords.forEach(function (k) {
+                            if (behaviorFirstKeywords.indexOf(k) === -1 && behaviorFirstKeywords.length < 30) {
+                                behaviorFirstKeywords.push(k);
+                            }
+                        });
+                    }
+
+                    return behaviorFirstKeywords.slice(0, 20);
                 },
 
                 /**
@@ -1889,6 +2048,78 @@ var AutoLeadAgentTaskRunner = (function () {
 
         console.log('[TaskRunner] Starting task:', taskId, 'for store:', storeId);
 
+        // ========== 前置环境检查：浏览器 / 模型配置 / MCP 扩展 ==========
+        // 1. 浏览器内核检查（必须为 Chrome）
+        if (typeof BrowserDetector !== 'undefined' &&
+            BrowserDetector &&
+            typeof BrowserDetector.getBrowserInfo === 'function') {
+            try {
+                var browserInfo = BrowserDetector.getBrowserInfo();
+                if (!browserInfo.isChrome) {
+                    var msgChrome = '自动寻客任务需要在 Chrome 浏览器中运行，当前浏览器：' +
+                        (browserInfo.name || 'Unknown') + ' ' + (browserInfo.version || '');
+                    console.error('[TaskRunner]', msgChrome);
+                    emitLog('inference', '错误: ' + msgChrome);
+                    if (typeof BrowserDetector.showIncompatibleDialog === 'function') {
+                        BrowserDetector.showIncompatibleDialog({
+                            title: '浏览器不兼容',
+                            message: '自动寻客任务需要在 Chrome 浏览器中运行，请使用 Chrome 打开本页面后再启动任务。'
+                        });
+                    } else {
+                        alert(msgChrome);
+                    }
+                    return false;
+                }
+            } catch (e) {
+                console.warn('[TaskRunner] BrowserDetector check failed:', e);
+            }
+        }
+
+        // 2. 模型配置检查（必须已配置并启用端侧模型）
+        var agentConfig = await getAgentConfig();
+        if (!agentConfig || !agentConfig.hf_model_id) {
+            var msgNoModel = '未检测到端侧推理模型配置。请先在“配置管理”中选择 Hugging Face 模型并启用后再启动任务。';
+            console.error('[TaskRunner]', msgNoModel, 'config:', agentConfig);
+            emitLog('inference', '错误: ' + msgNoModel);
+            alert(msgNoModel);
+            return false;
+        }
+        if (!agentConfig.hf_model_enabled) {
+            var msgModelDisabled = '已配置端侧模型（' + agentConfig.hf_model_id + '），但当前处于未启用状态。请在“配置管理”中启用模型后再启动任务。';
+            console.error('[TaskRunner]', msgModelDisabled);
+            emitLog('inference', '错误: ' + msgModelDisabled);
+            alert(msgModelDisabled);
+            return false;
+        }
+
+        // 3. Browser MCP 扩展检查（必须可用，以便模型通过 MCP 控制浏览器）
+        if (typeof MCPClient !== 'undefined' &&
+            MCPClient &&
+            typeof MCPClient.isMCPAvailable === 'function') {
+            try {
+                var mcpAvailable = await MCPClient.isMCPAvailable();
+                if (!mcpAvailable) {
+                    var msgNoMcp = '未检测到 Browser MCP 浏览器扩展或其未就绪，无法通过 AI 工具自动操作浏览器。请先安装并启用 Browser MCP 扩展。';
+                    console.error('[TaskRunner]', msgNoMcp);
+                    emitLog('inference', '错误: ' + msgNoMcp);
+                    alert(msgNoMcp);
+                    return false;
+                }
+            } catch (e) {
+                console.warn('[TaskRunner] MCP availability check failed:', e);
+                var msgMcpErr = '检测 Browser MCP 扩展状态失败，请确认扩展已安装并启用后重试。';
+                emitLog('inference', '错误: ' + msgMcpErr);
+                alert(msgMcpErr);
+                return false;
+            }
+        } else {
+            var msgMcpUnsupported = '当前环境不支持 Browser MCP 扩展检测，无法确保模型可以通过 MCP 控制浏览器。';
+            console.error('[TaskRunner]', msgMcpUnsupported);
+            emitLog('inference', '错误: ' + msgMcpUnsupported);
+            alert(msgMcpUnsupported);
+            return false;
+        }
+
         // 验证任务配置：必须有搜索引擎和目标网站
         var selectedSearchEngines = sourceTypeProfile && sourceTypeProfile.selected_search_engines 
             ? sourceTypeProfile.selected_search_engines 
@@ -1931,8 +2162,8 @@ var AutoLeadAgentTaskRunner = (function () {
         state.inferenceLog = [];
         state.crawlingLog = [];
 
-        // 加载模型
-        var modelLoaded = await loadWasmModel();
+        // 加载端侧推理模型
+        var modelLoaded = await loadInferenceModel();
         if (!modelLoaded) {
             reportTaskError(taskId, '模型加载失败');
             return false;

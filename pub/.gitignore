@@ -1,4 +1,12 @@
-static/*
+# 忽略pub目录下的所有文件和目录
+*
+!.gitignore
+
+# 保留这些目录
+!static/
 !static/.gitkeep
-media/*
+!media/
 !media/.gitkeep
+
+# 如果需要保留其他目录，请在下面添加
+# !other_dir/
