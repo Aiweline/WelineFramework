@@ -42,4 +42,5 @@
     <event name="Weline_Framework_UninstallService::uninstall">
         <observer name="Weline_Weline_Framework_UninstallService::uninstall_observer" instance="Weline\Framework\Uninstall\Observer\UninstallObserver" disabled="false" shared="true" sort="10"/>
     </event>
+    
 </config>
