@@ -9,6 +9,9 @@ var LocalFileStorage = (function () {
     // 存储模型目录句柄（使用 File System Access API）
     var modelDirectories = new Map();
     
+    // 存储当前正在写入的文件流
+    var activeWritables = new Map();
+    
     // 存储父目录句柄（用于记住用户选择的项目目录）
     var parentDirectoryHandle = null;
     
@@ -220,6 +223,58 @@ var LocalFileStorage = (function () {
             }
             if (error.name === 'SecurityError' || (error.message && error.message.includes('user gesture'))) {
                 throw new Error('需要用户交互才能选择文件保存位置。请点击"保存"按钮后，在弹出的对话框中选择保存目录。');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * 保存模型文件块（用于流式下载）
+     * @param {string} modelId 模型ID
+     * @param {string} filename 文件名
+     * @param {ArrayBuffer} data 数据块
+     * @param {number} offset 偏移量
+     * @param {boolean} isComplete 是否是最后一块
+     */
+    async function saveModelFileChunk(modelId, filename, data, offset, isComplete) {
+        try {
+            const cacheKey = `${modelId}/${filename}`;
+            let writable = activeWritables.get(cacheKey);
+
+            if (!writable) {
+                if (!supportsFileSystemAccess()) {
+                    throw new Error('当前浏览器不支持流式写入文件系统');
+                }
+                const directoryHandle = await getModelDirectory(modelId, false);
+                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                writable = await fileHandle.createWritable();
+                activeWritables.set(cacheKey, writable);
+                console.log('[LocalFileStorage] 创建文件写入流:', filename);
+            }
+
+            // 写入数据
+            if (data && data.byteLength > 0) {
+                await writable.write({ type: 'write', position: offset, data: data });
+            }
+
+            // 如果是最后一块，关闭流
+            if (isComplete) {
+                await writable.close();
+                activeWritables.delete(cacheKey);
+                console.log('[LocalFileStorage] 文件流已关闭并保存:', filename);
+                
+                // 更新元数据（需要知道最终大小）
+                const finalSize = offset + (data ? data.byteLength : 0);
+                await updateModelMetadata(modelId, filename, finalSize);
+            }
+        } catch (error) {
+            console.error('[LocalFileStorage] 保存文件块失败:', error);
+            const cacheKey = `${modelId}/${filename}`;
+            if (activeWritables.has(cacheKey)) {
+                try {
+                    await activeWritables.get(cacheKey).abort();
+                } catch (e) {}
+                activeWritables.delete(cacheKey);
             }
             throw error;
         }
@@ -699,6 +754,7 @@ var LocalFileStorage = (function () {
         checkFileSystemPermission: checkFileSystemPermission,
         requestModelDirectoryPermission: requestModelDirectoryPermission,
         saveModelFile: saveModelFile,
+        saveModelFileChunk: saveModelFileChunk,
         getModelFile: getModelFile,
         hasModelFile: hasModelFile,
         hasModelFiles: hasModelFiles,

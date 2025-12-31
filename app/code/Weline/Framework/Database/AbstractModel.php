@@ -649,9 +649,27 @@ abstract class AbstractModel extends DataObject
         }
 
 
-        # 如果主键有值
-        if ($this->_primary_key and $this->getId()) {
-            $this->unique_data[$this->_primary_key] = $this->getId();
+        # 1. 优先检查物理主键
+        if ($this->_primary_key && $this->getData($this->_primary_key)) {
+            $this->unique_data[$this->_primary_key] = $this->getData($this->_primary_key);
+        } 
+        # 2. 只有在没有主键的情况下，才检查逻辑上的联合唯一键
+        else if ($this->_unit_unique_fields) {
+            $all_parts_present = true;
+            $temp_unique_data = [];
+            foreach ($this->_unit_unique_fields as $field) {
+                $val = $this->getData($field);
+                if (is_null($val) || $val === '') {
+                    $all_parts_present = false;
+                    break;
+                }
+                $temp_unique_data[$field] = $val;
+            }
+            
+            // 只有当联合键的所有组成部分都有值时，才将其视为有效的唯一标识
+            if ($all_parts_present) {
+                $this->unique_data = array_merge($this->unique_data, $temp_unique_data);
+            }
         }
 
         // 如果强制检测更新，但是没有任何条件则使用联合主键的方式进行条件装配

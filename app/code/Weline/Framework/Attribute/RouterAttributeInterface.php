@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Attribute;
 
-#[\Attribute] interface RouterAttributeInterface
+interface RouterAttributeInterface
 {
 
     const result_key = 'result';
