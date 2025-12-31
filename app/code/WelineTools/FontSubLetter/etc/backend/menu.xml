@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- Font Sub Letter 后台菜单 -->
+    <add source="WelineTools_FontSubLetter::font-sub-letter" name="font-sub-letter" title="字体子集工具" action=""
+         parent="Weline_Backend::system_configuration" icon="mdi mdi-font-family" order="22000" is_backend="1"/>
+
+    <add source="WelineTools_FontSubLetter:font_records_manager" name="font_records" title="字体记录管理" action="fontsubletter/backend/record/index"
+          parent="WelineTools_FontSubLetter::font-sub-letter" icon="mdi mdi-file-document-outline" order="1" is_backend="1"/>
+
+    <add source="WelineTools_FontSubLetter:font_upload_manager" name="font_upload" title="字体上传管理" action="fontsubletter/backend/upload/index"
+         parent="WelineTools_FontSubLetter::font-sub-letter" icon="mdi mdi-cloud-upload" order="2" is_backend="1"/>
+
+    <add source="WelineTools_FontSubLetter:font_settings" name="font_settings" title="字体设置" action="fontsubletter/backend/config/index"
+          parent="WelineTools_FontSubLetter::font-sub-letter" icon="mdi mdi-cog" order="3" is_backend="1"/>
+</menus>

@@ -240,23 +240,21 @@ foreach ($variables as $varName => $var) {
     const resetAllBtn = document.getElementById('reset-all-variables-btn');
     if (resetAllBtn) {
         resetAllBtn.addEventListener('click', function() {
-            if (confirm('<?= __('确定要重置所有变量为默认值吗？') ?>')) {
-                modal.querySelectorAll('.variable-item').forEach(function(item) {
-                    const defaultInput = item.querySelector('[data-default-value]');
-                    if (defaultInput) {
-                        const defaultValue = defaultInput.getAttribute('data-default-value');
-                        const textInput = item.querySelector('input[name*="variables"]');
-                        const colorInput = item.querySelector('.variable-color-input');
-                        
-                        if (textInput) {
-                            textInput.value = defaultValue;
-                        }
-                        if (colorInput) {
-                            colorInput.value = defaultValue;
-                        }
+            modal.querySelectorAll('.variable-item').forEach(function(item) {
+                const defaultInput = item.querySelector('[data-default-value]');
+                if (defaultInput) {
+                    const defaultValue = defaultInput.getAttribute('data-default-value');
+                    const textInput = item.querySelector('input[name*="variables"]');
+                    const colorInput = item.querySelector('.variable-color-input');
+                    
+                    if (textInput) {
+                        textInput.value = defaultValue;
                     }
-                });
-            }
+                    if (colorInput) {
+                        colorInput.value = defaultValue;
+                    }
+                }
+            });
         });
     }
     

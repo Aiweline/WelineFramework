@@ -52,7 +52,7 @@
     <add source="Weline_AutoLeadAgent::config" 
          name="config" 
          title="配置管理" 
-         action="auto-lead-agent/backend/config/index"
+         action="auto-lead-agent/backend/config"
          parent="Weline_AutoLeadAgent::auto_lead_agent"
          icon="mdi mdi-cog" 
          order="50"/>
