@@ -347,6 +347,64 @@
     <?php echo $this->fetch('Weline_Theme::theme/frontend/components/loading.phtml'); ?>
     <?= $this->fetch('Weline_Frontend::templates/public/header.phtml') ?>
     ```
+- **禁止内联样式规范（强制）**：
+  - **绝对禁止使用内联样式**：开发过程中**严格禁止**在任何HTML元素上使用 `style` 属性设置内联样式
+  - **适用范围**：包括但不限于：
+    - ❌ HTML标签：`<div style="color: red;">`、`<span style="background: blue;">` 等
+    - ❌ PHP模板：`<div style="<?= $color ?>">`、`<button style="display: none;">` 等
+    - ❌ JavaScript动态设置：`element.style.color = 'red'`、`element.setAttribute('style', '...')` 等
+    - ❌ 任何形式的HTML内联样式属性
+  - **必须使用的方式**：
+    - ✅ **CSS类**：所有样式必须通过CSS类实现，在独立的CSS/SCSS文件中定义
+    - ✅ **CSS变量**：动态样式值必须使用CSS变量，通过JavaScript修改CSS变量值
+    - ✅ **外部样式表**：所有样式规则必须写在外部CSS/SCSS文件中，通过 `<css>` 标签引入
+  - **正确示例**：
+    ```html
+    <!-- ✅ 正确：使用CSS类 -->
+    <div class="my-component">
+        <button class="btn btn-primary">按钮</button>
+    </div>
+    
+    <!-- ✅ 正确：使用CSS变量（通过JavaScript动态修改） -->
+    <div class="dynamic-color" style="--custom-color: var(--primary-color);">
+        <style>
+        .dynamic-color {
+            color: var(--custom-color);
+        }
+        </style>
+    </div>
+    
+    <!-- ✅ 正确：JavaScript修改CSS变量 -->
+    <script>
+    document.documentElement.style.setProperty('--custom-color', '#0bb197');
+    </script>
+    ```
+  - **错误示例**：
+    ```html
+    <!-- ❌ 错误：HTML内联样式 -->
+    <div style="color: red; background: blue;">内容</div>
+    <button style="display: none; width: 100px;">按钮</button>
+    
+    <!-- ❌ 错误：PHP模板内联样式 -->
+    <div style="color: <?= $color ?>;">内容</div>
+    <span style="background: <?= $bgColor ?>;">文本</span>
+    
+    <!-- ❌ 错误：JavaScript直接设置style属性 -->
+    <script>
+    element.style.color = 'red';
+    element.style.display = 'none';
+    element.setAttribute('style', 'color: blue;');
+    </script>
+    ```
+  - **特殊情况处理**：
+    - **CSS变量动态设置**：如果需要动态设置样式值，必须使用CSS变量，通过JavaScript修改CSS变量值，而不是直接设置style属性
+    - **框架组件**：如果框架组件需要内联样式，必须在组件内部通过CSS类实现，而不是在模板中使用style属性
+    - **第三方库**：如果第三方库需要内联样式，必须在组件封装时将其转换为CSS类
+  - **检查清单**：
+    - ✅ 检查所有HTML模板文件中是否包含 `style="` 属性
+    - ✅ 检查所有JavaScript代码中是否使用 `element.style.xxx` 或 `element.setAttribute('style', ...)`
+    - ✅ 检查所有动态生成的HTML是否包含内联样式
+    - ✅ 确保所有样式都通过CSS类或CSS变量实现
 - **主题色系规范（重要）**：
   - **必须遵循主题色系**：所有开发必须使用 Weline Framework 主题规范的颜色变量，禁止自定义颜色值
   - **完整变量文档**：查看所有主题配色变量的完整列表和使用示例，请参考 `app/code/Weline/Admin/doc/主题配色变量文档.md`
@@ -1590,11 +1648,25 @@ return [
      - ✅ 检查HTML内联样式中是否使用了CSS变量
      - ❌ 禁止任何 `color: #xxx`、`background: #xxx` 等硬编码颜色
      - ❌ 禁止任何 `style="color: #xxx"` 等内联硬编码颜色
-9. **代码修改限制**: 
+9. **禁止内联样式规范（强制）**：
+   - **绝对禁止使用内联样式**：开发过程中**严格禁止**在任何HTML元素上使用 `style` 属性设置内联样式
+   - **适用范围**：包括HTML标签、PHP模板、JavaScript动态设置等所有形式的内联样式
+   - **必须使用的方式**：
+     - ✅ 所有样式必须通过CSS类实现，在独立的CSS/SCSS文件中定义
+     - ✅ 动态样式值必须使用CSS变量，通过JavaScript修改CSS变量值
+     - ✅ 所有样式规则必须写在外部CSS/SCSS文件中，通过 `<css>` 标签引入
+   - **检查清单**：
+     - ✅ 检查所有HTML模板文件中是否包含 `style="` 属性
+     - ✅ 检查所有JavaScript代码中是否使用 `element.style.xxx` 或 `element.setAttribute('style', ...)`
+     - ✅ 检查所有动态生成的HTML是否包含内联样式
+     - ✅ 确保所有样式都通过CSS类或CSS变量实现
+     - ❌ 禁止任何形式的HTML内联样式（`<div style="...">`）
+     - ❌ 禁止JavaScript直接设置style属性（`element.style.color = 'red'`）
+10. **代码修改限制**: 
    - 禁止对app/code/Weline目录进行修改，除非用户明确指定
    - 禁止对app/code/目录以外的代码进行修改，除非用户明确提到需要修改的文件，如果必要修改可以提醒用户
-10. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
-11. **Git工作流程规则**: 
+11. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
+12. **Git工作流程规则**: 
     - **核心原则**: 绝对禁止直接使用 `git push --force` 强推！
     - **标准推送流程**: 
       1. 先执行 `git pull origin <branch-name>` 拉取远程最新代码
@@ -1749,6 +1821,137 @@ try {
     return $this->error('系统错误: ' . $e->getMessage());
 }
 ```
+
+### 🎨 主题系统开发规范
+
+**1. ThemeData统一读取规则（强制）**
+- **统一使用ThemeData**：所有读取主题meta配置数据的地方，必须使用 `\Weline\Theme\Helper\ThemeData` 类，禁止写重复代码
+- **禁止直接使用其他类**：
+  - ❌ 禁止直接使用 `CssVariableInjector` 获取CSS变量
+  - ❌ 禁止直接使用 `MetaConfig` 查询配置
+  - ❌ 禁止直接使用 `ObjectManager` 获取主题对象后手动查询
+  - ✅ **必须使用** `ThemeData` 类的静态方法统一读取
+- **ThemeData常用方法**：
+  ```php
+  // 获取配置值
+  $value = ThemeData::get('partials.header.value', $default);
+  
+  // 获取配置列表
+  $configList = ThemeData::getConfigList($area, 'variables', $scope);
+  
+  // 获取布局配置
+  $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
+  
+  // 获取部件配置
+  $partialsConfig = ThemeData::getPartialsConfig($area, $scope);
+  
+  // 获取色系配置
+  $colorConfig = ThemeData::getColorConfig($area, $scope);
+  
+  // 获取变量配置
+  $variablesConfig = ThemeData::getVariablesConfig($area, $scope);
+  
+  // 获取Meta数据
+  $metaData = ThemeData::getMeta("theme.{$area}.layouts.{$layoutType}");
+  
+  // 获取文件参数
+  $params = ThemeData::getFileParams('partials.header.default', $scope);
+  ```
+- **初始化要求**：
+  ```php
+  // 设置当前主题和区域（ThemeData会自动初始化）
+  if ($theme instanceof \Weline\Theme\Model\WelineTheme) {
+      ThemeData::setCurrentTheme($theme);
+  }
+  ThemeData::setCurrentArea($area);
+  ```
+- **CSS变量获取示例**：
+  ```php
+  // ✅ 正确：使用ThemeData获取CSS变量
+  // 设置当前主题和区域
+  ThemeData::setCurrentTheme($theme);
+  ThemeData::setCurrentArea($area);
+  
+  // 1. 从变量配置读取
+  $configList = ThemeData::getConfigList($area, 'variables', $scope);
+  foreach ($configList as $configKey => $configValue) {
+      // configKey格式: {variableFile}.{variableName}.value（getConfigList已移除variables前缀）
+      // 例如: colors.color-primary.value -> variableName = color-primary
+      if (preg_match('/^([^.]+)\.([^.]+)\.value$/', $configKey, $matches)) {
+          $variableFile = $matches[1];
+          $variableName = $matches[2];
+          // CSS变量名格式: --{variableName}（变量名本身已包含完整名称，如color-primary）
+          $cssVarName = '--' . str_replace('_', '-', $variableName);
+          
+          // 处理配置值（可能是字符串或数组）
+          $value = is_array($configValue) ? json_encode($configValue) : (string)$configValue;
+          $cssVars[$cssVarName] = $value;
+      }
+  }
+  
+  // 2. 从色盘配置读取变量值（覆盖变量配置）
+  $colorConfig = ThemeData::getColorConfig($area, $scope);
+  if ($colorConfig) {
+      $paletteMeta = ThemeData::getMeta("theme.{$area}.colors.{$colorConfig}");
+      if ($paletteMeta && isset($paletteMeta['meta_data']['variables'])) {
+          $paletteVars = $paletteMeta['meta_data']['variables'];
+          foreach ($paletteVars as $varName => $varValue) {
+              // 色盘变量名可能已经是完整CSS变量名（如--color-primary）或只是变量名（如color-primary）
+              $cssVarName = strpos($varName, '--') === 0 ? $varName : '--' . str_replace('_', '-', $varName);
+              $cssVars[$cssVarName] = (string)$varValue;
+          }
+      }
+  }
+  ```
+- **错误示例**：
+  ```php
+  // ❌ 错误：直接使用CssVariableInjector
+  $cssVariableInjector = ObjectManager::getInstance(CssVariableInjector::class);
+  $cssVars = $cssVariableInjector->getVariables($area, $theme, $scope);
+  
+  // ❌ 错误：直接查询MetaConfig
+  $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+  $config = $metaConfig->where(...)->select()->fetch();
+  ```
+- **性能优化**：ThemeData内部使用performanceLoad预加载配置，避免重复查询数据库
+
+**2. 性能极客模式：颜色变量统一处理（强制）**
+- **事件中统一处理**：所有颜色变量等配置数据的读取操作必须在事件中处理，禁止在每个模板中重复处理
+- **性能考虑**：在 `ControllerFetchFileBefore` 事件中统一读取整个主题的颜色变量配置，所有模板都可以直接使用，避免重复读取
+- **colors数组格式**：CSS变量 `--color-bg-tertiary` 自动转换为 `colors.bgTeriary` 格式（驼峰命名）
+- **模板使用方式**：
+  ```php
+  // ✅ 正确：直接使用colors数组，无需任何PHP处理代码
+  $colors = $this->getData('colors') ?? [];
+  // 在CSS中使用
+  background-color: <?= htmlspecialchars($colors['bgTeriary'] ?? '#e7e7e7') ?>;
+  // 或使用模板语法
+  background-color: {{colors.bgTeriary}};
+  ```
+- **变量名转换规则**：
+  - `--color-primary` -> `colors.primary`
+  - `--color-bg-tertiary` -> `colors.bgTeriary`
+  - `--color-text-primary` -> `colors.textPrimary`
+  - `--color-primary-light` -> `colors.primaryLight`
+- **禁止在模板中处理**：
+  ```php
+  // ❌ 错误：在模板中重复读取和处理颜色变量
+  $configList = ThemeData::getConfigList($area, 'variables', $scope);
+  foreach ($configList as $configKey => $configValue) {
+      // 处理逻辑...
+  }
+  
+  // ❌ 错误：使用CssVariableInjector
+  $cssVariableInjector = ObjectManager::getInstance(CssVariableInjector::class);
+  $cssVars = $cssVariableInjector->getVariables($area, $theme, $scope);
+  ```
+- **事件处理位置**：`app/code/Weline/Theme/Observer/ControllerFetchFileBefore.php`
+- **实现方式**：事件中调用 `loadThemeColors()` 方法，自动读取所有CSS变量并转换为colors数组，设置到模板数据中
+- **优势**：
+  - 一次读取，全局使用
+  - 避免每个模板都重复查询数据库
+  - 模板代码简洁，无需大量PHP处理逻辑
+  - 性能优化，减少数据库查询次数
 
 ### 🏗️ 模块化设计
 
