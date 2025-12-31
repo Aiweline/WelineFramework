@@ -27,25 +27,26 @@ use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\Manager\ObjectManager;
 
 $session = ObjectManager::getInstance(CustomerSession::class);
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 $isLoggedIn = $session->isLogin();
 
 if ($isLoggedIn) {
     ?>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/index" role="menuitem"><?= __('账户') ?></a></li>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/orders" role="menuitem"><?= __('我的订单') ?></a></li>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/settings" role="menuitem"><?= __('账户设置') ?></a></li>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/profile" role="menuitem"><?= __('个人资料') ?></a></li>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/logout" role="menuitem"><?= __('退出登录') ?></a></li>
+    <li role="none"><a href="/customer/account/index" role="menuitem"><?= __('账户') ?></a></li>
+    <li role="none"><a href="/customer/account/orders" role="menuitem"><?= __('我的订单') ?></a></li>
+    <li role="none"><a href="/customer/account/settings" role="menuitem"><?= __('账户设置') ?></a></li>
+    <li role="none"><a href="/customer/account/profile" role="menuitem"><?= __('个人资料') ?></a></li>
+    <li role="none"><a href="/customer/account/logout" role="menuitem"><?= __('退出登录') ?></a></li>
     <?php
 } else {
     ?>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/login" role="menuitem"><?= __('登录') ?></a></li>
-    <li role="none"><a href="<?= $frontendUrl ?>customer/account/register" role="menuitem"><?= __('注册') ?></a></li>
+    <li role="none"><a href="/customer/account/login" role="menuitem"><?= __('登录') ?></a></li>
+    <li role="none"><a href="/customer/account/register" role="menuitem"><?= __('注册') ?></a></li>
     <?php
 }
 ?>
 ```
+
+**注意**：由于 Theme 模块的 head partial 已经设置了 `<base>` 标签，所有相对路径都会基于 frontend 基础 URL。因此可以直接使用相对路径（如 `/customer/account/index`），无需使用 `$frontendUrl` 变量。
 
 ## HTML 结构
 

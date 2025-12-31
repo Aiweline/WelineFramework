@@ -11,6 +11,8 @@
 @param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
 @param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
 @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+@param.layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+@param.layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
 
 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
@@ -67,6 +69,10 @@
     box-sizing: border-box;
 }
 
+html {
+    height: 100%;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -77,6 +83,9 @@ body {
     background-color: #fff;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh; /* 确保body至少占据整个视口高度 */
+    display: flex;
+    flex-direction: column;
 }
 
 /* 亚马逊风格容器 */
@@ -86,7 +95,8 @@ body {
     margin: 0 auto;
     padding: 0;
     background-color: #fff;
-    min-height: calc(100vh - 200px);
+    flex: 1 0 auto; /* flex-grow: 1, flex-shrink: 0, flex-basis: auto - 占据剩余空间，但不会收缩 */
+    min-height: 0; /* 允许flex子项收缩，但通过flex: 1确保占据剩余空间 */
 }
 
 /* 页面包装器 */
