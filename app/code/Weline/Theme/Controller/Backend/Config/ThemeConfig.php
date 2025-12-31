@@ -79,11 +79,12 @@ class ThemeConfig extends BackendController
         $this->assign('theme', $theme);
         $this->assign('area', $area);
         $this->assign('scope', $scope);
-        $this->assign('scopeOptions', $scopeOptions);
+        $this->assign('scopeOptions', []); // 这里可以加载可用scope列表
         $this->assign('previewUrlFrontend', $previewUrlFrontend);
         $this->assign('previewUrlBackend', $previewUrlBackend);
 
-        return $this->fetch('Weline_Theme::templates/backend/config/theme-config.phtml');
+        // 使用新的可视化编辑器模板
+        return $this->fetch('Weline_Theme::templates/backend/config/visual-editor.phtml');
     }
 
     /**
@@ -150,6 +151,9 @@ class ThemeConfig extends BackendController
     /**
      * 获取单个文件的参数配置（用于齿轮按钮）
      */
+    /**
+     * 获取单个文件的参数配置（用于齿轮按钮）
+     */
     public function getFileParams()
     {
         $themeId = $this->request->getParam('theme_id');
@@ -158,7 +162,7 @@ class ThemeConfig extends BackendController
         $category = $this->request->getParam('category'); // default, account, header 等
         $value = $this->request->getParam('value'); // 文件名（不含扩展名）
         
-        if (!$themeId || !$type || !$category || !$value) {
+        if (!$themeId || !$type || !$category) {
             return $this->fetchJson(['code' => 400, 'msg' => __('参数不完整')]);
         }
         
@@ -175,7 +179,12 @@ class ThemeConfig extends BackendController
         ThemeData::setCurrentArea($area);
         
         // 构建 meta_identify
-        $metaIdentify = "{$type}.{$category}.{$value}";
+        // 如果 value 为空，则可能是全局配置（如 colors, variables），使用 type.category
+        if (empty($value)) {
+            $metaIdentify = "{$type}.{$category}";
+        } else {
+            $metaIdentify = "{$type}.{$category}.{$value}";
+        }
         
         // 获取 meta 数据
         $metaDataArr = ThemeData::getMeta($metaIdentify);
@@ -189,7 +198,7 @@ class ThemeConfig extends BackendController
         }
         
         // 如果 Meta 中没有，尝试从文件解析
-        if (empty($params)) {
+        if (empty($params) && !empty($value)) {
             $filePath = $this->resolveFilePath($theme, $area, $type, $category, $value);
             if ($filePath && is_file($filePath)) {
                 $parsed = ComponentMetaParser::parse($filePath);
@@ -198,6 +207,9 @@ class ThemeConfig extends BackendController
                 }
             }
         }
+        
+        // 如果是全局配置（value为空），尝试从目录元数据获取参数（待定逻辑）
+        // 这里暂时假设全局配置已经写入了 meta 表
         
         // 读取当前配置值
         $config = [];
@@ -217,6 +229,7 @@ class ThemeConfig extends BackendController
                 'params' => $params,
                 'config' => $config,
                 'meta_identify' => $metaIdentify,
+                'value' => $value // 返回原 value 以便前端判断
             ]
         ]);
     }
@@ -229,8 +242,10 @@ class ThemeConfig extends BackendController
         $themeId = $this->request->getPost('theme_id');
         $area = $this->request->getPost('area', 'frontend');
         $scope = $this->request->getPost('scope', self::DEFAULT_SCOPE);
+        $locale = $this->request->getPost('locale');
         $metaIdentify = $this->request->getPost('meta_identify');
         $params = $this->request->getPost('params', []);
+        $action = $this->request->getPost('action');
         
         if (!$themeId || !$metaIdentify) {
             return $this->fetchJson(['code' => 400, 'msg' => __('参数不完整')]);
@@ -249,10 +264,21 @@ class ThemeConfig extends BackendController
         ThemeData::setCurrentArea($area);
         
         try {
+            // 处理重置操作
+            if ($action === 'reset') {
+                $paramKey = $this->request->getPost('param_key');
+                if (!$paramKey) {
+                    return $this->fetchJson(['code' => 400, 'msg' => __('重置操作缺少参数键')]);
+                }
+                ThemeData::deleteParamValue($metaIdentify, $paramKey, $scope, $locale);
+                return $this->fetchJson(['code' => 200, 'msg' => __('重置成功')]);
+            }
+
             // 保存每个参数
             foreach ($params as $paramKey => $paramValue) {
-                $paramIdentify = "{$metaIdentify}.param.{$paramKey}.value";
-                ThemeData::set($paramIdentify, (string)$paramValue, $scope);
+                // 如果参数包含 translatable 定义，需要处理 i18n
+                // 这里 setParamValues 内部会自动判断 translatable
+                ThemeData::setParamValues($metaIdentify, [$paramKey => $paramValue], $scope, $locale);
             }
             
             // 清除缓存
@@ -261,6 +287,39 @@ class ThemeConfig extends BackendController
             return $this->fetchJson(['code' => 200, 'msg' => __('保存成功')]);
         } catch (\Exception $e) {
             return $this->fetchJson(['code' => 500, 'msg' => __('保存失败：') . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 同步后台主题模式
+     */
+    public function postSyncThemeMode()
+    {
+        $mode = $this->request->getPost('mode');
+        if (!in_array($mode, ['light', 'dark'])) {
+             return $this->fetchJson(['code' => 400, 'msg' => __('无效的模式')]);
+        }
+
+        try {
+            /** @var \Weline\Backend\Block\ThemeConfig $themeConfigBlock */
+            $themeConfigBlock = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+            if (method_exists($themeConfigBlock, '__init')) {
+                $themeConfigBlock->__init();
+            }
+
+            // 更新 theme-mode-switch
+            $themeConfigBlock->setThemeConfig('theme-mode-switch', $mode);
+
+            // 更新 layouts 相关配置 (仿照 app.js 逻辑)
+            $layouts = $themeConfigBlock->getThemeConfig('layouts') ?: [];
+            $layouts['data-topbar'] = $mode;
+            $layouts['data-sidebar'] = $mode;
+            
+            $themeConfigBlock->setThemeConfig('layouts', $layouts);
+
+            return $this->fetchJson(['code' => 200, 'msg' => __('同步成功')]);
+        } catch (\Exception $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => __('同步失败：') . $e->getMessage()]);
         }
     }
 

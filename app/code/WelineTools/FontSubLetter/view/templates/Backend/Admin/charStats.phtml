@@ -1,0 +1,363 @@
+<?php
+/**
+ * 字符提取统计页面
+ */
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字符提取统计 - 字体子集管理后台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stats-card h3 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .char-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 5px;
+            text-align: center;
+            font-size: 14px;
+            position: relative;
+        }
+        .char-item:hover {
+            background: #e9ecef;
+            cursor: pointer;
+        }
+        .char-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .type-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .type-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .type-count {
+            background: #007bff;
+            color: white;
+            border-radius: 20px;
+            padding: 5px 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <!-- 页面标题 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="h3 mb-0">
+                            <i class="bi bi-bar-chart"></i> 字符提取统计
+                        </h1>
+                        <p class="text-muted">分析用户提取的字符使用情况</p>
+                    </div>
+                    <a href="<?= $this->getUrl('fontsubletter/backend/admin/index') ?>" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> 返回管理后台
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3><?= number_format($totalExtractions) ?></h3>
+                    <p><i class="bi bi-hash"></i> 总提取次数</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <h3><?= number_format($uniqueChars) ?></h3>
+                    <p><i class="bi bi-type"></i> 唯一字符数</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <h3><?= $uniqueChars > 0 ? round($totalExtractions / $uniqueChars, 1) : 0 ?></h3>
+                    <p><i class="bi bi-graph-up"></i> 平均使用次数</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <h3><?= count($topChars) ?></h3>
+                    <p><i class="bi bi-star"></i> 热门字符</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 字符类型分布 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5><i class="bi bi-pie-chart"></i> 字符类型分布</h5>
+                    <canvas id="charTypeChart" height="300"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5><i class="bi bi-bar-chart"></i> 热门字符排行</h5>
+                    <canvas id="topCharsChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 字符类型详情 -->
+        <div class="row">
+            <?php
+            $typeLabels = [
+                'numbers' => '数字',
+                'uppercase' => '大写字母',
+                'lowercase' => '小写字母',
+                'chinese' => '中文字符',
+                'punctuation' => '标点符号',
+                'symbols' => '特殊符号',
+                'other' => '其他字符'
+            ];
+            
+            $typeColors = [
+                'numbers' => '#FF6384',
+                'uppercase' => '#36A2EB',
+                'lowercase' => '#FFCE56',
+                'chinese' => '#4BC0C0',
+                'punctuation' => '#9966FF',
+                'symbols' => '#FF9F40',
+                'other' => '#C9CBCF'
+            ];
+            ?>
+            
+            <?php foreach ($charTypeStats as $type => $stats): ?>
+                <?php if ($stats['count'] > 0): ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="type-card">
+                            <div class="type-header">
+                                <h6 class="mb-0">
+                                    <span style="color: <?= $typeColors[$type] ?>;">
+                                        <i class="bi bi-circle-fill"></i>
+                                    </span>
+                                    <?= $typeLabels[$type] ?>
+                                </h6>
+                                <span class="type-count"><?= number_format($stats['count']) ?></span>
+                            </div>
+                            
+                            <div class="char-grid">
+                                <?php 
+                                $displayChars = array_slice($stats['chars'], 0, 50, true);
+                                foreach ($displayChars as $char => $count): 
+                                ?>
+                                    <div class="char-item" title="<?= htmlspecialchars($char) ?> (使用<?= $count ?>次)">
+                                        <?= htmlspecialchars($char) ?>
+                                        <div class="char-count"><?= $count > 99 ? '99+' : $count ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                                
+                                <?php if (count($stats['chars']) > 50): ?>
+                                    <div class="char-item" style="grid-column: span 2;">
+                                        <small class="text-muted">+<?= count($stats['chars']) - 50 ?>个</small>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- 完整字符列表 -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5><i class="bi bi-list-ul"></i> 完整字符使用统计</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>排名</th>
+                                    <th>字符</th>
+                                    <th>Unicode</th>
+                                    <th>使用次数</th>
+                                    <th>使用率</th>
+                                    <th>字符类型</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php 
+                                $rank = 1;
+                                foreach ($topChars as $char => $count): 
+                                    $percentage = $totalExtractions > 0 ? round(($count / $totalExtractions) * 100, 2) : 0;
+                                    $charType = $this->getCharType($char);
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <?php if ($rank <= 3): ?>
+                                                <span class="badge bg-warning"><?= $rank ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><?= $rank ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <span class="fs-5"><?= htmlspecialchars($char) ?></span>
+                                        </td>
+                                        <td>
+                                            <code>U+<?= strtoupper(dechex(ord($char))) ?></code>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary"><?= number_format($count) ?></span>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar" style="width: <?= $percentage ?>%">
+                                                    <?= $percentage ?>%
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge" style="background-color: <?= $typeColors[$charType] ?>">
+                                                <?= $typeLabels[$charType] ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                <?php 
+                                    $rank++;
+                                endforeach; 
+                                ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // 字符类型分布图
+        const charTypeData = {
+            labels: [
+                <?php foreach ($charTypeStats as $type => $stats): ?>
+                    <?php if ($stats['count'] > 0): ?>
+                        '<?= $typeLabels[$type] ?>',
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            ],
+            datasets: [{
+                data: [
+                    <?php foreach ($charTypeStats as $type => $stats): ?>
+                        <?php if ($stats['count'] > 0): ?>
+                            <?= $stats['count'] ?>,
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                ],
+                backgroundColor: [
+                    <?php foreach ($charTypeStats as $type => $stats): ?>
+                        <?php if ($stats['count'] > 0): ?>
+                            '<?= $typeColors[$type] ?>',
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                ]
+            }]
+        };
+
+        const charTypeCtx = document.getElementById('charTypeChart').getContext('2d');
+        new Chart(charTypeCtx, {
+            type: 'doughnut',
+            data: charTypeData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        // 热门字符排行图
+        const topCharsData = {
+            labels: [
+                <?php 
+                $top10Chars = array_slice($topChars, 0, 10, true);
+                foreach ($top10Chars as $char => $count): 
+                ?>
+                    '<?= htmlspecialchars($char) ?>',
+                <?php endforeach; ?>
+            ],
+            datasets: [{
+                label: '使用次数',
+                data: [
+                    <?php foreach ($top10Chars as $char => $count): ?>
+                        <?= $count ?>,
+                    <?php endforeach; ?>
+                ],
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        };
+
+        const topCharsCtx = document.getElementById('topCharsChart').getContext('2d');
+        new Chart(topCharsCtx, {
+            type: 'bar',
+            data: topCharsData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

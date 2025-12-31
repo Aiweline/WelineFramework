@@ -20,15 +20,14 @@
     </event>
     <event name="Weline_Framework_Controller::fetch_file_after">
         <observer name="Weline_Theme::controller_fetch_file_after" instance="Weline\Theme\Observer\ControllerFetchFileAfter" disabled="false" shared="true" sort="10"/>
+        <!-- 控制器模板获取后：在最终tpl文件生成后，提取CSS/JS并生成静态文件，然后更新tpl -->
+        <!-- 注意：必须在 ControllerFetchFileAfter 之后执行，因为需要等待布局文件渲染完成 -->
+        <observer name="Weline_Theme::layout_assets_generator" instance="Weline\Theme\Observer\LayoutAssetsGenerator" disabled="false" shared="true" sort="20"/>
     </event>
     <!-- 系统升级后：自动清理主题缓存并扫描 app/design 下的所有主题 -->
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Theme::setup_upgrade_after" instance="Weline\Theme\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="0"/>
         <observer name="Weline_Theme::variable_meta_register" instance="Weline\Theme\Observer\VariableMetaRegister" disabled="false" shared="true" sort="100"/>
-    </event>
-    <!-- 模板编译后：提取内联CSS/JS并生成布局资源文件 -->
-    <event name="Weline_Framework_Template::after_compile">
-        <observer name="Weline_Theme::layout_assets_extractor" instance="Weline\Theme\Observer\LayoutAssetsExtractor" disabled="false" shared="true" sort="200"/>
     </event>
     <!-- Meta扫描事件：解析变量文件并注册到Meta系统 -->
     <event name="Weline_Meta::scan_path">

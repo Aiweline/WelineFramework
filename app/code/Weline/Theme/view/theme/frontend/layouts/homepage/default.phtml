@@ -25,6 +25,8 @@
  * @param showTestimonials {default=true,name="是否显示客户评价区块",description="是否显示客户评价区块，用于控制客户评价区块的显示"}
  * @param showPartners {default=true,name="是否显示合作伙伴区块",description="是否显示合作伙伴区块，用于控制合作伙伴区块的显示"}
  * @param showNews {default=true,name="是否显示新闻动态区块",description="是否显示新闻动态区块，用于控制新闻动态区块的显示"}
+ * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  *
  * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
@@ -83,9 +85,58 @@ $meta = $this->getData('meta') ?? [];
                 <w:hook>Weline_Theme::frontend::layouts::homepage::features-after</w:hook>
             </if>
             
+            <w:hook>Weline_Theme::frontend::layouts::homepage::main-before</w:hook>
             <main class="homepage-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="homepage-main" data-layout="homepage">
-                {{meta.content}}
+                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content<else/>
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <else/>
+                        <div class="homepage-default-content">
+                            <div class="container">
+                                <section class="welcome-section">
+                                    <h1 class="welcome-title"><lang>欢迎来到我们的网站</lang></h1>
+                                    <p class="welcome-description"><lang>这是一个功能强大、设计精美的电商平台，为您提供优质的产品和服务体验。</lang></p>
+                                </section>
+                                
+                                <section class="features-preview">
+                                    <h2 class="section-title"><lang>核心功能</lang></h2>
+                                    <div class="features-grid">
+                                        <div class="feature-card">
+                                            <div class="feature-icon">🛒</div>
+                                            <h3 class="feature-title"><lang>便捷购物</lang></h3>
+                                            <p class="feature-desc"><lang>简单易用的购物流程，让您轻松选购心仪商品</lang></p>
+                                        </div>
+                                        <div class="feature-card">
+                                            <div class="feature-icon">🚚</div>
+                                            <h3 class="feature-title"><lang>快速配送</lang></h3>
+                                            <p class="feature-desc"><lang>高效的物流系统，确保商品快速送达您的手中</lang></p>
+                                        </div>
+                                        <div class="feature-card">
+                                            <div class="feature-icon">💳</div>
+                                            <h3 class="feature-title"><lang>安全支付</lang></h3>
+                                            <p class="feature-desc"><lang>多种支付方式，保障您的资金安全</lang></p>
+                                        </div>
+                                        <div class="feature-card">
+                                            <div class="feature-icon">🎁</div>
+                                            <h3 class="feature-title"><lang>优质服务</lang></h3>
+                                            <p class="feature-desc"><lang>专业的客服团队，为您提供贴心的服务支持</lang></p>
+                                        </div>
+                                    </div>
+                                </section>
+                                
+                                <section class="cta-section">
+                                    <h2 class="section-title"><lang>开始您的购物之旅</lang></h2>
+                                    <p class="cta-description"><lang>浏览我们的产品目录，发现更多精彩商品</lang></p>
+                                    <a href="/category" class="btn btn-primary"><lang>浏览商品</lang></a>
+                                </section>
+                            </div>
+                        </div>
+                    </if>
+                </w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content-after</w:hook>
             </main>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::main-after</w:hook>
             
             <if condition="meta.showProducts && meta.products">
                 <w:hook>Weline_Theme::frontend::layouts::homepage::products-before</w:hook>
@@ -144,6 +195,241 @@ $meta = $this->getData('meta') ?? [];
     
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <style>
+    /* ========================================
+       Amazon风格 - 首页布局样式
+       ======================================== */
+    
+    /* 基础重置和全局样式 */
+    * {
+        box-sizing: border-box;
+    }
+    
+    html {
+        height: 100%;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #111;
+        background-color: #fff;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        min-height: 100vh;
+    }
+    
+    /* 首页容器 */
+    .weline-page-wrapper {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .weline-main-content {
+        flex: 1;
+        width: 100%;
+    }
+    
+    /* 首页区块样式 */
+    .homepage-banner {
+        width: 100%;
+    }
+    
+    .homepage-section {
+        width: 100%;
+        padding: 2rem 0;
+    }
+    
+    .homepage-main {
+        width: 100%;
+        flex: 1;
+    }
+    
+    /* 容器样式 */
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 1rem;
+    }
+    
+    /* 默认内容样式 */
+    .homepage-default-content {
+        width: 100%;
+        padding: 3rem 0;
+    }
+    
+    .welcome-section {
+        text-align: center;
+        padding: 3rem 0;
+        margin-bottom: 3rem;
+    }
+    
+    .welcome-title {
+        font-size: 2.5rem;
+        font-weight: 600;
+        color: #111;
+        margin: 0 0 1rem 0;
+    }
+    
+    .welcome-description {
+        font-size: 1.125rem;
+        color: #565959;
+        margin: 0;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .features-preview {
+        margin: 3rem 0;
+    }
+    
+    .section-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #111;
+        text-align: center;
+        margin: 0 0 2rem 0;
+    }
+    
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+    
+    .feature-card {
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        transition: box-shadow 0.3s ease, transform 0.3s ease;
+    }
+    
+    .feature-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-4px);
+    }
+    
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .feature-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #111;
+        margin: 0 0 0.75rem 0;
+    }
+    
+    .feature-desc {
+        font-size: 0.95rem;
+        color: #565959;
+        margin: 0;
+        line-height: 1.6;
+    }
+    
+    .cta-section {
+        text-align: center;
+        padding: 3rem 0;
+        margin-top: 3rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .cta-description {
+        font-size: 1.125rem;
+        color: #565959;
+        margin: 0 0 1.5rem 0;
+    }
+    
+    .btn {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        font-weight: 500;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background-color 0.3s ease, transform 0.2s ease;
+        cursor: pointer;
+        border: none;
+    }
+    
+    .btn-primary {
+        background-color: #ff9900;
+        color: #fff;
+    }
+    
+    .btn-primary:hover {
+        background-color: #e68900;
+        transform: translateY(-2px);
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 1024px) {
+        .container {
+            padding: 0 0.75rem;
+        }
+        
+        .features-grid {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .container {
+            padding: 0 0.5rem;
+        }
+        
+        .homepage-section {
+            padding: 1.5rem 0;
+        }
+        
+        .homepage-default-content {
+            padding: 2rem 0;
+        }
+        
+        .welcome-section {
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .welcome-title {
+            font-size: 2rem;
+        }
+        
+        .welcome-description {
+            font-size: 1rem;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+        }
+        
+        .features-grid {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        
+        .feature-card {
+            padding: 1.5rem;
+        }
+        
+        .cta-section {
+            padding: 2rem 1rem;
+        }
+    }
+    </style>
 </body>
 </html>
 

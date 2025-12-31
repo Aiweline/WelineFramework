@@ -20,6 +20,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRANDOM_SUFFIX=${RANDOM_SUFFIX}")
 # 源文件
 set(SOURCES
     agent_core.cpp
+    agent_brain.cpp
+    mcp_protocol.cpp
     binding.cpp
 )
 
@@ -31,8 +33,7 @@ set(HEADERS
 # 创建可执行文件
 add_executable(agent_core ${SOURCES} ${HEADERS})
 
-# 编译为WASM
+# 编译为WASM - 导出所有新的智能体大脑函数
 set_target_properties(agent_core PROPERTIES
-    LINK_FLAGS "-s WASM=1 -s EXPORTED_FUNCTIONS='[\"_malloc\",\"_free\",\"calculateCustomerScore\",\"extractProfileFeatures\",\"matchProfile\",\"cleanData\"]' -s ALLOW_MEMORY_GROWTH=1 -O2"
+    LINK_FLAGS "-s WASM=1 -s EXPORTED_FUNCTIONS='[\"_malloc\",\"_free\",\"_wasm_start_task\",\"_wasm_next_decision\",\"_wasm_apply_tool_result\",\"_wasm_get_status\",\"_wasm_stop_task\",\"_wasm_is_ready\",\"_wasm_get_version\",\"_createAgentBrain\",\"_decideNextAction\",\"_updateState\",\"_calculateCustomerScore\",\"_extractProfileFeatures\",\"_matchProfile\",\"_cleanData\",\"_analyzeProfileForKeywords\",\"_matchWebContentWithProfile\",\"_extractContactInfo\"]' -s ALLOW_MEMORY_GROWTH=1 -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"UTF8ToString\",\"stringToUTF8\",\"lengthBytesUTF8\"]' -O2"
 )
-
