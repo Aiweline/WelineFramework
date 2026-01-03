@@ -1,0 +1,215 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Async\Model\SyncHost;
+
+$host = $this->getData('host');
+$isEdit = $host && $host->getId();
+
+$backendBase = $this->getBackendUrl('async/backend/host');
+$saveUrl = $this->getBackendUrl('async/backend/host/save');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $isEdit ? __('编辑主机') : __('新增主机') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑主机') : __('新增主机') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="<?= $backendBase ?>"><?= __('同步主机管理') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= $isEdit ? __('编辑主机') : __('新增主机') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <form method="post" action="<?= $saveUrl ?>">
+                                    <?php if ($isEdit): ?>
+                                        <input type="hidden" name="id" value="<?= $host->getId() ?>">
+                                    <?php endif; ?>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('主机名称') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" name="name" class="form-control" 
+                                               value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_NAME) : '') ?>" 
+                                               required>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('主机地址') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" name="host" class="form-control" 
+                                               value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_HOST) : '') ?>" 
+                                               placeholder="192.168.1.100 或 example.com" required>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('SSH端口') ?></label>
+                                        <input type="number" name="port" class="form-control" 
+                                               value="<?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_PORT) ?: 22) : 22) ?>" 
+                                               min="1" max="65535">
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('SSH用户名') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" name="user" class="form-control" 
+                                               value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_USER) : '') ?>" 
+                                               required>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('SSH密码') ?></label>
+                                        <input type="password" name="password" class="form-control" 
+                                               placeholder="<?= $isEdit ? __('留空则不修改密码') : __('请输入SSH密码') ?>">
+                                        <small class="form-text text-muted"><?= __('如果使用密钥认证，可留空') ?></small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('SSH密钥路径') ?></label>
+                                        <div class="input-group">
+                                            <input type="text" name="key_path" id="key_path" class="form-control" 
+                                                   value="<?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_KEY_PATH) ?: '') : '') ?>" 
+                                                   placeholder="/path/to/id_rsa">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="selectKeyFile()">
+                                                <i class="mdi mdi-folder-open"></i> <?= __('选择文件') ?>
+                                            </button>
+                                        </div>
+                                        <input type="file" id="key_file_input" style="display: none;" accept="*" onchange="handleKeyFileSelect(event)">
+                                        <small class="form-text text-muted"><?= __('SSH私钥文件的完整路径，可以点击"选择文件"按钮选择，或手动输入路径') ?></small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('描述') ?></label>
+                                        <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_DESCRIPTION) ?: '') : '') ?></textarea>
+                                    </div>
+
+                                    <div class="text-end">
+                                        <a href="<?= $backendBase ?>" class="btn btn-secondary"><?= __('取消') ?></a>
+                                        <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@template(Weline_Admin::common/footer.phtml)
+<script>
+function selectKeyFile() {
+    // 触发文件选择对话框
+    document.getElementById('key_file_input').click();
+}
+
+function handleKeyFileSelect(event) {
+    const fileInput = event.target;
+    const filePathInput = document.getElementById('key_path');
+    
+    if (fileInput.files && fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const fileName = file.name;
+        
+        // 尝试获取完整路径
+        let fullPath = '';
+        
+        // 方法1: 检查是否有 path 属性（某些环境支持）
+        if (file.path) {
+            fullPath = file.path;
+        }
+        // 方法2: 检查是否有 webkitRelativePath
+        else if (file.webkitRelativePath) {
+            fullPath = file.webkitRelativePath;
+        }
+        // 方法3: 尝试使用 FileReader（仅用于验证文件，无法获取路径）
+        else {
+            // 由于浏览器安全限制，无法直接获取完整路径
+            // 显示提示对话框，帮助用户输入路径
+            const currentValue = filePathInput.value || '';
+            const defaultPath = getDefaultKeyPath(fileName);
+            
+            const message = '<?= __('由于浏览器安全限制，无法自动获取文件的完整路径。\n\n请手动输入SSH密钥的完整路径：\n\nWindows示例: C:\\Users\\YourName\\.ssh\\id_rsa\nLinux/Mac示例: /home/username/.ssh/id_rsa\n\n当前选择的文件名: ') ?>' + fileName;
+            
+            const userPath = prompt(message, defaultPath || currentValue);
+            if (userPath !== null) {
+                fullPath = userPath.trim();
+            }
+        }
+        
+        if (fullPath) {
+            filePathInput.value = fullPath;
+            // 显示成功提示
+            showKeyPathHint('<?= __('路径已设置') ?>: ' + fullPath, 'success');
+        }
+    }
+    
+    // 清空文件输入，以便可以重复选择
+    fileInput.value = '';
+}
+
+function getDefaultKeyPath(fileName) {
+    // 根据操作系统和文件名提供默认路径建议
+    const isWindows = navigator.platform.indexOf('Win') > -1;
+    
+    if (isWindows) {
+        // Windows 默认路径
+        return 'C:\\Users\\YourName\\.ssh\\' + fileName;
+    } else {
+        // Linux/Mac 默认路径
+        return '/home/username/.ssh/' + fileName;
+    }
+}
+
+function showKeyPathHint(message, type) {
+    // 创建临时提示元素
+    const hint = document.createElement('div');
+    hint.className = 'alert alert-' + (type === 'success' ? 'success' : 'info') + ' alert-dismissible fade show';
+    hint.style.position = 'fixed';
+    hint.style.top = '20px';
+    hint.style.right = '20px';
+    hint.style.zIndex = '9999';
+    hint.style.minWidth = '300px';
+    hint.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    
+    document.body.appendChild(hint);
+    
+    // 3秒后自动移除
+    setTimeout(function() {
+        if (hint.parentNode) {
+            hint.parentNode.removeChild(hint);
+        }
+    }, 3000);
+}
+</script>
+</body>
+</html>
