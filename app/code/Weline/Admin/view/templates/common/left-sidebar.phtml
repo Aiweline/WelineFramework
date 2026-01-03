@@ -1974,7 +1974,8 @@ if ($dataLayout !== 'horizontal'):
                         // Enter键：打开选中的菜单项
                         if (selectedIndex >= 0 && selectedIndex < matchedItems.length) {
                             e.preventDefault();
-                            var $selectedItem = matchedItems[selectedIndex];
+                            var itemData = matchedItems[selectedIndex];
+                            var $selectedItem = itemData.$item ? itemData.$item : itemData; // 兼容新旧数据结构
                             var $link = $selectedItem.find('a').first();
                             if ($link.length && $link.attr('href') && $link.attr('href') !== 'javascript: void(0);') {
                                 window.location.href = $link.attr('href');
@@ -2008,7 +2009,8 @@ if ($dataLayout !== 'horizontal'):
                     $menuItems.removeClass('menu-item-keyboard-selected');
                     
                     if (selectedIndex >= 0 && selectedIndex < matchedItems.length) {
-                        var $selected = matchedItems[selectedIndex];
+                        var itemData = matchedItems[selectedIndex];
+                        var $selected = itemData.$item ? itemData.$item : itemData; // 兼容新旧数据结构
                         $selected.addClass('menu-item-keyboard-selected');
                         
                         // 平滑滚动到选中项
@@ -2139,7 +2141,15 @@ if ($dataLayout !== 'horizontal'):
                                 expandParentMenu($item);
                             }, 0);
                             matchCount++;
-                            matchedItems.push($item);
+                            // 检查是否有子菜单
+                            var $subMenu = $item.find('> ul.sub-menu');
+                            var hasChildren = $subMenu.length > 0;
+                            // 存储菜单项信息，包括是否有子菜单
+                            matchedItems.push({
+                                $item: $item,
+                                hasChildren: hasChildren,
+                                sourceId: $item.attr('data-source') || ''
+                            });
                             if (!firstMatchedItem) {
                                 firstMatchedItem = $item;
                             }
@@ -2160,7 +2170,14 @@ if ($dataLayout !== 'horizontal'):
                                     setTimeout(function() {
                                         expandParentMenu($child);
                                     }, 0);
-                                    matchedItems.push($child);
+                                    // 检查子菜单项是否有子菜单
+                                    var $childSubMenu = $child.find('> ul.sub-menu');
+                                    var childHasChildren = $childSubMenu.length > 0;
+                                    matchedItems.push({
+                                        $item: $child,
+                                        hasChildren: childHasChildren,
+                                        sourceId: $child.attr('data-source') || ''
+                                    });
                                     if (!firstMatchedItem) {
                                         firstMatchedItem = $child;
                                     }
@@ -2183,7 +2200,14 @@ if ($dataLayout !== 'horizontal'):
                                             setTimeout(function() {
                                                 expandParentMenu($child);
                                             }, 0);
-                                            matchedItems.push($child);
+                                            // 检查子菜单项是否有子菜单
+                                            var $childSubMenu = $child.find('> ul.sub-menu');
+                                            var childHasChildren = $childSubMenu.length > 0;
+                                            matchedItems.push({
+                                                $item: $child,
+                                                hasChildren: childHasChildren,
+                                                sourceId: $child.attr('data-source') || ''
+                                            });
                                             if (!firstMatchedItem) {
                                                 firstMatchedItem = $child;
                                             }
@@ -2212,6 +2236,98 @@ if ($dataLayout !== 'horizontal'):
                         }
                     });
                 }
+                
+                // 搜索完成后，补充有子菜单的匹配项的子菜单项
+                // 创建一个新的数组来存储补充后的结果
+                var finalMatchedItems = matchedItems.slice(); // 复制原数组
+                var addedChildrenCount = 0;
+                
+                // 遍历所有匹配的菜单项
+                matchedItems.forEach(function(itemData) {
+                    var $item = itemData.$item ? itemData.$item : itemData;
+                    var hasChildren = itemData.hasChildren || false;
+                    
+                    // 如果这个菜单项有子菜单，补充其子菜单项
+                    if (hasChildren) {
+                        // 展开子菜单
+                        var $subMenu = $item.find('> ul.sub-menu');
+                        if ($subMenu.length === 0) {
+                            $subMenu = $item.find('ul.sub-menu').first();
+                        }
+                        
+                        if ($subMenu.length > 0) {
+                            $subMenu.attr('aria-expanded', 'true').addClass('mm-show').css({
+                                'display': 'block',
+                                'visibility': 'visible'
+                            });
+                            $item.find('> a').parent('li').addClass('mm-active');
+                            
+                            // 递归函数：添加所有子菜单项
+                            function addChildrenToResults($parentItem) {
+                                var $parentSubMenu = $parentItem.find('> ul.sub-menu');
+                                if ($parentSubMenu.length === 0) {
+                                    $parentSubMenu = $parentItem.find('ul.sub-menu').first();
+                                }
+                                
+                                if ($parentSubMenu.length > 0) {
+                                    var $children = $parentSubMenu.find('> li');
+                                    
+                                    $children.each(function() {
+                                        var $child = $(this);
+                                        
+                                        // 跳过menu-title类型的项
+                                        if ($child.hasClass('menu-title')) {
+                                            return true; // continue
+                                        }
+                                        
+                                        // 检查是否已经添加过，避免重复
+                                        var isAlreadyAdded = false;
+                                        for (var i = 0; i < finalMatchedItems.length; i++) {
+                                            var existingItem = finalMatchedItems[i];
+                                            var existing$item = existingItem.$item ? existingItem.$item : existingItem;
+                                            if (existing$item[0] === $child[0]) {
+                                                isAlreadyAdded = true;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (!isAlreadyAdded) {
+                                            matchCount++;
+                                            addedChildrenCount++;
+                                            $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
+                                            
+                                            // 检查子菜单项是否还有子菜单
+                                            var $childSubMenu = $child.find('> ul.sub-menu');
+                                            var childHasChildren = $childSubMenu.length > 0;
+                                            
+                                            finalMatchedItems.push({
+                                                $item: $child,
+                                                hasChildren: childHasChildren,
+                                                sourceId: $child.attr('data-source') || ''
+                                            });
+                                            
+                                            // 如果子菜单项还有子菜单，递归添加
+                                            if (childHasChildren) {
+                                                $childSubMenu.attr('aria-expanded', 'true').addClass('mm-show').css({
+                                                    'display': 'block',
+                                                    'visibility': 'visible'
+                                                });
+                                                $child.find('> a').parent('li').addClass('mm-active');
+                                                addChildrenToResults($child);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            
+                            // 添加子菜单项
+                            addChildrenToResults($item);
+                        }
+                    }
+                });
+                
+                // 使用补充后的数组
+                matchedItems = finalMatchedItems;
                 
                 // 更新匹配的菜单项列表（供键盘导航使用）
                 MenuController.setMatchedMenuItems(matchedItems);
@@ -2255,18 +2371,110 @@ if ($dataLayout !== 'horizontal'):
                     }
                     
                     if (matchCount > 0) {
+                        // 首先构建一个包含层级信息的数组
+                        var itemsWithLevel = [];
+                        matchedItems.forEach(function(itemData) {
+                            // 兼容旧的数据结构（直接是jQuery对象）
+                            var $item, hasChildren = false, sourceId = '';
+                            if (itemData.$item) {
+                                $item = itemData.$item;
+                                hasChildren = itemData.hasChildren || false;
+                                sourceId = itemData.sourceId || '';
+                            } else {
+                                $item = itemData;
+                                hasChildren = $item.find('> ul.sub-menu').length > 0;
+                                sourceId = $item.attr('data-source') || '';
+                            }
+                            
+                            // 计算菜单项的层级深度
+                            var level = 0;
+                            var $parent = $item.parent('ul.sub-menu');
+                            while ($parent.length > 0) {
+                                level++;
+                                $parent = $parent.parent('li').parent('ul.sub-menu');
+                            }
+                            
+                            itemsWithLevel.push({
+                                $item: $item,
+                                hasChildren: hasChildren,
+                                sourceId: sourceId,
+                                level: level
+                            });
+                        });
+                        
+                        // 按层级和父子关系排序，确保父菜单项在子菜单项之前
+                        itemsWithLevel.sort(function(a, b) {
+                            var $aItem = a.$item;
+                            var $bItem = b.$item;
+                            
+                            // 检查是否有父子关系
+                            // 如果a是b的父菜单（b的父ul是a的子菜单）
+                            var $bParent = $bItem.parent('ul.sub-menu');
+                            if ($bParent.length > 0) {
+                                var $bParentLi = $bParent.parent('li');
+                                if ($bParentLi.length > 0 && $bParentLi[0] === $aItem[0]) {
+                                    return -1; // a在b前面
+                                }
+                            }
+                            
+                            // 如果b是a的父菜单（a的父ul是b的子菜单）
+                            var $aParent = $aItem.parent('ul.sub-menu');
+                            if ($aParent.length > 0) {
+                                var $aParentLi = $aParent.parent('li');
+                                if ($aParentLi.length > 0 && $aParentLi[0] === $bItem[0]) {
+                                    return 1; // b在a前面
+                                }
+                            }
+                            
+                            // 如果没有直接父子关系，按层级排序
+                            if (a.level !== b.level) {
+                                return a.level - b.level;
+                            }
+                            
+                            // 如果层级相同，按DOM中的位置排序
+                            var aIndex = matchedItems.findIndex(function(item) {
+                                var item$item = item.$item ? item.$item : item;
+                                return item$item[0] === a.$item[0];
+                            });
+                            var bIndex = matchedItems.findIndex(function(item) {
+                                var item$item = item.$item ? item.$item : item;
+                                return item$item[0] === b.$item[0];
+                            });
+                            return aIndex - bIndex;
+                        });
+                        
                         // 填充搜索结果
-                        matchedItems.forEach(function($item) {
+                        itemsWithLevel.forEach(function(itemData) {
+                            var $item = itemData.$item;
+                            var hasChildren = itemData.hasChildren;
+                            var sourceId = itemData.sourceId;
+                            var level = itemData.level;
+                            
+                            // 尝试多种方式获取链接和文本
                             var $link = $item.find('> a').first();
+                            if (!$link.length) {
+                                $link = $item.find('a').first();
+                            }
+                            
                             if ($link.length) {
                                 var menuText = $link.find('span').text();
+                                if (!menuText) {
+                                    menuText = $link.text().trim();
+                                }
                                 var menuIcon = $link.find('i').first().attr('class') || 'mdi mdi-circle';
                                 var menuHref = $link.attr('href') || '#';
                                 
-                                var $resultItem = $('<div class="search-result-item px-3 py-2"></div>');
-                                var $resultLink = $('<a href="' + menuHref + '" class="d-flex align-items-center waves-effect"></a>');
+                                // 根据层级添加缩进
+                                var indentStyle = '';
+                                if (level > 0) {
+                                    indentStyle = 'padding-left: ' + (20 + level * 20) + 'px;';
+                                }
+                                
+                                var $resultItem = $('<div class="search-result-item px-3 py-2" data-source="' + sourceId + '" style="' + indentStyle + '"></div>');
+                                var $resultLink = $('<a href="' + menuHref + '" class="d-flex align-items-center waves-effect search-result-link"></a>');
                                 $resultLink.append('<i class="' + menuIcon + ' me-2"></i>');
                                 $resultLink.append('<span>' + menuText + '</span>');
+                                
                                 $resultItem.append($resultLink);
                                 $resultsList.append($resultItem);
                                 
@@ -2285,6 +2493,27 @@ if ($dataLayout !== 'horizontal'):
                                             });
                                         }
                                     });
+                                }
+                            } else {
+                                // 如果找不到链接，尝试直接获取文本（可能是menu-title类型）
+                                var menuText = $item.find('span').text();
+                                if (!menuText) {
+                                    menuText = $item.text().trim();
+                                }
+                                if (menuText) {
+                                    var menuIcon = $item.find('i').first().attr('class') || 'mdi mdi-circle';
+                                    var indentStyle = '';
+                                    if (level > 0) {
+                                        indentStyle = 'padding-left: ' + (20 + level * 20) + 'px;';
+                                    }
+                                    
+                                    var $resultItem = $('<div class="search-result-item px-3 py-2" data-source="' + sourceId + '" style="' + indentStyle + '"></div>');
+                                    var $resultText = $('<div class="d-flex align-items-center">');
+                                    $resultText.append('<i class="' + menuIcon + ' me-2"></i>');
+                                    $resultText.append('<span>' + menuText + '</span>');
+                                    
+                                    $resultItem.append($resultText);
+                                    $resultsList.append($resultItem);
                                 }
                             }
                         });

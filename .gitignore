@@ -17,6 +17,7 @@
 .php-cs-fixer.cache
 
 ssh_tools.jsonc
+weline-async.json
 
 # generated目录规则：保留目录结构，但忽略具体文件
 /generated/**/*
