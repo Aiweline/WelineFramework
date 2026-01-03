@@ -1,0 +1,15 @@
+{
+  "name": "weline-async-watcher",
+  "version": "1.0.0",
+  "description": "File watcher for Weline Async sync module",
+  "main": "watcher.js",
+  "scripts": {
+    "start": "node watcher.js"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}

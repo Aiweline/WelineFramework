@@ -1,0 +1,16 @@
+[Unit]
+Description=Weline Async Sync Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/weline
+ExecStart=/usr/bin/php /path/to/weline/bin/w async:daemon
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
