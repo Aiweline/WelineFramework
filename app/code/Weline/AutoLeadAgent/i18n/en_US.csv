@@ -394,10 +394,19 @@ WASM模型配置,"WASM Model Settings"
 WASM模型单次推理的最大等待时间,"Maximum waiting time for a single WASM inference"
 "端侧模型配置（Hugging Face）","On-device Model Settings (Hugging Face)"
 未配置模型,"No model configured"
+模型状态,模型状态
+未加载,未加载
+加载模型,加载模型
+卸载模型,卸载模型
+内存使用,内存使用
 启用端侧推理模型,"Enable on-device inference model"
 启用后，任务必须使用端侧模型进行推理和决策,"When enabled, tasks must use the on-device model for inference and decision-making"
 模型缓存上限,"Model Cache Limit"
 用于在浏览器本地缓存模型文件的最大空间（100-10240MB）,"Maximum browser local cache space for model files (100-10240 MB)"
+模型管理,模型管理
+清理所有模型,清理所有模型
+查看缓存信息,查看缓存信息
+清理所有已下载的模型以释放磁盘空间,清理所有已下载的模型以释放磁盘空间
 "搜索 Hugging Face 模型","Search Hugging Face Models"
 "输入模型关键词，例如: qwen llama mistral","Enter model keywords, e.g. qwen llama mistral"
 文本生成,"Text Generation"
@@ -473,18 +482,23 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 准备下载...,准备下载...
 "速度: --","速度: --"
 "剩余时间: --","剩余时间: --"
+取消下载,取消下载
 下载过程中请勿关闭此窗口，模型文件较大，可能需要较长时间。,下载过程中请勿关闭此窗口，模型文件较大，可能需要较长时间。
 正在保存...,Saving...
 配置保存失败,"Failed to save configuration"
 正在重置...,Resetting...
 重置配置失败,"Failed to reset configuration"
+请输入测试指令,请输入测试指令
+请先加载模型,请先加载模型
+模型未加载或不可用,模型未加载或不可用
+测试失败,测试失败
 自动寻客管理,"Auto Lead Agent Management"
 潜在客户总数,"Total Lead Candidates"
-模型状态,模型状态
 待机,待机
 正在检测端侧模型配置...,正在检测端侧模型配置...
 配置模型,配置模型
 重新检测,重新检测
+卸载模型以释放内存,卸载模型以释放内存
 推理耗时,推理耗时
 内存占用,内存占用
 浏览器扩展未检测到,浏览器扩展未检测到
@@ -532,6 +546,7 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 以后再说,"Maybe later"
 继续上一次任务,"Continue last task"
 立即开始寻找客户,"Start lead search now"
+确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。,确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。
 加载中,加载中
 推理中,推理中
 爬取中,爬取中
@@ -682,6 +697,18 @@ WASM详情,WASM详情
 文件状态,文件状态
 文件存在,文件存在
 文件不存在,文件不存在
+搜索菜单,搜索菜单
+搜索菜单...,搜索菜单...
+常用菜单,常用菜单
+搜索结果,搜索结果
+最近访问,最近访问
+访问最多,访问最多
+模型缓存目录,模型缓存目录
+"例如: /path/to/models 或 C:\Models","例如: /path/to/models 或 C:\Models"
+模型文件将下载到此目录，请确保有足够的磁盘空间,模型文件将下载到此目录，请确保有足够的磁盘空间
+注意：下载模型前必须先配置缓存目录,注意：下载模型前必须先配置缓存目录
+"缓存目录已配置，模型文件存储在 IndexedDB 中","缓存目录已配置，模型文件存储在 IndexedDB 中"
+目录已选择，请立即开始下载（请勿刷新页面）,目录已选择，请立即开始下载（请勿刷新页面）
 文件已存在,文件已存在
 无法创建模型目录：%{1},无法创建模型目录：%{1}
 无法创建子目录：%{1},无法创建子目录：%{1}
@@ -708,12 +735,6 @@ PHP扩展阻止了文件上传,PHP扩展阻止了文件上传
 部分文件下载失败,部分文件下载失败
 模型下载成功,模型下载成功
 下载模型失败：%{1},下载模型失败：%{1}
-搜索菜单,搜索菜单
-搜索菜单...,搜索菜单...
-常用菜单,常用菜单
-搜索结果,搜索结果
-最近访问,最近访问
-访问最多,访问最多
 搜索关键词不能为空,搜索关键词不能为空
 选择要寻找客户的店铺,"Select the store to search leads for"
 请选择店铺,"Please select a store"

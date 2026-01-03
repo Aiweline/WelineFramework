@@ -77,6 +77,22 @@ document.addEventListener('DOMContentLoaded', function () {
             // Apply theme mode
             applyThemeMode();
 
+            // 初始化iframe加载事件处理（确保初始加载时也能隐藏loading）
+            if (elements.iframe && elements.loading) {
+                // 显示初始加载状态
+                elements.loading.classList.add('show');
+                
+                // 处理iframe初始加载完成
+                elements.iframe.addEventListener('load', function onInitialLoad() {
+                    // 延迟隐藏，确保内容已渲染
+                    setTimeout(() => {
+                        elements.loading.classList.remove('show');
+                    }, 300);
+                    // 移除事件监听器，避免重复执行
+                    elements.iframe.removeEventListener('load', onInitialLoad);
+                }, { once: true });
+            }
+
             // Load Initial Data
             loadOptions(config.area);
 
@@ -1012,11 +1028,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Helpers ---
 
     function refreshPreview() {
+        if (!elements.loading || !elements.iframe) return;
+        
         elements.loading.classList.add('show');
-        elements.iframe.src = elements.iframe.src; // Reload
-        elements.iframe.onload = () => {
-            elements.loading.classList.remove('show');
+        const currentSrc = elements.iframe.src;
+        
+        // 使用 addEventListener 而不是直接赋值 onload，避免覆盖其他监听器
+        const handleLoad = () => {
+            setTimeout(() => {
+                elements.loading.classList.remove('show');
+            }, 300);
+            elements.iframe.removeEventListener('load', handleLoad);
         };
+        
+        elements.iframe.addEventListener('load', handleLoad, { once: true });
+        elements.iframe.src = currentSrc; // Reload
     }
 
     /**
@@ -1175,7 +1201,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Show loading
-        elements.loading.classList.add('show');
+        if (elements.loading) {
+            elements.loading.classList.add('show');
+        }
 
         // Reload parameters for this layout type
         const currentVal = state.configData[area].layouts?.[category] || options[0].value;
@@ -1206,9 +1234,24 @@ document.addEventListener('DOMContentLoaded', function () {
             // Re-add preview parameters
             targetUrl.searchParams.set('preview_theme', config.themeId);
             targetUrl.searchParams.set('area', config.area);
+            
+            // 添加加载完成事件处理
+            const handleLoad = () => {
+                setTimeout(() => {
+                    if (elements.loading) {
+                        elements.loading.classList.remove('show');
+                    }
+                }, 300);
+                elements.iframe.removeEventListener('load', handleLoad);
+            };
+            
+            elements.iframe.addEventListener('load', handleLoad, { once: true });
             elements.iframe.src = targetUrl.toString();
         } catch (e) {
             console.error('Failed to update iframe URL:', e);
+            if (elements.loading) {
+                elements.loading.classList.remove('show');
+            }
             refreshPreview();
         }
 
