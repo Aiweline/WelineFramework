@@ -47,6 +47,18 @@ var ConfigUIRenderer = (function () {
 
         models.forEach(function (m) {
             var modelId = m.id || m.name || '';
+
+            // 检查模型是否支持 WebLLM/ONNX 格式
+            var isSupported = typeof HFModelManager !== 'undefined' && HFModelManager.isModelSupportedForWebLLM ?
+                HFModelManager.isModelSupportedForWebLLM(modelId) : true;
+
+            // 检查模型是否已下载
+            var isDownloaded = false;
+            if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.checkModelDownloadedByMetadata) {
+                var downloadStatus = LocalFileStorage.checkModelDownloadedByMetadata(modelId);
+                isDownloaded = downloadStatus.downloaded;
+            }
+
             var tr = document.createElement('tr');
             tr.className = 'hf-model-row';
             tr.setAttribute('data-model-id', modelId);
@@ -70,7 +82,15 @@ var ConfigUIRenderer = (function () {
 
             var tdAction = document.createElement('td');
             tdAction.className = 'text-center';
-            tdAction.innerHTML = '<button class="btn btn-sm btn-outline-primary select-btn">选择</button>';
+
+            // 根据支持状态和下载状态显示不同的按钮
+            if (!isSupported) {
+                tdAction.innerHTML = '<button class="btn btn-sm btn-outline-secondary" disabled title="该模型不支持 WebLLM/ONNX 格式">不支持</button>';
+            } else if (isDownloaded) {
+                tdAction.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check"></i> 已下载</span>';
+            } else {
+                tdAction.innerHTML = '<button class="btn btn-sm btn-outline-primary select-btn">选择</button>';
+            }
 
             tr.appendChild(tdName);
             tr.appendChild(tdSize);
@@ -78,6 +98,8 @@ var ConfigUIRenderer = (function () {
             tr.appendChild(tdAction);
 
             tr.addEventListener('click', function () {
+                if (!isSupported) return; // 不支持的模型不允许选择
+
                 if (onModelSelect) onModelSelect(modelId, m);
                 var rows = listBody.querySelectorAll('.hf-model-row');
                 rows.forEach(function (r) { r.classList.remove('table-active'); });
@@ -102,7 +124,7 @@ var ConfigUIRenderer = (function () {
         if (detailStatus) detailStatus.innerHTML = info.id ? '<span class="badge bg-secondary">已选择</span>' : '';
         if (detailSize) detailSize.textContent = info.estimated_size_mb ? ('大小约：' + ConfigUtils.formatFileSizeFromMB(info.estimated_size_mb)) : '';
         if (detailTask) detailTask.textContent = info.pipeline_tag ? ('任务类型：' + info.pipeline_tag) : '';
-        
+
         if (detailTags) {
             detailTags.innerHTML = '';
             (info.tags || []).forEach(function (t) {
@@ -156,20 +178,32 @@ var ConfigUIRenderer = (function () {
         // 总进度
         var totalBar = document.getElementById('hf-download-progress-bar');
         var totalText = document.getElementById('hf-download-progress-text');
+        var speedText = document.getElementById('hf-download-speed');
         if (totalBar) {
             totalBar.style.width = state.progress + '%';
             totalBar.textContent = Math.round(state.progress) + '%';
             totalBar.setAttribute('aria-valuenow', state.progress);
         }
         if (totalText) {
-            totalText.textContent = ConfigUtils.formatFileSize(state.downloadedSize) + ' / ' + 
-                                   ConfigUtils.formatFileSize(state.totalSize) + ' (' + Math.round(state.progress) + '%)';
+            totalText.textContent = ConfigUtils.formatFileSize(state.downloadedSize) + ' / ' +
+                ConfigUtils.formatFileSize(state.totalSize) + ' (' + Math.round(state.progress) + '%)';
+        }
+        if (speedText && state.downloadSpeed !== undefined && state.downloadSpeed !== null) {
+            var speedMB = state.downloadSpeed / 1024 / 1024; // MB/s
+            if (speedMB < 1) {
+                speedText.textContent = '速度: ' + speedMB.toFixed(2) + ' MB/s';
+            } else if (speedMB < 1024) {
+                speedText.textContent = '速度: ' + (speedMB / 1024).toFixed(2) + ' GB/s';
+            } else {
+                speedText.textContent = '速度: ' + (speedMB / 1024 / 1024).toFixed(2) + ' TB/s';
+            }
         }
 
         // 当前文件
         var fileText = document.getElementById('hf-download-progress-file');
+        var fileSpeedText = document.getElementById('hf-download-file-speed');
         if (fileText) fileText.textContent = '当前文件: ' + (state.currentFile || '准备中...');
-        
+
         // 当前文件进度
         var fileBar = document.getElementById('hf-download-file-progress-bar');
         var fileProgressText = document.getElementById('hf-download-file-progress-text');
@@ -179,8 +213,32 @@ var ConfigUIRenderer = (function () {
             fileBar.setAttribute('aria-valuenow', state.currentFileProgress);
         }
         if (fileProgressText && state.currentFileSize > 0) {
-            fileProgressText.textContent = ConfigUtils.formatFileSize(state.currentFileDownloaded || 0) + ' / ' + 
-                                          ConfigUtils.formatFileSize(state.currentFileSize);
+            fileProgressText.textContent = ConfigUtils.formatFileSize(state.currentFileDownloaded || 0) + ' / ' +
+                ConfigUtils.formatFileSize(state.currentFileSize);
+        }
+
+        // 计算并显示剩余时间
+        var etaText = document.getElementById('hf-download-file-eta');
+        if (etaText) {
+            // 检查是否有有效的下载速度和总大小
+            if (state.downloadSpeed !== undefined && state.downloadSpeed !== null && state.downloadSpeed > 0 && state.totalSize > 0) {
+                var remainingSize = state.totalSize - state.downloadedSize;
+                var remainingSeconds = remainingSize / state.downloadSpeed;
+
+                if (remainingSeconds > 0) {
+                    if (remainingSeconds < 60) {
+                        etaText.textContent = '剩余时间: ' + Math.round(remainingSeconds) + ' 秒';
+                    } else if (remainingSeconds < 3600) {
+                        etaText.textContent = '剩余时间: ' + Math.round(remainingSeconds / 60) + ' 分钟';
+                    } else {
+                        etaText.textContent = '剩余时间: ' + (remainingSeconds / 3600).toFixed(1) + ' 小时';
+                    }
+                } else {
+                    etaText.textContent = '剩余时间: 即将完成';
+                }
+            } else {
+                etaText.textContent = '剩余时间: 计算中...';
+            }
         }
     }
 

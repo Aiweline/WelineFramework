@@ -41,4 +41,8 @@
     <event name="Weline_Admin::msg">
         <observer name="Weline_Admin::system_notification" instance="Weline\Admin\Observer\SystemNotificationObserver" disabled="false" shared="true" sort="0"/>
     </event>
+    <!--维护模式-->
+    <event name="Weline_Maintenance::maintenance">
+        <observer name="Weline_Admin::maintenance" instance="Weline\Admin\Observer\Maintenance" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>
