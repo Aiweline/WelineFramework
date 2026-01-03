@@ -269,14 +269,17 @@ class I18n
             return $cached;
         }
         
-        $flag_path = BP . 'vendor/lipis/flag-icons/flags/4x3/' . $country_code . '.svg';
+        $flag_path = BP . 'vendor' . DS . 'lipis' . DS . 'flag-icons' . DS . 'flags' . DS . '4x3' . DS . $country_code . '.svg';
         
+        // 从本地文件获取
         if (!file_exists($flag_path)) {
             return '';
         }
 
-        $svg = file_get_contents($flag_path);
-        if (!$svg) return '';
+        $svg = @file_get_contents($flag_path);
+        if (!$svg) {
+            return '';
+        }
 
         $svg_xml = @simplexml_load_string($svg);
         if (!$svg_xml) {
