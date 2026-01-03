@@ -3,6 +3,7 @@
 .idea
 .vscode
 .cursor
+.trae/
 # 流水线文件
 /.workflow
 
