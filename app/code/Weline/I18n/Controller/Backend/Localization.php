@@ -406,8 +406,8 @@ class Localization extends BaseController
             foreach ($installedCountries as $countryCode) {
                 // 获取该国家的所有区域
                 $country = $this->i18n->getCountry($countryCode);
-                if ($country && method_exists($country, 'getLocales')) {
-                    $locales = $country->getLocales();
+                if ($country && isset($country['locales'])) {
+                    $locales = $country['locales'];
                     $expectedCount += count($locales);
                 }
             }
@@ -439,11 +439,11 @@ class Localization extends BaseController
                 try {
                     // 获取该国家的所有区域
                     $country = $this->i18n->getCountry($countryCode);
-                    if (!$country || !method_exists($country, 'getLocales')) {
+                    if (!$country) {
                         continue;
                     }
                     
-                    $locales = $country->getLocales();
+                    $locales = $country['locales'];
                     
                     foreach ($locales as $localeCode) {
                         // 如果区域不存在，则准备插入

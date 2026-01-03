@@ -24,10 +24,10 @@ var HFModelManager = (function () {
         cacheSize: 10240, // MB (最大默认值)
         localModelBaseUrl: null, // 本地模型文件 API 基础 URL
     };
-    
+
     // 保存原始的 fetch 函数
     var originalFetch = typeof fetch !== 'undefined' ? fetch : null;
-    
+
     /**
      * 创建自定义 fetch 函数，拦截 Hugging Face 请求并重定向到本地 API
      */
@@ -35,25 +35,75 @@ var HFModelManager = (function () {
         if (!originalFetch) {
             return null;
         }
-        
-        return async function(url, options) {
+
+        return async function (url, options) {
             // 检查是否是 Hugging Face 模型文件请求
             if (typeof url === 'string' && url.includes('huggingface.co') && config.modelId) {
                 // 提取文件名
                 var match = url.match(/huggingface\.co\/[^\/]+\/[^\/]+\/resolve\/main\/(.+)$/);
                 if (match && match[1]) {
                     var filename = decodeURIComponent(match[1]);
-                    
-                    console.log('[HFModelManager] 拦截 Hugging Face 请求，尝试从本地文件系统加载:', filename);
+                    var originalFilename = filename;
+
+                    console.log('[HFModelManager] 拦截 Hugging Face 请求:', filename);
                     console.log('[HFModelManager] 原始 URL:', url);
-                    
+
                     // 尝试从本地文件系统读取
                     if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.getModelFile) {
                         try {
+                            // 首先尝试精确匹配
                             var fileData = await LocalFileStorage.getModelFile(config.modelId, filename);
+
+                            // 如果精确匹配失败，尝试查找替代格式
+                            if (!fileData || fileData.byteLength === 0) {
+                                console.log('[HFModelManager] 精确匹配失败，尝试查找替代格式...');
+
+                                // 获取模型的所有本地文件
+                                var files = LocalFileStorage.collectModelFiles(config.modelId);
+                                console.log('[HFModelManager] 本地文件列表:', files);
+
+                                // 尝试匹配不同的文件格式
+                                if (filename.endsWith('.onnx')) {
+                                    // onnx/decoder_model_merged_quantized.onnx -> model.safetensors
+                                    if (filename.includes('decoder_model_merged')) {
+                                        var altFilename = 'model.safetensors';
+                                        fileData = await LocalFileStorage.getModelFile(config.modelId, altFilename);
+                                        if (fileData && fileData.byteLength > 0) {
+                                            console.log('[HFModelManager] 使用替代文件:', altFilename);
+                                            filename = altFilename;
+                                        }
+                                    }
+                                }
+
+                                // 如果还是找不到，尝试查找包含相同模式的文件
+                                if ((!fileData || fileData.byteLength === 0) && files.length > 0) {
+                                    for (var i = 0; i < files.length; i++) {
+                                        var localFile = files[i];
+                                        // 尝试匹配基础文件名
+                                        var localBaseName = localFile.filename.split('/').pop();
+                                        var requestedBaseName = filename.split('/').pop();
+
+                                        // 移除扩展名进行比较
+                                        var localNameWithoutExt = localBaseName.replace(/\.(safetensors|bin|onnx)$/, '');
+                                        var requestedNameWithoutExt = requestedBaseName.replace(/\.(safetensors|bin|onnx)$/, '');
+
+                                        // 如果基本名称匹配（忽略扩展名）
+                                        if (localNameWithoutExt === requestedNameWithoutExt ||
+                                            (localBaseName.includes('model') && requestedBaseName.includes('model'))) {
+                                            fileData = await LocalFileStorage.getModelFile(config.modelId, localFile.filename);
+                                            if (fileData && fileData.byteLength > 0) {
+                                                console.log('[HFModelManager] 使用匹配文件:', localFile.filename);
+                                                filename = localFile.filename;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             if (fileData && fileData.byteLength > 0) {
                                 console.log('[HFModelManager] 成功从本地文件系统加载文件:', filename, (fileData.byteLength / 1024 / 1024).toFixed(2), 'MB');
-                                
+
                                 // 创建 Blob 响应
                                 var blob = new Blob([fileData], { type: 'application/octet-stream' });
                                 var response = new Response(blob, {
@@ -66,17 +116,17 @@ var HFModelManager = (function () {
                                 });
                                 return response;
                             } else {
-                                console.warn('[HFModelManager] 本地文件不存在或为空，从 Hugging Face 加载:', filename);
+                                console.warn('[HFModelManager] 本地文件不存在或为空:', filename);
                             }
                         } catch (localError) {
-                            console.warn('[HFModelManager] 本地文件加载出错，从 Hugging Face 加载:', filename, localError.message);
+                            console.warn('[HFModelManager] 本地文件加载出错:', filename, localError.message);
                         }
                     } else {
                         console.warn('[HFModelManager] LocalFileStorage 不可用，从 Hugging Face 加载:', filename);
                     }
                 }
             }
-            
+
             // 使用原始 fetch
             return originalFetch(url, options);
         };
@@ -91,7 +141,15 @@ var HFModelManager = (function () {
         config.apiBaseUrl = options.apiBaseUrl || '';
         config.modelId = options.modelId || null;
         config.cacheSize = options.cacheSize || 10240;
-        
+
+        // 设置 localModelBaseUrl 以启用本地文件系统优先
+        // 即使值为 null 或空字符串，只要存在就会触发 createCustomFetch
+        if (options.localModelBaseUrl === undefined) {
+            config.localModelBaseUrl = '/models/' + config.modelId; // 使用本地文件系统
+        } else {
+            config.localModelBaseUrl = options.localModelBaseUrl;
+        }
+
         // 不再需要构建服务器 API URL，直接使用本地文件系统
         console.log('[HFModelManager] Initialized with config:', config);
         console.log('[HFModelManager] 将使用本地文件系统存储（File System Access API）');
@@ -103,9 +161,9 @@ var HFModelManager = (function () {
      */
     function detectChromeAI() {
         try {
-            return typeof window !== 'undefined' && 
-                   window.ai && 
-                   typeof window.ai.createTextSession === 'function';
+            return typeof window !== 'undefined' &&
+                window.ai &&
+                typeof window.ai.createTextSession === 'function';
         } catch (e) {
             console.warn('[HFModelManager] Chrome AI detection failed:', e);
             return false;
@@ -119,13 +177,13 @@ var HFModelManager = (function () {
     async function loadChromeAI() {
         try {
             console.log('[HFModelManager] Loading Chrome Built-in AI...');
-            
+
             if (!detectChromeAI()) {
                 throw new Error('Chrome Built-in AI is not available');
             }
 
             const session = await window.ai.createTextSession();
-            
+
             modelState.type = 'chrome_ai';
             modelState.session = session;
             modelState.loaded = true;
@@ -148,11 +206,11 @@ var HFModelManager = (function () {
      */
     function inferPipelineTask(modelId) {
         if (!modelId) return 'text-generation';
-        
+
         var lowerModelId = modelId.toLowerCase();
-        
+
         // sentence-transformers 模型使用 feature-extraction
-        if (lowerModelId.includes('sentence-transformer') || 
+        if (lowerModelId.includes('sentence-transformer') ||
             lowerModelId.includes('all-minilm') ||
             lowerModelId.includes('all-mpnet') ||
             lowerModelId.includes('paraphrase') ||
@@ -160,11 +218,11 @@ var HFModelManager = (function () {
             lowerModelId.includes('multi-qa')) {
             return 'feature-extraction';
         }
-        
+
         // BERT/RoBERTa 等编码器模型
         if (lowerModelId.includes('bert') && !lowerModelId.includes('gpt')) {
             // 检查是否是分类模型
-            if (lowerModelId.includes('classification') || 
+            if (lowerModelId.includes('classification') ||
                 lowerModelId.includes('sentiment') ||
                 lowerModelId.includes('ner') ||
                 lowerModelId.includes('qa')) {
@@ -172,32 +230,63 @@ var HFModelManager = (function () {
             }
             return 'feature-extraction';
         }
-        
+
         // T5/FLAN 等 seq2seq 模型
-        if (lowerModelId.includes('t5') || 
+        if (lowerModelId.includes('t5') ||
             lowerModelId.includes('flan') ||
             lowerModelId.includes('bart') ||
             lowerModelId.includes('pegasus')) {
             return 'text2text-generation';
         }
-        
+
         // 问答模型
         if (lowerModelId.includes('qa') || lowerModelId.includes('question-answering')) {
             return 'question-answering';
         }
-        
+
         // 翻译模型
         if (lowerModelId.includes('translation') || lowerModelId.includes('opus-mt')) {
             return 'translation';
         }
-        
+
         // 摘要模型
         if (lowerModelId.includes('summarization') || lowerModelId.includes('summary')) {
             return 'summarization';
         }
-        
+
         // 默认使用 text-generation（适用于 GPT, Llama, Qwen 等）
         return 'text-generation';
+    }
+
+    /**
+     * 检查模型是否支持 WebLLM/ONNX 格式
+     * @param {string} modelId 模型 ID
+     * @returns {boolean} 是否支持
+     */
+    function isModelSupportedForWebLLM(modelId) {
+        if (!modelId) return false;
+
+        var lowerModelId = modelId.toLowerCase();
+
+        // 已知不支持的模型列表
+        var unsupportedModels = [
+            'openai-community/gpt2',
+            'openai-community/gpt3',
+            'openai-community/gpt4',
+            'meta-llama',
+            'meta-llama-2',
+            'meta-llama-3',
+            'mistralai/mistral-7b'
+        ];
+
+        // 检查是否在不支持的列表中
+        for (var i = 0; i < unsupportedModels.length; i++) {
+            if (lowerModelId.includes(unsupportedModels[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -209,10 +298,10 @@ var HFModelManager = (function () {
         var originalEnvFetch = null;
         var originalGlobalFetch = null;
         var env = null;
-        
+
         try {
             console.log('[HFModelManager] Loading WebLLM model...');
-            
+
             modelState.loading = true;
             modelState.error = null;
 
@@ -230,38 +319,42 @@ var HFModelManager = (function () {
             const transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
             const { pipeline, env: transformersEnv } = transformersModule;
             env = transformersEnv; // 保存到外部变量
-            
-            // 配置自定义 fetch（如果可用）
-            if (config.localModelBaseUrl) {
-                var customFetch = createCustomFetch();
-                
-                // 方法1：尝试设置 env.fetch（如果 transformers 支持）
-                if (customFetch && typeof env !== 'undefined' && env.fetch) {
-                    originalEnvFetch = env.fetch;
-                    env.fetch = customFetch;
-                    console.log('[HFModelManager] 已配置 env.fetch，将优先使用本地文件');
-                }
-                
-                // 方法2：如果 transformers 使用全局 fetch，也替换它
-                if (customFetch && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
-                    originalGlobalFetch = window.fetch;
-                    window.fetch = customFetch;
-                    console.log('[HFModelManager] 已配置全局 fetch，将优先使用本地文件');
-                }
+
+            // 配置自定义 fetch（始终尝试使用本地文件系统）
+            var customFetch = createCustomFetch();
+
+            // 方法1：尝试设置 env.fetch（如果 transformers 支持）
+            if (customFetch && typeof env !== 'undefined' && env.fetch) {
+                originalEnvFetch = env.fetch;
+                env.fetch = customFetch;
+                console.log('[HFModelManager] 已配置 env.fetch，将优先使用本地文件');
             }
-            
+
+            // 方法2：如果 transformers 使用全局 fetch，也替换它
+            if (customFetch && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+                originalGlobalFetch = window.fetch;
+                window.fetch = customFetch;
+                console.log('[HFModelManager] 已配置全局 fetch，将优先使用本地文件');
+            }
+
             console.log('[HFModelManager] Loading model:', config.modelId);
-            
+
             // 根据模型 ID 推断任务类型
             var taskType = inferPipelineTask(config.modelId);
             console.log('[HFModelManager] 推断的任务类型:', taskType);
-            
+
             // 尝试加载模型，如果失败则提供更友好的错误信息
             let model;
             try {
                 model = await pipeline(taskType, config.modelId, {
                     device: 'webgpu', // 优先使用 WebGPU
                     dtype: 'q8', // 量化以节省内存
+                    quantized: false, // 不使用量化版本，使用已下载的 safetensors 文件
+                    progress_callback: function (data) {
+                        if (data.status === 'progress') {
+                            console.log('[HFModelManager] 加载进度:', data.progress, data.file);
+                        }
+                    }
                 });
             } catch (error) {
                 // 如果 WebGPU 失败，尝试使用 CPU
@@ -269,29 +362,35 @@ var HFModelManager = (function () {
                 try {
                     model = await pipeline(taskType, config.modelId, {
                         device: 'cpu',
+                        quantized: false, // 不使用量化版本
+                        progress_callback: function (data) {
+                            if (data.status === 'progress') {
+                                console.log('[HFModelManager] 加载进度:', data.progress, data.file);
+                            }
+                        }
                     });
                 } catch (cpuError) {
                     // 如果都失败，抛出更友好的错误
                     const errorMsg = cpuError.message || String(cpuError);
-                    
+
                     // 检查是否是文件不存在的错误
-                    if (errorMsg.includes('Could not locate file') || 
-                        errorMsg.includes('locate file') || 
+                    if (errorMsg.includes('Could not locate file') ||
+                        errorMsg.includes('locate file') ||
                         errorMsg.includes('404') ||
                         errorMsg.includes('not found')) {
                         console.warn('[HFModelManager] 模型文件不存在或无法访问:', errorMsg);
-                        
+
                         // 尝试从错误信息中提取缺失的文件名
                         var missingFile = extractMissingFileName(errorMsg);
                         if (missingFile && config.modelId) {
                             console.log('[HFModelManager] 检测到缺失文件:', missingFile);
-                            
+
                             // 先检查文件是否在 Hugging Face 仓库中存在
                             var fileCheck = await checkFileExistsInRepository(config.modelId, missingFile);
                             if (!fileCheck.exists) {
                                 // 文件在仓库中不存在，不应该尝试下载
                                 console.warn('[HFModelManager] 文件在模型仓库中不存在:', missingFile, fileCheck.reason);
-                                
+
                                 // 显示友好的错误提示，建议用户换模型
                                 var friendlyErrorMsg = '模型 "' + config.modelId + '" 加载失败\n\n';
                                 friendlyErrorMsg += '原因：文件 "' + missingFile + '" 在模型仓库中不存在\n\n';
@@ -300,17 +399,17 @@ var HFModelManager = (function () {
                                 friendlyErrorMsg += '• Qwen/Qwen3-0.6B（超小模型，适合测试）\n';
                                 friendlyErrorMsg += '• Qwen/Qwen2.5-3B-Instruct（中等模型）\n\n';
                                 friendlyErrorMsg += '提示：如果 Chrome Built-in AI 可用，系统会自动使用它。';
-                                
+
                                 // 尝试显示 Toast 提示（如果可用）
                                 if (typeof window !== 'undefined' && typeof window.safeToast === 'function') {
                                     window.safeToast('error', friendlyErrorMsg, 15000); // 显示15秒
                                 } else if (typeof window !== 'undefined' && typeof window.alert === 'function') {
                                     window.alert(friendlyErrorMsg);
                                 }
-                                
+
                                 throw new Error(friendlyErrorMsg);
                             }
-                            
+
                             // 文件在仓库中存在，检查本地文件是否完整
                             var fileComplete = await checkFileComplete(config.modelId, missingFile);
                             if (!fileComplete) {
@@ -339,7 +438,7 @@ var HFModelManager = (function () {
                                 console.log('[HFModelManager] 文件已存在且完整，可能是其他问题:', missingFile);
                             }
                         }
-                        
+
                         // 检查是否可以使用 Chrome Built-in AI 作为降级方案
                         if (detectChromeAI()) {
                             console.warn('[HFModelManager] 模型文件缺失，但检测到 Chrome Built-in AI 可用，将在 loadModel 中自动降级');
@@ -358,17 +457,17 @@ var HFModelManager = (function () {
                         detailedError += '• Qwen/Qwen3-0.6B（超小模型，适合测试）\n';
                         detailedError += '• Qwen/Qwen2.5-3B-Instruct（中等模型）\n\n';
                         detailedError += '提示：如果 Chrome Built-in AI 可用，系统会自动使用它。';
-                        
+
                         // 尝试显示 Toast 提示（如果可用）
                         if (typeof window !== 'undefined' && typeof window.safeToast === 'function') {
                             window.safeToast('error', detailedError, 15000); // 显示15秒
                         } else if (typeof window !== 'undefined' && typeof window.alert === 'function') {
                             window.alert(detailedError);
                         }
-                        
+
                         throw new Error(detailedError);
                     }
-                    
+
                     if (errorMsg.includes('Unsupported model type') || errorMsg.includes('qwen3')) {
                         // 检查是否可以使用 Chrome Built-in AI 作为降级方案
                         if (detectChromeAI()) {
@@ -394,6 +493,59 @@ var HFModelManager = (function () {
             console.error('[HFModelManager] Failed to load WebLLM:', error);
             modelState.loading = false;
             modelState.error = error.message;
+
+            // 检查是否是 IR 版本不兼容错误
+            if (error.message && (error.message.includes('IR version') || error.message.includes('Unsupported model IR'))) {
+                console.warn('[HFModelManager] ONNX IR 版本不兼容，需要使用旧版本模型');
+
+                var friendlyErrorMsg = '模型 "' + config.modelId + '" 使用的 ONNX IR 版本过高。\n\n';
+                friendlyErrorMsg += 'ONNX Runtime WebAssembly 最大支持 IR 版本 8，但模型使用了 IR 版本 9。\n\n';
+                friendlyErrorMsg += '建议方案：\n';
+                friendlyErrorMsg += '1. 使用支持 WebLLM 的模型（如 Qwen/Qwen3-0.6B）\n';
+                friendlyErrorMsg += '2. 使用 Qwen/Qwen2.5-1.5B-Instruct（推荐）\n';
+                friendlyErrorMsg += '3. 如果 Chrome Built-in AI 可用，系统会自动使用它\n\n';
+                friendlyErrorMsg += '提示：请选择带有 "WebLLM compatible" 标签的模型。';
+
+                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                    window.alert(friendlyErrorMsg);
+                }
+
+                throw error;
+            }
+
+            // 检查是否是 ONNX 会话创建失败
+            if (error.message && error.message.includes('create a session')) {
+                console.warn('[HFModelManager] ONNX 会话创建失败，可能是因为模型格式不兼容');
+
+                // 尝试检查是否有本地 safetensors 文件
+                if (typeof LocalFileStorage !== 'undefined') {
+                    try {
+                        var metadata = LocalFileStorage.getModelMetadata();
+                        var modelData = metadata[config.modelId];
+                        if (modelData && modelData.files && modelData.files.length > 0) {
+                            var hasSafetensors = modelData.files.some(f => f.filename.endsWith('.safetensors'));
+                            var hasOnnx = modelData.files.some(f => f.filename.endsWith('.onnx'));
+
+                            if (hasSafetensors && !hasOnnx) {
+                                // 下载的是 safetensors 格式，但 ONNX Runtime 需要 onnx 格式
+                                var friendlyErrorMsg = '模型 "' + config.modelId + '" 已下载，但使用的是 PyTorch safetensors 格式。\n\n';
+                                friendlyErrorMsg += '当前浏览器环境需要 ONNX 格式的模型才能运行。\n\n';
+                                friendlyErrorMsg += '建议方案：\n';
+                                friendlyErrorMsg += '1. 使用支持 WebLLM 的模型（如 Qwen/Qwen3-0.6B）\n';
+                                friendlyErrorMsg += '2. 如果需要使用此模型，可能需要服务器端推理\n\n';
+                                friendlyErrorMsg += '提示：Chrome Built-in AI 可能可以提供本地推理能力。';
+
+                                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                                    window.alert(friendlyErrorMsg);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[HFModelManager] 检查模型格式失败:', e);
+                    }
+                }
+            }
+
             throw error;
         } finally {
             // 恢复原始 fetch（如果已替换）
@@ -424,13 +576,13 @@ var HFModelManager = (function () {
                     return decodeURIComponent(pathMatch[1]);
                 }
             }
-            
+
             // 尝试直接匹配文件名模式
             var filenameMatch = errorMsg.match(/([a-zA-Z0-9_\-\.\/]+\.(onnx|bin|safetensors|json|txt|model))/);
             if (filenameMatch) {
                 return filenameMatch[1];
             }
-            
+
             return null;
         } catch (e) {
             console.warn('[HFModelManager] 提取文件名失败:', e);
@@ -449,13 +601,13 @@ var HFModelManager = (function () {
             // 尝试从 Hugging Face 获取文件信息
             var encodedModelId = modelId.split('/').map(encodeURIComponent).join('/');
             var fileUrl = 'https://huggingface.co/' + encodedModelId + '/resolve/main/' + encodeURIComponent(filename);
-            
+
             // 使用 HEAD 请求检查文件是否存在
             var response = await originalFetch(fileUrl, {
                 method: 'HEAD',
                 credentials: 'include'
             });
-            
+
             if (response.ok) {
                 return { exists: true };
             } else if (response.status === 404) {
@@ -483,7 +635,7 @@ var HFModelManager = (function () {
 
             // 构建检查文件API URL
             var checkUrl = config.apiBaseUrl + 'check-model-file?model_id=' + encodeURIComponent(modelId) + '&filename=' + encodeURIComponent(filename);
-            
+
             var response = await originalFetch(checkUrl);
             if (!response.ok) {
                 return false;
@@ -505,7 +657,7 @@ var HFModelManager = (function () {
      * @returns {Promise<void>}
      */
     async function triggerModelDownload(modelId, missingFile) {
-        return new Promise(function(resolve, reject) {
+        return new Promise(function (resolve, reject) {
             if (!modelId) {
                 reject(new Error('模型ID不能为空'));
                 return;
@@ -516,11 +668,11 @@ var HFModelManager = (function () {
             // 检查是否有全局的 ensureModelDownloaded 函数（来自 config-models.js）
             if (typeof window !== 'undefined' && typeof window.ensureModelDownloaded === 'function') {
                 window.ensureModelDownloaded(modelId)
-                    .then(function(result) {
+                    .then(function (result) {
                         console.log('[HFModelManager] 模型下载完成:', result);
                         // 如果指定了缺失文件，检查该文件是否已完整
                         if (missingFile) {
-                            return checkFileComplete(modelId, missingFile).then(function(complete) {
+                            return checkFileComplete(modelId, missingFile).then(function (complete) {
                                 if (!complete) {
                                     console.warn('[HFModelManager] 文件下载后仍不完整:', missingFile);
                                     // 即使不完整，也继续，因为可能是文件本身不存在
@@ -530,7 +682,7 @@ var HFModelManager = (function () {
                         }
                         resolve(result);
                     })
-                    .catch(function(error) {
+                    .catch(function (error) {
                         console.error('[HFModelManager] 模型下载失败:', error);
                         reject(error);
                     });
@@ -548,12 +700,12 @@ var HFModelManager = (function () {
                 }, '*');
 
                 // 等待下载完成（通过轮询检查）
-                var checkInterval = setInterval(function() {
+                var checkInterval = setInterval(function () {
                     // 这里可以添加检查逻辑，暂时使用超时
                 }, 1000);
 
                 // 设置超时
-                setTimeout(function() {
+                setTimeout(function () {
                     clearInterval(checkInterval);
                     // 假设下载已完成（实际应该检查文件是否存在）
                     resolve({ success: true, auto: true });
@@ -623,15 +775,15 @@ var HFModelManager = (function () {
             } catch (webllmError) {
                 // 如果 WebLLM 加载失败（特别是模型类型不支持或文件不存在），尝试再次使用 Chrome Built-in AI
                 const errorMsg = webllmError.message || String(webllmError);
-                const isUnsupportedModel = errorMsg.includes('Unsupported model type') || 
-                                          errorMsg.includes('qwen3') ||
-                                          errorMsg.includes('not supported');
-                const isFileNotFound = errorMsg.includes('Could not locate file') || 
-                                      errorMsg.includes('locate file') ||
-                                      errorMsg === 'MODEL_FILE_NOT_FOUND' ||
-                                      errorMsg.includes('404') ||
-                                      errorMsg.includes('not found');
-                
+                const isUnsupportedModel = errorMsg.includes('Unsupported model type') ||
+                    errorMsg.includes('qwen3') ||
+                    errorMsg.includes('not supported');
+                const isFileNotFound = errorMsg.includes('Could not locate file') ||
+                    errorMsg.includes('locate file') ||
+                    errorMsg === 'MODEL_FILE_NOT_FOUND' ||
+                    errorMsg.includes('404') ||
+                    errorMsg.includes('not found');
+
                 if ((isUnsupportedModel || isFileNotFound) && detectChromeAI()) {
                     console.warn('[HFModelManager] WebLLM model loading failed, falling back to Chrome Built-in AI:', errorMsg);
                     if (isFileNotFound) {
@@ -641,13 +793,13 @@ var HFModelManager = (function () {
                     }
                     return await loadChromeAI();
                 }
-                
+
                 // 如果 Chrome AI 也不可用，或者不是模型类型/文件问题，抛出原始错误
                 throw webllmError;
             }
         } catch (error) {
             console.error('[HFModelManager] Failed to load model:', error);
-            
+
             // 最后尝试：如果所有方法都失败，但 Chrome AI 可用，强制使用 Chrome AI
             const errorMsg = error.message || String(error);
             if (detectChromeAI() && !modelState.loaded) {
@@ -659,7 +811,7 @@ var HFModelManager = (function () {
                     throw new Error('模型加载失败。原因：' + errorMsg + '。建议：1. 使用 Chrome Built-in AI（如果可用）；2. 或选择其他支持的模型（如 Qwen2、Llama 等）。');
                 }
             }
-            
+
             throw error;
         }
     }
@@ -672,7 +824,7 @@ var HFModelManager = (function () {
      */
     async function generate(prompt, options) {
         options = options || {};
-        
+
         if (!modelState.loaded) {
             await loadModel();
         }
@@ -685,18 +837,18 @@ var HFModelManager = (function () {
             } else if (modelState.type === 'webllm') {
                 // 根据 pipeline 任务类型使用不同的推理逻辑
                 const task = modelState.pipelineTask || 'text-generation';
-                
+
                 if (task === 'feature-extraction') {
                     // 嵌入模型：返回向量信息
                     const result = await modelState.model(prompt, { pooling: 'mean', normalize: true });
                     if (result && result.data) {
                         var dims = result.dims || [result.data.length];
-                        return '✓ 嵌入生成成功\n维度: ' + dims.join('x') + '\n前5个值: [' + 
-                               Array.from(result.data).slice(0, 5).map(v => v.toFixed(4)).join(', ') + ', ...]';
+                        return '✓ 嵌入生成成功\n维度: ' + dims.join('x') + '\n前5个值: [' +
+                            Array.from(result.data).slice(0, 5).map(v => v.toFixed(4)).join(', ') + ', ...]';
                     }
                     return '嵌入生成完成（无数据返回）';
                 }
-                
+
                 if (task === 'text-classification') {
                     // 分类模型
                     const result = await modelState.model(prompt);
@@ -705,7 +857,7 @@ var HFModelManager = (function () {
                     }
                     return JSON.stringify(result);
                 }
-                
+
                 if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
                     // Seq2Seq 模型
                     const result = await modelState.model(prompt, {
@@ -716,14 +868,14 @@ var HFModelManager = (function () {
                     }
                     return '';
                 }
-                
+
                 // 默认：text-generation
                 const result = await modelState.model(prompt, {
                     max_new_tokens: options.maxTokens || 512,
                     temperature: options.temperature || 0.7,
                     top_p: options.topP || 0.9,
                 });
-                
+
                 if (Array.isArray(result) && result.length > 0) {
                     return result[0].generated_text || '';
                 }
@@ -736,7 +888,7 @@ var HFModelManager = (function () {
             throw error;
         }
     }
-    
+
     /**
      * 获取文本嵌入向量
      * @param {string} text 输入文本
@@ -746,11 +898,11 @@ var HFModelManager = (function () {
         if (!modelState.loaded) {
             await loadModel();
         }
-        
+
         if (modelState.type !== 'webllm' || modelState.pipelineTask !== 'feature-extraction') {
             throw new Error('当前模型不支持嵌入提取，请选择 sentence-transformers 类型的模型');
         }
-        
+
         try {
             const result = await modelState.model(text, { pooling: 'mean', normalize: true });
             return result.data;
@@ -768,7 +920,7 @@ var HFModelManager = (function () {
      */
     async function generateStream(prompt, callback, options) {
         options = options || {};
-        
+
         if (!modelState.loaded) {
             await loadModel();
         }
