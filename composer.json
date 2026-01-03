@@ -56,13 +56,13 @@
     "lipis/flag-icons": "^7.5"
   },
   "repositories": [
-      {
-        "type": "path",
-        "url": "app/code/Weline/*",
-        "options": {
-          "symlink": true
-        }
+    {
+      "type": "path",
+      "url": "app/code/Weline/*",
+      "options": {
+        "symlink": false
       }
+    }
   ],
   "opcache-autoloader": true,
   "apcu-autoloader": true,
