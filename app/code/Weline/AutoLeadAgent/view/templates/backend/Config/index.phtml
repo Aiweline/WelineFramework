@@ -467,6 +467,27 @@ if (is_array($targetSites)) {
                                         </div>
                                     </div>
 
+                                    <!-- 模型清理 -->
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="mdi mdi-delete-sweep me-1"></i>
+                                            <?= __('模型管理') ?>
+                                        </label>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="hf_model_clear_cache">
+                                                <i class="mdi mdi-delete me-1"></i>
+                                                <?= __('清理所有模型') ?>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-warning btn-sm" id="hf_model_show_cache_info">
+                                                <i class="mdi mdi-information me-1"></i>
+                                                <?= __('查看缓存信息') ?>
+                                            </button>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('清理所有已下载的模型以释放磁盘空间') ?>
+                                        </div>
+                                    </div>
+
                                     <!-- 搜索模型 -->
                                     <div class="mb-3">
                                         <label class="form-label">
@@ -909,7 +930,52 @@ if (is_array($targetSites)) {
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+// AutoLeadAgent 扩展ID配置
+// 注意：实际扩展ID需要根据打包后的扩展ID进行修改
+// 可以通过 chrome://extensions/ 页面查看已安装扩展的ID
+window.AUTOLEADAGENT_EXTENSION_IDS = [
+    'your-extension-id-here', // 请替换为实际的扩展ID
+    'autoleadagent-weline-extension', // 备用ID1
+    'weline-auto-lead-agent' // 备用ID2
+];
+
+// 打开缓存目录数据库
+    async function openCacheDirDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('AutoLeadAgentCacheDir', 1);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('cacheDir')) {
+                    db.createObjectStore('cacheDir');
+                }
+            };
+        });
+    }
+    
+    // 获取缓存的目录句柄
+    async function getCachedDirectoryHandle() {
+        try {
+            const db = await openCacheDirDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(['cacheDir'], 'readonly');
+                const store = tx.objectStore('cacheDir');
+                const request = store.get('default');
+                
+                request.onsuccess = () => resolve(request.result ? request.result.handle : null);
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('[Config] 获取缓存目录句柄失败:', error);
+            return null;
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+    
     // 表单提交
     var form = document.getElementById('config-form');
     if (form) {
@@ -943,26 +1009,11 @@ function saveConfig() {
         formData.set('wasm_model_enabled', '0');
     }
     
-    // 构建保存 URL：使用与 config-models.js 相同的逻辑
-    var currentPath = window.location.pathname || '';
-    // 移除末尾的 /index，确保路径以 /config 结尾
-    var basePath = currentPath.replace(/\/index[^\/]*$/, '');
-    // 如果路径不以 /config 结尾，说明可能有问题，尝试修复
-    if (!basePath.endsWith('/config')) {
-        // 如果路径以 /backend 结尾，添加 /config
-        if (basePath.endsWith('/backend')) {
-            basePath = basePath + '/config';
-        } else if (basePath.includes('/config/')) {
-            // 如果路径中包含 /config/，取到 /config 为止
-            var configIndex = basePath.indexOf('/config/');
-            basePath = basePath.substring(0, configIndex + 7); // 7 = '/config'.length
-        } else {
-            // 最后的手段：直接添加 /config
-            basePath = basePath + (basePath.endsWith('/') ? '' : '/') + 'config';
-        }
-    }
-    var saveUrl = basePath + '/save';
-    console.log('[Config] 保存 URL:', saveUrl, '当前路径:', currentPath, '基础路径:', basePath);
+    
+    // 使用当前页面的路径构建保存URL
+    var currentPath = window.location.pathname;
+    var saveUrl = currentPath + '/save';
+    console.log('[Config] 保存 URL:', saveUrl, '当前路径:', currentPath);
     
     // 打印表单数据便于调试
     for (var pair of formData.entries()) {
@@ -1016,7 +1067,7 @@ function doResetConfig() {
     btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('正在重置...') ?>';
     
     var currentPath = window.location.pathname;
-    var resetUrl = currentPath.replace(/\/[^\/]+$/, '/reset');
+    var resetUrl = currentPath + '/reset';
     
     fetch(resetUrl, {
         method: 'POST',
@@ -1113,6 +1164,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var testSteps = document.getElementById('hf_agent_test_steps');
     var testStepsContent = document.getElementById('hf_agent_test_steps_content');
     
+    // 初始化测试按钮状态
+    function updateTestButtonState() {
+        if (testBtn) {
+            // 检查模型是否已加载
+            var modelLoaded = false;
+            if (typeof ModelLifecycle !== 'undefined') {
+                modelLoaded = ModelLifecycle.isLoaded();
+            } else if (typeof HFModelManager !== 'undefined') {
+                modelLoaded = HFModelManager.isLoaded();
+            }
+            testBtn.disabled = !modelLoaded;
+        }
+    }
+    
+    // 监听模型状态变化
+    if (typeof ModelLifecycle !== 'undefined') {
+        // 使用 MutationObserver 监听模型状态变化
+        var observer = new MutationObserver(function(mutations) {
+            updateTestButtonState();
+        });
+        var statusIcon = document.getElementById('hf-runtime-status-icon');
+        if (statusIcon) {
+            observer.observe(statusIcon, { attributes: true, attributeFilter: ['style'] });
+        }
+    }
+    
     if (testBtn) {
         testBtn.addEventListener('click', async function() {
             var input = testInput ? testInput.value.trim() : '';
@@ -1124,7 +1201,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // 检查模型是否已加载
-            if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+            var modelLoaded = false;
+            if (typeof ModelLifecycle !== 'undefined') {
+                modelLoaded = ModelLifecycle.isLoaded();
+            } else if (typeof HFModelManager !== 'undefined') {
+                modelLoaded = HFModelManager.isLoaded();
+            }
+            
+            if (!modelLoaded) {
                 if (typeof showToast === 'function') {
                     showToast('warning', '<?= __('请先加载模型') ?>');
                 }
@@ -1179,6 +1263,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } finally {
                 testBtn.disabled = false;
+                updateTestButtonState();
             }
         });
     }
@@ -1192,6 +1277,118 @@ document.addEventListener('DOMContentLoaded', function() {
             if (testSteps) testSteps.style.display = 'none';
         });
     }
+    
+    
+    // 清理所有模型
+    var clearCacheBtn = document.getElementById('hf_model_clear_cache');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', async function() {
+            if (!confirm('确定要清理所有已下载的模型吗？此操作不可恢复！')) {
+                return;
+            }
+            
+            try {
+                if (typeof LocalFileStorage !== 'undefined') {
+                    const metadata = LocalFileStorage.getModelMetadata();
+                    var modelIds = Object.keys(metadata);
+                    
+                    if (modelIds.length === 0) {
+                        ConfigUtils.safeToast('info', '没有已下载的模型需要清理');
+                        return;
+                    }
+                    
+                    clearCacheBtn.disabled = true;
+                    clearCacheBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> 清理中...';
+                    
+                    var deletedCount = 0;
+                    var deletedSize = 0;
+                    
+                    for (var i = 0; i < modelIds.length; i++) {
+                        var modelId = modelIds[i];
+                        try {
+                            var result = await LocalFileStorage.deleteModel(modelId);
+                            deletedCount++;
+                            deletedSize += result.deletedSize;
+                        } catch (error) {
+                            console.error('[Config] 删除模型失败:', modelId, error);
+                        }
+                    }
+                    
+                    clearCacheBtn.disabled = false;
+                    clearCacheBtn.innerHTML = '<i class="mdi mdi-delete me-1"></i><?= __('清理所有模型') ?>';
+                    
+                    ConfigUtils.safeToast('success', '已清理 ' + deletedCount + ' 个模型，释放空间: ' + ConfigUtils.formatFileSize(deletedSize));
+                    
+                    // 刷新模型列表
+                    var searchBtn = document.getElementById('hf_model_search_btn');
+                    if (searchBtn) {
+                        searchBtn.click();
+                    }
+                } else {
+                    ConfigUtils.safeToast('error', 'LocalFileStorage 不可用');
+                }
+            } catch (error) {
+                console.error('[Config] 清理模型失败:', error);
+                clearCacheBtn.disabled = false;
+                clearCacheBtn.innerHTML = '<i class="mdi mdi-delete me-1"></i><?= __('清理所有模型') ?>';
+                ConfigUtils.safeToast('error', '清理模型失败: ' + error.message);
+            }
+        });
+    }
+    
+    // 查看缓存信息
+    var showCacheInfoBtn = document.getElementById('hf_model_show_cache_info');
+    if (showCacheInfoBtn) {
+        showCacheInfoBtn.addEventListener('click', function() {
+            try {
+                if (typeof LocalFileStorage !== 'undefined') {
+                    const metadata = LocalFileStorage.getModelMetadata();
+                    var modelIds = Object.keys(metadata);
+                    
+                    if (modelIds.length === 0) {
+                        ConfigUtils.safeToast('info', '没有已下载的模型');
+                        return;
+                    }
+                    
+                    var totalSize = 0;
+                    var totalFiles = 0;
+                    var modelInfo = [];
+                    
+                    modelIds.forEach(function(modelId) {
+                        var modelData = metadata[modelId];
+                        totalSize += modelData.totalSize || 0;
+                        totalFiles += modelData.fileCount || 0;
+                        modelInfo.push({
+                            id: modelId,
+                            files: modelData.fileCount || 0,
+                            size: modelData.totalSize || 0
+                        });
+                    });
+                    
+                    var info = '缓存信息:\n\n';
+                    info += '模型数量: ' + modelIds.length + '\n';
+                    info += '文件总数: ' + totalFiles + '\n';
+                    info += '总大小: ' + ConfigUtils.formatFileSize(totalSize) + '\n\n';
+                    info += '模型列表:\n';
+                    
+                    modelInfo.forEach(function(m) {
+                        info += '• ' + m.id + '\n';
+                        info += '  文件数: ' + m.files + ', 大小: ' + ConfigUtils.formatFileSize(m.size) + '\n';
+                    });
+                    
+                    alert(info);
+                } else {
+                    ConfigUtils.safeToast('error', 'LocalFileStorage 不可用');
+                }
+            } catch (error) {
+                console.error('[Config] 获取缓存信息失败:', error);
+                ConfigUtils.safeToast('error', '获取缓存信息失败: ' + error.message);
+            }
+        });
+    }
+    
+    // 初始化按钮状态
+    setTimeout(updateTestButtonState, 1000);
 });
 </script>
 

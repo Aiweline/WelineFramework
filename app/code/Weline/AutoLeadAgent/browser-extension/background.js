@@ -509,7 +509,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         // 添加请求去重机制
         const requestId = request.requestId || 'hf_filesize_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         const dedupKey = `hf_filesize_${request.modelId}_${request.filename}`;
-        
+
         if (processingRequests.has(dedupKey)) {
             const startTime = processingRequests.get(dedupKey);
             const elapsed = Date.now() - startTime;
@@ -523,14 +523,14 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
             return true;
         }
         processingRequests.set(dedupKey, Date.now());
-        
+
         // 包装 sendResponse 以确保清理
         const originalSendResponse = sendResponse;
         const wrappedSendResponse = (response) => {
             processingRequests.delete(dedupKey);
             originalSendResponse(response);
         };
-        
+
         // 处理异步函数，确保错误也被捕获
         handleHfGetFileSize(request, wrappedSendResponse).catch(error => {
             console.error('[AutoLeadAgent Extension] HF_GET_FILE_SIZE 处理异常:', error);
@@ -541,7 +541,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
                 });
             }
         });
-        
+
         return true; // 保持消息通道开放以支持异步响应
     }
 
@@ -681,7 +681,7 @@ function handleMCPListTools(request, sendResponse) {
  */
 async function handleWasmStartBackgroundTask(request, sendResponse) {
     const { taskConfig, wasmPath } = request;
-    
+
     console.log('[AutoLeadAgent Extension] 正在启动后台 WASM 任务:', taskConfig.taskId);
 
     try {
@@ -696,13 +696,13 @@ async function handleWasmStartBackgroundTask(request, sendResponse) {
         await WasmBridge.startTaskInWasm(taskConfig, {
             onDecision: async (decision) => {
                 console.log('[AutoLeadAgent Extension] 后台 WASM 决策:', decision.type);
-                
+
                 if (decision.type === 'tool_call') {
                     const { name, arguments: args } = decision;
                     try {
                         const toolFunc = (mcpTools || {})[name];
                         if (!toolFunc) throw new Error('Tool not found: ' + name);
-                        
+
                         const result = await toolFunc(args || {});
                         WasmBridge.applyToolResult({
                             name: name,
@@ -841,7 +841,7 @@ async function handleWasmExecuteToolsBatch(request, sendResponse) {
         }
     }
 
-    console.log('[AutoLeadAgent Extension] WASM 批量工具调用完成, 成功:', 
+    console.log('[AutoLeadAgent Extension] WASM 批量工具调用完成, 成功:',
         results.filter(r => r.success).length, '/', results.length);
 
     sendResponse({
@@ -860,14 +860,14 @@ initMCPTools();
 // 监听 Port 连接建立
 chrome.runtime.onConnect.addListener((port) => {
     console.log('[AutoLeadAgent Extension] 收到 Port 连接请求:', port.name);
-    
+
     if (port.name === 'hf-download') {
         let currentModelId = null;
-        
+
         // 监听 Port 消息
         port.onMessage.addListener((request) => {
             console.log('[AutoLeadAgent Extension] 收到 Port 消息:', request);
-            
+
             if (request.type === 'start-download') {
                 const { modelId } = request;
                 if (!modelId) {
@@ -877,13 +877,13 @@ chrome.runtime.onConnect.addListener((port) => {
                     });
                     return;
                 }
-                
+
                 currentModelId = modelId;
                 console.log('[AutoLeadAgent Extension] 通过 Port 开始下载:', modelId);
-                
+
                 // 保存 Port 连接
                 downloadPorts.set(modelId, port);
-                
+
                 // 先检查登录状态
                 checkLoginAndStartDownload(modelId, port).catch(error => {
                     console.error('[AutoLeadAgent Extension] Port 下载失败:', error);
@@ -894,23 +894,23 @@ chrome.runtime.onConnect.addListener((port) => {
                     });
                     downloadPorts.delete(modelId);
                 });
-                
+
             } else if (request.type === 'cancel-download') {
                 const { modelId } = request;
                 console.log('[AutoLeadAgent Extension] 取消下载:', modelId);
-                
+
                 // 清理 Port 连接
                 downloadPorts.delete(modelId);
-                
+
                 // 发送取消确认
                 port.postMessage({
                     type: 'download-cancelled',
                     modelId: modelId
                 });
-                
+
                 // 断开连接
                 port.disconnect();
-                
+
             } else if (request.type === 'check-status') {
                 const { modelId } = request;
                 const portExists = downloadPorts.has(modelId);
@@ -921,15 +921,15 @@ chrome.runtime.onConnect.addListener((port) => {
                 });
             }
         });
-        
+
         // 处理 Port 断开
         port.onDisconnect.addListener(() => {
             console.log('[AutoLeadAgent Extension] Port 连接断开:', currentModelId);
-            
+
             if (currentModelId) {
                 downloadPorts.delete(currentModelId);
             }
-            
+
             // 清理所有相关连接
             for (const [modelId, p] of downloadPorts.entries()) {
                 if (p === port) {
@@ -971,20 +971,20 @@ async function checkLoginAndStartDownload(modelId, port) {
             loginTabId: loginTab.id,
             message: '需要登录 HuggingFace，已打开登录页面'
         });
-        
+
         return; // 等待登录成功后再继续
     }
 
     // 2. 已登录，开始下载模型
     console.log('[AutoLeadAgent Extension] 已登录，通过 Port 开始下载模型');
-    
+
     // 发送下载开始消息
     port.postMessage({
         type: 'download-started',
         modelId: modelId,
         message: '下载已开始'
     });
-    
+
     // 执行下载
     await downloadHfModelViaPort(modelId, port);
 }
@@ -1069,7 +1069,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
         processingRequests.set(requestId, Date.now());
-        
+
         // 包装 sendResponse 以确保清理和错误处理
         let hasResponded = false;
         const originalSendResponse = sendResponse;
@@ -1086,7 +1086,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.error('[AutoLeadAgent Extension] 发送 HF_SEARCH_MODELS 响应失败:', e);
             }
         };
-        
+
         // 处理异步函数，确保错误也被捕获
         handleHfSearchModels(request, wrappedSendResponse).catch(error => {
             console.error('[AutoLeadAgent Extension] HF_SEARCH_MODELS 处理异常:', error);
@@ -1097,7 +1097,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 });
             }
         });
-        
+
         return true; // 保持消息通道开放以支持异步响应
     }
 
@@ -1107,7 +1107,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const modelId = request.modelId || '';
         const requestId = request.requestId || 'hf_info_' + modelId + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         const dedupKey = modelId ? `hf_info_${modelId}` : requestId;
-        
+
         if (processingRequests.has(dedupKey)) {
             const startTime = processingRequests.get(dedupKey);
             const elapsed = Date.now() - startTime;
@@ -1139,7 +1139,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // 添加请求去重机制
         const requestId = request.requestId || 'hf_filesize_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         const dedupKey = `hf_filesize_${request.modelId}_${request.filename}`;
-        
+
         if (processingRequests.has(dedupKey)) {
             const startTime = processingRequests.get(dedupKey);
             const elapsed = Date.now() - startTime;
@@ -1153,14 +1153,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
         processingRequests.set(dedupKey, Date.now());
-        
+
         // 包装 sendResponse 以确保清理
         const originalSendResponse = sendResponse;
         const wrappedSendResponse = (response) => {
             processingRequests.delete(dedupKey);
             originalSendResponse(response);
         };
-        
+
         // 处理异步函数，确保错误也被捕获
         handleHfGetFileSize(request, wrappedSendResponse).catch(error => {
             console.error('[AutoLeadAgent Extension] HF_GET_FILE_SIZE 处理异常:', error);
@@ -1171,7 +1171,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 });
             }
         });
-        
+
         return true; // 保持消息通道开放以支持异步响应
     }
 
@@ -1344,14 +1344,14 @@ function isLogDuplicate(type, message) {
     const logKey = getLogKey(type, message);
     const now = Date.now();
     const lastSentTime = sentLogs.get(logKey);
-    
+
     if (lastSentTime && (now - lastSentTime) < LOG_DEDUP_WINDOW) {
         return true; // 在去重窗口内，跳过
     }
-    
+
     // 更新发送时间
     sentLogs.set(logKey, now);
-    
+
     // 清理过期的日志记录（超过1分钟的记录）
     const oneMinuteAgo = now - 60000;
     for (const [key, timestamp] of sentLogs.entries()) {
@@ -1359,7 +1359,7 @@ function isLogDuplicate(type, message) {
             sentLogs.delete(key);
         }
     }
-    
+
     return false;
 }
 
@@ -1377,13 +1377,13 @@ async function findTargetTabId() {
             logTargetTabId = null;
         }
     }
-    
+
     // 查找任务管理页面
     const tabs = await chrome.tabs.query({});
     if (!tabs || tabs.length === 0) {
         return null;
     }
-    
+
     // 优先查找任务管理页面（包含 auto-lead-agent 路径的页面）
     const taskManagementTabs = tabs.filter(tab => {
         // 跳过扩展自己的页面
@@ -1400,12 +1400,12 @@ async function findTargetTabId() {
         }
         return false;
     });
-    
+
     if (taskManagementTabs.length > 0) {
         logTargetTabId = taskManagementTabs[0].id;
         return logTargetTabId;
     }
-    
+
     // 如果没有找到任务管理页面，尝试发送到第一个非搜索结果页面
     const searchEngines = [
         'google.com/search',
@@ -1414,19 +1414,19 @@ async function findTargetTabId() {
         'yahoo.com/search',
         'duckduckgo.com'
     ];
-    
+
     const nonSearchTabs = tabs.filter(tab => {
         if (tab.url && tab.url.startsWith('chrome-extension://')) {
             return false;
         }
         return !searchEngines.some(engine => tab.url && tab.url.includes(engine));
     });
-    
+
     if (nonSearchTabs.length > 0) {
         logTargetTabId = nonSearchTabs[0].id;
         return logTargetTabId;
     }
-    
+
     return null;
 }
 
@@ -1438,19 +1438,19 @@ function sendLogToFrontend(type, message) {
     try {
         // 同时输出到控制台（用于调试）
         console.log('[AutoLeadAgent Extension Log]', message);
-        
+
         // 检查是否重复（去重机制）
         if (isLogDuplicate(type, message)) {
             return; // 跳过重复日志
         }
-        
+
         // 异步查找目标标签页并发送日志
         findTargetTabId().then(targetTabId => {
             if (!targetTabId) {
                 // 没有找到目标标签页，静默失败（不输出警告，避免日志污染）
                 return;
             }
-            
+
             // 只发送到单一目标标签页
             chrome.tabs.sendMessage(targetTabId, {
                 type: 'AUTOLEADAGENT_LOG',
@@ -1672,12 +1672,12 @@ async function searchInEngine(engine, query, maxResults, tabId = null, openedTab
 
         // 增加等待时间并添加动态检测页面加载完成的逻辑
         sendLogToFrontend('crawl', '  → 等待5秒让页面完全加载（包括动态内容）...');
-        
+
         // 动态检测页面是否完全加载（检查DOM是否稳定）
         try {
             await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
-                func: function() {
+                func: function () {
                     return new Promise((resolve) => {
                         let lastHeight = document.body.scrollHeight;
                         let stableCount = 0;
@@ -1695,7 +1695,7 @@ async function searchInEngine(engine, query, maxResults, tabId = null, openedTab
                                 lastHeight = currentHeight;
                             }
                         }, 500);
-                        
+
                         // 最多等待5秒
                         setTimeout(() => {
                             clearInterval(checkInterval);
@@ -1708,7 +1708,7 @@ async function searchInEngine(engine, query, maxResults, tabId = null, openedTab
             // 如果动态检测失败，使用固定等待时间
             await sleep(5000);
         }
-        
+
         sendLogToFrontend('crawl', '  ✓ 等待完成');
 
         // 执行内容脚本提取URL列表（直接使用端侧模型获取结果）
@@ -2745,11 +2745,11 @@ async function handleCrawlRequest(request, sendResponse) {
                         console.log('[AutoLeadAgent Extension] ===== 提取结果验证 =====');
                         console.log('[AutoLeadAgent Extension] 提取到的结果列表长度:', urlList.length);
                         console.log('[AutoLeadAgent Extension] 提取到的结果列表详情:', JSON.stringify(urlList.slice(0, 5), null, 2));
-                        
+
                         if (urlList.length > 0) {
                             sendLogToFrontend('crawl', '  ✓ [' + engine.name + '] 第' + currentPage + '/' + maxPages + '页提取到 ' + urlList.length + ' 个结果URL');
                             sendLogToFrontend('crawl', '  🔍 [调试] urlList内容验证: 长度=' + urlList.length + ', 有效URL=' + urlList.filter(item => item.url).length);
-                            
+
                             // 显示前3个结果的预览
                             urlList.slice(0, 3).forEach((item, idx) => {
                                 const urlPreview = item.url ? (item.url.substring(0, 60) + (item.url.length > 60 ? '...' : '')) : '无URL';
@@ -3204,7 +3204,7 @@ ${pageHtml.substring(0, 50000)}${pageHtml.length > 50000 ? '...(已截断)' : ''
                                 sendLogToFrontend('crawl', '   📍 目标URL: ' + targetUrl);
                                 sendLogToFrontend('crawl', '   🔢 最大深度: 10层');
                                 sendLogToFrontend('crawl', '   ⏳ 开始深度爬取（这可能需要几分钟）...');
-                                
+
                                 const deepCrawlStartTime = Date.now();
                                 const deepCrawlResults = await deepCrawlWebsite(
                                     targetUrl,
@@ -3213,7 +3213,7 @@ ${pageHtml.substring(0, 50000)}${pageHtml.length > 50000 ? '...(已截断)' : ''
                                     0, // 从深度0开始
                                     sendLogToFrontend
                                 );
-                                
+
                                 const deepCrawlDuration = Math.floor((Date.now() - deepCrawlStartTime) / 1000);
                                 sendLogToFrontend('crawl', '   ✓ 深度爬取完成，耗时: ' + deepCrawlDuration + ' 秒');
                                 sendLogToFrontend('crawl', '   📊 深度爬取结果: 找到 ' + deepCrawlResults.length + ' 条客户信息');
@@ -4061,7 +4061,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                     'div[data-hveid]',
                     'div[data-ved][data-hveid]'
                 ];
-                
+
                 // 尝试每个选择器，直到找到结果
                 for (const selector of googleSelectors) {
                     try {
@@ -4082,15 +4082,15 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                     const allDivs = document.querySelectorAll('div');
                     const resultDivs = [];
                     const seenDivs = new Set();
-                    
+
                     allDivs.forEach(div => {
                         if (seenDivs.has(div)) return;
-                        
+
                         // 查找div内的所有a标签
                         const links = div.querySelectorAll('a[href]');
                         for (const link of links) {
                             let href = link.href || link.getAttribute('href') || '';
-                            
+
                             // 处理Google的/url?q=重定向（多种格式）
                             if (href.includes('/url?q=')) {
                                 try {
@@ -4098,12 +4098,12 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                                     href = urlParams.get('q') || href;
                                 } catch (e) { }
                             }
-                            
+
                             // 处理 data-href 和 data-url 属性
                             if (!href || href.startsWith('javascript:')) {
                                 href = link.getAttribute('data-href') || link.getAttribute('data-url') || href;
                             }
-                            
+
                             // 如果是外部链接（不是Google自己的），这个div就是结果条目
                             if (href && href.startsWith('http') &&
                                 !href.includes('google.com/search') &&
@@ -4137,7 +4137,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                 const linkContainers = new Set();
                 const validLinksMap = new Map(); // 存储链接到容器的映射
                 let validLinksCount = 0;
-                
+
                 // 搜索引擎域名列表（用于过滤）
                 const searchEngineDomains = [
                     'google.com', 'baidu.com', 'bing.com', 'yahoo.com',
@@ -4165,20 +4165,20 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                             }
                         }
                     }
-                    
+
                     // 处理 data-href 和 data-url 属性（Google有时使用这些属性）
                     if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
-                        href = link.getAttribute('data-href') || 
-                               link.getAttribute('data-url') || 
-                               link.getAttribute('data-ved') || 
-                               href;
+                        href = link.getAttribute('data-href') ||
+                            link.getAttribute('data-url') ||
+                            link.getAttribute('data-ved') ||
+                            href;
                     }
 
                     // 处理相对链接
                     if (href.startsWith('/')) {
                         href = window.location.origin + href;
                     }
-                    
+
                     // 处理协议相对URL
                     if (href.startsWith('//')) {
                         href = 'https:' + href;
@@ -4190,14 +4190,14 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                         try {
                             const urlObj = new URL(href);
                             const hostname = urlObj.hostname.toLowerCase();
-                            
+
                             // 检查是否是搜索引擎域名
-                            const isSearchEngine = searchEngineDomains.some(domain => 
+                            const isSearchEngine = searchEngineDomains.some(domain =>
                                 hostname === domain || hostname.endsWith('.' + domain)
                             );
-                            
+
                             // 排除搜索引擎域名和常见的内链
-                            if (!isSearchEngine && 
+                            if (!isSearchEngine &&
                                 !hostname.includes('googleusercontent.com') &&
                                 !hostname.includes('gstatic.com') &&
                                 !urlObj.pathname.includes('/search') &&
@@ -4211,29 +4211,29 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
 
                     if (isValidExternalLink) {
                         validLinksCount++;
-                        
+
                         // 计算链接的重要性评分（用于排序）
                         const linkText = (link.textContent || link.innerText || '').trim();
                         const linkTitle = link.getAttribute('title') || '';
                         let importanceScore = 0;
-                        
+
                         // 链接文本长度（合理的标题长度）
                         if (linkText.length >= 10 && linkText.length <= 200) {
                             importanceScore += 2;
                         }
-                        
+
                         // 链接位置（在页面中的位置，越靠前越重要）
                         const rect = link.getBoundingClientRect();
                         if (rect.top < window.innerHeight * 2) {
                             importanceScore += 1;
                         }
-                        
+
                         // 找到链接的父容器（向上查找5层，更深入）
                         let container = link.parentElement;
                         for (let i = 0; i < 5 && container; i++) {
-                            if (container.tagName === 'DIV' || 
-                                container.tagName === 'ARTICLE' || 
-                                container.tagName === 'SECTION' || 
+                            if (container.tagName === 'DIV' ||
+                                container.tagName === 'ARTICLE' ||
+                                container.tagName === 'SECTION' ||
                                 container.tagName === 'LI') {
                                 // 确保容器有足够的文本内容（至少20个字符）
                                 const containerText = container.textContent || container.innerText || '';
@@ -4256,7 +4256,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                         }
                     }
                 });
-                
+
                 // 按重要性评分排序链接
                 linkContainers.forEach(container => {
                     const links = validLinksMap.get(container);
@@ -4602,19 +4602,19 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                                 }
                             }
                         }
-                        
+
                         // 处理 data-href 和 data-url 属性
                         if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
-                            href = link.getAttribute('data-href') || 
-                                   link.getAttribute('data-url') || 
-                                   href;
+                            href = link.getAttribute('data-href') ||
+                                link.getAttribute('data-url') ||
+                                href;
                         }
 
                         // 处理协议相对URL
                         if (href.startsWith('//')) {
                             href = 'https:' + href;
                         }
-                        
+
                         // 处理相对链接
                         if (href.startsWith('/') && !href.startsWith('//')) {
                             href = window.location.origin + href;
@@ -4626,7 +4626,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                             try {
                                 const urlObj = new URL(href);
                                 const hostname = urlObj.hostname.toLowerCase();
-                                
+
                                 // 排除Google域名和常见的内链
                                 if (!hostname.includes('google.com') &&
                                     !hostname.includes('googleusercontent.com') &&
@@ -4640,7 +4640,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                                 // URL解析失败，跳过
                             }
                         }
-                        
+
                         if (isValidExternalLink) {
                             resultItem.url = href;
                             console.log('[AutoLeadAgent] 提取到链接: ' + href);
@@ -4649,7 +4649,7 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                             if (!resultItem.title) {
                                 const linkText = (link.textContent || link.innerText || '').trim();
                                 const linkTitle = link.getAttribute('title') || '';
-                                
+
                                 if (linkText && linkText.length > 5 && linkText.length < 200) {
                                     resultItem.title = linkText;
                                 } else if (linkTitle && linkTitle.length > 5 && linkTitle.length < 200) {
@@ -6822,7 +6822,7 @@ const downloadPorts = new Map(); // Map<modelId, Port>
 async function handleHfCheckLogin(request, sendResponse) {
     try {
         console.log('[AutoLeadAgent Extension] 检查 HuggingFace 登录状态');
-        
+
         // 尝试访问 whoami API 检查登录状态
         const response = await fetch('https://huggingface.co/api/whoami-v2', {
             method: 'GET',
@@ -6867,7 +6867,7 @@ async function handleHfCheckLogin(request, sendResponse) {
  */
 async function handleHfDownloadModel(request, sendResponse) {
     const { modelId } = request;
-    
+
     if (!modelId) {
         sendResponse({
             success: false,
@@ -6925,7 +6925,7 @@ async function handleHfDownloadModel(request, sendResponse) {
 
         // 2. 已登录，开始下载模型（异步执行，不阻塞其他消息）
         console.log('[AutoLeadAgent Extension] 已登录，开始下载模型');
-        
+
         // 立即返回"已开始下载"的响应，实际下载在后台进行
         // 下载进度通过 HF_DOWNLOAD_PROGRESS 消息实时更新
         safeSendResponse({
@@ -6934,7 +6934,7 @@ async function handleHfDownloadModel(request, sendResponse) {
             modelId: modelId,
             message: '模型下载已开始，请查看进度更新'
         });
-        
+
         // 在后台异步执行下载（不阻塞消息通道）
         downloadHfModel(modelId, (response) => {
             // 下载完成或失败时，通过进度消息通知（而不是通过 sendResponse，因为已经响应过了）
@@ -6980,7 +6980,7 @@ function startLoginDetection(loginTabId, modelId) {
                     type: 'HF_LOGIN_OK',
                     modelId: modelId
                 };
-                
+
                 // 发送到所有标签页的 content script
                 chrome.tabs.query({}, function (tabs) {
                     tabs.forEach(function (tab) {
@@ -7038,7 +7038,7 @@ function startLoginDetectionForModelInfo(loginTabId, modelId) {
                     type: 'HF_LOGIN_OK_FOR_MODEL_INFO',
                     modelId: modelId
                 };
-                
+
                 // 发送到所有标签页的 content script
                 chrome.tabs.query({}, function (tabs) {
                     tabs.forEach(function (tab) {
@@ -7112,7 +7112,7 @@ async function downloadHfModel(modelId, onComplete) {
         // 2. 获取文件列表（优先使用 siblings API，如果失败则从 modelInfo 中获取）
         let siblings = [];
         const siblingsUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}/siblings`;
-        
+
         try {
             const siblingsResponse = await fetch(siblingsUrl, {
                 credentials: 'include',
@@ -7127,7 +7127,7 @@ async function downloadHfModel(modelId, onComplete) {
             } else {
                 // siblings API 失败（可能是 404），尝试从 modelInfo 中获取
                 console.warn('[AutoLeadAgent Extension] siblings API 返回', siblingsResponse.status, '，尝试从 modelInfo 中获取文件列表');
-                
+
                 if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
                     siblings = modelInfo.siblings;
                     console.log('[AutoLeadAgent Extension] 从 modelInfo 获取文件列表:', siblings);
@@ -7139,7 +7139,7 @@ async function downloadHfModel(modelId, onComplete) {
         } catch (error) {
             // 如果 fetch 失败或解析失败，尝试从 modelInfo 中获取
             console.warn('[AutoLeadAgent Extension] 获取 siblings API 失败:', error.message);
-            
+
             if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
                 siblings = modelInfo.siblings;
                 console.log('[AutoLeadAgent Extension] 从 modelInfo 获取文件列表（fallback）:', siblings);
@@ -7148,7 +7148,7 @@ async function downloadHfModel(modelId, onComplete) {
                 throw new Error(`获取文件列表失败: ${error.message}`);
             }
         }
-        
+
         if (!siblings || siblings.length === 0) {
             throw new Error('模型文件列表为空，无法下载');
         }
@@ -7157,11 +7157,11 @@ async function downloadHfModel(modelId, onComplete) {
         const importantFiles = siblings.filter(file => {
             const name = file.rfilename || file.filename || '';
             return name.endsWith('.safetensors') ||
-                   name.endsWith('.bin') ||
-                   name.endsWith('.json') ||
-                   name === 'tokenizer.json' ||
-                   name === 'config.json' ||
-                   name.startsWith('tokenizer_config.json');
+                name.endsWith('.bin') ||
+                name.endsWith('.json') ||
+                name === 'tokenizer.json' ||
+                name === 'config.json' ||
+                name.startsWith('tokenizer_config.json');
         });
 
         console.log('[AutoLeadAgent Extension] 需要下载的文件:', importantFiles.length);
@@ -7180,13 +7180,13 @@ async function downloadHfModel(modelId, onComplete) {
             for (const file of importantFiles) {
                 const filename = file.rfilename || file.filename;
                 const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
-                
+
                 try {
                     const headResponse = await fetch(fileUrl, {
                         method: 'HEAD',
                         credentials: 'include'
                     });
-                    
+
                     if (headResponse.ok) {
                         const contentLength = parseInt(headResponse.headers.get('content-length') || '0', 10);
                         if (contentLength > 0) {
@@ -7200,7 +7200,7 @@ async function downloadHfModel(modelId, onComplete) {
                     // 继续处理其他文件
                 }
             }
-            
+
             console.log('[AutoLeadAgent Extension] 通过 HEAD 请求获取的总大小:', totalSize, '字节');
         }
 
@@ -7236,7 +7236,7 @@ async function downloadHfModel(modelId, onComplete) {
                 total: total,
                 progress: progress
             };
-            
+
             // 发送到所有标签页的 content script，由 content script 转发到页面
             chrome.tabs.query({}, function (tabs) {
                 tabs.forEach(function (tab) {
@@ -7258,7 +7258,7 @@ async function downloadHfModel(modelId, onComplete) {
         for (const file of importantFiles) {
             const filename = file.rfilename || file.filename;
             const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
-            
+
             console.log('[AutoLeadAgent Extension] 下载文件:', filename, '大小:', file.size || '未知');
 
             try {
@@ -7274,7 +7274,7 @@ async function downloadHfModel(modelId, onComplete) {
                 // 获取实际文件大小（优先使用 content-length，其次使用文件信息中的 size）
                 const contentLength = parseInt(fileResponse.headers.get('content-length') || '0', 10);
                 const fileSize = contentLength > 0 ? contentLength : (file.size || 0);
-                
+
                 // 如果文件大小与预期不符，更新文件信息（但不改变总大小，因为已经在开始前计算好了）
                 if (fileSize > 0 && file.size !== fileSize) {
                     console.log('[AutoLeadAgent Extension] 文件实际大小与预期不同:', filename, '预期:', file.size, '实际:', fileSize);
@@ -7302,7 +7302,7 @@ async function downloadHfModel(modelId, onComplete) {
                         console.warn('[AutoLeadAgent Extension] 总大小为0，使用文件大小估算进度');
                         progress = fileSize > 0 ? Math.min(100, (downloadedSize / fileSize) * 100) : 0;
                     }
-                    
+
                     // 发送进度更新（节流）
                     sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, progress);
                 }
@@ -7325,7 +7325,7 @@ async function downloadHfModel(modelId, onComplete) {
                     uint8Array.set(chunk, offset);
                     offset += chunk.length;
                 }
-                
+
                 // 保存到 IndexedDB（通过消息通知前端保存）
                 downloadedFiles.push({
                     filename: filename,
@@ -7342,7 +7342,7 @@ async function downloadHfModel(modelId, onComplete) {
                     filename: filename,
                     size: arrayBuffer.byteLength
                 };
-                
+
                 // 发送到所有标签页的 content script
                 chrome.tabs.query({}, function (tabs) {
                     tabs.forEach(function (tab) {
@@ -7384,10 +7384,10 @@ async function downloadHfModel(modelId, onComplete) {
         // 6. 下载完成
         const finalTotalSize = actualTotalSize || totalSize || downloadedSize;
         console.log('[AutoLeadAgent Extension] 模型下载完成:', modelId, '总大小:', finalTotalSize, '字节，已下载:', downloadedSize, '字节');
-        
+
         // 发送最终进度（100%）
         sendProgressUpdate('下载完成', downloadedSize, finalTotalSize, 100);
-        
+
         // 调用完成回调（如果提供）
         if (onComplete) {
             onComplete({
@@ -7401,7 +7401,7 @@ async function downloadHfModel(modelId, onComplete) {
 
     } catch (error) {
         console.error('[AutoLeadAgent Extension] 下载模型文件失败:', error);
-        
+
         // 发送错误进度消息
         const errorMessage = {
             type: 'HF_DOWNLOAD_PROGRESS',
@@ -7412,15 +7412,15 @@ async function downloadHfModel(modelId, onComplete) {
             progress: -1, // 使用 -1 表示错误
             error: error.message || '下载模型失败'
         };
-        
+
         chrome.tabs.query({}, function (tabs) {
             tabs.forEach(function (tab) {
                 try {
-                    chrome.tabs.sendMessage(tab.id, errorMessage).catch(() => {});
-                } catch (e) {}
+                    chrome.tabs.sendMessage(tab.id, errorMessage).catch(() => { });
+                } catch (e) { }
             });
         });
-        
+
         // 调用完成回调（如果提供）
         if (onComplete) {
             onComplete({
@@ -7457,7 +7457,7 @@ async function downloadHfModelViaPort(modelId, port) {
         // 2. 获取文件列表
         let siblings = [];
         const siblingsUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}/siblings`;
-        
+
         try {
             const siblingsResponse = await fetch(siblingsUrl, {
                 credentials: 'include',
@@ -7482,7 +7482,7 @@ async function downloadHfModelViaPort(modelId, port) {
                 throw new Error(`获取文件列表失败: ${error.message}`);
             }
         }
-        
+
         if (!siblings || siblings.length === 0) {
             throw new Error('模型文件列表为空，无法下载');
         }
@@ -7491,11 +7491,11 @@ async function downloadHfModelViaPort(modelId, port) {
         const importantFiles = siblings.filter(file => {
             const name = file.rfilename || file.filename || '';
             return name.endsWith('.safetensors') ||
-                   name.endsWith('.bin') ||
-                   name.endsWith('.json') ||
-                   name === 'tokenizer.json' ||
-                   name === 'config.json' ||
-                   name.startsWith('tokenizer_config.json');
+                name.endsWith('.bin') ||
+                name.endsWith('.json') ||
+                name === 'tokenizer.json' ||
+                name === 'config.json' ||
+                name.startsWith('tokenizer_config.json');
         });
 
         console.log('[AutoLeadAgent Extension] 需要下载的文件:', importantFiles.length);
@@ -7511,13 +7511,13 @@ async function downloadHfModelViaPort(modelId, port) {
             for (const file of importantFiles) {
                 const filename = file.rfilename || file.filename;
                 const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
-                
+
                 try {
                     const headResponse = await fetch(fileUrl, {
                         method: 'HEAD',
                         credentials: 'include'
                     });
-                    
+
                     if (headResponse.ok) {
                         const contentLength = parseInt(headResponse.headers.get('content-length') || '0', 10);
                         if (contentLength > 0) {
@@ -7566,7 +7566,7 @@ async function downloadHfModelViaPort(modelId, port) {
         for (const file of importantFiles) {
             const filename = file.rfilename || file.filename;
             const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
-            
+
             console.log('[AutoLeadAgent Extension] 下载文件:', filename);
 
             try {
@@ -7607,18 +7607,20 @@ async function downloadHfModelViaPort(modelId, port) {
                     } else if (fileSize > 0) {
                         progress = Math.min(100, (downloadedSize / fileSize) * 100);
                     }
-                    
+
                     sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, progress);
 
                     // 立即将数据块发送到前端，不再在后台进行 ArrayBuffer 合并
+                    // 注意：使用 slice() 复制数据，避免 transferable 导致数据被清空
+                    const dataCopy = value.buffer.slice(0, value.byteLength);
                     port.postMessage({
                         type: 'download-file-chunk',
                         modelId: modelId,
                         filename: filename,
-                        data: value.buffer, // 使用 ArrayBuffer
+                        data: dataCopy,
                         offset: fileDownloadedSize - value.byteLength,
                         isComplete: false
-                    }, [value.buffer]); // 使用 transferable
+                    });
                 }
 
                 // 通知前端文件分块发送完成
@@ -7648,10 +7650,10 @@ async function downloadHfModelViaPort(modelId, port) {
         // 6. 下载完成
         const finalTotalSize = actualTotalSize || totalSize || downloadedSize;
         console.log('[AutoLeadAgent Extension] 模型下载完成:', modelId, '总大小:', finalTotalSize);
-        
+
         // 发送最终进度（100%）
         sendProgressUpdate('下载完成', downloadedSize, finalTotalSize, 100);
-        
+
         // 发送完成消息
         port.postMessage({
             type: 'download-complete',
@@ -7663,13 +7665,13 @@ async function downloadHfModelViaPort(modelId, port) {
 
     } catch (error) {
         console.error('[AutoLeadAgent Extension] Port 下载模型失败:', error);
-        
+
         port.postMessage({
             type: 'download-error',
             modelId: modelId,
             error: error.message || '下载模型失败'
         });
-        
+
         throw error;
     } finally {
         // 清理 Port 连接
@@ -7683,7 +7685,7 @@ async function downloadHfModelViaPort(modelId, port) {
 async function handleHfSearchModels(request, sendResponse) {
     try {
         const { query = '', task = 'text-generation', limit = 50 } = request;
-        
+
         console.log('[AutoLeadAgent Extension] 搜索模型:', { query, task, limit });
 
         // 构建搜索 URL
@@ -7692,14 +7694,14 @@ async function handleHfSearchModels(request, sendResponse) {
             sort: 'downloads',
             direction: '-1'
         });
-        
+
         // 添加扩展字段以获取模型权重大小（safetensors 信息）
         params.append('expand', 'safetensors');
         params.append('expand', 'downloads');
         params.append('expand', 'author');
         params.append('expand', 'likes');
         params.append('expand', 'siblings');
-        
+
         if (query) {
             params.append('search', query);
         }
@@ -7729,7 +7731,7 @@ async function handleHfSearchModels(request, sendResponse) {
             clearTimeout(timeoutId);
         } catch (fetchError) {
             clearTimeout(timeoutId);
-            
+
             // 提供更详细的错误信息
             let errorMessage = '网络请求失败';
             if (fetchError.name === 'AbortError') {
@@ -7739,11 +7741,11 @@ async function handleHfSearchModels(request, sendResponse) {
             } else if (fetchError.toString) {
                 errorMessage = '网络错误: ' + fetchError.toString();
             }
-            
+
             console.error('[AutoLeadAgent Extension] Fetch 失败:', fetchError);
             console.error('[AutoLeadAgent Extension] 错误类型:', fetchError.name);
             console.error('[AutoLeadAgent Extension] 错误消息:', fetchError.message);
-            
+
             throw new Error(errorMessage);
         }
 
@@ -7758,7 +7760,7 @@ async function handleHfSearchModels(request, sendResponse) {
             console.error('[AutoLeadAgent Extension] API 返回格式错误，不是数组:', typeof models, models);
             throw new Error('API 返回格式错误');
         }
-        
+
         console.log('[AutoLeadAgent Extension] 搜索返回', models.length, '个模型（过滤前）');
 
         // 过滤和格式化模型数据
@@ -7773,10 +7775,10 @@ async function handleHfSearchModels(request, sendResponse) {
             // 1) 检查任务类型
             const pipelineTag = model.pipeline_tag || model.pipelineTag || '';
             // 如果用户指定了任务类型，API 已经过滤了，但我们这里可以做二次校验
-            
+
             // 2) 检查库类型
             const library = model.library_name || model.libraryName || '';
-            
+
             // 3) 标签检查
             const tags = model.tags || [];
 
@@ -7798,7 +7800,7 @@ async function handleHfSearchModels(request, sendResponse) {
             // 其次从 safetensors 权重信息中获取（expand=safetensors）
             else if (model.safetensors && model.safetensors.total) {
                 totalSize = parseInt(model.safetensors.total, 10);
-            } 
+            }
             // 再次尝试从文件列表累加（需要 expand=siblings 或 full=true）
             else if (Array.isArray(model.siblings)) {
                 for (const sibling of model.siblings) {
@@ -7807,10 +7809,10 @@ async function handleHfSearchModels(request, sendResponse) {
                     }
                 }
             }
-            
+
             // 针对某些模型，即使没有 safetensors 也有 downloads 信息，这里记录一下
             const estimatedSizeMB = totalSize > 0 ? Math.round(totalSize / 1024 / 1024) : 0;
-            
+
             if (estimatedSizeMB === 0) {
                 console.log('[AutoLeadAgent Extension] 模型大小为 0:', modelId, 'safetensors:', !!model.safetensors, 'siblings:', model.siblings ? model.siblings.length : 0);
             }
@@ -7830,14 +7832,14 @@ async function handleHfSearchModels(request, sendResponse) {
         }
 
         console.log('[AutoLeadAgent Extension] 搜索完成，找到', formattedModels.length, '个模型（过滤后）');
-        
+
         const result = {
             success: true,
             data: formattedModels,
             total: formattedModels.length
         };
         console.log('[AutoLeadAgent Extension] 发送搜索响应:', result);
-        
+
         // 确保 sendResponse 被调用
         if (sendResponse) {
             try {
@@ -7850,7 +7852,7 @@ async function handleHfSearchModels(request, sendResponse) {
     } catch (error) {
         console.error('[AutoLeadAgent Extension] 搜索模型失败:', error);
         console.error('[AutoLeadAgent Extension] 错误堆栈:', error.stack);
-        
+
         // 提供更友好的错误信息
         let errorMessage = error.message || '搜索模型失败';
         if (errorMessage.includes('Failed to fetch') || errorMessage.includes('network')) {
@@ -7858,7 +7860,7 @@ async function handleHfSearchModels(request, sendResponse) {
         } else if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
             errorMessage = '请求超时，请检查网络连接或稍后重试';
         }
-        
+
         const errorResult = {
             success: false,
             error: errorMessage,
@@ -7866,7 +7868,7 @@ async function handleHfSearchModels(request, sendResponse) {
             originalError: error.message || 'Unknown error'
         };
         console.log('[AutoLeadAgent Extension] 发送错误响应:', errorResult);
-        
+
         // 确保 sendResponse 被调用
         if (sendResponse) {
             try {
@@ -7898,7 +7900,7 @@ async function handleHfGetModelInfo(request, sendResponse) {
 
     try {
         const { modelId } = request;
-        
+
         if (!modelId) {
             safeSendResponse({
                 success: false,
@@ -7934,13 +7936,13 @@ async function handleHfGetModelInfo(request, sendResponse) {
                 } catch (e) {
                     console.warn('[AutoLeadAgent Extension] 读取错误信息失败:', e);
                 }
-                
+
                 // 检查是否是明确的编码错误（如 "Invalid repo name" 且包含 "url-encoded"）
                 const isEncodingError = errorText && (
-                    errorText.includes('Invalid repo name') && 
+                    errorText.includes('Invalid repo name') &&
                     errorText.includes('url-encoded')
                 );
-                
+
                 // 如果不是明确的编码错误，先检查登录状态
                 if (!isEncodingError) {
                     let isLoggedIn = false;
@@ -7958,7 +7960,7 @@ async function handleHfGetModelInfo(request, sendResponse) {
                         // 检查登录状态失败，假设未登录
                         console.warn('[AutoLeadAgent Extension] 检查登录状态失败:', e);
                     }
-                    
+
                     // 如果未登录，打开登录页面
                     if (!isLoggedIn) {
                         console.log('[AutoLeadAgent Extension] 获取模型信息需要登录，打开登录页面');
@@ -7978,17 +7980,17 @@ async function handleHfGetModelInfo(request, sendResponse) {
                         });
                         return;
                     }
-                    
+
                     // 如果已登录但仍然是400/401，检查错误信息是否表明需要更多权限
                     const needsMoreAccess = errorText && (
-                        errorText.includes('gated') || 
+                        errorText.includes('gated') ||
                         errorText.includes('access') ||
                         errorText.includes('permission') ||
                         errorText.includes('private') ||
                         errorText.includes('unauthorized') ||
                         errorText.includes('forbidden')
                     );
-                    
+
                     if (needsMoreAccess) {
                         console.log('[AutoLeadAgent Extension] 模型可能需要更多权限，打开登录页面');
                         const loginTab = await chrome.tabs.create({
@@ -8008,7 +8010,7 @@ async function handleHfGetModelInfo(request, sendResponse) {
                         return;
                     }
                 }
-                
+
                 // 如果是编码错误或已登录但仍然是400，返回错误信息
                 safeSendResponse({
                     success: false,
@@ -8016,7 +8018,7 @@ async function handleHfGetModelInfo(request, sendResponse) {
                 });
                 return;
             }
-            
+
             // 其他状态码的错误
             let errorMessage = `获取模型信息失败: ${response.status} ${response.statusText}`;
             try {
@@ -8044,7 +8046,7 @@ async function handleHfGetModelInfo(request, sendResponse) {
         // 优先从 safetensors 权重信息中获取
         if (modelInfo.safetensors && modelInfo.safetensors.total) {
             totalSize = parseInt(modelInfo.safetensors.total, 10);
-        } 
+        }
         // 其次尝试从文件列表累加
         else if (Array.isArray(modelInfo.siblings)) {
             for (const sibling of modelInfo.siblings) {
@@ -8108,7 +8110,7 @@ async function handleHfGetFileSize(request, sendResponse) {
 
     try {
         const { modelId, filename } = request;
-        
+
         if (!modelId || !filename) {
             safeSendResponse({
                 success: false,
@@ -8121,7 +8123,7 @@ async function handleHfGetFileSize(request, sendResponse) {
 
         // 构建文件 URL
         const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
-        
+
         // 使用 HEAD 请求获取文件大小（扩展不受 CORS 限制）
         const response = await fetch(fileUrl, {
             method: 'HEAD',
@@ -8141,7 +8143,7 @@ async function handleHfGetFileSize(request, sendResponse) {
         }
 
         const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-        
+
         safeSendResponse({
             success: true,
             size: contentLength,
