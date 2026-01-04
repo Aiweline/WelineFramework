@@ -66,6 +66,11 @@ return [
     ],
     
     // ========== 路由事件 ==========
+    'Weline_Framework_Router::before_start' => [
+        'name' => __('路由开始前'),
+        'description' => __('在路由开始处理之前触发，允许其他模块在路由开始前执行操作（如维护模式检查、全局访问控制等）。'),
+        'doc' => 'router/路由开始前.md',
+    ],
     'Weline_Framework_Router::process_uri_before' => [
         'name' => __('URI处理前'),
         'description' => __('在处理URI之前触发，允许其他模块修改URI或执行预处理。'),
