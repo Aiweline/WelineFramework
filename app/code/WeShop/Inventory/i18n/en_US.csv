@@ -12,6 +12,12 @@
 库存调整成功！,"Stock adjusted successfully!"
 库存调整失败！,"Failed to adjust stock!"
 产品ID无效！,"Invalid product ID!"
+库存变更,"Stock Change"
+库存数量变更时触发（增加/减少）。,库存数量变更时触发（增加/减少）。
+低库存警告,"Low Stock Warning"
+库存低于阈值时触发。,库存低于阈值时触发。
+缺货,"Out of Stock"
+产品库存归零时触发。,产品库存归零时触发。
 库存管理,"Inventory Management"
 库存源管理,"Source Management"
 产品库存,"Product Stock"
@@ -38,7 +44,4 @@
 库存数量,Quantity
 库存状态,"Stock Status"
 有货,"In Stock"
-缺货,"Out of Stock"
 低库存阈值,"Low Stock Threshold"
-库存变更,"Stock Change"
-低库存警告,"Low Stock Warning"
