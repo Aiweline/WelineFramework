@@ -81,7 +81,8 @@ class Data extends AbstractHelper
                 $api_classs = [];
                 $this->scan->globFile($api_dir . '*', $api_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
                 foreach ($api_classs as $api_class) {
-                    if (!class_exists($api_class)) {
+                    // 使用 false 参数避免触发自动加载，防止重复加载类文件
+                    if (!class_exists($api_class, false)) {
                         continue;
                     }
                     $apiDirArray = explode(Handle::api_DIR, $api_class);
@@ -298,7 +299,8 @@ class Data extends AbstractHelper
                 $pc_classs = [];
                 $this->scan->globFile($pc_dir . '*', $pc_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
                 foreach ($pc_classs as $pc_class) {
-                    if (!class_exists($pc_class)) {
+                    // 使用 false 参数避免触发自动加载，防止重复加载类文件
+                    if (!class_exists($pc_class, false)) {
                         continue;
                     }
                     $pcDirArray = explode(Handle::pc_DIR, $pc_class);
