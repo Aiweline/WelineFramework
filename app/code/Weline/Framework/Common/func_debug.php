@@ -115,8 +115,10 @@ if (!function_exists('p')) {
         $exe_time = microtime(true) - START_TIME;
         $isCli    = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            // 响应500
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         // 美化输出样式
@@ -514,7 +516,10 @@ if (!function_exists('p_light')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         // 美化输出样式
@@ -581,7 +586,10 @@ if (!function_exists('p_fast')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         echo ($isCli ? PHP_EOL : '<div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin: 5px; border-radius: 5px; font-family: monospace;">');
@@ -615,7 +623,10 @@ if (!function_exists('p_color')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         $themes = [
@@ -656,7 +667,10 @@ if (!function_exists('p_table')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         echo ($isCli ? PHP_EOL : '<div style="' . debug_get_style('info') . '">');
@@ -770,7 +784,10 @@ if (!function_exists('p_json')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         echo ($isCli ? PHP_EOL : '<div style="' . debug_get_style('default') . '">');
@@ -812,7 +829,10 @@ if (!function_exists('p_perf')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         static $startTime = null;
@@ -877,7 +897,10 @@ if (!function_exists('p_sql')) {
     {
         $isCli = (PHP_SAPI === 'cli');
         if (!$isCli) {
-            http_response_code(500);
+            // 响应500 - 检查headers是否已发送
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
         }
         
         echo ($isCli ? PHP_EOL : '<div style="' . debug_get_style('info') . '">');

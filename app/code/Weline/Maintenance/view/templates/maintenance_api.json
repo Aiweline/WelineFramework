@@ -1,0 +1,9 @@
+{
+    "success": false,
+    "code": "maintenance",
+    "message": "{{message}}",
+    "data": {
+        "retry_after": {{retry_after}},
+        "lang": "{{lang}}"
+    }
+}

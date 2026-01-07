@@ -20,33 +20,14 @@ class Event extends \Weline\Framework\DataObject\DataObject
 {
     public function __construct(array $data = [])
     {
+        // 保持观察者配置数组结构，不在此处实例化
+        // 实例化将在 dispatch() 方法中按需进行
         if (isset($data['observers'])) {
-            foreach ($data['observers'] as $key => $observer) {
-                // 如果已经是实例，直接使用
-                if ($observer instanceof ObserverInterface) {
-                    continue;
-                }
-                
-                // 如果是配置数组，需要实例化
-                if (is_array($observer) && isset($observer['instance'])) {
-                    try {
-                        $observerInstance = ObjectManager::getInstance($observer['instance']);
-                        if ($observerInstance instanceof ObserverInterface) {
-                            $data['observers'][$key] = $observerInstance;
-                        } elseif (DEV) {
-                            throw new Core(__('观察者必须继承于：') . ObserverInterface::class);
-                        } else {
-                            $debug = ObjectManager::getInstance(Printing::class);
-                            $debug->debug(__('观察者必须继承于：') . ObserverInterface::class);
-                        }
-                    } catch (\Exception $e) {
-                        // 移除失败的观察者
-                        unset($data['observers'][$key]);
-                    }
-                }
+            // 确保 observers 是数组
+            if (!is_array($data['observers'])) {
+                $data['observers'] = [];
             }
-            // 重新索引数组
-            $data['observers'] = array_values($data['observers']);
+            // 保持原始配置数组结构，不进行实例化
         }
         parent::__construct($data);
     }
@@ -171,7 +152,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
     public function dispatch(): void
     {
         $observers = $this->getObservers();
-        
+
         // 确保观察者是数组
         if (!is_array($observers)) {
             $observers = [];
@@ -213,11 +194,37 @@ class Event extends \Weline\Framework\DataObject\DataObject
             $this->initLogFile();
         }
         
-        foreach ($observers as $index => $observer) {
-            if ($needDebug) {
-                $this->executeWithDebug($observer, $printToConsole, $needLog);
-            } else {
-                $observer->execute($this);
+        // 遍历观察者配置，按需实例化并执行
+        foreach ($observers as $index => $observerConfig) {
+            try {
+                // 检查是否被禁用
+                if (isset($observerConfig['disabled']) && $observerConfig['disabled'] === 'true') {
+                    continue;
+                }
+                
+                // 按需实例化观察者
+                $observer = ObjectManager::getInstance($observerConfig['instance']);
+                
+                if (!($observer instanceof ObserverInterface)) {
+                    if (DEV) {
+                        throw new Core(__('观察者必须继承于：') . ObserverInterface::class);
+                    } else {
+                        $debug = ObjectManager::getInstance(Printing::class);
+                        $debug->debug(__('观察者必须继承于：') . ObserverInterface::class);
+                    }
+                    continue;
+                }
+                
+                // 执行观察者
+                if ($needDebug) {
+                    $this->executeWithDebug($observer, $printToConsole, $needLog);
+                } else {
+                    $observer->execute($this);
+                }
+                
+            } catch (\Exception $e) {
+                // 实例化失败，跳过该观察者
+                throw $e;
             }
         }
         

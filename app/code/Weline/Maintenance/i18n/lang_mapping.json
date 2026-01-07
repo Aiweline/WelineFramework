@@ -1,0 +1,357 @@
+{
+    "_comment": "浏览器语言代码 -> 框架语言代码映射表",
+    "_description": "用于将 Accept-Language 请求头中的语言代码转换为框架标准的语言代码格式",
+    "_default": "zh_Hans_CN",
+    
+    "mapping": {
+        "zh-CN": "zh_Hans_CN",
+        "zh-Hans": "zh_Hans_CN",
+        "zh-Hans-CN": "zh_Hans_CN",
+        "zh-SG": "zh_Hans_SG",
+        "zh-Hans-SG": "zh_Hans_SG",
+        "zh-TW": "zh_Hant_TW",
+        "zh-Hant": "zh_Hant_TW",
+        "zh-Hant-TW": "zh_Hant_TW",
+        "zh-HK": "zh_Hant_HK",
+        "zh-Hant-HK": "zh_Hant_HK",
+        "zh-MO": "zh_Hant_MO",
+        "zh-Hant-MO": "zh_Hant_MO",
+        "zh": "zh_Hans_CN",
+
+        "en-US": "en_US",
+        "en-GB": "en_GB",
+        "en-AU": "en_AU",
+        "en-CA": "en_CA",
+        "en-NZ": "en_NZ",
+        "en-IE": "en_IE",
+        "en-ZA": "en_ZA",
+        "en-IN": "en_IN",
+        "en-PH": "en_PH",
+        "en-SG": "en_SG",
+        "en-MY": "en_MY",
+        "en-HK": "en_HK",
+        "en": "en_US",
+
+        "ja-JP": "ja_JP",
+        "ja": "ja_JP",
+
+        "ko-KR": "ko_KR",
+        "ko": "ko_KR",
+
+        "fr-FR": "fr_FR",
+        "fr-CA": "fr_CA",
+        "fr-BE": "fr_BE",
+        "fr-CH": "fr_CH",
+        "fr-LU": "fr_LU",
+        "fr-MC": "fr_MC",
+        "fr": "fr_FR",
+
+        "de-DE": "de_DE",
+        "de-AT": "de_AT",
+        "de-CH": "de_CH",
+        "de-LI": "de_LI",
+        "de-LU": "de_LU",
+        "de": "de_DE",
+
+        "es-ES": "es_ES",
+        "es-MX": "es_MX",
+        "es-AR": "es_AR",
+        "es-CO": "es_CO",
+        "es-CL": "es_CL",
+        "es-PE": "es_PE",
+        "es-VE": "es_VE",
+        "es-EC": "es_EC",
+        "es-GT": "es_GT",
+        "es-CU": "es_CU",
+        "es-BO": "es_BO",
+        "es-DO": "es_DO",
+        "es-HN": "es_HN",
+        "es-PY": "es_PY",
+        "es-SV": "es_SV",
+        "es-NI": "es_NI",
+        "es-CR": "es_CR",
+        "es-PA": "es_PA",
+        "es-UY": "es_UY",
+        "es-PR": "es_PR",
+        "es-US": "es_US",
+        "es": "es_ES",
+
+        "pt-BR": "pt_BR",
+        "pt-PT": "pt_PT",
+        "pt-AO": "pt_AO",
+        "pt-MZ": "pt_MZ",
+        "pt": "pt_BR",
+
+        "ru-RU": "ru_RU",
+        "ru-BY": "ru_BY",
+        "ru-KZ": "ru_KZ",
+        "ru-UA": "ru_UA",
+        "ru": "ru_RU",
+
+        "it-IT": "it_IT",
+        "it-CH": "it_CH",
+        "it-SM": "it_SM",
+        "it": "it_IT",
+
+        "nl-NL": "nl_NL",
+        "nl-BE": "nl_BE",
+        "nl": "nl_NL",
+
+        "pl-PL": "pl_PL",
+        "pl": "pl_PL",
+
+        "tr-TR": "tr_TR",
+        "tr-CY": "tr_CY",
+        "tr": "tr_TR",
+
+        "ar-SA": "ar_SA",
+        "ar-AE": "ar_AE",
+        "ar-EG": "ar_EG",
+        "ar-IQ": "ar_IQ",
+        "ar-JO": "ar_JO",
+        "ar-KW": "ar_KW",
+        "ar-LB": "ar_LB",
+        "ar-LY": "ar_LY",
+        "ar-MA": "ar_MA",
+        "ar-OM": "ar_OM",
+        "ar-QA": "ar_QA",
+        "ar-SY": "ar_SY",
+        "ar-TN": "ar_TN",
+        "ar-YE": "ar_YE",
+        "ar-BH": "ar_BH",
+        "ar-DZ": "ar_DZ",
+        "ar-SD": "ar_SD",
+        "ar": "ar_SA",
+
+        "he-IL": "he_IL",
+        "he": "he_IL",
+        "iw": "he_IL",
+
+        "th-TH": "th_TH",
+        "th": "th_TH",
+
+        "vi-VN": "vi_VN",
+        "vi": "vi_VN",
+
+        "id-ID": "id_ID",
+        "id": "id_ID",
+        "in": "id_ID",
+
+        "ms-MY": "ms_MY",
+        "ms-SG": "ms_SG",
+        "ms-BN": "ms_BN",
+        "ms": "ms_MY",
+
+        "hi-IN": "hi_IN",
+        "hi": "hi_IN",
+
+        "bn-BD": "bn_BD",
+        "bn-IN": "bn_IN",
+        "bn": "bn_BD",
+
+        "ta-IN": "ta_IN",
+        "ta-LK": "ta_LK",
+        "ta-SG": "ta_SG",
+        "ta-MY": "ta_MY",
+        "ta": "ta_IN",
+
+        "te-IN": "te_IN",
+        "te": "te_IN",
+
+        "mr-IN": "mr_IN",
+        "mr": "mr_IN",
+
+        "gu-IN": "gu_IN",
+        "gu": "gu_IN",
+
+        "kn-IN": "kn_IN",
+        "kn": "kn_IN",
+
+        "ml-IN": "ml_IN",
+        "ml": "ml_IN",
+
+        "pa-IN": "pa_IN",
+        "pa-PK": "pa_PK",
+        "pa": "pa_IN",
+
+        "ur-PK": "ur_PK",
+        "ur-IN": "ur_IN",
+        "ur": "ur_PK",
+
+        "uk-UA": "uk_UA",
+        "uk": "uk_UA",
+
+        "cs-CZ": "cs_CZ",
+        "cs": "cs_CZ",
+
+        "sv-SE": "sv_SE",
+        "sv-FI": "sv_FI",
+        "sv": "sv_SE",
+
+        "nb-NO": "nb_NO",
+        "nn-NO": "nn_NO",
+        "no-NO": "nb_NO",
+        "no": "nb_NO",
+
+        "da-DK": "da_DK",
+        "da": "da_DK",
+
+        "fi-FI": "fi_FI",
+        "fi": "fi_FI",
+
+        "el-GR": "el_GR",
+        "el-CY": "el_CY",
+        "el": "el_GR",
+
+        "hu-HU": "hu_HU",
+        "hu": "hu_HU",
+
+        "ro-RO": "ro_RO",
+        "ro-MD": "ro_MD",
+        "ro": "ro_RO",
+
+        "sk-SK": "sk_SK",
+        "sk": "sk_SK",
+
+        "bg-BG": "bg_BG",
+        "bg": "bg_BG",
+
+        "hr-HR": "hr_HR",
+        "hr-BA": "hr_BA",
+        "hr": "hr_HR",
+
+        "sr-RS": "sr_RS",
+        "sr-BA": "sr_BA",
+        "sr-ME": "sr_ME",
+        "sr-Latn": "sr_Latn_RS",
+        "sr-Cyrl": "sr_Cyrl_RS",
+        "sr": "sr_RS",
+
+        "sl-SI": "sl_SI",
+        "sl": "sl_SI",
+
+        "lt-LT": "lt_LT",
+        "lt": "lt_LT",
+
+        "lv-LV": "lv_LV",
+        "lv": "lv_LV",
+
+        "et-EE": "et_EE",
+        "et": "et_EE",
+
+        "fa-IR": "fa_IR",
+        "fa-AF": "fa_AF",
+        "fa": "fa_IR",
+
+        "fil-PH": "fil_PH",
+        "tl-PH": "fil_PH",
+        "tl": "fil_PH",
+
+        "ca-ES": "ca_ES",
+        "ca-AD": "ca_AD",
+        "ca": "ca_ES",
+
+        "eu-ES": "eu_ES",
+        "eu": "eu_ES",
+
+        "gl-ES": "gl_ES",
+        "gl": "gl_ES",
+
+        "af-ZA": "af_ZA",
+        "af": "af_ZA",
+
+        "sw-KE": "sw_KE",
+        "sw-TZ": "sw_TZ",
+        "sw-UG": "sw_UG",
+        "sw": "sw_KE",
+
+        "am-ET": "am_ET",
+        "am": "am_ET",
+
+        "ne-NP": "ne_NP",
+        "ne-IN": "ne_IN",
+        "ne": "ne_NP",
+
+        "si-LK": "si_LK",
+        "si": "si_LK",
+
+        "km-KH": "km_KH",
+        "km": "km_KH",
+
+        "lo-LA": "lo_LA",
+        "lo": "lo_LA",
+
+        "my-MM": "my_MM",
+        "my": "my_MM",
+
+        "ka-GE": "ka_GE",
+        "ka": "ka_GE",
+
+        "hy-AM": "hy_AM",
+        "hy": "hy_AM",
+
+        "az-AZ": "az_AZ",
+        "az-Latn": "az_Latn_AZ",
+        "az-Cyrl": "az_Cyrl_AZ",
+        "az": "az_AZ",
+
+        "uz-UZ": "uz_UZ",
+        "uz-Latn": "uz_Latn_UZ",
+        "uz-Cyrl": "uz_Cyrl_UZ",
+        "uz": "uz_UZ",
+
+        "kk-KZ": "kk_KZ",
+        "kk": "kk_KZ",
+
+        "ky-KG": "ky_KG",
+        "ky": "ky_KG",
+
+        "tg-TJ": "tg_TJ",
+        "tg": "tg_TJ",
+
+        "tk-TM": "tk_TM",
+        "tk": "tk_TM",
+
+        "mn-MN": "mn_MN",
+        "mn-Cyrl": "mn_Cyrl_MN",
+        "mn": "mn_MN",
+
+        "be-BY": "be_BY",
+        "be": "be_BY",
+
+        "mk-MK": "mk_MK",
+        "mk": "mk_MK",
+
+        "sq-AL": "sq_AL",
+        "sq-XK": "sq_XK",
+        "sq-MK": "sq_MK",
+        "sq": "sq_AL",
+
+        "bs-BA": "bs_BA",
+        "bs-Latn": "bs_Latn_BA",
+        "bs-Cyrl": "bs_Cyrl_BA",
+        "bs": "bs_BA",
+
+        "mt-MT": "mt_MT",
+        "mt": "mt_MT",
+
+        "is-IS": "is_IS",
+        "is": "is_IS",
+
+        "ga-IE": "ga_IE",
+        "ga": "ga_IE",
+
+        "cy-GB": "cy_GB",
+        "cy": "cy_GB",
+
+        "gd-GB": "gd_GB",
+        "gd": "gd_GB",
+
+        "lb-LU": "lb_LU",
+        "lb": "lb_LU",
+
+        "eo": "eo",
+
+        "la": "la"
+    }
+}
