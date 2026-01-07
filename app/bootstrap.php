@@ -28,22 +28,40 @@ if (!defined('APP_CODE_PATH')) {
 
 // 注册 app/code 优先的自动加载器（在 Composer 之前）
 // 只在类未加载时检查，性能影响最小
+// 使用静态变量记录已加载的文件，防止重复加载
 spl_autoload_register(function ($class) {
+    static $loadedFiles = [];
+    
     // 如果类已加载，直接返回（避免重复检查）
     if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-        return false;
+        return true; // 已加载，停止自动加载链
     }
     
+    // 规范化路径，确保路径一致性
     $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
     $fullPath = APP_CODE_PATH . $relativePath;
     
+    // 规范化路径（处理 Windows 路径分隔符）
+    $normalizedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $fullPath);
+    
+    // 如果文件已被加载过，直接返回
+    if (isset($loadedFiles[$normalizedPath])) {
+        return true; // 文件已加载，停止自动加载链
+    }
+    
     // 如果 app/code 下存在该类文件，优先加载它
-    if (file_exists($fullPath)) {
-        require_once $fullPath;
+    if (file_exists($normalizedPath)) {
+        // 标记文件为已加载（在 require 之前，防止并发问题和重复加载）
+        $loadedFiles[$normalizedPath] = true;
+        // 使用 require_once 防止重复加载（即使类定义失败，文件也只加载一次）
+        require_once $normalizedPath;
         // 验证类是否成功加载
         if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
             return true; // 已加载，停止自动加载链
         }
+        // 即使类没有成功定义，也返回 true 阻止其他自动加载器再次加载同一文件
+        // 这样可以避免 "Cannot redeclare class" 错误
+        return true;
     }
     
     return false; // 返回 false 让其他自动加载器继续处理

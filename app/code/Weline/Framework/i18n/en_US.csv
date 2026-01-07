@@ -311,12 +311,6 @@ Model升级,Model升级
 "Start Time","Start Time"
 "End Time","End Time"
 Duration,Duration
-未知模块,未知模块
-"缺少事件规约文件 (event.php)","缺少事件规约文件 (event.php)"
-"缺少事件文档文件 (doc/event/*.md)","缺少事件文档文件 (doc/event/*.md)"
-无,无
-【超级严重】事件缺少规约或文档,【超级严重】事件缺少规约或文档
-"EventsManager Error: Failed to send spec/doc error message - %{error}","EventsManager Error: Failed to send spec/doc error message - %{error}"
 【超级严重】检测到事件循环调用,【超级严重】检测到事件循环调用
 "EventsManager Error: Failed to send circular error message - %{error}","EventsManager Error: Failed to send circular error message - %{error}"
 "EventsManager Warning: Observer execution failed - %{error}","EventsManager Warning: Observer execution failed - %{error}"
@@ -1028,6 +1022,12 @@ env.php中的服务器信息:,env.php中的服务器信息:
 "模板文件：%{1} END","模板文件：%{1} END"
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
+未知模块,未知模块
+"缺少事件规约文件 (event.php)","缺少事件规约文件 (event.php)"
+"缺少事件文档文件 (doc/event/*.md)","缺少事件文档文件 (doc/event/*.md)"
+无,无
+【超级严重】事件缺少规约或文档,【超级严重】事件缺少规约或文档
+"EventsManager Error: Failed to send spec/doc error message - %{error}","EventsManager Error: Failed to send spec/doc error message - %{error}"
 "表 %{1} 不存在，跳过。","表 %{1} 不存在，跳过。"
 "表 %{1} (完整名: %{2}) 不存在，跳过。","表 %{1} (完整名: %{2}) 不存在，跳过。"
 无法获取数据库连接,无法获取数据库连接
