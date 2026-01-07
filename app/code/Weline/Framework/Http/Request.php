@@ -22,6 +22,12 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     private bool $check_param = false;
     private array $path_split = [];
+    
+    /**
+     * 多模块支持：存储请求关联的多个模块
+     * @var array
+     */
+    private array $modules = [];
 
     public function __init()
     {
@@ -343,6 +349,105 @@ class Request extends Request\RequestAbstract implements RequestInterface
         } else {
             return $this->getRouter()['module'] ?? '';
         }
+    }
+
+    /**
+     * 添加模块到请求关联的模块列表
+     * 
+     * @param string $module_name 模块名（如 Weline_I18n 或 I18n）
+     * @return static
+     */
+    public function addModule(string $module_name): static
+    {
+        if (!empty($module_name) && !in_array($module_name, $this->modules, true)) {
+            $this->modules[] = $module_name;
+        }
+        return $this;
+    }
+
+    /**
+     * 批量添加模块
+     * 
+     * @param array $modules 模块名数组
+     * @return static
+     */
+    public function addModules(array $modules): static
+    {
+        foreach ($modules as $module_name) {
+            $this->addModule($module_name);
+        }
+        return $this;
+    }
+
+    /**
+     * 设置请求关联的模块列表（替换现有模块）
+     * 
+     * @param array $modules 模块名数组
+     * @return static
+     */
+    public function setModules(array $modules): static
+    {
+        $this->modules = [];
+        foreach ($modules as $module_name) {
+            $this->addModule($module_name);
+        }
+        return $this;
+    }
+
+    /**
+     * 获取请求关联的所有模块
+     * 
+     * @return array 模块名数组
+     */
+    public function getModules(): array
+    {
+        // 如果 modules 为空，返回包含当前模块的数组（如果有）
+        if (empty($this->modules)) {
+            $current_module = $this->getModuleName();
+            if (!empty($current_module)) {
+                return [$current_module];
+            }
+            return [];
+        }
+        return $this->modules;
+    }
+
+    /**
+     * 检查模块是否在请求关联的模块列表中
+     * 
+     * @param string $module_name 模块名
+     * @return bool
+     */
+    public function hasModule(string $module_name): bool
+    {
+        return in_array($module_name, $this->modules, true);
+    }
+
+    /**
+     * 从请求关联的模块列表中移除模块
+     * 
+     * @param string $module_name 模块名
+     * @return static
+     */
+    public function removeModule(string $module_name): static
+    {
+        $key = array_search($module_name, $this->modules, true);
+        if ($key !== false) {
+            unset($this->modules[$key]);
+            $this->modules = array_values($this->modules); // 重新索引
+        }
+        return $this;
+    }
+
+    /**
+     * 清空请求关联的模块列表
+     * 
+     * @return static
+     */
+    public function clearModules(): static
+    {
+        $this->modules = [];
+        return $this;
     }
 
     public function clientIP()
