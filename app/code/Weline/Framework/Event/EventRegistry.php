@@ -198,13 +198,35 @@ class EventRegistry
                         });
                     }
                     
+                    // 验证动态事件模式的规约和文档（收集阶段检查）
+                    $hasSpec = $eventInfo['has_spec'] ?? false;
+                    $hasDoc = $eventInfo['has_doc'] ?? false;
+                    
+                    // 如果缺少规约或文档，记录警告
+                    if (!$hasSpec || !$hasDoc) {
+                        $warnings = [];
+                        if (!$hasSpec) {
+                            $warnings[] = '缺少事件规约文件 (event.php)';
+                        }
+                        if (!$hasDoc) {
+                            $warnings[] = '缺少事件文档文件 (doc/event/*.md)';
+                        }
+                        $warningMessage = sprintf(
+                            "[事件注册警告] 动态事件模式 '%s' (%s 模块) %s。建议在构建注册表时修复。",
+                            $eventName,
+                            $moduleName,
+                            implode('，', $warnings)
+                        );
+                        error_log($warningMessage);
+                    }
+                    
                     $dynamicEventPatterns[$eventName] = [
                         'name' => $eventInfo['name'] ?? $eventName,
                         'description' => $eventInfo['description'] ?? '',
                         'doc' => $eventInfo['doc'] ?? '',
                         'doc_path' => $eventInfo['doc_path'] ?? '',
-                        'has_spec' => $eventInfo['has_spec'] ?? false,
-                        'has_doc' => $eventInfo['has_doc'] ?? false,
+                        'has_spec' => $hasSpec,
+                        'has_doc' => $hasDoc,
                         'module' => $moduleName,
                         'pattern' => $eventName, // 存储原始模式
                         'observers' => $matchedObservers, // 添加匹配的观察者
@@ -229,14 +251,36 @@ class EventRegistry
                     throw new \RuntimeException($errorMessage);
                 }
 
+                // 验证规约和文档（收集阶段检查）
+                $hasSpec = $eventInfo['has_spec'] ?? false;
+                $hasDoc = $eventInfo['has_doc'] ?? false;
+                
+                // 如果缺少规约或文档，记录警告（但不阻止注册表的构建）
+                if (!$hasSpec || !$hasDoc) {
+                    $warnings = [];
+                    if (!$hasSpec) {
+                        $warnings[] = '缺少事件规约文件 (event.php)';
+                    }
+                    if (!$hasDoc) {
+                        $warnings[] = '缺少事件文档文件 (doc/event/*.md)';
+                    }
+                    $warningMessage = sprintf(
+                        "[事件注册警告] 事件 '%s' (%s 模块) %s。建议在构建注册表时修复。",
+                        $eventName,
+                        $moduleName,
+                        implode('，', $warnings)
+                    );
+                    error_log($warningMessage);
+                }
+                
                 // 添加新事件
                 $registry[$eventName] = [
                     'name' => $eventInfo['name'] ?? $eventName,
                     'description' => $eventInfo['description'] ?? '',
                     'doc' => $eventInfo['doc'] ?? '',
                     'doc_path' => $eventInfo['doc_path'] ?? '',
-                    'has_spec' => $eventInfo['has_spec'] ?? false,
-                    'has_doc' => $eventInfo['has_doc'] ?? false,
+                    'has_spec' => $hasSpec,
+                    'has_doc' => $hasDoc,
                     'module' => $moduleName, // 定义该事件的模块
                     'modules' => [],
                     'observers' => $observersData[$eventName] ?? [] // 添加观察者信息
