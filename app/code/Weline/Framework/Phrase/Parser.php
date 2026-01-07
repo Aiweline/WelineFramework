@@ -9,12 +9,10 @@
 
 namespace Weline\Framework\Phrase;
 
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\App\State;
 use Weline\Framework\Exception\Core;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -164,7 +162,7 @@ class Parser
                 } catch (\Exception $e) {
                     // 如果无法获取模块名，继续使用总词典
                 }
-                $lang = $_SERVER['WELINE_USER_LANG'] ?? Cookie::getLangLocal() ?: Env::default_LANGUAGE_CODE;
+                $lang = State::getLangLocal();
                 // 缓存键包含所有模块名，用于区分不同模块组合
                 $modules_key = !empty($modules) ? '_' . implode('_', $modules) : '';
                 $cache_key = 'phrase_locale_words_' . $lang . $modules_key;
