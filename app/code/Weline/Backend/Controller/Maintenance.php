@@ -3,9 +3,13 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\Message;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Maintenance\Helper\IpMatcher;
+use Weline\Maintenance\Service\BackupManager;
 
 /**
  * 系统维护模式控制器
@@ -27,9 +31,15 @@ class Maintenance extends BackendController
         try {
             $isMaintenance = $this->getMaintenanceStatus();
             $maintenanceMessage = $this->getMaintenanceMessage();
+            $retryAfter = Env::getInstance()->getConfig('maintenance_retry_after', 60);
+            $bypassConfig = $this->getBypassConfig();
+            $backupConfig = Env::getInstance()->getConfig('maintenance.backup', []);
             
             $this->assign('is_maintenance', $isMaintenance);
             $this->assign('maintenance_message', $maintenanceMessage);
+            $this->assign('retry_after', $retryAfter);
+            $this->assign('bypass_config', $bypassConfig);
+            $this->assign('backup_config', $backupConfig);
             
             return $this->fetch();
             
@@ -67,15 +77,77 @@ class Maintenance extends BackendController
     }
     
     /**
+     * 保存配置
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Backend::system_maintenance_config', '配置系统维护模式', 'mdi-cog', '配置系统维护模式')]
+    public function saveConfig(): string
+    {
+        if (!$this->isPost()) {
+            return $this->jsonResponse(false, __('无效的请求方法'));
+        }
+
+        try {
+            $env = Env::getInstance();
+            
+            // 维护模式基本配置
+            $enabled = (bool)$this->request->getPost('enabled', false);
+            $message = trim($this->request->getPost('message', ''));
+            $retryAfter = (int)$this->request->getPost('retry_after', 60);
+            
+            $env->setConfig('maintenance', $enabled);
+            $env->setConfig('maintenance_message', $message);
+            $env->setConfig('maintenance_retry_after', $retryAfter);
+            
+            // 放行配置
+            $bypassConfig = [
+                'backend_paths' => $this->request->getPost('backend_paths', []),
+                'ip_whitelist' => $this->request->getPost('ip_whitelist', []),
+                'bypass_key' => [
+                    'enabled' => (bool)$this->request->getPost('bypass_key_enabled', false),
+                    'name' => trim($this->request->getPost('bypass_key_name', 'maintenance_key')),
+                    'value' => trim($this->request->getPost('bypass_key_value', '')),
+                    'methods' => $this->request->getPost('bypass_key_methods', ['url', 'header', 'cookie']),
+                ],
+                'log_bypass' => (bool)$this->request->getPost('log_bypass', false),
+            ];
+            
+            // 验证IP白名单格式
+            foreach ($bypassConfig['ip_whitelist'] as $ip) {
+                if (!empty($ip) && !IpMatcher::isValidCidr($ip)) {
+                    return $this->jsonResponse(false, __('IP白名单格式错误：%{1}', $ip));
+                }
+            }
+            
+            $env->setConfig('maintenance.bypass', $bypassConfig);
+            
+            // 备份配置（可选）
+            $autoBackup = (bool)$this->request->getPost('auto_backup_before_maintenance', false);
+            $backupTypes = $this->request->getPost('backup_types', []);
+            
+            if ($autoBackup) {
+                $backupConfig = $env->getConfig('maintenance.backup', []);
+                $backupConfig['auto_backup_before_maintenance'] = true;
+                $backupConfig['backup_types'] = $backupTypes;
+                $env->setConfig('maintenance.backup', $backupConfig);
+            }
+            
+            return $this->jsonResponse(true, __('配置保存成功'));
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('保存配置失败：%{1}', $e->getMessage()));
+        }
+    }
+    
+    /**
      * 获取维护模式状态
      * 
      * @return bool
      */
     private function getMaintenanceStatus(): bool
     {
-        // TODO: 从配置或文件获取维护模式状态
-        // 可以使用配置文件或数据库存储
-        return false;
+        return (bool)Env::getInstance()->getConfig('maintenance', false);
     }
     
     /**
@@ -85,8 +157,7 @@ class Maintenance extends BackendController
      */
     private function getMaintenanceMessage(): string
     {
-        // TODO: 从配置或文件获取维护消息
-        return __('系统维护中，请稍后再试');
+        return Env::getInstance()->getConfig('maintenance_message', __('系统维护中，请稍后再试'));
     }
     
     /**
@@ -98,8 +169,51 @@ class Maintenance extends BackendController
      */
     private function setMaintenanceStatus(bool $enabled, string $message): void
     {
-        // TODO: 保存维护模式状态到配置或文件
-        // 可以使用配置文件或数据库存储
+        $env = Env::getInstance();
+        
+        // 如果开启维护模式且配置了自动备份，先执行备份
+        if ($enabled) {
+            $backupConfig = $env->getConfig('maintenance.backup', []);
+            if (!empty($backupConfig['auto_backup_before_maintenance'])) {
+                try {
+                    /** @var BackupManager $backupManager */
+                    $backupManager = ObjectManager::getInstance(BackupManager::class);
+                    $backupTypes = $backupConfig['backup_types'] ?? ['database', 'code'];
+                    
+                    foreach ($backupTypes as $type) {
+                        $backupManager->createBackup($type, $this->session->getLoginUserID());
+                    }
+                } catch (\Exception $e) {
+                    // 备份失败不影响维护模式开启，但记录错误
+                    Message::warning(__('自动备份失败：%{1}，维护模式已开启', $e->getMessage()));
+                }
+            }
+        }
+        
+        $env->setConfig('maintenance', $enabled);
+        if (!empty($message)) {
+            $env->setConfig('maintenance_message', $message);
+        }
+    }
+    
+    /**
+     * 获取放行配置
+     * 
+     * @return array
+     */
+    private function getBypassConfig(): array
+    {
+        return Env::getInstance()->getConfig('maintenance.bypass', [
+            'backend_paths' => [],
+            'ip_whitelist' => [],
+            'bypass_key' => [
+                'enabled' => false,
+                'name' => 'maintenance_key',
+                'value' => '',
+                'methods' => ['url', 'header', 'cookie'],
+            ],
+            'log_bypass' => false,
+        ]);
     }
     
     /**
