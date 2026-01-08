@@ -21,11 +21,80 @@ if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . '
 if (!defined('VENDOR_PATH')) {
     define('VENDOR_PATH', BP . 'vendor' . DIRECTORY_SEPARATOR);
 }
+// 应用代码目录
+if (!defined('APP_CODE_PATH')) {
+    define('APP_CODE_PATH', BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
+}
+
+// 注册 app/code 优先的自动加载器（在 Composer 之前）
+// 只在类未加载时检查，性能影响最小
+// 使用静态变量记录已加载的文件，防止重复加载
+spl_autoload_register(function ($class) {
+    static $loadedFiles = [];
+    
+    // 如果类已加载，直接返回（避免重复检查）
+    if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
+        return true; // 已加载，停止自动加载链
+    }
+    
+    // 规范化路径，确保路径一致性
+    $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
+    $fullPath = APP_CODE_PATH . $relativePath;
+    
+    // 规范化路径（处理 Windows 路径分隔符）
+    $normalizedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $fullPath);
+    
+    // 如果文件已被加载过，直接返回
+    if (isset($loadedFiles[$normalizedPath])) {
+        return true; // 文件已加载，停止自动加载链
+    }
+    
+    // 如果 app/code 下存在该类文件，优先加载它
+    if (file_exists($normalizedPath)) {
+        // 标记文件为已加载（在 require 之前，防止并发问题和重复加载）
+        $loadedFiles[$normalizedPath] = true;
+        // 使用 require_once 防止重复加载（即使类定义失败，文件也只加载一次）
+        require_once $normalizedPath;
+        // 验证类是否成功加载
+        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
+            return true; // 已加载，停止自动加载链
+        }
+        // 即使类没有成功定义，也返回 true 阻止其他自动加载器再次加载同一文件
+        // 这样可以避免 "Cannot redeclare class" 错误
+        return true;
+    }
+    
+    return false; // 返回 false 让其他自动加载器继续处理
+}, true, true); // prepend=true 表示优先于其他自动加载器
+
 // 检测Composer自动加载代理
 try {
     $autoloader = VENDOR_PATH . 'autoload.php';
     if (is_file($autoloader)) {
-        require $autoloader;
+        $composerLoader = require $autoloader;
+        
+        // 获取所有 PSR-4 映射并修改，确保 app/code 路径优先
+        $psr4Map = $composerLoader->getPrefixesPsr4();
+        
+        foreach ($psr4Map as $prefix => $paths) {
+            // 将命名空间前缀转换为目录路径
+            // Weline\Admin\ -> Weline/Admin/
+            $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, trim($prefix, '\\'));
+            $appCodePath = APP_CODE_PATH . $relativePath . DIRECTORY_SEPARATOR;
+            
+            // 如果 app/code 下存在对应的目录
+            if (is_dir($appCodePath)) {
+                // 移除已存在的 app/code 路径（避免重复）
+                $paths = array_filter($paths, function($path) use ($appCodePath) {
+                    $normalizedPath = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                    return $normalizedPath !== $appCodePath;
+                });
+                // 将 app/code 路径添加到数组最前面
+                array_unshift($paths, $appCodePath);
+                // 重新设置映射
+                $composerLoader->setPsr4($prefix, array_values($paths));
+            }
+        }
     } else {
         exit('Composer自动加载异常!尝试执行：php composer.phar install');
     }

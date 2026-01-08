@@ -119,6 +119,13 @@ class Core
      */
     public function start()
     {
+        # ----------事件：路由开始前 开始------------
+        /**@var EventsManager $eventManager */
+        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        $eventData = ['router' => $this];
+        $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
+        # ----------事件：路由开始前 结束------------
+        
         # 获取URL
         $this->url = $url = $this->processUrl();
 //        $url                     = str_replace('-', '', $origin_url);

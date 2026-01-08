@@ -9,11 +9,6 @@
 
 namespace Weline\Framework\Http;
 
-use Weline\Framework\DataObject\DataObject;
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\I18n;
-
 class Cookie
 {
     public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = [])
@@ -32,7 +27,9 @@ class Cookie
     }
 
     /**
-     * @DESC          # 获取语言
+     * @DESC          # 获取语言（已废弃，请使用 State::getLang()）
+     * @deprecated 请使用 \Weline\Framework\App\State::getLang() 替代
+     * 此方法仅用于向后兼容，实际调用 State::getLang()
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
@@ -42,17 +39,13 @@ class Cookie
      */
     public static function getLang(): string
     {
-        // 用户语言优先
-        $lang = $_COOKIE['WELINE_USER_LANG'] ?? null;
-        // 默认网站语言
-        if (empty($lang)) {
-            $lang = self::get('WELINE-WEBSITE-LANG', 'zh_Hans_CN');
-        }
-        return $lang;
+        return \Weline\Framework\App\State::getLang();
     }
 
     /**
-     * @DESC          # 获取语言
+     * @DESC          # 获取货币（已废弃，请使用 State::getCurrency()）
+     * @deprecated 请使用 \Weline\Framework\App\State::getCurrency() 替代
+     * 此方法仅用于向后兼容，实际调用 State::getCurrency()
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
@@ -62,17 +55,13 @@ class Cookie
      */
     public static function getCurrency(): string
     {
-        // 用户货币优先
-        $currency = $_COOKIE['WELINE_USER_CURRENCY'] ?? null;
-        // 默认网站语言
-        if (empty($currency)) {
-            $currency = self::get('WELINE_WEBSITE_CURRENCY', 'CNY');
-        }
-        return $currency;
+        return \Weline\Framework\App\State::getCurrency();
     }
 
     /**
-     * @DESC          # 获取语言
+     * @DESC          # 获取语言本地化代码（已废弃，请使用 State::getLangLocal()）
+     * @deprecated 请使用 \Weline\Framework\App\State::getLangLocal() 替代
+     * 此方法仅用于向后兼容，实际调用 State::getLangLocal()
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
@@ -83,12 +72,7 @@ class Cookie
      */
     public static function getLangLocal(): string
     {
-        $data = new DataObject();
-        $data->setData('lang', self::getLang());
-        $data->setData('currency', self::getCurrency());
-        $data->setData('lang_local', self::getLang());
-        ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Framework_Cookie::lang_local', $data);
-        return $data->getData('lang_local');
+        return \Weline\Framework\App\State::getLangLocal();
     }
 
     public static function static_file(): void

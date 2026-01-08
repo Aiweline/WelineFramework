@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Controller\Data\DataInterface as DataInterfaceAlias;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\RegisterInterface;
 use Weline\Framework\Register\Router\Data\DataInterface;
@@ -39,7 +40,9 @@ class Handle implements RegisterInterface
 
     public function __construct()
     {
-        $this->helper = new Data();
+        // 使用 ObjectManager 获取 Data 实例，确保与其他地方使用的是同一个实例
+        // 这样才能保证批量模式状态的一致性
+        $this->helper = ObjectManager::getInstance(Data::class);
         $this->modules = Env::getInstance()->getModuleList();
         $this->printing = new Printing();
     }
@@ -66,6 +69,7 @@ class Handle implements RegisterInterface
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = ''): array
     {
         $controller = explode('Controller', $param['class']);
+
         // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元素
         $controller = empty(end($controller)) && count($controller) > 1 ? $controller[count($controller) - 2] : array_pop($controller);
         $controller = ltrim(str_replace('\\', '/', $controller), '/');
