@@ -58,11 +58,6 @@ class EventsManager
      */
     private static bool $isSendingMsg = false;
 
-    /**
-     * 是否正在检查事件规约和文档（防止循环调用）
-     */
-    private static bool $isCheckingEvent = false;
-
     public function __construct(
         XmlReader $reader,
         EventRegistry $eventRegistry
@@ -151,25 +146,20 @@ class EventsManager
     {
         // 记录当前正在执行的事件名（压入栈）
         self::$currentEventStack[] = $eventName;
-
         try {
-            // 检查事件是否有规约和文档
-            $this->checkEventSpecAndDoc($eventName);
+            // 规约和文档检查已在收集阶段（EventRegistry::organizeRegistryData）完成
+            // 这里只检查 Weline_Admin::msg 事件的循环调用
+            if ($eventName === 'Weline_Admin::msg') {
+                $this->checkCircularCall();
+            }
 
             // 获取事件监听器（观察者）
             $observers = $this->getEventObservers($eventName);
-            
             // 检查是否有监听器（Weline_Admin::msg 事件除外，因为它用于发送错误消息）
             if (empty($observers) && $eventName !== 'Weline_Admin::msg') {
                 // 如果没有监听器，直接跳过，不执行事件
                 return $this;
             }
-            // 获取观察者 如果获取不到观察者则不执行事件
-            $observers = $this->getEventObservers($eventName);
-            if (empty($observers)) {
-                return $this;
-            }
-            
             if (is_array($data)) {
                 $data['observers'] = $observers;
                 $this->events[$eventName] = (new Event($data))->setName($eventName);
@@ -183,95 +173,6 @@ class EventsManager
         }
 
         return $this;
-    }
-
-    /**
-     * 检查事件是否有规约和文档
-     *
-     * @param string $eventName 事件名
-     * @return bool 如果有规约和文档返回 true，否则抛出致命错误
-     * @throws Exception 如果没有规约或文档，直接抛出致命错误
-     */
-    private function checkEventSpecAndDoc(string $eventName): bool
-    {
-        // Weline_Admin::msg 事件特殊处理：只检查循环，不检查规约和文档
-        // 因为我们需要用它来发送错误消息，即使它本身没有规约和文档
-        if ($eventName === 'Weline_Admin::msg') {
-            return $this->checkCircularCall();
-        }
-
-        // 如果正在检查事件，直接返回 true，避免循环调用
-        // 这可以防止 __() 函数触发的事件再次进入检查流程
-        if (self::$isCheckingEvent) {
-            return true;
-        }
-
-        try {
-            // 设置检查标志，防止循环调用
-            self::$isCheckingEvent = true;
-
-            // 检查是否有规约
-            $hasSpec = $this->eventRegistry->hasSpec($eventName);
-            // 检查是否有文档
-            $hasDoc = $this->eventRegistry->hasDoc($eventName);
-
-            // 如果都有，直接返回 true
-            if ($hasSpec && $hasDoc) {
-                return true;
-            }
-
-            // 获取事件信息
-            $eventInfo = $this->eventRegistry->getEventInfo($eventName);
-            // 从事件注册表中获取模块信息
-            // 注意：这里调用 __() 可能会触发 Weline_Framework::get_words_file 事件
-            // 但由于设置了 $isCheckingEvent 标志，该事件会直接返回 true，避免循环
-            $sourceModule = EventData::getEventModule($eventName) ?? __('未知模块');
-            
-            // 构建错误消息
-            $errors = [];
-            if (!$hasSpec) {
-                $errors[] = __('缺少事件规约文件 (event.php)');
-            }
-            if (!$hasDoc) {
-                $errors[] = __('缺少事件文档文件 (doc/event/*.md)');
-            }
-
-            $errorMessage = implode('，', $errors);
-            
-            // 发送系统消息（严重程度：超级严重）
-            $this->sendSpecDocErrorMsg($eventName, $errorMessage, $eventInfo, $sourceModule);
-
-            // 直接抛出致命错误，不允许执行没有规约的事件
-            $errorDetails = [
-                'eventName' => $eventName,
-                'error' => $errorMessage,
-                'sourceModule' => $sourceModule,
-                'eventInfo' => $eventInfo ? json_encode($eventInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : __('无')
-            ];
-            
-            $fullErrorMessage = sprintf(
-                "【致命错误】事件 '%s' 缺少规约或文档，不允许执行。\n\n" .
-                "错误详情：%s\n\n" .
-                "源模块：%s\n\n" .
-                "事件信息：%s\n\n" .
-                "请确保：\n" .
-                "1. 在提供该事件的模块根目录下创建 event.php 规约文件\n" .
-                "2. 在 doc/event/ 目录下创建对应的文档文件\n" .
-                "3. 运行 'php bin/w event:rebuild' 重建事件注册表\n\n" .
-                "参考示例：\n" .
-                "- 规约文件：app/code/Weline/Admin/event.php\n" .
-                "- 文档文件：app/code/Weline/Admin/doc/event/系统消息通知.md",
-                $errorDetails['eventName'],
-                $errorDetails['error'],
-                $errorDetails['sourceModule'],
-                $errorDetails['eventInfo']
-            );
-            // PHP 8.4+ 不再支持 trigger_error() 的 E_USER_ERROR，改为抛出异常
-            throw new Exception($fullErrorMessage);
-        } finally {
-            // 清除检查标志
-            self::$isCheckingEvent = false;
-        }
     }
 
     /**
@@ -325,58 +226,6 @@ class EventsManager
 
         // 没有循环，允许执行
         return true;
-    }
-
-    /**
-     * 发送规约和文档错误消息
-     *
-     * @param string $eventName 事件名
-     * @param string $errorMessage 错误消息
-     * @param array|null $eventInfo 事件信息
-     * @param string $sourceModule 源模块
-     */
-    private function sendSpecDocErrorMsg(string $eventName, string $errorMessage, ?array $eventInfo, string $sourceModule): void
-    {
-        // 防止循环调用
-        if (self::$isSendingMsg) {
-            return;
-        }
-
-        try {
-            self::$isSendingMsg = true;
-
-            // 构建消息内容
-            $title = __('【超级严重】事件缺少规约或文档');
-            $content = __(
-                "事件执行被阻止：事件 '%{eventName}' 缺少规约或文档。\n\n" .
-                "错误详情：%{error}\n\n" .
-                "源模块：%{sourceModule}\n\n" .
-                "事件信息：%{eventInfo}\n\n" .
-                "请确保：\n" .
-                "1. 在提供该事件的模块根目录下创建 event.php 规约文件\n" .
-                "2. 在 doc/event/ 目录下创建对应的文档文件\n" .
-                "3. 运行 'php bin/w event:rebuild' 重建事件注册表\n\n" .
-                "参考示例：\n" .
-                "- 规约文件：app/code/Weline/Admin/event.php\n" .
-                "- 文档文件：app/code/Weline/Admin/doc/event/系统消息通知.md",
-                [
-                    'eventName' => $eventName,
-                    'error' => $errorMessage,
-                    'sourceModule' => $sourceModule,
-                    'eventInfo' => $eventInfo ? json_encode($eventInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : __('无')
-                ]
-            );
-
-            // 直接调用观察者，避免再次触发事件检查
-            $this->sendSystemMessageDirectly($title, $content);
-        } catch (\Exception $e) {
-            // 如果发送失败，记录到错误日志
-            if (defined('DEV') && DEV) {
-                error_log(__('EventsManager Error: Failed to send spec/doc error message - %{error}', ['error' => $e->getMessage()]));
-            }
-        } finally {
-            self::$isSendingMsg = false;
-        }
     }
 
     /**

@@ -86,8 +86,17 @@ class Locals extends \Weline\Framework\Database\Model
             $i18nModel = \Weline\Framework\Manager\ObjectManager::getInstance(I18n::class);
             
             foreach ($allLocales as $locale) {
-                // 获取语言名称（使用英语作为显示语言）
-                $localeName = \Symfony\Component\Intl\Locales::getName($locale, 'en');
+                try {
+                    // 获取语言名称（使用英语作为显示语言）
+                    // 如果locale不存在，getName会抛出异常，需要单独捕获
+                    $localeName = \Symfony\Component\Intl\Locales::getName($locale, 'en');
+                } catch (\Exception $e) {
+                    // 如果获取名称失败，使用locale代码作为名称，并跳过这个locale
+                    if (defined('DEV') && DEV) {
+                        error_log("I18n: 无法获取locale '{$locale}' 的名称，跳过: " . $e->getMessage());
+                    }
+                    continue;
+                }
                 
                 // 从 locale 提取国家代码
                 $countryCode = '';
