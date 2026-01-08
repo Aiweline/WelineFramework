@@ -26,6 +26,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Maintenance\Helper\IpMatcher;
 use Weline\Maintenance\Helper\UrlParser;
 
 /**
@@ -132,6 +133,24 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             }
         }
 
+        // 检查后端路径放行
+        if ($this->checkBackendPath($pure_uri)) {
+            $this->logBypass('backend_path', $pure_uri);
+            return;
+        }
+
+        // 检查IP白名单
+        if ($this->checkIpWhitelist()) {
+            $this->logBypass('ip_whitelist', $pure_uri);
+            return;
+        }
+
+        // 检查Bypass Key验证
+        if ($this->checkBypassKey()) {
+            $this->logBypass('bypass_key', $pure_uri);
+            return;
+        }
+
         // 返回维护页面响应
         $this->sendMaintenanceResponse();
     }
@@ -147,6 +166,138 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             }
         }
         return false;
+    }
+
+    /**
+     * 检查是否为后端路径（维护模式下自动放行）
+     * 
+     * @param string $uri
+     * @return bool
+     */
+    private function checkBackendPath(string $uri): bool
+    {
+        $bypassConfig = Env::getInstance()->getConfig('maintenance.bypass', []);
+        $backendPaths = $bypassConfig['backend_paths'] ?? [];
+        
+        if (empty($backendPaths) || !is_array($backendPaths)) {
+            return false;
+        }
+
+        foreach ($backendPaths as $path) {
+            if (!empty($path) && str_starts_with($uri, $path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 检查IP是否在白名单中
+     * 
+     * @return bool
+     */
+    private function checkIpWhitelist(): bool
+    {
+        $bypassConfig = Env::getInstance()->getConfig('maintenance.bypass', []);
+        $ipWhitelist = $bypassConfig['ip_whitelist'] ?? [];
+        
+        if (empty($ipWhitelist) || !is_array($ipWhitelist)) {
+            return false;
+        }
+
+        $clientIp = IpMatcher::getClientIp();
+        
+        return IpMatcher::isIpInWhitelist($clientIp, $ipWhitelist);
+    }
+
+    /**
+     * 检查Bypass Key验证
+     * 支持URL参数、Header和Cookie三种方式
+     * 
+     * @return bool
+     */
+    private function checkBypassKey(): bool
+    {
+        $bypassConfig = Env::getInstance()->getConfig('maintenance.bypass', []);
+        $keyConfig = $bypassConfig['bypass_key'] ?? [];
+        
+        // 检查是否启用
+        if (empty($keyConfig['enabled']) || empty($keyConfig['name']) || empty($keyConfig['value'])) {
+            return false;
+        }
+
+        $keyName = $keyConfig['name'];
+        $keyValue = $keyConfig['value'];
+        $methods = $keyConfig['methods'] ?? ['url', 'header', 'cookie'];
+
+        // 从URL参数检查
+        if (in_array('url', $methods)) {
+            $urlKey = $_GET[$keyName] ?? null;
+            if ($urlKey === $keyValue) {
+                return true;
+            }
+        }
+
+        // 从Header检查
+        if (in_array('header', $methods)) {
+            $headerKey = $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $keyName))] ?? null;
+            if ($headerKey === $keyValue) {
+                return true;
+            }
+        }
+
+        // 从Cookie检查
+        if (in_array('cookie', $methods)) {
+            $cookieKey = $_COOKIE[$keyName] ?? null;
+            if ($cookieKey === $keyValue) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 记录绕过日志
+     * 
+     * @param string $bypassType 绕过类型：backend_path/ip_whitelist/bypass_key
+     * @param string $uri 请求URI
+     * @return void
+     */
+    private function logBypass(string $bypassType, string $uri): void
+    {
+        $bypassConfig = Env::getInstance()->getConfig('maintenance.bypass', []);
+        
+        // 如果未启用日志记录，直接返回
+        if (empty($bypassConfig['log_bypass'])) {
+            return;
+        }
+
+        try {
+            $clientIp = IpMatcher::getClientIp();
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            $timestamp = date('Y-m-d H:i:s');
+            
+            $logDir = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR;
+            if (!is_dir($logDir)) {
+                @mkdir($logDir, 0755, true);
+            }
+            
+            $logFile = $logDir . 'maintenance_bypass.log';
+            $logMessage = sprintf(
+                "[%s] Type: %s | IP: %s | URI: %s | UA: %s\n",
+                $timestamp,
+                $bypassType,
+                $clientIp,
+                $uri,
+                substr($userAgent, 0, 200)
+            );
+            
+            @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+        } catch (\Exception $e) {
+            // 静默失败，不影响主流程
+        }
     }
 
     /**
