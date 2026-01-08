@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Event Configuration for AiKnowledge Module
+    
+    Defines event observers for automatic knowledge base updates.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    
+    <!-- Update index when a module is upgraded -->
+    <event name="Weline_Framework::module_upgrade_after">
+        <observer 
+            name="weline_aiknowledge_module_upgrade" 
+            class="Weline\AiKnowledge\Observer\ModuleUpgradeObserver" 
+        />
+    </event>
+    
+    <!-- Update index when developer workspace scans documents -->
+    <event name="Weline_DeveloperWorkspace::document_scan_after">
+        <observer 
+            name="weline_aiknowledge_document_scan" 
+            class="Weline\AiKnowledge\Observer\DocumentScanObserver" 
+        />
+    </event>
+    
+</config>

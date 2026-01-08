@@ -43,4 +43,9 @@
         <observer name="Weline_Weline_Framework_UninstallService::uninstall_observer" instance="Weline\Framework\Uninstall\Observer\UninstallObserver" disabled="false" shared="true" sort="10"/>
     </event>
     
+    <!-- 注册安装器事件：确保 Router 使用 app/code 下的类 -->
+    <event name="Weline_Framework_Register::register_installer">
+        <observer name="Weline_Framework_Router::register_installer" instance="Weline\Framework\Router\Observer\RegisterInstaller" disabled="false" shared="true" sort="0"/>
+    </event>
+    
 </config>
