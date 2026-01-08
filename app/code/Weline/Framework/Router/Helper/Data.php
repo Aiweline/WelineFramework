@@ -42,8 +42,25 @@ class Data
             return;
         }
         
+        // 写入已注册的路由
         foreach ($this->batchRouters as $path => $routers) {
             $this->writeRoutersToFile($path, $routers);
+        }
+        
+        // 确保所有路由文件都存在（即使没有路由，也创建空文件）
+        $routerFiles = [
+            Env::path_BACKEND_PC_ROUTER_FILE,
+            Env::path_BACKEND_REST_API_ROUTER_FILE,
+            Env::path_FRONTEND_PC_ROUTER_FILE,
+            Env::path_FRONTEND_REST_API_ROUTER_FILE,
+        ];
+        
+        foreach ($routerFiles as $path) {
+            // 如果文件不存在，创建空数组文件
+            if (!isset($this->batchRouters[$path]) && !is_file($path)) {
+                $emptyRouters = [];
+                $this->writeRoutersToFile($path, $emptyRouters);
+            }
         }
         
         $this->batchRouters = [];
@@ -72,12 +89,19 @@ class Data
             return $this->batchRouters[$path];
         }
         
-        // 如果批量路由中没有，从文件读取
+        // 如果批量路由中没有，从文件读取并缓存到批量路由中
+        $routers = [];
         if (is_file($path)) {
-            return require $path;
+            $routers = require $path;
+            if (!is_array($routers)) {
+                $routers = [];
+            }
         }
         
-        return [];
+        // 将读取的路由缓存到批量路由中，避免重复读取
+        $this->batchRouters[$path] = $routers;
+        
+        return $routers;
     }
     
     /**
@@ -127,15 +151,22 @@ class Data
     public function updatePcRouters(string $path, array &$routers)
     {
         if ($this->batchMode) {
-            // 批量模式：合并路由到属性，不立即写入
-            if (isset($this->batchRouters[$path])) {
-                // 合并路由，新路由覆盖旧路由
-                $this->batchRouters[$path] = array_merge($this->batchRouters[$path], $routers);
-            } else {
-                $this->batchRouters[$path] = $routers;
-            }
+            // 批量模式：直接将路由数组保存到批量缓存中
+            // 注意：$routers 参数已经通过 register() 方法中的 getBatchRouters() 
+            // 获取了现有路由，并添加了新路由，所以这里直接保存即可
+            $this->batchRouters[$path] = $routers;
         } else {
-            // 立即写入模式
+            // 立即写入模式：需要从文件读取现有路由并合并
+            $existingRouters = [];
+            if (is_file($path)) {
+                $existingRouters = require $path;
+                if (!is_array($existingRouters)) {
+                    $existingRouters = [];
+                }
+            }
+            // 合并现有路由和新路由
+            $routers = array_merge($existingRouters, $routers);
+            // 立即写入
             $this->writeRoutersToFile($path, $routers);
         }
     }
