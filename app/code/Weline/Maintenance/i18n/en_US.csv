@@ -1,7 +1,70 @@
 维护模式已关闭！,"Maintenance mode has been disabled!"
 维护模式已开启！,"Maintenance mode has been enabled!"
+无效的请求方法,"Invalid request method"
+不支持的备份类型,"Unsupported backup type"
+备份创建成功,"Backup created successfully"
+备份创建失败：%{1},备份创建失败：%{1}
+无效的备份ID,"Invalid backup ID"
+备份文件不存在,"Backup file does not exist"
+下载失败：%{1},下载失败：%{1}
+备份删除成功,"Backup deleted successfully"
+备份删除失败,"Failed to delete backup"
+删除失败：%{1},删除失败：%{1}
+维护模式自动备份任务,"Maintenance Mode Auto Backup Task"
+定时执行系统备份任务（数据库和代码），自动清理过期备份,"Scheduled system backup task (database and code), automatically clean up expired backups"
+Cron自动备份未启用,"Cron auto backup is not enabled"
+未配置备份类型,"No backup type configured"
+%{1}备份成功,%{1}备份成功
+%{1}备份失败：%{2},%{1}备份失败：%{2}
+"清理过期备份：删除 %{1} 个备份，释放空间 %{2}","清理过期备份：删除 %{1} 个备份，释放空间 %{2}"
+清理过期备份失败：%{1},清理过期备份失败：%{1}
+自动备份任务执行失败：%{1},自动备份任务执行失败：%{1}
 维护模式,"Maintenance Mode"
 "在系统进入维护模式时触发，允许其他模块添加维护模式白名单URL。可以通过修改 white_urls 字段来添加白名单URL。","Triggered when the system enters maintenance mode, allowing other modules to add maintenance mode whitelist URLs. You can add whitelist URLs by modifying the white_urls field."
+创建完整备份失败：%{1},创建完整备份失败：%{1}
+数据库备份失败：%{1},数据库备份失败：%{1}
+代码备份失败：%{1},代码备份失败：%{1}
+配置文件备份失败：%{1},配置文件备份失败：%{1}
+不支持的备份类型：%{1},不支持的备份类型：%{1}
+无法创建备份文件：%{1},无法创建备份文件：%{1}
+备份数据库失败：%{1},备份数据库失败：%{1}
+获取数据库表列表失败：%{1},获取数据库表列表失败：%{1}
+程序化备份失败：%{1},程序化备份失败：%{1}
+无法创建备份压缩文件：%{1},无法创建备份压缩文件：%{1}
+配置文件备份失败,配置文件备份失败
+备份配置文件失败：%{1},备份配置文件失败：%{1}
+无法创建压缩文件：%{1},无法创建压缩文件：%{1}
+创建压缩文件失败,创建压缩文件失败
+压缩文件失败：%{1},压缩文件失败：%{1}
+备份文件不存在：%{1},备份文件不存在：%{1}
+保存备份文件失败：%{1},保存备份文件失败：%{1}
+创建备份,"Create Backup"
+备份设置,备份设置
+备份类型,"Backup Type"
+完整备份（数据库+代码）,完整备份（数据库+代码）
+数据库备份,"Database Backup"
+代码备份,"Code Backup"
+配置文件备份,"Config Backup"
+创建备份可能需要几分钟时间，请耐心等待。,创建备份可能需要几分钟时间，请耐心等待。
+返回列表,返回列表
+创建中...,创建中...
+创建备份失败,创建备份失败
+备份管理,"Backup Management"
+备份ID,备份ID
+备份名称,备份名称
+文件大小,文件大小
+状态,状态
+创建时间,创建时间
+操作,操作
+暂无备份记录,暂无备份记录
+下载,下载
+删除,Delete
+完整备份,"Full Backup"
+已完成,已完成
+进行中,进行中
+失败,失败
+确定要删除此备份吗？,确定要删除此备份吗？
+操作失败,操作失败
 程序维护中...,"System Under Maintenance..."
 网站维护中...,"Website Under Maintenance..."
 网站维护,"Website Maintenance"
@@ -17,3 +80,57 @@
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 返回首页,"Back to Home"
+系统正在升级维护中，请稍后再试。,"System is under maintenance, please try again later."
+维护模式设置,"Maintenance Mode Settings"
+后端路径放行,"Backend Path Bypass"
+IP白名单,"IP Whitelist"
+Bypass密钥,"Bypass Key"
+备份列表,"Backup List"
+保存设置,"Save Settings"
+配置保存成功,"Configuration saved successfully"
+配置保存失败,"Failed to save configuration"
+保存失败,"Save failed"
+IP白名单格式错误,"Invalid IP whitelist format"
+备份创建失败,"Failed to create backup"
+下载失败,"Download failed"
+备份成功,"Backup successful"
+备份失败,"Backup failed"
+清理过期备份,"Clean expired backups"
+删除备份,"Delete Backup"
+释放空间,"Freed space"
+清理过期备份失败,"Failed to clean expired backups"
+自动备份任务执行失败,"Auto backup task execution failed"
+维护模式状态已更新,"Maintenance mode status updated"
+更新失败,"Update failed"
+自动备份失败，维护模式已开启,"Auto backup failed, maintenance mode enabled"
+系统当前处于维护模式,"System is currently in maintenance mode"
+系统当前正常运行,"System is currently running normally"
+启用维护模式,"Enable Maintenance Mode"
+维护消息,"Maintenance Message"
+此消息将显示给访问前台的用户,"This message will be displayed to frontend users"
+重要提示,"Important Notice"
+开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,"After enabling maintenance mode, the frontend will display a maintenance page, but the backend can still be accessed normally."
+当前状态,"Current Status"
+放行设置,"Bypass Settings"
+后端路径列表,"Backend Path List"
+添加路径,"Add Path"
+IP地址或CIDR格式,"IP address or CIDR format"
+添加IP,"Add IP"
+启用密钥验证,"Enable Key Verification"
+密钥名称,"Key Name"
+密钥值,"Key Value"
+验证方式,"Verification Methods"
+URL参数,"URL Parameter"
+"HTTP Header","HTTP Header"
+Cookie,Cookie
+记录绕过日志,"Log Bypass Events"
+重试间隔(秒),"Retry After (seconds)"
+自动备份设置,"Auto Backup Settings"
+开启维护模式前自动备份,"Auto backup before enabling maintenance mode"
+备份存储路径,"Backup Storage Path"
+备份保留天数,"Backup Retention Days"
+Cron自动备份,"Cron Auto Backup"
+启用Cron自动备份,"Enable Cron Auto Backup"
+Cron时间表达式,"Cron Time Expression"
+Cron备份类型,"Cron Backup Types"
+"示例：每天凌晨2点 = 0 2 * * *","Example: Daily at 2 AM = 0 2 * * *"
