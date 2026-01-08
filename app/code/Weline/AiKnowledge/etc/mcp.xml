@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    MCP (Model Context Protocol) Configuration
+    
+    This file defines the tools, resources, and prompts available through the MCP server.
+    External AI tools like Cursor, Claude, and other MCP-compatible clients can discover
+    and use these capabilities.
+-->
+<mcp xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    
+    <!-- Server Information -->
+    <server>
+        <name>weline-ai-knowledge</name>
+        <version>1.0.0</version>
+        <protocol_version>2024-11-05</protocol_version>
+        <description>AI Knowledge server for WelineFramework providing documentation search, API discovery, and code analysis</description>
+    </server>
+    
+    <!-- Tools Definition -->
+    <tools>
+        <!-- Search Documents Tool -->
+        <tool name="search_docs">
+            <class>Weline\AiKnowledge\Mcp\Tool\SearchDocsTool</class>
+            <description>Search WelineFramework documentation, API references, and code examples using hybrid semantic and keyword search</description>
+            <permissions>
+                <permission>read</permission>
+            </permissions>
+            <input_schema>
+                <property name="query" type="string" required="true">
+                    <description>The search query. Can be a natural language question or keywords.</description>
+                </property>
+                <property name="type" type="string" required="false">
+                    <description>Filter by content type: all, docs, api, code, config</description>
+                    <enum>all,docs,api,code,config</enum>
+                    <default>all</default>
+                </property>
+                <property name="module" type="string" required="false">
+                    <description>Filter by module name (e.g., Weline_Framework, Weline_Ai)</description>
+                </property>
+                <property name="limit" type="integer" required="false">
+                    <description>Maximum number of results to return (1-50)</description>
+                    <default>10</default>
+                    <min>1</min>
+                    <max>50</max>
+                </property>
+            </input_schema>
+        </tool>
+        
+        <!-- Get API Structure Tool -->
+        <tool name="get_api_structure">
+            <class>Weline\AiKnowledge\Mcp\Tool\GetApiStructureTool</class>
+            <description>Get the API structure for a WelineFramework module including endpoints, parameters, and return types</description>
+            <permissions>
+                <permission>read</permission>
+            </permissions>
+            <input_schema>
+                <property name="module" type="string" required="false">
+                    <description>Module name (e.g., Weline_Ai). Leave empty to list all modules.</description>
+                </property>
+                <property name="include_phpdoc" type="boolean" required="false">
+                    <description>Include PHPDoc comments in the output</description>
+                    <default>true</default>
+                </property>
+                <property name="include_attributes" type="boolean" required="false">
+                    <description>Include PHP 8 Attributes in the output</description>
+                    <default>true</default>
+                </property>
+            </input_schema>
+        </tool>
+        
+        <!-- Get Schema Info Tool -->
+        <tool name="get_schema_info">
+            <class>Weline\AiKnowledge\Mcp\Tool\GetSchemaInfoTool</class>
+            <description>Get database schema information including table structures, columns, and relationships</description>
+            <permissions>
+                <permission>read</permission>
+            </permissions>
+            <input_schema>
+                <property name="table" type="string" required="false">
+                    <description>Table name. Leave empty to list all tables.</description>
+                </property>
+                <property name="module" type="string" required="false">
+                    <description>Filter tables by module name</description>
+                </property>
+                <property name="include_comments" type="boolean" required="false">
+                    <description>Include column comments</description>
+                    <default>true</default>
+                </property>
+            </input_schema>
+        </tool>
+    </tools>
+    
+    <!-- Resources Definition -->
+    <resources>
+        <!-- Documentation Resources -->
+        <resource name="docs">
+            <class>Weline\AiKnowledge\Mcp\Resource\DocsResource</class>
+            <description>Framework and module documentation files</description>
+            <uri_pattern>weline://docs/{module}/{path}</uri_pattern>
+            <mime_type>text/markdown</mime_type>
+        </resource>
+        
+        <!-- Configuration Templates -->
+        <resource name="config_templates">
+            <class>Weline\AiKnowledge\Mcp\Resource\ConfigTemplatesResource</class>
+            <description>Boilerplate code and configuration templates for creating modules</description>
+            <uri_pattern>weline://config_templates/{template_name}</uri_pattern>
+            <templates>
+                <template name="register.php">Module registration file</template>
+                <template name="composer.json">Module composer.json</template>
+                <template name="env.php">Module environment configuration</template>
+                <template name="Controller.php">Controller class template</template>
+                <template name="Model.php">Model class template</template>
+                <template name="RestController.php">REST API controller template</template>
+                <template name="Observer.php">Event observer template</template>
+                <template name="Setup/Install.php">Module installation setup</template>
+                <template name="event.xml">Event configuration template</template>
+                <template name="menu.xml">Backend menu configuration</template>
+            </templates>
+        </resource>
+    </resources>
+    
+    <!-- Prompts Definition -->
+    <prompts>
+        <!-- Debug Weline Error Prompt -->
+        <prompt name="debug-weline-error">
+            <description>Guide for debugging Weline Framework errors using log files</description>
+            <arguments>
+                <argument name="error_message" type="string" required="true">
+                    <description>The error message to debug</description>
+                </argument>
+            </arguments>
+        </prompt>
+        
+        <!-- Create Module Prompt -->
+        <prompt name="create-module">
+            <description>Guide for creating a new Weline module</description>
+            <arguments>
+                <argument name="module_name" type="string" required="true">
+                    <description>The name of the module (e.g., Vendor_ModuleName)</description>
+                </argument>
+            </arguments>
+        </prompt>
+        
+        <!-- Database Migration Prompt -->
+        <prompt name="database-migration">
+            <description>Guide for creating database migrations in Weline</description>
+            <arguments>
+                <argument name="table_name" type="string" required="true">
+                    <description>The name of the table to migrate</description>
+                </argument>
+            </arguments>
+        </prompt>
+    </prompts>
+    
+    <!-- Collectors Configuration -->
+    <collectors>
+        <collector name="db_doc" enabled="true">
+            <class>Weline\AiKnowledge\Service\Collector\DbDocCollector</class>
+            <description>Collects database table structures and column documentation</description>
+            <options>
+                <option name="include_comments">true</option>
+            </options>
+        </collector>
+        
+        <collector name="reflect_api" enabled="true">
+            <class>Weline\AiKnowledge\Service\Collector\ReflectApiCollector</class>
+            <description>Collects API documentation from PHP 8 Attributes and PHPDoc</description>
+            <options>
+                <option name="parse_phpdoc">true</option>
+                <option name="parse_attributes">true</option>
+            </options>
+        </collector>
+        
+        <collector name="source_graph" enabled="true">
+            <class>Weline\AiKnowledge\Service\Collector\SourceGraphCollector</class>
+            <description>Builds code topology index (class hierarchies, dependencies)</description>
+            <options>
+                <option name="scan_paths">app/code</option>
+            </options>
+        </collector>
+    </collectors>
+    
+    <!-- Access Control -->
+    <acl>
+        <!-- Define permissions for MCP operations -->
+        <role name="reader">
+            <permission>tools.search_docs</permission>
+            <permission>tools.get_api_structure</permission>
+            <permission>tools.get_schema_info</permission>
+            <permission>resources.read</permission>
+            <permission>prompts.get</permission>
+        </role>
+        
+        <role name="admin">
+            <permission>*</permission>
+        </role>
+    </acl>
+    
+</mcp>
