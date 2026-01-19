@@ -1,0 +1,75 @@
+<?php
+/**
+ * 片段：Backend Breadcrumb
+ * 
+ * 后端面包屑导航
+ * 字段
+ * @meta.name {default="Backend Breadcrumb面包屑片段",name="Backend Breadcrumb面包屑片段",description="Backend Breadcrumb面包屑片段，用于描述片段的名称"}
+ * @meta.description {default="后端面包屑导航",name="后端面包屑导航",description="后端面包屑导航，用于描述片段的用途"}
+ * @param.items {default=[],name="面包屑项数组",description="面包屑项数组，用于设置面包屑导航项，格式：[{\"text\":\"文字\",\"url\":\"链接\"}]"}
+ * @param.separator {default="/",name="分隔符",description="分隔符，用于设置面包屑项之间的分隔符（可选，Bootstrap样式通常不需要）"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param.showHome {default=true,name="显示首页",description="是否显示首页链接（默认：true）"}
+ * @param.homeText {default="首页",name="首页文字",description="首页链接的文字（默认：首页）"}
+ * @param.homeUrl {default="",name="首页链接",description="首页链接URL（默认：后端首页）"}
+ */
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.breadcrumb.default');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$items = $this->getData("meta.items") ?? [];
+$separator = $this->getData("meta.separator") ?? '/';
+$class = $this->getData("meta.class") ?? '';
+$showHome = $this->getData("meta.showHome") ?? true;
+$homeText = $this->getData("meta.homeText") ?? __('首页');
+$homeUrl = $this->getData("meta.homeUrl") ?? '';
+
+// 如果没有指定首页URL，使用后端首页
+if (empty($homeUrl)) {
+    $homeUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
+}
+
+// 构建CSS类（Bootstrap样式）
+$breadcrumbClass = 'breadcrumb m-0';
+if ($class) {
+    $breadcrumbClass .= ' ' . htmlspecialchars($class);
+}
+
+// 如果显示首页且items不为空，在开头添加首页项
+if ($showHome && !empty($items)) {
+    array_unshift($items, [
+        'text' => $homeText,
+        'url' => $homeUrl
+    ]);
+}
+?>
+<nav aria-label="breadcrumb">
+    <ol class="<?= $breadcrumbClass ?>">
+        <?php if (empty($items)): ?>
+            <!-- 如果没有提供items，显示默认首页 -->
+            <?php if ($showHome): ?>
+                <li class="breadcrumb-item">
+                    <a href="<?= htmlspecialchars($homeUrl) ?>">
+                        <?= htmlspecialchars($homeText) ?>
+                    </a>
+                </li>
+            <?php endif; ?>
+        <?php else: ?>
+            <?php foreach ($items as $index => $item): ?>
+                <li class="breadcrumb-item <?= empty($item['url']) || $index === count($items) - 1 ? 'active' : '' ?>" 
+                    <?= $index === count($items) - 1 ? 'aria-current="page"' : '' ?>>
+                    <?php if (!empty($item['url']) && $index < count($items) - 1): ?>
+                        <a href="<?= htmlspecialchars($item['url']) ?>">
+                            <?= htmlspecialchars($item['text'] ?? '') ?>
+                        </a>
+                    <?php else: ?>
+                        <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </ol>
+</nav>
