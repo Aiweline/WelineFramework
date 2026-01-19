@@ -20,6 +20,5 @@ class TestObjectManager extends \Weline\Framework\UnitTest\TestCore
     function testT()
     {
         $m = ObjectManager::getInstance(TaglibCacheFactory::class);
-        dd($m);
     }
 }
