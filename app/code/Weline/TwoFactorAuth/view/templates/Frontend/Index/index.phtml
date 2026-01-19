@@ -356,6 +356,10 @@
         </div>
     </div>
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         function showDisableModal() {
             document.getElementById('disableModal').classList.add('active');
@@ -378,7 +382,16 @@
         async function disableTwoFactor() {
             const code = document.getElementById('disableCode').value;
             if (!code || code.length !== 6) {
-                alert('请输入6位验证码');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请输入6位验证码') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请输入6位验证码');
+                }
                 return;
             }
 
@@ -394,20 +407,57 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert(result.message);
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: result.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        console.log(result.message);
+                        location.reload();
+                    }
                 } else {
-                    alert(result.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('失败') ?>',
+                            text: result.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message);
+                    }
                 }
             } catch (error) {
-                alert('操作失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('操作失败，请重试');
+                }
             }
         }
 
         async function regenerateBackupCodes() {
             const code = document.getElementById('regenerateCode').value;
             if (!code || code.length !== 6) {
-                alert('请输入6位验证码');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请输入6位验证码') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请输入6位验证码');
+                }
                 return;
             }
 
@@ -434,10 +484,29 @@
                     modal.querySelector('.modal-content').innerHTML = codesHtml + 
                         '<button class="btn btn-primary" onclick="location.reload()">完成</button>';
                 } else {
-                    alert(result.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: result.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log(result.message);
+                    }
                 }
             } catch (error) {
-                alert('操作失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('操作失败，请重试');
+                }
             }
         }
 

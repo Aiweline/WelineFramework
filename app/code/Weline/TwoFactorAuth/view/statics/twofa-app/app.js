@@ -639,21 +639,53 @@ async function scanQRCodeFromImage(image) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
+        // 确保图片已加载
+        if (!image.complete || image.naturalWidth === 0) {
+            image.onload = () => scanQRCodeFromImage(image).then(resolve);
+            return;
+        }
+
         canvas.width = image.width || image.naturalWidth;
         canvas.height = image.height || image.naturalHeight;
+
+        // 如果图片太大，进行缩放以提高识别率
+        const maxSize = 1000;
+        let scale = 1;
+        if (canvas.width > maxSize || canvas.height > maxSize) {
+            scale = Math.min(maxSize / canvas.width, maxSize / canvas.height);
+            canvas.width = Math.floor(canvas.width * scale);
+            canvas.height = Math.floor(canvas.height * scale);
+        }
 
         ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // 使用jsQR库解析
+        // 使用jsQR库解析，尝试多种配置以提高识别率
         if (typeof jsQR !== 'undefined') {
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            // 尝试标准配置
+            let code = jsQR(imageData.data, imageData.width, imageData.height, {
                 inversionAttempts: "dontInvert",
             });
+            
+            // 如果失败，尝试反转
+            if (!code) {
+                code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "attemptBoth",
+                });
+            }
+            
+            // 如果还是失败，尝试只反转
+            if (!code) {
+                code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "invertFirst",
+                });
+            }
+            
             resolve(code);
         } else {
-            showToast('二维码解析库未加载');
+            console.error('jsQR库未加载');
+            showToast('二维码解析库未加载，请刷新页面重试');
             resolve(null);
         }
     });

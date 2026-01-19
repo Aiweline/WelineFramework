@@ -53,8 +53,12 @@ class BackupImporter
         if (str_starts_with($content, '{') || str_starts_with($content, '[')) {
             $decoded = json_decode($content, true);
             if (is_array($decoded)) {
-                // Aegis Authenticator 格式
-                if (isset($decoded['type']) && $decoded['type'] === 'totp') {
+                // Aegis Authenticator 格式 - 检查是否有db.entries结构
+                if (isset($decoded['db']['entries']) && is_array($decoded['db']['entries'])) {
+                    return 'aegis';
+                }
+                // 也检查是否有type字段且为totp（Aegis格式的特征）
+                if (isset($decoded['type']) && $decoded['type'] === 'totp' && isset($decoded['db'])) {
                     return 'aegis';
                 }
                 return 'json';
