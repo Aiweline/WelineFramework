@@ -16,7 +16,7 @@
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
 <!DOCTYPE html>
-<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>

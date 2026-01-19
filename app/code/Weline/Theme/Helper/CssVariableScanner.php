@@ -331,54 +331,22 @@ class CssVariableScanner
             ]
         ];
         
-        // 检查是否已存在（使用完整唯一约束字段：namespace, meta_type, meta_identify）
+        // 使用 forceCheck 自动处理插入或更新，避免唯一约束冲突
         /** @var Meta $metaModel */
-        $metaModel = ObjectManager::getInstance(Meta::class);
-        $existing = $metaModel->clearQuery()
-            ->where(Meta::fields_NAMESPACE, 'theme')
-            ->where(Meta::fields_META_TYPE, 'variables')
-            ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
-            ->find()
-            ->fetch();
+        $metaModel = ObjectManager::make(Meta::class);
+        $metaModel->reset();
+        $metaModel->setData(Meta::fields_NAMESPACE, 'theme');
+        $metaModel->setData(Meta::fields_META_TYPE, 'variables');
+        $metaModel->setData(Meta::fields_META_IDENTIFY, $metaIdentify);
+        $metaModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+        $metaModel->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
+        $metaModel->setData(Meta::fields_AREA, $area);
+        $metaModel->setData(Meta::fields_CATEGORY, $variableFile);
         
-        try {
-            if ($existing && $existing->getId()) {
-                // 更新现有记录（不改变唯一约束字段）
-                $existing->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                $existing->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                $existing->setData(Meta::fields_AREA, $area);
-                $existing->setData(Meta::fields_CATEGORY, $variableFile);
-                $existing->save();
-            } else {
-                // 创建新记录
-                $metaModel->clearQuery();
-                $metaModel->setData(Meta::fields_NAMESPACE, 'theme');
-                $metaModel->setData(Meta::fields_META_TYPE, 'variables');
-                $metaModel->setData(Meta::fields_META_IDENTIFY, $metaIdentify);
-                $metaModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-                $metaModel->setData(Meta::fields_SETTING, json_encode($setting, JSON_UNESCAPED_UNICODE));
-                $metaModel->setData(Meta::fields_AREA, $area);
-                $metaModel->setData(Meta::fields_CATEGORY, $variableFile);
-                $metaModel->save();
-            }
-        } catch (\Exception $e) {
-            // 如果保存失败（可能是唯一约束冲突），尝试使用 INSERT ON DUPLICATE KEY UPDATE 或直接更新
-            if (strpos($e->getMessage(), 'UNIQUE constraint') !== false || strpos($e->getMessage(), 'Integrity constraint violation') !== false) {
-                // 尝试直接更新（使用完整唯一约束条件）
-                $metaModel->clearQuery()
-                    ->where(Meta::fields_NAMESPACE, 'theme')
-                    ->where(Meta::fields_META_TYPE, 'variables')
-                    ->where(Meta::fields_META_IDENTIFY, $metaIdentify)
-                    ->update([
-                        Meta::fields_META_DATA => json_encode($metaDataArray, JSON_UNESCAPED_UNICODE),
-                        Meta::fields_SETTING => json_encode($setting, JSON_UNESCAPED_UNICODE),
-                        Meta::fields_AREA => $area,
-                        Meta::fields_CATEGORY => $variableFile
-                    ])->fetch();
-            } else {
-                throw $e;
-            }
-        }
+        // 使用 forceCheck 确保唯一键检查，如果已存在则更新，不存在则插入
+        // 这样可以避免并发情况下的唯一约束冲突
+        $metaModel->forceCheck(true, [Meta::fields_NAMESPACE, Meta::fields_META_TYPE, Meta::fields_META_IDENTIFY])
+                ->save();
     }
     
     /**
