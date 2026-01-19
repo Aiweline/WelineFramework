@@ -59,10 +59,35 @@ class ThemeCss implements TaglibInterface
         return function ($tag_key, $config, $tag_data, $attributes) {
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
-            return match ($tag_key) {
-                'tag' => "<link {$tag_data[1]} href='{$template->fetchTagSource(DataInterface::dir_type_THEME, trim($tag_data[2]))}' rel=\"stylesheet\" type=\"text/css\"/>",
-                default => "<link href='{$template->fetchTagSource(DataInterface::dir_type_THEME, trim($tag_data[1]))}' rel=\"stylesheet\" type=\"text/css\"/>"
-            };
+            
+            // 对于成对标签，内容在 $tag_data[2]，属性在 $tag_data[1]
+            // 对于 @tag() 或 @tag{} 格式，内容在 $tag_data[1]
+            $content = '';
+            $attrs = '';
+            
+            if ($tag_key === 'tag') {
+                // 成对标签：<theme:css>content</theme:css>
+                $attrs = $tag_data[1] ?? '';
+                $content = trim($tag_data[2] ?? '');
+            } else {
+                // @tag() 或 @tag{} 格式
+                $content = trim($tag_data[1] ?? '');
+            }
+            
+            if (empty($content)) {
+                return '';
+            }
+            
+            try {
+                $href = $template->fetchTagSource(DataInterface::dir_type_THEME, $content);
+                
+                $attrsStr = $attrs ? ' ' . trim($attrs) : '';
+                $result = "<link{$attrsStr} href='{$href}' rel=\"stylesheet\" type=\"text/css\"/>";
+                
+                return $result;
+            } catch (\Exception $e) {
+                throw $e;
+            }
         };
     }
 

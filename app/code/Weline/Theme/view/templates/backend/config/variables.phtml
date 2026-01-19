@@ -145,6 +145,10 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
         </form>
     </div>
     
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         function saveVariables() {
             const form = document.getElementById('variables-form');
@@ -157,14 +161,42 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             .then(response => response.json())
             .then(data => {
                 if (data.code === 200) {
-                    alert('保存成功！');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('保存成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log('保存成功！');
+                    }
                 } else {
-                    alert('保存失败：' + (data.msg || '未知错误'));
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('保存失败') ?>',
+                            text: data.msg || '<?= __('未知错误') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('保存失败：' + (data.msg || '未知错误'));
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('保存失败：网络错误');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: '<?= __('网络错误') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('保存失败：网络错误');
+                }
             });
         }
         
@@ -173,7 +205,16 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             const paletteName = paletteSelect.value;
             
             if (!paletteName) {
-                alert('请选择色盘');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请选择色盘') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请选择色盘');
+                }
                 return;
             }
             
@@ -190,15 +231,43 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             .then(response => response.json())
             .then(data => {
                 if (data.code === 200) {
-                    alert('色盘应用成功！页面将刷新。');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('色盘应用成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        console.log('色盘应用成功！页面将刷新。');
+                        location.reload();
+                    }
                 } else {
-                    alert('应用失败：' + (data.msg || '未知错误'));
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('应用失败') ?>',
+                            text: data.msg || '<?= __('未知错误') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('应用失败：' + (data.msg || '未知错误'));
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('应用失败：网络错误');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('应用失败') ?>',
+                        text: '<?= __('网络错误') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('应用失败：网络错误');
+                }
             });
         }
     </script>

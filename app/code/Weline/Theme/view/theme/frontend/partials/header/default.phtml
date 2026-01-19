@@ -23,7 +23,8 @@ $meta = $this->getData('meta') ?? [];
 $layout = $this->getData('layout') ?? [];
 $logo = $meta['logo'] ?? '';
 $logoText = $meta['logoText'] ?? __('Weline');
-$navItems = $meta['navItems'] ?? [];
+// navItems 可能在 hook 中被设置，先尝试从模板数据中获取，如果没有则从 meta 中获取
+$navItems = $this->getData('navItems') ?? $meta['navItems'] ?? [];
 $showSearch = $meta['showSearch'] ?? true;
 $showUserMenu = $meta['showUserMenu'] ?? true;
 $class = $meta['class'] ?? '';
@@ -34,6 +35,8 @@ $baseUrl = $this->request->getBaseUrl();
 // 直接使用colors数组，无需重复读取和处理
 $colors = $this->getData('colors') ?? [];
 
+// 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
+// 如果 hook 设置了 navItems，会覆盖这里的默认值
 // 默认导航数据（统一用于横向菜单和汉堡菜单）
 $defaultNavItems = [
     [
@@ -224,9 +227,9 @@ $defaultNavItems = [
     ['text' => __('食品饮料'), 'url' => '/category/food'],
 ];
 
-if (empty($navItems)) {
-    $navItems = $defaultNavItems;
-}
+// 在 hook 执行前，navItems 为 null
+// hook 执行后，会从模板数据中获取 navItems（如果 hook 设置了的话）
+// 如果 hook 没有设置或设置为空，使用默认值
 ?>
 <!-- Visual Editor Live Preview Listener -->
 <script>
@@ -521,46 +524,49 @@ if (empty($navItems)) {
                 </w:hook>
                 
                 <!-- 分类菜单区域（Hook，横向导航） -->
-                <w:hook>Weline_Theme::frontend::partials::header::categories-before</w:hook>
-                <div class="header-categories">
-                <?php if (!empty($navItems)): ?>
-                    <nav class="categories-nav">
-                        <ul class="categories-list" id="categories-list">
-                            <?php 
-                            // 递归函数：渲染菜单项（支持多级）
-                            $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem) {
-                                $hasChildren = !empty($item['children']) && is_array($item['children']);
-                                ?>
-                                <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
-                                    <div class="category-link-wrapper">
-                                        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
-                                            <?= htmlspecialchars($item['text'] ?? '') ?>
-                                        </a>
+                <w:hook>
+                    Weline_Theme::frontend::partials::header::categories-before
+                    <else/>
+                    <div class="header-categories">
+                    <?php if (!empty($navItems)): ?>
+                        <nav class="categories-nav">
+                            <ul class="categories-list" id="categories-list">
+                                <?php 
+                                // 递归函数：渲染菜单项（支持多级）
+                                $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem) {
+                                    $hasChildren = !empty($item['children']) && is_array($item['children']);
+                                    ?>
+                                    <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
+                                        <div class="category-link-wrapper">
+                                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
+                                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                                            </a>
+                                            <?php if ($hasChildren): ?>
+                                                <span class="category-arrow" role="button" aria-label="展开子菜单"></span>
+                                            <?php endif; ?>
+                                        </div>
                                         <?php if ($hasChildren): ?>
-                                            <span class="category-arrow" role="button" aria-label="展开子菜单"></span>
+                                            <ul class="category-submenu">
+                                                <?php foreach ($item['children'] as $child): ?>
+                                                    <?php $renderMenuItem($child, $level + 1); ?>
+                                                <?php endforeach; ?>
+                                             </ul>
                                         <?php endif; ?>
-                                    </div>
-                                    <?php if ($hasChildren): ?>
-                                        <ul class="category-submenu">
-                                            <?php foreach ($item['children'] as $child): ?>
-                                                <?php $renderMenuItem($child, $level + 1); ?>
-                                            <?php endforeach; ?>
-                                         </ul>
-                                    <?php endif; ?>
-                                </li>
-                            <?php };
-                            
-                            foreach ($navItems as $item): 
-                                $renderMenuItem($item);
-                            endforeach; 
-                            ?>
-                        </ul>
-                    </nav>
-                <?php endif; ?>
-                </div>
-                </div>
+                                    </li>
+                                <?php };
+                                
+                                foreach ($navItems as $item): 
+                                    $renderMenuItem($item);
+                                endforeach; 
+                                ?>
+                            </ul>
+                        </nav>
+                    <?php endif; ?>
+                    </div>
+                    </div>
+                </w:hook>
                 <w:hook>Weline_Theme::frontend::partials::header::categories-after</w:hook>
-            
+            </div>
             <div class="header-nav-fill" id="header-nav-fill">
                 <!-- 横向导航链接（今日特价、Prime Video等） -->
                 <w:hook>header-nav-links<else/>
@@ -619,7 +625,16 @@ if (empty($navItems)) {
         <nav class="categories-sidebar-nav" role="navigation" aria-label="<lang>分类导航</lang>">
             <ul class="categories-sidebar-list" id="categories-sidebar-list">
                 <?php 
-                // 使用相同的渲染函数生成侧边栏菜单
+                // 确保使用最新的 navItems（hook 可能已经设置了真实分类数据）
+                // 如果 navItems 还是 null，从模板数据中获取
+                if ($navItems === null) {
+                    $navItems = $this->getData('navItems');
+                }
+                // 如果 hook 没有设置，使用默认值
+                if ($navItems === null || (is_array($navItems) && empty($navItems) && !$this->getData('navItems_set_by_hook'))) {
+                    $navItems = $defaultNavItems;
+                }
+                // 使用相同的渲染函数生成侧边栏菜单（汉堡菜单）
                 if (!empty($navItems)): 
                     $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem) {
                         $hasChildren = !empty($item['children']) && is_array($item['children']);
@@ -812,6 +827,7 @@ if (empty($navItems)) {
 .search-category-dropdown {
     position: relative;
     flex-shrink: 0;
+    height: 100%;
 }
 
 .search-category-select {
@@ -821,6 +837,34 @@ if (empty($navItems)) {
     height: 100%;
     cursor: pointer;
     z-index: 2;
+}
+
+/* 多级分类选项样式 */
+.search-category-select option {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* 为不同层级的分类选项添加视觉区分 */
+.search-category-select option[data-level="0"] {
+    font-weight: 600;
+}
+
+.search-category-select option[data-level="1"] {
+    font-weight: 500;
+    padding-left: 1.5rem;
+}
+
+.search-category-select option[data-level="2"] {
+    font-weight: 400;
+    padding-left: 2.25rem;
+}
+
+.search-category-select option[data-level="3"],
+.search-category-select option[data-level="4"],
+.search-category-select option[data-level="5"] {
+    font-weight: 400;
+    padding-left: 3rem;
 }
 
 .search-category-facade {
@@ -1354,11 +1398,11 @@ if (empty($navItems)) {
 
 /* 右侧链接区域 - 自动宽度且靠右 */
 .header-nav-fill {
-    flex: 0 1 auto; /* 自动宽度 */
+    flex: 1 1 auto; /* 占据剩余空间 */
     margin-left: auto; /* 核心：产生弹性间距并推向右侧 */
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-end; /* 内容靠右对齐 */
     position: relative;
     overflow: visible; 
     height: 40px;
@@ -1509,7 +1553,7 @@ if (empty($navItems)) {
     position: absolute;
     top: 100%;
     left: 0;
-    background-color: rgba(255, 255, 255, 0.95);
+    background-color: transparent;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -2224,153 +2268,9 @@ if (empty($navItems)) {
             // 删除点击展开逻辑，改为纯hover展开
         }
 
-        // 搜索分类下拉菜单同步
-        const searchCategorySelect = document.querySelector('.search-category-select');
-        const searchCategoryLabel = document.querySelector('.search-category-label');
-        const searchCategoryFacade = document.querySelector('.search-category-facade');
-        
-        if (searchCategorySelect && searchCategoryLabel && searchCategoryFacade) {
-            // 点击分类下拉区域，触发 select
-            searchCategoryFacade.addEventListener('click', function() {
-                searchCategorySelect.focus();
-                searchCategorySelect.click();
-            });
-            
-            // 同步 select 值到 label
-            searchCategorySelect.addEventListener('change', function() {
-                const selectedOption = this.options[this.selectedIndex];
-                searchCategoryLabel.textContent = selectedOption.textContent;
-            });
-        }
-        
-        // 搜索建议功能
-        const searchInput = document.querySelector('.search-input');
-        const searchSuggestions = document.getElementById('search-suggestions');
-        const searchSuggestionsList = document.getElementById('search-suggestions-list');
-        let searchTimeout;
-        
-        if (searchInput && searchSuggestions && searchSuggestionsList) {
-            // 输入时显示建议
-            searchInput.addEventListener('input', function() {
-                const query = this.value.trim();
-                clearTimeout(searchTimeout);
-                
-                if (query.length >= 2) {
-                    searchTimeout = setTimeout(function() {
-                        showSearchSuggestions(query);
-                    }, 300);
-                } else {
-                    hideSearchSuggestions();
-                }
-            });
-            
-            // 聚焦时显示建议（如果有内容）
-            searchInput.addEventListener('focus', function() {
-                if (this.value.trim().length >= 2) {
-                    showSearchSuggestions(this.value.trim());
-                }
-            });
-            
-            // 点击外部关闭建议（排除汉堡菜单）
-            document.addEventListener('click', function(e) {
-                const hamburgerMenu = document.getElementById('hamburger-menu');
-                // 如果点击的是汉堡菜单或其子元素，不处理
-                if (hamburgerMenu && (hamburgerMenu.contains(e.target) || hamburgerMenu === e.target)) {
-                    return;
-                }
-                if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
-                    hideSearchSuggestions();
-                }
-            });
-            
-            // 键盘导航
-            searchInput.addEventListener('keydown', function(e) {
-                const items = searchSuggestionsList.querySelectorAll('li');
-                const activeItem = searchSuggestionsList.querySelector('li.active');
-                let currentIndex = -1;
-                
-                if (activeItem) {
-                    currentIndex = Array.from(items).indexOf(activeItem);
-                }
-                
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    if (currentIndex < items.length - 1) {
-                        if (activeItem) activeItem.classList.remove('active');
-                        items[currentIndex + 1].classList.add('active');
-                        items[currentIndex + 1].scrollIntoView({ block: 'nearest' });
-                    }
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    if (currentIndex > 0) {
-                        if (activeItem) activeItem.classList.remove('active');
-                        items[currentIndex - 1].classList.add('active');
-                        items[currentIndex - 1].scrollIntoView({ block: 'nearest' });
-                    }
-                } else if (e.key === 'Enter' && activeItem) {
-                    e.preventDefault();
-                    activeItem.click();
-                } else if (e.key === 'Escape') {
-                    hideSearchSuggestions();
-                }
-            });
-        }
-        
-        function showSearchSuggestions(query) {
-            // 这里可以调用API获取搜索建议
-            // 目前使用模拟数据
-            const suggestions = generateMockSuggestions(query);
-            
-            searchSuggestionsList.innerHTML = '';
-            
-            if (suggestions.length > 0) {
-                suggestions.forEach(function(suggestion) {
-                    const li = document.createElement('li');
-                    li.textContent = suggestion;
-                    li.addEventListener('click', function() {
-                        searchInput.value = suggestion;
-                        hideSearchSuggestions();
-                        // 可以在这里触发搜索
-                        const form = searchInput.closest('form');
-                        if (form) {
-                            form.submit();
-                        }
-                    });
-                    searchSuggestionsList.appendChild(li);
-                });
-                searchSuggestions.setAttribute('aria-hidden', 'false');
-            } else {
-                hideSearchSuggestions();
-            }
-        }
-        
-        function hideSearchSuggestions() {
-            searchSuggestions.setAttribute('aria-hidden', 'true');
-            searchSuggestionsList.querySelectorAll('li').forEach(function(li) {
-                li.classList.remove('active');
-            });
-        }
-        
-        function generateMockSuggestions(query) {
-            // 模拟搜索建议数据
-            const allSuggestions = [
-                '智能手机',
-                '笔记本电脑',
-                '耳机',
-                '运动鞋',
-                'T恤',
-                '背包',
-                '手表',
-                '相机',
-                '平板电脑',
-                '键盘鼠标'
-            ];
-            
-            return allSuggestions.filter(function(item) {
-                return item.toLowerCase().includes(query.toLowerCase());
-            }).slice(0, 8);
-        }
-        
+        // 搜索相关功能已移至 search.js 模块
+        // 搜索分类下拉菜单同步和搜索建议功能由 Weline.Search 模块处理
+
         // 导航链接"更多"按钮功能
         const navLinksList = document.getElementById('nav-links-list');
         const navMoreWrapper = document.getElementById('nav-more-wrapper');

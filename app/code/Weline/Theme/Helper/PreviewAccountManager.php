@@ -45,29 +45,47 @@ class PreviewAccountManager
         $config = $theme->getConfig();
         $previewConfig = self::normalizePreviewConfig($config['preview_user'] ?? []);
 
+        $tableExists = false;
         try {
             /** @var FrontendUser $user */
             $user = ObjectManager::getInstance(FrontendUser::class);
             $user->where('username', $previewConfig['username'])->find()->fetch();
+            $tableExists = true;
         } catch (\PDOException $e) {
             // 如果前端用户表不存在，返回 null（跳过预览用户创建）
             if (str_contains($e->getMessage(), 'does not exist') || 
-                str_contains($e->getMessage(), 'Undefined table')) {
+                str_contains($e->getMessage(), 'Undefined table') ||
+                str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
                 return null;
             }
             throw $e;
         }
 
+        // 如果表不存在，直接返回 null
+        if (!$tableExists) {
+            return null;
+        }
+
         $isNewUser = false;
 
         if (!$user->getId()) {
-            $user->reset();
-            $user->setUsername($previewConfig['username'])
-                ->setEmail($previewConfig['email'])
-                ->setPassword($previewConfig['password'])
-                ->setStatus(1)
-                ->save();
-            $isNewUser = true;
+            try {
+                $user->reset();
+                $user->setUsername($previewConfig['username'])
+                    ->setEmail($previewConfig['email'])
+                    ->setPassword($previewConfig['password'])
+                    ->setStatus(1)
+                    ->save();
+                $isNewUser = true;
+            } catch (\PDOException $e) {
+                // 如果保存时表不存在，返回 null
+                if (str_contains($e->getMessage(), 'does not exist') || 
+                    str_contains($e->getMessage(), 'Undefined table') ||
+                    str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
+                    return null;
+                }
+                throw $e;
+            }
         } else {
             $updated = false;
             if ($previewConfig['email'] !== $user->getData('email')) {
@@ -79,7 +97,17 @@ class PreviewAccountManager
                 $updated = true;
             }
             if ($updated) {
-                $user->save();
+                try {
+                    $user->save();
+                } catch (\PDOException $e) {
+                    // 如果保存时表不存在，返回 null
+                    if (str_contains($e->getMessage(), 'does not exist') || 
+                        str_contains($e->getMessage(), 'Undefined table') ||
+                        str_contains($e->getMessage(), 'relation') && str_contains($e->getMessage(), 'does not exist')) {
+                        return null;
+                    }
+                    throw $e;
+                }
             }
         }
 
