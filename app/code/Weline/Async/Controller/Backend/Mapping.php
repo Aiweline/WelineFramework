@@ -713,10 +713,6 @@ class Mapping extends BackendController
             $password = $host->getDecryptedPassword();
             $keyContent = $host->getDecryptedKeyContent();
             
-            // 调试信息：检查密钥内容
-            $keyContentLength = strlen($keyContent ?? '');
-            error_log("SSH Connection Debug - Host ID: {$host->getId()}, Key Content Length: {$keyContentLength}, Has Password: " . (!empty($password) ? 'yes' : 'no'));
-            
             // 构建SSH选项
             $sshOptions = [];
             $keyFile = null;
