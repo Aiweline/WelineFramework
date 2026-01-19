@@ -113,6 +113,8 @@ function collectHeaders(responseHeaders) {
 }
 
 function detectMaintenance(response, body) {
+    // 检测维护模式响应
+    // 格式：{"success":false,"code":"maintenance","message":"系统正在升级，请稍后再试。","data":{"retry_after":60,"request_id":1768278381.756889}}
     if (response.status === 503) {
         return true;
     }
