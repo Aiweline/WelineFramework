@@ -45,7 +45,6 @@ class OrderSync extends Helper
         //    10,
         //     1
         // );
-        // dd('');
         $shops = $this->shopModel->getActiveShops();
         $results = [];
 
@@ -224,10 +223,8 @@ class OrderSync extends Helper
                 ->fetch();
 
             $isNewOrder = !$existingOrder->getId();
-            // dd(json_decode($orderData['line_items']));
             unset($orderData['customer']);
             unset($orderData['billing_address']);
-            // dd(json_encode($orderData));
         // 准备订单数据
         $orderInsertData = [
             Order::fields_PLATFORM => 'shopify',
