@@ -1,0 +1,34 @@
+<?php
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\Theme\Helper\Interface;
+
+use Weline\Framework\Manager\FactoryObjectInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\ThemePathResolver;
+
+/**
+ * 主题路径解析器接口工厂类
+ * 
+ * 职责：将接口映射到实现类，支持依赖注入
+ */
+class ThemePathResolverInterfaceFactory implements FactoryObjectInterface
+{
+    /**
+     * 创建实例
+     * 
+     * @return ThemePathResolverInterface
+     */
+    public function create(): ThemePathResolverInterface
+    {
+        $themeChainResolver = ObjectManager::getInstance(ThemeChainResolverInterface::class);
+        return new ThemePathResolver($themeChainResolver);
+    }
+}

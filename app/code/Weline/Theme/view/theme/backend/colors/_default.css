@@ -1,0 +1,146 @@
+/**
+ * Backend Theme - 默认主题颜色
+ * 
+ * 后端管理界面默认主题的颜色覆盖文件
+ * 字段
+ * @meta.name {default="Backend默认主题颜色",name="Backend默认主题颜色",description="Backend默认主题颜色，用于描述色系的名称"}
+ * @meta.description {default="后端管理界面默认主题的颜色覆盖，提供专业的管理界面配色方案",name="后端管理界面默认主题的颜色覆盖",description="后端管理界面默认主题的颜色覆盖，提供专业的管理界面配色方案，用于描述色系的用途"}
+ * @meta.theme {default="default",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ */
+
+:root,
+[data-theme="default"] {
+    /* ========================================
+       品牌色（Bootstrap兼容的蓝色系）
+       ======================================== */
+    --backend-color-primary: #556ee6;
+    --backend-color-primary-rgb: 85, 110, 230;
+    --backend-color-primary-light: #6c7ce8;
+    --backend-color-primary-dark: #4757d4;
+    --backend-color-primary-hover: #4857d4;
+    --backend-color-primary-active: #3d4bc0;
+    --backend-color-primary-border: #4857d4;
+    --backend-color-primary-bg-subtle: rgba(85, 110, 230, 0.1);
+    --backend-color-primary-bg-light: rgba(85, 110, 230, 0.15);
+
+    /* ========================================
+       文本色
+       ======================================== */
+    --backend-color-text-primary: #212529;
+    --backend-color-text-secondary: #6c757d;
+    --backend-color-text-tertiary: #adb5bd;
+    --backend-color-text-disabled: #ced4da;
+    --backend-color-text-muted: #6c757d;
+    --backend-color-text-light: #f8f9fa;
+    --backend-color-text-light-secondary: #dee2e6;
+    --backend-color-text-dark: #212529;
+    --backend-color-text-placeholder: #adb5bd;
+    --backend-color-text-inverse: #ffffff;
+
+    /* ========================================
+       背景色
+       ======================================== */
+    --backend-color-bg-primary: #ffffff;
+    --backend-color-bg-secondary: #f8f9fa;
+    --backend-color-bg-tertiary: #e9ecef;
+    --backend-color-bg-dark: #212529;
+    --backend-color-bg-dark-secondary: #343a40;
+    --backend-color-bg-dark-tertiary: #495057;
+    --backend-color-bg-body: #f8f9fa;
+    --backend-color-bg-surface: #ffffff;
+    --backend-color-bg-overlay: rgba(0, 0, 0, 0.5);
+
+    /* ========================================
+       边框色
+       ======================================== */
+    --backend-color-border-default: #dee2e6;
+    --backend-color-border-emphasis: #adb5bd;
+    --backend-color-border-focus: var(--backend-color-primary);
+    --backend-color-border-light: #e9ecef;
+    --backend-color-border-dark: #6c757d;
+
+    /* ========================================
+       功能色（Bootstrap兼容）
+       ======================================== */
+    /* 成功色 */
+    --backend-color-success: #34c38f;
+    --backend-color-success-rgb: 52, 195, 143;
+    --backend-color-success-light: #56d0a5;
+    --backend-color-success-dark: #2ab57d;
+    --backend-color-success-hover: #2ab57d;
+    --backend-color-success-bg-subtle: rgba(52, 195, 143, 0.1);
+    --backend-color-success-border: #2ab57d;
+    
+    /* 危险色 */
+    --backend-color-danger: #f46a6a;
+    --backend-color-danger-rgb: 244, 106, 106;
+    --backend-color-danger-light: #f68a8a;
+    --backend-color-danger-dark: #f24a4a;
+    --backend-color-danger-hover: #f24a4a;
+    --backend-color-danger-bg-subtle: rgba(244, 106, 106, 0.1);
+    --backend-color-danger-border: #f24a4a;
+    
+    /* 警告色 */
+    --backend-color-warning: #f1b44c;
+    --backend-color-warning-rgb: 241, 180, 76;
+    --backend-color-warning-light: #f4c470;
+    --backend-color-warning-dark: #eea428;
+    --backend-color-warning-hover: #eea428;
+    --backend-color-warning-bg-subtle: rgba(241, 180, 76, 0.1);
+    --backend-color-warning-border: #eea428;
+    
+    /* 信息色 */
+    --backend-color-info: #50a5f1;
+    --backend-color-info-rgb: 80, 165, 241;
+    --backend-color-info-light: #6fb5f3;
+    --backend-color-info-dark: #3a95ef;
+    --backend-color-info-hover: #3a95ef;
+    --backend-color-info-bg-subtle: rgba(80, 165, 241, 0.1);
+    --backend-color-info-border: #3a95ef;
+
+    /* ========================================
+       链接色
+       ======================================== */
+    --backend-color-link: var(--backend-color-primary);
+    --backend-color-link-hover: var(--backend-color-primary-dark);
+    --backend-color-link-visited: #6f42c1;
+    --backend-color-link-active: var(--backend-color-primary-active);
+
+    /* ========================================
+       组件特定颜色
+       ======================================== */
+    /* 侧边栏 */
+    --backend-color-sidebar-bg: #ffffff;
+    --backend-color-sidebar-text: var(--backend-color-text-primary);
+    --backend-color-sidebar-hover: var(--backend-color-bg-secondary);
+    --backend-color-sidebar-active: var(--backend-color-primary-bg-subtle);
+    --backend-color-sidebar-border: var(--backend-color-border-light);
+    
+    /* 头部 */
+    --backend-color-header-bg: #ffffff;
+    --backend-color-header-text: var(--backend-color-text-primary);
+    --backend-color-header-border: var(--backend-color-border-light);
+    
+    /* 表格 */
+    --backend-color-table-bg: #ffffff;
+    --backend-color-table-bg-striped: var(--backend-color-bg-secondary);
+    --backend-color-table-bg-hover: var(--backend-color-bg-tertiary);
+    --backend-color-table-border: var(--backend-color-border-light);
+    
+    /* 卡片 */
+    --backend-color-card-bg: #ffffff;
+    --backend-color-card-border: var(--backend-color-border-default);
+    --backend-color-card-header-bg: var(--backend-color-bg-secondary);
+    
+    /* 输入框 */
+    --backend-color-input-bg: #ffffff;
+    --backend-color-input-border: var(--backend-color-border-default);
+    --backend-color-input-focus-border: var(--backend-color-primary);
+    --backend-color-input-disabled-bg: var(--backend-color-bg-tertiary);
+    
+    /* 按钮 */
+    --backend-color-btn-primary: var(--backend-color-primary);
+    --backend-color-btn-primary-hover: var(--backend-color-primary-hover);
+    --backend-color-btn-secondary: var(--backend-color-text-secondary);
+    --backend-color-btn-secondary-hover: var(--backend-color-text-tertiary);
+}
