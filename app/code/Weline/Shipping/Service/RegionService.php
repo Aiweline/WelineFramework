@@ -177,5 +177,78 @@ class RegionService
         }
         return $region->getFullPath();
     }
+
+    /**
+     * 根据位置信息查找地区
+     * 
+     * @param string $countryCode 国家代码
+     * @param string|null $province 省/州
+     * @param string|null $city 市
+     * @param string|null $district 区县
+     * @return Region|null
+     */
+    public function findByLocation(
+        string $countryCode,
+        ?string $province = null,
+        ?string $city = null,
+        ?string $district = null
+    ): ?Region {
+        $model = $this->getModel();
+        
+        // 优先匹配区县
+        if ($district) {
+            $region = $model->reset()
+                ->where(Region::fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::fields_REGION_TYPE, Region::TYPE_DISTRICT)
+                ->where(Region::fields_REGION_NAME, $district)
+                ->where(Region::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            
+            if ($region->getId()) {
+                return $region;
+            }
+        }
+        
+        // 其次匹配市
+        if ($city) {
+            $region = $model->reset()
+                ->where(Region::fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::fields_REGION_TYPE, Region::TYPE_CITY)
+                ->where(Region::fields_REGION_NAME, $city)
+                ->where(Region::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            
+            if ($region->getId()) {
+                return $region;
+            }
+        }
+        
+        // 再次匹配省/州
+        if ($province) {
+            $region = $model->reset()
+                ->where(Region::fields_COUNTRY_CODE, $countryCode)
+                ->where(Region::fields_REGION_TYPE, Region::TYPE_PROVINCE)
+                ->where(Region::fields_REGION_NAME, $province)
+                ->where(Region::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            
+            if ($region->getId()) {
+                return $region;
+            }
+        }
+        
+        // 最后匹配国家
+        $region = $model->reset()
+            ->where(Region::fields_COUNTRY_CODE, $countryCode)
+            ->where(Region::fields_REGION_TYPE, Region::TYPE_COUNTRY)
+            ->where(Region::fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        
+        return $region->getId() ? $region : null;
+    }
 }
 
