@@ -1,0 +1,273 @@
+<?php
+/**
+ * 片段：Backend Head
+ *
+ * 后端页面头部区域（主题CSS、JS初始化等）
+ * 字段
+ * @meta.name {default="Backend Head头部片段",name="Backend Head头部片段",description="Backend Head头部片段，用于描述片段的名称"}
+ * @meta.description {default="后端页面头部区域（主题CSS、JS初始化等）",name="后端页面头部区域",description="后端页面头部区域（主题CSS、JS初始化等），用于描述片段的用途"}
+ * @param.title {default="Weline Admin 管理面板",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param.description {default="Weline Framework - 后台管理系统",name="页面描述",description="页面描述，用于设置SEO描述"}
+ * @param.keywords {default="Weline, Framework, Admin, PHP",name="页面关键词",description="页面关键词，用于设置SEO关键词"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * - 参数配置由 Block\Partials 在渲染时自动加载
+ * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
+ */
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+// 主题相关数据由 ControllerFetchFileBefore Observer 设置
+$themeData = $this->getData('theme') ?? [];
+
+// 获取 backend 基础 URL 用于 base 标签
+$backendBaseUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
+?>
+<!-- Base URL 设置：所有相对链接将基于此路径 -->
+<base href="<?= htmlspecialchars($backendBaseUrl) ?>">
+<!-- 
+    Theme Head Partial - 只负责加载 Theme 资源
+    注意：
+    - Meta 标签、Favicon 等由 Backend/Admin 模块的 head.phtml 负责
+    - Backend CSS/JS（bootstrap, font-awesome, jquery等）由 Backend/Admin 模块负责
+    - Theme 只负责加载 Theme 相关的 CSS 变量、色系、主题 CSS/JS
+-->
+<?php
+// 主题相关数据由 ControllerFetchFileBefore Observer 设置
+// 模板中直接使用 theme 对象中的数据，不进行任何提取或获取操作
+$themeData = $this->getData('theme') ?? [];
+
+$area = $themeData['area'] ?? 'backend';
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
+
+// 注意：变量和色盘配置现在通过生成的布局CSS文件加载，不再单独引用
+// 布局CSS文件在编译时自动生成，包含所有CSS变量和色盘配置
+?>
+<!-- 主题CSS（基础样式，不包含变量） -->
+<theme:css>Weline_Theme::theme/backend/assets/css/theme.css</theme:css>
+<?php
+// 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
+// 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
+$area = $themeData['area'] ?? 'backend';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
+
+// 检查布局信息和主题对象是否存在
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    // 使用LayoutAssetsManager获取CSS URL（使用 Observer 设置的主题对象）
+    $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+    try {
+        $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+        ?>
+<!-- 布局CSS（包含变量、色盘和布局特定样式）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
+<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+<?php
+    } catch (\Exception $e) {
+        // 如果获取URL失败，记录错误
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Backend Head Partial: 无法获取布局CSS URL', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } catch (\Exception $logError) {
+                // 忽略日志错误
+            }
+        }
+    }
+}
+?>
+<!-- 注意：jQuery 等 Backend JS 由 Backend/Admin 模块的 head.phtml 负责加载 -->
+<?php
+// 获取基础URL和当前语言
+$isDev = defined('DEV') && DEV;
+$baseUrl = $this->request->getBaseUrl();
+
+// 根据环境设置模块配置URL和基础URL
+if ($isDev) {
+    // 开发模式
+    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+} else {
+    // 生产模式
+    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+}
+
+$currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+$currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+$siteName = $this->getData('site_name') ?? __('Weline Admin');
+$pageTitle = $meta['title'] ?? $this->getData('title') ?? __('Weline Admin 管理面板');
+$pageDescription = $meta['description'] ?? __('Weline Framework - 后台管理系统');
+$pageKeywords = $meta['keywords'] ?? __('Weline, Framework, Admin, PHP');
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+
+$envConfig = [
+    'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+    'DEV' => DEV,
+    'PROD' => !DEV,
+];
+// API 模块的 workerUrl 由 API 模块内部自动处理，无需在此处配置
+$themeConfigPayload = [
+    'env' => $envConfig,
+    'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
+    'currentLang' => $currentLang,
+    'currentCurrency' => $currentCurrency,
+    'debug' => DEV,
+    'site' => [
+        'name' => $siteName,
+        'title' => $pageTitle,
+        'description' => $pageDescription,
+        'keywords' => $pageKeywords,
+    ],
+    // i18n 模块配置由 i18n 模块内部自动处理，无需在此处配置
+    // i18n 模块会自动从全局配置读取所需配置，并处理 URL 解析
+    // 模块加载器配置由模块加载器内部自动处理，无需在此处配置
+    // 模块加载器会自动检测环境并生成合适的 URL
+    // API 模块配置由 API 模块内部自动处理，无需在此处配置
+    // API 模块会自动从全局配置读取所需配置，并处理 URL 解析
+    // 如需自定义，可在 api 配置中提供 workerUrl 等配置项
+    // Account 模块配置由 Account 模块内部自动处理，无需在此处配置
+    // Account 模块会自动从全局配置读取所需配置，并处理 URL 解析
+    'theme' => [
+        'area' => $area,
+        'colorMode' => $welineThemeColorMode,
+        'layoutType' => $layoutType,
+        'layoutOption' => $layoutOption,
+    ],
+];
+    
+// 将配置数据序列化为JSON，供外部JS文件使用
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('envConfig', $envConfig);
+?>
+<!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<script data-no-extract="true">
+    (function() {
+        // 合并到全局配置（与Frontend模块的配置合并）
+        // 如果 Frontend 模块的 head.phtml 未运行，手动暴露 modulesConfigUrl
+        if (!window.__WelineThemeConfig) {
+            window.__WelineThemeConfig = {};
+        }
+        // 使用Object.assign合并，保留Frontend模块已设置的配置
+        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        Object.assign(window.__WelineThemeConfig, themeConfig);
+        
+        // 关键：确保全局变量 modulesConfigUrl 也被设置，支持 theme.js 直接访问
+        if (window.__WelineThemeConfig.modulesConfigUrl) {
+            window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        }
+    })();
+</script>
+<!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
+<!-- 注意：Token存储管理器、Switcher组件等 Backend 资源由 Backend/Admin 模块负责加载 -->
+<!-- 主题JS -->
+<theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
+<!-- 注意：getHeader()->getHtml() 由 Backend/Admin 模块的 head.phtml 负责 -->
+
+<style>
+/* ========================================
+   Backend Head初始化样式
+   ======================================== */
+
+/* 确保HTML元素使用后端主题的基础设置 */
+html[data-theme="backend"] {
+    /* 后端主题配色变量 */
+    --backend-primary: #556ee6;
+    --backend-secondary: #6c757d;
+    --backend-success: #34c38f;
+    --backend-danger: #f46a6a;
+    --backend-warning: #f1b44c;
+    --backend-info: #50a5f1;
+    --backend-dark: #343a40;
+    --backend-light: #f8f9fa;
+}
+
+/* 基础字体优化 */
+html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 确保viewport正确设置 */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari特定优化 */
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+}
+
+/* ========================================
+   开发模式：基础样式收集
+   这些样式会被提取系统收集到生成的布局CSS文件中
+   ======================================== */
+
+/* backend-main-content 基础样式（开发模式下需要被收集） */
+.backend-main-content {
+    flex: 1;
+    width: 100%;
+    min-height: 80vh;
+}
+</style>
+
+<script>
+// Backend Head初始化脚本
+(function() {
+    'use strict';
+    
+    // 设置后端主题标识
+    if (!document.documentElement.getAttribute('data-theme')) {
+        // 如果未设置主题，默认使用backend主题
+        document.documentElement.setAttribute('data-theme', 'backend');
+    }
+    
+    // 后端主题配置增强
+    if (window.__WelineThemeConfig) {
+        // 添加后端主题特定配置
+        window.__WelineThemeConfig.backend = {
+            primaryColor: '#556ee6',
+            secondaryColor: '#6c757d',
+            successColor: '#34c38f',
+            dangerColor: '#f46a6a',
+            warningColor: '#f1b44c',
+            infoColor: '#50a5f1'
+        };
+    }
+    
+    // 性能优化：预加载关键资源
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(function() {
+            // 在空闲时预加载可能需要的资源
+            const link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.href = window.__WelineThemeConfig?.baseUrl || '/';
+            document.head.appendChild(link);
+        });
+    }
+
+    // 监听来自Visual Editor的postMessage (Live Preview支持)
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
+            const cssVars = event.data.cssVars || {};
+            const root = document.documentElement;
+            for (const [varName, value] of Object.entries(cssVars)) {
+                root.style.setProperty(varName, value);
+            }
+            console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
+        }
+    });
+})();
+</script>
