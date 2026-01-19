@@ -18,13 +18,14 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Warm implements CommandInterface
 {
-    private Client $client;
+    private ?Client $client = null;
     private Printing $printing;
 
-    public function __construct(Client $client, Printing $printing)
+    public function __construct(Printing $printing, ?Client $client = null)
     {
-        $this->client = $client;
         $this->printing = $printing;
+        // 如果 Client 未提供，延迟创建
+        $this->client = $client ?? new Client();
     }
 
     public function execute(array $args = [], array $data = [])
