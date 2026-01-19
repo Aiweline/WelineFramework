@@ -419,6 +419,10 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     }
 </style>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     const app = document.getElementById('meta-config-app');
@@ -912,12 +916,31 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 if (json.code !== 200) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
-                alert(json.msg || json.message || '<?= __('配置保存成功') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: json.msg || json.message || '<?= __('配置保存成功') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log(json.msg || json.message || '<?= __('配置保存成功') ?>');
+                }
                 notifyParentConfigSaved(formArea);
             })
             .catch(error => {
                 console.error(error);
-                alert('<?= __('保存失败') ?>: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('保存失败') ?>: ' + error.message);
+                }
             })
             .finally(() => {
                 if (activeNode) {
@@ -1024,7 +1047,17 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
                 translationModal.hide();
-                alert(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: json.msg || json.message || '<?= __('翻译已保存') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                }
                 // 重新加载当前文件以更新显示
                 const activeNode = treeContainer.querySelector('.tree-label.active');
                 if (activeNode) {
@@ -1035,7 +1068,16 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                alert('<?= __('保存失败') ?>: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('保存失败') ?>: ' + error.message);
+                }
             });
     }
 
@@ -1162,7 +1204,17 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                     throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
                 }
                 metaNameDescTranslationModal.hide();
-                alert(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: json.msg || json.message || '<?= __('翻译已保存') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                }
                 // 重新加载当前文件以更新显示
                 const activeNode = treeContainer.querySelector('.tree-label.active');
                 if (activeNode) {
@@ -1173,7 +1225,16 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                alert('<?= __('保存失败') ?>: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('保存失败') ?>: ' + error.message);
+                }
             });
     }
 

@@ -17,15 +17,6 @@
                   sort="50"/>
     </event>
     
-    <!-- 系统升级后事件：自动扫描所有模块的元数据 -->
-    <event name="Weline_Framework_Setup::upgrade_after">
-        <observer name="Weline_Meta::setup_upgrade_after_scan_meta" 
-                  instance="Weline\Meta\Observer\SetupUpgradeAfter" 
-                  disabled="false" 
-                  shared="true" 
-                  sort="300"/>
-    </event>
-    
     <!-- 元数据路径扫描事件：处理扫描任务 -->
     <event name="Weline_Meta::scan_path">
         <observer name="Weline_Meta::scan_path" 
