@@ -16,6 +16,7 @@ namespace Weline\I18n\Model;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\I18n\Cache\LanguageCache;
 
 class Locals extends \Weline\Framework\Database\Model
 {
@@ -135,6 +136,22 @@ class Locals extends \Weline\Framework\Database\Model
         } catch (\Exception $e) {
             // 记录错误但不中断安装过程
             error_log('I18n global locales installation failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 保存后清除语言缓存
+     * 当语言数据更新时，清除缓存的语言列表，确保下次请求时重新加载最新数据
+     */
+    public function save_after()
+    {
+        parent::save_after();
+        // 清除语言缓存
+        try {
+            $languageCache = new LanguageCache();
+            $languageCache->clear();
+        } catch (\Throwable $e) {
+            // 缓存清除失败，静默处理
         }
     }
 }

@@ -60,11 +60,19 @@ class Localization extends BaseController
         $filter = $this->request->getGet('filter', 'all'); // 默认显示全部区域
         $search = $this->request->getGet('search');
         $countryFilter = $this->request->getGet('country_filter'); // 国家码过滤
-                
+        
+        // 检查是否有国家数据，如果没有则立即安装默认国家
+        $this->ensureCountriesInstalled();
+        
+        // 检查是否有区域数据，如果没有则立即安装默认区域
+        $this->ensureLocalesInstalled();
         
         // 自动更新区域数据和区域名称数据
         $this->autoUpdateLocaleData();
         $this->autoUpdateLocaleNames();
+        
+        // 更新缺失的简码、ISO2、ISO3字段
+        $this->updateMissingLocaleCodes();
         
         // 检查语言切换并强制更新
         $this->checkLanguageSwitchAndUpdate();
@@ -79,7 +87,10 @@ class Localization extends BaseController
             $localeCode = $this->locale::fields_CODE;
             $localeName = \Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME;
             $countryCode = $this->locale::fields_COUNTRY_CODE;
-            $this->locale->concat_like("main_table.{$localeCode},ln.{$localeName},main_table.{$countryCode}", "%{$search}%");
+            $shortCode = $this->locale::fields_SHORT_CODE;
+            $iso2 = $this->locale::fields_ISO2;
+            $iso3 = $this->locale::fields_ISO3;
+            $this->locale->concat_like("main_table.{$localeCode},ln.{$localeName},main_table.{$countryCode},main_table.{$shortCode},main_table.{$iso2},main_table.{$iso3}", "%{$search}%");
         }
         
         // 国家码过滤
@@ -94,9 +105,12 @@ class Localization extends BaseController
         $page = (int)$this->request->getGet('page', 1);
         $pageSize = (int)$this->request->getGet('page_size', 20);
         
-        // 获取数据
+        // 获取数据（确保包含简码、ISO2、ISO3字段）
         $locales = $this->locale
-        ->pagination($page, $pageSize)->select()->fetchArray();
+            ->fields('main_table.*,ln.' . \Weline\I18n\Model\Locale\Name::fields_DISPLAY_NAME . ' as display_name')
+            ->pagination($page, $pageSize)
+            ->select()
+            ->fetchArray();
         
         // 确保 locales 是数组
         if (!is_array($locales)) {
@@ -313,9 +327,15 @@ class Localization extends BaseController
                         $countryCode = 'CN'; // 默认使用中国
                     }
                     
+                    // 提取简码、ISO2和ISO3
+                    $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
+                    
                     $insertData[] = [
                         $this->locale::fields_CODE => $localeCode,
                         $this->locale::fields_COUNTRY_CODE => $countryCode,
+                        $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
+                        $this->locale::fields_ISO2 => $localeCodes['iso2'],
+                        $this->locale::fields_ISO3 => $localeCodes['iso3'],
                         $this->locale::fields_IS_INSTALL => 0, // 默认未安装
                         $this->locale::fields_IS_ACTIVE => 0,  // 默认未激活
                         $this->locale::fields_FLAG => ''
@@ -448,9 +468,15 @@ class Localization extends BaseController
                     foreach ($locales as $localeCode) {
                         // 如果区域不存在，则准备插入
                         if (!in_array($localeCode, $existingCodes)) {
+                            // 提取简码、ISO2和ISO3
+                            $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
+                            
                             $insertData[] = [
                                 $this->locale::fields_CODE => $localeCode,
                                 $this->locale::fields_COUNTRY_CODE => $countryCode,
+                                $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
+                                $this->locale::fields_ISO2 => $localeCodes['iso2'],
+                                $this->locale::fields_ISO3 => $localeCodes['iso3'],
                                 $this->locale::fields_IS_INSTALL => 0, // 默认未安装
                                 $this->locale::fields_IS_ACTIVE => 0,  // 默认未激活
                                 $this->locale::fields_FLAG => ''
@@ -1163,9 +1189,15 @@ class Localization extends BaseController
                 // 获取国家代码（从 locale code 中提取）
                 $countryCode = 'CN';
                 
+                // 提取简码、ISO2和ISO3
+                $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
+                
                 // 创建区域记录
                 $locale->setData($this->locale::fields_CODE, $localeCode);
                 $locale->setData($this->locale::fields_COUNTRY_CODE, $countryCode);
+                $locale->setData($this->locale::fields_SHORT_CODE, $localeCodes['short_code']);
+                $locale->setData($this->locale::fields_ISO2, $localeCodes['iso2']);
+                $locale->setData($this->locale::fields_ISO3, $localeCodes['iso3']);
                 $locale->setData($this->locale::fields_IS_INSTALL, 1);
                 $locale->setData($this->locale::fields_IS_ACTIVE, 1);
                 
@@ -1180,6 +1212,16 @@ class Localization extends BaseController
                 $locale->save();
                 Message::notes(__('已自动安装并激活默认区域：%{1}', [$localeCode]));
             } else {
+                // 如果简码字段为空，自动计算并保存
+                if (empty($locale->getData($this->locale::fields_SHORT_CODE)) || 
+                    empty($locale->getData($this->locale::fields_ISO2)) || 
+                    empty($locale->getData($this->locale::fields_ISO3))) {
+                    $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
+                    $locale->setData($this->locale::fields_SHORT_CODE, $localeCodes['short_code'])
+                        ->setData($this->locale::fields_ISO2, $localeCodes['iso2'])
+                        ->setData($this->locale::fields_ISO3, $localeCodes['iso3']);
+                }
+                
                 // 如果区域存在但未安装，自动安装并激活
                 if (!$locale->getData($this->locale::fields_IS_INSTALL)) {
                     $locale->setData($this->locale::fields_IS_INSTALL, 1);
@@ -1191,11 +1233,180 @@ class Localization extends BaseController
                     $locale->setData($this->locale::fields_IS_ACTIVE, 1);
                     $locale->save();
                     Message::notes(__('已自动激活默认区域：%{1}', [$localeCode]));
+                } else {
+                    // 如果已安装且已激活，但简码为空，只更新简码字段
+                    if (empty($locale->getData($this->locale::fields_SHORT_CODE)) || 
+                        empty($locale->getData($this->locale::fields_ISO2)) || 
+                        empty($locale->getData($this->locale::fields_ISO3))) {
+                        $locale->save();
+                    }
                 }
             }
         } catch (\Exception $e) {
             // 静默处理错误，不影响主要功能
             Message::error(__('确保 zh_Hans_CN 安装失败: %{1}', $e->getMessage()));
+        }
+    }
+    
+    /**
+     * 更新缺失的简码、ISO2、ISO3字段
+     * 对于已存在但简码为空的记录，自动计算并更新
+     */
+    private function updateMissingLocaleCodes(): void
+    {
+        try {
+            // 使用独立的模型实例，避免影响主查询
+            $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
+            
+            // 查找简码为空或ISO2为空或ISO3为空的记录
+            // 使用OR条件查找任一字段为空的记录
+            $missingCodes = $localeModel->reset()
+                ->where('(' . $this->locale::fields_SHORT_CODE . ' IS NULL OR ' . $this->locale::fields_SHORT_CODE . ' = "" OR ' . $this->locale::fields_ISO2 . ' IS NULL OR ' . $this->locale::fields_ISO2 . ' = "" OR ' . $this->locale::fields_ISO3 . ' IS NULL OR ' . $this->locale::fields_ISO3 . ' = "")')
+                ->select()
+                ->fetch()
+                ->getItems();
+            
+            if (empty($missingCodes)) {
+                return;
+            }
+            
+            $updatedCount = 0;
+            foreach ($missingCodes as $locale) {
+                $localeCode = $locale->getData($this->locale::fields_CODE);
+                if (empty($localeCode)) {
+                    continue;
+                }
+                
+                // 提取简码、ISO2和ISO3
+                $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
+                
+                // 更新记录（使用独立的模型实例）
+                $updateModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
+                $updateModel->reset()
+                    ->where($this->locale::fields_CODE, $localeCode)
+                    ->setData($this->locale::fields_SHORT_CODE, $localeCodes['short_code'])
+                    ->setData($this->locale::fields_ISO2, $localeCodes['iso2'])
+                    ->setData($this->locale::fields_ISO3, $localeCodes['iso3'])
+                    ->update()
+                    ->fetch();
+                
+                $updatedCount++;
+            }
+            
+            if ($updatedCount > 0) {
+                Message::notes(__('已更新 %{1} 个区域的简码、ISO2、ISO3字段', [$updatedCount]));
+            }
+            
+        } catch (\Exception $e) {
+            // 静默处理错误，不影响主要功能
+            error_log('Update missing locale codes failed: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 确保国家数据已安装
+     * 如果没有国家数据，立即安装默认国家（中国）
+     */
+    private function ensureCountriesInstalled(): void
+    {
+        try {
+            // 检查是否有国家数据
+            $countriesModel = clone $this->countries;
+            $countriesCount = $countriesModel->reset()->count();
+            
+            if ($countriesCount == 0) {
+                Message::notes(__('检测到没有国家数据，开始安装默认国家...'));
+                
+                // 使用 CountryDataUpdateService 安装国家数据
+                $updateService = ObjectManager::getInstance(\Weline\I18n\Service\CountryDataUpdateService::class);
+                $updateService->updateCountryData();
+                
+                Message::success(__('默认国家数据安装完成'));
+            }
+        } catch (\Exception $e) {
+            Message::error(__('安装国家数据失败: %{1}', $e->getMessage()));
+        }
+    }
+    
+    /**
+     * 确保区域数据已安装
+     * 如果没有区域数据，立即安装默认区域（zh_Hans_CN）
+     */
+    private function ensureLocalesInstalled(): void
+    {
+        try {
+            // 检查是否有区域数据
+            $localeModel = clone $this->locale;
+            $localesCount = $localeModel->reset()->count();
+            
+            if ($localesCount == 0) {
+                Message::notes(__('检测到没有区域数据，开始安装默认区域...'));
+                
+                // 先确保有已安装的国家
+                $installedCountries = $this->getInstalledCountries();
+                
+                // 如果没有已安装的国家，先安装中国
+                if (empty($installedCountries)) {
+                    $this->installDefaultCountry();
+                    $installedCountries = $this->getInstalledCountries();
+                }
+                
+                // 如果有已安装的国家，为这些国家安装区域
+                if (!empty($installedCountries)) {
+                    $this->batchUpdateLocaleDataForInstalledCountries($installedCountries);
+                    Message::success(__('默认区域数据安装完成'));
+                } else {
+                    // 如果还是没有已安装的国家，至少安装 zh_Hans_CN
+                    $this->ensureZhHansCnInstalled();
+                    Message::success(__('已安装默认区域：zh_Hans_CN'));
+                }
+            }
+        } catch (\Exception $e) {
+            Message::error(__('安装区域数据失败: %{1}', $e->getMessage()));
+        }
+    }
+    
+    /**
+     * 安装默认国家（中国）
+     */
+    private function installDefaultCountry(): void
+    {
+        try {
+            $countryCode = 'CN';
+            $countryModel = clone $this->countries;
+            $country = $countryModel->reset()->where($countryModel::fields_CODE, $countryCode)->find()->fetch();
+            
+            if (!$country->getId()) {
+                // 国家不存在，创建国家记录
+                $country->setData($countryModel::fields_CODE, $countryCode);
+                $country->setData($countryModel::fields_IS_INSTALL, 1);
+                $country->setData($countryModel::fields_IS_ACTIVE, 1);
+                
+                // 获取国旗
+                try {
+                    $flag = $this->i18n->getCountryFlag($countryCode, 24, 18);
+                    $country->setData($countryModel::fields_FLAG, $flag ?: '');
+                } catch (\Exception $e) {
+                    $country->setData($countryModel::fields_FLAG, '');
+                }
+                
+                $country->save();
+                Message::notes(__('已安装默认国家：%{1}', [$countryCode]));
+            } else {
+                // 国家存在但未安装，安装并激活
+                if (!$country->getData($countryModel::fields_IS_INSTALL)) {
+                    $country->setData($countryModel::fields_IS_INSTALL, 1);
+                    $country->setData($countryModel::fields_IS_ACTIVE, 1);
+                    $country->save();
+                    Message::notes(__('已安装并激活默认国家：%{1}', [$countryCode]));
+                } elseif (!$country->getData($countryModel::fields_IS_ACTIVE)) {
+                    $country->setData($countryModel::fields_IS_ACTIVE, 1);
+                    $country->save();
+                    Message::notes(__('已激活默认国家：%{1}', [$countryCode]));
+                }
+            }
+        } catch (\Exception $e) {
+            Message::error(__('安装默认国家失败: %{1}', $e->getMessage()));
         }
     }
 }
