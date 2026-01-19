@@ -778,6 +778,10 @@
         </div>
     </div>
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // Worker管理器 - 使用加密混淆的Worker处理TOTP计算
         const TotpWorkerManager = (function() {
@@ -875,7 +879,17 @@
                             if (data.result.fail > 0) {
                                 message += `，失败：${data.result.fail} 个`;
                             }
-                            alert(message);
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'info',
+                                    title: '<?= __('提示') ?>',
+                                    html: message.replace(/\n/g, '<br>'),
+                                    confirmButtonText: '<?= __('确定') ?>',
+                                    width: '600px'
+                                });
+                            } else {
+                                console.log(message);
+                            }
                             
                             if (data.result.success > 0) {
                                 closeModal('addModal');
@@ -1123,7 +1137,16 @@
                     }, 100);
                 })
                 .catch(err => {
-                    alert('无法访问摄像头：' + err.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('无法访问摄像头') ?>',
+                            text: err.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('无法访问摄像头：' + err.message);
+                    }
                 });
         }
         
@@ -1144,7 +1167,16 @@
         // 处理解析的URI
         function handleQRCodeURI(uri) {
             if (!uri.startsWith('otpauth://')) {
-                alert('无效的二维码格式');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('错误') ?>',
+                        text: '<?= __('无效的二维码格式') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('无效的二维码格式');
+                }
                 return;
             }
             
@@ -1172,15 +1204,46 @@
             .then(res => res.json())
             .then(result => {
                 if (result.success) {
-                    alert('账户添加成功！');
-                    closeModal('addModal');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('账户添加成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            closeModal('addModal');
+                            location.reload();
+                        });
+                    } else {
+                        console.log('账户添加成功！');
+                        closeModal('addModal');
+                        location.reload();
+                    }
                 } else {
-                    alert(result.message || '添加失败，请重试');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('添加失败') ?>',
+                            text: result.message || '<?= __('请重试') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message || '添加失败，请重试');
+                    }
                 }
             })
             .catch(error => {
-                alert('添加失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('添加失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('添加失败，请重试');
+                }
             });
         }
 
@@ -1202,14 +1265,45 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('账户添加成功！');
-                    closeModal('addModal');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('账户添加成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            closeModal('addModal');
+                            location.reload();
+                        });
+                    } else {
+                        console.log('账户添加成功！');
+                        closeModal('addModal');
+                        location.reload();
+                    }
                 } else {
-                    alert(result.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('添加失败') ?>',
+                            text: result.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message);
+                    }
                 }
             } catch (error) {
-                alert('添加失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('添加失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('添加失败，请重试');
+                }
             }
         }
 
@@ -1230,14 +1324,45 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('账户导入成功！');
-                    closeModal('addModal');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('账户导入成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            closeModal('addModal');
+                            location.reload();
+                        });
+                    } else {
+                        console.log('账户导入成功！');
+                        closeModal('addModal');
+                        location.reload();
+                    }
                 } else {
-                    alert(result.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('导入失败') ?>',
+                            text: result.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message);
+                    }
                 }
             } catch (error) {
-                alert('导入失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('导入失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('导入失败，请重试');
+                }
             }
         }
 
@@ -1289,13 +1414,41 @@
                 if (result.success) {
                     // 从Worker中移除账户
                     TotpWorkerManager.removeAccount(accountId);
-                    alert('账户已删除');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('账户已删除') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        console.log('账户已删除');
+                        location.reload();
+                    }
                 } else {
-                    alert(result.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('删除失败') ?>',
+                            text: result.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message);
+                    }
                 }
             } catch (error) {
-                alert('删除失败，请重试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('删除失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('删除失败，请重试');
+                }
             }
         }
 
@@ -1345,11 +1498,17 @@
                     
                     // 根据文件扩展名判断格式
                     if (fileName.endsWith('.json')) {
-                        accounts = parseJsonImport(text);
+                        // 使用Worker解析，不再直接调用未定义的函数
+                        console.warn('parseJsonImport未定义，应使用TotpWorkerManager.parseFile');
+                        throw new Error('请使用Worker解析文件');
                     } else if (fileName.endsWith('.csv')) {
-                        accounts = parseCsvImport(text);
+                        // 使用Worker解析，不再直接调用未定义的函数
+                        console.warn('parseCsvImport未定义，应使用TotpWorkerManager.parseFile');
+                        throw new Error('请使用Worker解析文件');
                     } else if (fileName.endsWith('.txt')) {
-                        accounts = parseTxtImport(text);
+                        // 使用Worker解析，不再直接调用未定义的函数
+                        console.warn('parseTxtImport未定义，应使用TotpWorkerManager.parseFile');
+                        throw new Error('请使用Worker解析文件');
                     } else {
                         throw new Error('不支持的文件格式');
                     }
@@ -1402,7 +1561,16 @@
             
             // 如果验证码还是占位符，不执行复制
             if (code === '---- --' || code === '' || code.length < 6) {
-                alert('验证码尚未生成，请稍候...');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'info',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('验证码尚未生成，请稍候...') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.log('验证码尚未生成，请稍候...');
+                }
                 return;
             }
             
@@ -1449,14 +1617,32 @@
                             }, 2000);
                         }
                     } catch (err) {
-                        alert('复制失败，请手动复制：' + code);
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: '<?= __('复制失败') ?>',
+                                text: '<?= __('请手动复制：') ?>' + code,
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        } else {
+                            console.error('复制失败，请手动复制：' + code);
+                        }
                     }
                     
                     document.body.removeChild(textArea);
                 }
             } catch (error) {
                 console.error('复制失败:', error);
-                alert('复制失败，请手动复制：' + code);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('复制失败') ?>',
+                        text: '<?= __('请手动复制：') ?>' + code,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('复制失败，请手动复制：' + code);
+                }
             }
         }
     </script>
