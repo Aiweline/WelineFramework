@@ -42,17 +42,12 @@ class Locales extends BaseController
     {
         parent::__init();
         $country_code = $this->request->getParam('country_code');
+        
+        // 先设置基础条件
         $this->locale->where('main_table.' . $this->locale::fields_COUNTRY_CODE, $country_code);
-
-        if ($search = $this->request->getParam('search')) {
-            $code = $this->locale::fields_CODE;
-            $country_code = $this->locale::fields_COUNTRY_CODE;
-            $this->locale->where("CONCAT(main_table.{$code},country_name,main_table.{$country_code})", "%{$search}%", 'LIKE');
-        }
-
-        $this->locale->where('lln.' . Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->joinModel(
+        
+        // 先执行joinModel，然后再使用where条件引用join的表
+        $this->locale->joinModel(
                 \Weline\I18n\Model\Countries::class,
                 'c',
                 'main_table.' . $this->locale::fields_COUNTRY_CODE . '=c.' . \Weline\I18n\Model\Countries::fields_CODE,
@@ -71,8 +66,19 @@ class Locales extends BaseController
                 'main_table.' . $this->locale::fields_CODE . '=lln.' . Name::fields_LOCALE_CODE,
                 'left',
                 'lln.' . Name::fields_DISPLAY_NAME . ' as locale_name'
-            )
-            ->where('c.' . \Weline\I18n\Model\Countries::fields_CODE, $this->request->getParam('country_code'));
+            );
+        
+        // joinModel之后才能使用where条件引用join的表
+        $this->locale->where('lln.' . Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+            ->where('c.' . \Weline\I18n\Model\Countries::fields_CODE, $country_code);
+
+        // 搜索条件（在join之后才能使用country_name）
+        if ($search = $this->request->getParam('search')) {
+            $code = $this->locale::fields_CODE;
+            $country_code_field = $this->locale::fields_COUNTRY_CODE;
+            $this->locale->where("CONCAT(main_table.{$code},cln." . \Weline\I18n\Model\Countries\Locale\Name::fields_DISPLAY_NAME . ",main_table.{$country_code_field})", "%{$search}%", 'LIKE');
+        }
     }
 
     public function getIndex()
@@ -121,9 +127,15 @@ class Locales extends BaseController
         $this->locale->clearQuery();
         foreach ($locales as $key => $locale) {
             unset($locales[$key]);
+            // 提取简码、ISO2和ISO3
+            $localeCodes = Locale::extractLocaleCodes($locale);
+            
             $locales[] = [
                 $this->locale::fields_CODE => $locale,
                 $this->locale::fields_COUNTRY_CODE => $country_code,
+                $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
+                $this->locale::fields_ISO2 => $localeCodes['iso2'],
+                $this->locale::fields_ISO3 => $localeCodes['iso3'],
             ];
             $locales_display[] = [
                 Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
@@ -200,6 +212,15 @@ class Locales extends BaseController
             $this->redirect($this->request->getReferer());
         }
         $flag = $this->i18n->getCountryFlagWithLocal($code, 42);
+        
+        // 如果简码字段为空，自动计算并保存
+        if (!$locale->getData($locale::fields_SHORT_CODE)) {
+            $localeCodes = Locale::extractLocaleCodes($code);
+            $locale->setData($locale::fields_SHORT_CODE, $localeCodes['short_code'])
+                ->setData($locale::fields_ISO2, $localeCodes['iso2'])
+                ->setData($locale::fields_ISO3, $localeCodes['iso3']);
+        }
+        
         $locale->setData($locale::fields_IS_INSTALL, 1)->setData($locale::fields_FLAG, $flag['flag'] ?? '')->save(true);
         $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
@@ -247,9 +268,15 @@ class Locales extends BaseController
             $locales_display = [];
             
             foreach ($locales as $locale) {
+                // 提取简码、ISO2和ISO3
+                $localeCodes = Locale::extractLocaleCodes($locale);
+                
                 $locales_data[] = [
                     $this->locale::fields_CODE => $locale,
                     $this->locale::fields_COUNTRY_CODE => $country_code,
+                    $this->locale::fields_SHORT_CODE => $localeCodes['short_code'],
+                    $this->locale::fields_ISO2 => $localeCodes['iso2'],
+                    $this->locale::fields_ISO3 => $localeCodes['iso3'],
                     $this->locale::fields_IS_INSTALL => 0,
                     $this->locale::fields_IS_ACTIVE => 0,
                     $this->locale::fields_FLAG => ''
@@ -262,21 +289,31 @@ class Locales extends BaseController
                 ];
             }
             
-            $this->locale->beginTransaction();
+            // 使用独立的模型实例，避免影响主查询对象
+            $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
+            $localeNameModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale\Name::class);
+            
+            $localeModel->beginTransaction();
             
             // 插入区域数据
-            $this->locale->reset()->insert($locales_data, $this->locale::fields_CODE)->fetch();
+            $localeModel->reset()->insert($locales_data, $this->locale::fields_CODE)->fetch();
             
             // 插入区域显示名称数据
-            $this->localeName->reset()->insert($locales_display, [
+            $localeNameModel->reset()->insert($locales_display, [
                 $this->localeName::fields_LOCALE_CODE,
                 $this->localeName::fields_DISPLAY_LOCALE_CODE
             ])->fetch();
             
-            $this->locale->commit();
+            $localeModel->commit();
             
         } catch (\Exception $e) {
-            $this->locale->rollBack();
+            // 使用独立的模型实例回滚
+            try {
+                $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
+                $localeModel->rollBack();
+            } catch (\Exception $rollbackException) {
+                // 忽略回滚错误
+            }
             // 静默处理异常，不影响页面显示
             error_log('Auto update locale data failed: ' . $e->getMessage());
         }

@@ -217,6 +217,18 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 已自动安装并激活默认区域：%{1},"Default locale automatically installed and activated: %{1}"
 已自动激活默认区域：%{1},"Default locale automatically activated: %{1}"
 "确保 zh_Hans_CN 安装失败: %{1}","Failed to ensure zh_Hans_CN installation: %{1}"
+"已更新 %{1} 个区域的简码、ISO2、ISO3字段","已更新 %{1} 个区域的简码、ISO2、ISO3字段"
+检测到没有国家数据，开始安装默认国家...,检测到没有国家数据，开始安装默认国家...
+默认国家数据安装完成,默认国家数据安装完成
+"安装国家数据失败: %{1}","安装国家数据失败: %{1}"
+检测到没有区域数据，开始安装默认区域...,检测到没有区域数据，开始安装默认区域...
+默认区域数据安装完成,默认区域数据安装完成
+已安装默认区域：zh_Hans_CN,已安装默认区域：zh_Hans_CN
+"安装区域数据失败: %{1}","安装区域数据失败: %{1}"
+已安装默认国家：%{1},已安装默认国家：%{1}
+已安装并激活默认国家：%{1},已安装并激活默认国家：%{1}
+已激活默认国家：%{1},已激活默认国家：%{1}
+"安装默认国家失败: %{1}","安装默认国家失败: %{1}"
 "没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","No localization data found! <a target=""_blank"" href=""%{url}"">Go to I18n to install and enable</a> Search local language: %{search} or manually refresh the page: <a href=""%{refresh}"">Refresh</a>"
 请设置local标签model属性！,"Please set the model attribute of the local tag!"
 请传输local标签值！,"Please pass the local tag value!"
@@ -278,6 +290,12 @@ Weline_I18n:语言包Locals读取,"Weline_I18n: Language Pack Locals Read"
 Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals Translation Dictionary Read"
 成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
 推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
+切换货币,切换货币
+货币,货币
+货币选项,货币选项
+切换语言,切换语言
+语言,语言
+语言选项,语言选项
 确定恢复该词典么？,"Are you sure you want to restore this dictionary?"
 确认后，翻译部分将恢复至翻译前！,"After confirmation"
 取消,Cancel
@@ -313,6 +331,8 @@ i18n国际化,"i18n Internationalization"
 暂无国家数据,"No country data"
 "请点击""更新全球数据""按钮来更新国家数据。","请点击""更新全球数据""按钮来更新国家数据。"
 "Weline Admin 管理面板","Weline Admin Management Panel"
+测试结果,测试结果
+测试失败,测试失败
 i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
 地区,Region
 词典,Dictionary
@@ -345,6 +365,7 @@ i18n国际化国家列表,"i18n Internationalization Country List"
 地区列表,"Region List"
 排序,Sort
 代码,Code
+简码,简码
 名称,Name
 国家代码,"Country Code"
 国家名称,"Country Name"
@@ -417,6 +438,12 @@ AI驱动,"AI Driven"
 支持.csv格式，文件名必须是locale_code,"Supports .csv format, file name must be locale_code"
 覆盖已存在的翻译,"Overwrite existing translations"
 开始导入,"Start Import"
+加载失败,加载失败
+请求失败,请求失败
+请检查网络连接,请检查网络连接
+请先选择要导出的语言,请先选择要导出的语言
+请选择CSV格式的文件,请选择CSV格式的文件
+请选择要操作的区域,"Please select locales to operate"
 请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
 填写正确！,"Filled correctly!"
 请输入关键词,"Please enter keywords"
@@ -494,7 +521,6 @@ I18n国际化,"I18n Internationalization"
 "确定要卸载%{1} 区域吗？","Are you sure you want to uninstall locale %{1}?"
 卸载,Uninstall
 "确定要停用%{1} 区域吗？","Are you sure you want to deactivate locale %{1}?"
-请选择要操作的区域,"Please select locales to operate"
 "确定要%{1} %{2} 个区域吗？","Are you sure you want to %{1} %{2} locales?"
 无区域数据,"No Locale Data"
 "已激活%{1} 个区域","%{1} locales activated"
