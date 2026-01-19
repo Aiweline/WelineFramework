@@ -40,6 +40,16 @@ class Module extends \Weline\Framework\App\Controller\BackendController
                 $file->write('<?php return ' . w_var_export($modules, true) . ';');
                 $file->close();
             }
+            // 更新注册表
+            try {
+                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+                $registryService->updateAllRegistries(true); // 静默执行
+            } catch (\Exception $e) {
+                // 注册表更新失败不影响模块状态更新，只记录日志
+                Env::log_warning('registry_update.log', __('模块状态变更后注册表更新失败: %{1}', [$e->getMessage()]));
+            }
+            
             return $this->fetchJson(['code' => 200, 'msg' => __('操作成功！'), 'data' => $status]);
         } catch (\Exception $exception) {
             return $this->fetchJson(['code' => 403, 'msg' => $exception->getMessage(), 'data' => $status]);
