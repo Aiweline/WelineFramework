@@ -20,12 +20,10 @@ use Weline\Queue\Observer\QueueCollect;
 
 class Collect implements CommandInterface
 {
-    private Helper $helper;
     private Printing $printing;
 
-    function __construct(Helper $helper, Printing $printing)
+    function __construct(Printing $printing)
     {
-        $this->helper   = $helper;
         $this->printing = $printing;
     }
 
@@ -35,7 +33,8 @@ class Collect implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        $this->helper::collect();
+        // Helper 是静态类，直接使用静态方法，无需通过依赖注入
+        Helper::collect();
         $this->printing->success('队列数据收集完成！', '系统队列');
     }
 
