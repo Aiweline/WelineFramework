@@ -45,7 +45,13 @@
 确认禁用,"Confirm Disable"
 旧的备份码将失效，请输入验证码确认,"Old backup codes will be invalidated, please enter verification code to confirm"
 确认生成,"Confirm Generate"
+提示,Tip
 请输入6位验证码,"Please enter 6-digit verification code"
+确定,确定
+成功,成功
+失败,失败
+操作失败,操作失败
+请重试,请重试
 操作失败，请重试,"Operation failed, please try again"
 新的备份码,"New Backup Codes"
 请妥善保存这些备份码！,"Please save these backup codes properly!"
@@ -102,7 +108,6 @@ TOTP账户,"TOTP Accounts"
 密钥,"Secret Key"
 创建时间,"Create Time"
 算法,Algorithm
-提示,Tip
 这里是后台账户管理页面，您可以查看所有用户的TOTP账户。要添加或管理账户，请使用前端管理界面。,"This is the backend account management page where you can view all users' TOTP accounts. To add or manage accounts, please use the frontend management interface."
 点击进入前端管理,"Click to Enter Frontend Management"
 启用双因素身份验证,"Enable Two-Factor Authentication"
@@ -135,7 +140,10 @@ URI:,URI:
 验证并启用,"Verify and Enable"
 在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：,"In your authenticator app, find the account you just added and enter the displayed 6-digit verification code:"
 确认启用,"Confirm Enable"
+复制成功,复制成功
 密钥已复制到剪贴板,"Secret key copied to clipboard"
+备份码已复制到剪贴板,备份码已复制到剪贴板
+请妥善保存,请妥善保存
 "备份码已复制到剪贴板\n请妥善保存！","Backup codes copied to clipboard\nPlease save them properly!"
 双因素身份验证备份码,"Two-Factor Authentication Backup Codes"
 生成时间：,"Generated Time:"
@@ -143,19 +151,37 @@ URI:,URI:
 每个备份码只能使用一次，请妥善保存！,"Each backup code can only be used once, please save them properly!"
 备份码列表：,"Backup Codes List:"
 请将本文件保存在安全的地方！,"Please save this file in a safe place!"
+下载成功,下载成功
+备份码已下载,备份码已下载
+文件名：,文件名：
 "备份码已下载！\n文件名：","Backup codes downloaded!\nFilename:"
+双因素身份验证已成功启用,双因素身份验证已成功启用
+请确保已保存备份码，然后点击确定返回管理页面。,请确保已保存备份码，然后点击确定返回管理页面。
 "双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。","Two-factor authentication has been successfully enabled!\n\nPlease make sure you have saved the backup codes, then click OK to return to the management page."
 请检查验证码是否正确，注意验证码每30秒会更新。,"Please check if the verification code is correct. Note that the verification code updates every 30 seconds."
+无法访问摄像头,无法访问摄像头
+错误,错误
+无效的二维码格式,无效的二维码格式
+账户添加成功,账户添加成功
+添加失败,添加失败
+账户导入成功,账户导入成功
+导入失败,导入失败
+账户已删除,账户已删除
+删除失败,删除失败
+验证码尚未生成，请稍候...,验证码尚未生成，请稍候...
+复制失败,复制失败
+请手动复制：,请手动复制：
 安装到桌面,"Install to Desktop"
-"请在新打开的页面中点击""安装到桌面""按钮","请在新打开的页面中点击""安装到桌面""按钮"
-应用安装成功！,应用安装成功！
-安装已取消,安装已取消
 每个备份码只能使用一次,每个备份码只能使用一次
 请妥善保存此文件，建议打印或保存到安全位置,请妥善保存此文件，建议打印或保存到安全位置
 如果丢失所有备份码，您将无法登录账户,如果丢失所有备份码，您将无法登录账户
 请妥善保管此文件！,请妥善保管此文件！
 备份码,备份码
 "备份码文件已下载\n请妥善保存！","备份码文件已下载\n请妥善保存！"
+"请在新打开的页面中点击""安装到桌面""按钮","请在新打开的页面中点击""安装到桌面""按钮"
+应用安装成功,应用安装成功
+安装已取消,安装已取消
+应用安装成功！,应用安装成功！
 2FAS（JSON）,"2FAS (JSON)"
 "Aegis Authenticator（加密JSON）","Aegis Authenticator (Encrypted JSON)"
 URI列表（纯文本）,"URI List (Plain Text)"
