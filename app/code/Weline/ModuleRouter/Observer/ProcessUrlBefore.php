@@ -24,6 +24,20 @@ use Weline\ModuleRouter\Config\ModuleRouterReader;
 class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
 {
     private CacheInterface $moduleRouterCache;
+    
+    /**
+     * 静态缓存模块路由列表，避免每次事件分发都重新读取
+     * 
+     * @var array|null
+     */
+    private static ?array $cachedModuleRouters = null;
+    
+    /**
+     * 静态缓存ModuleRouterCache实例，避免重复创建
+     * 
+     * @var CacheInterface|null
+     */
+    private static ?CacheInterface $staticCacheInstance = null;
 
     public function __construct(
         ModuleRouterCache $moduleRouterCache,
@@ -46,15 +60,57 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
             $rule = $rule->getData();
         }
         $type = $data->getData('type');
-        /**@var ModuleRouterReader $moduleRoutersReader */
-        $moduleRoutersReader = ObjectManager::getInstance(ModuleRouterReader::class);
-        $moduleRouters = $moduleRoutersReader->read();
+        
+        // 使用静态缓存，避免每次事件分发都重新读取模块路由
+        if (self::$cachedModuleRouters === null) {
+            
+            // 优化：直接从缓存读取，避免实例化ModuleRouterReader
+            if (self::$staticCacheInstance === null) {
+                self::$staticCacheInstance = $this->moduleRouterCache;
+            }
+            $cache_key = 'routers_rules_cache';
+            $router_rules = self::$staticCacheInstance->get($cache_key);
+            if ($router_rules !== false && is_array($router_rules) && !empty($router_rules)) {
+                // 缓存命中，直接使用
+                self::$cachedModuleRouters = $router_rules;
+            } else {
+                // 缓存未命中，回退到使用ModuleRouterReader
+                /**@var ModuleRouterReader $moduleRoutersReader */
+                $moduleRoutersReader = ObjectManager::getInstance(ModuleRouterReader::class);
+                self::$cachedModuleRouters = $moduleRoutersReader->read();
+            }
+        } else {
+            
+        }
+        $moduleRouters = self::$cachedModuleRouters;
+        $moduleCount = 0;
         foreach ($moduleRouters as $module => $moduleRouter) {
-            /**@var RouterInterface $moduleRouter */
-            $moduleRouter = ObjectManager::getInstance($moduleRouter['class']);
-            $moduleRouter::process($path, $rule);
+            $routerClass = $moduleRouter['class'];
+            
+            // RouterInterface::process() 是静态方法，直接使用类名调用，无需实例化
+            // 这样可以支持静态类（如 Weline\BackendThemeUpzet\Controller\Router）
+            if (class_exists($routerClass) && is_subclass_of($routerClass, RouterInterface::class)) {
+                $routerClass::process($path, $rule);
+                $moduleCount++;
+            }
+            
+            // 优化：如果路由已匹配，提前退出循环
+            if (!empty($rule['module'])) {
+                break;
+            }
         }
         $data->setData('path', $path);
         $data->setData('rule', $rule);
+    }
+    
+    /**
+     * 清除静态缓存（用于开发模式或缓存清理时）
+     * 
+     * @return void
+     */
+    public static function clearCache(): void
+    {
+        self::$cachedModuleRouters = null;
+        self::$staticCacheInstance = null;
     }
 }
