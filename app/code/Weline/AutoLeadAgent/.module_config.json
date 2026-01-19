@@ -1,0 +1,26 @@
+{
+    "module_name": "Weline_AutoLeadAgent",
+    "version": "1.0.0",
+    "description": "",
+    "router": "",
+    "controllers": [],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": false,
+    "created_at": "2026-01-09 10:31:00",
+    "updated_at": "2026-01-09 10:31:44",
+    "i18n": [
+        {
+            "extracted_at": "2026-01-09 10:31:44",
+            "languages": [
+                "en_US"
+            ],
+            "total_strings": 715,
+            "translated_strings": 0,
+            "untranslated_strings": 715
+        }
+    ]
+}

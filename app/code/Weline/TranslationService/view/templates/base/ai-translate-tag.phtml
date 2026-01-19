@@ -1,0 +1,339 @@
+<?php
+/**
+ * AI翻译标签组件
+ * 
+ * 使用方法：
+ * <w:ai-translate target="input-id" target-language="zh" />
+ * 
+ * 参数：
+ * - target: 目标输入框的ID或选择器（必填）
+ * - target-language: 目标语言代码（可选，默认使用当前语言）
+ * - source-language: 源语言代码（可选，默认auto）
+ * - provider-code: 指定翻译渠道（可选）
+ * - position: 按钮位置（可选，top/bottom，默认top）
+ * - button-text: 按钮文本（可选，默认"AI翻译"）
+ * - button-class: 按钮CSS类（可选）
+ */
+$target = $this->getData('target') ?: '';
+$targetLanguage = $this->getData('target_language') ?: '';
+$sourceLanguage = $this->getData('source_language') ?: 'auto';
+$providerCode = $this->getData('provider_code') ?: '';
+$position = $this->getData('position') ?: 'top';
+$buttonText = $this->getData('button_text') ?: __('AI翻译');
+$buttonClass = $this->getData('button_class') ?: 'ai-translate-btn';
+
+if (empty($target)) {
+    return;
+}
+
+// 生成唯一ID
+$uniqueId = 'ai-translate-' . uniqid();
+?>
+<div class="ai-translate-wrapper" data-target="<?= htmlspecialchars($target) ?>" data-unique-id="<?= $uniqueId ?>" data-position="<?= htmlspecialchars($position) ?>">
+    <button type="button" 
+            class="<?= htmlspecialchars($buttonClass) ?>" 
+            data-target-language="<?= htmlspecialchars($targetLanguage) ?>"
+            data-source-language="<?= htmlspecialchars($sourceLanguage) ?>"
+            data-provider-code="<?= htmlspecialchars($providerCode) ?>"
+            data-unique-id="<?= $uniqueId ?>">
+        <span class="ai-translate-icon">🤖</span>
+        <span class="ai-translate-text"><?= htmlspecialchars($buttonText) ?></span>
+        <span class="ai-translate-loading" style="display: none;">⏳</span>
+    </button>
+</div>
+
+<style>
+.ai-translate-wrapper {
+    position: relative;
+    display: inline-block;
+    margin: 5px 0;
+}
+
+.ai-translate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.ai-translate-btn:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transform: translateY(-1px);
+}
+
+.ai-translate-btn:active {
+    transform: translateY(0);
+}
+
+.ai-translate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ai-translate-icon {
+    font-size: 14px;
+}
+
+.ai-translate-loading {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 按钮位置样式 */
+.ai-translate-wrapper[data-position="top"] {
+    margin-bottom: 5px;
+}
+
+.ai-translate-wrapper[data-position="bottom"] {
+    margin-top: 5px;
+}
+</style>
+
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<script>
+(function() {
+    'use strict';
+    
+    // 确保只加载一次
+    if (window.AITranslateTagInitialized) {
+        return;
+    }
+    window.AITranslateTagInitialized = true;
+    
+    // 翻译API地址
+    const translateApiUrl = '<?= $this->getUrl("translation-service/api/translate") ?>';
+    
+    /**
+     * 初始化所有AI翻译按钮
+     */
+    function initAITranslateButtons() {
+        const wrappers = document.querySelectorAll('.ai-translate-wrapper');
+        
+        wrappers.forEach(function(wrapper) {
+            const button = wrapper.querySelector('.ai-translate-btn');
+            if (!button) return;
+            
+            const targetSelector = wrapper.getAttribute('data-target');
+            const uniqueId = wrapper.getAttribute('data-unique-id');
+            
+            // 检查是否已初始化
+            if (button.hasAttribute('data-initialized')) {
+                return;
+            }
+            button.setAttribute('data-initialized', 'true');
+            
+            // 绑定点击事件
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                translateInput(targetSelector, button, uniqueId);
+            });
+        });
+    }
+    
+    /**
+     * 翻译输入框内容
+     */
+    function translateInput(targetSelector, button, uniqueId) {
+        // 查找目标输入框
+        let targetInput = null;
+        
+        // 尝试通过ID查找
+        if (targetSelector.startsWith('#')) {
+            targetInput = document.querySelector(targetSelector);
+        } else if (!targetSelector.includes(' ')) {
+            // 可能是ID（不带#）
+            targetInput = document.getElementById(targetSelector);
+        }
+        
+        // 如果还没找到，尝试作为选择器
+        if (!targetInput) {
+            targetInput = document.querySelector(targetSelector);
+        }
+        
+        // 如果还是找不到，尝试通过name查找
+        if (!targetInput) {
+            targetInput = document.querySelector(`[name="${targetSelector}"]`);
+        }
+        
+        if (!targetInput) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('未找到目标输入框：%{1}', ['']) ?>'.replace('%{1}', targetSelector),
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('未找到目标输入框：%{1}', ['']) ?>'.replace('%{1}', targetSelector));
+            }
+            return;
+        }
+        
+        // 获取输入框内容
+        const text = targetInput.value || targetInput.textContent || '';
+        
+        if (!text.trim()) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('输入框内容为空，无法翻译') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('输入框内容为空，无法翻译') ?>');
+            }
+            return;
+        }
+        
+        // 显示加载状态
+        const loadingEl = button.querySelector('.ai-translate-loading');
+        const textEl = button.querySelector('.ai-translate-text');
+        const iconEl = button.querySelector('.ai-translate-icon');
+        
+        if (loadingEl) loadingEl.style.display = 'inline';
+        if (iconEl) iconEl.style.display = 'none';
+        if (textEl) textEl.textContent = '<?= __('翻译中...") ?>';
+        button.disabled = true;
+        
+        // 准备请求数据
+        const formData = new FormData();
+        formData.append('text', text);
+        
+        const targetLanguage = button.getAttribute('data-target-language');
+        if (targetLanguage) {
+            formData.append('target_language', targetLanguage);
+        }
+        
+        const sourceLanguage = button.getAttribute('data-source-language');
+        if (sourceLanguage) {
+            formData.append('source_language', sourceLanguage);
+        }
+        
+        const providerCode = button.getAttribute('data-provider-code');
+        if (providerCode) {
+            formData.append('provider_code', providerCode);
+        }
+        
+        // 发送翻译请求
+        fetch(translateApiUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // 恢复按钮状态
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (iconEl) iconEl.style.display = 'inline';
+            if (textEl) textEl.textContent = '<?= htmlspecialchars($buttonText) ?>';
+            button.disabled = false;
+            
+            if (data.success && data.data && data.data.translated_text) {
+                // 填充翻译结果
+                if (targetInput.tagName === 'TEXTAREA' || targetInput.tagName === 'INPUT') {
+                    targetInput.value = data.data.translated_text;
+                    // 触发change事件
+                    targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                } else {
+                    targetInput.textContent = data.data.translated_text;
+                }
+                
+                // 显示成功提示
+                showMessage('<?= __('翻译成功") ?>', 'success');
+            } else {
+                showMessage(data.message || '<?= __('翻译失败") ?>', 'error');
+            }
+        })
+        .catch(error => {
+            // 恢复按钮状态
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (iconEl) iconEl.style.display = 'inline';
+            if (textEl) textEl.textContent = '<?= htmlspecialchars($buttonText) ?>';
+            button.disabled = false;
+            
+            console.error('Translation error:', error);
+            showMessage('<?= __('翻译请求失败，请稍后重试") ?>', 'error');
+        });
+    }
+    
+    /**
+     * 显示消息提示
+     */
+    function showMessage(message, type) {
+        // 尝试使用框架的消息系统
+        if (window.showMessage && typeof window.showMessage === 'function') {
+            window.showMessage(message, type);
+            return;
+        }
+        
+        // 简单的提示
+        const messageEl = document.createElement('div');
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: ${type === 'success' ? '#4caf50' : '#f44336'};
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        `;
+        messageEl.textContent = message;
+        
+        document.body.appendChild(messageEl);
+        
+        setTimeout(() => {
+            messageEl.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => {
+                document.body.removeChild(messageEl);
+            }, 300);
+        }, 3000);
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAITranslateButtons);
+    } else {
+        initAITranslateButtons();
+    }
+    
+    // 监听动态添加的元素
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length) {
+                initAITranslateButtons();
+            }
+        });
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
+</script>

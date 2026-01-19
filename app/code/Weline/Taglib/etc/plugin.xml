@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+    <plugin name="Weline_Taglib::setup_upgrade_execute_plugin" class="Weline\Framework\Setup\Console\Setup\Upgrade">
+        <interceptor name="Weline_Taglib::setup_upgrade_execute_collect_taglib"
+                     instance="Weline\Taglib\Plugin\SetupUpgradeBeforeExecutePlugin"
+                     disabled="false"
+                     sort="30"/>
+    </plugin>
+</config>
