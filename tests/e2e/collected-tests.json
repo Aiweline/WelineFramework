@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-01-13T11:04:57.829Z",
+  "total_modules": 1,
+  "total_tests": 1,
+  "modules": {
+    "Weline_Theme": {
+      "module": "Weline_Theme",
+      "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme",
+      "test_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme//test/e2e",
+      "test_files": [
+        "app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js"
+      ],
+      "count": 1
+    }
+  },
+  "all_test_files": [
+    "app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js"
+  ]
+}
