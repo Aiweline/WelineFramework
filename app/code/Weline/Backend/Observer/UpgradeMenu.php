@@ -127,7 +127,7 @@ class UpgradeMenu implements ObserverInterface
                     $menu[Menu::fields_LEVEL] = 1;
                     $menu[Menu::fields_ACTION] = trim($menu[Menu::fields_ACTION], '/');
                     # 如果动作路径有*号，替换为路由所指模块的路由
-                    $menu = $this->replaceModuleAction($menu, $modules_info, $module);
+                    $menu = $this->replaceModuleAction($menu, $modules_info);
                     # 收集文件中的菜单 source
                     $file_menu_sources[] = $menu[Menu::fields_SOURCE];
                     # 先查询一遍
@@ -247,6 +247,7 @@ class UpgradeMenu implements ObserverInterface
         // 删除权限表中不在收集列表中的菜单权限（type='menus'）
         /**@var \Weline\Acl\Model\Acl $alcModel */
         $alcModel = ObjectManager::getInstance(Acl::class);
+        
         if (!empty($collected_menu_sources)) {
             // 删除所有不在收集列表中的菜单权限
             $alcModel->reset()
