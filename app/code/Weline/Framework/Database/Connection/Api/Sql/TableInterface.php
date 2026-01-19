@@ -22,6 +22,8 @@ interface TableInterface
 
     public const column_type_VARCHAR = 'varchar';
 
+    public const column_type_TINYINT = 'tinyint';
+
     public const column_type_SMALLINT = 'smallint';
 
     public const column_type_INTEGER = 'integer';

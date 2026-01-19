@@ -394,6 +394,17 @@ class Rebuild extends CommandAbstract
         ], '__construct');
 
         try {
+            // 跳过静态类、抽象类、trait 和接口
+            if (class_exists($modelClass)) {
+                $reflection = new \ReflectionClass($modelClass);
+                if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                    throw new \Exception(__('模型 %{1} 是抽象类、trait 或接口，无法重建', [$modelClass]));
+                }
+                if (ObjectManager::isStaticClass($modelClass)) {
+                    throw new \Exception(__('模型 %{1} 是静态类，无法重建', [$modelClass]));
+                }
+            }
+            
             // 创建模型实例
             $modelInstance = ObjectManager::getInstance($modelClass);
             

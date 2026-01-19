@@ -52,9 +52,12 @@ class ModelManager
         foreach ($model_files_data as $key => $model_class) {
             $this->printing->note($model_class, __('Model升级'));
             if (class_exists($model_class)) {
-                // 跳过抽象类
+                // 跳过抽象类、trait、接口和静态类
                 $reflection = new \ReflectionClass($model_class);
-                if ($reflection->isAbstract()) {
+                if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                    continue;
+                }
+                if (ObjectManager::isStaticClass($model_class)) {
                     continue;
                 }
                 $model = ObjectManager::getInstance($model_class);

@@ -119,12 +119,9 @@ class Setup
     public function tableExist(string $table): bool
     {
         $table = $this->getTable($table);
-        try {
-            $this->query("DESC {$table}");
-            return true;
-        } catch (PDOException $exception) {
-            return false;
-        }
+        // 使用连接器的 tableExist 方法，它会根据数据库类型使用正确的语法
+        // MySQL 使用 DESC，PostgreSQL 使用 information_schema，SQLite 使用 sqlite_master
+        return $this->getConnector()->tableExist($table);
     }
 
     /**

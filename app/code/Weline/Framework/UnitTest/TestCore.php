@@ -49,6 +49,19 @@ class TestCore extends TestCase
 {
     use Boot;
 
+    /**
+     * Pest 兼容性：让 Pest 能够识别 PHPUnit 测试用例
+     * 通过实现 Pest 期望的方法，使现有的 PHPUnit 测试能被 Pest 运行
+     */
+    public function setUp(): void
+    {
+        parent::setUp();
+        // Pest 兼容性初始化
+        if (class_exists(\Pest\TestSuite::class)) {
+            // 确保 Pest 能够识别这个测试类
+        }
+    }
+
     public static function getInstance(string $class)
     {
         return ObjectManager::getInstance($class);

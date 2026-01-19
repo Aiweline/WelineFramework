@@ -212,9 +212,92 @@ class ConfigProvider extends DataObject implements ConfigProviderInterface
 
     public function getOptions(): array
     {
-        return $this->getData('options') ?? [
-            \PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$this->getCharset()} COLLATE {$this->getCollate()}"
+        $defaultOptions = [
+            // 持久连接：默认启用，除非主动销毁否则保持连接
+            \PDO::ATTR_PERSISTENT => $this->isPersistent(),
+            
+            // 错误模式：使用异常模式，提高错误处理性能
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            
+            // 默认获取模式：使用关联数组，避免数字索引和对象转换开销
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+            
+            // 自动提交：默认启用，提高事务性能
+            \PDO::ATTR_AUTOCOMMIT => true,
         ];
+        
+        // MySQL 特定优化选项
+        if ($this->getDbType() === 'mysql') {
+            $defaultOptions[\PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$this->getCharset()} COLLATE {$this->getCollate()}";
+            
+            // 禁用预处理语句模拟：使用原生预处理，提高性能和安全性
+            // 注意：某些复杂查询可能需要模拟，可通过配置覆盖
+            $defaultOptions[\PDO::ATTR_EMULATE_PREPARES] = $this->getData('emulate_prepares') ?? false;
+            
+            // 使用缓冲查询：默认启用，提高查询性能
+            $defaultOptions[\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = $this->getData('use_buffered_query') ?? true;
+            
+            // MySQL 压缩：如果网络较慢可以启用（默认禁用，因为会增加CPU开销）
+            if ($this->getData('compress') ?? false) {
+                $defaultOptions[\PDO::MYSQL_ATTR_COMPRESS] = true;
+            }
+        }
+        
+        // PostgreSQL 特定优化选项
+        if ($this->getDbType() === 'pgsql') {
+            // PostgreSQL 预处理语句默认使用原生模式，无需额外配置
+            // 可以设置连接超时（秒）
+            if ($timeout = $this->getData('timeout')) {
+                $defaultOptions[\PDO::ATTR_TIMEOUT] = (int)$timeout;
+            }
+        }
+        
+        // SQLite 特定优化选项
+        if ($this->getDbType() === 'sqlite') {
+            // SQLite 预处理语句默认使用原生模式
+            // 可以设置 busy_timeout（毫秒）
+            if ($busyTimeout = $this->getData('busy_timeout')) {
+                // SQLite 的 busy_timeout 需要通过 PRAGMA 设置，在连接后执行
+            }
+        }
+        
+        // 连接超时（通用，单位：秒）
+        if ($timeout = $this->getData('timeout')) {
+            $defaultOptions[\PDO::ATTR_TIMEOUT] = (int)$timeout;
+        }
+        
+        // 合并用户自定义选项（用户选项优先级更高）
+        $userOptions = $this->getData('options') ?? [];
+        return array_merge($defaultOptions, $userOptions);
+    }
+
+    /**
+     * @DESC          # 是否启用持久连接
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2025/1/20
+     * 参数区：
+     * @return bool
+     */
+    public function isPersistent(): bool
+    {
+        return (bool)($this->getData('persistent') ?? true);  // 默认启用持久连接
+    }
+
+    /**
+     * @DESC          # 设置是否启用持久连接
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2025/1/20
+     * 参数区：
+     * @param bool $persistent
+     * @return ConfigProviderInterface
+     */
+    public function setPersistent(bool $persistent): ConfigProviderInterface
+    {
+        return $this->setData('persistent', $persistent);
     }
 
     /**
@@ -246,5 +329,36 @@ class ConfigProvider extends DataObject implements ConfigProviderInterface
     public function setCollate(string $collate = 'utf8mb4_general_ci'): ConfigProviderInterface
     {
         return $this->setData('collate', $collate);
+    }
+
+    /**
+     * @DESC          # 获取连接池大小
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     * @return int
+     */
+    public function getPoolSize(): int
+    {
+        return (int)($this->getData('pool_size') ?? 10);
+    }
+
+    /**
+     * @DESC          # 设置连接池大小
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     *
+     * @param int $poolSize
+     *
+     * @return ConfigProviderInterface
+     */
+    public function setPoolSize(int $poolSize): ConfigProviderInterface
+    {
+        return $this->setData('pool_size', $poolSize);
     }
 }

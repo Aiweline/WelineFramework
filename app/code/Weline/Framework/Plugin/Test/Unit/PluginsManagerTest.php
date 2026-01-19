@@ -31,6 +31,8 @@ class PluginsManagerTest extends TestCore
 //        p($this->pluginsManager->getPluginInstanceList('Aiweline\Index\Controller\Index'));
 //        p($this->pluginsManager->generatorInterceptor('Aiweline\Index\Controller\Index'));
 //        p($this->pluginsManager->generatorInterceptor());
-        self::assertIsObject($this->pluginsManager->generatorInterceptor(), 'Framework_Plugin::测试生成插件器。');
+        // generatorInterceptor 现在返回 void，测试方法是否正常执行（不抛出异常）
+        $this->pluginsManager->generatorInterceptor();
+        self::assertTrue(true, 'Framework_Plugin::测试生成插件器。');
     }
 }

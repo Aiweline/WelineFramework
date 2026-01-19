@@ -38,8 +38,16 @@ class Disable extends CommandAbstract
             /**@var Data $helper */
             $helper = ObjectManager::getInstance(Data::class);
             $helper->updateModules($module_list);
-            # 请继续执行 php bin/w module:upgrade
-            $this->printer->printing('请继续执行 php bin/w module:upgrade', $this->printer::WARNING);
+            
+            // 更新注册表
+            try {
+                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+                $registryService->updateAllRegistries(true); // 静默执行
+                $this->printer->success(__('注册表已更新完成。'));
+            } catch (\Exception $e) {
+                $this->printer->warning(__('注册表更新失败：%{1}，请手动执行 php bin/w setup:upgrade', [$e->getMessage()]));
+            }
         } else {
             $this->printer->printList([$command => ['禁用提示：' => $this->printer->colorize('请输入要禁用的模块', $this->printer::ERROR)]]);
         }

@@ -12,22 +12,189 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
 {
     public function compile(Query $query, string $action): string
     {
+        // 🔧 在调用父类之前，确保有 JOIN 时主表有别名
+        if (!empty($query->joins) && empty($query->table_alias)) {
+            $query->table_alias = 'main_table';
+        }
+        
         $sql = parent::compile($query, $action);
+        
         // 如果 SQL 为空，不需要转换和准备语句
         if (empty($sql)) {
             return $query->sql;
         }
+        
+        // 转换 SQL 中可能遗留的反引号（处理其他可能遗漏的部分，如字段列表等）
         $converted = $this->convertBackticks($sql);
+        
+        // 🔧 修复 PostgreSQL 中表别名引用问题
+        // PostgreSQL 支持不带 AS 的别名（如：FROM table alias），但别名需要用双引号引用以确保大小写敏感
+        // 匹配：FROM table AS alias 或 FROM table alias 或 FROM "table" AS alias 或 FROM "table" alias
+        // 使用 (?:AS\s+)? 来匹配可选的 AS 关键字
+        $beforeAliasFix = $converted;
+        $converted = preg_replace_callback(
+            '/FROM\s+([^`"\s]+(?:\.[^`"\s]+)?|"[^"]+"|`[^`]+`)\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*|"[^"]+")(?=\s+(?:LEFT|RIGHT|INNER|OUTER)?\s*JOIN|\s+WHERE|\s*$)/i',
+            function ($matches) {
+                $table = $matches[1];
+                $alias = $matches[2];
+                
+                // 移除表名上的引号（如果存在），然后重新引用
+                $table = trim($table, '`"');
+                if (str_contains($table, '.')) {
+                    $parts = explode('.', $table);
+                    $table = '"' . implode('"."', $parts) . '"';
+                } else {
+                    $table = '"' . $table . '"';
+                }
+                
+                // 移除别名上的引号（如果存在），然后重新引用
+                $alias = trim($alias, '"');
+                
+                // 别名总是需要引用（确保大小写敏感）
+                // PostgreSQL 支持不带 AS 的别名，但为了清晰性和兼容性，我们统一添加 AS
+                return "FROM {$table} AS \"{$alias}\"";
+            },
+            $converted
+        );
+        
+        // 🔧 如果 FROM 子句没有别名，但 JOIN 条件中使用了 main_table，需要添加别名
+        // 检查是否有 JOIN 且 JOIN 条件中使用了 main_table
+        $hasMainTableInJoin = !empty($query->joins) && preg_match('/\bmain_table\b/i', $converted);
+        $hasFromAlias = preg_match('/FROM\s+[^`"\s]+(?:\.[^`"\s]+)?|"[^"]+"|`[^`]+`\s+(?:AS\s+)?[a-zA-Z_][a-zA-Z0-9_]*/i', $converted);
+        
+        if ($hasMainTableInJoin && !$hasFromAlias) {
+            // FROM 子句没有别名，需要添加
+            $beforeAddAlias = $converted;
+            $converted = preg_replace_callback(
+                '/FROM\s+([^`"\s]+(?:\.[^`"\s]+)?|"[^"]+"|`[^`]+`)(?=\s+(?:LEFT|RIGHT|INNER|OUTER)?\s*JOIN|\s+WHERE|\s*$)/i',
+                function ($matches) use ($query) {
+                    $table = $matches[1];
+                    
+                    // 移除表名上的引号（如果存在），然后重新引用
+                    $table = trim($table, '`"');
+                    
+                    // 如果包含点号，说明是 schema.table 格式
+                    if (str_contains($table, '.')) {
+                        $parts = explode('.', $table);
+                        $table = '"' . implode('"."', $parts) . '"';
+                    } else {
+                        $table = '"' . $table . '"';
+                    }
+                    
+                    // 使用查询对象的 table_alias（默认为 main_table）
+                    $alias = $query->table_alias ?: 'main_table';
+                    
+                    // 添加别名
+                    return "FROM {$table} AS \"{$alias}\"";
+                },
+                $converted
+            );
+        }
+        
+        // 🔧 修复：如果主表别名不是 main_table，但 SELECT 或 ORDER BY 中使用了 main_table，需要替换
+        $mainTableAlias = $query->table_alias ?: 'main_table';
+        if ($mainTableAlias !== 'main_table' && preg_match('/\bmain_table\b/i', $converted)) {
+            $formatter = $query->getIdentifierFormatter();
+            $quotedActualAlias = $formatter->quote($mainTableAlias);
+            
+            // 替换 SELECT 子句中的 main_table.* 或 main_table.field
+            $converted = preg_replace_callback(
+                '/(SELECT\s+)([^F]+?)(\s+FROM)/i',
+                function ($matches) use ($quotedActualAlias) {
+                    $selectPart = $matches[2];
+                    // 替换 main_table.* 为 actualAlias.*
+                    $selectPart = preg_replace('/([`"]?)main_table\1\.\*/i', $quotedActualAlias . '.*', $selectPart);
+                    // 替换 "main_table".field 或 `main_table`.field 或 main_table.field
+                    $selectPart = preg_replace('/([`"]?)main_table\1(\.)/i', $quotedActualAlias . '$2', $selectPart);
+                    return $matches[1] . $selectPart . $matches[3];
+                },
+                $converted
+            );
+            
+            // 替换 ORDER BY 子句中的 main_table.field
+            // 直接在整个 SQL 中替换 ORDER BY 后面的 main_table（更简单可靠）
+            if (preg_match('/ORDER\s+BY/i', $converted)) {
+                // 找到 ORDER BY 的位置，然后替换其后面的 main_table
+                $converted = preg_replace_callback(
+                    '/(ORDER\s+BY\s+)(.*?)(?=\s+(?:LIMIT|OFFSET|$))/is',
+                    function ($matches) use ($quotedActualAlias) {
+                        $orderPart = $matches[2];
+                        // 替换 "main_table".field 或 `main_table`.field 或 main_table.field
+                        $orderPart = preg_replace('/([`"]?)main_table\1(\.)/i', $quotedActualAlias . '$2', $orderPart);
+                        return $matches[1] . $orderPart;
+                    },
+                    $converted
+                );
+            }
+        }
+        
         if ($converted !== $sql) {
             $query->sql = $converted;
-            // 确保转换后的 SQL 不为空才准备语句
+            // 重新准备语句（因为 SQL 已更改）
             if (!empty($converted)) {
-                $query->PDOStatement = $query->getLink()->prepare($converted);
+                try {
+                    $query->PDOStatement = $query->getLink()->prepare($converted);
+                } catch (\Throwable $e) {
+                    $query->PDOStatement = null;
+                }
             } else {
                 $query->PDOStatement = null;
             }
         }
         return $query->sql;
+    }
+    
+
+    /**
+     * 重写 buildJoins 方法，修复 JOIN 条件中 main_table 引用问题
+     * 当主表别名不是 main_table 时，需要将 JOIN 条件中的 main_table 替换为实际的主表别名
+     */
+    protected function buildJoins(Query $query): string
+    {
+        $formatter = $query->getIdentifierFormatter();
+        $joins = '';
+        $mainTableAlias = $query->table_alias ?: 'main_table';
+        
+        foreach ($query->joins as $join) {
+            $table = $join[0];
+            $condition = $join[1];
+            $type = $join[2];
+            
+            // 使用格式化器处理表名中的标识符（移除反引号/双引号，使用正确的格式化器）
+            $table = $this->formatTableNameInJoin($table, $formatter);
+            
+            // 使用格式化器处理条件中的标识符
+            $condition = $this->formatConditionInJoin($condition, $formatter);
+            
+            // 🔧 修复：如果主表别名不是 main_table，但 JOIN 条件中使用了 main_table，需要替换
+            if ($mainTableAlias !== 'main_table' && preg_match('/\bmain_table\b/i', $condition)) {
+                // 替换 JOIN 条件中的 main_table 为实际的主表别名
+                // 处理三种情况：
+                // 1. "main_table".field 或 `main_table`.field
+                // 2. main_table.field（不带引号）
+                // 3. "main_table" 或 `main_table`（单独出现，但这种情况较少）
+                $condition = preg_replace_callback(
+                    '/([`"]?)main_table\1(\.)/i',
+                    function ($matches) use ($formatter, $mainTableAlias) {
+                        // 无论原条件是否使用引号，都使用格式化器引用别名（确保一致性）
+                        return $formatter->quote($mainTableAlias) . $matches[2];
+                    },
+                    $condition
+                );
+                
+                // 处理单独出现的 main_table（不带点号的情况，虽然较少见）
+                $condition = preg_replace_callback(
+                    '/([^`"a-zA-Z0-9_])([`"]?)main_table\2([^`"a-zA-Z0-9_])/i',
+                    function ($matches) use ($formatter, $mainTableAlias) {
+                        return $matches[1] . $formatter->quote($mainTableAlias) . $matches[3];
+                    },
+                    $condition
+                );
+            }
+            
+            $joins .= " {$type} JOIN {$table} ON {$condition} ";
+        }
+        return $joins;
     }
 
     protected function buildUpdate(Query $query, string $wheres): string
@@ -70,15 +237,22 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
                         $query->bound_values[$identity_field_column_key] = (string)$line[$query->identity_field];
                         $identity_field_column_value = ':' . md5("update_{$column}_value_{$update_key}");
                         $value = $line[$column];
-                        $query->bound_values[$identity_field_column_value] = (string)$value;
-                        
-                        // PostgreSQL 类型转换：如果列名看起来像整数列，添加 CAST
-                        // 检测列名模式：以 _id 结尾，或者是 id，或者是常见的整数列名
-                        $castType = $this->getIntegerCastType($column);
-                        if ($castType) {
-                            // 在 PostgreSQL 中，使用 CAST 将参数转换为相应的整数类型
-                            $updates .= sprintf('WHEN %s THEN CAST(%s AS %s) ', $identity_field_column_key, $identity_field_column_value, $castType);
+                        // 🔧 PostgreSQL CASE 表达式类型处理：
+                        // PostgreSQL 在 CASE 表达式中要求所有分支返回相同类型
+                        // 如果值是整数或数字字符串，需要在 CASE 表达式中使用 CAST 显式转换
+                        // 因为 PostgreSQL 无法自动将字符串转换为 smallint/integer
+                        if (is_bool($value)) {
+                            $query->bound_values[$identity_field_column_value] = $value ? '1' : '0';
+                            // 布尔值转换为字符串后，在 CASE 表达式中使用 CAST 转换为 INTEGER
+                            $updates .= sprintf('WHEN %s THEN CAST(%s AS INTEGER) ', $identity_field_column_key, $identity_field_column_value);
+                        } elseif (is_int($value) || (is_string($value) && is_numeric($value) && !str_contains($value, '.'))) {
+                            // 整数或数字字符串（不包含小数点），保持原样绑定，但在 CASE 表达式中使用 CAST
+                            // 使用 INTEGER 类型，PostgreSQL 可以隐式转换为 smallint
+                            $query->bound_values[$identity_field_column_value] = $value;
+                            $updates .= sprintf('WHEN %s THEN CAST(%s AS INTEGER) ', $identity_field_column_key, $identity_field_column_value);
                         } else {
+                            // 其他类型（字符串、浮点数等），转换为字符串
+                            $query->bound_values[$identity_field_column_value] = (string)$value;
                             $updates .= sprintf('WHEN %s THEN %s ', $identity_field_column_key, $identity_field_column_value);
                         }
                     }
@@ -116,8 +290,23 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
             throw new \Exception(__('无法解析更新数据！多记录更新数据：%{1}，单记录更新数据：%{2}', [var_export($query->updates, true), var_export($query->single_updates, true)]));
         }
         $updates = rtrim($updates, ',');
-
-        return "UPDATE {$query->table} SET {$updates} {$wheres} {$query->additional_sql} ";
+        
+        $sql = "UPDATE {$query->table} SET {$updates} {$wheres} {$query->additional_sql} ";
+        
+        // 🔧 为 PostgreSQL 的 UPDATE 语句添加 RETURNING 子句，以便获取受影响的行数
+        // 这样可以避免 fetchAll() 返回空数组导致 (bool)[] 为 false 的问题
+        if ($query->identity_field) {
+            $identity_field_quoted = $formatter->quote($query->identity_field);
+            // 检查 SQL 中是否已经包含 RETURNING 子句
+            if (stripos($sql, 'RETURNING') === false) {
+                // 移除末尾的分号（如果存在）
+                $sql = rtrim(trim($sql), ';');
+                // 添加 RETURNING 子句，返回主键值（用于确认更新成功）
+                $sql .= " RETURNING {$identity_field_quoted}";
+            }
+        }
+        
+        return $sql;
     }
 
     /**
@@ -132,9 +321,14 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
             return $sql;
         }
         
-        // 为 PostgreSQL 的 INSERT 语句添加 RETURNING 子句
-        // 这样可以获取插入的 ID，即使手动指定了 ID 值
-        if ($query->identity_field) {
+        // 🔧 修复：如果 SQL 是 UPDATE 语句（当所有记录都已存在时），不需要添加 RETURNING 子句
+        // 因为 PostgreSQL 的 prepared statement 不支持多个 SQL 命令（用分号分隔）
+        // 多个 UPDATE 语句需要使用 exec() 执行，而不是 prepare/execute
+        // 注意：如果 SQL 包含多个 UPDATE 语句（用分号分隔），fetch 方法会使用 exec() 执行
+        // 所以这里不需要特殊处理，保持原样即可
+        if ($query->identity_field && !preg_match('/^\s*UPDATE/i', $sql)) {
+            // 为 PostgreSQL 的 INSERT 语句添加 RETURNING 子句
+            // 这样可以获取插入的 ID，即使手动指定了 ID 值
             $formatter = $query->getIdentifierFormatter();
             $identity_field_quoted = $formatter->quote($query->identity_field);
             
@@ -157,64 +351,139 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
         return $sql;
     }
 
+
+
     /**
-     * 获取列名对应的整数类型 CAST（如果需要）
-     * @param string $columnName
-     * @return string|null 返回 'SMALLINT'、'INTEGER' 或 null
+     * 重写 buildWheres 方法，确保 PostgreSQL 中整数类型字段使用整数类型参数
+     * 修复 PostgreSQL 查询时整数字段与字符串参数类型不匹配的问题
      */
-    private function getIntegerCastType(string $columnName): ?string
+    protected function buildWheres(Query $query): string
     {
-        $columnNameLower = strtolower($columnName);
-        
-        // smallint 类型的列模式（通常是标志位、状态等）
-        $smallintPatterns = [
-            '/^is_/',           // 以 is_ 开头（如 is_install, is_enabled）
-            '/_status$/',       // 以 _status 结尾
-            '/_type$/',         // 以 _type 结尾
-            '/_flag$/',         // 以 _flag 结尾
-            '/_enabled$/',      // 以 _enabled 结尾
-            '/_active$/',       // 以 _active 结尾
-            '/_disabled$/',     // 以 _disabled 结尾
-            '/_visible$/',      // 以 _visible 结尾
-            '/_hidden$/',       // 以 _hidden 结尾
-            '/_deleted$/',      // 以 _deleted 结尾
-        ];
-        
-        foreach ($smallintPatterns as $pattern) {
-            if (preg_match($pattern, $columnNameLower)) {
-                return 'SMALLINT';
+        $formatter = $query->getIdentifierFormatter();
+        $wheres = '';
+        if (!$query->wheres) {
+            return $wheres;
+        }
+        $wheres .= ' WHERE ';
+        $logic = 'AND ';
+        foreach ($query->wheres as $key => $where) {
+            // 检查是否已经引用（包含引号或反引号）
+            $isQuoted = str_contains((string)$where[0], '`') || 
+                       str_contains((string)$where[0], '"') || 
+                       str_contains((string)$where[0], "'");
+            if (!$isQuoted) {
+                if (str_contains($where[0], '.')) {
+                    $where0items = explode('.', $where[0]);
+                    $where[0] = $formatter->quoteQualified(...$where0items);
+                } else {
+                    if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $where[0])) {
+                        $where[0] = $formatter->quote($where[0]);
+                    }
+                }
+            }
+            $key += 1;
+            if (isset($where[3])) {
+                $logic = array_pop($where) . ' ';
+            }
+            switch (count($where)) {
+                case 1:
+                    $wheres .= $where[0] . " {$logic} ";
+                    break;
+                default:
+                    if ($where[2] === null) {
+                        $wheres .= '(' . $where[0] . ') ' . $logic;
+                        break;
+                    }
+                    // 规范化字段名用于生成参数名（移除所有引用符号）
+                    $normalized_field = $formatter->normalize($where[0]);
+                    // 确保移除所有引号（包括反引号和双引号），避免参数名包含非法字符
+                    $normalized_field = str_replace(['`', '"'], '', $normalized_field);
+                    $param = ':' . str_replace([' ', '(', ')', ','], '_', $normalized_field);
+                    $param = str_replace('.', '__', $param) . $key;
+                    $skip_implode = false;
+                    switch (strtolower($where[1])) {
+                        case 'in':
+                        case 'not in':
+                        case 'find_in_set':
+                            $set_where = '(';
+                            if (is_array($where[2])) {
+                                foreach ($where[2] as $in_where_key => $item) {
+                                    if (is_string($in_where_key)) {
+                                        $in_where_key = preg_replace('/[^A-Za-z_]/', '', $in_where_key);
+                                    }
+                                    $set_where_key_param = $param . '_' . $in_where_key . '_' . str_replace(' ', '_', $where[1]);
+                                    // 🔧 PostgreSQL 类型处理：对于整数或布尔值，保持为整数类型
+                                    if (is_bool($item)) {
+                                        $query->bound_values[$set_where_key_param] = $item ? 1 : 0;
+                                    } elseif (is_int($item) || (is_string($item) && is_numeric($item) && !str_contains((string)$item, '.'))) {
+                                        $query->bound_values[$set_where_key_param] = (int)$item;
+                                    } else {
+                                        $query->bound_values[$set_where_key_param] = (string)$item;
+                                    }
+                                    $set_where .= $set_where_key_param . ',';
+                                }
+                                $where[2] = rtrim($set_where, ',') . ')';
+                                break;
+                            }
+                        case 'like':
+                        case 'not like':
+                            // LIKE 和 NOT LIKE 不需要等号，直接使用字段 LIKE 参数
+                            $value = $where[2];
+                            if (is_bool($value)) {
+                                $value = $value ? 1 : 0;
+                            } elseif (is_int($value) || (is_string($value) && is_numeric($value) && !str_contains((string)$value, '.'))) {
+                                $value = (int)$value;
+                            } else {
+                                $value = (string)$value;
+                            }
+                            $query->bound_values[$param] = $value;
+                            // 直接构建 WHERE 子句，不使用 implode，避免添加等号
+                            $wheres .= '(' . $where[0] . ' ' . strtoupper($where[1]) . ' ' . $param . ') ' . $logic;
+                            $skip_implode = true;
+                            break;
+                        // no break
+                        default:
+                            // 🔧 PostgreSQL 类型处理：对于整数或布尔值，保持为整数类型而不是字符串
+                            // 这确保 PostgreSQL 能够正确匹配 smallint/integer 类型的字段
+                            $value = $where[2];
+                            if (is_bool($value)) {
+                                // 布尔值转换为整数
+                                $query->bound_values[$param] = $value ? 1 : 0;
+                            } elseif (is_int($value)) {
+                                // 已经是整数，直接使用
+                                $query->bound_values[$param] = $value;
+                            } elseif (is_string($value) && is_numeric($value) && !str_contains($value, '.')) {
+                                // 数字字符串（整数），转换为整数类型
+                                $query->bound_values[$param] = (int)$value;
+                            } else {
+                                // 其他类型（浮点数、字符串等），转换为字符串
+                                $query->bound_values[$param] = (string)$value;
+                            }
+                            $where[2] = $param;
+                    };
+                    if (!$skip_implode) {
+                        $wheres .= '(' . implode(' ', $where) . ') ' . $logic;
+                    }
             }
         }
+
+        $wheres = rtrim($wheres, $logic);
         
-        // integer 类型的列模式（通常是 ID、计数等）
-        $integerPatterns = [
-            '/_id$/',           // 以 _id 结尾
-            '/^id$/',           // 就是 id
-            '/_count$/',        // 以 _count 结尾
-            '/_num$/',          // 以 _num 结尾
-            '/_number$/',       // 以 _number 结尾
-            '/_quantity$/',     // 以 _quantity 结尾
-            '/_amount$/',       // 以 _amount 结尾
-            '/_price$/',        // 以 _price 结尾
-            '/_total$/',        // 以 _total 结尾
-            '/_sum$/',          // 以 _sum 结尾
-            '/_size$/',         // 以 _size 结尾
-            '/_length$/',       // 以 _length 结尾
-            '/_width$/',        // 以 _width 结尾
-            '/_height$/',       // 以 _height 结尾
-            '/_weight$/',       // 以 _weight 结尾
-            '/_order$/',        // 以 _order 结尾
-            '/_sort$/',         // 以 _sort 结尾
-            '/_level$/',        // 以 _level 结尾
-        ];
-        
-        foreach ($integerPatterns as $pattern) {
-            if (preg_match($pattern, $columnNameLower)) {
-                return 'INTEGER';
-            }
+        // 🔧 修复：如果主表别名不是 main_table，但 WHERE 条件中使用了 main_table，需要替换
+        $mainTableAlias = $query->table_alias ?: 'main_table';
+        if ($mainTableAlias !== 'main_table' && preg_match('/\bmain_table\b/i', $wheres)) {
+            // 替换 WHERE 条件中的 main_table 为实际的主表别名
+            // 处理带引号的情况："main_table".field 或 `main_table`.field
+            $wheres = preg_replace_callback(
+                '/([`"]?)main_table\1(\.)/i',
+                function ($matches) use ($formatter, $mainTableAlias) {
+                    return $formatter->quote($mainTableAlias) . $matches[2];
+                },
+                $wheres
+            );
         }
         
-        return null;
+        return $wheres;
     }
 
     private function convertBackticks(string $sql): string
