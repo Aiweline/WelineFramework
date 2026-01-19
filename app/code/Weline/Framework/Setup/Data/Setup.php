@@ -69,7 +69,9 @@ class Setup
                 $this->connection = $this->master_connection;
                 return $this->master_connection;
             }
-            $this->master_connection = ObjectManager::getInstance(DbManagerFactory::class);
+            /** @var DbManagerFactory $dbManagerFactory */
+            $dbManagerFactory = ObjectManager::getInstance(DbManagerFactory::class);
+            $this->master_connection = $dbManagerFactory->create();
             $this->connection        = $this->master_connection;
             $this->setup_db->setConnection($this->connection);
         }

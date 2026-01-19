@@ -51,7 +51,17 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
         $configs = parent::read();
         // 合并掉所有相同名字的拦截器的观察者，方便获取
         $plugin_interceptors_list = [];
+        
+        $env = \Weline\Framework\App\Env::getInstance();
+        
         foreach ($configs as $module_and_file => $config) {
+            // 提取模块名并检查模块状态
+            $moduleName = explode('::', $module_and_file)[0] ?? '';
+            if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+                // 跳过禁用的模块
+                continue;
+            }
+            
             $module_plugin_interceptors = [];
             if (
                 !isset($config['config']['_attribute']['noNamespaceSchemaLocation']) ||
@@ -86,7 +96,10 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
                                 if (!isset($item['_attribute']['instance'])) {
                                     throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性：<interceptor name="interceptorName" instance="instanceClass" disabled="false" sort="0"/>', [$module_and_file]));
                                 }
-                                $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $item['_attribute']];
+                                $pluginData = $item['_attribute'];
+                                $pluginData['module'] = $moduleName;
+                                $pluginData['module_status'] = true; // 已通过状态检查
+                                $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $pluginData];
                             }
                         } else {
                             if (!isset($plugin['_value']['interceptor']['_attribute'])) {
@@ -98,7 +111,10 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
                             if (!isset($plugin['_value']['interceptor']['_attribute']['instance'])) {
                                 throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性：<interceptor name="interceptorName" instance="instanceClass" disabled="false" sort="0"/>', [$module_and_file]));
                             }
-                            $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $plugin['_value']['interceptor']['_attribute']];
+                            $pluginData = $plugin['_value']['interceptor']['_attribute'];
+                            $pluginData['module'] = $moduleName;
+                            $pluginData['module_status'] = true; // 已通过状态检查
+                            $module_plugin_interceptors[$plugin['_attribute']['name']][] = ['class' => $plugin['_attribute']['class'], 'plugins' => $pluginData];
                         }
                     }
                 }
@@ -119,7 +135,10 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
                         if (!isset($item['_attribute']['instance'])) {
                             throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性：<interceptor name="interceptorName" instance="instanceClass" disabled="false" sort="0"/>', [$module_and_file]));
                         }
-                        $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $item['_attribute']];
+                        $pluginData = $item['_attribute'];
+                        $pluginData['module'] = $moduleName;
+                        $pluginData['module_status'] = true; // 已通过状态检查
+                        $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $pluginData];
                     }
                 } else {
                     if (!isset($interceptors['_attribute'])) {
@@ -131,7 +150,10 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
                     if (!isset($interceptors['_attribute']['instance'])) {
                         throw new Core(__('%{1} 拦截器Interceptor没有设置instance属性：<interceptor name="interceptorName" instance="instanceClass" disabled="false" sort="0"/>', [$module_and_file]));
                     }
-                    $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $interceptors['_attribute']];
+                    $pluginData = $interceptors['_attribute'];
+                    $pluginData['module'] = $moduleName;
+                    $pluginData['module_status'] = true; // 已通过状态检查
+                    $module_plugin_interceptors[$config['config']['_value']['plugin']['_attribute']['name']][] = ['class' => $config['config']['_value']['plugin']['_attribute']['class'], 'plugins' => $pluginData];
                 }
             }
             $plugin_interceptors_list[$module_and_file] = $module_plugin_interceptors;

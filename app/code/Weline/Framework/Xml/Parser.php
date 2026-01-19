@@ -97,11 +97,13 @@ class Parser
      *
      * 参数区：
      *
-     * @return array|string
+     * @return array
      */
-    public function xmlToArray()
+    public function xmlToArray(): array
     {
-        $this->_content = $this->_xmlToArray();
+        $result = $this->_xmlToArray();
+        // 确保返回的是数组类型，如果 _xmlToArray 返回字符串，则转换为空数组
+        $this->_content = is_array($result) ? $result : [];
 
         return $this->_content;
     }
@@ -120,6 +122,12 @@ class Parser
         if (!$currentNode) {
             $currentNode = $this->getDom();
         }
+        
+        // 检查 DOM 是否为空（没有子节点）
+        if (!$currentNode || !$currentNode->hasChildNodes()) {
+            return [];
+        }
+        
         $content = '';
         foreach ($currentNode->childNodes as $node) {
             switch ($node->nodeType) {
@@ -164,7 +172,9 @@ class Parser
             }
         }
 
-        return $content;
+        // 如果 content 仍然是字符串（没有找到任何元素节点），返回空数组
+        // 这样可以确保 xmlToArray() 始终返回数组类型
+        return is_array($content) ? $content : [];
     }
 
     /**
@@ -178,7 +188,43 @@ class Parser
      */
     public function load(string $file): static
     {
-        $this->getDom()->load($file);
+        // 检查文件是否存在
+        if (!file_exists($file)) {
+            // 文件不存在，创建一个空的 DOMDocument
+            $this->_dom = new \DOMDocument();
+            $this->_currentDom = $this->_dom;
+            return $this;
+        }
+        
+        // 检查文件是否为空
+        $fileContent = trim(file_get_contents($file));
+        if (empty($fileContent)) {
+            // 文件为空，创建一个空的 DOMDocument
+            $this->_dom = new \DOMDocument();
+            $this->_currentDom = $this->_dom;
+            return $this;
+        }
+        
+        // 使用错误处理来抑制警告，并检查加载是否成功
+        $previousErrorHandler = set_error_handler(function($errno, $errstr, $errfile, $errline) {
+            // 如果是空文档警告，忽略它
+            if (strpos($errstr, 'Document is empty') !== false) {
+                return true; // 抑制警告
+            }
+            // 其他错误继续处理
+            return false;
+        });
+        
+        try {
+            $result = $this->getDom()->load($file);
+            // 如果加载失败，创建一个空的 DOMDocument
+            if (!$result) {
+                $this->_dom = new \DOMDocument();
+                $this->_currentDom = $this->_dom;
+            }
+        } finally {
+            restore_error_handler();
+        }
 
         return $this;
     }

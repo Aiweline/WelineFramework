@@ -1,10 +1,10 @@
 <?php
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有�?
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
+ * æœ¬æ–‡ä»¶ç”± ç§‹æž«é›�é£ž ç¼–å†™ï¼Œæ‰€æœ‰è§£é‡Šæ�ƒå½’Aiwelineæ‰€æœ‰ã€?
+ * é‚®ç®±ï¼šaiweline@qq.com
+ * ç½‘å�€ï¼šaiweline.com
+ * è®ºå�›ï¼šhttps://bbs.aiweline.com
  */
 
 namespace Weline\Framework\Module\Helper;
@@ -29,6 +29,12 @@ class Data extends AbstractHelper
     private array $parent_class_arr = [];
     private File $file;
     private Scan $scan;
+    
+    /** @var array 收集的控制器属性事件数据，用于批量发送 */
+    private array $collected_controller_attributes_events = [];
+    
+    /** @var array 收集的路由注册参数，用于批量注册 */
+    private array $collected_route_registrations = [];
 
     public function __construct(
         File $file,
@@ -59,40 +65,40 @@ class Data extends AbstractHelper
     /**
      * @DESC         |注册模块路由
      *
-     * 参数区：
-     *
-     * @param array $modules 【模组列表指针�?
-     * @param string $path 【模组路径�?
-     * @param string $name 【模组名�?
-     * @param string $router 【控制器路径�?
+     * @param array $modules 模块数组
+     * @param Module $register_module 注册模块
      *
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
     public function registerModuleRouter(array &$modules, Module &$register_module)
     {
+        // 清空当前模块的事件收集数组和路由注册数组
+        $this->collected_controller_attributes_events = [];
+        $this->collected_route_registrations = [];
+        
         $name = $register_module->getName();
         $path = $register_module->getBasePath();
         if (!$this->isDisabled($modules, $name)) {
             $module = $modules[$name];
-            # API 路由
+            # API 路由注册
             $api_dir = $path . Handle::api_DIR . DS;
             if (is_dir($api_dir)) {
                 $api_classs = [];
                 $this->scan->globFile($api_dir . '*', $api_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
                 foreach ($api_classs as $api_class) {
-                    // 先从文件系统加载控制器类
+                    // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $api_class)) . '.php';
                     $classFile = $module['base_path'] . $classRelativePath;
                     if (is_file($classFile) && !class_exists($api_class, false)) {
                         require_once $classFile;
                     }
-                    // 使用 false 参数避免触发自动加载
+                    // 如果控制器类不存在，跳过
                     if (!class_exists($api_class, false)) {
                         continue;
                     }
                     $apiDirArray = explode(Handle::api_DIR, $api_class);
-                    // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元�?
+                    // 获取控制器文件的 baseRouter
                     $baseRouterPart = empty(end($apiDirArray)) && count($apiDirArray) > 1 ? $apiDirArray[count($apiDirArray) - 2] : array_pop($apiDirArray);
                     $baseRouter = str_replace('\\', '/', $baseRouterPart);
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
@@ -111,7 +117,7 @@ class Data extends AbstractHelper
                         }
                     }
 
-                    $this->parent_class_arr = [];// 清空父类信息
+                    $this->parent_class_arr = [];// 清空父类数组
                     $ctl_data = $this->parserController($api_class, $name);
                     if (empty($ctl_data)) {
                         continue;
@@ -123,13 +129,13 @@ class Data extends AbstractHelper
                         $backend = true;
                     }
                     $router = $register_module->getRouter($backend);
-                    // API路由按照PC路由的方式生成，只包含模块路由和路径
-                    // area 前缀会在 URL 生成时添加（�?getFrontendApiUrl() 中）
+                    // API 路由注册包含 PC 路由注册，因此需要注册原始路由和方法路由
+                    // area 在 URL 中请求时，获取前端 API URL（在 getFrontendApiUrl() 中）
                     $baseRouter = trim($router . $baseRouter, '/');
-                    // 清理双斜杠（处理所有连续斜杠）
+                    // 处理路由中的重复斜杠
                     $baseRouter = preg_replace('#/+#', '/', $baseRouter);
                     foreach ($ctl_methods as $method => $attributes) {
-                        // 分析请求方法
+                        // 解析方法路由
                         $request_method = null;
                         $rule_method = $method;
                         $request_method_split_array = preg_split('/(?=[A-Z])/', $method);
@@ -145,13 +151,12 @@ class Data extends AbstractHelper
                         } else {
                             $rule_method = trim(implode('-', $request_method_split_array), '-');
                         }
-                        # 检测请求方法和方法名是否重合，重合就使用方法名作为请求方法
+                        # 如果方法路由为空，且方法路由为大写请求方法，则使用大写请求方法
                         if (in_array(strtoupper($rule_method), Request::METHODS)) {
                             $request_method = strtoupper($rule_method);
                             $rule_method = '';
                         }
-                        # 规则路由处理
-                        # 删除index后缀
+                        # 获取方法路由
                         $rule_router = strtolower($baseRouter . '/' . $rule_method);
                         $rule_rule_arr = explode('/', trim($rule_router, '/'));
                         $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
@@ -161,11 +166,11 @@ class Data extends AbstractHelper
                         }
                         $rule_router = implode('/', $rule_rule_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
                         $rule_router = trim($rule_router, '/');
-                        // 再次清理双斜杠，确保最终路由格式正�?
+                        // 处理路由中的重复斜杠
                         $rule_router = preg_replace('#/+#', '/', $rule_router);
 
                         $request_method = $request_method ?? RequestInterface::GET;
-                        # 模块路由解析
+                        # 获取路由
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
                             $route = $rule_router . ($request_method ? '::' . $request_method : '');
@@ -189,12 +194,17 @@ class Data extends AbstractHelper
                                 $data->setData('type', 'api');
                                 $data->setData('controller_data', $ctl_data);
                                 $data->setData('params', $params);
-                                $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                // 收集事件数据，不立即发送
+                                $this->collected_controller_attributes_events[] = clone $data;
                             }
-                            // 路由注册+
-                            Register::register(RegisterDataInterface::ROUTER, $name, $params);
+                            // 收集路由注册参数，不立即注册
+                            $this->collected_route_registrations[] = [
+                                'type' => RegisterDataInterface::ROUTER,
+                                'module_name' => $name,
+                                'params' => $params
+                            ];
 
-                            // 原始路由注册
+                            // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
                                 $backend = false;
@@ -221,15 +231,20 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'api');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $params);
-                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                    // 收集事件数据，不立即发送
+                                    $this->collected_controller_attributes_events[] = clone $data;
                                 }
-                                // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $params);
+                                // 收集路由注册参数，不立即注册
+                                $this->collected_route_registrations[] = [
+                                    'type' => RegisterDataInterface::ROUTER,
+                                    'module_name' => $name,
+                                    'params' => $params
+                                ];
                             }
                             
-                            // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
+                            // 小写方法路由与 baseRouter 方法路由不一致时，注册小写方法路由
                             if ($request_method && $rule_method !== strtolower($method)) {
-                                // 1. 注册完整方法名的kebab-case路由�?get-add格式�?
+                                // 1. 小写方法路由
                                 $full_method_kebab = strtolower(preg_replace('/([A-Z])/', '-$1', $method));
                                 $full_method_kebab_router = strtolower($baseRouter . '/' . $full_method_kebab);
                                 $full_method_kebab_router = trim($full_method_kebab_router, '/');
@@ -248,23 +263,28 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true
                                 ];
-                                $data = new DataObject($full_method_kebab_params);
-                                /**@var \ReflectionAttribute $attribute */
-                                foreach ($attributes as $attribute) {
-                                    $data->setData('attribute', $attribute);
-                                    $data->setData('type', 'api');
-                                    $data->setData('controller_data', $ctl_data);
-                                    $data->setData('params', $full_method_kebab_params);
-                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
-                                }
-                                // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_kebab_params);
+                                    $data = new DataObject($full_method_kebab_params);
+                                    /**@var \ReflectionAttribute $attribute */
+                                    foreach ($attributes as $attribute) {
+                                        $data->setData('attribute', $attribute);
+                                        $data->setData('type', 'api');
+                                        $data->setData('controller_data', $ctl_data);
+                                        $data->setData('params', $full_method_kebab_params);
+                                        // 收集事件数据，不立即发送
+                                        $this->collected_controller_attributes_events[] = clone $data;
+                                    }
+                                // 收集路由注册参数，不立即注册
+                                $this->collected_route_registrations[] = [
+                                    'type' => RegisterDataInterface::ROUTER,
+                                    'module_name' => $name,
+                                    'params' => $full_method_kebab_params
+                                ];
                                 
-                                // 2. 注册完整方法名的小写路由�?getadd格式�?
+                                // 2. 小写方法路由
                                 $full_method_lower_router = strtolower($baseRouter . '/' . strtolower($method));
                                 $full_method_lower_router = trim($full_method_lower_router, '/');
                                 $full_method_lower_router = preg_replace('#/+#', '/', $full_method_lower_router);
-                                // 只有当小写路由与kebab-case路由不同时才注册
+                                // 小写方法路由与 baseRouter 方法路由不一致时，注册小写方法路由
                                 if ($full_method_lower_router !== $full_method_kebab_router) {
                                     $full_method_lower_route = $full_method_lower_router . ($request_method ? '::' . $request_method : '');
                                     $full_method_lower_params = [
@@ -287,10 +307,15 @@ class Data extends AbstractHelper
                                         $data->setData('type', 'api');
                                         $data->setData('controller_data', $ctl_data);
                                         $data->setData('params', $full_method_lower_params);
-                                        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                        // 收集事件数据，不立即发送
+                                        $this->collected_controller_attributes_events[] = clone $data;
                                     }
-                                    // 路由注册+
-                                    Register::register(RegisterDataInterface::ROUTER, $name, $full_method_lower_params);
+                                    // 收集路由注册参数，不立即注册
+                                    $this->collected_route_registrations[] = [
+                                        'type' => RegisterDataInterface::ROUTER,
+                                        'module_name' => $name,
+                                        'params' => $full_method_lower_params
+                                    ];
                                 }
                             }
                         }
@@ -298,25 +323,25 @@ class Data extends AbstractHelper
                 }
             }
 
-            # PC 路由
+            # PC 路由注册
             $pc_dir = $path . Handle::pc_DIR . DS;
 
             if (is_dir($pc_dir)) {
                 $pc_classs = [];
                 $this->scan->globFile($pc_dir . '*', $pc_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
                 foreach ($pc_classs as $pc_class) {
-                    // 先从文件系统加载控制器类
+                    // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $pc_class)) . '.php';
                     $classFile = $module['base_path'] . $classRelativePath;
                     if (is_file($classFile) && !class_exists($pc_class, false)) {
                         require_once $classFile;
                     }
-                    // 使用 false 参数避免触发自动加载
+                    // 如果控制器类不存在，跳过
                     if (!class_exists($pc_class, false)) {
                         continue;
                     }
                     $pcDirArray = explode(Handle::pc_DIR, $pc_class);
-                    // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元�?
+                    // 获取控制器文件的 baseRouter
                     $baseRouterPart = empty(end($pcDirArray)) && count($pcDirArray) > 1 ? $pcDirArray[count($pcDirArray) - 2] : array_pop($pcDirArray);
                     $baseRouter = str_replace('\\', '/', $baseRouterPart);
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
@@ -337,7 +362,7 @@ class Data extends AbstractHelper
                         }
                     }
 
-                    $this->parent_class_arr = [];// 清空父类信息
+                    $this->parent_class_arr = [];// 清空父类数组
                     $ctl_data = $this->parserController($pc_class, $name);
                     if (empty($ctl_data)) {
                         continue;
@@ -351,7 +376,7 @@ class Data extends AbstractHelper
                     $router = $register_module->getRouter($backend);
                     $baseRouter = trim($router . $baseRouter, '/');
                     foreach ($ctl_methods as $method => $attributes) {
-                        // 分析请求方法
+                        // 解析方法路由
                         $request_method = '';
                         $rule_method = $method;
                         $request_method_split_array = preg_split('/(?=[A-Z])/', $method);
@@ -367,12 +392,12 @@ class Data extends AbstractHelper
                         } else {
                             $rule_method = trim(implode('-', $request_method_split_array), '-');
                         }
-                        # 如果没有解析到请求方法就使用方法�?
+                        # 如果方法路由为空，且方法路由为大写请求方法，则使用大写请求方法
                         if (!$request_method && in_array(strtoupper($rule_method), Request::METHODS)) {
                             $request_method = strtoupper($rule_method);
                             $rule_method = '';
                         }
-                        # 删除index后缀
+                        # 获取方法路由
                         $rule_router = strtolower($baseRouter . '/' . $rule_method);
                         $rule_rule_arr = explode('/', trim($rule_router, '/'));
                         $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
@@ -384,7 +409,7 @@ class Data extends AbstractHelper
                         $rule_router = implode('/', $rule_rule_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
                         $rule_router = trim($rule_router, '/');
 
-                        # 模块路由解析
+                        # 获取路由
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
                             $route = $rule_router . ($request_method ? '::' . $request_method : '');
@@ -408,12 +433,17 @@ class Data extends AbstractHelper
                                 $data->setData('type', 'pc');
                                 $data->setData('controller_data', $ctl_data);
                                 $data->setData('params', $params);
-                                $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                // 收集事件数据，不立即发送
+                                $this->collected_controller_attributes_events[] = clone $data;
                             }
-                            // 路由注册+
-                            Register::register(RegisterDataInterface::ROUTER, $name, $params);
+                            // 收集路由注册参数，不立即注册
+                            $this->collected_route_registrations[] = [
+                                'type' => RegisterDataInterface::ROUTER,
+                                'module_name' => $name,
+                                'params' => $params
+                            ];
 
-                            // 原始路由注册
+                            // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
                                 $backend = false;
@@ -440,15 +470,20 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'pc');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $params);
-                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                    // 收集事件数据，不立即发送
+                                    $this->collected_controller_attributes_events[] = clone $data;
                                 }
-                                // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $params);
+                                // 收集路由注册参数，不立即注册
+                                $this->collected_route_registrations[] = [
+                                    'type' => RegisterDataInterface::ROUTER,
+                                    'module_name' => $name,
+                                    'params' => $params
+                                ];
                             }
                             
-                            // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
+                            // 小写方法路由与 baseRouter 方法路由不一致时，注册小写方法路由
                             if ($request_method && $rule_method !== strtolower($method)) {
-                                // 1. 注册完整方法名的kebab-case路由�?get-add格式�?
+                                // 1. 小写方法路由
                                 $full_method_kebab = strtolower(preg_replace('/([A-Z])/', '-$1', $method));
                                 $full_method_kebab_router = strtolower($baseRouter . '/' . $full_method_kebab);
                                 $full_method_kebab_router = trim($full_method_kebab_router, '/');
@@ -467,23 +502,28 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true,
                                 ];
-                                $data = new DataObject($full_method_kebab_params);
-                                /**@var \ReflectionAttribute $attribute */
-                                foreach ($attributes as $attribute) {
-                                    $data->setData('attribute', $attribute);
-                                    $data->setData('type', 'pc');
-                                    $data->setData('controller_data', $ctl_data);
-                                    $data->setData('params', $full_method_kebab_params);
-                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
-                                }
-                                // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_kebab_params);
+                                    $data = new DataObject($full_method_kebab_params);
+                                    /**@var \ReflectionAttribute $attribute */
+                                    foreach ($attributes as $attribute) {
+                                        $data->setData('attribute', $attribute);
+                                        $data->setData('type', 'pc');
+                                        $data->setData('controller_data', $ctl_data);
+                                        $data->setData('params', $full_method_kebab_params);
+                                        // 收集事件数据，不立即发送
+                                        $this->collected_controller_attributes_events[] = clone $data;
+                                    }
+                                // 收集路由注册参数，不立即注册
+                                $this->collected_route_registrations[] = [
+                                    'type' => RegisterDataInterface::ROUTER,
+                                    'module_name' => $name,
+                                    'params' => $full_method_kebab_params
+                                ];
                                 
-                                // 2. 注册完整方法名的小写路由�?getadd格式�?
+                                // 2. 小写方法路由
                                 $full_method_lower_router = strtolower($baseRouter . '/' . strtolower($method));
                                 $full_method_lower_router = trim($full_method_lower_router, '/');
                                 $full_method_lower_router = preg_replace('#/+#', '/', $full_method_lower_router);
-                                // 只有当小写路由与kebab-case路由不同时才注册
+                                // 小写方法路由与 baseRouter 方法路由不一致时，注册小写方法路由
                                 if ($full_method_lower_router !== $full_method_kebab_router) {
                                     $full_method_lower_route = $full_method_lower_router . ($request_method ? '::' . $request_method : '');
                                     $full_method_lower_params = [
@@ -506,10 +546,15 @@ class Data extends AbstractHelper
                                         $data->setData('type', 'pc');
                                         $data->setData('controller_data', $ctl_data);
                                         $data->setData('params', $full_method_lower_params);
-                                        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                        // 收集事件数据，不立即发送
+                                        $this->collected_controller_attributes_events[] = clone $data;
                                     }
-                                    // 路由注册+
-                                    Register::register(RegisterDataInterface::ROUTER, $name, $full_method_lower_params);
+                                    // 收集路由注册参数，不立即注册
+                                    $this->collected_route_registrations[] = [
+                                        'type' => RegisterDataInterface::ROUTER,
+                                        'module_name' => $name,
+                                        'params' => $full_method_lower_params
+                                    ];
                                 }
                             }
                         }
@@ -517,6 +562,71 @@ class Data extends AbstractHelper
                 }
             }
         }
+        
+        // 批量发送收集的所有控制器属性事件
+        $this->batchDispatchControllerAttributesEvents();
+        
+        // 批量注册收集的所有路由
+        $this->batchRegisterRoutes();
+    }
+    
+    /**
+     * 批量注册收集的路由
+     * 
+     * @return void
+     * @throws \Weline\Framework\App\Exception
+     */
+    private function batchRegisterRoutes(): void
+    {
+        if (empty($this->collected_route_registrations)) {
+            return;
+        }
+        
+        // 获取路由 Helper
+        /** @var \Weline\Framework\Router\Helper\Data $routerHelper */
+        $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+        
+        // 如果批量模式未启用，才启用（避免清空已收集的路由）
+        // 注意：RouteUpdateStage->prepare() 已经启用了批量模式，所以这里不会重复启用
+        if (!$routerHelper->isBatchMode()) {
+            $routerHelper->enableBatchMode();
+        }
+        
+        // 批量注册所有路由
+        foreach ($this->collected_route_registrations as $registration) {
+            Register::register(
+                $registration['type'],
+                $registration['module_name'],
+                $registration['params']
+            );
+        }
+        
+        // 注意：不在这里调用 flushBatchRouters()
+        // 批量写入由 RouteUpdateStage->commit() 统一处理
+        // 这样可以确保在阶段提交时一次性写入所有路由文件
+        
+        // 清空收集的路由注册数据
+        $this->collected_route_registrations = [];
+    }
+    
+    /**
+     * 批量发送收集的控制器属性事件
+     * 
+     * @return void
+     */
+    private function batchDispatchControllerAttributesEvents(): void
+    {
+        if (empty($this->collected_controller_attributes_events)) {
+            return;
+        }
+        
+        $eventsManager = $this->getEvenManager();
+        
+        // 批量发送：直接发送事件数据数组
+        $eventsManager->dispatch('Weline_Framework_Module::controller_attributes', $this->collected_controller_attributes_events);
+        
+        // 清空收集的事件数据
+        $this->collected_controller_attributes_events = [];
     }
 
     public function getEvenManager(): EventsManager
@@ -525,17 +635,10 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |模块名到路径转化
+     * @DESC         |将模块名称转换为路径
      *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码�?
-     *
-     * 参数区：
-     *
-     * @param array $modules
-     * @param string $name
+     * @param array $modules 模块数组
+     * @param string $name 模块名称
      *
      * @return string
      */
@@ -549,16 +652,9 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |模块名到路径转化
+     * @DESC         |获取模块路径
      *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码�?
-     *
-     * 参数区：
-     *
-     * @param string $name
+     * @param string $name 模块名称
      *
      * @return string
      */
@@ -568,9 +664,7 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |利用反射去除父类方法
-     *
-     * 参数区：
+     * @DESC         |解析控制器
      *
      * @param string $class
      * @param        $module_name
@@ -581,7 +675,7 @@ class Data extends AbstractHelper
      */
     private function parserController(string $class, $module_name): array
     {
-        // 默认前端控制�?
+        // 清空父类数组
 //        $ctl_area = \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND;
         if (class_exists($class)) {
             $reflect = new \ReflectionClass($class);
@@ -594,7 +688,7 @@ class Data extends AbstractHelper
                     }
                 }
             }
-            // 存在父类则过滤父类方�?
+            // 在父类中查找控制器方法
             if ($parent_class = $reflect->getParentClass()) {
                 $controller_class = [];
                 foreach (explode('\\', $parent_class->getName()) as $item) {
@@ -613,7 +707,7 @@ class Data extends AbstractHelper
                     }
                 }
                 $controller_methods = array_merge($parent_methods, $controller_methods);
-                // 实例化类
+                // 如果父类不是抽象类，则添加父类区域
                 if (!$parent_class->isAbstract()) {
                     $this->parent_class_arr = array_merge($this->parent_class_arr, $this->parserController($parent_class->getName(), $module_name)['area']);
                 }
@@ -632,17 +726,10 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |模块是否已经安装
+     * @DESC         |判断模块是否已安装
      *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码�?
-     *
-     * 参数区：
-     *
-     * @param array $modules
-     * @param string $name
+     * @param array $modules 模块数组
+     * @param string $name 模块名称
      *
      * @return bool
      */
@@ -652,17 +739,10 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |模块是否已经安装
+     * @DESC         |判断模块是否已禁用
      *
-     * @Author       秋枫雁飞
-     * @Email        aiweline@qq.com
-     * @Forum        https://bbs.aiweline.com
-     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码�?
-     *
-     * 参数区：
-     *
-     * @param array $modules
-     * @param string $name
+     * @param array $modules 模块数组
+     * @param string $name 模块名称
      *
      * @return bool
      */
@@ -676,13 +756,10 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |是否模块更新
+     * @DESC         |判断模块是否需要升级
      *
-     * 参数区：
-     *
-     * @param array $modules
-     * @param string $name
-     * @param string $version
+     * @param string $version 当前版本
+     * @param string $new_version 新版本
      *
      * @return bool
      */
@@ -696,11 +773,9 @@ class Data extends AbstractHelper
     }
 
     /**
-     * @DESC         |更新模块数据
+     * @DESC         |更新模块
      *
-     * 参数区：
-     *
-     * @param array $modules
+     * @param array $modules 模块数组
      */
     public function updateModules(array &$modules)
     {
@@ -714,9 +789,7 @@ class Data extends AbstractHelper
     /**
      * @DESC         |更新路由
      *
-     * 参数区：
-     *
-     * @param array $routers
+     * @param array $routers 路由数组
      *
      * @throws \Weline\Framework\App\Exception
      */

@@ -11,6 +11,7 @@ namespace Weline\Framework\View;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
@@ -122,6 +123,8 @@ class Template extends DataObject
 
     public function init()
     {
+        // 语言初始化
+        $this->initLanguage();
             $this->theme ?? $this->theme = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
             $this->eventsManager ?? $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
             $this->viewCache ?? $this->viewCache = ObjectManager::getInstance(ViewCache::class)->create();
@@ -154,6 +157,17 @@ class Template extends DataObject
             $this->compile_dir = $this->getViewDir(DataInterface::view_TEMPLATE_COMPILE_DIR);
         }
         return $this;
+    }
+
+    private function initLanguage(): void
+    {
+        $lang = State::getLang();
+        $this->setData('lang', $lang);
+        // lang变量用于HTML lang属性，必须符合BCP 47规范（将下划线替换为连字符）
+        $htmlLang = str_replace('_', '-', $lang);
+        $this->setData('lang_local', State::getLangLocal());
+        // htmlLang变量与lang相同，保持向后兼容
+        $this->setData('htmlLang', $htmlLang);
     }
 
     public function __init()
@@ -307,11 +321,12 @@ class Template extends DataObject
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
     {
         list($comFileName, $tplFile) = $this->convertFetchFileName($fileName);
-        # 检测编译文件，如果不符合条件则重新进行文件编译
+        
+        // 检测编译文件，如果不符合条件则重新进行文件编译
         if (DEV || !file_exists($comFileName) || (filemtime($comFileName) < filemtime($tplFile))) {
-            //如果缓存文件不存在则 编译 或者文件修改了也编译
+            // 如果缓存文件不存在则编译，或者文件修改了也编译
             $content = file_get_contents($tplFile);
-            $repContent = $this->tmp_replace($content, $comFileName);                   //得到模板文件 并替换占位符 并得到替换后的文件
+            $repContent = $this->tmp_replace($content, $comFileName);  // 得到模板文件并替换占位符，得到替换后的文件
             
             // 检查是否显示模板位置注释（默认不显示，可通过配置 template.show_comments 控制）
             $showTemplateComments = Env::getInstance()->getConfig('template.show_comments', false);
@@ -345,8 +360,10 @@ class Template extends DataObject
             $eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
             $repContent = $eventData->getData('content');
             
-            file_put_contents($comFileName, $repContent);                               //将替换后的文件写入定义的缓存文件中
+            // 将替换后的文件写入定义的缓存文件中
+            file_put_contents($comFileName, $repContent);
         }
+        
         return $comFileName;
     }
 
@@ -379,9 +396,7 @@ class Template extends DataObject
      * @throws \Exception
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
-    {
-        $comFileName = $this->getFetchFile($fileName);
-        return $this->ob_file($comFileName, $dictionary);
+    {$comFileName = $this->getFetchFile($fileName);$result = $this->ob_file($comFileName, $dictionary);return $result;
     }
 
     /**
@@ -404,21 +419,19 @@ class Template extends DataObject
     public function ob_file(string $filename, array $dictionary = []): string
     {
         ob_start();
-        try {
-            if ($dictionary) {
+        try {if ($dictionary) {
                 $this->addData($dictionary);
             }
             # 将数组存储的变量散列到当前页内存中，使得变量可在页面中暴露出来（可直接使用）
             if ($this->getData()) {
                 extract($this->getData(), EXTR_SKIP);
-            }
-            include $filename;
-        } catch (\Exception $exception) {
+            }include $filename;} catch (\Exception $exception) {
             ob_end_clean();
             throw $exception;
         }
         /** Get output buffer. */
-        return ob_get_clean();
+        $result = ob_get_clean();
+        return $result;
     }
 
     /**
@@ -476,18 +489,141 @@ class Template extends DataObject
      */
     public function getHook(string $name): string
     {
-        /**@var Hooker $hooker */
-        $hooker = ObjectManager::getInstance(Hooker::class);
-        $hookers = $hooker->getHook($name);
         $hooker_content = '';
-        foreach ($hookers as $module => $hooker_file) {
-            if (DEV) {
-                $content = "<!-- 来自模组 $module 的钩子实现{$name}代码 起-->" . $this->fetchTagHtml('hooks', $hooker_file) . "<!-- 来自模组 $module 的钩子实现{$name}代码 止-->";;
-            } else {
-                $content = $this->fetchTagHtml('hooks', $hooker_file);
+        
+        // 获取hook文件列表（已按顺序排序）
+        $hookFiles = [];
+        $hookFilesWithMeta = [];
+        try {
+            /** @var \Weline\Framework\Hook\Config\HookReader $hookReader */
+            $hookReader = ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+            $hookReader->setPath($name);
+            $hookFiles = $hookReader->getFileList(); // 已按顺序排序
+            
+            // 获取完整的hook信息（包含solo等元数据）
+            $hookFilesWithMeta = $hookReader->getFileListWithMeta();
+        } catch (\Throwable $e) {
+            // 如果获取失败，尝试使用Hooker（向后兼容）
+            /**@var Hooker $hooker */
+            $hooker = ObjectManager::getInstance(Hooker::class);
+            $hookFiles = $hooker->getHook($name);
+        }
+        
+        // 检查是否有solo（独享）的hook
+        $soloHook = null;
+        $affectedHooks = [];
+        foreach ($hookFilesWithMeta as $module => $meta) {
+            if (!empty($meta['solo'])) {
+                $soloHook = $module;
+                // 收集所有被影响的hook（除了solo的hook本身）
+                foreach ($hookFilesWithMeta as $otherModule => $otherMeta) {
+                    if ($otherModule !== $module) {
+                        $affectedHooks[] = $otherModule;
+                    }
+                }
+                break; // 只允许一个solo hook
             }
+        }
+        
+        // 如果存在solo hook，只执行solo hook
+        if ($soloHook !== null) {
+            $hookFiles = [$soloHook => $hookFiles[$soloHook]];
+        }
+        
+        // 按顺序遍历hook文件（HookReader已按优先级和排序顺序排序）
+        foreach ($hookFiles as $module => $hooker_file) {
+            // 获取hook文件路径（用于属性备注）
+            $hookFilePath = $hookFiles[$module] ?? $hooker_file;
+            // 提取相对路径
+            if (strpos($hookFilePath, BP) === 0) {
+                $relativePath = str_replace(BP, '', $hookFilePath);
+                $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+            } else {
+                // 如果已经是相对路径格式（Module::path），直接使用
+                $relativePath = str_replace($module . '::', '', $hookFilePath);
+            }
+            
+            // HookReader 已经返回正确格式：ModuleName::hooks/path/to/file.phtml
+            // 直接使用，不需要再次构建路径
+            $hookHtml = $this->fetchTagHtml('hooks', $hooker_file);
+            
+            // 检查是否是solo hook
+            $isSolo = ($soloHook === $module);
+            $hookMeta = $hookFilesWithMeta[$module] ?? [];
+            
+            if (DEV) {
+                // 开发环境：添加注释和data-hook-source属性
+                // 如果hook内容不是空字符串，用span包裹并添加属性
+                if (trim($hookHtml) !== '') {
+                    // 构建data属性
+                    $dataAttrs = 'data-hook-source="' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . '"';
+                    $dataAttrs .= ' data-hook-file="' . htmlspecialchars($relativePath, ENT_QUOTES, 'UTF-8') . '"';
+                    
+                    // 如果是solo hook，添加solo相关属性
+                    if ($isSolo) {
+                        $dataAttrs .= ' data-hook-solo="true"';
+                        if (!empty($affectedHooks)) {
+                            $dataAttrs .= ' data-hook-affected="' . htmlspecialchars(implode(',', $affectedHooks), ENT_QUOTES, 'UTF-8') . '"';
+                        }
+                    }
+                    
+                    // 检查hook内容是否已经是完整的HTML元素（有开始和结束标签）
+                    // 如果是，尝试在第一个元素上添加属性
+                    if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
+                        // 找到第一个标签，添加data属性
+                        $tagName = $matches[1];
+                        $hookHtml = preg_replace(
+                            '/^(<' . preg_quote($tagName, '/') . '[^>]*)(>)/',
+                            '$1 ' . $dataAttrs . '$2',
+                            $hookHtml,
+                            1
+                        );
+                    } else {
+                        // 如果没有找到标签，用span包裹
+                        $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';
+                    }
+                }
+                
+                // 添加注释
+                $soloInfo = $isSolo ? ' | 独享模式（已禁用其他' . count($affectedHooks) . '个hook）' : '';
+                $content = "<!-- Hook: {$name} | 模块: {$module} | 文件: {$relativePath}{$soloInfo} -->\n" . 
+                          $hookHtml . 
+                          "\n<!-- /Hook: {$name} | 模块: {$module} -->";
+            } else {
+                // 生产环境：只添加data-hook-source属性（不添加注释）
+                if (trim($hookHtml) !== '') {
+                    // 构建data属性
+                    $dataAttrs = 'data-hook-source="' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . '"';
+                    
+                    // 如果是solo hook，添加solo相关属性
+                    if ($isSolo) {
+                        $dataAttrs .= ' data-hook-solo="true"';
+                        if (!empty($affectedHooks)) {
+                            $dataAttrs .= ' data-hook-affected="' . htmlspecialchars(implode(',', $affectedHooks), ENT_QUOTES, 'UTF-8') . '"';
+                        }
+                    }
+                    
+                    // 检查hook内容是否已经是完整的HTML元素
+                    if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
+                        // 找到第一个标签，添加data属性
+                        $tagName = $matches[1];
+                        $hookHtml = preg_replace(
+                            '/^(<' . preg_quote($tagName, '/') . '[^>]*)(>)/',
+                            '$1 ' . $dataAttrs . '$2',
+                            $hookHtml,
+                            1
+                        );
+                    } else {
+                        // 如果没有找到标签，用span包裹
+                        $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';
+                    }
+                }
+                $content = $hookHtml;
+            }
+            
             $hooker_content .= $content;
         }
+        
         return $hooker_content;
     }
 

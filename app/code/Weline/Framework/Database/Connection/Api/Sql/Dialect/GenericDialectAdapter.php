@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api\Sql\Dialect;
 
+use PDO;
 use Weline\Framework\Database\Connection\Api\Sql\Query;
 use Weline\Framework\Database\Exception\DbException;
 
@@ -43,6 +44,7 @@ class GenericDialectAdapter implements DialectAdapterInterface
         }
 
         $query->sql = $sql;
+        
         // 如果 SQL 为空，不准备语句（例如：insert 时没有数据需要插入）
         if (!empty($sql)) {
             $query->PDOStatement = $query->getLink()->prepare($query->sql);
@@ -83,16 +85,142 @@ class GenericDialectAdapter implements DialectAdapterInterface
         }
     }
 
-    private function buildJoins(Query $query): string
+    /**
+     * 构建 JOIN 语句
+     * 使用格式化器处理表名和条件中的标识符，确保跨数据库兼容性
+     */
+    protected function buildJoins(Query $query): string
     {
+        $formatter = $query->getIdentifierFormatter();
         $joins = '';
         foreach ($query->joins as $join) {
-            $joins .= " {$join[2]} JOIN {$join[0]} ON {$join[1]} ";
+            $table = $join[0];
+            $condition = $join[1];
+            $type = $join[2];
+            
+            // 使用格式化器处理表名中的标识符（移除反引号/双引号，使用正确的格式化器）
+            $table = $this->formatTableNameInJoin($table, $formatter);
+            
+            // 使用格式化器处理条件中的标识符
+            $condition = $this->formatConditionInJoin($condition, $formatter);
+            
+            $joins .= " {$type} JOIN {$table} ON {$condition} ";
         }
         return $joins;
     }
+    
+    /**
+     * 格式化 JOIN 中的表名
+     * 处理表名和别名，使用格式化器确保跨数据库兼容
+     * 
+     * 支持格式：
+     * - table（简单表名）
+     * - `table` 或 "table"（带引号的表名）
+     * - schema.table（带 schema 的表名）
+     * - `schema`.`table` 或 "schema"."table"（带引号的 schema 和表名）
+     * - table `alias` 或 table "alias"（表名和别名）
+     * - `table` `alias` 或 "table" "alias"（带引号的表名和别名）
+     * - schema.table `alias`（带 schema 的表名和别名）
+     */
+    protected function formatTableNameInJoin(string $table, $formatter): string
+    {
+        $table = trim($table);
+        
+        // 分离表名和别名（通过空格分隔）
+        // 匹配：表名部分 + 空格 + 别名部分（别名可能带引号）
+        if (preg_match('/^(.+?)\s+([`"]?)(\w+)\2$/i', $table, $matches)) {
+            $tablePart = trim($matches[1]); // 表名部分（可能包含 schema）
+            $alias = $matches[3]; // 别名（已去除引号）
+            
+            // 格式化表名部分（可能包含 schema.table）
+            $formattedTable = $this->formatQualifiedTableName($tablePart, $formatter);
+            
+            // 格式化别名
+            $formattedAlias = $formatter->quote($alias);
+            
+            return "{$formattedTable} {$formattedAlias}";
+        }
+        
+        // 没有别名，只格式化表名
+        return $this->formatQualifiedTableName($table, $formatter);
+    }
+    
+    /**
+     * 格式化限定表名（可能包含 schema.table）
+     * 
+     * @param string $tableName 表名（可能包含 schema，可能带引号）
+     * @param mixed $formatter 格式化器
+     * @return string 格式化后的表名
+     */
+    protected function formatQualifiedTableName(string $tableName, $formatter): string
+    {
+        // 移除所有引号
+        $tableName = trim($tableName, '`"');
+        
+        // 如果包含点号，说明是限定名（schema.table）
+        if (str_contains($tableName, '.')) {
+            $parts = explode('.', $tableName);
+            // 使用 quoteQualified 格式化每个部分
+            return $formatter->quoteQualified(...$parts);
+        }
+        
+        // 简单表名
+        return $formatter->quote($tableName);
+    }
+    
+    /**
+     * 格式化 JOIN 条件中的标识符
+     * 解析条件字符串，将反引号/双引号标识符转换为使用格式化器的格式
+     * 
+     * 支持格式：
+     * - `identifier` 或 "identifier"（简单标识符，带引号）
+     * - `table`.`field` 或 "table"."field"（限定名，每个部分单独引号）
+     * - `table.field` 或 "table.field"（限定名，整体引号）
+     * - table.field（限定名，不带引号）
+     * - identifier（简单标识符，不带引号）
+     */
+    protected function formatConditionInJoin(string $condition, $formatter): string
+    {
+        // 第一步：处理带引号的标识符（反引号或双引号）
+        $condition = preg_replace_callback(
+            '/([`"])([^`"]+)\1(?:\.([`"])([^`"]+)\3)?/',
+            function ($matches) use ($formatter) {
+                $firstPart = $matches[2]; // 第一部分标识符
+                
+                // 情况1：限定名格式 `table`.`field` 或 "table"."field"
+                if (isset($matches[4]) && !empty($matches[4])) {
+                    $secondPart = $matches[4];
+                    return $formatter->quoteQualified($firstPart, $secondPart);
+                }
+                
+                // 情况2：整体限定名格式 `table.field` 或 "table.field"
+                if (str_contains($firstPart, '.')) {
+                    $parts = explode('.', $firstPart);
+                    return $formatter->quoteQualified(...$parts);
+                }
+                
+                // 情况3：简单标识符 `identifier` 或 "identifier"
+                return $formatter->quote($firstPart);
+            },
+            $condition
+        );
+        
+        // 第二步：处理不带引号的限定名（如：table.field）
+        // 只匹配有效的标识符格式（字母、数字、下划线），避免误匹配操作符、函数等
+        // 使用负向前瞻和回顾，确保不是字符串的一部分
+        $condition = preg_replace_callback(
+            '/(?<![`"a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)(?![`"a-zA-Z0-9_])/',
+            function ($matches) use ($formatter) {
+                // 确保这是有效的标识符对，而不是其他内容
+                return $formatter->quoteQualified($matches[1], $matches[2]);
+            },
+            $condition
+        );
+        
+        return $condition;
+    }
 
-    private function buildWheres(Query $query): string
+    protected function buildWheres(Query $query): string
     {
         $formatter = $query->getIdentifierFormatter();
         $wheres = '';
@@ -135,6 +263,7 @@ class GenericDialectAdapter implements DialectAdapterInterface
                     $normalized_field = str_replace(['`', '"'], '', $normalized_field);
                     $param = ':' . str_replace([' ', '(', ')', ','], '_', $normalized_field);
                     $param = str_replace('.', '__', $param) . $key;
+                    $skip_implode = false;
                     switch (strtolower($where[1])) {
                         case 'in':
                         case 'not in':
@@ -152,6 +281,20 @@ class GenericDialectAdapter implements DialectAdapterInterface
                                 $where[2] = rtrim($set_where, ',') . ')';
                                 break;
                             }
+                        case 'like':
+                        case 'not like':
+                            // LIKE 和 NOT LIKE 不需要等号，直接使用字段 LIKE 参数
+                            $value = $where[2];
+                            if (is_bool($value)) {
+                                $value = $value ? '1' : '0';
+                            } else {
+                                $value = (string)$value;
+                            }
+                            $query->bound_values[$param] = $value;
+                            // 直接构建 WHERE 子句，不使用 implode，避免添加等号
+                            $wheres .= '(' . $where[0] . ' ' . strtoupper($where[1]) . ' ' . $param . ') ' . $logic;
+                            $skip_implode = true;
+                            break;
                         // no break
                         default:
                             // 处理布尔值：false 转换为 0，true 转换为 1
@@ -165,7 +308,9 @@ class GenericDialectAdapter implements DialectAdapterInterface
                             $query->bound_values[$param] = $value;
                             $where[2] = $param;
                     };
-                    $wheres .= '(' . implode(' ', $where) . ') ' . $logic;
+                    if (!$skip_implode) {
+                        $wheres .= '(' . implode(' ', $where) . ') ' . $logic;
+                    }
             }
         }
 
@@ -219,15 +364,26 @@ class GenericDialectAdapter implements DialectAdapterInterface
             $exist_sql = rtrim($exist_sql, 'OR ');
             $existsQuery = $query->getLink()->prepare($exist_sql);
             $existsQuery->execute($bound_filed_values);
-            $exists = $existsQuery->fetchAll();
+            $exists = $existsQuery->fetchAll(PDO::FETCH_ASSOC);
             $insert_update_where_fields_times = count($query->insert_update_where_fields);
+            
             if (count($exists) > 0) {
                 foreach ($exists as $exist) {
                     foreach ($insert_items as $insert_item_key => $insert_item) {
                         $hit_times = 0;
                         foreach ($query->insert_update_where_fields as $insert_update_where_field) {
-                            $insert_update_where_field = trim($insert_update_where_field, '`');
-                            if ($insert_item[$insert_update_where_field] == $exist[$insert_update_where_field]) {
+                            // 🔧 修复：规范化字段名（移除引号，统一大小写）
+                            $normalized_field = strtolower(trim($insert_update_where_field, '`"'));
+                            // PostgreSQL 返回的字段名可能是小写的，需要匹配
+                            $exist_field_value = null;
+                            foreach ($exist as $exist_key => $exist_value) {
+                                if (strtolower(trim($exist_key, '`"')) === $normalized_field) {
+                                    $exist_field_value = $exist_value;
+                                    break;
+                                }
+                            }
+                            $insert_field_value = $insert_item[$insert_update_where_field] ?? null;
+                            if ($insert_field_value == $exist_field_value && $exist_field_value !== null) {
                                 $hit_times += 1;
                             }
                         }
@@ -237,14 +393,22 @@ class GenericDialectAdapter implements DialectAdapterInterface
                     }
                     $exist_update_value_key = '';
                     foreach ($query->insert_update_where_fields as $insert_update_where_field) {
-                        $exist_update_value_key .= $insert_update_where_field . '_' . $exist[trim($insert_update_where_field, '`')] . '_';
+                        $normalized_field = strtolower(trim($insert_update_where_field, '`"'));
+                        $exist_field_value = null;
+                        foreach ($exist as $exist_key => $exist_value) {
+                            if (strtolower(trim($exist_key, '`"')) === $normalized_field) {
+                                $exist_field_value = $exist_value;
+                                break;
+                            }
+                        }
+                        $exist_update_value_key .= $insert_update_where_field . '_' . ($exist_field_value ?? '') . '_';
                     }
                     $exist_update_value_key = rtrim($exist_update_value_key, '_');
 
                     foreach ($insert_or_update_items as $insert_key => $insert) {
                         $insert_data_value_key = '';
                         foreach ($query->insert_update_where_fields as $update_field) {
-                            $insert_data_value_key .= $update_field . '_' . $insert[trim($update_field, '`')] . '_';
+                            $insert_data_value_key .= $update_field . '_' . ($insert[$update_field] ?? '') . '_';
                         }
                         $insert_data_value_key = rtrim($insert_data_value_key, '_');
                         if ($insert_data_value_key == $exist_update_value_key) {
@@ -288,7 +452,15 @@ class GenericDialectAdapter implements DialectAdapterInterface
                     $update_inserts_sql = rtrim($update_inserts_sql, ', ') . ' ' . $insert_update_where . '; ';
                 }
             }
+            // 🔧 修复：如果所有记录都已存在（insert_items 为空），但 update_inserts_sql 不为空，应该返回 UPDATE 语句
+            // 否则 UPDATE 语句会被忽略，导致数据没有真正更新到数据库
             if (empty($insert_items)) {
+                // 如果有 UPDATE 语句，返回它们；否则返回空字符串
+                if (!empty($update_inserts_sql)) {
+                    // 移除末尾的分号，因为后续可能还会拼接其他 SQL
+                    $update_inserts_sql = rtrim($update_inserts_sql, '; ');
+                    return $update_inserts_sql;
+                }
                 $query->reset();
                 $query->sql = '';
                 $query->PDOStatement = null;

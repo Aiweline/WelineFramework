@@ -164,18 +164,18 @@ interface QueryInterface
     public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface;
 
     /**
-     * @DESC          # 表名设置
+     * @DESC          # 字段设置
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/8/16 23:01
      * 参数区：
      *
-     * @param string $fields 示例：a.id,a.name,b.role_id,b.rule_name
+     * @param string|array $fields 示例：a.id,a.name,b.role_id,b.rule_name 或 ['alias' => 'expression', 'field1', 'field2']
      *
      * @return QueryInterface
      */
-    public function fields(string $fields): QueryInterface;
+    public function fields(string|array $fields): QueryInterface;
 
     /**
      * @DESC          # 连接查询

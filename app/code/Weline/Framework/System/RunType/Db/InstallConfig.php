@@ -130,7 +130,7 @@ class InstallConfig
         try {
             //初始化一个PDO对象
             $configProvider = new ConfigProvider();
-            $connect = new ConnectionFactory($configProvider);
+            $connect = ConnectionFactory::getInstance($configProvider);
             if (CLI) {
                 $this->printer->success('PDO数据库链接检测通过', 'OK');
             }
