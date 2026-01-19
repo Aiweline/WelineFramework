@@ -76,10 +76,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         <div class='card'>
                             <div class='card-body'>
                                 <h4 class='card-title'>
-                                    <lang>产品管理</lang>
+                                    <lang>分类管理</lang>
                                 </h4>
                                 <p class='card-title-desc'>
-                                    <lang>管理产品</lang>
+                                    <lang>管理分类</lang>
                                 </p>
                                 <div class='table-rep-plugin'>
                                     <!-- search form -->
@@ -160,11 +160,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <tr>
                                                     <td class='co-name'>{{category.category_id}}</td>
                                                     <td class='co-name'>
-                                                        <local model="WeShop\Product\Model\Category\LocalDescription"
-                                                               id="category
-                                                        .category_id" field="name">
-                                                            {{category.local_name|category.name}}
-                                                        </local>
+                                                        {{category.local_name|category.name}}
                                                     </td>
                                                     <td class='co-name'>
                                                         <if condition="category.pid">
@@ -182,7 +178,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                    id='off_canvas_category_edit'
                                                                    action='*/backend/category/edit'
                                                                    vars='category'
-                                                                   action-params='{id: category.category_id}'
+                                                                   action-params='{id:category.category_id}'
                                                                    submit-button-text='保存'
                                                                    target-button-text='修改'
                                                                    title='编辑分类'
