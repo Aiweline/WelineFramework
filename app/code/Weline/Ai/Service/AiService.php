@@ -184,7 +184,8 @@ class AiService
         // 1. 模型选择
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
-            throw new Exception('无法选择合适的AI模型');
+            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
+            throw new Exception($reason);
         }
 
         // 2. 配置解析
@@ -271,7 +272,8 @@ class AiService
         // 1. 模型选择
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
-            throw new Exception('无法选择合适的AI模型');
+            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
+            throw new Exception($reason);
         }
 
         // 2. 场景适配器处理
@@ -295,6 +297,8 @@ class AiService
      */
     private function selectModel(?string $modelCode, ?string $scenarioCode): ?AiModel
     {
+        $model = null;
+        
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
             // 优先取已激活模型
@@ -304,31 +308,148 @@ class AiService
                 ->find()
                 ->fetch();
 
-            if ($model->getId()) {
-                return $model;
-            }
-
-            // 若未激活，则放宽激活限制，用于连接测试等场景
-            $model = $this->aiModel->reset()
-                ->where(AiModel::fields_MODEL_CODE, $modelCode)
-                ->find()
-                ->fetch();
-
-            if ($model->getId()) {
-                return $model;
+            if (!$model->getId()) {
+                // 若未激活，则放宽激活限制，用于连接测试等场景
+                $model = $this->aiModel->reset()
+                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->find()
+                    ->fetch();
             }
         }
 
         // 2. 根据场景代码选择默认模型
-        if ($scenarioCode) {
-            $model = $this->defaultModelManager->getDefaultModel($scenarioCode);
-            if ($model) {
-                return $model;
+        if (!$model || !$model->getId()) {
+            if ($scenarioCode) {
+                $model = $this->defaultModelManager->getDefaultModel($scenarioCode);
             }
         }
 
         // 3. 使用全局默认模型
-        return $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
+        if (!$model || !$model->getId()) {
+            $model = $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
+        }
+
+        // 4. 如果找不到默认模型，使用任意一个已激活的默认标记模型
+        if (!$model || !$model->getId()) {
+            $model = $this->aiModel->reset()
+                ->where(AiModel::fields_IS_ACTIVE, 1)
+                ->where(AiModel::fields_IS_DEFAULT, 1)
+                ->find()
+                ->fetch();
+        }
+
+        // 5. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
+        if ($model && $model->getId()) {
+            $this->mergeConfigToProviderConfig($model);
+            return $model;
+        }
+
+        return null;
+    }
+    
+    /**
+     * 将模型的 config 配置合并到 provider_config 中（读取时覆盖）
+     * config 的值会覆盖 provider_config 的对应键
+     * 
+     * @param AiModel $model
+     * @return void
+     */
+    private function mergeConfigToProviderConfig(AiModel $model): void
+    {
+        $config = $model->getConfig();
+        $providerConfig = $model->getProviderConfig();
+        
+        // 如果 config 不为空，用 config 的值覆盖 provider_config 的对应键
+        if (!empty($config)) {
+            // 合并配置：config 的值覆盖 provider_config 的值
+            $mergedProviderConfig = array_merge($providerConfig, $config);
+            // 更新 provider_config（仅在内存中，不保存到数据库）
+            $model->setData(AiModel::fields_PROVIDER_CONFIG, json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        }
+    }
+    
+    /**
+     * 获取模型选择失败的原因
+     * 
+     * @param string|null $modelCode 指定模型代码
+     * @param string|null $scenarioCode 场景代码
+     * @return string
+     */
+    private function getModelSelectionFailureReason(?string $modelCode, ?string $scenarioCode): string
+    {
+        $reasons = [];
+        
+        // 检查指定模型
+        if ($modelCode) {
+            $model = $this->aiModel->reset()
+                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->find()
+                ->fetch();
+            if (!$model->getId()) {
+                $reasons[] = __('指定的模型 "%{1}" 不存在', [$modelCode]);
+            } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+                $reasons[] = __('指定的模型 "%{1}" 未激活', [$modelCode]);
+            }
+        }
+        
+        // 检查场景默认模型
+        if ($scenarioCode) {
+            $defaultConfig = $this->defaultModelManager->getDefaultModelForService($scenarioCode);
+            if (!$defaultConfig) {
+                $reasons[] = __('场景 "%{1}" 未配置默认模型', [$scenarioCode]);
+            } else {
+                $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
+                $model = $this->aiModel->reset()
+                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->find()
+                    ->fetch();
+                if (!$model->getId()) {
+                    $reasons[] = __('场景 "%{1}" 的默认模型 "%{2}" 不存在', [$scenarioCode, $modelCode]);
+                } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+                    $reasons[] = __('场景 "%{1}" 的默认模型 "%{2}" 未激活', [$scenarioCode, $modelCode]);
+                }
+            }
+        }
+        
+        // 检查全局默认模型
+        $globalDefault = $this->defaultModelManager->getDefaultModelForService(DefaultModelManager::SERVICE_TYPE_DEFAULT);
+        if (!$globalDefault) {
+            $reasons[] = __('未配置全局默认模型');
+        } else {
+            $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::fields_MODEL_CODE);
+            $model = $this->aiModel->reset()
+                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->find()
+                ->fetch();
+            if (!$model->getId()) {
+                $reasons[] = __('全局默认模型 "%{1}" 不存在', [$modelCode]);
+            } elseif (!$model->getData(AiModel::fields_IS_ACTIVE)) {
+                $reasons[] = __('全局默认模型 "%{1}" 未激活', [$modelCode]);
+            }
+        }
+        
+        // 检查是否有已激活的默认标记模型
+        $activeDefaultCount = $this->aiModel->reset()
+            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where(AiModel::fields_IS_DEFAULT, 1)
+            ->count();
+        if ($activeDefaultCount == 0) {
+            $reasons[] = __('系统中没有已激活的默认模型');
+        }
+        
+        // 检查是否有任何已激活的模型
+        $activeModelCount = $this->aiModel->reset()
+            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->count();
+        if ($activeModelCount == 0) {
+            $reasons[] = __('系统中没有任何已激活的AI模型');
+        }
+        
+        if (empty($reasons)) {
+            return __('无法选择合适的AI模型，请检查模型配置');
+        }
+        
+        return __('无法选择合适的AI模型。原因：%{1}。请前往后台 AI 模块配置默认模型。', [implode('；', $reasons)]);
     }
 
     /**

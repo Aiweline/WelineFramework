@@ -598,12 +598,35 @@ $typeLabel = [
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function rentAssistant(assistantId) {
-    if (!confirm('<?= __("确定要租用此助手吗？") ?>')) {
-        return;
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __("确认租用") ?>',
+            text: '<?= __("确定要租用此助手吗？") ?>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定租用") ?>',
+            cancelButtonText: '<?= __("取消") ?>',
+            confirmButtonColor: '#28a745'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performRent(assistantId);
+            }
+        });
+    } else {
+        if (!confirm('<?= __("确定要租用此助手吗？") ?>')) {
+            return;
+        }
+        performRent(assistantId);
     }
+}
 
+function performRent(assistantId) {
     fetch('<?= $this->getBackendUrl('*/backend/market/rent') ?>', {
         method: 'POST',
         headers: {
@@ -614,15 +637,46 @@ function rentAssistant(assistantId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            // 可以跳转到我的租用列表
-            location.href = '<?= $this->getBackendUrl('*/backend/market/index') ?>';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __("成功") ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // 可以跳转到我的租用列表
+                    location.href = '<?= $this->getBackendUrl('*/backend/market/index') ?>';
+                });
+            } else {
+                console.log(data.message);
+                // 可以跳转到我的租用列表
+                location.href = '<?= $this->getBackendUrl('*/backend/market/index') ?>';
+            }
         } else {
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("失败") ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __("操作失败，请稍后重试") ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("操作失败") ?>',
+                text: '<?= __("请稍后重试") ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("操作失败，请稍后重试") ?>');
+        }
         console.error('Error:', error);
     });
 }
@@ -656,16 +710,42 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
-                if (data.success) {
-                    hideRatingForm();
-                    ratingForm.reset();
-                    // 刷新页面显示新评分
-                    location.reload();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: data.success ? 'success' : 'error',
+                        title: data.success ? '<?= __("成功") ?>' : '<?= __("失败") ?>',
+                        text: data.message,
+                        timer: data.success ? 2000 : 0,
+                        showConfirmButton: !data.success
+                    }).then(() => {
+                        if (data.success) {
+                            hideRatingForm();
+                            ratingForm.reset();
+                            // 刷新页面显示新评分
+                            location.reload();
+                        }
+                    });
+                } else {
+                    console.log(data.message);
+                    if (data.success) {
+                        hideRatingForm();
+                        ratingForm.reset();
+                        // 刷新页面显示新评分
+                        location.reload();
+                    }
                 }
             })
             .catch(error => {
-                alert('<?= __("提交失败，请稍后重试") ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __("提交失败") ?>',
+                        text: '<?= __("请稍后重试") ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __("提交失败，请稍后重试") ?>');
+                }
                 console.error('Error:', error);
             });
         });

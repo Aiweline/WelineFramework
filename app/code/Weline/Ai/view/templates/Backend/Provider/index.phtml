@@ -413,12 +413,30 @@ function loadAccounts(page = 1) {
                 displayAccounts(data.data);
                 displayPagination(data.total, data.page, data.limit);
             } else {
-                alert('加载失败: ' + data.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + data.message);
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('加载失败');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('加载失败') ?>',
+                    text: '<?= __('请重试') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('加载失败');
+            }
         });
 }
 
@@ -531,13 +549,31 @@ function onActivateChange() {
         
         if (!providerCode) {
             activateCheckbox.checked = false;
-            alert('请先选择供应商');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择供应商') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请先选择供应商');
+            }
             return;
         }
         
         if (!apiKey) {
             activateCheckbox.checked = false;
-            alert('请先填写API密钥');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先填写API密钥') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请先填写API密钥');
+            }
             return;
         }
         
@@ -591,7 +627,16 @@ function saveAccountForActivation() {
             document.querySelector('label[for="is_active"]').textContent = originalLabel;
             activateCheckbox.disabled = false;
             activateCheckbox.checked = false;
-            alert('保存失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('保存失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
@@ -599,7 +644,16 @@ function saveAccountForActivation() {
         activateCheckbox.disabled = false;
         activateCheckbox.checked = false;
         console.error('Error:', error);
-        alert('保存失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('保存失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('保存失败');
+        }
     });
 }
 
@@ -779,12 +833,30 @@ function editAccount(id) {
             const modal = new bootstrap.Modal(document.getElementById('accountModal'));
             modal.show();
         } else {
-            alert('加载账户数据失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('加载失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('加载账户数据失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('加载账户数据失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('加载失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('加载账户数据失败');
+        }
     });
 }
 
@@ -811,14 +883,42 @@ function saveAccount() {
         if (data.success) {
             bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
             loadAccounts(currentPage);
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log(data.message);
+            }
         } else {
-            alert('保存失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('保存失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('保存失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('保存失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('保存失败');
+        }
     });
 }
 
@@ -1007,13 +1107,31 @@ function toggleActive(id) {
     .then(response => response.json())
     .then(data => {
         if (!data.success) {
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(data.message);
+            }
             loadAccounts(currentPage);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('操作失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('操作失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('操作失败');
+        }
         loadAccounts(currentPage);
     });
 }
@@ -1034,7 +1152,17 @@ function deleteAccount(id) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log(data.message);
+            }
             loadAccounts(currentPage);
         } else {
             showResultModal('error', '删除失败', '删除失败: ' + data.message);

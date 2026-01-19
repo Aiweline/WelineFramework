@@ -20,6 +20,7 @@ use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
+use Weline\Framework\Acl\Acl;
 
 /**
  * 默认模型管理后台控制器
@@ -30,6 +31,7 @@ use Weline\Framework\Manager\Message;
  * - 模型保护状态查看
  * - 默认模型验证
  */
+#[Acl('Weline_Ai::ai_default_model_manager', '默认模型管理', 'mdi-star-settings', '默认模型管理', 'Weline_Ai::ai')]
 class DefaultModel extends BackendController
 {
     /**
@@ -77,60 +79,124 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Ai::ai_default_model_index', '查看默认模型配置', 'mdi-view-list', '查看默认模型配置', 'Weline_Ai::ai_default_model_manager')]
     public function index(): string
     {
-        // 获取所有默认模型配置
-        $defaultModels = $this->getDefaultModelManager()->getAllDefaultModels();
-        foreach ($defaultModels as $defaultModel) {
-            $defaultModelsArray[] = $defaultModel->getData();
-        }
+        // 硬编码的服务类型列表（作为基础配置）
+        $serviceTypes = [
+            'text' => __('文本生成'),
+            'image' => __('图像生成'),
+            'audio' => __('音频生成'),
+            'video' => __('视频生成'),
+            'code' => __('代码生成'),
+            'translation' => __('翻译'),
+            'embedding' => __('向量嵌入'),
+        ];
         
-        // 从数据库获取场景适配器作为服务类型（与适配器管理页面使用相同的查询方式）
-        $serviceTypes = [];
-        try {
-            // 从数据库查询所有场景适配器（与适配器管理页面保持一致，不过滤 is_active）
-            $adapterModel = ObjectManager::getInstance(AiScenarioAdapter::class);
-            $adapterCollection = $adapterModel->reset()
-                ->order(AiScenarioAdapter::fields_CODE, 'ASC')
-                ->select()
-                ->fetch();
-            
-            // 获取适配器记录数组（与适配器管理页面使用相同的方式）
-            $adapterItems = $adapterCollection->getItems();
-            
-            // 从适配器记录中提取服务类型（使用适配器的 code 作为 key，name 作为 label）
-            if (!empty($adapterItems)) {
-                foreach ($adapterItems as $adapter) {
-                    if (is_object($adapter)) {
-                        $code = $adapter->getData(AiScenarioAdapter::fields_CODE);
-                        $name = $adapter->getData(AiScenarioAdapter::fields_NAME);
-                        if ($code && $name) {
-                            $serviceTypes[$code] = $name;
-                        }
-                    }
+        // 添加场景适配器的场景代码作为服务类型
+        $adapterScanner = $this->getAdapterScanner();
+        $scannedAdapters = $adapterScanner->scanAllAdapters();
+        
+        foreach ($scannedAdapters as $adapter) {
+            // $adapter 是 ScenarioAdapterInterface 实例
+            if ($adapter instanceof \Weline\Ai\Interface\ScenarioAdapterInterface) {
+                $adapterCode = $adapter->getCode();
+                // 如果场景代码不在基础服务类型列表中，则添加
+                if (!isset($serviceTypes[$adapterCode])) {
+                    $adapterName = $adapter->getName();
+                    $serviceTypes[$adapterCode] = $adapterName . ' (' . __('场景适配器') . ')';
                 }
             }
-            
-            // 如果没有适配器，使用默认列表作为后备
-            if (empty($serviceTypes)) {
-                $serviceTypes = $this->getDefaultModelManager()->getAvailableServiceTypes();
-            }
-        } catch (\Exception $e) {
-            // 如果获取适配器失败，使用默认列表作为后备
-            $serviceTypes = $this->getDefaultModelManager()->getAvailableServiceTypes();
         }
         
-        // 获取所有可用模型
-        $availableModels = $this->getAiModel()->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->order(AiModel::fields_SUPPLIER, 'ASC')
-            ->order(AiModel::fields_NAME, 'ASC')
-            ->select()
-            ->fetchArray(); 
+        // 从数据库获取所有默认模型配置
+        $defaultModels = $this->getDefaultModelManager()->getAllDefaultModels();
+        $defaultModelsArray = [];
+        
+        // 先初始化所有服务类型（包括硬编码和场景适配器）的默认模型数据为空数组
+        foreach ($serviceTypes as $serviceType => $label) {
+            $defaultModelsArray[$serviceType] = [
+                'service_type' => $serviceType,
+                'model_code' => '',
+                'priority' => 100,
+                'is_active' => 1,
+                'model_name' => '',
+                'supplier' => '',
+            ];
+        }
+        
+        // 从数据库读取的默认模型数据匹配到所有服务类型（包括场景适配器）
+        if (!empty($defaultModels)) {
+            foreach ($defaultModels as $defaultModel) {
+                $serviceType = is_object($defaultModel) 
+                    ? $defaultModel->getData('service_type') 
+                    : ($defaultModel['service_type'] ?? '');
+                
+                // 如果服务类型不在列表中，添加到列表（可能是数据库中有但扫描时未发现的场景适配器）
+                if ($serviceType && !isset($defaultModelsArray[$serviceType])) {
+                    // 尝试从适配器扫描器获取适配器信息
+                    $adapterInstance = $this->getAdapterScanner()->getAdapter($serviceType);
+                    if ($adapterInstance) {
+                        $serviceTypes[$serviceType] = $adapterInstance->getName() . ' (' . __('场景适配器') . ')';
+                    } else {
+                        $serviceTypes[$serviceType] = $serviceType . ' (' . __('场景适配器') . ')';
+                    }
+                    $defaultModelsArray[$serviceType] = [
+                        'service_type' => $serviceType,
+                        'model_code' => '',
+                        'priority' => 100,
+                        'is_active' => 1,
+                        'model_name' => '',
+                        'supplier' => '',
+                    ];
+                }
+                
+                // 处理所有服务类型（包括场景适配器）
+                if ($serviceType && isset($defaultModelsArray[$serviceType])) {
+                    $modelCode = is_object($defaultModel) 
+                        ? $defaultModel->getData('model_code') 
+                        : ($defaultModel['model_code'] ?? '');
+                    
+                    // 获取模型的详细信息
+                    $modelInfo = null;
+                    if ($modelCode) {
+                        $model = $this->getAiModel()->reset()
+                            ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                            ->find()
+                            ->fetch();
+                        
+                        if ($model && $model->getId()) {
+                            $modelInfo = [
+                                'model_code' => $modelCode,
+                                'model_name' => $model->getName(),
+                                'supplier' => $model->getSupplier(),
+                            ];
+                        }
+                    }
+                    
+                    // 用数据库中的数据覆盖初始化的空数据
+                    $defaultModelsArray[$serviceType] = [
+                        'service_type' => $serviceType,
+                        'model_code' => $modelCode,
+                        'priority' => is_object($defaultModel) 
+                            ? $defaultModel->getData('priority') 
+                            : ($defaultModel['priority'] ?? 100),
+                        'is_active' => is_object($defaultModel) 
+                            ? $defaultModel->getData('is_active') 
+                            : ($defaultModel['is_active'] ?? 1),
+                        'model_name' => $modelInfo['model_name'] ?? '',
+                        'supplier' => $modelInfo['supplier'] ?? '',
+                    ];
+                }
+            }
+        }
+        
+        // 调试：检查数据是否正确构建
+        // var_dump('defaultModelsArray count:', count($defaultModelsArray));
+        // var_dump('defaultModelsArray keys:', array_keys($defaultModelsArray));
+        
         $this->assign('defaultModels', $defaultModelsArray);
         $this->assign('serviceTypes', $serviceTypes);
-        $this->assign('availableModels', $availableModels);
-        $this->assign('models', $availableModels); // 兼容模板变量名
 
         return $this->fetch();
     }
@@ -140,7 +206,8 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    public function setDefault(): string
+    #[Acl('Weline_Ai::ai_default_model_set', '设置默认模型', 'mdi-star', '设置默认模型', 'Weline_Ai::ai_default_model_manager')]
+    public function postSetDefault(): string
     {
         $serviceType = $this->request->getPost('service_type');
         $modelCode = $this->request->getPost('model_code');
@@ -160,7 +227,6 @@ class DefaultModel extends BackendController
                 ->where(AiModel::fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
-            
             if (!$model || !$model->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -168,12 +234,8 @@ class DefaultModel extends BackendController
                 ]);
             }
             
-            $result = $this->getDefaultModelManager()->setDefaultModel($serviceType, $modelCode, $priority);
+            $result = $this->getDefaultModelManager()->setDefaultModel($serviceType, $modelCode, $priority, $isActive);
             if ($result) {
-                // 如果需要更新 is_active 状态，可以在这里处理
-                // 注意：DefaultModelManager 的 setDefaultModel 可能不处理 is_active
-                // 如果需要，可以单独更新
-                
                 return $this->jsonResponse([
                     'success' => true,
                     'message' => '默认模型设置成功'
@@ -197,7 +259,8 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    public function removeDefault(): string
+    #[Acl('Weline_Ai::ai_default_model_remove', '移除默认模型配置', 'mdi-delete', '移除默认模型配置', 'Weline_Ai::ai_default_model_manager')]
+    public function postRemoveDefault(): string
     {
         $serviceType = $this->request->getPost('service_type');
         
@@ -235,6 +298,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Ai::ai_default_model_protection_status', '获取模型保护状态', 'mdi-shield-check', '获取模型保护状态', 'Weline_Ai::ai_default_model_manager')]
     public function getProtectionStatus(): string
     {
         $modelCode = $this->request->getGet('model_code');
@@ -265,7 +329,8 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    public function initialize(): string
+    #[Acl('Weline_Ai::ai_default_model_initialize', '初始化默认配置', 'mdi-play', '初始化默认配置', 'Weline_Ai::ai_default_model_manager')]
+    public function postInitialize(): string
     {
         try {
             $result = $this->getDefaultModelManager()->initializeDefaults();
@@ -288,6 +353,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Ai::ai_default_model_validate', '验证默认模型配置', 'mdi-check-circle', '验证默认模型配置', 'Weline_Ai::ai_default_model_manager')]
     public function validate(): string
     {
         try {
@@ -319,6 +385,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Ai::ai_default_model_get', '获取默认模型', 'mdi-information', '获取默认模型', 'Weline_Ai::ai_default_model_manager')]
     public function getDefaultModel(): string
     {
         $serviceType = $this->request->getGet('service_type', DefaultModelManager::SERVICE_TYPE_DEFAULT);
@@ -355,7 +422,8 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    public function clearCache(): string
+    #[Acl('Weline_Ai::ai_default_model_clear_cache', '清除缓存', 'mdi-cached', '清除缓存', 'Weline_Ai::ai_default_model_manager')]
+    public function postClearCache(): string
     {
         try {
             $this->getDefaultModelManager()->clearCache();
@@ -377,6 +445,7 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
+    #[Acl('Weline_Ai::ai_default_model_get_protected', '获取受保护的模型列表', 'mdi-shield-lock', '获取受保护的模型列表', 'Weline_Ai::ai_default_model_manager')]
     public function getProtected(): string
     {
         try {
@@ -432,7 +501,8 @@ class DefaultModel extends BackendController
      * 
      * @return string
      */
-    public function batchSet(): string
+    #[Acl('Weline_Ai::ai_default_model_batch_set', '批量设置默认模型', 'mdi-content-save-all', '批量设置默认模型', 'Weline_Ai::ai_default_model_manager')]
+    public function postBatchSet(): string
     {
         $configurationsJson = $this->request->getPost('configurations', '[]');
         

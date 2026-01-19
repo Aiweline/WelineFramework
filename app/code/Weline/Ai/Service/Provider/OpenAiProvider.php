@@ -39,6 +39,14 @@ class OpenAiProvider implements ProviderInterface
     private const RETRY_DELAY = 1;
 
     /**
+     * 构造函数
+     */
+    public function __construct()
+    {
+        // 无参数构造函数，用于依赖注入兼容性
+    }
+
+    /**
      * 调用OpenAI API
      * 
      * @param AiModel $model
@@ -71,9 +79,24 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 100);
-        if ($timeout > 0) { @set_time_limit($timeout + 10); } else { @set_time_limit(0); }
+        // 超时优先级：params.timeout > config.timeout > 默认120秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 120);
+        
+        // 设置执行时间限制，确保有足够的时间完成请求
+        if ($timeout > 0) {
+            // 设置时间限制为 timeout + 10 秒的缓冲时间
+            $timeLimit = $timeout + 10;
+            @set_time_limit($timeLimit);
+            
+            // 检查当前剩余时间是否足够
+            $currentLimit = ini_get('max_execution_time');
+            if ($currentLimit > 0 && $currentLimit < $timeLimit) {
+                // 如果当前限制小于需要的限制，尝试增加
+                @set_time_limit($timeLimit);
+            }
+        } else {
+            @set_time_limit(0);
+        }
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -151,8 +174,35 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 100);
-        if ($timeout > 0) { @set_time_limit($timeout + 10); } else { @set_time_limit(0); }
+        // 超时优先级：params.timeout > config.timeout > 默认120秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 120);
+        
+        // 调试日志：记录超时时间的来源和值
+        if (DEV) {
+            $timeoutSource = isset($params['timeout']) ? 'params' : (isset($config['timeout']) ? 'model_config' : 'default');
+            error_log(sprintf('AI流式超时设置: %d秒 (来源: %s, model_code: %s, config_keys: %s)', 
+                $timeout, 
+                $timeoutSource, 
+                $model->getModelCode(),
+                implode(',', array_keys($config))
+            ));
+        }
+        
+        // 设置执行时间限制，确保有足够的时间完成请求
+        if ($timeout > 0) {
+            // 设置时间限制为 timeout + 10 秒的缓冲时间
+            $timeLimit = $timeout + 10;
+            @set_time_limit($timeLimit);
+            
+            // 检查当前剩余时间是否足够
+            $currentLimit = ini_get('max_execution_time');
+            if ($currentLimit > 0 && $currentLimit < $timeLimit) {
+                // 如果当前限制小于需要的限制，尝试增加
+                @set_time_limit($timeLimit);
+            }
+        } else {
+            @set_time_limit(0);
+        }
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -244,21 +294,59 @@ class OpenAiProvider implements ProviderInterface
      * @param string $apiKey
      * @param array $data
      * @param array $proxyInfo
+     * @param int $timeout
      * @param int $retryCount
      * @return array
      * @throws Exception
      */
     private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
     {
+        // 记录开始时间，用于检测超时（在方法开始时记录）
+        $startTime = microtime(true);
+        $maxExecutionTime = ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
+        
         try {
             $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
             
+            // 在执行前检查剩余时间，如果时间不足，提前抛出错误
+            if ($timeLimit !== null && $timeLimit > 0) {
+                $elapsedBeforeRequest = microtime(true) - $startTime;
+                $remainingTime = $timeLimit - $elapsedBeforeRequest;
+                // 如果剩余时间少于5秒，提前抛出错误
+                if ($remainingTime < 5) {
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
+                }
+            }
+            
+            // 清除之前的错误
+            error_clear_last();
+            
             $response = curl_exec($ch);
+            
+            // 检查是否超时
+            $lastError = error_get_last();
+            if ($lastError && (
+                strpos($lastError['message'], 'Maximum execution time') !== false ||
+                strpos($lastError['message'], 'exceeded') !== false
+            )) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+            
+            // 检查执行时间是否接近限制
+            $elapsedTime = microtime(true) - $startTime;
+            if ($timeLimit !== null && $elapsedTime >= ($timeLimit - 2)) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+            
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
-            curl_close($ch);
 
             if ($response === false) {
+                // 检查是否是超时错误
+                if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
+                }
                 throw new Exception("API请求失败: {$error}");
             }
 
@@ -282,6 +370,12 @@ class OpenAiProvider implements ProviderInterface
             return $result;
 
         } catch (\Exception $e) {
+            // 如果是超时错误，直接抛出，不重试
+            if (strpos($e->getMessage(), '请求超时') !== false || 
+                strpos($e->getMessage(), '执行时间') !== false) {
+                throw $e;
+            }
+            
             if ($retryCount < self::MAX_RETRIES) {
                 sleep(self::RETRY_DELAY * ($retryCount + 1));
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
@@ -298,14 +392,41 @@ class OpenAiProvider implements ProviderInterface
      * @param array $data
      * @param callable $callback
      * @param array $proxyInfo
+     * @param int $timeout
      * @throws Exception
      */
     private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout): void
     {
+        // 记录开始时间，用于检测超时（在方法开始时记录）
+        $startTime = microtime(true);
+        $maxExecutionTime = ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
+        
         $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
         
+        // 在执行前检查剩余时间，如果时间不足，提前抛出错误
+        if ($timeLimit !== null && $timeLimit > 0) {
+            $elapsedBeforeRequest = microtime(true) - $startTime;
+            $remainingTime = $timeLimit - $elapsedBeforeRequest;
+            // 如果剩余时间少于5秒，提前抛出错误
+            if ($remainingTime < 5) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
+        }
+        
+        // 清除之前的错误
+        error_clear_last();
+        
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit) {
+            // 检查是否超时
+            if ($timeLimit !== null) {
+                $elapsedTime = microtime(true) - $startTime;
+                if ($elapsedTime >= ($timeLimit - 2)) {
+                    return -1; // 返回 -1 会中断 curl_exec
+                }
+            }
+            
             $lines = explode("\n", $data);
             
             foreach ($lines as $line) {
@@ -332,10 +453,23 @@ class OpenAiProvider implements ProviderInterface
         });
 
         curl_exec($ch);
+        
+        // 检查是否超时
+        $lastError = error_get_last();
+        if ($lastError && (
+            strpos($lastError['message'], 'Maximum execution time') !== false ||
+            strpos($lastError['message'], 'exceeded') !== false
+        )) {
+            throw new Exception($this->getTimeoutErrorMessage($timeout));
+        }
+        
         $error = curl_error($ch);
-        curl_close($ch);
 
         if ($error) {
+            // 检查是否是超时错误
+            if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
             throw new Exception("流式API调用失败: {$error}");
         }
     }
@@ -347,9 +481,9 @@ class OpenAiProvider implements ProviderInterface
      * @param string $apiKey
      * @param array $data
      * @param array $proxyInfo
-     * @return resource
+     * @return \CurlHandle|false
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout)
+    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
     {
         $ch = curl_init($url);
         
@@ -442,6 +576,35 @@ class OpenAiProvider implements ProviderInterface
             || str_contains($modelCode, 'openai') 
             || str_contains($modelCode, 'deepseek')
             || str_contains($modelCode, 'claude');
+    }
+
+    /**
+     * 获取超时错误消息
+     * 
+     * @param int $timeout 超时时间（秒）
+     * @return string 友好的错误消息（纯文本，不包含HTML标签）
+     */
+    private function getTimeoutErrorMessage(int $timeout): string
+    {
+        // 生成纯文本错误消息，去除所有HTML标签
+        $message = '';
+        if ($timeout > 0) {
+            $message = sprintf(
+                __('AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。'),
+                $timeout
+            );
+        } else {
+            $message = __('AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。');
+        }
+        
+        // 去除所有HTML标签，只保留纯文本
+        $message = strip_tags($message);
+        // 解码HTML实体
+        $message = html_entity_decode($message, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // 去除多余的空白字符
+        $message = trim(preg_replace('/\s+/', ' ', $message));
+        
+        return $message;
     }
 }
 

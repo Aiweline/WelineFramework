@@ -344,6 +344,10 @@ $current_status = $this->getData('current_status');
 <!-- 页脚 -->
 @template(Weline_Admin::common/footer.phtml)
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function changePage(page) {
     const url = new URL(window.location.href);
@@ -368,19 +372,56 @@ function toggleUserStatus(userId) {
         if (data.success) {
             location.reload();
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('操作失败') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('操作失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('操作失败') ?>');
+        }
     });
 }
 
 function deleteUser(userId) {
-    if (!confirm('<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>')) {
-        return;
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('确认删除') ?>',
+            text: '<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定删除") ?>',
+            cancelButtonText: '<?= __("取消") ?>',
+            confirmButtonColor: '#d33'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performDelete(userId);
+            }
+        });
+    } else {
+        if (!confirm('<?= __('确定要删除这个用户吗？此操作不可恢复！') ?>')) {
+            return;
+        }
+        performDelete(userId);
     }
+}
 
+function performDelete(userId) {
     fetch('<?= $this->getBackendUrl('*/backend/user/delete') ?>', {
         method: 'POST',
         headers: {
@@ -391,13 +432,41 @@ function deleteUser(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: '<?= __('用户已删除') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                location.reload();
+            }
         } else {
-            alert('<?= __('删除失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('删除失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('删除失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('操作失败') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('操作失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('操作失败') ?>');
+        }
     });
 }
 </script>

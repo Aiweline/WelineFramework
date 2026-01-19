@@ -308,6 +308,10 @@ $title = $isEdit ? __('编辑 API Key') : __('新建 API Key');
 </div>
 
 <!-- JavaScript -->
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 表单验证
@@ -346,23 +350,55 @@ document.addEventListener('DOMContentLoaded', function() {
                     offcanvas.hide();
                 } else {
                     // 显示成功消息
-                    alert('<?= __("保存成功！") ?>');
-                    
-                    // 关闭 Offcanvas
-                    const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('apiKeyEditOffcanvas'));
-                    offcanvas.hide();
-                    
-                    // 刷新列表
-                    window.location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __("保存成功") ?>',
+                            text: '<?= __("API Key已成功保存") ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            // 关闭 Offcanvas
+                            const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('apiKeyEditOffcanvas'));
+                            offcanvas.hide();
+                            // 刷新列表
+                            window.location.reload();
+                        });
+                    } else {
+                        console.log('<?= __("保存成功！") ?>');
+                        // 关闭 Offcanvas
+                        const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('apiKeyEditOffcanvas'));
+                        offcanvas.hide();
+                        // 刷新列表
+                        window.location.reload();
+                    }
                 }
             } else {
                 // 显示错误消息
-                alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __("保存失败") ?>',
+                        text: data.message || '<?= __("未知错误") ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __("保存失败，请稍后重试") ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("保存失败") ?>',
+                    text: '<?= __("请稍后重试") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("保存失败，请稍后重试") ?>');
+            }
         })
         .finally(() => {
             // 恢复按钮状态
@@ -396,10 +432,29 @@ function copyToken() {
 
 // 撤销 API Key
 function revokeApiKey(id) {
-    if (!confirm('<?= __("确定要撤销此 API Key 吗？此操作不可撤销！") ?>')) {
-        return;
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __("确认撤销") ?>',
+            text: '<?= __("确定要撤销此 API Key 吗？此操作不可撤销！") ?>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定撤销") ?>',
+            cancelButtonText: '<?= __("取消") ?>',
+            confirmButtonColor: '#d33'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performRevoke(id);
+            }
+        });
+    } else {
+        if (!confirm('<?= __("确定要撤销此 API Key 吗？此操作不可撤销！") ?>')) {
+            return;
+        }
+        performRevoke(id);
     }
-    
+}
+
+function performRevoke(id) {
     fetch('<?= $this->getUrl('*/*/revoke') ?>', {
         method: 'POST',
         headers: {
@@ -414,15 +469,43 @@ function revokeApiKey(id) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('<?= __("API Key 已撤销") ?>');
-            window.location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __("成功") ?>',
+                    text: '<?= __("API Key 已撤销") ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => window.location.reload());
+            } else {
+                console.log('<?= __("API Key 已撤销") ?>');
+                window.location.reload();
+            }
         } else {
-            alert('<?= __("撤销失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("撤销失败") ?>',
+                    text: data.message || '<?= __("未知错误") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("撤销失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('<?= __("撤销失败，请稍后重试") ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("撤销失败") ?>',
+                text: '<?= __("请稍后重试") ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("撤销失败，请稍后重试") ?>');
+        }
     });
 }
 </script>

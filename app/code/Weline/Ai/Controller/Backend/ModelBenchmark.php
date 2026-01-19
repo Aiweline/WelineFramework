@@ -47,10 +47,22 @@ class ModelBenchmark extends BackendController
     {
         try {
             // 获取可用模型列表
-            $models = $this->getAiModel()->reset()
+            $modelData = $this->getAiModel()->reset()
                 ->where('is_active', 1)
                 ->select()
                 ->fetchArray();
+            
+            // 规范化模型数据，确保包含必要的字段
+            $models = [];
+            foreach ($modelData as $data) {
+                $models[] = [
+                    'id' => $data['id'] ?? $data['model_id'] ?? '',
+                    'name' => $data['name'] ?? '',
+                    'model_code' => $data['model_code'] ?? '',
+                    'vendor' => $data['vendor'] ?? ($data['supplier'] ?? ''),
+                    'version' => $data['version'] ?? '',
+                ];
+            }
             
             // TODO: 获取历史测试记录
             $testHistory = [];
@@ -82,14 +94,8 @@ class ModelBenchmark extends BackendController
      * @return string
      */
     #[Acl('Weline_Ai::ai_model_benchmark_run', '运行基准测试', 'mdi-play', '运行基准测试')]
-    public function runBenchmark(): string
+    public function postRunBenchmark(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => __('无效的请求方法')
-            ]);
-        }
 
         $modelIds = $this->request->getPost('model_ids', []);
         $testSuite = $this->request->getPost('test_suite', 'default');

@@ -73,7 +73,7 @@ class DefaultModelManager
      * @param int $priority
      * @return AiDefaultModel
      */
-    public function setDefault(string $modelCode, string $serviceType, int $priority = 0): AiDefaultModel
+    public function setDefault(string $modelCode, string $serviceType, int $priority = 0, int $isActive = 1): AiDefaultModel
     {
         // Clear existing defaults for this service type if setting priority 0
         if ($priority === 0) {
@@ -86,6 +86,7 @@ class DefaultModelManager
             AiDefaultModel::fields_SERVICE_TYPE => $serviceType,
             AiDefaultModel::fields_IS_DEFAULT => 1,
             AiDefaultModel::fields_PRIORITY => $priority,
+            AiDefaultModel::fields_IS_ACTIVE => $isActive,
         ]);
         $model->save();
 
@@ -168,12 +169,16 @@ class DefaultModelManager
      * @param string $serviceType
      * @param string $modelCode
      * @param int $priority
+     * @param int $isActive
      * @return bool
      */
-    public function setDefaultModel(string $serviceType, string $modelCode, int $priority = 100): bool
+    public function setDefaultModel(string $serviceType, string $modelCode, int $priority = 100, int $isActive = 1): bool
     {
         try {
-            // Find existing configuration
+            // 先清除该服务类型的所有现有默认配置（确保每个服务类型只有一个默认模型）
+            $this->clearDefaults($serviceType);
+            
+            // Find existing configuration with same model_code and service_type
             $model = clone $this->defaultModel;
             $existing = $model->where(AiDefaultModel::fields_SERVICE_TYPE, $serviceType)
                 ->where(AiDefaultModel::fields_MODEL_CODE, $modelCode)
@@ -184,10 +189,11 @@ class DefaultModelManager
                 // Update existing
                 $existing->setData(AiDefaultModel::fields_IS_DEFAULT, 1);
                 $existing->setData(AiDefaultModel::fields_PRIORITY, $priority);
+                $existing->setData(AiDefaultModel::fields_IS_ACTIVE, $isActive);
                 $existing->save();
             } else {
                 // Create new
-                $this->setDefault($modelCode, $serviceType, $priority);
+                $this->setDefault($modelCode, $serviceType, $priority, $isActive);
             }
 
             return true;

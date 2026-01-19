@@ -50,9 +50,9 @@ class Test extends BackendController
             $models = $this->getAiModel()->reset()
                 ->where('is_active', 1)
                 ->select()
-                ->fetchArray();
+                ->fetch();
             
-            $this->assign('models', $models);
+            $this->assign('models', $models->getItems());
             
             return $this->fetch();
 

@@ -159,6 +159,10 @@ $pageTitle = $isEdit ? __('编辑助手') : __('创建助手');
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 // 表单提交处理
 document.getElementById('assistantForm').addEventListener('submit', function(e) {
@@ -179,16 +183,46 @@ document.getElementById('assistantForm').addEventListener('submit', function(e) 
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            window.location.href = '<?= $this->getBackendUrl("*/backend/assistant") ?>';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __("成功") ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.href = '<?= $this->getBackendUrl("*/backend/assistant") ?>';
+                });
+            } else {
+                console.log(data.message);
+                window.location.href = '<?= $this->getBackendUrl("*/backend/assistant") ?>';
+            }
         } else {
-            alert('<?= __("保存失败：") ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("保存失败") ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("保存失败：") ?>' + data.message);
+            }
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalHtml;
         }
     })
     .catch(error => {
-        alert('<?= __("请求失败：") ?>' + error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("请求失败") ?>',
+                text: error,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("请求失败：") ?>' + error);
+        }
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalHtml;
     });
@@ -205,7 +239,16 @@ document.getElementById('mcp_config').addEventListener('blur', function() {
         } catch (e) {
             this.classList.remove('is-valid');
             this.classList.add('is-invalid');
-            alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("格式错误") ?>',
+                    text: '<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+            }
         }
     } else {
         this.classList.remove('is-invalid', 'is-valid');

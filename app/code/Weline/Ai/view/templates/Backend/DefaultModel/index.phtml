@@ -2,7 +2,6 @@
 /**
  * 默认模型管理页面模板
  * 
- * @var array $models
  * @var array $serviceTypes
  * @var array $defaultModels
  */
@@ -10,15 +9,14 @@
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
-$models = $this->models ?? [];
-$serviceTypes = $this->serviceTypes ?? [];
-$defaultModels = $this->defaultModels ?? [];
 ?>
 <!DOCTYPE html>
 <html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
     @template(Weline_Admin::common/head.phtml)
     <title><lang>默认模型管理</lang></title>
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
@@ -97,23 +95,17 @@ $defaultModels = $this->defaultModels ?? [];
                 </thead>
                 <tbody>
                     <?php
-                    $serviceTypes = [
-                        'text' => __('文本生成'),
-                        'image' => __('图像生成'),
-                        'audio' => __('音频生成'),
-                        'video' => __('视频生成'),
-                        'code' => __('代码生成'),
-                        'translation' => __('翻译'),
-                        'embedding' => __('向量嵌入'),
-                    ];
-                    
+                    // $serviceTypes 和 $defaultModels 已在控制器中组装好
                     foreach ($serviceTypes as $type => $label):
-                        $currentDefault = $defaultModels[$type] ?? null;
+                        $currentDefault = $defaultModels[$type] ?? [];
+                        // 为标签库准备变量，确保值能正确解析
+                        $modelCode = $currentDefault['model_code'] ?? '';
+                        $modelName = $currentDefault['model_name'] ?? __('请选择模型');
                     ?>
                     <tr>
                         <td><strong><?= $label ?></strong><br><small class="text-muted"><?= $type ?></small></td>
                         <td>
-                            <w:ai:model:select id="type" name="model_code" value="currentDefault.model_code|''" display="currentDefault.model_name|请选择模型" service_type="type" class="w-100" json="1" />
+                            <w:ai:model:select id="type" name="model_code" value="modelCode|''" display="modelName|请选择模型" service_type="type" data-service-type="type" class="w-100" json="1" />
                         </td>
                         <td>
                             <input type="number" 
@@ -168,16 +160,28 @@ $defaultModels = $this->defaultModels ?? [];
 <script>
 function saveDefaultModel(serviceType) {
     const form = document.getElementById('defaultModelForm');
-    // 读取隐藏字段（从标签生成的隐藏域，按 name 读取）
-    let modelCode = (form.querySelector(`input[name="model_${serviceType}"]`) || {}).value || '';
-    if (!modelCode && window.AiModelSelectSelected && window.AiModelSelectSelected[serviceType]) {
-        modelCode = window.AiModelSelectSelected[serviceType];
+    // 通过 data-service-type 属性查找对应的隐藏输入框
+    const hiddenInput = form.querySelector(`input[data-service-type="${serviceType}"]`);
+    let modelCode = hiddenInput ? hiddenInput.value : '';
+    // 如果隐藏字段为空，尝试从全局选中状态读取（key 是 id）
+    if (!modelCode && window.AiModelSelectSelected) {
+        // 通过 data-service-type 查找对应的容器，获取其 id
+        const container = form.querySelector(`div[data-service-type="${serviceType}"]`);
+        if (container) {
+            const selectId = container.id.replace('_container', '');
+            modelCode = window.AiModelSelectSelected[selectId] || '';
+        }
     }
     const priority = form.querySelector(`input[name="priority_${serviceType}"]`).value;
     const isActive = form.querySelector(`input[name="active_${serviceType}"]`).checked ? 1 : 0;
 
     if (!modelCode) {
-        alert('<?= __('请选择模型') ?>');
+        Swal.fire({
+            icon: 'warning',
+            title: '<?= __('提示') ?>',
+            text: '<?= __('请选择模型') ?>',
+            confirmButtonText: '<?= __('确定') ?>'
+        });
         return;
     }
 
@@ -187,72 +191,223 @@ function saveDefaultModel(serviceType) {
     data.append('priority', priority);
     data.append('is_active', isActive);
 
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/setDefault') ?>', {
+    fetch('<?= $this->getBackendUrl('*/backend/default-model/set-default') ?>', {
         method: 'POST',
         body: data
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('<?= __('保存成功！') ?>');
+            Swal.fire({
+                icon: 'success',
+                title: '<?= __('成功') ?>',
+                text: '<?= __('保存成功！') ?>',
+                showConfirmButton: false,
+                timer: 1500
+            });
             updateProtectedModelsList();
         } else {
-            alert('<?= __('保存失败：') ?>' + data.message);
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('错误') ?>',
+                text: '<?= __('保存失败：') ?>' + data.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('请求失败') ?>',
+            text: '<?= __('请求失败：') ?>' + error.message,
+            confirmButtonText: '<?= __('确定') ?>'
+        });
     });
 }
 
 function saveAllDefaultModels() {
-    if (!confirm('<?= __('确定要保存所有默认模型配置吗？') ?>')) {
-        return;
-    }
-
-    // 实现批量保存逻辑
-    alert('<?= __('功能开发中...') ?>');
+    Swal.fire({
+        title: '<?= __('确认') ?>',
+        text: '<?= __('确定要保存所有默认模型配置吗？') ?>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '<?= __('确定') ?>',
+        cancelButtonText: '<?= __('取消') ?>'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.getElementById('defaultModelForm');
+            const configurations = [];
+            
+            // 收集所有服务类型的配置
+            <?php foreach ($serviceTypes as $type => $label): ?>
+            {
+                const serviceType = '<?= $type ?>';
+                // 通过 data-service-type 属性查找对应的隐藏输入框
+                const hiddenInput = form.querySelector(`input[data-service-type="${serviceType}"]`);
+                let modelCode = hiddenInput ? hiddenInput.value : '';
+                
+                // 如果隐藏字段为空，尝试从全局选中状态读取
+                if (!modelCode && window.AiModelSelectSelected) {
+                    const container = form.querySelector(`div[data-service-type="${serviceType}"]`);
+                    if (container) {
+                        const selectId = container.id.replace('_container', '');
+                        modelCode = window.AiModelSelectSelected[selectId] || '';
+                    }
+                }
+                
+                const priority = form.querySelector(`input[name="priority_${serviceType}"]`).value || 100;
+                const isActive = form.querySelector(`input[name="active_${serviceType}"]`).checked ? 1 : 0;
+                
+                configurations.push({
+                    service_type: serviceType,
+                    model_code: modelCode,
+                    priority: parseInt(priority) || 100,
+                    is_active: isActive
+                });
+            }
+            <?php endforeach; ?>
+            
+            // 发送批量保存请求
+            const data = new FormData();
+            data.append('configurations', JSON.stringify(configurations));
+            
+            Swal.fire({
+                title: '<?= __('保存中...') ?>',
+                text: '<?= __('正在保存所有配置，请稍候...') ?>',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            fetch('<?= $this->getBackendUrl('*/backend/default-model/batch-set') ?>', {
+                method: 'POST',
+                body: data
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('保存成功') ?>',
+                        text: '<?= __('所有默认模型配置已成功保存！') ?>',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        // 刷新页面以更新数据
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: '<?= __('保存失败：') ?>' + (data.message || '<?= __('未知错误') ?>'),
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: '<?= __('请求失败：') ?>' + error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            });
+        }
+    });
 }
 
 function clearCache() {
-    if (!confirm('<?= __('确定要清除默认模型缓存吗？') ?>')) {
-        return;
-    }
-
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/clearCache') ?>', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('<?= __('缓存已清除！') ?>');
-        } else {
-            alert('<?= __('清除失败：') ?>' + data.message);
+    Swal.fire({
+        title: '<?= __('确定要清除默认模型缓存吗？') ?>',
+        text: '<?= __('此操作将刷新默认模型配置缓存。') ?>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '<?= __('确定清除') ?>',
+        cancelButtonText: '<?= __('取消') ?>'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('<?= $this->getBackendUrl('*/backend/default-model/clear-cache') ?>', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire(
+                        '<?= __('已清除！') ?>',
+                        '<?= __('默认模型缓存已成功清除。') ?>',
+                        'success'
+                    );
+                } else {
+                    Swal.fire(
+                        '<?= __('清除失败！') ?>',
+                        '<?= __('清除失败：') ?>' + data.message,
+                        'error'
+                    );
+                }
+            })
+            .catch(error => {
+                Swal.fire(
+                    '<?= __('请求失败！') ?>',
+                    '<?= __('请求失败：') ?>' + error.message,
+                    'error'
+                );
+            });
         }
     });
 }
 
 function initDefaultModels() {
-    if (!confirm('<?= __('这将初始化所有默认模型配置，确定继续吗？') ?>')) {
-        return;
-    }
-
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/initialize') ?>', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('<?= __('初始化成功！') ?>');
-            location.reload();
-        } else {
-            alert('<?= __('初始化失败：') ?>' + data.message);
+    Swal.fire({
+        title: '<?= __('确定要初始化所有默认模型配置吗？') ?>',
+        text: '<?= __('此操作将重置所有服务类型的默认模型为系统推荐配置。') ?>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '<?= __('确定初始化') ?>',
+        cancelButtonText: '<?= __('取消') ?>'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('<?= $this->getBackendUrl('*/backend/default-model/initialize') ?>', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire(
+                        '<?= __('初始化成功！') ?>',
+                        '<?= __('默认配置已成功初始化。') ?>',
+                        'success'
+                    ).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire(
+                        '<?= __('初始化失败！') ?>',
+                        '<?= __('初始化失败：') ?>' + data.message,
+                        'error'
+                    );
+                }
+            })
+            .catch(error => {
+                Swal.fire(
+                    '<?= __('请求失败！') ?>',
+                    '<?= __('请求失败：') ?>' + error.message,
+                    'error'
+                );
+            });
         }
     });
 }
 
 function updateProtectedModelsList() {
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/getProtected') ?>')
+    fetch('<?= $this->getBackendUrl('*/backend/default-model/get-protected') ?>')
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('protectedModelsList');
@@ -275,6 +430,8 @@ function updateProtectedModelsList() {
 // 页面加载时获取受保护的模型列表
 document.addEventListener('DOMContentLoaded', updateProtectedModelsList);
 </script>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <style>
 .page-header {

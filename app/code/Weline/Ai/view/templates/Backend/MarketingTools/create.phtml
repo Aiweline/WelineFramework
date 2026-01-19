@@ -122,6 +122,10 @@ $isEdit = !empty($campaign['id']);
     
     <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
     
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         document.getElementById('campaign-form').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -142,15 +146,45 @@ $isEdit = !empty($campaign['id']);
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    alert(result.message || '保存成功');
-                    window.location.href = '<?= $this->getBackendUrl('ai/backend/marketingtools') ?>';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: result.message || '<?= __('保存成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = '<?= $this->getBackendUrl('ai/backend/marketingtools') ?>';
+                        });
+                    } else {
+                        console.log(result.message || '保存成功');
+                        window.location.href = '<?= $this->getBackendUrl('ai/backend/marketingtools') ?>';
+                    }
                 } else {
-                    alert(result.message || '保存失败');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('保存失败') ?>',
+                            text: result.message || '<?= __('保存失败') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(result.message || '保存失败');
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('保存失败');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('保存失败');
+                }
             });
         });
         
@@ -158,7 +192,16 @@ $isEdit = !empty($campaign['id']);
         document.getElementById('start_date').addEventListener('change', function() {
             const endDate = document.getElementById('end_date');
             if (this.value && endDate.value && this.value > endDate.value) {
-                alert('开始日期不能晚于结束日期');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('日期错误') ?>',
+                        text: '<?= __('开始日期不能晚于结束日期') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('开始日期不能晚于结束日期');
+                }
                 this.value = '';
             }
         });
@@ -166,7 +209,16 @@ $isEdit = !empty($campaign['id']);
         document.getElementById('end_date').addEventListener('change', function() {
             const startDate = document.getElementById('start_date');
             if (this.value && startDate.value && this.value < startDate.value) {
-                alert('结束日期不能早于开始日期');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('日期错误') ?>',
+                        text: '<?= __('结束日期不能早于开始日期') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('结束日期不能早于开始日期');
+                }
                 this.value = '';
             }
         });

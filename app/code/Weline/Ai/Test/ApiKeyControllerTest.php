@@ -35,7 +35,7 @@ class ApiKeyControllerTest extends TestCore
     /**
      * 设置测试环境
      */
-    protected function setUp(): void
+    public function setUp(): void
     {
         parent::setUp();
         

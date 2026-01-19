@@ -85,6 +85,10 @@
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 let startTime = 0;
 
@@ -95,7 +99,16 @@ function testAI() {
     const streamMode = document.getElementById('streamMode').checked;
 
     if (!prompt.trim()) {
-        alert('<?= __('请输入提示词') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请输入提示词') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请输入提示词') ?>');
+        }
         return;
     }
 

@@ -62,7 +62,8 @@ class ConfigResolver
      */
     private function resolveBackendConfig(AiModel $model, string $providerCode, array $userConfig): array
     {
-        $config = [];
+        // 优先级0: 模型的基础配置（包含 timeout 等配置项）
+        $config = $model->getConfig();
         
         // 优先级1: 用户提供的配置 (最高优先级)
         if (!empty($userConfig)) {
@@ -90,7 +91,8 @@ class ConfigResolver
      */
     private function resolveFrontendConfig(AiModel $model, string $providerCode, array $userConfig, ?int $userId): array
     {
-        $config = [];
+        // 优先级0: 模型的基础配置（包含 timeout 等配置项）
+        $config = $model->getConfig();
         
         // 优先级1: 用户提供的配置 (最高优先级)
         if (!empty($userConfig)) {
