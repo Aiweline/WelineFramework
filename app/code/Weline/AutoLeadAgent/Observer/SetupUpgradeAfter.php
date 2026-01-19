@@ -114,14 +114,46 @@ class SetupUpgradeAfter implements ObserverInterface
 
             // 检查编译环境（WASI SDK）
             if (!isset($envCheck['wasi_sdk']) || !$envCheck['wasi_sdk']) {
-                $this->printing->warning(__('WASI SDK 未安装，无法编译 WASM'));
-                $this->printing->note(__('模块将使用纯 JavaScript 推理引擎作为备用方案'));
-                $this->printing->note(__('如需编译 WASM，请运行: php bin/m auto-lead-agent:wasm:compile --install-deps'));
-                return;
+                $this->printing->note(__('WASI SDK 未安装，开始自动安装依赖...'));
+                // 立即刷新输出，确保用户能看到进度
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+                
+                // 自动安装 WASI SDK
+                $installResult = $compileService->installDependencies();
+                
+                if ($installResult['success']) {
+                    $this->printing->success(__('✓ WASI SDK 自动安装成功'));
+                    
+                    // 重新检查环境
+                    $envCheck = $compileService->checkEnvironment();
+                    
+                    if (!isset($envCheck['wasi_sdk']) || !$envCheck['wasi_sdk']) {
+                        $this->printing->warning(__('WASI SDK 安装后验证失败，无法编译 WASM'));
+                        $this->printing->note(__('模块将使用纯 JavaScript 推理引擎作为备用方案'));
+                        $this->printing->note(__('可手动运行: php bin/m auto-lead-agent:wasm:compile --install-deps'));
+                        return;
+                    }
+                } else {
+                    $errorMsg = !empty($installResult['errors']) 
+                        ? implode('; ', $installResult['errors']) 
+                        : __('安装失败，未知错误');
+                    $this->printing->warning(__('WASI SDK 自动安装失败：%{1}', [$errorMsg]));
+                    $this->printing->note(__('模块将使用纯 JavaScript 推理引擎作为备用方案'));
+                    $this->printing->note(__('可手动运行: php bin/m auto-lead-agent:wasm:compile --install-deps'));
+                    return;
+                }
             }
 
             // 执行编译
             $this->printing->note(__('检测到 WASM 源码有更新，开始自动编译...'));
+            // 立即刷新输出，确保用户能看到进度
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
+            flush();
             $result = $compileService->compile();
 
             if ($result['success']) {

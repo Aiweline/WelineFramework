@@ -15,6 +15,7 @@ use Weline\AutoLeadAgent\Model\SearchTask;
 use Weline\AutoLeadAgent\Model\LeadCandidate;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\State;
 use Weline\AutoLeadAgent\Service\SourceTypeHandlerInterface;
 use Weline\AutoLeadAgent\Service\StoreProfileService;
 
@@ -344,6 +345,29 @@ class LeadSearchService
             }
             $keywords = array_unique(array_slice($keywords, 0, 20));
             
+            // 获取语言和货币（从框架State获取真实值）
+            $language = $detail['language'] ?? null;
+            $currency = $detail['currency'] ?? null;
+            
+            // 如果detail中没有，尝试从框架State获取
+            if (empty($language)) {
+                try {
+                    $language = State::getLang();
+                } catch (\Throwable $e) {
+                    // 如果获取失败，使用默认值
+                    $language = 'zh';
+                }
+            }
+            
+            if (empty($currency)) {
+                try {
+                    $currency = State::getCurrency();
+                } catch (\Throwable $e) {
+                    // 如果获取失败，使用默认值
+                    $currency = 'CNY';
+                }
+            }
+            
             // 构建画像
             $profile = [
                 'source_type' => $sourceType,
@@ -355,6 +379,9 @@ class LeadSearchService
                 'region' => $detail['region'] ?? $detail['address'] ?? '',
                 'keywords' => $keywords,
                 'products' => $detail['products'] ?? [],
+                'language' => $language,  // 添加语言字段
+                'currency' => $currency,  // 添加货币字段
+                'languages' => $detail['languages'] ?? [$language], // 支持多语言列表
                 'detail' => $detail,
             ];
             
