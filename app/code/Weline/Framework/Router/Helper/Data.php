@@ -89,19 +89,23 @@ class Data
             return $this->batchRouters[$path];
         }
         
-        // 如果批量路由中没有，从文件读取并缓存到批量路由中
-        $routers = [];
-        if (is_file($path)) {
-            $routers = require $path;
-            if (!is_array($routers)) {
-                $routers = [];
+        // 如果批量路由中没有
+        if ($this->batchMode) {
+            // 批量模式下：只从批量缓存读取，不从文件读取（避免覆盖已收集的路由）
+            // 如果批量缓存中没有，返回空数组
+            $this->batchRouters[$path] = [];
+            return [];
+        } else {
+            // 非批量模式：从文件读取
+            $routers = [];
+            if (is_file($path)) {
+                $routers = require $path;
+                if (!is_array($routers)) {
+                    $routers = [];
+                }
             }
+            return $routers;
         }
-        
-        // 将读取的路由缓存到批量路由中，避免重复读取
-        $this->batchRouters[$path] = $routers;
-        
-        return $routers;
     }
     
     /**
@@ -184,16 +188,19 @@ class Data
     public function updateApiRouters(string $path, array &$api)
     {
         if ($this->batchMode) {
-            // 批量模式：从属性或文件读取现有路由，合并后存储到属性
+            // 批量模式：从批量缓存读取现有路由，合并后存储到批量缓存
             $routers = $this->getBatchRouters($path);
             $routers[$api['router']] = $api['rule'];
             $this->batchRouters[$path] = $routers;
         } else {
             // 立即写入模式
+            $routers = [];
             $routers[$api['router']] = $api['rule'];
             if (is_file($path)) {
                 $file_routers = require $path;
-                $routers      = array_merge($file_routers, $routers);
+                if (is_array($file_routers)) {
+                    $routers = array_merge($file_routers, $routers);
+                }
             }
             $this->writeRoutersToFile($path, $routers);
         }

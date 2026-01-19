@@ -33,7 +33,7 @@
     "ext-pdo": "*",
     "ext-exif": "*",
     "ext-fileinfo": "*",
-    "phpunit/phpunit": "^9.5.6",
+    "phpunit/phpunit": "^10.0",
     "ext-simplexml": "*",
     "ext-dom": "*",
     "ext-libxml": "*",

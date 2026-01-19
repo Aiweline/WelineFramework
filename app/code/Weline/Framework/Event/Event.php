@@ -195,11 +195,29 @@ class Event extends \Weline\Framework\DataObject\DataObject
         }
         
         // 遍历观察者配置，按需实例化并执行
+        $env = \Weline\Framework\App\Env::getInstance();
+        
         foreach ($observers as $index => $observerConfig) {
             try {
                 // 检查是否被禁用
                 if (isset($observerConfig['disabled']) && $observerConfig['disabled'] === 'true') {
                     continue;
+                }
+                
+                // 检查观察者所在模块的激活状态（运行时二次检查，确保安全）
+                $moduleName = $observerConfig['module'] ?? '';
+                if (!empty($moduleName)) {
+                    // 如果注册表中已有module_status字段，直接使用
+                    if (isset($observerConfig['module_status'])) {
+                        if (!$observerConfig['module_status']) {
+                            continue; // 模块被禁用，跳过
+                        }
+                    } else {
+                        // 兼容旧版本：运行时检查模块状态
+                        if (!$env->getModuleStatus($moduleName)) {
+                            continue; // 模块被禁用，跳过
+                        }
+                    }
                 }
                 
                 // 按需实例化观察者
@@ -221,7 +239,6 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 } else {
                     $observer->execute($this);
                 }
-                
             } catch (\Exception $e) {
                 // 实例化失败，跳过该观察者
                 throw $e;

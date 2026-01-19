@@ -11,13 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
-use Weline\Websites\Model\Website;
 
 class Url implements UrlInterface
 {
@@ -37,6 +35,23 @@ class Url implements UrlInterface
      */
     public static function detectLanguage(string &$uri, string $code): bool
     {
+        // 优化：使用语言缓存类，避免重复数据库查询
+        $languageCache = new \Weline\I18n\Cache\LanguageCache();
+        $checkResult = $languageCache->checkLanguage($code);
+        
+        if ($checkResult === true) {
+            // 找到语言，更新URI并设置
+            if (str_starts_with($uri, '/' . $code)) {
+                $uri = substr($uri, strlen('/' . $code));
+            }
+            self::$parserServer['WELINE_USER_LANG'] = $code;
+            return true;
+        } elseif ($checkResult === false) {
+            // 明确知道语言不存在，直接返回
+            return false;
+        }
+        
+        // 缓存未命中，分发事件查询数据库
         # 必须有前两个字符是否都是小写字母,且第三个字符必须是_
         $data = new DataObject([
             'result' => false,
@@ -46,7 +61,13 @@ class Url implements UrlInterface
         /** @var EventsManager $eventManager */
         $eventManager = w_obj(EventsManager::class);
         $eventManager->dispatch('Weline_Framework_Url::detect_language', $data);
-        if ($data->getData('result')) {
+        
+        $result = $data->getData('result');
+        
+        // 保存检查结果到缓存
+        $languageCache->setLanguageCheck($code, $result);
+        
+        if ($result) {
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
             }
@@ -63,6 +84,29 @@ class Url implements UrlInterface
      */
     public static function detectCurrency(string &$uri, string $code): bool
     {
+        // 优化：使用静态缓存，避免重复查询
+        $codeUpper = strtoupper($code);
+        if (isset(self::$parserCurrencies[$codeUpper])) {
+            self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
+            return true;
+        }
+        
+        // 优化：使用货币缓存类，避免重复数据库查询
+        $currencyCache = new \Weline\Currency\Cache\CurrencyCache();
+        $currency = $currencyCache->getByCode($code);
+        
+        if ($currency !== null && isset($currency['code'])) {
+            // 找到货币，更新URI并设置
+            if (str_starts_with($uri, '/' . $code)) {
+                $uri = substr($uri, strlen('/' . $code));
+            }
+            self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
+            // 缓存成功的货币代码到静态缓存
+            self::$parserCurrencies[$codeUpper] = $codeUpper;
+            return true;
+        }
+        
+        // 缓存未命中，分发事件查询数据库
         $detect_currency_data = new DataObject([
             'result' => false,
             'uri' => $uri,
@@ -77,7 +121,9 @@ class Url implements UrlInterface
             if (str_starts_with($uri_, '/' . $code)) {
                 $uri = substr($uri_, strlen('/' . $code));
             }
-            self::$parserServer['WELINE_USER_CURRENCY'] = $code;
+            self::$parserServer['WELINE_USER_CURRENCY'] = $codeUpper;
+            // 缓存成功的货币代码到静态缓存
+            self::$parserCurrencies[$codeUpper] = $codeUpper;
         }
         return (bool)$detect_currency_data->getData('result');
     }
@@ -331,11 +377,17 @@ class Url implements UrlInterface
         if (strpos($url, '?') !== false) {
             $url_arrs = explode('?', $url);
             $url_query = $url_arrs[1];
-            $url_params = explode('&', $url_query);
-            foreach ($url_params as $key => $url_param) {
-                unset($url_params[$key]);
-                $url_param_arr = explode('=', $url_param);
-                $url_params[$url_param_arr[0]] = $url_param_arr[1] ?? '';
+            // 确保 $url_query 是字符串
+            if (is_string($url_query)) {
+                $url_params = explode('&', $url_query);
+                foreach ($url_params as $key => $url_param) {
+                    unset($url_params[$key]);
+                    // 确保 $url_param 是字符串
+                    if (is_string($url_param)) {
+                        $url_param_arr = explode('=', $url_param);
+                        $url_params[$url_param_arr[0]] = $url_param_arr[1] ?? '';
+                    }
+                }
             }
             $url = $url_arrs[0];
             // 如果原url有参数，并且没有传入参数，则将原url的参数赋值给$params 避免参数丢失
@@ -355,16 +407,26 @@ class Url implements UrlInterface
             }
         }
         if ($merge_url_params) {
-            $params = array_merge($this->request->getGet(), $params);
+            $getParams = $this->request->getGet();
+            // 过滤掉数组值，只保留字符串值
+            foreach ($getParams as $key => $value) {
+                if (is_array($value)) {
+                    unset($getParams[$key]);
+                }
+            }
+            $params = array_merge($getParams, $params);
         }
 
         if ($params) {
+            // 过滤掉数组值，避免在 http_build_query 时出现问题
             foreach ($params as $key => $param) {
-                if (empty($param)) {
+                if (empty($param) || is_array($param)) {
                     unset($params[$key]);
                 }
             }
-            $url .= '?' . http_build_query($params);
+            if (!empty($params)) {
+                $url .= '?' . http_build_query($params);
+            }
         }
         $url = self::removeExtraDoubleSlashes($url);
         if (Env::get('seo')) {
@@ -466,6 +528,7 @@ class Url implements UrlInterface
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
+        
         # 静态文件不用再分析店铺
         if ($parse_url and str_contains($parse_url, '.')
             and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $parse_url)) {
@@ -473,7 +536,6 @@ class Url implements UrlInterface
         }
 
         $url = $parse_url;
-
         # 初始化server
         if (empty(self::$parserServer)) {
             self::$parserServer = $_SERVER;
@@ -518,38 +580,56 @@ class Url implements UrlInterface
             and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
             return $url;
         }
-
-        if (empty(self::$parserMatchs)) {
-            $detect_website_data = new DataObject([
-                'sites' => [],
-                'site_sample' => [
-                    "website_id" => 1,
-                    "name" => "默认网站",
-                    "code" => "default",
-                    "url" => "http://127.0.0.1:9981/default",
-                    "default_currency" => "CNY",
-                    "default_language" => "zh_Hans_CN",
-                    "default_timezone" => "Asia/Shanghai",
-                ],
-                'get_sites' => true
-            ]);
-            $eventManager = w_obj(EventsManager::class);
-            $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
-            $sites = $detect_website_data->getData('sites');
-            # 找出站点链接最长的，依次写入self::$parserMatchs
-            $tmp = [];
-            foreach ($sites as $site) {
-                $site_url = $site['url'];
-                $length = strlen($site_url);
-                $tmp[$length] = $site;
-            }
-            krsort($tmp);
-            foreach ($tmp as $site) {
-                $site_url = $site['url'];
-                self::$parserSites[$site_url] = $site;
+        // 优化：使用缓存类跨请求缓存网站数据，避免每次请求都查询数据库
+        // 如果 self::$parserSites 已经初始化，直接使用，避免重复查询和事件分发
+        if (empty(self::$parserSites)) {
+            // 使用网站缓存类
+            $websiteCache = new \Weline\Websites\Cache\WebsiteCache();
+            $cachedSites = $websiteCache->getAllSites();
+            
+            if ($cachedSites !== null && is_array($cachedSites)) {
+                // 使用缓存数据，转换为 self::$parserSites 格式
+                foreach ($cachedSites as $site) {
+                    $site_url = $site['url'] ?? '';
+                    if ($site_url) {
+                        self::$parserSites[$site_url] = $site;
+                    }
+                }
+            } else {
+                // 缓存不存在或无效，从数据库查询
+                $detect_website_data = new DataObject([
+                    'sites' => [],
+                    'site_sample' => [
+                        "website_id" => 1,
+                        "name" => "默认网站",
+                        "code" => "default",
+                        "url" => "http://127.0.0.1:9981/default",
+                        "default_currency" => "CNY",
+                        "default_language" => "zh_Hans_CN",
+                        "default_timezone" => "Asia/Shanghai",
+                    ],
+                    'get_sites' => true
+                ]);
+                $eventManager = w_obj(EventsManager::class);
+                $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
+                $sites = $detect_website_data->getData('sites');
+                # 找出站点链接最长的，依次写入self::$parserSites
+                $tmp = [];
+                foreach ($sites as $site) {
+                    $site_url = $site['url'];
+                    $length = strlen($site_url);
+                    $tmp[$length] = $site;
+                }
+                krsort($tmp);
+                foreach ($tmp as $site) {
+                    $site_url = $site['url'];
+                    self::$parserSites[$site_url] = $site;
+                }
+                
+                // 将查询结果保存到缓存
+                $websiteCache->setAllSites($sites);
             }
         }
-
         # 匹配网站 self::$parserSites 最长倒序
         $parsers = self::parse_url($url);
         if (!is_array($parsers)) {
@@ -575,10 +655,10 @@ class Url implements UrlInterface
                 self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
                 self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
                 if (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                    self::$parserServer['WELINE_USER_LANG'] = Cookie::getLang() ?: $site['default_language'];
+                    self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: $site['default_language'];
                 }
                 if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                    self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::getCurrency() ?: $site['default_currency'];
+                    self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: $site['default_currency'];
                 }
                 # 如果URI是空的，后边就不用判断了，直接返回环境包含的参数
                 if (empty($uri)) {
@@ -705,7 +785,6 @@ class Url implements UrlInterface
 
                 $has_currency = false;
                 $has_language = false;
-
                 if ($pre_path_1) {
                     # 检查头路径$pre_path_1是否是货币
                     if (strlen($pre_path_1) === 3) {

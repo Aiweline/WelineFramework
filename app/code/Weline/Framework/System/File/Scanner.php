@@ -115,8 +115,11 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
                 foreach ($framework_module_paths as $framework_module_path) {
                     $app_need_file_or_dir = $framework_module_path . DS . $file_or_dir;
                     if (is_file($app_need_file_or_dir)) {
-                        $modules_files[$name] = $app_need_file_or_dir;
-                        continue;
+                        // 提取子模块名称（例如：Event, Plugin, Hook 等）
+                        $submodule_name = basename($framework_module_path);
+                        // 为每个子模块创建独立的条目，使用 Weline_Framework_Event 格式
+                        $submodule_full_name = 'Weline_Framework_' . $submodule_name;
+                        $modules_files[$submodule_full_name] = $app_need_file_or_dir;
                     }
                 }
             }

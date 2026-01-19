@@ -65,6 +65,9 @@ class Request extends CommandAbstract
         $this->printer->note(__('正在请求: %{1}', [$url]));
         $this->printer->note(__('请求方法: %{1}', [$method]));
         
+        // 性能监控：记录总体开始时间
+        $totalStartTime = microtime(true);
+        
         // 检查是否并发请求
         $concurrent = isset($args['concurrent']) || isset($args['C']);
         $times = isset($args['times']) || isset($args['t']) ? (int)($args['times'] ?? $args['t']) : 1;
@@ -116,10 +119,18 @@ class Request extends CommandAbstract
             }
         }
 
-        // 输出响应信息
+        // 性能监控：计算总体耗时和资源大小
+        $totalEndTime = microtime(true);
+        $totalDuration = ($totalEndTime - $totalStartTime) * 1000;
+        $responseSize = strlen($response['body']);
+        $responseSizeKB = round($responseSize / 1024, 2);
+        $responseSizeMB = round($responseSize / 1024 / 1024, 2);
+        
+        
+        
+        // 输出响应信息（简化版，详细性能信息在底部显示）
         $this->printer->success(__('请求成功！'));
         $this->printer->note(__('响应状态码: %{1}', [$response['status_code']]));
-        $this->printer->note(__('响应时间: %{1}ms', [round($response['time'] * 1000, 2)]));
         
         if (!empty($response['headers'])) {
             $this->printer->note(__('响应头:'));
@@ -128,8 +139,18 @@ class Request extends CommandAbstract
             }
         }
 
-        // 处理响应内容
-        $this->processResponse($response['body'], $filter, $lines);
+        // 处理响应内容，并将性能信息传递到底部显示
+        $performanceInfo = [
+            'status_code' => $response['status_code'],
+            'http_time' => round($response['time'] * 1000, 2),
+            'total_time' => round($totalDuration, 2),
+            'response_size' => $responseSize,
+            'response_size_kb' => $responseSizeKB,
+            'response_size_mb' => $responseSizeMB,
+            'url' => $url,
+            'method' => $method
+        ];
+        $this->processResponse($response['body'], $filter, $lines, $performanceInfo);
     }
 
     /**
@@ -752,15 +773,35 @@ class Request extends CommandAbstract
         
         $totalDuration = (microtime(true) - $start) * 1000;
         
-        // 输出统计信息
+        // 输出统计信息（优化格式，统一显示在底部）
         $this->printer->printing('');
         $this->printer->success(__('并发请求完成！'));
-        $this->printer->printing($this->printer->colorize('======================================', 'cyan'));
-        $this->printer->note(__('总请求数: %{1}', [$times]));
-        $this->printer->note(__('成功数: %{1}', [$successCount]));
-        $this->printer->note(__('失败数: %{1}', [$failedCount]));
-        $this->printer->note(__('总耗时: %{1}ms', [round($totalDuration, 2)]));
-        $this->printer->note(__('平均耗时: %{1}ms', [round($totalDuration / $times, 2)]));
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+        $this->printer->printing($this->printer->colorize('                   并发请求性能统计', 'cyan'));
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+        
+        // 请求统计
+        $this->printer->printing($this->printer->colorize('请求统计:', 'yellow'));
+        $this->printer->printing(sprintf('  %-20s %s', __('总请求数:'), $times));
+        $successColor = ($successCount == $times) ? 'green' : (($successCount > $times * 0.8) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('成功数:'), 
+            $this->printer->colorize($successCount, $successColor)));
+        $failColor = ($failedCount == 0) ? 'green' : (($failedCount < $times * 0.2) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('失败数:'), 
+            $this->printer->colorize($failedCount, $failColor)));
+        
+        $this->printer->printing('');
+        
+        // 时间统计
+        $this->printer->printing($this->printer->colorize('时间统计:', 'yellow'));
+        $totalTimeColor = $totalDuration < 1000 ? 'green' : (($totalDuration < 5000) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('总耗时:'), 
+            $this->printer->colorize(sprintf('%.2f ms', $totalDuration), $totalTimeColor)));
+        
+        $avgTime = $totalDuration / $times;
+        $avgTimeColor = $avgTime < 100 ? 'green' : (($avgTime < 500) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('平均耗时:'), 
+            $this->printer->colorize(sprintf('%.2f ms', $avgTime), $avgTimeColor)));
         
         if (!empty($responseTimes)) {
             sort($responseTimes);
@@ -769,22 +810,39 @@ class Request extends CommandAbstract
             $avg = array_sum($responseTimes) / count($responseTimes);
             $median = $responseTimes[floor(count($responseTimes) / 2)];
             
-            $this->printer->note(__('最快响应: %{1}ms', [round($min, 2)]));
-            $this->printer->note(__('最慢响应: %{1}ms', [round($max, 2)]));
-            $this->printer->note(__('平均响应: %{1}ms', [round($avg, 2)]));
-            $this->printer->note(__('中位响应: %{1}ms', [round($median, 2)]));
+            $this->printer->printing(sprintf('  %-20s %s', __('最快响应:'), 
+                $this->printer->colorize(sprintf('%.2f ms', $min), 'green')));
+            $this->printer->printing(sprintf('  %-20s %s', __('最慢响应:'), 
+                $this->printer->colorize(sprintf('%.2f ms', $max), ($max > 1000 ? 'red' : 'yellow'))));
+            $this->printer->printing(sprintf('  %-20s %s', __('平均响应:'), 
+                $this->printer->colorize(sprintf('%.2f ms', $avg), ($avg < 100 ? 'green' : 'yellow'))));
+            $this->printer->printing(sprintf('  %-20s %s', __('中位响应:'), 
+                $this->printer->colorize(sprintf('%.2f ms', $median), ($median < 100 ? 'green' : 'yellow'))));
         }
         
+        $this->printer->printing('');
+        
+        // 吞吐量
+        $qps = round($successCount / ($totalDuration / 1000), 2);
+        $qpsColor = $qps > 100 ? 'green' : (($qps > 10) ? 'yellow' : 'red');
+        $this->printer->printing($this->printer->colorize('吞吐量:', 'yellow'));
+        $this->printer->printing(sprintf('  %-20s %s', __('QPS:'), 
+            $this->printer->colorize(sprintf('%.2f 请求/秒', $qps), $qpsColor)));
+        
+        $this->printer->printing('');
+        
+        // 状态码分布
         if (!empty($statusCodes)) {
-            $this->printer->note(__('状态码分布:'));
+            $this->printer->printing($this->printer->colorize('状态码分布:', 'yellow'));
             foreach ($statusCodes as $code => $count) {
-                $this->printer->printing("  HTTP {$code}: {$count} 次");
+                $codeColor = ($code >= 200 && $code < 300) ? 'green' : (($code >= 300 && $code < 400) ? 'yellow' : 'red');
+                $this->printer->printing(sprintf('  %-20s %s', 
+                    sprintf('HTTP %d:', $code), 
+                    $this->printer->colorize(sprintf('%d 次', $count), $codeColor)));
             }
         }
         
-        $qps = round($successCount / ($totalDuration / 1000), 2);
-        $this->printer->note(__('吞吐量(QPS): %{1} 请求/秒', [$qps]));
-        $this->printer->printing($this->printer->colorize('======================================', 'cyan'));
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
     }
     
     /**
@@ -856,8 +914,10 @@ class Request extends CommandAbstract
             
             $client = new \GuzzleHttp\Client();
             $start = microtime(true);
+            
             $response = $client->request($method, $url, $options);
             $duration = microtime(true) - $start;
+            
             
             // 提取响应头
             $responseHeaders = [];
@@ -865,10 +925,14 @@ class Request extends CommandAbstract
                 $responseHeaders[strtolower($key)] = implode(', ', $values);
             }
             
+            $bodyContent = $response->getBody()->getContents();
+            $bodySize = strlen($bodyContent);
+            
+            
             return [
                 'status_code' => $response->getStatusCode(),
                 'headers' => $responseHeaders,
-                'body' => $response->getBody()->getContents(),
+                'body' => $bodyContent,
                 'time' => $duration
             ];
             
@@ -881,7 +945,7 @@ class Request extends CommandAbstract
     /**
      * 处理响应内容
      */
-    private function processResponse(string $content, string $filter, int $lines): void
+    private function processResponse(string $content, string $filter, int $lines, array $performanceInfo = []): void
     {
         if ($filter) {
             // 使用filter参数提取内容
@@ -919,9 +983,95 @@ class Request extends CommandAbstract
             $this->printer->printing($this->printer->colorize('======================================', 'cyan'));
         }
         
-        // 输出响应大小
-        $size = strlen($content);
-        $this->printer->note(__('响应大小: %{1} 字节', [$size]));
+        // 在底部显示性能信息
+        if (!empty($performanceInfo)) {
+            $this->displayPerformanceInfo($performanceInfo);
+        } else {
+            // 如果没有传递性能信息，只显示响应大小
+            $size = strlen($content);
+            $this->printer->note(__('响应大小: %{1} 字节', [$size]));
+        }
+    }
+    
+    /**
+     * 显示性能信息
+     */
+    private function displayPerformanceInfo(array $info): void
+    {
+        $this->printer->printing('');
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+        $this->printer->printing($this->printer->colorize('                   性能信息 / Performance Info', 'cyan'));
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+        
+        // 请求信息
+        $this->printer->printing($this->printer->colorize('请求信息:', 'yellow'));
+        $this->printer->printing(sprintf('  %-20s %s', __('请求方法:'), $info['method'] ?? 'GET'));
+        if (isset($info['url'])) {
+            $this->printer->printing(sprintf('  %-20s %s', __('请求URL:'), $info['url']));
+        }
+        
+        $this->printer->printing('');
+        
+        // 响应信息
+        $this->printer->printing($this->printer->colorize('响应信息:', 'yellow'));
+        $statusCode = $info['status_code'] ?? 0;
+        $statusColor = ($statusCode >= 200 && $statusCode < 300) ? 'green' : (($statusCode >= 300 && $statusCode < 400) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('状态码:'), 
+            $this->printer->colorize($statusCode, $statusColor)));
+        
+        $this->printer->printing('');
+        
+        // 性能指标
+        $this->printer->printing($this->printer->colorize('性能指标:', 'yellow'));
+        
+        // HTTP响应时间
+        $httpTime = $info['http_time'] ?? 0;
+        $httpTimeColor = $httpTime < 100 ? 'green' : (($httpTime < 500) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('HTTP响应时间:'), 
+            $this->printer->colorize(sprintf('%.2f ms', $httpTime), $httpTimeColor)));
+        
+        // 总耗时
+        $totalTime = $info['total_time'] ?? 0;
+        $totalTimeColor = $totalTime < 200 ? 'green' : (($totalTime < 1000) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('总耗时:'), 
+            $this->printer->colorize(sprintf('%.2f ms', $totalTime), $totalTimeColor)));
+        
+        // 响应大小
+        $responseSize = $info['response_size'] ?? 0;
+        $responseSizeKB = $info['response_size_kb'] ?? 0;
+        $responseSizeMB = $info['response_size_mb'] ?? 0;
+        
+        $sizeText = '';
+        if ($responseSizeMB >= 1) {
+            $sizeText = sprintf('%.2f MB (%.2f KB / %d bytes)', $responseSizeMB, $responseSizeKB, $responseSize);
+        } elseif ($responseSizeKB >= 1) {
+            $sizeText = sprintf('%.2f KB (%d bytes)', $responseSizeKB, $responseSize);
+        } else {
+            $sizeText = sprintf('%d bytes', $responseSize);
+        }
+        
+        $sizeColor = $responseSizeMB < 1 ? 'green' : (($responseSizeMB < 5) ? 'yellow' : 'red');
+        $this->printer->printing(sprintf('  %-20s %s', __('响应大小:'), 
+            $this->printer->colorize($sizeText, $sizeColor)));
+        
+        // 计算传输速度（如果总耗时大于0）
+        if ($totalTime > 0 && $responseSize > 0) {
+            $speedKBps = ($responseSize / 1024) / ($totalTime / 1000);
+            $speedMBps = $speedKBps / 1024;
+            
+            $speedText = '';
+            if ($speedMBps >= 1) {
+                $speedText = sprintf('%.2f MB/s', $speedMBps);
+            } else {
+                $speedText = sprintf('%.2f KB/s', $speedKBps);
+            }
+            
+            $speedColor = $speedMBps > 1 ? 'green' : (($speedKBps > 100) ? 'yellow' : 'red');
+            $this->printer->printing(sprintf('  %-20s %s', __('传输速度:'), 
+                $this->printer->colorize($speedText, $speedColor)));
+        }
+        
+        $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
     }
 
     /**

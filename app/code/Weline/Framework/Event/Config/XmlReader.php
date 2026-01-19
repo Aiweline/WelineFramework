@@ -101,8 +101,14 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                     
                     $eventName = $event['_attribute']['name'];
                     
-                    // 验证事件名是否在规约文件中存在
-                    $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
+                    // 验证事件名是否在规约文件中存在（如果验证失败，只记录警告，不中断流程）
+                    try {
+                        $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
+                    } catch (\RuntimeException $e) {
+                        // 只记录警告，不中断流程
+                        // 使用框架的日志系统记录警告
+                        \Weline\Framework\App\Env::log_warning('event_spec_validation.log', '事件规约验证警告: ' . $e->getMessage());
+                    }
                     
                     // 检查 _value 是否存在
                     if (!isset($event['_value']) || !is_array($event['_value'])) {
@@ -160,8 +166,14 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 
                 $eventName = $config['config']['_value']['event']['_attribute']['name'];
                 
-                // 验证事件名是否在规约文件中存在
-                $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
+                // 验证事件名是否在规约文件中存在（如果验证失败，只记录警告，不中断流程）
+                try {
+                    $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
+                } catch (\RuntimeException $e) {
+                    // 只记录警告，不中断流程
+                    // 使用框架的日志系统记录警告
+                    \Weline\Framework\App\Env::log_warning('event_spec_validation.log', '事件规约验证警告: ' . $e->getMessage());
+                }
                 
                 // 检查 _value 是否存在
                 if (!isset($config['config']['_value']['event']['_value']) || !is_array($config['config']['_value']['event']['_value'])) {
