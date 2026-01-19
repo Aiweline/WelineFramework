@@ -1,0 +1,118 @@
+<?php
+/**
+ * WeShop Default Theme - Base Layout
+ * 基础布局模板 - 所有页面的基础结构
+ */
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title><?= $this->getTitle() ?></title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+    
+    <!-- Tailwind Config -->
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#007BFF",
+              "secondary": "#FFA500",
+              "background-light": "#F8F9FA",
+              "background-dark": "#121212",
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#1E1E1E",
+              "text-primary-light": "#212529",
+              "text-primary-dark": "#EAEAEA",
+              "text-secondary-light": "#6C757D",
+              "text-secondary-dark": "#9E9E9E",
+              "border-light": "#E0E0E0",
+              "border-dark": "#424242",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+    
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+    
+    <!-- Hook: head-before -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::head-before"/>
+    
+    <!-- 主题CSS -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/main.css') ?>">
+    
+    <!-- Hook: head-after -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::head-after"/>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
+    <!-- Hook: body-start -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::body-start"/>
+    
+    <div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            
+            <!-- Hook: header-before -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::header-before"/>
+            
+            <!-- Header -->
+            <w:theme:template layout="partials.header">
+                WeShop_Default::frontend/partials/header/default.phtml
+            </w:theme:template>
+            
+            <!-- Hook: header-after -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::header-after"/>
+            
+            <!-- Main Content -->
+            <main class="flex-1">
+                <!-- Hook: content-before -->
+                <w:hook name="Weline_Theme::frontend::layouts::base::content-before"/>
+                
+                <?= $this->getChildHtml('content') ?>
+                
+                <!-- Hook: content-after -->
+                <w:hook name="Weline_Theme::frontend::layouts::base::content-after"/>
+            </main>
+            
+            <!-- Hook: footer-before -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::footer-before"/>
+            
+            <!-- Footer -->
+            <w:theme:template layout="partials.footer">
+                WeShop_Default::frontend/partials/footer/default.phtml
+            </w:theme:template>
+            
+            <!-- Hook: footer-after -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::footer-after"/>
+            
+        </div>
+    </div>
+    
+    <!-- Hook: body-end -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::body-end"/>
+    
+    <!-- 主题JS -->
+    <script src="<?= $this->getStaticUrl('frontend/assets/js/main.js') ?>"></script>
+</body>
+</html>
