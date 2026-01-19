@@ -47,9 +47,7 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
             }
             # 2>> \"\"{$log}\"\" 2>&1
             $bp_command_file = BP . 'bin\w';
-//            $command = "$php_binary $bp_command_file cron:task:run 2>> {$log} 2>&1";
             $command = "$php_binary $bp_command_file cron:task:run";
-//            dd($command);
             $script_string = <<<SCRIPT
 Dim command
 command = "$command"
