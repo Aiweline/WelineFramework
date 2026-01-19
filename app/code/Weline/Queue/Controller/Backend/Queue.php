@@ -51,7 +51,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         if ($id = $this->request->getGet('id')) {
             $this->queue->where('main_table.' . $this->queue::fields_ID, $id);
         }
-        $this->queue->where('t.enable', 1)
+        // 允许显示所有队列，如果有类型关联则只显示类型启用的
+        // 使用 additional 方法添加原始 SQL 条件，允许显示没有类型或类型启用的队列
+        $this->queue->additional('AND (t.enable = 1 OR t.enable IS NULL)')
             ->order('main_table.queue_id');
 //        $this->queue->additional('order by CASE status WHEN \'' . \Weline\Queue\Model\Queue::status_running . '\' THEN 0 WHEN \'' . \Weline\Queue\Model\Queue::status_pending . '\' THEN 1 WHEN \'' . \Weline\Queue\Model\Queue::status_done . '\' THEN 2  WHEN \'' . \Weline\Queue\Model\Queue::status_error . '\' THEN  3 END ASC,main_table.update_time DESC');
         $this->queue->pagination()->select()->fetch();
