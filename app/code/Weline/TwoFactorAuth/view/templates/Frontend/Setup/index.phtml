@@ -428,6 +428,10 @@
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
     <input type="hidden" id="referer" value="<?= htmlspecialchars($referer ?? '/frontend/account') ?>">
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // PWA 安装功能
         let deferredPrompt;
@@ -460,7 +464,16 @@
                 if (!deferredPrompt) {
                     // 如果 deferredPrompt 不存在，打开验证器应用页面，那里会触发安装提示
                     window.open('/twofa-app/', '_blank');
-                    alert('<?= addslashes('<lang>请在新打开的页面中点击"安装到桌面"按钮</lang>') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '<?= __('提示') ?>',
+                            text: '<?= __('请在新打开的页面中点击"安装到桌面"按钮') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.log('<?= __('请在新打开的页面中点击"安装到桌面"按钮') ?>');
+                    }
                     return;
                 }
                 
@@ -471,9 +484,28 @@
                 const { outcome } = await deferredPrompt.userChoice;
                 
                 if (outcome === 'accepted') {
-                    alert('<?= addslashes('<lang>应用安装成功！</lang>') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('应用安装成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log('<?= __('应用安装成功') ?>');
+                    }
                 } else {
-                    alert('<?= addslashes('<lang>安装已取消</lang>') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '<?= __('提示') ?>',
+                            text: '<?= __('安装已取消') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.log('<?= __('安装已取消') ?>');
+                    }
                 }
                 
                 // 清除 deferredPrompt
@@ -532,7 +564,17 @@
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
             navigator.clipboard.writeText(text).then(() => {
-                alert(translations.secretCopied);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('复制成功') ?>',
+                        text: translations.secretCopied,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log(translations.secretCopied);
+                }
             });
         }
 
@@ -541,7 +583,17 @@
             const codes = <?= json_encode($backup_codes) ?>;
             const text = codes.join('\n');
             navigator.clipboard.writeText(text).then(() => {
-                alert(translations.backupCodesCopied);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('复制成功') ?>',
+                        text: translations.backupCodesCopied,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log(translations.backupCodesCopied);
+                }
             });
         }
 
@@ -583,7 +635,17 @@ ${translations.finalNote}`;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            alert(translations.fileDownloaded);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('下载成功') ?>',
+                    text: translations.fileDownloaded,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log(translations.fileDownloaded);
+            }
         }
 
         // 自动格式化验证码输入
@@ -598,7 +660,16 @@ ${translations.finalNote}`;
             const backupCodes = document.getElementById('backupCodesJson').value;
 
             if (!code || code.length !== 6) {
-                alert(translations.enter6DigitCode);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: translations.enter6DigitCode,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(translations.enter6DigitCode);
+                }
                 return;
             }
 
@@ -615,13 +686,43 @@ ${translations.finalNote}`;
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ ' + translations.enableSuccess);
-                    window.location.href = '/two-factor-auth/frontend';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: translations.enableSuccess,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = '/two-factor-auth/frontend';
+                        });
+                    } else {
+                        console.log('✅ ' + translations.enableSuccess);
+                        window.location.href = '/two-factor-auth/frontend';
+                    }
                 } else {
-                    alert('❌ ' + result.message + '\n\n' + translations.checkCode);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('失败') ?>',
+                            html: result.message + '<br><br>' + translations.checkCode,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('❌ ' + result.message + '\n\n' + translations.checkCode);
+                    }
                 }
             } catch (error) {
-                alert(translations.operationFailed);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: translations.operationFailed,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(translations.operationFailed);
+                }
                 console.error(error);
             }
         }
