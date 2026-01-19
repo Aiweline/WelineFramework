@@ -11,257 +11,242 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Controller\Frontend;
 
-use Weline\Customer\Session\CustomerSession;
-use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionManager;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
- * 运送地址前端控制器
+ * 配送地址前端API控制器
+ * 
+ * 提供配送地址的CRUD操作和session管理
  */
-class DeliveryAddress extends FrontendController
+class DeliveryAddress extends FrontendRestController
 {
-    protected ?string $layoutType = 'account.dashboard';
-    
-    private DeliveryAddressService $service;
-    private CustomerSession $session;
+    private SessionManager $sessionManager;
+    private DeliveryAddressService $deliveryAddressService;
 
     public function __construct(
-        ObjectManager $objectManager,
-        CustomerSession $session
+        SessionManager $sessionManager,
+        DeliveryAddressService $deliveryAddressService
     ) {
-        $this->service = $objectManager->getInstance(DeliveryAddressService::class);
-        $this->session = $session;
+        $this->sessionManager = $sessionManager;
+        $this->deliveryAddressService = $deliveryAddressService;
     }
 
     /**
-     * 检查登录状态
+     * 更新session中的配送地址
+     * 
+     * POST /shipping/rest/v1/frontend/delivery-address/update-session
+     * Body: {
+     *   "country": "中国",
+     *   "province": "北京市",
+     *   "city": "北京市",
+     *   "district": "朝阳区",
+     *   "street": "xxx街道",
+     *   "postal_code": "100000",
+     *   "latitude": 39.9042,
+     *   "longitude": 116.4074
+     * }
+     * 
+     * @return array
      */
-    private function checkLogin(): bool
+    public function updateSession(): array
     {
-        if (!$this->session->isLogin()) {
-            $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
-            $this->redirect('/customer/account/login?referer=' . urlencode($currentUrl));
-            return false;
+        try {
+            $body = $this->request->getBodyParams();
+            
+            // 验证必填字段
+            $requiredFields = ['country', 'province', 'city'];
+            foreach ($requiredFields as $field) {
+                if (empty($body[$field])) {
+                    return $this->error(__('%{1}不能为空', [$field]), 400);
+                }
+            }
+            
+            // 构建配送地址数据
+            $deliveryAddress = [
+                'country' => $body['country'] ?? '',
+                'province' => $body['province'] ?? '',
+                'city' => $body['city'] ?? '',
+                'district' => $body['district'] ?? '',
+                'street' => $body['street'] ?? '',
+                'postal_code' => $body['postal_code'] ?? '',
+                'latitude' => $body['latitude'] ?? null,
+                'longitude' => $body['longitude'] ?? null,
+                'full_address' => $this->buildFullAddress($body),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            
+            // 保存到session
+            $session = $this->sessionManager->create();
+            $session->set('shipping_delivery_address', $deliveryAddress);
+            
+            // 如果用户已登录，尝试同步到数据库
+            $customerId = $this->getCustomerId();
+            if ($customerId) {
+                $this->syncToDatabase($customerId, $deliveryAddress);
+            }
+            
+            return $this->success(__('配送地址更新成功'), $deliveryAddress);
+            
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), 500);
         }
-        return true;
     }
-
+    
     /**
-     * 获取当前客户ID
+     * 获取session中的配送地址
+     * 
+     * GET /shipping/rest/v1/frontend/delivery-address/get-session
+     * 
+     * @return array
+     */
+    public function getSession(): array
+    {
+        try {
+            $session = $this->sessionManager->create();
+            $address = $session->get('shipping_delivery_address');
+            
+            if (empty($address)) {
+                return $this->success(__('暂无配送地址'), null);
+            }
+            
+            return $this->success(__('获取成功'), $address);
+            
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), 500);
+        }
+    }
+    
+    /**
+     * 同步浏览器存储的地址到session（登录后调用）
+     * 
+     * POST /shipping/rest/v1/frontend/delivery-address/sync-from-browser
+     * Body: {
+     *   "address": {...}
+     * }
+     * 
+     * @return array
+     */
+    public function syncFromBrowser(): array
+    {
+        try {
+            $customerId = $this->getCustomerId();
+            if (!$customerId) {
+                return $this->error(__('用户未登录'), 401);
+            }
+            
+            $body = $this->request->getBodyParams();
+            $address = $body['address'] ?? null;
+            
+            if (empty($address) || !is_array($address)) {
+                return $this->error(__('地址数据不能为空'), 400);
+            }
+            
+            // 同步到session
+            $session = $this->sessionManager->create();
+            $session->set('shipping_delivery_address', $address);
+            
+            // 同步到数据库
+            $this->syncToDatabase($customerId, $address);
+            
+            return $this->success(__('同步成功'), $address);
+            
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), 500);
+        }
+    }
+    
+    /**
+     * 获取当前登录用户ID
+     * 
+     * @return int|null
      */
     private function getCustomerId(): ?int
     {
-        if (!$this->session->isLogin()) {
+        try {
+            $session = $this->sessionManager->create();
+            $customerData = $session->get('weshop_customer');
+            
+            if ($customerData && isset($customerData['customer_id'])) {
+                return (int)$customerData['customer_id'];
+            }
+            
+            return null;
+        } catch (\Exception $e) {
             return null;
         }
-        $user = $this->session->getLoginUser();
-        return $user->getId();
     }
-
+    
     /**
-     * 地址列表页
+     * 同步地址到数据库
+     * 
+     * @param int $customerId
+     * @param array $addressData
+     * @return void
      */
-    public function getIndex()
+    private function syncToDatabase(int $customerId, array $addressData): void
     {
-        if (!$this->checkLogin()) {
-            return;
-        }
-        
-        $customerId = $this->getCustomerId();
-        $filters = [];
-        if ($this->request->getParam('keyword')) {
-            $filters['keyword'] = $this->request->getParam('keyword');
-        }
-        
-        $addresses = $this->service->getListByCustomer($customerId, $filters);
-        $this->assign('addresses', $addresses);
-        return $this->fetch();
-    }
-
-    /**
-     * 地址表单页（新增/编辑）
-     */
-    public function getForm()
-    {
-        if (!$this->checkLogin()) {
-            return;
-        }
-        
-        $id = $this->request->getParam('id');
-        $address = null;
-        
-        if ($id) {
-            $address = $this->service->getById((int)$id);
-            if (!$address) {
-                $this->getMessageManager()->addError(__('地址不存在'));
-                $this->redirect('*/index');
-                return;
-            }
-            
-            // 验证权限：只能编辑自己的地址
-            $customerId = $this->getCustomerId();
-            if ($address->getCustomerId() !== $customerId) {
-                $this->getMessageManager()->addError(__('无权操作此地址'));
-                $this->redirect('*/index');
-                return;
-            }
-        }
-        
-        $this->assign('address', $address);
-        return $this->fetch();
-    }
-
-    /**
-     * 保存地址
-     */
-    public function postSave()
-    {
-        if (!$this->checkLogin()) {
-            return;
-        }
-        
-        $customerId = $this->getCustomerId();
-        $data = $this->request->getPost();
-        $id = $data['delivery_address_id'] ?? null;
-        
         try {
-            if ($id) {
-                $address = $this->service->update((int)$id, $data, $customerId);
-                $message = __('更新成功');
+            // 检查是否已有默认地址
+            $defaultAddress = $this->deliveryAddressService->getDefaultByCustomer($customerId);
+            
+            if ($defaultAddress) {
+                // 更新现有默认地址
+                $updateData = [
+                    'country' => $addressData['country'],
+                    'province' => $addressData['province'],
+                    'city' => $addressData['city'],
+                    'district' => $addressData['district'],
+                    'street' => $addressData['street'],
+                    'postal_code' => $addressData['postal_code'],
+                ];
+                
+                $this->deliveryAddressService->update(
+                    $defaultAddress->getId(),
+                    $updateData,
+                    $customerId
+                );
             } else {
-                $address = $this->service->create($customerId, $data);
-                $message = __('创建成功');
+                // 创建新地址作为默认地址
+                $createData = [
+                    'name' => __('自动定位地址'),
+                    'contact_name' => '',
+                    'contact_phone' => '',
+                    'country' => $addressData['country'] ?: '中国',
+                    'province' => $addressData['province'],
+                    'city' => $addressData['city'],
+                    'district' => $addressData['district'],
+                    'street' => $addressData['street'],
+                    'postal_code' => $addressData['postal_code'],
+                    'is_default' => 1,
+                    'is_enabled' => 1,
+                ];
+                
+                $this->deliveryAddressService->create($customerId, $createData);
             }
-            
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => true,
-                    'message' => $message,
-                    'data' => $address->getData()
-                ]);
-            }
-            
-            $this->getMessageManager()->addSuccess($message);
-            $this->redirect('*/index');
         } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ]);
-            }
-            
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/form' . ($id ? '?id=' . $id : ''));
+            // 静默处理错误，不影响主流程
+            error_log('Shipping syncToDatabase error: ' . $e->getMessage());
         }
     }
-
+    
     /**
-     * 删除地址
+     * 构建完整地址字符串
+     * 
+     * @param array $address
+     * @return string
      */
-    public function postDelete()
+    private function buildFullAddress(array $address): string
     {
-        if (!$this->checkLogin()) {
-            return;
-        }
-        
-        $customerId = $this->getCustomerId();
-        $id = $this->request->getPost('id');
-        
-        if (!$id) {
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => __('参数错误')
-                ]);
-            }
-            $this->getMessageManager()->addError(__('参数错误'));
-            $this->redirect('*/index');
-            return;
-        }
-        
-        try {
-            $this->service->delete((int)$id, $customerId);
-            
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => true,
-                    'message' => __('删除成功')
-                ]);
-            }
-            
-            $this->getMessageManager()->addSuccess(__('删除成功'));
-            $this->redirect('*/index');
-        } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ]);
-            }
-            
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/index');
-        }
-    }
-
-    /**
-     * 设置默认地址
-     */
-    public function postSetDefault()
-    {
-        if (!$this->checkLogin()) {
-            return;
-        }
-        
-        $customerId = $this->getCustomerId();
-        $id = $this->request->getPost('id');
-        
-        if (!$id) {
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => __('参数错误')
-                ]);
-            }
-            $this->getMessageManager()->addError(__('参数错误'));
-            $this->redirect('*/index');
-            return;
-        }
-        
-        try {
-            $this->service->setDefault((int)$id, $customerId);
-            
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => true,
-                    'message' => __('设置成功')
-                ]);
-            }
-            
-            $this->getMessageManager()->addSuccess(__('设置成功'));
-            $this->redirect('*/index');
-        } catch (\Exception $e) {
-            if ($this->request->isAjax()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ]);
-            }
-            
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/index');
-        }
-    }
-
-    /**
-     * 返回JSON响应
-     */
-    private function json(array $data): string
-    {
-        header('Content-Type: application/json');
-        return json_encode($data, JSON_UNESCAPED_UNICODE);
+        $parts = array_filter([
+            $address['country'] ?? '',
+            $address['province'] ?? '',
+            $address['city'] ?? '',
+            $address['district'] ?? '',
+            $address['street'] ?? '',
+        ]);
+        return implode('', $parts);
     }
 }
-
