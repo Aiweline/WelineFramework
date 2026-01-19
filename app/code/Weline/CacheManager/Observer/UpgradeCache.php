@@ -75,10 +75,25 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
      */
     public function processCache(\Weline\CacheManager\Model\Cache $model, array $cache, array $modules, $default_module_name = '')
     {
-        /**@var CacheFactory $cache */
-        $cacheObj = ObjectManager::makeWithoutFactory($cache['class']);
+        // 尝试使用 Factory 版本（如果存在）
+        $cacheClass = $cache['class'];
+        if (!str_ends_with($cacheClass, 'Factory')) {
+            $factoryClass = $cacheClass . 'Factory';
+            if (class_exists($factoryClass)) {
+                $cacheClass = $factoryClass;
+            }
+        }
+        
+        /**@var CacheFactory $cacheObj */
+        $cacheObj = ObjectManager::makeWithoutFactory($cacheClass);
+        
+        // 检查是否有 getIdentity 方法，如果没有则使用类名作为标识
+        $identity = method_exists($cacheObj, 'getIdentity') 
+            ? $cacheObj->getIdentity() 
+            : str_replace('\\', '_', $cache['class']);
+        
         # 查找是否存在缓存记录
-        $model = $model->clearData()->where($model::fields_IDENTITY, $cacheObj->getIdentity())->find()->fetch();
+        $model = $model->clearData()->where($model::fields_IDENTITY, $identity)->find()->fetch();
         # 查找缓存文件所在module
         $module_name = $default_module_name;
         foreach ($modules as $module) {
@@ -87,15 +102,20 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
                 break;
             }
         }
+        // 获取缓存对象的属性（兼容 Factory 和非 Factory 类）
+        $status = method_exists($cacheObj, 'getStatus') ? $cacheObj->getStatus() : false;
+        $isKeep = method_exists($cacheObj, 'isKeep') ? $cacheObj->isKeep() : false;
+        $tip = method_exists($cacheObj, 'tip') ? $cacheObj->tip() : '';
+        
         $model
-            ->setData($model::fields_NAME, $cacheObj::class)
-            ->setData($model::fields_IDENTITY, $cacheObj->getIdentity())
+            ->setData($model::fields_NAME, $cache['class'])
+            ->setData($model::fields_IDENTITY, $identity)
             ->setData($model::fields_Module, $module_name)
             ->setData($model::fields_FILE, str_replace(BP, '', $cache['file']))
             ->setData($model::fields_TYPE, $cache['type'])
-            ->setData($model::fields_Status, $cacheObj->getStatus() ? 1 : 0)
-            ->setData($model::fields_Permanently, $cacheObj->isKeep() ? 1 : 0)
-            ->setData($model::fields_DESCRIPTION, $cacheObj->tip())
+            ->setData($model::fields_Status, $status ? 1 : 0)
+            ->setData($model::fields_Permanently, $isKeep ? 1 : 0)
+            ->setData($model::fields_DESCRIPTION, $tip)
             ->save(true);
     }
 
