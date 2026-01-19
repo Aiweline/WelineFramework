@@ -203,6 +203,10 @@
         </div>
     </div>
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // 获取基础URL
         function getBaseUrl() {
@@ -352,7 +356,16 @@
             const variant = document.getElementById('abtest-variant').value;
 
             if (!testId) {
-                alert('请输入测试ID');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请输入测试ID') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请输入测试ID');
+                }
                 return;
             }
 
