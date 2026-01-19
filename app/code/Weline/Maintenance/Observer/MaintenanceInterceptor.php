@@ -109,6 +109,9 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         }
 
 
+        // 获取当前语言（从路径、Cookie 或浏览器 Accept-Language）
+        $currentLang = $this->getCurrentLang();
+        
         // 触发维护模式事件，允许其他模块添加白名单或自定义响应
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -118,6 +121,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             'uri' => $pure_uri,
             'parse' => $parse,
             'handled' => false,
+            'language' => $currentLang, // 传递当前语言给观察者
         ]);
         $eventManager->dispatch('Weline_Maintenance::maintenance', $data);
         // 如果已被其他观察者处理，则退出
@@ -301,14 +305,25 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     }
 
     /**
-     * 获取当前语言（从 Cookie 或 Accept-Language）
+     * 获取当前语言
+     * 优先级：
+     * 1. URL 路径中明确指定的语言（通过 UrlParser 解析，已设置到 $_SERVER['WELINE_USER_LANG']）
+     * 2. Cookie 中的语言
+     * 3. 浏览器 Accept-Language 头
+     * 4. 默认语言
      */
     private function getCurrentLang(): string
     {
-        // 从 Cookie 获取语言
-        $lang = $_COOKIE['WELINE_USER_LANG'] ?? null;
+        // 优先级1：从 URL 路径中获取语言（UrlParser 已解析并设置到 $_SERVER['WELINE_USER_LANG']）
+        // 如果路径中明确指定了语言，优先使用路径中的语言
+        $lang = $_SERVER['WELINE_USER_LANG'] ?? null;
         
-        // 从 Accept-Language 头获取
+        // 优先级2：从 Cookie 获取语言（如果路径中没有指定）
+        if (empty($lang)) {
+            $lang = $_COOKIE['WELINE_USER_LANG'] ?? null;
+        }
+        
+        // 优先级3：从浏览器 Accept-Language 头获取
         if (empty($lang)) {
             $acceptLang = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
             if (!empty($acceptLang)) {
@@ -318,7 +333,20 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             }
         }
         
-        return $lang ?: self::DEFAULT_LANG;
+        // 优先级4：使用默认语言
+        // 如果检测到的语言是英文，但用户可能期望中文，优先使用中文
+        // 只有在明确设置了英文 Cookie 或路径中指定了英文时才使用英文
+        if (empty($lang) || ($lang === 'en_US' && empty($_COOKIE['WELINE_USER_LANG']) && empty($_SERVER['WELINE_USER_LANG']))) {
+            // 检查 Accept-Language 是否包含中文
+            $acceptLang = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+            if (!empty($acceptLang) && (str_contains($acceptLang, 'zh') || str_contains($acceptLang, 'cn'))) {
+                $lang = self::DEFAULT_LANG;
+            } else {
+                $lang = $lang ?: self::DEFAULT_LANG;
+            }
+        }
+        
+        return $lang;
     }
 
     /**
@@ -467,6 +495,15 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         $isApiRequest = str_contains($acceptHeader, 'application/json') 
                      || str_contains($uri, '/api/') 
                      || str_contains($uri, '/rest/');
+        
+        // 开发环境下：通过查询参数 ?api=1 可以测试 API 维护模式响应
+        if (!$isApiRequest && defined('DEV') && DEV) {
+            $queryString = $_SERVER['QUERY_STRING'] ?? '';
+            parse_str($queryString, $queryParams);
+            if (isset($queryParams['api']) && ($queryParams['api'] === '1' || $queryParams['api'] === 'true')) {
+                $isApiRequest = true;
+            }
+        }
 
         http_response_code(503);
         header('Retry-After: ' . $retryAfter);
