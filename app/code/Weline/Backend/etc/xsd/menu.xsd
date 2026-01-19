@@ -6,7 +6,7 @@
     <xs:element name="menus">
         <xs:annotation>
             <xs:documentation>
-                系统菜单
+                系统菜单声明。
             </xs:documentation>
         </xs:annotation>
         <xs:complexType>
@@ -19,16 +19,64 @@
     <xs:complexType name="menuDeclaration">
         <xs:annotation>
             <xs:documentation>
-                菜单详情
+                菜单详情声明。
             </xs:documentation>
         </xs:annotation>
-        <xs:attribute name="name" type="xs:string" use="required"/>
-        <xs:attribute name="source" type="xs:integer" use="required"/>
-        <xs:attribute name="title" type="xs:string" use="required"/>
-        <xs:attribute name="action" type="xs:string" use="required"/>
-        <xs:attribute name="parent" type="xs:string" use="optional"/>
-        <xs:attribute name="icon" type="xs:string" use="optional"/>
-        <xs:attribute name="is_backend" type="xs:string" use="optional"/>
-        <xs:attribute name="order" type="xs:integer" use="required"/>
+        <xs:attribute name="name" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单名称，必须唯一。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="source" type="xs:integer" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单来源标识。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="title" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单标题。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="action" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单动作/路由。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="parent" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    父菜单名称。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="icon" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单图标。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="is_backend" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    是否为后端菜单。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="order" type="xs:integer" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    菜单排序顺序。数值越小越靠前。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
     </xs:complexType>
 </xs:schema>

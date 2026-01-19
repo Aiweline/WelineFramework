@@ -235,6 +235,11 @@ class BackendUser extends \Weline\Framework\Database\Model
 
     public function getRole(): Backend\Acl\UserRole
     {
+        /**@var \Weline\Backend\Model\Backend\Acl\UserRole $userRole */
+        $userRole = ObjectManager::getInstance(UserRole::class);
+        $userRole->clear()->joinModel(Role::class, 'r', 'main_table.role_id=r.role_id')
+            ->where('main_table.' . self::fields_ID, $this->getId())
+            ->find()->fetch();
         if ($role = $this->getData('user_role')) {
             return $role;
         }
