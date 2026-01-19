@@ -14,6 +14,7 @@ namespace Weline\Cdn\Service;
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Model\Account;
+use Weline\Cdn\Model\ApiRule;
 use Weline\Framework\App\Env;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
@@ -74,27 +75,61 @@ class RuleManager
     }
 
     /**
-     * 获取域名的合并规则（默认规则 + 域名覆盖规则）
+     * 获取域名的合并规则（通用规则，适用于所有适配器）
      * 
-     * @param Domain $domain 域名模型
-     * @return array
+     * @param Domain $domain 域名对象
+     * @param string|null $triggerType 触发类型：'cron'（定时）或'realtime'（实时），null表示全部
+     * @return array Cloudflare格式的规则数组（作为统一标准）
      */
-    public function getMergedRules(Domain $domain): array
+    public function getMergedRules(Domain $domain, ?string $triggerType = null): array
     {
-        // 获取默认规则
+        // 1. 获取默认规则（Cloudflare格式，通用）
         $defaultRules = $this->getDefaultRules();
         
-        // 获取域名覆盖规则
+        // 2. 获取域名覆盖规则（Cloudflare格式，通用）
         $overrideRules = $domain->getRulesOverrideArray();
         
-        // 合并规则（域名规则覆盖默认规则）
-        if (!empty($overrideRules)) {
-            // 简单的合并策略：域名规则完全替换默认规则
-            // 如果需要更复杂的合并逻辑，可以在这里实现
-            return $overrideRules;
+        // 3. 获取API注释规则（Cloudflare格式，通用，不指定适配器）
+        $apiRules = $this->getApiRules($triggerType);
+        
+        // 4. 合并规则（优先级：API规则 > 域名规则 > 默认规则）
+        // 这些规则是通用的，所有适配器都可以使用
+        $mergedRules = array_merge(
+            $defaultRules,
+            $overrideRules,
+            $apiRules
+        );
+        
+        return $mergedRules;
+    }
+
+    /**
+     * 获取API注释规则
+     * 
+     * @param string|null $triggerType 触发类型过滤：'cron'、'realtime' 或 null（全部）
+     * @return array
+     */
+    private function getApiRules(?string $triggerType = null): array
+    {
+        /** @var ApiRule $apiRuleModel */
+        $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
+        
+        $query = $apiRuleModel->clear()
+            ->where(ApiRule::fields_ENABLED, 1);
+        
+        // 如果指定了触发类型，只获取对应类型的规则
+        if ($triggerType !== null) {
+            $query->where(ApiRule::fields_TRIGGER, $triggerType);
         }
         
-        return $defaultRules;
+        $apiRules = $query->select()->fetch();
+        
+        $rules = [];
+        foreach ($apiRules as $apiRule) {
+            $rules[] = $apiRule->toCloudflareRule();
+        }
+        
+        return $rules;
     }
 
     /**
