@@ -107,6 +107,10 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
         </div>
     </div>
     
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         function openVariableConfig(file) {
             const url = '<?= $getVariableFileUrl ?>' + 
@@ -137,15 +141,43 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
             .then(response => response.json())
             .then(data => {
                 if (data.code === 200 || data.success) {
-                    alert('扫描完成！页面将刷新。');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('扫描完成') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        console.log('扫描完成！页面将刷新。');
+                        location.reload();
+                    }
                 } else {
-                    alert('扫描失败：' + (data.msg || '未知错误'));
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('扫描失败') ?>',
+                            text: data.msg || '<?= __('未知错误') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('扫描失败：' + (data.msg || '未知错误'));
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('扫描失败：网络错误');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('扫描失败') ?>',
+                        text: '<?= __('网络错误') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('扫描失败：网络错误');
+                }
             });
         }
     </script>

@@ -29,7 +29,7 @@ $class = $this->getData('class') ?? '';
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>

@@ -335,6 +335,10 @@ use Weline\Framework\Event\EventsManager;
                     </button>
                 </div>
             </form>
+            <!-- SweetAlert2 CSS -->
+            <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+            <!-- SweetAlert2 JS -->
+            <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
             <script>
                 $(document).ready(function() {
                     $('#componentParamsForm').on('submit', function(e) {
@@ -356,16 +360,44 @@ use Weline\Framework\Event\EventsManager;
                             dataType: 'json',
                             success: function(response) {
                                 if (response.status === 'success') {
-                                    alert(response.message || '<?= __('保存成功') ?>');
-                                    location.reload();
+                                    if (typeof Swal !== 'undefined') {
+                                        Swal.fire({
+                                            icon: 'success',
+                                            title: '<?= __('成功') ?>',
+                                            text: response.message || '<?= __('保存成功') ?>',
+                                            timer: 2000,
+                                            showConfirmButton: false
+                                        }).then(() => location.reload());
+                                    } else {
+                                        console.log(response.message || '<?= __('保存成功') ?>');
+                                        location.reload();
+                                    }
                                 } else {
-                                    alert(response.message || '<?= __('保存失败') ?>');
+                                    if (typeof Swal !== 'undefined') {
+                                        Swal.fire({
+                                            icon: 'error',
+                                            title: '<?= __('保存失败') ?>',
+                                            text: response.message || '<?= __('保存失败') ?>',
+                                            confirmButtonText: '<?= __('确定') ?>'
+                                        });
+                                    } else {
+                                        console.error(response.message || '<?= __('保存失败') ?>');
+                                    }
                                     submitBtn.prop('disabled', false);
                                     submitBtn.html(originalText);
                                 }
                             },
                             error: function() {
-                                alert('<?= __('保存失败，请重试') ?>');
+                                if (typeof Swal !== 'undefined') {
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: '<?= __('保存失败') ?>',
+                                        text: '<?= __('请重试') ?>',
+                                        confirmButtonText: '<?= __('确定') ?>'
+                                    });
+                                } else {
+                                    console.error('<?= __('保存失败，请重试') ?>');
+                                }
                                 submitBtn.prop('disabled', false);
                                 submitBtn.html(originalText);
                             }

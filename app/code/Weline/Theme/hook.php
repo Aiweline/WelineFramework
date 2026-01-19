@@ -121,6 +121,11 @@ return [
         'description' => __('在渲染页头搜索框之前触发，允许其他模块在搜索框开始处注入内容。'),
         'doc' => 'frontend/partials/header/search-before.md',
     ],
+    'Weline_Theme::frontend::partials::header::search-form-before' => [
+        'name' => __('页头搜索表单之前'),
+        'description' => __('在渲染页头搜索表单之前触发，允许其他模块在搜索表单开始处注入内容（如分类下拉菜单等）。'),
+        'doc' => 'frontend/partials/header/search-form-before.md',
+    ],
     'Weline_Theme::frontend::partials::header::search-after' => [
         'name' => __('页头搜索之后'),
         'description' => __('在渲染页头搜索框之后触发，允许其他模块在搜索框结束处注入内容。'),
@@ -142,17 +147,14 @@ return [
         'doc' => 'frontend/partials/header/after.md',
     ],
     
+    // ==================== Theme Frontend Partials - Head ====================
+    'Weline_Theme::frontend::partials::head::module-declarations' => [
+        'name' => __('Head 模块声明'),
+        'description' => __('在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。'),
+        'doc' => 'frontend/partials/head/module-declarations.md',
+    ],
+    
     // ==================== Theme Frontend Layouts - Base ====================
-    'Weline_Theme::frontend::layouts::base::html-lang' => [
-        'name' => __('基础布局 HTML 语言属性'),
-        'description' => __('在渲染基础布局的 <html> 标签的 lang 属性时触发，允许其他模块自定义语言代码。此 hook 适用于所有使用基础布局的页面。默认返回当前语言代码。'),
-        'doc' => 'frontend/layouts/base/html-lang.md',
-    ],
-    'Weline_Theme::frontend::layouts::base::html-lang-end' => [
-        'name' => __('基础布局 HTML 语言属性结束'),
-        'description' => __('在渲染基础布局的 <html> 标签的 lang 属性之后触发，允许其他模块在 lang 属性后注入额外内容。此 hook 适用于所有使用基础布局的页面。'),
-        'doc' => 'frontend/layouts/base/html-lang-end.md',
-    ],
     'Weline_Theme::frontend::layouts::base::head-before' => [
         'name' => __('基础布局头部之前'),
         'description' => __('在渲染基础布局的 <head> 标签之前触发，允许其他模块在头部开始处注入内容。此 hook 适用于所有使用基础布局的页面。'),
@@ -205,11 +207,6 @@ return [
     ],
     
     // ==================== Theme Frontend Layouts - Homepage ====================
-    'Weline_Theme::frontend::layouts::homepage::html-lang-end' => [
-        'name' => __('首页布局 HTML 语言属性结束'),
-        'description' => __('在渲染首页布局的 <html> 标签的 lang 属性之后触发，允许其他模块在 lang 属性后注入额外内容。此 hook 仅适用于首页布局。'),
-        'doc' => 'frontend/layouts/homepage/html-lang-end.md',
-    ],
     'Weline_Theme::frontend::layouts::homepage::head-before' => [
         'name' => __('首页头部之前'),
         'description' => __('在渲染首页布局的 <head> 标签之前触发，允许其他模块在头部开始处注入内容。'),
@@ -552,11 +549,48 @@ return [
         'description' => __('在页头账户下拉菜单中显示账户相关链接，允许其他模块自定义账户菜单项。'),
         'doc' => 'frontend/header/account-links.md',
     ],
+    'header-location-selector' => [
+        'name' => __('页头配送地址选择器'),
+        'description' => __('在页头显示配送地址选择器，允许其他模块实现配送地址选择功能。'),
+        'doc' => 'frontend/header/location-selector.md',
+    ],
+    'header-orders' => [
+        'name' => __('页头订单'),
+        'description' => __('在页头显示订单相关功能，允许其他模块实现订单查看、订单管理等功能。'),
+        'doc' => 'frontend/header/orders.md',
+    ],
+    'header-hamburger-menu' => [
+        'name' => __('页头汉堡菜单'),
+        'description' => __('在页头显示汉堡菜单（移动端侧边栏菜单），允许其他模块实现移动端导航菜单功能。如果没有提供内容，将显示默认的汉堡菜单。'),
+        'doc' => 'frontend/header/hamburger-menu.md',
+    ],
+    'header-nav-links' => [
+        'name' => __('页头导航链接'),
+        'description' => __('在页头导航区域显示横向导航链接（如今日特价、Prime Video等），允许其他模块添加自定义导航链接。'),
+        'doc' => 'frontend/header/nav-links.md',
+    ],
+    'header-nav-right' => [
+        'name' => __('页头右侧导航'),
+        'description' => __('在页头右侧导航区域显示内容，允许其他模块在右侧导航区域注入内容（如分类菜单等）。'),
+        'doc' => 'frontend/header/nav-right.md',
+    ],
     
     // ==================== Theme Frontend Footer (简单格式 Hook，向后兼容) ====================
     'footer' => [
         'name' => __('页脚'),
         'description' => __('在页脚区域显示内容，允许其他模块在页脚注入内容。'),
         'doc' => 'frontend/footer.md',
+    ],
+    
+    // ==================== Theme Frontend Account Sidebar (简单格式 Hook，向后兼容) ====================
+    'account.sidebar' => [
+        'name' => __('账户侧边栏'),
+        'description' => __('在账户页面的侧边栏导航中注入内容，允许其他模块添加自定义导航项。'),
+        'doc' => 'frontend/account/sidebar.md',
+    ],
+    'account.sidebar.content' => [
+        'name' => __('账户侧边栏内容'),
+        'description' => __('在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。'),
+        'doc' => 'frontend/account/sidebar-content.md',
     ],
 ];

@@ -160,6 +160,10 @@ foreach ($variables as $varName => $var) {
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     const saveUrl = <?= json_encode($saveUrl) ?>;
@@ -283,7 +287,17 @@ foreach ($variables as $varName => $var) {
                 if (typeof showSaveToast === 'function') {
                     showSaveToast(data.msg || '<?= __('配置保存成功') ?>', 'success');
                 } else {
-                    alert(data.msg || '<?= __('配置保存成功') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: data.msg || '<?= __('配置保存成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log(data.msg || '<?= __('配置保存成功') ?>');
+                    }
                 }
                 
                 if (showPreview && data.data && data.data.preview_url) {
@@ -297,12 +311,30 @@ foreach ($variables as $varName => $var) {
                     bsModal.hide();
                 }
             } else {
-                alert(data.msg || '<?= __('保存失败') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: data.msg || '<?= __('保存失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(data.msg || '<?= __('保存失败') ?>');
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __('保存失败') ?>: ' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('保存失败') ?>: ' + error.message);
+            }
         })
         .finally(() => {
             saveBtn.disabled = false;
