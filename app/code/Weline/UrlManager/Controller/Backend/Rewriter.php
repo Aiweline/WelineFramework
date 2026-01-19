@@ -28,7 +28,6 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
     {
         /**@var UrlRewrite $urlRewriteModel */
         $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
-//        dd($urlRewriteModel);
         $rewrites = $urlRewriteModel->fields('main_table.*,main_table.path as rewrite_path,um.url_id,um.path,um.is_deleted')
             ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id')
             ->pagination()
