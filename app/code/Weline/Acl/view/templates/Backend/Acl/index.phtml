@@ -128,7 +128,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <td class='co-name'>{{acl.document}}</td>
                                                     <td class='co-name'>{{acl.router}}</td>
                                                     <td class='co-name'>{{acl.route}}</td>
-                                                    <td class='co-name'>{{acl.method}}</td>
+                                                    <td class='co-name'><if condition="acl.method">{{acl.method}}<else/>ALL</if></td>
                                                     <td class='co-name'>{{acl.module}}</td>
                                                     <td class='co-name'>{{acl.class}}</td>
                                                     <td class='co-name'>{{acl.type}}</td>
