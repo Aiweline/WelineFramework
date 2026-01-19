@@ -313,6 +313,10 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         let currentRecordId = null;
         let selectedCharacters = new Set();
@@ -366,7 +370,16 @@
             
             // 检查文件是否有效
             if (!file || file.size === 0) {
-                alert('<?= __('请选择有效的文件') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请选择有效的文件') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请选择有效的文件') ?>');
+                }
                 return;
             }
             
@@ -427,7 +440,16 @@
         // 显示错误信息并重置状态
         function showErrorAndReset(message) {
             hideProgress();
-            alert(message + '\n\n请重新选择文件进行上传。');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('错误') ?>',
+                    html: message.replace(/\n/g, '<br>') + '<br><br><?= __('请重新选择文件进行上传。') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(message + '\n\n请重新选择文件进行上传。');
+            }
             
             // 重置上传状态，让用户可以继续尝试
             resetUpload();
@@ -617,7 +639,16 @@
         // 生成字体
         document.getElementById('generateBtn').addEventListener('click', () => {
             if (!currentRecordId) {
-                alert('<?= __('请先上传字体文件') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请先上传字体文件') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请先上传字体文件') ?>');
+                }
                 return;
             }
 
@@ -626,7 +657,16 @@
             
             // 检查是否有自定义输入或选择的字符
             if (selectedCharsArray.length === 0 && !customChars) {
-                alert('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请选择要包含的字符或输入自定义字符') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                }
                 return;
             }
 
@@ -652,7 +692,17 @@
             .then(data => {
                 hideProgress();
                 if (data.code === 200) {
-                    alert('<?= __('子集字体生成成功') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('子集字体生成成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log('<?= __('子集字体生成成功') ?>');
+                    }
                     // 可以添加下载链接
                     const downloadUrl = `<?= $this->getUrl("*/frontend/download") ?>?record_id=${currentRecordId}`;
                     window.open(downloadUrl, '_blank');
@@ -682,10 +732,29 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.code === 200) {
-                            alert('已清理');
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: '<?= __('成功') ?>',
+                                    text: '<?= __('已清理') ?>',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                });
+                            } else {
+                                console.log('已清理');
+                            }
                             location.reload();
                         } else {
-                            alert('清理失败: ' + data.msg);
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: '<?= __('清理失败') ?>',
+                                    text: data.msg,
+                                    confirmButtonText: '<?= __('确定') ?>'
+                                });
+                            } else {
+                                console.error('清理失败: ' + data.msg);
+                            }
                         }
                     });
             }
@@ -728,7 +797,16 @@
         document.getElementById('generateBtnCustom').addEventListener('click', () => {
             // Same logic as generateBtn
             if (!currentRecordId) {
-                alert('<?= __('请先上传字体文件') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请先上传字体文件') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请先上传字体文件') ?>');
+                }
                 return;
             }
 
@@ -736,7 +814,16 @@
             const selectedCharsArray = Array.from(selectedCharacters);
             
             if (selectedCharsArray.length === 0 && !customChars) {
-                alert('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请选择要包含的字符或输入自定义字符') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+                }
                 return;
             }
 
@@ -762,7 +849,17 @@
             .then(data => {
                 hideProgress();
                 if (data.code === 200) {
-                    alert('<?= __('子集字体生成成功') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('子集字体生成成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log('<?= __('子集字体生成成功') ?>');
+                    }
                     const downloadUrl = `<?= $this->getUrl("*/frontend/download") ?>?record_id=${currentRecordId}`;
                     window.open(downloadUrl, '_blank');
                 } else {

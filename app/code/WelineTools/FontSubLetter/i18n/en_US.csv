@@ -35,6 +35,9 @@ OpenType子集创建失败,OpenType子集创建失败
 TrueType子集创建失败,TrueType子集创建失败
 无法写入TrueType子集文件,无法写入TrueType子集文件
 字体子集创建失败,字体子集创建失败
+成功,成功
+删除失败,"Delete failed"
+确定,确定
 处理记录,"Processing Records"
 上传字体文件,"Upload Font File"
 拖拽字体文件到此处或点击选择文件,"Drag font files here or click to select"
@@ -80,8 +83,10 @@ TrueType子集创建失败,TrueType子集创建失败
 高效字体压缩,高效字体压缩
 一键下载,一键下载
 上传失败,"Upload failed"
+提示,提示
 请先上传字体文件,"Please upload a font file first"
 提取字符中...,"Extracting characters..."
+格式错误,格式错误
 提取失败,"Extraction failed"
 没有可显示的字符,没有可显示的字符
 没有有效的字符可以显示,没有有效的字符可以显示
@@ -109,7 +114,6 @@ ID,ID
 下一页,下一页
 确定要提取字符吗？,"Are you sure you want to extract characters?"
 确定要删除这条记录吗？,"Are you sure you want to delete this record?"
-删除失败,"Delete failed"
 字体记录管理,字体记录管理
 前往前端上传,前往前端上传
 搜索文件名...,搜索文件名...
@@ -142,6 +146,10 @@ ID,ID
 安全可靠,安全可靠
 在线处理,在线处理
 请选择有效的文件,请选择有效的文件
+错误,错误
+请重新选择文件进行上传。,请重新选择文件进行上传。
+已清理,已清理
+清理失败,清理失败
 字体字符提取与压缩工具模块,"Font Character Extraction and Compression Tool Module"
 不支持的字体格式,"Unsupported font format"
 文件上传失败,"File upload failed"
