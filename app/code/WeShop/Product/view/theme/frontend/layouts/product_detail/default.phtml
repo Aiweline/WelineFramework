@@ -16,7 +16,7 @@
 产品数据通过 Observer 自动传递到 product 变量中
 -->
 <!DOCTYPE html>
-<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::head-before</w:hook>
