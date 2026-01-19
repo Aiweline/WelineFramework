@@ -16,7 +16,14 @@ API配置JSON格式错误,"API configuration JSON format error"
 地区编辑功能暂未开放，请通过数据库或后续版本管理。,地区编辑功能暂未开放，请通过数据库或后续版本管理。
 同步完成，新增国家数量：%{1},同步完成，新增国家数量：%{1}
 同步失败：%{1},同步失败：%{1}
-无权操作此地址,"No permission to operate this address"
+%{1}不能为空,"%{1} cannot be empty"
+配送地址更新成功,配送地址更新成功
+暂无配送地址,暂无配送地址
+获取成功,获取成功
+用户未登录,用户未登录
+地址数据不能为空,地址数据不能为空
+同步成功,同步成功
+自动定位地址,自动定位地址
 国家代码不能为空,"Country code cannot be empty"
 配送服务ID不能为空,"Shipping service ID cannot be empty"
 物流单号不能为空,"Tracking number cannot be empty"
@@ -31,13 +38,13 @@ API配置JSON格式错误,"API configuration JSON format error"
 取件,Pickup
 到达,Arrival
 派送,Delivery
+无权操作此地址,"No permission to operate this address"
 地址名称,"Address Name"
 收货人姓名,"Recipient Name"
 联系电话,"Contact Phone"
 省份,Province
 城市,City
 街道地址,"Street Address"
-%{1}不能为空,"%{1} cannot be empty"
 电话号码格式不正确,"Invalid phone number format"
 邮政编码格式不正确，应为6位数字,"Invalid postal code format, should be 6 digits"
 费用模板不存在,"Rate template does not exist"
@@ -187,6 +194,8 @@ ID,ID
 电话,电话
 邮编,邮编
 设为默认,设为默认
+操作失败,操作失败
+确定,确定
 确定要删除此地址吗？,确定要删除此地址吗？
 收货地址详情,收货地址详情
 默认地址,默认地址
