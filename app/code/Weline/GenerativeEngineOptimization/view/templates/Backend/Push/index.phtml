@@ -53,7 +53,7 @@
                         <td><?= $log['pushed_at'] ? date('Y-m-d H:i:s', $log['pushed_at']) : '-' ?></td>
                         <td>
                             <?php if ($log['error_message']): ?>
-                                <button class="btn btn-sm btn-danger" onclick="alert('<?= htmlspecialchars($log['error_message']) ?>')">
+                                <button class="btn btn-sm btn-danger" onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'error',title:'<?= __('错误信息') ?>',text:'<?= htmlspecialchars(addslashes($log['error_message'])) ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.error('<?= htmlspecialchars(addslashes($log['error_message'])) ?>');}">
                                     <i class="mdi mdi-alert"></i> <?= __('查看错误') ?>
                                 </button>
                             <?php endif; ?>
