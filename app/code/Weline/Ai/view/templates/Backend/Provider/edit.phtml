@@ -225,6 +225,10 @@
 
 @template(Weline_Admin::common/right-sidebar.phtml)
 @template(Weline_Admin::common/footer.phtml)
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <script>
 // 页面加载完成后初始化
@@ -278,13 +282,31 @@ function onActivateChange() {
         
         if (!providerCode) {
             activateCheckbox.checked = false;
-            alert('请先选择供应商');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择供应商') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请先选择供应商');
+            }
             return;
         }
         
         if (!apiKey) {
             activateCheckbox.checked = false;
-            alert('请先填写API密钥');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先填写API密钥') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请先填写API密钥');
+            }
             return;
         }
         
@@ -335,7 +357,16 @@ function saveAccountForActivation() {
             document.querySelector('label[for="is_active"]').textContent = originalLabel;
             activateCheckbox.disabled = false;
             activateCheckbox.checked = false;
-            alert('保存失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('保存失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
@@ -343,7 +374,16 @@ function saveAccountForActivation() {
         activateCheckbox.disabled = false;
         activateCheckbox.checked = false;
         console.error('Error:', error);
-        alert('保存失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('保存失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('保存失败');
+        }
     });
 }
 
@@ -370,11 +410,29 @@ function testConnectionForActivation(accountId) {
         
         if (data.success) {
             // 测试成功，保持激活状态
-            alert(`连接测试成功！\n\n使用的测试模型: ${data.model_code || '未知'}\n\n账户已激活。`);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('连接测试成功') ?>',
+                    html: `<?= __('使用的测试模型') ?>: ${data.model_code || '<?= __('未知') ?>'}<br><br><?= __('账户已激活') ?>`,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.log(`连接测试成功！使用的测试模型: ${data.model_code || '未知'}\n账户已激活。`);
+            }
         } else {
             // 测试失败，取消激活状态
             activateCheckbox.checked = false;
-            alert(`连接测试失败，无法激活账户！\n\n错误信息: ${data.message}\n\n请检查API密钥和网络连接后重试。`);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('连接测试失败') ?>',
+                    html: `<?= __('无法激活账户') ?>！<br><br><?= __('错误信息') ?>: ${data.message}<br><br><?= __('请检查API密钥和网络连接后重试') ?>`,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(`连接测试失败，无法激活账户！错误信息: ${data.message}`);
+            }
         }
     })
     .catch(error => {
@@ -385,7 +443,16 @@ function testConnectionForActivation(accountId) {
         activateCheckbox.checked = false;
         
         console.error('Error:', error);
-        alert('连接测试失败，无法激活账户！\n\n网络错误，请检查网络连接后重试。');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('连接测试失败') ?>',
+                html: '<?= __('无法激活账户') ?>！<br><br><?= __('网络错误，请检查网络连接后重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('连接测试失败，无法激活账户！网络错误，请检查网络连接后重试。');
+        }
     });
 }
 
@@ -442,17 +509,47 @@ function saveAccount() {
         submitBtn.disabled = false;
         
         if (data.success) {
-            alert(data.message);
-            window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+                });
+            } else {
+                console.log(data.message);
+                window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+            }
         } else {
-            alert('保存失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('保存失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
         console.error('Error:', error);
-        alert('保存失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('保存失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('保存失败');
+        }
     });
 }
 
@@ -477,18 +574,47 @@ function testConnection() {
         btn.disabled = false;
         
         if (data.success) {
-            alert(data.message);
-            // 刷新页面以显示更新的连接状态
-            window.location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('测试成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                console.log(data.message);
+                window.location.reload();
+            }
         } else {
-            alert('测试失败: ' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('测试失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('测试失败: ' + data.message);
+            }
         }
     })
     .catch(error => {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
         console.error('Error:', error);
-        alert('测试失败');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('测试失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('测试失败');
+        }
     });
 }
 <?php endif; ?>

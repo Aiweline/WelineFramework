@@ -274,6 +274,22 @@ if (empty($providerConfig) && !empty($config)) {
                     
                     <div class="col-md-4">
                         <div class="mb-3">
+                            <label for="timeout" class="form-label">
+                                <?= __('超时时间（秒）') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="timeout" 
+                                   name="config[timeout]" 
+                                   value="<?= $config['timeout'] ?? '120' ?>"
+                                   min="0"
+                                   placeholder="120">
+                            <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认120秒') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
                             <label for="top_p" class="form-label">
                                 <?= __('Top P') ?>
                             </label>
@@ -673,6 +689,10 @@ if (!empty($displayConfig)) {
 <!-- 页脚 -->
 @template(Weline_Admin::common/footer.phtml)
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 // 表单验证
 document.getElementById('model-form').addEventListener('submit', function(e) {
@@ -683,7 +703,16 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
     
     if (!vendor || !modelCode || !modelName) {
         e.preventDefault();
-        alert(__('请填写必填项：供应商、模型代码、模型名称'));
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: __('请填写必填项：供应商、模型代码、模型名称'),
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error(__('请填写必填项：供应商、模型代码、模型名称'));
+        }
         return false;
     }
     
@@ -694,7 +723,16 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
             JSON.parse(providerConfigTextarea.value);
         } catch (e) {
             e.preventDefault();
-            alert(__('提供商配置JSON格式错误，请检查语法'));
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('格式错误') ?>',
+                    text: __('提供商配置JSON格式错误，请检查语法'),
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(__('提供商配置JSON格式错误，请检查语法'));
+            }
             providerConfigTextarea.focus();
             return false;
         }
@@ -711,7 +749,16 @@ testModelBtn.addEventListener('click', function() {
     const modelId = <?= $model->getId() ?>;
     
     if (!prompt) {
-        alert(__('请输入测试提示词'));
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: __('请输入测试提示词'),
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error(__('请输入测试提示词'));
+        }
         return;
     }
     

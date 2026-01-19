@@ -75,6 +75,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     
     <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
     
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         function generateContent() {
             const contentType = document.getElementById('content_type').value;
@@ -83,7 +87,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             const copyBtn = document.getElementById('copy-btn');
             
             if (!prompt.trim()) {
-                alert('请输入内容描述');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请输入内容描述') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请输入内容描述');
+                }
                 return;
             }
             
@@ -101,7 +114,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             const content = document.getElementById('generated_content');
             content.select();
             document.execCommand('copy');
-            alert('内容已复制到剪贴板');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('复制成功') ?>',
+                    text: '<?= __('内容已复制到剪贴板') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log('内容已复制到剪贴板');
+            }
         }
     </script>
 </body>

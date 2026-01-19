@@ -347,6 +347,10 @@
 }
 </style>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const packages = document.querySelectorAll('.recharge-package');
@@ -373,50 +377,108 @@ document.addEventListener('DOMContentLoaded', function() {
     // 立即充值按钮
     rechargeBtn.addEventListener('click', function() {
         if (selectedAmount < 1) {
-            alert('<?= __("请选择充值套餐或输入充值金额（最低1元）") ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __("提示") ?>',
+                    text: '<?= __("请选择充值套餐或输入充值金额（最低1元）") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("请选择充值套餐或输入充值金额（最低1元）") ?>');
+            }
             return;
         }
 
         const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
 
-        if (!confirm('<?= __("确认充值 ¥") ?>' + selectedAmount.toFixed(2) + '<?= __(" 吗？") ?>')) {
-            return;
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __("确认充值") ?>',
+                text: '<?= __("确认充值 ¥") ?>' + selectedAmount.toFixed(2) + '<?= __(" 吗？") ?>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定充值") ?>',
+                cancelButtonText: '<?= __("取消") ?>',
+                confirmButtonColor: '#28a745'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    performRecharge(selectedAmount, paymentMethod, rechargeBtn);
+                }
+            });
+        } else {
+            if (!confirm('<?= __("确认充值 ¥") ?>' + selectedAmount.toFixed(2) + '<?= __(" 吗？") ?>')) {
+                return;
+            }
+            performRecharge(selectedAmount, paymentMethod, rechargeBtn);
         }
+    });
+});
 
-        // 显示加载状态
-        rechargeBtn.disabled = true;
-        rechargeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __("处理中...") ?>';
+function performRecharge(selectedAmount, paymentMethod, rechargeBtn) {
 
-        // 发送充值请求
-        fetch('<?= $this->getUrl("*/backend/recharge/create") ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'amount=' + selectedAmount + '&payment_method=' + paymentMethod
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('<?= __("充值订单创建成功！订单ID：") ?>' + data.data.recharge_id);
-                // TODO: 跳转到支付页面或显示支付二维码
+    // 显示加载状态
+    rechargeBtn.disabled = true;
+    rechargeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __("处理中...") ?>';
+
+    // 发送充值请求
+    fetch('<?= $this->getUrl("*/backend/recharge/create") ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'amount=' + selectedAmount + '&payment_method=' + paymentMethod
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __("充值订单创建成功") ?>',
+                    text: '<?= __("订单ID：") ?>' + data.data.recharge_id,
+                    timer: 3000,
+                    showConfirmButton: false
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                console.log('<?= __("充值订单创建成功！订单ID：") ?>' + data.data.recharge_id);
                 setTimeout(() => {
                     location.reload();
                 }, 1000);
-            } else {
-                alert('<?= __("充值失败：") ?>' + data.message);
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('<?= __("充值请求失败，请稍后重试") ?>');
-        })
-        .finally(() => {
-            rechargeBtn.disabled = false;
-            rechargeBtn.innerHTML = '<i class="mdi mdi-cash-plus me-2"></i><?= __("立即充值") ?>';
-        });
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("充值失败") ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("充值失败：") ?>' + data.message);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("充值请求失败") ?>',
+                text: '<?= __("请稍后重试") ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("充值请求失败，请稍后重试") ?>');
+        }
+    })
+    .finally(() => {
+        rechargeBtn.disabled = false;
+        rechargeBtn.innerHTML = '<i class="mdi mdi-cash-plus me-2"></i><?= __("立即充值") ?>';
     });
-});
+}
 </script>
 
 @template(Weline_Admin::common/footer.phtml)
