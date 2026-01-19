@@ -1,0 +1,37 @@
+/**
+ * Backend Theme - 阴影变量
+ * 
+ * 后端管理界面的阴影系统
+ */
+
+:root {
+    /* ========================================
+       基础阴影
+       ======================================== */
+    --backend-shadow-none: none;
+    --backend-shadow-xs: 0 0 0 1px rgba(0, 0, 0, 0.05);
+    --backend-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --backend-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --backend-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --backend-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --backend-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --backend-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --backend-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    
+    /* ========================================
+       组件阴影
+       ======================================== */
+    --backend-card-shadow: 0 0 13px 0 rgba(74, 53, 107, 0.05);
+    --backend-dropdown-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
+    --backend-modal-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --backend-header-shadow: 0 0 4px rgba(15, 34, 58, 0.12);
+    --backend-sidebar-shadow: 2px 0 6px rgba(0, 0, 0, 0.05);
+    
+    /* ========================================
+       焦点阴影
+       ======================================== */
+    --backend-focus-ring: 0 0 0 0.15rem rgba(85, 110, 230, 0.25);
+    --backend-focus-ring-danger: 0 0 0 0.15rem rgba(244, 106, 106, 0.25);
+    --backend-focus-ring-success: 0 0 0 0.15rem rgba(52, 195, 143, 0.25);
+    --backend-focus-ring-warning: 0 0 0 0.15rem rgba(241, 180, 76, 0.25);
+}
