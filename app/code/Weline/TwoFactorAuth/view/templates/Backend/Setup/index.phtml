@@ -419,12 +419,26 @@
     <input type="hidden" id="secret" value="<?= $secret ?>">
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // 复制密钥
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
             navigator.clipboard.writeText(text).then(() => {
-                alert('<?= __('密钥已复制到剪贴板') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('复制成功') ?>',
+                        text: '<?= __('密钥已复制到剪贴板') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log('<?= __('密钥已复制到剪贴板') ?>');
+                }
             });
         }
 
@@ -433,7 +447,17 @@
             const codes = <?= json_encode($backup_codes) ?>;
             const text = codes.join('\n');
             navigator.clipboard.writeText(text).then(() => {
-                alert('<?= __('备份码已复制到剪贴板\n请妥善保存！') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('复制成功') ?>',
+                        html: '<?= __('备份码已复制到剪贴板') ?><br><?= __('请妥善保存') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log('<?= __('备份码已复制到剪贴板\n请妥善保存！') ?>');
+                }
             });
         }
 
@@ -470,7 +494,17 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            alert('<?= __('备份码已下载！\n文件名：') ?>' + link.download);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('下载成功') ?>',
+                    html: '<?= __('备份码已下载') ?><br><?= __('文件名：') ?>' + link.download,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log('<?= __('备份码已下载！\n文件名：') ?>' + link.download);
+            }
         }
 
         // 自动格式化验证码输入
@@ -485,7 +519,16 @@
             const backupCodes = document.getElementById('backupCodesJson').value;
 
             if (!code || code.length !== 6) {
-                alert('<?= __('请输入6位验证码') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请输入6位验证码') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('请输入6位验证码') ?>');
+                }
                 return;
             }
 
@@ -501,13 +544,42 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ <?= __('双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。') ?>');
-                    window.location.href = '/two-factor-auth/frontend';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            html: '<?= __('双因素身份验证已成功启用') ?><br><br><?= __('请确保已保存备份码，然后点击确定返回管理页面。') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        }).then(() => {
+                            window.location.href = '/two-factor-auth/frontend';
+                        });
+                    } else {
+                        console.log('✅ <?= __('双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。') ?>');
+                        window.location.href = '/two-factor-auth/frontend';
+                    }
                 } else {
-                    alert('❌ ' + result.message + '\n\n<?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('失败') ?>',
+                            html: result.message + '<br><br><?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('❌ ' + result.message + '\n\n<?= __('请检查验证码是否正确，注意验证码每30秒会更新。') ?>');
+                    }
                 }
             } catch (error) {
-                alert('<?= __('操作失败，请重试') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('操作失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('操作失败，请重试') ?>');
+                }
                 console.error(error);
             }
         }
