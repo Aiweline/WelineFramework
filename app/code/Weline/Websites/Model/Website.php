@@ -97,6 +97,22 @@ class Website extends Model
         }
     }
 
+    /**
+     * 保存后清除网站缓存
+     * 当网站数据更新时，清除缓存的网站列表，确保下次请求时重新加载最新数据
+     */
+    public function save_after()
+    {
+        parent::save_after();
+        // 清除网站缓存
+        try {
+            $websiteCache = new \Weline\Websites\Cache\WebsiteCache();
+            $websiteCache->clear();
+        } catch (\Throwable $e) {
+            // 缓存清除失败，静默处理
+        }
+    }
+
     public function setWebsiteId(int $websiteId): self
     {
         $this->setData(self::fields_ID, $websiteId);
