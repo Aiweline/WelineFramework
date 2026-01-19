@@ -58,6 +58,14 @@ class Reindex implements \Weline\Framework\Console\CommandInterface
             $models = $this->moduleFileReader->readClass($module, 'Model');
             foreach ($models as $model) {
                 if (class_exists($model)) {
+                    // 跳过抽象类、trait、接口和静态类
+                    $reflection = new \ReflectionClass($model);
+                    if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                        continue;
+                    }
+                    if (ObjectManager::isStaticClass($model)) {
+                        continue;
+                    }
                     $model = ObjectManager::getInstance($model);
                     if ($model instanceof AbstractModel && $indexer = $model::indexer) {
                         $indexers[$indexer][] = $model;

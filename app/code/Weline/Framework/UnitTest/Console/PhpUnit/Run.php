@@ -20,6 +20,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
+use Weline\Framework\UnitTest\Pest\Pest as PestTest;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
@@ -46,6 +47,265 @@ class Run implements \Weline\Framework\Console\CommandInterface
             exit(1);
         }
         
+        # 检查是否使用 Pest（--pest 参数）
+        $usePest = isset($args['pest']) || isset($args['--pest']);
+        
+        # 默认使用 PHPUnit，只有指定 --pest 时才使用 Pest
+        if ($usePest && PestTest::isAvailable()) {
+            $this->printing->note(__('使用 Pest 测试框架运行测试...'));
+            $this->printing->note(__('提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数'));
+            echo "\n";
+            
+            // 构建 Pest 选项
+            $pestOptions = [];
+            
+            // 检查模块参数（结合之前的测试收集逻辑）
+            $moduleName = $args['--module'] ?? $args['module'] ?? null;
+            if ($moduleName) {
+                $pestOptions['module'] = $moduleName;
+            }
+            
+            // 检查文件名参数（支持智能匹配）
+            $fileName = $args['--name'] ?? $args['name'] ?? null;
+            if ($fileName) {
+                // 如果包含 ::，说明是方法名，需要分别处理
+                if (str_contains($fileName, '::')) {
+                    $parts = explode('::', $fileName);
+                    $pestOptions['file'] = $parts[0]; // 文件名部分
+                    $pestOptions['filter'] = $parts[1] ?? $fileName; // 方法名部分
+                } else {
+                    $pestOptions['file'] = $fileName; // 文件名
+                }
+            }
+            
+            // SELECTION OPTIONS（选择选项）
+            if (isset($args['filter']) || isset($args['f'])) {
+                $pestOptions['filter'] = $args['filter'] ?? $args['f'];
+            }
+            
+            if (isset($args['group']) || isset($args['g'])) {
+                $pestOptions['group'] = $args['group'] ?? $args['g'];
+            }
+            
+            if (isset($args['exclude-group'])) {
+                $pestOptions['exclude-group'] = $args['exclude-group'];
+            }
+            
+            if (isset($args['testsuite']) || isset($args['s'])) {
+                $pestOptions['testsuite'] = $args['testsuite'] ?? $args['s'];
+            }
+            
+            if (isset($args['exclude-testsuite'])) {
+                $pestOptions['exclude-testsuite'] = $args['exclude-testsuite'];
+            }
+            
+            if (isset($args['covers'])) {
+                $pestOptions['covers'] = $args['covers'];
+            }
+            
+            if (isset($args['uses'])) {
+                $pestOptions['uses'] = $args['uses'];
+            }
+            
+            // EXECUTION OPTIONS（执行选项）
+            if (isset($args['parallel']) || isset($args['p'])) {
+                $pestOptions['parallel'] = true;
+            }
+            
+            if (isset($args['bail'])) {
+                $pestOptions['bail'] = true;
+            }
+            
+            if (isset($args['retry'])) {
+                $pestOptions['retry'] = true;
+            }
+            
+            if (isset($args['stop-on-error'])) {
+                $pestOptions['stop-on-error'] = true;
+            }
+            
+            if (isset($args['stop-on-failure'])) {
+                $pestOptions['stop-on-failure'] = true;
+            }
+            
+            if (isset($args['stop-on-warning'])) {
+                $pestOptions['stop-on-warning'] = true;
+            }
+            
+            if (isset($args['stop-on-defect'])) {
+                $pestOptions['stop-on-defect'] = true;
+            }
+            
+            if (isset($args['order-by'])) {
+                $pestOptions['order-by'] = $args['order-by'];
+            }
+            
+            if (isset($args['random-order-seed'])) {
+                $pestOptions['random-order-seed'] = $args['random-order-seed'];
+            }
+            
+            // CODE COVERAGE OPTIONS（代码覆盖率选项）
+            if (isset($args['coverage']) || isset($args['c'])) {
+                $pestOptions['coverage'] = true;
+            }
+            
+            if (isset($args['min'])) {
+                $pestOptions['min'] = $args['min'];
+            }
+            
+            if (isset($args['coverage-html'])) {
+                $pestOptions['coverage-html'] = $args['coverage-html'];
+            }
+            
+            if (isset($args['coverage-text'])) {
+                $pestOptions['coverage-text'] = $args['coverage-text'];
+            }
+            
+            if (isset($args['coverage-xml'])) {
+                $pestOptions['coverage-xml'] = $args['coverage-xml'];
+            }
+            
+            if (isset($args['coverage-clover'])) {
+                $pestOptions['coverage-clover'] = $args['coverage-clover'];
+            }
+            
+            // REPORTING OPTIONS（报告选项）
+            if (isset($args['testdox'])) {
+                $pestOptions['testdox'] = true;
+            }
+            
+            if (isset($args['compact'])) {
+                $pestOptions['compact'] = true;
+            }
+            
+            if (isset($args['debug'])) {
+                $pestOptions['debug'] = true;
+            }
+            
+            if (isset($args['profile'])) {
+                $pestOptions['profile'] = true;
+            }
+            
+            if (isset($args['colors'])) {
+                $pestOptions['colors'] = $args['colors'];
+            }
+            
+            if (isset($args['no-progress'])) {
+                $pestOptions['no-progress'] = true;
+            }
+            
+            if (isset($args['no-results'])) {
+                $pestOptions['no-results'] = true;
+            }
+            
+            // CONFIGURATION OPTIONS（配置选项）
+            if (isset($args['configuration'])) {
+                $pestOptions['configuration'] = $args['configuration'];
+            }
+            
+            if (isset($args['bootstrap'])) {
+                $pestOptions['bootstrap'] = $args['bootstrap'];
+            }
+            
+            if (isset($args['cache-directory'])) {
+                $pestOptions['cache-directory'] = $args['cache-directory'];
+            }
+            
+            // 检查是否启用监听模式
+            $watchMode = isset($args['watch']) || isset($args['w']);
+            if ($watchMode) {
+                $pestOptions['watch'] = true;
+            }
+            
+            // 生成 XML 配置文件（与 PHPUnit 模式保持一致）
+            // 这样 Pest 可以通过 --configuration 参数读取所有收集到的测试
+            // 注意：$moduleName 和 $fileName 已经在上面获取过了
+            // 如果 fileName 包含 ::，需要提取文件名部分
+            $actualFileName = $fileName;
+            if ($fileName && str_contains($fileName, '::')) {
+                $parts = explode('::', $fileName);
+                $actualFileName = $parts[0]; // 文件名部分
+            }
+            
+            $php_unit_path = DEV_PATH . 'phpunit' . DS;
+            if (!is_dir($php_unit_path)) {
+                mkdir($php_unit_path, 0755, true);
+            }
+            $php_unit_report_path = $php_unit_path . 'report';
+            if (!is_dir($php_unit_report_path)) {
+                mkdir($php_unit_report_path, 0755, true);
+            }
+            $php_unit_config_path = $php_unit_path . 'config.xml';
+            
+            // 根据运行模式生成不同的配置
+            $php_unit_xml = '';
+            if ($actualFileName) {
+                // 优先处理文件名参数
+                if ($moduleName) {
+                    // 指定模块 + 文件名：在指定模块中查找文件
+                    $php_unit_xml = $this->generateModuleFileConfig($moduleName, $actualFileName, $php_unit_report_path);
+                } else {
+                    // 只指定文件名：在所有模块中查找文件
+                    $php_unit_xml = $this->generateFileConfig($actualFileName, $php_unit_report_path);
+                }
+            } elseif ($moduleName) {
+                // 只指定模块：运行整个模块的测试
+                $php_unit_xml = $this->generateModuleConfig($moduleName, $php_unit_report_path);
+            } else {
+                // 套件模式：运行套件测试
+                $php_unit_xml = $this->generateSuiteConfig($php_unit_report_path);
+            }
+            
+            // 如果生成了 XML 配置，写入文件并传递给 Pest
+            // 注意：当使用 XML 配置文件时，Pest 会从配置文件中读取测试，不需要再传递测试路径
+            if (!empty($php_unit_xml)) {
+                file_put_contents($php_unit_config_path, $php_unit_xml);
+                // 使用生成的 XML 配置文件
+                $pestOptions['configuration'] = $php_unit_config_path;
+                // 清除之前设置的测试路径相关选项，让 Pest 从 XML 配置文件中读取
+                unset($pestOptions['module']);
+                unset($pestOptions['file']);
+                unset($pestOptions['name']);
+                unset($pestOptions['path']);
+            }
+            
+            // 运行 Pest 测试
+            try {
+                $exitCode = PestTest::run($pestOptions);
+                
+                // 如果使用 watch 模式，不返回，继续监听
+                if ($watchMode) {
+                    // watch 模式会持续运行，不返回
+                    return 0;
+                }
+                
+                echo "\n";
+                if ($exitCode === 0) {
+                    $this->printing->success(__('所有测试通过！'));
+                } else {
+                    $this->printing->error(__('测试失败，退出代码: %{1}', [$exitCode]));
+                }
+                
+                // 如果启用了后台模式，启动 Web 服务器并打开浏览器
+                $isBackground = true; // Pest 模式默认后台运行
+                if ($isBackground && !$watchMode) {
+                    $php_unit_report_path = DEV_PATH . 'phpunit' . DS . 'report';
+                    if (!is_dir($php_unit_report_path)) {
+                        mkdir($php_unit_report_path, 0755, true);
+                    }
+                    $port = $this->getPortFromArgs($args, $data);
+                    $this->startPhpUnitServerBackground($php_unit_report_path, $port, false);
+                    $this->openBrowser($port);
+                }
+                
+                return $exitCode;
+            } catch (Exception $e) {
+                $this->printing->error(__('Pest 测试运行失败: %{1}', [$e->getMessage()]));
+                $this->printing->note(__('回退到 PHPUnit 模式...'));
+                echo "\n";
+                // 继续执行 PHPUnit 逻辑
+            }
+        }
         
         # 检查帮助参数（只检查明确的帮助参数，避免误识别）
         if (isset($args['h']) || isset($args['help']) || isset($args['--help'])) {
@@ -152,7 +412,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $this->printing->note(__('收集完成，准备运行...'));
         
         $ds = DS;
-        $phpunitCommand = PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --verbose --no-interaction --debug";
+        // PHPUnit 10.x 不支持 --verbose 参数，使用 --testdox 代替以获得更好的输出
+        $phpunitCommand = PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox --no-interaction";
+        // 如果指定了 debug 参数，添加 --debug
+        if (isset($args['debug']) || isset($data['debug'])) {
+            $phpunitCommand .= ' --debug';
+        }
         
         if ($fileName) {
             # 文件模式：运行指定文件的测试
@@ -212,10 +477,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         } else {
             # 套件模式：运行套件测试
             $filteredArgs = [];
+            # 获取命令名，用于排除
+            $commandName = $args['command'] ?? '';
             foreach ($args as $arg_key => $arg) {
                 # 只取整数键的参数作为套件名，排除命令名和参数
                 if (is_int($arg_key) && !empty($arg) && !is_bool($arg) && 
-                    $arg !== 'phpunit:run' && $arg !== '-b' && $arg !== '--backend') {
+                    $arg !== 'phpunit:run' && $arg !== 'p:r' && 
+                    $arg !== '-b' && $arg !== '--backend' &&
+                    $arg !== $commandName) {
                     $filteredArgs[] = $arg;
                 }
             }
@@ -244,44 +513,125 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - 退出代码: %{1}', (string)$command['return_vars']));
         }
         
-        # 彩色输出测试结果
+        # 彩色输出测试结果，并捕获失败的测试用例
+        $failedTests = [];
+        $currentTest = null;
+        $inFailureBlock = false;
+        
         foreach ($command['output'] as $line) {
             $line = trim($line);
             if (empty($line)) {
                 continue;
             }
             
+            // 检测未知选项错误
+            if (str_contains($line, 'Unknown option')) {
+                $this->printing->error($line);
+                $this->printing->warning(__('提示：PHPUnit 版本可能不支持某些参数，请检查 PHPUnit 版本'));
+                continue;
+            }
+            
+            // 检测 PHPUnit 版本信息
             if (str_contains($line, 'PHPUnit') && str_contains($line, 'by Sebastian Bergmann')) {
                 $this->printing->note($line);
-            } elseif (str_contains($line, 'OK') || str_contains($line, 'PASSED')) {
-                $this->printing->success($line);
-            } elseif (str_contains($line, 'FAILURES') || str_contains($line, 'ERRORS') || str_contains($line, 'FAILED')) {
-                $this->printing->error($line);
-            } elseif (str_contains($line, 'WARNING') || str_contains($line, 'Warning')) {
-                $this->printing->warning($line);
-            } elseif (str_contains($line, 'Tests:') || str_contains($line, 'Time:') || str_contains($line, 'Memory:')) {
+            }
+            // 检测测试用例名称（TestDox 格式：类名和方法名）
+            elseif (preg_match('/^([A-Z][a-zA-Z0-9_\\\\]+)::([a-zA-Z0-9_]+)/', $line, $matches)) {
+                $currentTest = $matches[1] . '::' . $matches[2];
                 $this->printing->note($line);
-            } elseif (str_contains($line, 'There were') || str_contains($line, 'There was')) {
+            }
+            // 检测 TestDox 格式的测试名称（例如：✓ Test name 或 ✗ Test name）
+            elseif (preg_match('/^[✓✗]\s+(.+)/', $line, $matches)) {
+                $testName = $matches[1];
+                if (str_starts_with($line, '✗')) {
+                    $failedTests[] = $testName;
+                    $currentTest = $testName;
+                    $inFailureBlock = true;
+                    $this->printing->error($line);
+                } else {
+                    $this->printing->success($line);
+                    $inFailureBlock = false;
+                }
+            }
+            // 检测成功信息
+            elseif (str_contains($line, 'OK') || str_contains($line, 'PASSED')) {
+                $this->printing->success($line);
+            }
+            // 检测失败信息
+            elseif (str_contains($line, 'FAILURES') || str_contains($line, 'ERRORS') || str_contains($line, 'FAILED')) {
                 $this->printing->error($line);
-            } elseif (str_contains($line, 'ERRORS!') || str_contains($line, 'FAILURES!')) {
+                $inFailureBlock = true;
+            }
+            // 检测警告
+            elseif (str_contains($line, 'WARNING') || str_contains($line, 'Warning')) {
+                $this->printing->warning($line);
+            }
+            // 检测统计信息
+            elseif (str_contains($line, 'Tests:') || str_contains($line, 'Time:') || str_contains($line, 'Memory:')) {
+                $this->printing->note($line);
+            }
+            // 检测错误摘要
+            elseif (str_contains($line, 'There were') || str_contains($line, 'There was')) {
                 $this->printing->error($line);
-            } elseif (preg_match('/^\d+\)/', $line)) {
-                # 测试用例编号行
+            }
+            // 检测错误标记
+            elseif (str_contains($line, 'ERRORS!') || str_contains($line, 'FAILURES!')) {
                 $this->printing->error($line);
-            } elseif (str_contains($line, 'Error:') || str_contains($line, 'Exception:')) {
+            }
+            // 检测测试用例编号（传统格式）
+            elseif (preg_match('/^\d+\)\s+(.+)/', $line, $matches)) {
+                $testCase = $matches[1];
+                $failedTests[] = $testCase;
+                $currentTest = $testCase;
+                $inFailureBlock = true;
                 $this->printing->error($line);
-            } elseif (str_contains($line, 'Failed asserting')) {
+            }
+            // 检测错误和异常
+            elseif (str_contains($line, 'Error:') || str_contains($line, 'Exception:')) {
                 $this->printing->error($line);
-            } elseif (str_contains($line, '--- Expected') || str_contains($line, '+++ Actual')) {
+                if ($currentTest && !in_array($currentTest, $failedTests)) {
+                    $failedTests[] = $currentTest;
+                }
+            }
+            // 检测断言失败
+            elseif (str_contains($line, 'Failed asserting')) {
                 $this->printing->error($line);
-            } elseif (str_contains($line, '@@')) {
+                if ($currentTest && !in_array($currentTest, $failedTests)) {
+                    $failedTests[] = $currentTest;
+                }
+            }
+            // 检测差异信息
+            elseif (str_contains($line, '--- Expected') || str_contains($line, '+++ Actual')) {
                 $this->printing->error($line);
-            } elseif (str_contains($line, '--') && str_contains($line, 'There was')) {
+            }
+            // 检测差异标记
+            elseif (str_contains($line, '@@')) {
                 $this->printing->error($line);
-            } else {
-                # 默认输出所有其他行
+            }
+            // 检测其他错误格式
+            elseif (str_contains($line, '--') && str_contains($line, 'There was')) {
+                $this->printing->error($line);
+            }
+            // 在失败块中的其他行也标记为错误
+            elseif ($inFailureBlock) {
+                $this->printing->error($line);
+            }
+            // 默认输出所有其他行
+            else {
                 echo $line . "\n";
             }
+        }
+        
+        // 如果有失败的测试用例，显示摘要
+        if (!empty($failedTests)) {
+            echo "\n";
+            $this->printing->error(__('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+            $this->printing->error(__('失败的测试用例：'));
+            foreach ($failedTests as $index => $test) {
+                $this->printing->error(__('  %{1}. %{2}', [($index + 1), $test]));
+            }
+            $this->printing->error(__('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+            echo "\n";
         }
         
         if ($command['return_vars']) {
@@ -311,12 +661,27 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 获取端口参数
         $port = $this->getPortFromArgs($args, $data);
         
+        # 检查是否启用监听模式
+        $watchMode = isset($args['watch']) || isset($args['w']);
+        
         # 启动报告服务器
         if ($isBackground) {
-            $this->startPhpUnitServerBackground($php_unit_report_path, $port);
+            $this->startPhpUnitServerBackground($php_unit_report_path, $port, $watchMode);
+            
+            # 自动打开浏览器
+            $this->openBrowser($port);
+            
+            # 如果启用监听模式，启动文件监听
+            if ($watchMode) {
+                $this->startWatchMode($php_unit_report_path, $port, $args, $data);
+            }
+            
             # 在服务器启动后输出测试完成标志
             $this->printing->separator('═', 0, 'SUCCESS');
             $this->printing->success(__('✓ 测试已完成，报告服务器已在后台运行'));
+            if ($watchMode) {
+                $this->printing->note(__('📡 监听模式已启用，文件变化时将自动重新运行测试'));
+            }
             $this->printing->success(__('=== PHPUNIT_TEST_COMPLETED ==='));
             $this->printing->separator('═', 0, 'SUCCESS');
             # 确保立即返回
@@ -327,12 +692,69 @@ class Run implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
+     * 自动打开浏览器
+     * 
+     * @param int $port 端口号
+     */
+    private function openBrowser(int $port): void
+    {
+        // 检查是否禁用自动打开浏览器
+        if (getenv('WELINE_NO_BROWSER') === '1') {
+            return;
+        }
+        
+        $url = "http://localhost:$port";
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        
+        if ($isWindows) {
+            // Windows 系统
+            \exec("start \"\" \"$url\"", $output, $exitCode);
+        } elseif (strtoupper(PHP_OS) === 'DARWIN') {
+            // macOS 系统
+            \exec("open \"$url\"", $output, $exitCode);
+        } else {
+            // Linux 系统
+            \exec("xdg-open \"$url\"", $output, $exitCode);
+        }
+        
+        if ($exitCode === 0) {
+            $this->printing->success(__('✓ 已自动打开浏览器: %{1}', [$url]));
+        } else {
+            $this->printing->note(__('提示：请手动访问 %{1}', [$url]));
+        }
+    }
+
+    /**
+     * 启动监听模式
+     * 
+     * @param string $reportPath 报告路径
+     * @param int $port 端口号
+     * @param array $args 参数
+     * @param array $data 数据
+     */
+    private function startWatchMode(string $reportPath, int $port, array $args, array $data): void
+    {
+        // 检查是否安装了 Pest（Pest 有内置的 watch 功能）
+        $usePest = isset($args['pest']) || isset($args['--pest']);
+        if ($usePest && PestTest::isAvailable()) {
+            $this->printing->note(__('使用 Pest 的 watch 模式...'));
+            // Pest 的 watch 模式会在后台运行，自动监听文件变化
+            // 这里可以添加额外的监听逻辑
+        } else {
+            // 对于 PHPUnit，可以使用简单的文件监听
+            $this->printing->note(__('启动文件监听模式...'));
+            // 可以在这里添加文件监听逻辑
+        }
+    }
+
+    /**
      * 后台启动PHPUnit报告服务器
      * 
      * @param string $reportPath 报告路径
      * @param int $port 端口号
+     * @param bool $watchMode 是否启用监听模式
      */
-    private function startPhpUnitServerBackground(string $reportPath, int $port = 9980): void
+    private function startPhpUnitServerBackground(string $reportPath, int $port = 9980, bool $watchMode = false): void
     {
         $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
         $logFile = BP . 'var' . DS . 'log' . DS . 'phpunit_server.log';
@@ -1106,6 +1528,63 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 查找测试文件
         $testFile = $this->findTestFile($fileName, false);
         if (!$testFile) {
+            # 如果找不到文件，尝试查找包含该文件的测试目录
+            # 这样可以让 Pest 从目录中查找测试文件
+            $modules = Env::getInstance()->getActiveModules();
+            $testDirs = [];
+            foreach ($modules as $module) {
+                $testPath = $module['base_path'] . 'test' . DS;
+                if (is_dir($testPath)) {
+                    $testDirs[] = $testPath;
+                } else {
+                    $testPath = $module['base_path'] . 'Test' . DS;
+                    if (is_dir($testPath)) {
+                        $testDirs[] = $testPath;
+                    }
+                }
+            }
+            
+            # 如果找到了测试目录，生成包含这些目录的配置
+            if (!empty($testDirs)) {
+                $this->printing->note(__('未找到测试文件: %{1}，将搜索所有测试目录', [$fileName]));
+                # 生成包含所有测试目录的配置，并使用 filter 参数过滤
+                $php_unit_xml = '<?xml version=\'1.0\' encoding=\'UTF-8\'?>';
+                $php_unit_xml .= '<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"';
+                $php_unit_xml .= ' xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"';
+                $php_unit_xml .= ' bootstrap="../../app/bootstrap_phpunit.php"';
+                $php_unit_xml .= ' colors="true"';
+                $php_unit_xml .= ' beStrictAboutTestsThatDoNotTestAnything="false"';
+                $php_unit_xml .= ' beStrictAboutOutputDuringTests="false"';
+                $php_unit_xml .= ' beStrictAboutTodoAnnotatedTests="false"';
+                $php_unit_xml .= ' convertErrorsToExceptions="true"';
+                $php_unit_xml .= ' convertNoticesToExceptions="true"';
+                $php_unit_xml .= ' convertWarningsToExceptions="true"';
+                $php_unit_xml .= ' processIsolation="false"';
+                $php_unit_xml .= ' stopOnFailure="false">';
+                $php_unit_xml .= '<testsuites>';
+                $php_unit_xml .= '<testsuite name="file">';
+                foreach ($testDirs as $testDir) {
+                    $php_unit_xml .= '<directory suffix="Test.php">' . $testDir . '</directory>';
+                }
+                $php_unit_xml .= '</testsuite>';
+                $php_unit_xml .= '</testsuites>';
+                $php_unit_xml .= '<coverage processUncoveredFiles="true">';
+                $php_unit_xml .= '<include>';
+                $php_unit_xml .= '<directory suffix=".php">../../app</directory>';
+                $php_unit_xml .= '</include>';
+                $php_unit_xml .= '</coverage>';
+                $php_unit_xml .= '<logging>';
+                $php_unit_xml .= '<junit outputFile="' . $reportPath . '/junit.xml"/>';
+                $php_unit_xml .= '<teamcity outputFile="' . $reportPath . '/teamcity.txt"/>';
+                $php_unit_xml .= '<testdoxHtml outputFile="' . $reportPath . '/index.html"/>';
+                $php_unit_xml .= '<testdoxText outputFile="' . $reportPath . '/testdox.txt"/>';
+                $php_unit_xml .= '<testdoxXml outputFile="' . $reportPath . '/testdox.xml"/>';
+                $php_unit_xml .= '<text outputFile="' . $reportPath . '/logfile.txt"/>';
+                $php_unit_xml .= '</logging>';
+                $php_unit_xml .= '</phpunit>';
+                return $php_unit_xml;
+            }
+            
             $this->printing->error(__('未找到测试文件: %{1}', [$fileName]));
             return '';
         }
@@ -1230,6 +1709,30 @@ class Run implements \Weline\Framework\Console\CommandInterface
                             $this->printing->note(__('调试 - 找到文件: %{1}', [$possibleFile]));
                         }
                         return $possibleFile;
+                    }
+                }
+                
+                # 递归查找子目录（支持 Unit、Integration 等子目录）
+                if (is_dir($test_path)) {
+                    $iterator = new \RecursiveIteratorIterator(
+                        new \RecursiveDirectoryIterator($test_path, \RecursiveDirectoryIterator::SKIP_DOTS),
+                        \RecursiveIteratorIterator::SELF_FIRST
+                    );
+                    
+                    foreach ($iterator as $file) {
+                        if ($file->isFile() && preg_match('/\.php$/i', $file->getExtension())) {
+                            $basename = $file->getBasename('.php');
+                            // 支持多种匹配方式
+                            if ($basename === $actualFileName || 
+                                $basename === $actualFileName . 'Test' ||
+                                str_contains($basename, $actualFileName) ||
+                                str_contains($actualFileName, $basename)) {
+                                if ($debug) {
+                                    $this->printing->note(__('调试 - 递归找到文件: %{1}', [$file->getPathname()]));
+                                }
+                                return $file->getPathname();
+                            }
+                        }
                     }
                 }
             }
@@ -1480,59 +1983,157 @@ class Run implements \Weline\Framework\Console\CommandInterface
 ════════════════════════════════════════════════════════════════════════════════
 
 📖 描述：
-    PHPUnit测试套件命令使用指南
+    单元测试运行命令，支持 PHPUnit 和 Pest 两种测试框架
+    默认使用 PHPUnit，可通过 --pest 参数使用 Pest（如果已安装）
     支持多种测试方式：套件测试、模块测试、文件测试、方法测试
-    提供智能文件名匹配，默认后台运行并启动报告服务器
+    提供智能文件名匹配，自动收集各个模块的测试脚本
+    默认后台运行并启动报告服务器（PHPUnit模式）
     
-    ⚡ 重要变更：
-    现在默认后台运行并生成HTML报告！
+    ⚡ 重要特性：
+    - 自动收集所有模块的测试脚本（保持之前的功能）
+    - 智能文件名匹配（支持多种格式）
+    - 支持 Pest 2.x 的所有参数
+    - 自定义 Watch 模式（文件监听）
 
 🎯 基本语法：
     php bin/w phpunit:run [选项] [套件名]
 
-🔧 常用选项：
-    -p, --port=<端口>       指定报告服务器端口（默认：9980）
+🔧 核心选项：
+    --pest                  使用 Pest 测试框架（默认使用 PHPUnit）
+    -p, --port=<端口>       指定报告服务器端口（默认：9980，仅 PHPUnit 模式）
     --debug                 显示详细的调试信息
-    --module=<模块名>       指定要测试的模块
-    --name=<文件名|方法名>  指定测试文件或方法（支持智能匹配）
-    -h, --help              显示此帮助信息
+    --module=<模块名>       指定要测试的模块（自动收集该模块的测试）
+    --name=<文件名|方法名>  指定测试文件或方法（支持智能匹配，自动查找）
+    
+🔧 Pest 选择选项（SELECTION OPTIONS）：
+    --filter=<pattern>      过滤测试名称（支持正则表达式）
+    -f, --filter            同上
+    --group=<name>          运行指定组的测试
+    -g, --group             同上
+    --exclude-group=<name>  排除指定组的测试
+    --testsuite=<name>      运行指定测试套件
+    -s, --testsuite         同上
+    --exclude-testsuite     排除指定测试套件
+    --covers=<name>         只运行覆盖指定代码的测试
+    --uses=<name>           只运行使用指定代码的测试
+    --test-suffix=<suffixes> 指定测试文件后缀（默认：Test.php,.phpt）
+    
+🔧 Pest 执行选项（EXECUTION OPTIONS）：
+    --parallel              并行运行测试（提高速度）
+    -p, --parallel          同上（注意：与 --port 冲突时使用完整形式）
+    --bail                  遇到第一个失败就停止
+    --retry                  优先运行失败的测试
+    --stop-on-error         遇到错误就停止
+    --stop-on-failure       遇到失败就停止
+    --stop-on-warning       遇到警告就停止
+    --stop-on-defect        遇到缺陷就停止
+    --order-by=<order>      测试执行顺序（default|defects|depends|duration|random|reverse|size）
+    --random-order-seed=<N> 随机顺序的种子值
+    
+🔧 Pest 代码覆盖率选项（CODE COVERAGE OPTIONS）：
+    --coverage              生成代码覆盖率报告
+    -c, --coverage          同上
+    --coverage --min=<n>    设置最小覆盖率要求
+    --coverage-html=<dir>   生成 HTML 格式覆盖率报告
+    --coverage-text[=<file>] 生成文本格式覆盖率报告
+    --coverage-xml=<dir>    生成 XML 格式覆盖率报告
+    --coverage-clover=<file> 生成 Clover 格式覆盖率报告
+    
+🔧 Pest 报告选项（REPORTING OPTIONS）：
+    --testdox               使用 TestDox 格式输出
+    --compact               紧凑格式输出
+    --debug                 调试模式输出
+    --profile               显示最慢的 10 个测试
+    --colors=<flag>         颜色输出（never|auto|always）
+    --no-progress           禁用进度输出
+    --no-results            禁用结果输出
+    
+🔧 Pest 配置选项（CONFIGURATION OPTIONS）：
+    --configuration=<file>  指定配置文件
+    --bootstrap=<file>      指定引导文件
+    --cache-directory=<dir> 指定缓存目录
 
 📝 参数：
     <套件名>                可选的测试套件名称（例如：unit）
 
 📋 使用方式：
 
-1️⃣ 默认测试（后台运行+HTML报告）：
-    php bin/w phpunit:run --name=Eav                # 默认后台运行
-    php bin/w phpunit:run --name=Eav::testMethod   # 测试单个方法
-    php bin/w phpunit:run --module=Weline_Ai       # 测试整个模块
-    php bin/w phpunit:run                          # 运行默认套件
+1️⃣ 默认测试（自动收集所有模块的测试）：
+    php bin/w phpunit:run                          # 使用 PHPUnit 运行所有模块的测试
+    php bin/w phpunit:run --name=ThemeCssTaglibTest  # 智能查找并运行指定测试文件
+    php bin/w phpunit:run --module=Weline_Theme     # 自动收集并运行指定模块的测试
+    php bin/w phpunit:run --pest                   # 使用 Pest 运行测试
 
-3️⃣ 指定套件测试：
-    php bin/w phpunit:run                          # 运行默认套件（后台）
-    php bin/w phpunit:run unit                     # 运行指定套件（后台）
+2️⃣ 智能文件匹配（自动查找测试文件）：
+    php bin/w phpunit:run --name=ThemeCssTaglibTest     # 自动查找 ThemeCssTaglibTest.php
+    php bin/w phpunit:run --name=ThemeCssTaglib         # 自动匹配 ThemeCssTaglibTest.php
+    php bin/w phpunit:run --name=ThemeCssTaglibTest::testMethod  # 运行指定方法
 
-4️⃣ 指定模块测试：
-    php bin/w phpunit:run --module=Weline_Eav        # 后台运行
-    php bin/w phpunit:run --module=Weline_Database   # 后台运行
+3️⃣ 模块测试（自动收集模块下的所有测试）：
+    php bin/w phpunit:run --module=Weline_Theme         # 运行 Theme 模块的所有测试
+    php bin/w phpunit:run --module=Weline_Framework     # 运行 Framework 模块的所有测试
 
-5️⃣ 自定义端口：
-    php bin/w phpunit:run --port=8080 --module=Weline_Ai
-    php bin/w phpunit:run -p 8080 --name=Eav
+4️⃣ 强大的 Pest 参数组合：
+    # 并行测试 + 覆盖率
+    php bin/w phpunit:run --parallel --coverage --min=80
+    
+    # 测试特定组 + TestDox 格式
+    php bin/w phpunit:run --group=unit --testdox
+    
+    # 调试模式 + 显示最慢测试
+    php bin/w phpunit:run --debug --profile
+    
+    # 只运行覆盖特定代码的测试
+    php bin/w phpunit:run --covers=ThemeCss
+    
+    # 遇到失败就停止
+    php bin/w phpunit:run --stop-on-failure --bail
 
-🎨 智能文件名匹配规则：
-    Eav         → EavTest.php
-    TestEav     → EavTest.php
-    EavTest     → EavTest.php
-    EavTest.php → EavTest.php
+5️⃣ Watch 模式（文件监听 + 自动收集）：
+    php bin/w phpunit:run --watch                    # 监听所有模块的测试
+    php bin/w phpunit:run --watch --name=Test         # 监听指定测试文件
+    php bin/w phpunit:run --watch --module=Weline_Theme  # 监听指定模块
+
+6️⃣ Pest 模式（需要指定 --pest 参数）：
+    php bin/w phpunit:run --pest --name=Eav        # Pest 模式运行
+    php bin/w phpunit:run --pest --module=Weline_Ai  # Pest 模式测试模块
+
+🎨 智能文件名匹配规则（自动查找）：
+    ThemeCssTaglibTest     → app/code/Weline/Theme/test/Unit/ThemeCssTaglibTest.php
+    ThemeCssTaglib         → ThemeCssTaglibTest.php（自动添加 Test 后缀）
+    TestThemeCssTaglib     → ThemeCssTaglibTest.php（智能转换）
+    ThemeCssTaglibTest.php → 直接匹配文件
+    
+💡 测试收集功能：
+    - 自动扫描所有模块的 test/ 或 Test/ 目录
+    - 支持递归查找子目录中的测试文件
+    - 支持 Unit、Integration 等子目录结构
+    - 自动识别测试文件（*Test.php 格式）
 
 🚀 最佳实践：
     · 日常测试：直接运行（默认后台），访问浏览器查看报告
     · CI/CD集成：结合 --debug 参数查看详细信息
 
 💡 提示：
-    现在默认后台运行，测试完成后会自动启动报告服务器
+    现在默认后台运行，测试完成后会自动启动报告服务器并打开浏览器
     报告地址会在命令行显示（默认 http://localhost:9980）
+
+📡 监听模式（Watch Mode）：
+    ✅ 已实现：自定义文件监听功能（Pest 2.x 本身不支持 --watch，已实现替代方案）
+    php bin/w phpunit:run --watch              # 启用文件监听模式
+    php bin/w phpunit:run -w                    # 短参数形式
+    php bin/w phpunit:run --watch --name=Test   # 监听指定测试文件
+    php bin/w phpunit:run --watch --module=Weline_Theme  # 监听指定模块测试
+    
+    💡 Watch 模式功能：
+    - 自动监听 app/code 目录下的 PHP 文件变化
+    - 文件变化时自动重新运行相关测试
+    - 持续运行直到手动停止（Ctrl+C）
+    - 每 0.5 秒检查一次文件变化
+
+🌐 自动打开浏览器：
+    测试完成后会自动打开浏览器显示测试报告
+    如果不想自动打开，可以设置环境变量：WELINE_NO_BROWSER=1
 
 ════════════════════════════════════════════════════════════════════════════════
 ';

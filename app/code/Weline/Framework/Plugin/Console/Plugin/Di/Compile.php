@@ -73,9 +73,10 @@ class Compile implements \Weline\Framework\Console\CommandInterface
         $clear = ObjectManager::getInstance(Clear::class);
         $clear->execute();
         $this->pluginsManager->scanPlugins(false);
-        $generator    = $this->pluginsManager->generatorInterceptor('', false);
+        $this->pluginsManager->generatorInterceptor('', false);
         $printer_list = [];
-        foreach ($generator::getClassProxyMap() as $key => $item) {
+        // Generator 是静态类，直接使用静态方法
+        foreach (\Weline\Framework\Plugin\Proxy\Generator::getClassProxyMap() as $key => $item) {
             unset($item['body']);
             $printer_list[$key] = $item;
         }

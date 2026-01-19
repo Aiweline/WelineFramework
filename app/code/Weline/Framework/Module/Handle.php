@@ -135,6 +135,17 @@ class Handle implements HandleInterface, RegisterInterface
         if ($this->system->getDirectoryObject()->is_empty(dirname($back_path))) {
             $this->system->exec("rm $back_path -rf");
         }
+        
+        // 更新注册表（模块卸载后）
+        try {
+            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+            $registryService->updateAllRegistries(true); // 静默执行
+        } catch (\Exception $e) {
+            // 注册表更新失败不影响模块卸载，只记录日志
+            \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块卸载后注册表更新失败: %{1}', [$e->getMessage()]));
+        }
+        
         $this->printer->success($module . __('模块已卸载完成！'));
     }
 
@@ -265,6 +276,17 @@ class Handle implements HandleInterface, RegisterInterface
         $this->modules[$module->getName()] = $module->getData();
         // 更新模块
         $this->helper->updateModules($this->modules);
+        
+        // 更新注册表（模块安装/升级后）
+        try {
+            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+            $registryService->updateAllRegistries(true); // 静默执行
+        } catch (\Exception $e) {
+            // 注册表更新失败不影响模块安装，只记录日志
+            \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块安装后注册表更新失败: %{1}', [$e->getMessage()]));
+        }
+        
         return $module;
     }
 

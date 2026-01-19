@@ -143,8 +143,23 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function fields(string $fields): QueryInterface
+    public function fields(string|array $fields): QueryInterface
     {
+        // 处理数组参数
+        if (is_array($fields)) {
+            $fieldsStringParts = [];
+            foreach ($fields as $alias => $expression) {
+                if (is_string($alias) && is_string($expression)) {
+                    // 关联数组格式：['alias' => 'expression'] -> 'expression AS alias'
+                    $fieldsStringParts[] = $expression . ' AS ' . $alias;
+                } else {
+                    // 普通数组格式：['field1', 'field2'] -> 'field1,field2'
+                    $fieldsStringParts[] = is_string($expression) ? $expression : (string)$expression;
+                }
+            }
+            $fields = implode(',', $fieldsStringParts);
+        }
+        
         if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
             $this->fields = $fields;
         } else {

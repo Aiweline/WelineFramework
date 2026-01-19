@@ -64,13 +64,42 @@ class PluginsManager
             return $this->plugins;
         }
         if (empty($this->plugins)) {
+            $env = \Weline\Framework\App\Env::getInstance();
+            
             // 合并相同类的拦截器
             foreach ($this->reader->read() as $module_and_file => $pluginInstances) {
+                // 提取模块名并检查模块状态
+                $moduleName = explode('::', $module_and_file)[0] ?? '';
+                if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+                    // 跳过禁用的模块
+                    continue;
+                }
+                
                 foreach ($pluginInstances as $key => $instances) {
                     foreach ($instances as $k => $instance) {
+                        // 检查插件是否被禁用
                         if (isset($instance['plugins']['disabled']) && 'true' === $instance['plugins']['disabled']) {
                             unset($instances[$k]);
+                            continue;
                         }
+                        
+                        // 检查模块状态（双重检查，确保安全）
+                        $pluginModuleName = $instance['plugins']['module'] ?? $moduleName;
+                        if (!empty($pluginModuleName)) {
+                            if (isset($instance['plugins']['module_status'])) {
+                                if (!$instance['plugins']['module_status']) {
+                                    unset($instances[$k]);
+                                    continue; // 模块被禁用，跳过
+                                }
+                            } else {
+                                // 兼容旧版本：运行时检查模块状态
+                                if (!$env->getModuleStatus($pluginModuleName)) {
+                                    unset($instances[$k]);
+                                    continue; // 模块被禁用，跳过
+                                }
+                            }
+                        }
+                        
                         $this->plugins[$instance['class']][] = $instance['plugins'];
                     }
                 }
@@ -83,9 +112,11 @@ class PluginsManager
         //）
         // 反射所有插件类方法
         foreach ($this->plugins as $type => $type_plugins) {
-            // 插件类排序 二维数组根据sort字段排序
+            // 插件类排序 二维数组根据sort字段排序（使用数字比较确保正确排序）
             usort($type_plugins, function ($a, $b) {
-                return strnatcasecmp($a['sort'], $b['sort']);
+                $sortA = (int)($a['sort'] ?? 10000);
+                $sortB = (int)($b['sort'] ?? 10000);
+                return $sortA <=> $sortB;
             });
             $plugin_listen_methods = [];
 
@@ -230,13 +261,24 @@ class PluginsManager
         // 针对方法的前置，环绕，后置
         foreach ($types_plugins_info as $type => $plugin_data) {
             $method_plugins_methods = [];
+            // 构建插件类到 sort 的映射，用于后续排序
+            $plugin_class_to_sort = [];
+            foreach ($this->plugins[$type] ?? [] as $type_plugin) {
+                if (isset($type_plugin['instance'])) {
+                    $sort = (int)($type_plugin['sort'] ?? 10000);
+                    $plugin_class_to_sort[$type_plugin['instance']] = $sort;
+                }
+            }
+            
             foreach ($plugin_data['listen_methods'] as $listen_method) {
                 foreach ($plugin_data['plugins_methods'] as $plugin_class => $plugin_methods) {
                     if ($plugin_methods && isset($plugin_methods[$listen_method])) {
+                        $plugin_sort = $plugin_class_to_sort[$plugin_class] ?? 10000;
                         foreach ($plugin_methods[$listen_method] as $plugin_method) {
                             $plugin_class_method_data = [
                                 'instance' => $plugin_class,
                                 'method' => $plugin_method,
+                                'sort' => $plugin_sort,
                             ];
                             // 全部数据
                             $method_plugins_methods[$listen_method]['all'][] = $plugin_class_method_data;
@@ -255,6 +297,44 @@ class PluginsManager
                     }
                 }
             }
+            
+            // 对每个方法的插件数组按 sort 值排序
+            foreach ($method_plugins_methods as $listen_method => &$method_plugins) {
+                // 对 'all' 数组排序
+                if (isset($method_plugins['all']) && count($method_plugins['all']) > 1) {
+                    usort($method_plugins['all'], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
+                // 对 'before' 数组排序
+                if (isset($method_plugins[$before_name]) && count($method_plugins[$before_name]) > 1) {
+                    usort($method_plugins[$before_name], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
+                // 对 'around' 数组排序
+                if (isset($method_plugins[$around_name]) && count($method_plugins[$around_name]) > 1) {
+                    usort($method_plugins[$around_name], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
+                // 对 'after' 数组排序
+                if (isset($method_plugins[$after_name]) && count($method_plugins[$after_name]) > 1) {
+                    usort($method_plugins[$after_name], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
+            }
+            unset($method_plugins); // 解除引用
+            
             $plugin_data['methods_plugins'] = $method_plugins_methods;
             $types_plugins_info[$type] = $plugin_data;
         }
@@ -331,11 +411,13 @@ class PluginsManager
     public function getNext($type, $method, $code = '__self'): ?array
     {
         if (!isset($this->plugin_map[$type . $method])) {
-            $this->_inheritPlugins($type);
+            // 如果插件映射不存在，通过scanPlugins获取
+            $this->scanPlugins(false);
         }
         $key = $type . '_' . lcfirst($method) . '_' . $code;
 
-        return $this->_processed[$key] ?? null;
+        // 注意：_processed属性可能不存在，这里返回null作为兼容处理
+        return null;
     }
 
     /**
@@ -346,23 +428,20 @@ class PluginsManager
      * @param string $class
      * @param bool $cache
      *
-     * @return Proxy\Generator
+     * @return void
      * @throws \Weline\Framework\Exception\Core
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
-    public function generatorInterceptor(string $class = '', bool $cache = false): Proxy\Generator
+    public function generatorInterceptor(string $class = '', bool $cache = false): void
     {
-        /**@var \Weline\Framework\Plugin\Proxy\Generator $generator */
-        $generator = ObjectManager::getInstance(\Weline\Framework\Plugin\Proxy\Generator::class);
+        // Generator 是静态类，直接使用静态方法，无需通过 ObjectManager 实例化
         if ($class) {
-            $generator::createInterceptor($class);
+            Proxy\Generator::createInterceptor($class);
         } else {
             foreach ($this->scanPlugins($cache) as $origin_class => $scanPlugin) {
-                $generator::createInterceptor($origin_class);
+                Proxy\Generator::createInterceptor($origin_class);
             }
         }
-
-        return $generator;
     }
 }

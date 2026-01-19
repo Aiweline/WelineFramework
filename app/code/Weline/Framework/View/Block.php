@@ -152,10 +152,16 @@ class Block extends Template implements BlockInterface
             $currentName = '';
             foreach ($action_param_value_arr as $action_param_value_key => $item) {
                 $currentName .= $item . '.';
-                if ($action_param_value_key !== 0 && (!isset($currentVar[$item]) || empty($item))) {
-                    throw new \Weline\Framework\App\Exception(__('参数调用链不存在。调用链：%{1}，不存在的参数：%{2}。使用示例：%{3}', [$currentName, $item, $this->doc()]));
+                // 支持模型对象访问
+                if (is_object($currentVar) && method_exists($currentVar, 'getData')) {
+                    $currentVar = $currentVar->getData($item);
+                } elseif (is_array($currentVar) && isset($currentVar[$item])) {
+                    $currentVar = $currentVar[$item];
+                } else {
+                    if ($action_param_value_key !== 0) {
+                        throw new \Weline\Framework\App\Exception(__('参数调用链不存在。调用链：%{1}，不存在的参数：%{2}。使用示例：%{3}', [$currentName, $item, $this->doc()]));
+                    }
                 }
-                $currentVar = $currentVar[$item];
                 if (empty($currentVar)) {
                     break;
                 }
@@ -180,10 +186,16 @@ class Block extends Template implements BlockInterface
             $currentName = '';
             foreach ($action_param_value_arr as $action_param_value_key => $action_param) {
                 $currentName .= $action_param . '.';
-                if ($action_param_value_key !== 0 and !isset($action_param_name_var[$action_param])) {
-                    throw new \Weline\Framework\App\Exception(__('参数调用链不存在。调用链：%{1}，不存在的参数：%{2}。使用示例：%{3}', [$currentName, $action_param, $this->doc()]));
+                // 支持模型对象访问
+                if (is_object($action_param_name_var) && method_exists($action_param_name_var, 'getData')) {
+                    $action_param_name_var = $action_param_name_var->getData($action_param);
+                } elseif (is_array($action_param_name_var) && isset($action_param_name_var[$action_param])) {
+                    $action_param_name_var = $action_param_name_var[$action_param];
+                } else {
+                    if ($action_param_value_key !== 0) {
+                        throw new \Weline\Framework\App\Exception(__('参数调用链不存在。调用链：%{1}，不存在的参数：%{2}。使用示例：%{3}', [$currentName, $action_param, $this->doc()]));
+                    }
                 }
-                $action_param_name_var = $action_param_name_var[$action_param];
                 if (empty($action_param_name_var)) {
                     break;
                 }

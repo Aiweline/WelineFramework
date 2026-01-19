@@ -189,14 +189,6 @@ trait SqlTrait
         // 去除SET NAMES utf8mb4;
         $mysqlSql = preg_replace('/SET\s+NAMES\s+\w+/i', '', $mysqlSql);
 
-        // 将sql分割成一条一条的语句
-//        if (str_contains($mysqlSql, 'developer_workspace_document')) {
-//            // 如何正确提取每条sql语句，注意值中的分号不能当作结束标志
-//            d($mysqlSql);
-//            dd(Tool::extract_sql_statements($mysqlSql));
-//        }
-
-
         // 转换 TRUNCATE 语句，支持带反引号、双引号和不带引号的表名
         $mysqlSql = preg_replace('/TRUNCATE\s+TABLE\s+[`"]?(\w+)[`"]?/i', 'DELETE FROM "$1"', $mysqlSql);
 

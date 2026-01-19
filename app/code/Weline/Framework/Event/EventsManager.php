@@ -103,32 +103,78 @@ class EventsManager
         // 优先从 generated/events.php 读取观察者（性能优化）
         $registry = $this->eventRegistry->getRegistry();
         
+        $observers = [];
+        
         // 先检查精确匹配
         if (isset($registry['events'][$eventName]['observers'])) {
-            return $registry['events'][$eventName]['observers'];
-        }
-        
-        // 检查是否匹配动态事件模式
-        $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
-        foreach ($dynamicPatterns as $pattern => $patternInfo) {
-            if ($this->eventRegistry->matchPattern($pattern, $eventName)) {
-                // 匹配到动态事件模式，返回该模式的观察者
-                return $patternInfo['observers'] ?? [];
+            $observers = $registry['events'][$eventName]['observers'];
+        } else {
+            // 检查是否匹配动态事件模式
+            $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
+            foreach ($dynamicPatterns as $pattern => $patternInfo) {
+                if ($this->eventRegistry->matchPattern($pattern, $eventName)) {
+                    // 匹配到动态事件模式，返回该模式的观察者
+                    $observers = $patternInfo['observers'] ?? [];
+                    break;
+                }
+            }
+            
+            // 如果还没有找到，检查是否启用事件扫描回退机制
+            if (empty($observers)) {
+                $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
+                if ($scanEnabled) {
+                    // 如果 generated/events.php 中没有观察者信息，回退到扫描方式（兼容旧版本）
+                    $evenObserverLists = $this->scanEvents();
+                    $observers = $evenObserverLists[$eventName] ?? [];
+                }
             }
         }
         
-        // 检查是否启用事件扫描回退机制（默认关闭以提升性能）
-        $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
-        if (!$scanEnabled) {
-            // 如果扫描功能已关闭，直接返回空数组，不执行扫描
+        // 过滤掉模块被禁用的观察者
+        return $this->filterActiveObservers($observers);
+    }
+    
+    /**
+     * 过滤掉模块被禁用的观察者
+     * 
+     * @param array $observers 观察者列表
+     * @return array 过滤后的观察者列表
+     */
+    private function filterActiveObservers(array $observers): array
+    {
+        if (empty($observers)) {
             return [];
         }
         
-        // 如果 generated/events.php 中没有观察者信息，回退到扫描方式（兼容旧版本）
-        // 注意：动态事件模式的观察者注册在实际事件名上，所以通过扫描方式可以获取到
-        $evenObserverLists = $this->scanEvents();
-
-        return $evenObserverLists[$eventName] ?? [];
+        $env = Env::getInstance();
+        $activeObservers = [];
+        
+        foreach ($observers as $observer) {
+            // 检查观察者是否被禁用（disabled属性）
+            if (($observer['disabled'] ?? 'false') === 'true') {
+                continue;
+            }
+            
+            // 检查观察者所在模块的激活状态
+            $moduleName = $observer['module'] ?? '';
+            if (!empty($moduleName)) {
+                // 如果注册表中已有module_status字段，直接使用
+                if (isset($observer['module_status'])) {
+                    if (!$observer['module_status']) {
+                        continue; // 模块被禁用，跳过
+                    }
+                } else {
+                    // 兼容旧版本：运行时检查模块状态
+                    if (!$env->getModuleStatus($moduleName)) {
+                        continue; // 模块被禁用，跳过
+                    }
+                }
+            }
+            
+            $activeObservers[] = $observer;
+        }
+        
+        return $activeObservers;
     }
 
     /**
@@ -155,23 +201,26 @@ class EventsManager
 
             // 获取事件监听器（观察者）
             $observers = $this->getEventObservers($eventName);
+            
             // 检查是否有监听器（Weline_Admin::msg 事件除外，因为它用于发送错误消息）
             if (empty($observers) && $eventName !== 'Weline_Admin::msg') {
                 // 如果没有监听器，直接跳过，不执行事件
                 return $this;
             }
+            
             if (is_array($data)) {
                 $data['observers'] = $observers;
                 $this->events[$eventName] = (new Event($data))->setName($eventName);
             } else {
                 $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
             }
+            
             $this->events[$eventName]->dispatch();
         } finally {
             // 事件执行完毕，弹出栈
             array_pop(self::$currentEventStack);
         }
-
+        
         return $this;
     }
 

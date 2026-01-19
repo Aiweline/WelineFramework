@@ -119,16 +119,29 @@ class Register implements RegisterDataInterface
         }
 
         // 如果仍然为空，说明没有找到任何调用或解析失败
+        // 对于空文件或缺少调用的文件，返回空数组而不是抛出异常
+        // 这样调用方可以优雅地处理（跳过该文件）
         if (empty($registerArgs)) {
-            // 提供更详细的错误信息
-            $foundCalls = array_keys($registerCalls);
-            $errorMsg = $register_file . __(' 文件中：Register::register(...)  函数参数不能为空');
-            if (!empty($foundCalls)) {
-                $errorMsg .= '。找到的调用：' . implode(', ', $foundCalls);
-            } else {
-                $errorMsg .= '。未找到任何 Register::register 调用。';
+            // 检查文件是否为空
+            $fileContent = trim(file_get_contents($register_file));
+            if (empty($fileContent)) {
+                // 文件为空，返回空数组，调用方会跳过该文件
+                return [];
             }
-            throw new Exception($errorMsg);
+            
+            // 文件不为空但没有找到 Register::register 调用
+            // 记录警告但不中断流程
+            $foundCalls = array_keys($registerCalls);
+            $warningMsg = $register_file . __(' 文件中：Register::register(...)  函数参数不能为空');
+            if (!empty($foundCalls)) {
+                $warningMsg .= __('。找到的调用：') . implode(', ', $foundCalls);
+            } else {
+                $warningMsg .= __('。未找到任何 Register::register 调用。');
+            }
+            // 使用框架的日志系统记录警告
+            \Weline\Framework\App\Env::log_warning('register_parse.log', $warningMsg);
+            // 返回空数组，让调用方跳过该文件
+            return [];
         }
 
         // 反解析参数名

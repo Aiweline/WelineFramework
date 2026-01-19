@@ -15,7 +15,6 @@
     <!-- 系统升级后扫描数据库适配器（只在系统升级完成后扫描一次，避免重复扫描） -->
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
-        <observer name="Weline_Framework_Extends::setup_upgrade_after" instance="Weline\Framework\Extends\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="200"/>
     </event>
 
     <!-- 维护模式：API 请求统一JSON 响应 -->

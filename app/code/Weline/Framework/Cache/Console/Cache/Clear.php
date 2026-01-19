@@ -121,7 +121,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                             $totalSize += $result['size'];
                             $totalFiles += $result['files'];
                         }
-                    } else {
+                    } elseif ($cacheObjectManager instanceof CacheInterface) {
                         /**@var CacheInterface $cacheObjectManager */
                         $result = $this->clearCacheWithStats($cacheObjectManager);
                         $totalCount += $result['count'];
@@ -273,11 +273,27 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     public function reductionFactoryClass(string $class): string
     {
-        if (!class_exists($class) && str_ends_with($class, 'Factory')) {
-            if (str_ends_with($class, 'Factory')) {
-                $class = rtrim($class, 'Factory');
+        // 如果类已存在，直接返回
+        if (class_exists($class)) {
+            return $class;
+        }
+        
+        // 如果类不存在，尝试转换
+        if (str_ends_with($class, 'Factory')) {
+            // 如果以 Factory 结尾，尝试去掉 Factory 后缀
+            $baseClass = rtrim($class, 'Factory');
+            if (class_exists($baseClass)) {
+                return $baseClass;
+            }
+        } else {
+            // 如果不以 Factory 结尾，尝试加上 Factory 后缀
+            $factoryClass = $class . 'Factory';
+            if (class_exists($factoryClass)) {
+                return $factoryClass;
             }
         }
+        
+        // 如果都找不到，返回原类名（让后续代码处理错误）
         return $class;
     }
 

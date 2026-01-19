@@ -142,9 +142,20 @@ abstract class AbstractModel extends DataObject
      *
      */
     public function __init()
-    {
-        $this->reset();
-        # 如果初始化有数据
+    {// 优化：延迟数据库连接初始化，避免在 __init() 中创建连接
+        // 直接重置模型状态变量，而不是调用 reset() 方法（reset() 会触发 getQuery() 创建连接）// 直接重置模型状态，不创建数据库连接
+        $this->items = [];
+        $this->_model_fields_data = [];
+        $this->_bind_model_fields = [];
+        $this->_fetch_data = [];
+        $this->_query_data = null;
+        $this->is_delete = false;
+        $this->is_insert = false;
+        $this->find_fields = '';
+        $this->pagination = ['page' => 1, 'pageSize' => 20, 'totalSize' => 0, 'lastPage' => 0];
+        $this->use_cache = false;
+        // 不清除 current_query，延迟到真正需要时再创建
+        // $this->current_query = null;# 如果初始化有数据
         if ($this->getData()) {
             $this->fetch_after();
         }
@@ -179,6 +190,7 @@ abstract class AbstractModel extends DataObject
                 $this->_primary_key = $this->_primary_key_default;
             }
         }
+        
         # 字段解析
         if (empty($this->_fields)) {
             $this->_fields = $this->getModelFields();
@@ -229,13 +241,16 @@ abstract class AbstractModel extends DataObject
      */
     public function getConnection()
     {
+        
         # 如果已经有链接直接返回
         if (!empty($this->connection)) {
             return $this->connection;
         }
         # 使用主数据库
         if ($this::use_main_db_master) {
-            $this->connection = ObjectManager::getInstance(DbManager::class . 'Factory');
+            $dbManagerFactory = ObjectManager::getInstance(DbManager::class . 'Factory');
+            // 从 DbManagerFactory 获取 ConnectionFactory 实例
+            $this->connection = $dbManagerFactory->create();
         } else {
             # 检测app应用级别的数据库配置信息 读链接 和  写链接
             $filename = ObjectManager::getReflectionInstance($this)->getFileName();
@@ -254,6 +269,7 @@ abstract class AbstractModel extends DataObject
                 throw new DbException(__('模型文件路径错误，无法确定数据库配置信息') . (DEV ? '(' . $filename . ')' : ''));
             }
         }
+        
         return $this->connection;
     }
 
@@ -278,12 +294,16 @@ abstract class AbstractModel extends DataObject
             if (!isset($db_config['master'])) {
                 throw new DbException(__('请配置主数据库配置信息,或者主数据库配置信息设置错误') . (DEV ? '(' . $db_config_file . ')' : ''));
             }
-            $this->connection = ObjectManager::getInstance(DbManager::class)->create(
+            $dbManager = ObjectManager::getInstance(DbManager::class);
+            $configProvider = new ConfigProvider($db_config);
+            $this->connection = $dbManager->create(
                 $this->module_name,
-                new ConfigProvider($db_config)
+                $configProvider
             );
         } else {
-            $this->connection = ObjectManager::getInstance(DbManager::class . 'Factory');
+            $dbManagerFactory = ObjectManager::getInstance(DbManager::class . 'Factory');
+            // 从 DbManagerFactory 获取 ConnectionFactory 实例
+            $this->connection = $dbManagerFactory->create();
         }
     }
 
@@ -431,8 +451,7 @@ abstract class AbstractModel extends DataObject
      * @throws \ReflectionException
      */
     public function getQuery(bool $keep_condition = true): QueryInterface
-    {
-        $query = null;
+    {$query = null;
         // 构建表名，如果设置了别名则一起传入（table() 方法支持 "table_name alias" 格式）
         $tableName = $this->getOriginTableName();
         if ($this->alias) {
@@ -452,13 +471,22 @@ abstract class AbstractModel extends DataObject
                 }
                 $query = $this->current_query->table($tableName)->identity($this->_primary_key);
             } else {
-                # 区分是否保持查询
-                $this->current_query = clone $this->getConnection()->getConnector()->clearQuery()->table($tableName)->identity($this->_primary_key);
+                // 区分是否保持查询
+                $connection = $this->getConnection();
+                $connector = $connection->getConnector();
+                $this->current_query = clone $connector->clearQuery()->table($tableName)->identity($this->_primary_key);
                 $query = $this->current_query;
             }
         }
+        
+        // 确保 query 不为 null
+        if (is_null($query)) {
+            throw new \Exception(__('无法创建查询对象，数据库连接可能未正确初始化'));
+        }
+        
         // 联合主键索引对where条件进行排序提升查询速度
         $query->_index_sort_keys = array_unique([$this->_primary_key, ...$this->_unit_primary_keys, ...$this->_index_sort_keys]);
+        
         return $query;
     }
 
@@ -703,13 +731,18 @@ abstract class AbstractModel extends DataObject
         $evenData = new DataObject(['model' => &$this]);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
         $this->getQuery()->beginTransaction();
+        $save_result = false; // 初始化默认值
         try {
             if ($this->force_check_flag) {
                 $save_result = $this->checkUpdateOrInsert();
             } else {
                 $save_result = $this->getQuery()->clearQuery()->insert($this->getModelData())->fetch();
             }
-            if (!$this->getId()) {
+            // 确保 save_result 不为 null
+            if ($save_result === null) {
+                $save_result = false;
+            }
+            if (!$this->getId() && $save_result) {
                 $this->setData($this->_primary_key, $save_result);
             }
             $this->getQuery()->commit();
@@ -851,6 +884,7 @@ abstract class AbstractModel extends DataObject
      */
     public function __call($method, $args)
     {
+        
         // 模型查询
         if (in_array($method, get_class_methods(QueryInterface::class))) {
             # 某些函数是不需要保持查询的
@@ -889,19 +923,56 @@ abstract class AbstractModel extends DataObject
             }
             # 注入选择的模型字段
             if ($method == 'fields') {
-                $fields = explode(',', ...$args);
-                foreach ($fields as &$field) {
-                    if (is_int(strpos($field, '.'))) {
-                        $fields_array = explode('.', $field);
-                        $field = array_pop($fields_array);
+                // 旧代码
+                // $fields = explode(',', ...$args);
+                // foreach ($fields as &$field) {
+                //     if (is_int(strpos($field, '.'))) {
+                //         $fields_array = explode('.', $field);
+                //         $field = array_pop($fields_array);
+                //     }
+                //     # 别名
+                //     if (is_int(strpos($field, 'as'))) {
+                //         $fields_array = explode('as', $field);
+                //         $field = array_pop($fields_array);
+                //     }
+                // }
+                // $this->bindModelFields($fields);
+                // 处理数组参数（如 ['total' => 'SUM(...)']）
+                if (!empty($args) && is_array($args[0])) {
+                    $fieldsArray = $args[0];
+                    // 将关联数组转换为字符串格式（如 'SUM(...) AS total'）
+                    $fieldsStringParts = [];
+                    foreach ($fieldsArray as $alias => $expression) {
+                        if (is_string($alias) && is_string($expression)) {
+                            // 关联数组格式：['alias' => 'expression'] -> 'expression AS alias'
+                            $fieldsStringParts[] = $expression . ' AS ' . $alias;
+                        } else {
+                            // 普通数组格式：['field1', 'field2'] -> 'field1,field2'
+                            $fieldsStringParts[] = $expression;
+                        }
                     }
-                    # 别名
-                    if (is_int(strpos($field, 'as'))) {
-                        $fields_array = explode('as', $field);
-                        $field = array_pop($fields_array);
+                    $fieldsString = implode(',', $fieldsStringParts);
+                    // 传递给查询对象
+                    $query->fields($fieldsString);
+                    // 绑定模型字段（用于字段映射）
+                    $this->bindModelFields(array_keys($fieldsArray));
+                } else {
+                    // 处理字符串参数（如 'field1,field2'）
+                    $fieldsString = is_array($args[0] ?? '') ? '' : ($args[0] ?? '');
+                    $fields = !empty($fieldsString) ? explode(',', $fieldsString) : [];
+                    foreach ($fields as &$field) {
+                        if (is_string($field) && is_int(strpos($field, '.'))) {
+                            $fields_array = explode('.', $field);
+                            $field = array_pop($fields_array);
+                        }
+                        # 别名
+                        if (is_string($field) && is_int(strpos($field, 'as'))) {
+                            $fields_array = explode('as', $field);
+                            $field = array_pop($fields_array);
+                        }
                     }
+                    $this->bindModelFields($fields);
                 }
-                $this->bindModelFields($fields);
             }
             # 非链式操作的Fetch
             $is_fetch = false;
@@ -920,7 +991,6 @@ abstract class AbstractModel extends DataObject
                 $args[] = $this::class;
                 $is_fetch = true;
             }
-
             $query_data = $query->$method(...$args);
             if ($query_data instanceof QueryInterface) {
                 $this->setQuery($query_data);
@@ -1735,9 +1805,16 @@ PAGINATION;
                 return $check_result[$this->_primary_key];
             }
 
-            $save_result = $this->getQuery()
+            // 🔧 修复：确保 identity_field 被正确设置
+            $query = $this->getQuery();
+            if ($this->_primary_key && $query->identity_field !== $this->_primary_key) {
+                $query->identity($this->_primary_key);
+            }
+            
+            // 🔧 修复：在调用 update() 时传入正确的主键字段名作为第二个参数
+            $save_result = $query
                 ->where($this->unique_data)
-                ->update($data)
+                ->update($data, $this->_primary_key)
                 ->fetch();
             if ($is_addition_identity) {
                 unset($this->unique_data[$this->_primary_key]);

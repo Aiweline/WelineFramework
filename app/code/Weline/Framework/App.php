@@ -70,7 +70,29 @@ class App
         }
         // 单元测试环境
         if (!defined('ENV_TEST')) {
-            define('ENV_TEST', false);
+            // 检查是否通过参数启用了测试模式
+            $enableTest = false;
+            if (PHP_SAPI === 'cli') {
+                global $argv;
+                if (isset($argv) && is_array($argv)) {
+                    foreach ($argv as $arg) {
+                        if ($arg === '--test' || $arg === '-t' || strpos($arg, '--test=') === 0) {
+                            $enableTest = true;
+                            break;
+                        }
+                    }
+                }
+                // 检查环境变量
+                if (!$enableTest && (getenv('WELINE_ENABLE_TEST') === '1' || getenv('WELINE_ENABLE_TEST') === 'true')) {
+                    $enableTest = true;
+                }
+            }
+            // Web 环境下不允许启用测试模式
+            // 注释掉以下代码，确保 Web 请求中不会启用测试
+            // if (!$enableTest && isset($_SERVER['WELINE_ENABLE_TEST']) && $_SERVER['WELINE_ENABLE_TEST'] === '1') {
+            //     $enableTest = true;
+            // }
+            define('ENV_TEST', $enableTest);
         }
         // 运行模式
         if (!defined('CLI')) {
@@ -209,6 +231,19 @@ class App
         // 通用加载（在关闭 OpCache 之后加载，确保代码不会被缓存）
         \Weline\Framework\Common\Loader::load();
         
+        // 如果启用了测试模式，尝试加载 Pest 测试框架
+        // 重要：只在 CLI 模式下加载，Web 请求生命周期中不允许运行测试框架
+        if (CLI && defined('ENV_TEST') && ENV_TEST === true) {
+            try {
+                \Weline\Framework\UnitTest\Pest\Boot::boot();
+            } catch (\Exception $e) {
+                // 如果 Pest 未安装，静默失败（不影响正常应用运行）
+                if (DEBUG) {
+                    Env::log_error('framework_pest', 'Pest 测试框架加载失败: ' . $e->getMessage());
+                }
+            }
+        }
+        
         // 助手函数
         $handle_functions = APP_ETC_PATH . 'functions.php';
         if (is_file($handle_functions)) {
@@ -291,7 +326,6 @@ class App
         $result = '';
         # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
         if (!CLI) {
-            // dd( $_SERVER['WELINE_NO_PARSER_URL']);
             $parse = null;
             if ($_SERVER['WELINE_PARSER_URL']) {
                 $parse = Url::parser();

@@ -23,7 +23,7 @@
                     <xs:unique name="uniqueObserverName">
                         <xs:annotation>
                             <xs:documentation>
-                                Observer name must be unique.
+                                观察者名称必须唯一。
                             </xs:documentation>
                         </xs:annotation>
                         <xs:selector xpath="observer"/>
@@ -35,7 +35,7 @@
         <xs:unique name="uniqueEventName">
             <xs:annotation>
                 <xs:documentation>
-                    Event name must be unique.
+                    事件名称必须唯一。
                 </xs:documentation>
             </xs:annotation>
             <xs:selector xpath="event"/>
@@ -46,7 +46,7 @@
     <xs:complexType name="eventDeclaration">
         <xs:annotation>
             <xs:documentation>
-                Event declaration.
+                事件声明。
             </xs:documentation>
         </xs:annotation>
         <xs:sequence>
@@ -58,20 +58,50 @@
     <xs:complexType name="observerDeclaration">
         <xs:annotation>
             <xs:documentation>
-                Observer declaration.
+                观察者声明。
             </xs:documentation>
         </xs:annotation>
-        <xs:attribute name="name" type="xs:string" use="required"/>
-        <xs:attribute name="instance" type="xs:string" use="optional"/>
-        <xs:attribute name="disabled" type="xs:boolean" use="optional"/>
-        <xs:attribute name="shared" type="xs:boolean" use="optional"/>
-        <xs:attribute name="sort" type="xs:string" use="optional"/>
+        <xs:attribute name="name" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    观察者名称，必须唯一。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="instance" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    实现观察者方法的类名。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="disabled" type="xs:boolean" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    是否禁用该观察者。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="shared" type="xs:boolean" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    是否共享观察者实例。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="sort" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    观察者的排序顺序。数值越小越先执行。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
     </xs:complexType>
 
     <xs:simpleType name="eventName">
         <xs:annotation>
             <xs:documentation>
-                Event name can contain only [a-zA-Z0-9_].
+                事件名称只能包含 [a-zA-Z0-9_]。
             </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">

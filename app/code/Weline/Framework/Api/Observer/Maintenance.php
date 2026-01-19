@@ -39,6 +39,15 @@ class Maintenance implements ObserverInterface
             $isApiRequest = str_contains($acceptHeader, 'application/json');
         }
         
+        // 开发环境下：通过查询参数 ?api=1 可以测试 API 维护模式响应
+        if (!$isApiRequest && defined('DEV') && DEV) {
+            $queryString = $_SERVER['QUERY_STRING'] ?? '';
+            parse_str($queryString, $queryParams);
+            if (isset($queryParams['api']) && ($queryParams['api'] === '1' || $queryParams['api'] === 'true')) {
+                $isApiRequest = true;
+            }
+        }
+        
         // 仅处理 API 请求
         if ($isApiRequest) {
              /** @var DataObject|null $data */
@@ -61,6 +70,11 @@ class Maintenance implements ObserverInterface
 
             // 同步白名单数据，避免其他观察者覆盖
             $data->setData('white_urls', $whiteUrls);
+
+            // 获取语言（从事件数据中读取，如果事件数据中有的话）
+            $lang = $data->getData('language') ?? $_SERVER['WELINE_USER_LANG'] ?? $_COOKIE['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            // 设置语言到 $_SERVER，以便翻译函数能够使用正确的语言
+            $_SERVER['WELINE_USER_LANG'] = $lang;
 
             $retryAfter = (int)(Env::get('maintenance.retry_after', self::DEFAULT_RETRY_AFTER));
             if ($retryAfter <= 0) {

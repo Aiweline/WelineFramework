@@ -22,6 +22,7 @@ use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Manager\ObjectManager;
@@ -46,6 +47,7 @@ final class Connector extends Query implements ConnectorInterface
 
     protected ?PDO $link = null;
     protected ?Query $query = null;
+    protected bool $fromPool = false; // 标记连接是否来自连接池
 
     static function processName(string $name): string
     {
@@ -54,25 +56,54 @@ final class Connector extends Query implements ConnectorInterface
 
     public function create(): static
     {
-        $db_type = $this->configProvider->getDbType();
-        $dsn = "{$db_type}:{$this->configProvider->getData('path')}";
-        try {
-            //初始化一个Connection对象
-            $this->link = new PDO($dsn);
-            # PRAGMA case_sensitive_like = ON;  -- 开启大小写敏感的LIKE查询
-            $this->link->exec('PRAGMA case_sensitive_like = OFF; -- 关闭大小写敏感的LIKE查询（默认）');
-            //            $this->link->exec("set names {$this->configProvider->getCharset()} COLLATE {$this->configProvider->getCollate()}");
-            // 设置错误模式为异常
-            $this->link->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        } catch (PDOException $e) {
-            throw new LinkException($e->getMessage());
+        if ($this->link !== null) {
+            return $this;
         }
+
+        $db_type = $this->configProvider->getDbType();
+        
+        // 从连接池获取连接
+        $this->link = ConnectionPool::getConnection(
+            $this->configProvider,
+            function () use ($db_type) {
+                $dsn = "{$db_type}:{$this->configProvider->getData('path')}";
+                try {
+                    $options = $this->configProvider->getOptions();
+                    // SQLite 也支持持久连接，但需要确保错误模式设置
+                    if (!isset($options[PDO::ATTR_ERRMODE])) {
+                        $options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+                    }
+                    $connection = new PDO($dsn, null, null, $options);
+                    # PRAGMA case_sensitive_like = ON;  -- 开启大小写敏感的LIKE查询
+                    $connection->exec('PRAGMA case_sensitive_like = OFF; -- 关闭大小写敏感的LIKE查询（默认）');
+                    return $connection;
+                } catch (PDOException $e) {
+                    throw new LinkException($e->getMessage());
+                }
+            }
+        );
+        $this->fromPool = true;
         return $this;
     }
 
     public function close(): void
     {
-        $this->link = null;
+        // 如果连接来自连接池，归还到池中；否则直接释放
+        if ($this->link !== null) {
+            if ($this->fromPool) {
+                ConnectionPool::releaseConnection($this->link, $this->configProvider);
+            }
+            $this->link = null;
+            $this->fromPool = false;
+        }
+    }
+
+    /**
+     * 析构函数：确保连接在使用后被归还到连接池
+     */
+    public function __destruct()
+    {
+        $this->close();
     }
 
     public function getLink(): PDO

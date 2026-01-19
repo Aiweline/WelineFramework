@@ -25,25 +25,52 @@ use Weline\Framework\Manager\ObjectManager;
 
 class ConnectionFactory
 {
-    protected ?ConnectorInterface $defaultConnector = null;
-    protected ConfigProvider $configProvider;
-    protected ?AlterInterface $alter;
     /**
-     * @var ConnectorInterface[] $connectors
+     * @var array<string, array{defaultConnector: ?ConnectorInterface, configProvider: ConfigProvider, connectors: array}> 静态存储连接工厂实例
      */
-    protected array $connectors = [];
+    private static array $instances = [];
 
     /**
-     * Connection 初始函数...
+     * 获取连接工厂实例的键名
+     */
+    private static function getInstanceKey(ConfigProvider $configProvider): string
+    {
+        return md5(serialize($configProvider->getData()));
+    }
+
+    /**
+     * 获取或创建连接工厂实例
      *
      * @param ConfigProvider $configProvider
-     *
+     * @return static
      * @throws LinkException
      */
-    public function __construct(ConfigProvider $configProvider)
+    public static function getInstance(ConfigProvider $configProvider): static
     {
-        $this->configProvider = $configProvider;
-        $this->create();
+        $key = self::getInstanceKey($configProvider);
+        if (!isset(self::$instances[$key])) {
+            self::$instances[$key] = [
+                'defaultConnector' => null,
+                'configProvider' => $configProvider,
+                'connectors' => [],
+            ];
+            // 延迟创建连接：不再在 getInstance() 时立即创建连接器
+            // 连接器会在真正需要时（调用 getConnector()）才创建
+            // self::create($configProvider);
+        }
+        return new static($key);
+    }
+
+    private string $instanceKey;
+
+    /**
+     * Connection 初始函数（私有，只能通过 getInstance 创建）
+     *
+     * @param string $instanceKey
+     */
+    private function __construct(string $instanceKey)
+    {
+        $this->instanceKey = $instanceKey;
     }
 
     /**
@@ -55,32 +82,7 @@ class ConnectionFactory
      */
     public function getConfigProvider(): ConfigProvider
     {
-        return $this->configProvider;
-    }
-
-    /**
-     * @DESC         |休眠时执行函数： 保存配置信息，以及模型数据
-     *
-     * 参数区：
-     *
-     * @return string[]
-     */
-    public function __sleep()
-    {
-        return ['configProvider', 'query'];
-    }
-
-    /**
-     * @DESC         |唤醒时执行函数
-     *
-     * 参数区：
-     *
-     * @throws LinkException
-     * @throws \Weline\Framework\App\Exception
-     */
-    public function __wakeup()
-    {
-        $this->create();
+        return self::$instances[$this->instanceKey]['configProvider'];
     }
 
     /**
@@ -92,12 +94,21 @@ class ConnectionFactory
      * 参数区：
      * @throws LinkException
      */
-    public function create(): static
+    public static function create(ConfigProvider $configProvider): void
     {
-        if (!$this->defaultConnector) {
-            $this->defaultConnector = $this->getConnectorAdapter()->create($this->configProvider);
+        $key = self::getInstanceKey($configProvider);
+        if (!isset(self::$instances[$key])) {
+            self::$instances[$key] = [
+                'defaultConnector' => null,
+                'configProvider' => $configProvider,
+                'connectors' => [],
+            ];
         }
-        return $this;
+        $instance = &self::$instances[$key];
+        if (!$instance['defaultConnector']) {
+            $factory = new static($key);
+            $instance['defaultConnector'] = $factory->getConnectorAdapter()->create($configProvider);
+        }
     }
 
     /**
@@ -110,7 +121,7 @@ class ConnectionFactory
      */
     public function getConnectorAdapter(null|ConfigProvider $configProvider = null): ConnectorInterface
     {
-        $configProvider = $configProvider ?: $this->configProvider;
+        $configProvider = $configProvider ?: $this->getConfigProvider();
         $driver_type = $configProvider->getDbType();
         
         // 优先从驱动注册表加载
@@ -122,8 +133,7 @@ class ConnectionFactory
                 try {
                     return ObjectManager::make($driverClass, ['configProvider' => $configProvider]);
                 } catch (\Throwable $e) {
-                    // 如果实例化失败，回退到原有方式
-                    error_log("实例化适配器 {$driverClass} 失败: " . $e->getMessage());
+                    // 如果实例化失败，回退到原有方式（静默处理）
                 }
             }
         } catch (\Throwable $e) {
@@ -141,7 +151,9 @@ class ConnectionFactory
 
     public function close(): void
     {
-        $this->defaultConnector = null;
+        if (isset(self::$instances[$this->instanceKey])) {
+            self::$instances[$this->instanceKey]['defaultConnector'] = null;
+        }
     }
 
     /**
@@ -155,7 +167,7 @@ class ConnectionFactory
      */
     public function getConnection(): ConnectorInterface
     {
-        return $this->defaultConnector;
+        return self::$instances[$this->instanceKey]['defaultConnector'];
     }
 
     /**
@@ -169,12 +181,35 @@ class ConnectionFactory
      */
     public function getConnector(): ConnectorInterface
     {
-        if (is_null($this->defaultConnector)) {
-            $adapter = $this->getConnectorAdapter();
-            $this->connectors['master'] = $adapter;
-            $this->defaultConnector = $this->connectors['master'];
+        $instance = &self::$instances[$this->instanceKey];
+        
+        // 确保 connectors 数组已初始化
+        if (!isset($instance['connectors'])) {
+            $instance['connectors'] = [];
         }
-        return $this->defaultConnector;
+        
+        if (is_null($instance['defaultConnector'])) {
+            $adapter = $this->getConnectorAdapter();
+            
+            // 确保适配器不为空
+            if (is_null($adapter)) {
+                throw new LinkException(__('无法创建数据库连接适配器'));
+            }
+            
+            // 确保连接器已初始化：调用 create() 方法初始化连接
+            $adapter->create();
+            
+            // 将适配器存储到 connectors 数组中
+            $instance['connectors']['master'] = $adapter;
+            $instance['defaultConnector'] = $instance['connectors']['master'];
+        }
+        
+        // 确保返回的连接器不为空
+        if (is_null($instance['defaultConnector'])) {
+            throw new LinkException(__('数据库连接器未初始化'));
+        }
+        
+        return $instance['defaultConnector'];
     }
 
     /**
@@ -191,6 +226,9 @@ class ConnectionFactory
      */
     public function query(string $sql): QueryInterface
     {
+        $instance = &self::$instances[$this->instanceKey];
+        $configProvider = $instance['configProvider'];
+        
         # 非写操作，用均衡算法从从库中选择一个
         $write_flags = [
             'insert',
@@ -210,29 +248,29 @@ class ConnectionFactory
         $sql_type = strtolower(substr(trim($sql), 0, strpos($sql, ' ')));
         if (!in_array($sql_type, $write_flags)) {
             # 检测从库配置，如果有从库，则从库中查询
-            if ($slaves_configs = $this->configProvider->getSalvesConfig()) {
+            if ($slaves_configs = $configProvider->getSalvesConfig()) {
                 # 如果有从库直接读取从库，一个请求只能读取一个从库
                 # FIXME 均衡算法（先随机选一个）
                 $slave_config = $slaves_configs[array_rand($slaves_configs)];
                 $config_key = md5($slave_config['host'] . $slave_config['port'] . $slave_config['database']);
-                if (!isset($this->connectors[$config_key])) {
-                    $this->connectors[$config_key] = $this->getConnectorAdapter($slave_config);
+                if (!isset($instance['connectors'][$config_key])) {
+                    $instance['connectors'][$config_key] = $this->getConnectorAdapter($slave_config);
                 }
-                $this->defaultConnector = $this->connectors[$config_key];
+                $instance['defaultConnector'] = $instance['connectors'][$config_key];
             } else {
-                $this->defaultConnector = $this->getConnector();
+                $instance['defaultConnector'] = $this->getConnector();
             }
         }
-        if (is_null($this->defaultConnector)) {
+        if (is_null($instance['defaultConnector'])) {
             $this->getConnector();
         }
 
-        return $this->defaultConnector->query($sql);
+        return $instance['defaultConnector']->query($sql);
     }
 
     public function getQuery(): QueryInterface
     {
-        return $this->defaultConnector->getQuery();
+        return self::$instances[$this->instanceKey]['defaultConnector']->getQuery();
     }
 
 }

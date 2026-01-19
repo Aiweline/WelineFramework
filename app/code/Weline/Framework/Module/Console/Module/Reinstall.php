@@ -115,11 +115,14 @@ class Reinstall extends CommandAbstract
         // 4. 检查是否强制模式（-f 或 --force）
         $force = isset($args['f']) || isset($args['force']);
         
-        // 5. 是否在重装完成后尝试从卸载备份中恢复数据
+        // 5. 检查是否自动确认模式（-y 或 --yes）
+        $yes = isset($args['y']) || isset($args['yes']);
+        
+        // 6. 是否在重装完成后尝试从卸载备份中恢复数据
         $restoreFromBackup = isset($args['restore']);
 
-        // 6. 显示警告信息并要求确认（除非是强制模式）
-        if (!$force) {
+        // 7. 显示警告信息并要求确认（除非是强制模式或自动确认模式）
+        if (!$force && !$yes) {
             $this->printer->error('');
             $this->printer->error('╔════════════════════════════════════════════════════════════════╗');
             $this->printer->error('║                      ⚠️  危险操作警告 ⚠️                        ║');
@@ -153,7 +156,11 @@ class Reinstall extends CommandAbstract
                 exit(0);
             }
         } else {
-            $this->printer->note(__('强制模式：跳过确认，直接执行重装...'));
+            if ($yes) {
+                $this->printer->note(__('自动确认模式：跳过确认，直接执行重装...'));
+            } else {
+                $this->printer->note(__('强制模式：跳过确认，直接执行重装...'));
+            }
         }
 
         // 7. 生成统一的备份批次时间戳
@@ -340,6 +347,15 @@ class Reinstall extends CommandAbstract
             }
 
             try {
+                // 跳过静态类、抽象类、trait 和接口
+                $reflection = new \ReflectionClass($modelClass);
+                if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                    continue;
+                }
+                if (ObjectManager::isStaticClass($modelClass)) {
+                    continue;
+                }
+                
                 // 实例化 Model
                 $model = ObjectManager::getInstance($modelClass);
                 
@@ -360,10 +376,33 @@ class Reinstall extends CommandAbstract
                 // 检查表是否存在（使用适配器的 tableExist 方法）
                 $connector = $model->getConnection()->getConnector();
                 
-                // 先尝试带前缀的表名，如果不存在，再尝试不带前缀的
+                // 对于 PostgreSQL，需要处理表名格式
+                // tableExist 方法会自动处理引号和 schema，但我们需要确保传入正确的格式
+                // 先尝试带前缀的表名（可能是格式化后的，如 "public"."weshop_category"）
                 $tableExists = $connector->tableExist($tableName);
+                
+                // 如果表名包含引号或 schema，也尝试不带引号的原始表名
                 if (!$tableExists) {
-                    // 如果带前缀的表不存在，尝试不带前缀的
+                    // 去除引号和 schema，只保留表名部分
+                    $cleanTableName = $tableName;
+                    $cleanTableName = str_replace(['`', '"'], '', $cleanTableName);
+                    if (str_contains($cleanTableName, '.')) {
+                        $parts = explode('.', $cleanTableName);
+                        $cleanTableName = end($parts); // 取最后一部分作为表名
+                    }
+                    
+                    // 尝试使用清理后的表名（不带 schema）
+                    if ($cleanTableName !== $tableName) {
+                        $tableExists = $connector->tableExist($cleanTableName);
+                        if ($tableExists) {
+                            // 如果找到了，更新 tableName 为清理后的表名
+                            $tableName = $cleanTableName;
+                        }
+                    }
+                }
+                
+                // 如果还是不存在，尝试使用原始表名（不带前缀）
+                if (!$tableExists) {
                     $tableExists = $connector->tableExist($originTableName);
                     if ($tableExists) {
                         // 如果使用原始表名找到了，使用原始表名
@@ -788,10 +827,16 @@ class Reinstall extends CommandAbstract
             $this->printer->note(__('强制模式：保留所有备份表。'));
             return;
         }
-
-        $this->printer->setup(__('是否删除所有备份表？(yes/y=删除, no/n=保留)：'));
         
-        $confirm = strtolower(trim($this->system->input()));
+        // 检查是否自动确认模式，自动确认模式下自动删除备份表
+        $yes = isset($this->args['y']) || isset($this->args['yes']);
+        if ($yes) {
+            $this->printer->note(__('自动确认模式：自动删除所有备份表。'));
+            $confirm = 'yes';
+        } else {
+            $this->printer->setup(__('是否删除所有备份表？(yes/y=删除, no/n=保留)：'));
+            $confirm = strtolower(trim($this->system->input()));
+        }
         
         if ($confirm === 'yes' || $confirm === 'y') {
             // 删除备份表
@@ -914,6 +959,15 @@ class Reinstall extends CommandAbstract
             return;
         }
         
+        // 跳过静态类、抽象类、trait 和接口
+        $reflection = new \ReflectionClass($firstModelClass);
+        if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+            return;
+        }
+        if (ObjectManager::isStaticClass($firstModelClass)) {
+            return;
+        }
+        
         try {
             $model = ObjectManager::getInstance($firstModelClass);
             if (!$model instanceof \Weline\Framework\Database\AbstractModel) {
@@ -1006,13 +1060,14 @@ class Reinstall extends CommandAbstract
             '重新安装模块（危险操作，仅限开发模式）',
             [
                 '-m, --module=<模块名>' => '指定要重新安装的模块（必填，支持多个模块用空格分隔）',
+                '-y, --yes'            => '自动确认所有操作，跳过所有询问提示',
                 '--restore'            => '如果存在卸载备份记录，重装后尝试从数据库备份中恢复模块数据表',
                 '-h, --help' => '显示帮助信息',
             ],
             [
                 '仅在开发模式下可用' => '此命令仅在 deploy=dev 时可用',
                 '数据将被删除' => '所有模块数据将被永久删除，虽然会自动备份但请手动备份重要数据',
-                '需要确认' => '执行前需要输入 "yes" 或 "y" 确认',
+                '需要确认' => '执行前需要输入 "yes" 或 "y" 确认（可使用 -y 跳过）',
                 '双重备份保护' => '1) SQL文件备份到 var/backup/db/；2) 数据库中复制表为 {表名}_backup_{时间戳}',
                 '备份表示例' => '如表 demo 会被复制为 demo_backup_2025_10_27_14_30_00，包含所有数据',
                 '批次管理' => '同一次重装的所有表使用相同时间戳，便于批量管理',
@@ -1021,6 +1076,7 @@ class Reinstall extends CommandAbstract
             [
                 '重新安装单个模块' => 'php bin/w module:reinstall -m Weline_Demo',
                 '重新安装多个模块' => 'php bin/w module:reinstall --module "Weline_Demo Weline_Test"',
+                '跳过确认提示' => 'php bin/w module:reinstall -m Weline_Demo -y',
             ],
             'php bin/w module:reinstall -m <模块名>'
         );

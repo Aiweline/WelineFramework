@@ -39,7 +39,9 @@ class DbManager
 
     public function __init()
     {
-        $this->create();
+        // 延迟初始化：不在这里创建连接，而是在真正需要时再创建
+        // 这样可以避免每次实例化 DbManager 时都创建数据库连接
+        // $this->create();
     }
 
     /**
@@ -122,13 +124,14 @@ class DbManager
             if ($connection->getConfigProvider()->getData() == $configProvider->getData()) {
                 return $connection;
             } else {
-                $connection = new ConnectionFactory($configProvider);
+                $connection = ConnectionFactory::getInstance($configProvider);
             }
         } else {
             if ($configProvider && empty($connection)) {
-                $connection = new ConnectionFactory($configProvider);
+                $connection = ConnectionFactory::getInstance($configProvider);
             } else {
-                $connection = new ConnectionFactory($this->configProvider);
+                // 延迟初始化：只有在真正需要时才创建连接
+                $connection = ConnectionFactory::getInstance($this->configProvider);
             }
         }
         $this->connections[$connection_name] = $connection;
@@ -160,5 +163,34 @@ class DbManager
             }
         }*/
         return $this->connections[$connection_name] ?? null;
+    }
+
+    /**
+     * @DESC         |获取连接器（为了兼容 ConnectionFactory 接口）
+     *
+     * 参数区：
+     *
+     * @return \Weline\Framework\Database\Connection\Api\ConnectorInterface
+     * @throws LinkException
+     */
+    public function getConnector(): \Weline\Framework\Database\Connection\Api\ConnectorInterface
+    {
+        // 确保默认连接已创建
+        if (!$this->defaultConnectionFactory) {
+            $this->create();
+        }
+        return $this->defaultConnectionFactory->getConnector();
+    }
+
+    /**
+     * @DESC         |获取配置提供者（为了兼容 ConnectionFactory 接口）
+     *
+     * 参数区：
+     *
+     * @return ConfigProvider
+     */
+    public function getConfigProvider(): ConfigProvider
+    {
+        return $this->configProvider;
     }
 }

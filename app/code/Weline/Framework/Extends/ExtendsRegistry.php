@@ -98,6 +98,7 @@ class ExtendsRegistry
     private function organizeRegistryData(array $scannedData, array $completenessReport): array
     {
         $registry = [];
+        $env = Env::getInstance();
 
         foreach ($scannedData as $moduleName => $data) {
             // 验证模块名格式，只保留有效的模块名
@@ -118,6 +119,12 @@ class ExtendsRegistry
                         continue; // 跳过无效的源模块名
                     }
                     
+                    // 检查源模块（提供扩展的模块）的激活状态
+                    // 如果源模块被禁用，跳过该扩展（依赖Extends衍生功能需要源模块激活）
+                    if (!$env->getModuleStatus($sourceModule)) {
+                        continue; // 跳过源模块被禁用的扩展
+                    }
+                    
                     // 初始化类型分组
                     if (!isset($registry[$moduleName]['extended_by'][$sourceModule])) {
                         $registry[$moduleName]['extended_by'][$sourceModule] = [];
@@ -128,6 +135,7 @@ class ExtendsRegistry
                         $coreInfo = [
                             'type' => $extendInfo['type'] ?? 'module',
                             'source_module' => $sourceModule,
+                            'source_module_status' => true, // 已通过状态检查
                             'source_file' => $extendInfo['source_file'] ?? '',
                             'file_path' => $extendInfo['file_path'] ?? '',
                             'relative_path' => $extendInfo['relative_path'] ?? ''
@@ -371,8 +379,13 @@ class ExtendsRegistry
         $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
 
         if ($result !== false) {
+            // 更新实例缓存
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            
+            // 清除 ExtendsData 的静态缓存，确保其他使用 ExtendsData 的代码能立即看到新生成的文件
+            ExtendsData::clearCache();
+            
             return true;
         }
 
