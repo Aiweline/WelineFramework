@@ -14,4 +14,7 @@ return [
         'description' => __('在前端页面的 <head> 标签内注入内容，允许其他模块在前端页面头部注入额外的 CSS、JavaScript 或其他资源。'),
         'doc' => 'frontend/head.md',
     ],
+    // 注意：'frontend::layouts::base::head-before' 已由 Weline_Theme 模块提供标准格式
+    // 标准格式：Weline_Theme::frontend::layouts::base::head-before
+    // 请使用 Weline_Theme 模块提供的标准格式
 ];
