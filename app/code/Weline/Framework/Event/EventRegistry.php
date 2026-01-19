@@ -129,14 +129,27 @@ class EventRegistry
             $xmlReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\Config\XmlReader::class);
             $eventObserversList = $xmlReader->read();
             
+            $env = \Weline\Framework\App\Env::getInstance();
+            
             // 合并所有模块的观察者
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                // 提取模块名并检查模块状态
+                $moduleName = explode('::', $module_and_file)[0] ?? '';
+                if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+                    // 跳过禁用的模块
+                    continue;
+                }
+                
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {
                     if (!isset($observersData[$eventName])) {
                         $observersData[$eventName] = [];
                     }
-                    // 合并观察者
-                    $observersData[$eventName] = array_merge($observersData[$eventName], $eventObservers);
+                    // 为每个观察者添加模块信息
+                    foreach ($eventObservers as $observer) {
+                        $observer['module'] = $moduleName;
+                        $observer['module_status'] = true; // 已通过状态检查
+                        $observersData[$eventName][] = $observer;
+                    }
                 }
             }
             
@@ -316,8 +329,17 @@ class EventRegistry
         // 扫描所有观察者
         $observersData = $this->xmlReader->read();
         
+        $env = \Weline\Framework\App\Env::getInstance();
+        
         // 合并所有观察者到对应的事件中
         foreach ($observersData as $module_and_file => $eventObservers) {
+            // 提取模块名并检查模块状态
+            $moduleName = explode('::', $module_and_file)[0] ?? '';
+            if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+                // 跳过禁用的模块
+                continue;
+            }
+            
             foreach ($eventObservers as $eventName => $observers) {
                 // 如果事件不存在，跳过（可能是动态事件或未定义的事件）
                 if (!isset($registry['events'][$eventName])) {
@@ -335,6 +357,10 @@ class EventRegistry
                     if (($observer['disabled'] ?? 'false') === 'true') {
                         continue;
                     }
+                    
+                    // 添加模块信息
+                    $observer['module'] = $moduleName;
+                    $observer['module_status'] = true; // 已通过状态检查
                     
                     // 检查是否已存在相同的观察者（根据 instance 和 name 判断）
                     $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
@@ -397,8 +423,13 @@ class EventRegistry
         $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
 
         if ($result !== false) {
+            // 更新实例缓存
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            
+            // 清除 EventData 的静态缓存，确保其他使用 EventData 的代码能立即看到新生成的文件
+            EventData::clearCache();
+            
             return true;
         }
 

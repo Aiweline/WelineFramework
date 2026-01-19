@@ -18,6 +18,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Cache\RouterCache;
+use Weline\Framework\Router\Cache\ProcessUrlCache;
 
 class Core
 {
@@ -35,6 +36,8 @@ class Core
     private bool $is_match = false;
 
     private CacheInterface $cache;
+
+    private ?ProcessUrlCache $processUrlCache = null;
 
     protected array $router;
     protected string $url;
@@ -66,6 +69,9 @@ class Core
         $this->request = ObjectManager::getInstance(Request::class);
         if (empty($this->cache)) {
             $this->cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
+        }
+        if ($this->processUrlCache === null) {
+            $this->processUrlCache = new ProcessUrlCache();
         }
 
         if (empty($this->request_area)) {
@@ -125,22 +131,22 @@ class Core
         $eventData = ['router' => $this];
         $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
         # ----------事件：路由开始前 结束------------
-        
         # 获取URL
         $this->url = $url = $this->processUrl();
-//        $url                     = str_replace('-', '', $origin_url);
         // 优先从统一缓存中读取 router
         $unifiedCache = $this->cache->get($this->unified_cache_key);
         if (is_array($unifiedCache) && isset($unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY]) && !empty($unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY])) {
             $this->router = $unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY];
-            return $this->route();
+            $result = $this->route();
+            return $result;
         }
         
         // 回退到旧的缓存方式（兼容性）
         $router = $this->cache->get($this->_router_cache_key);
         if ($router) {
             $this->router = $router;
-            return $this->route();
+            $result = $this->route();
+            return $result;
         }
         # 后台接口请求
         switch ($this->request_area) {
@@ -155,7 +161,8 @@ class Core
             case \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND:
             case \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND:
                 if (($pc_result = $this->Pc($url)) || $this->is_match) {
-                    return $pc_result;
+                    $result = $pc_result;
+                    return $result;
                 }
                 break;
             default:
@@ -210,7 +217,6 @@ class Core
             }
             /** @var DataObject $ruleData */
             $rule = $ruleData->getData();
-
             $this->routerGeneratedGetParams = $this->collectRouterGeneratedGetParams($originalGet);
             if (!empty($this->routerGeneratedGetParams)) {
                 $this->applyRouterGeneratedGetParams();
@@ -264,24 +270,14 @@ class Core
             }
         }
         
-        // 回退到旧的缓存方式（兼容性）
-        $url = $this->cache->get($this->url_cache_key);
-        # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
-        if ($this->isStaticFile()) {
-            try {
-                $static = $this->StaticFile($url, true);
-                if ($static) {
-                    exit();
-                }
-            } catch (\ReflectionException|Exception $e) {
-                $this->request->getResponse()->noRouter();
-            }
-        }
-        $ruleCache = $this->cache->get($this->rule_cache_key);
-        [$ruleFromCache, $cachedGeneratedGetParams] = $this->normalizeRuleCache($ruleCache);
-
-        // 修复：验证缓存的有效性，确保 rule 不为空且包含必要信息
-        if (PROD && $url && !empty($ruleFromCache)) {
+        // 尝试从 ProcessUrlCache 读取缓存（可通过 env 配置禁用：cache.status.process_url_cache = 0）
+        $processUrlCacheKey = $this->url_cache_key;
+        $processUrlCacheData = $this->processUrlCache->getProcessedUrl($processUrlCacheKey);
+        if ($processUrlCacheData !== null) {
+            // 从 ProcessUrlCache 获取缓存数据
+            $url = $processUrlCacheData['url'];
+            $ruleFromCache = $processUrlCacheData['rule'];
+            $cachedGeneratedGetParams = $processUrlCacheData['generated_get_params'];
             $this->url_cache_data = $url;
             $this->rule_cache_data = $ruleFromCache;
             $this->routerGeneratedGetParams = $cachedGeneratedGetParams;
@@ -292,52 +288,90 @@ class Core
             $this->request->setRule($ruleFromCache);
             $this->request->setData($ruleFromCache);
         } else {
-            $this->routerGeneratedGetParams = [];
-            $url = $this->request->getUrlPath();
-            if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
-                $url = str_replace($this->area_router, '', $url);
+            // 回退到旧的缓存方式（兼容性）
+            $url = $this->cache->get($this->url_cache_key);
+            # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
+            $isStaticFile = $this->isStaticFile();
+            if ($isStaticFile) {
+                try {
+                    $static = $this->StaticFile($url, true);
+                    if ($static) {
+                        exit();
+                    }
+                } catch (\ReflectionException|Exception $e) {
+                    $this->request->getResponse()->noRouter();
+                }
             }
-            $url = str_replace('//', '/', $url);
-            # ----------事件：处理url之前 开始------------
-            /**@var EventsManager $eventManager */
-            $eventManager = ObjectManager::getInstance(EventsManager::class);
-            /** @var DataObject $routerData */
-            $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-            $originalGet = $_GET;
-            $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
-            $pathData = $routerData->getData('path');
-            $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
-            $ruleData = $routerData->getData('rule');
-            if (!($ruleData instanceof DataObject)) {
-                $ruleDataArray = is_array($ruleData) ? $ruleData : [];
-                $ruleData = new DataObject($ruleDataArray);
-                $routerData->setData('rule', $ruleData);
-            }
-            /** @var DataObject $ruleData */
-            $rule = $ruleData->getData();
+            $ruleCache = $this->cache->get($this->rule_cache_key);
+            [$ruleFromCache, $cachedGeneratedGetParams] = $this->normalizeRuleCache($ruleCache);
+            // 修复：验证缓存的有效性，确保 rule 不为空且包含必要信息
+            if (PROD && $url && !empty($ruleFromCache)) {
+                $this->url_cache_data = $url;
+                $this->rule_cache_data = $ruleFromCache;
+                $this->routerGeneratedGetParams = $cachedGeneratedGetParams;
+                if (!empty($this->routerGeneratedGetParams)) {
+                    $this->applyRouterGeneratedGetParams();
+                }
+                # 将规则设置到请求类
+                $this->request->setRule($ruleFromCache);
+                $this->request->setData($ruleFromCache);
+            } else {
+                $this->routerGeneratedGetParams = [];
+                $url = $this->request->getUrlPath();
+                if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
+                    $url = str_replace($this->area_router, '', $url);
+                }
+                $url = str_replace('//', '/', $url);
+                # ----------事件：处理url之前 开始------------
+                /**@var EventsManager $eventManager */
+                $eventManager = ObjectManager::getInstance(EventsManager::class);
+                /** @var DataObject $routerData */
+                $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
+                $originalGet = $_GET;
+                $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
+                $pathData = $routerData->getData('path');
+                $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
+                $ruleData = $routerData->getData('rule');
+                if (!($ruleData instanceof DataObject)) {
+                    $ruleDataArray = is_array($ruleData) ? $ruleData : [];
+                    $ruleData = new DataObject($ruleDataArray);
+                    $routerData->setData('rule', $ruleData);
+                }
+                /** @var DataObject $ruleData */
+                $rule = $ruleData->getData();
 
-            $this->routerGeneratedGetParams = $this->collectRouterGeneratedGetParams($originalGet);
-            if (!empty($this->routerGeneratedGetParams)) {
-                $this->applyRouterGeneratedGetParams();
-            }
+                $this->routerGeneratedGetParams = $this->collectRouterGeneratedGetParams($originalGet);
+                if (!empty($this->routerGeneratedGetParams)) {
+                    $this->applyRouterGeneratedGetParams();
+                }
 
-            # 将规则设置到请求类
-            $this->request->setRule($rule);
-            $this->request->setData($rule);
-            # ----------事件：处理url之前 结束------------
+                # 将规则设置到请求类
+                $this->request->setRule($rule);
+                $this->request->setData($rule);
+                # ----------事件：处理url之前 结束------------
 
-            $url = trim($url, self::url_path_split);
+                $url = trim($url, self::url_path_split);
 //            $url = str_replace('.html', '', $url);
-            # 去除后缀index
-            $url_arr = explode('/', $url);
+                # 去除后缀index
+                $url_arr = explode('/', $url);
 
-            $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
-            while ('index' === array_pop($url_arr)) {
                 $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
+                while ('index' === array_pop($url_arr)) {
+                    $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
+                }
+                $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
+                $url = trim($url, '/');
+                $url = str_replace('//', '/', $url);
+                
+                // 保存到 ProcessUrlCache（可通过 env 配置禁用：cache.status.process_url_cache = 0）
+                $this->processUrlCache->setProcessedUrl(
+                    $processUrlCacheKey,
+                    $url,
+                    $rule,
+                    $this->routerGeneratedGetParams,
+                    !empty($rule)
+                );
             }
-            $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
-            $url = trim($url, '/');
-            $url = str_replace('//', '/', $url);
         }
         return $url;
     }
@@ -370,6 +404,7 @@ class Core
             if (
                 isset($routers[$url]) || isset($routers[$url . $method]) || (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method])))
             ) {
+                // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
                 $this->router = $routers[$url] ?? $routers[$url . $method] ?? $routers['index/index'] ?? $routers['index/index' . $method];
                 # 缓存路由结果
                 $this->router['type'] = 'api';
@@ -411,7 +446,8 @@ class Core
             if (
                 isset($routers[$url]) || isset($routers[$url . $method]) || (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method])))
             ) {
-                $this->router = $routers[$url . $method] ?? $routers[$url] ?? $routers['index/index'] ?? $routers['index/index' . $method];
+                // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
+                $this->router = $routers[$url] ?? $routers[$url . $method] ?? $routers['index/index'] ?? $routers['index/index' . $method];
                 # 缓存路由结果
                 $this->router['type'] = 'pc';
                 $this->cache->set($this->_router_cache_key, $this->router);
@@ -589,7 +625,6 @@ class Core
                 }
             }
         }
-
         /**@var \Weline\Framework\Controller\Core $dispatch */
 //        $dispatch->assign($this->request->getData());
         /**@var EventsManager $eventManager */
@@ -598,7 +633,6 @@ class Core
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
-
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
             $dispatch_class = $dispatch::class;
@@ -613,7 +647,6 @@ class Core
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
             $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
-            
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             $output = ob_get_clean();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
@@ -663,7 +696,6 @@ class Core
             $saveCacheKey = RouterCache::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET', $this->request);
             $this->cache->set($saveCacheKey, $unifiedCacheData, 3600);
         }
-        
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
         if (!$this->url_cache_data) {
             $ruleCachePayload = [

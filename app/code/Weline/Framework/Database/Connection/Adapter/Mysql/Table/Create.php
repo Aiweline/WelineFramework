@@ -56,7 +56,13 @@ class Create extends AbstractTable implements CreateInterface
     public function addColumn(string $field_name, string $type, int|string|null $length, string $options, string $comment): CreateInterface
     {
         # 数字字段
-        if ($type === TableInterface::column_type_INTEGER || $type === TableInterface::column_type_SMALLINT) {
+        if ($type === TableInterface::column_type_TINYINT) {
+            // TINYINT 类型直接使用，通常用于布尔值或小范围整数
+            if (!$length) {
+                $length = 1;
+            }
+            $type = 'tinyint';
+        } elseif ($type === TableInterface::column_type_INTEGER || $type === TableInterface::column_type_SMALLINT) {
             if (!$length) {
                 $length = 11;
             }

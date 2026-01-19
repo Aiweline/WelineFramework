@@ -18,6 +18,7 @@ use Weline\Framework\System\File\Data\File;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use ReflectionClass;
 
 class Upgrade extends CommandAbstract
 {
@@ -184,7 +185,12 @@ class Upgrade extends CommandAbstract
                     }
                     try {
                         $classRef = ObjectManager::getReflectionInstance($declaredClass);
-                        if ($classRef->isAbstract()) {
+                        // 跳过抽象类、trait、接口和静态类
+                        if ($classRef->isAbstract() || $classRef->isTrait() || $classRef->isInterface()) {
+                            continue;
+                        }
+                        // 检查是否为静态类（所有方法都是静态的，且没有公共构造函数）
+                        if ($this->isStaticClass($declaredClass)) {
                             continue;
                         }
                         $command_class = ObjectManager::getInstance($declaredClass);
@@ -291,7 +297,12 @@ class Upgrade extends CommandAbstract
             }
             try {
                 $classRef = ObjectManager::getReflectionInstance($class);
-                if ($classRef->isAbstract()) {
+                // 跳过抽象类、trait、接口和静态类
+                if ($classRef->isAbstract() || $classRef->isTrait() || $classRef->isInterface()) {
+                    continue;
+                }
+                // 检查是否为静态类（所有方法都是静态的，且没有公共构造函数）
+                if ($this->isStaticClass($class)) {
                     continue;
                 }
                 $command_class = ObjectManager::getInstance($class);
@@ -398,5 +409,58 @@ class Upgrade extends CommandAbstract
         }
         
         return $commands;
+    }
+    
+    /**
+     * 检测类是否为静态类（所有方法都是静态的，且没有可实例化的构造函数）
+     *
+     * @param string $class 类名
+     * @return bool
+     */
+    private function isStaticClass(string $class): bool
+    {
+        try {
+            $refClass = new ReflectionClass($class);
+            
+            // 检查是否有公共构造函数
+            $constructor = $refClass->getConstructor();
+            if ($constructor && $constructor->isPublic()) {
+                // 有公共构造函数，不是静态类
+                return false;
+            }
+            
+            // 检查是否有 getInstance 等工厂方法（单例模式）
+            if ($refClass->hasMethod('getInstance') && $refClass->getMethod('getInstance')->isStatic()) {
+                // 有静态工厂方法，不是纯静态类
+                return false;
+            }
+            
+            // 获取所有公共方法
+            $methods = $refClass->getMethods(\ReflectionMethod::IS_PUBLIC);
+            
+            // 如果没有公共方法，可能是静态类
+            if (empty($methods)) {
+                return true;
+            }
+            
+            // 检查是否所有公共方法都是静态的
+            foreach ($methods as $method) {
+                // 跳过构造函数和魔术方法
+                if (in_array($method->getName(), ['__construct', '__destruct', '__clone', '__wakeup', '__sleep'])) {
+                    continue;
+                }
+                
+                // 如果有非静态的公共方法，不是静态类
+                if (!$method->isStatic()) {
+                    return false;
+                }
+            }
+            
+            // 所有公共方法都是静态的，且没有公共构造函数，判定为静态类
+            return true;
+        } catch (\ReflectionException $e) {
+            // 反射失败，假设不是静态类
+            return false;
+        }
     }
 }

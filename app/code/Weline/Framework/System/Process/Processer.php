@@ -1000,4 +1000,45 @@ class Processer
         }
         return (string)file_get_contents($name_file);
     }
+
+    /**
+     * @DESC          # 执行命令并获取输出（遵循SOLID原则，统一使用进程类执行命令）
+     *
+     * @AUTH  秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     * @param string $command 要执行的命令
+     * @param array &$output 输出数组（引用传递）
+     * @param int &$returnCode 返回码（引用传递）
+     * @return bool 是否执行成功
+     */
+    public static function execute(string $command, array &$output = [], int &$returnCode = 0): bool
+    {
+        // 检查可用的命令执行函数
+        $availableFunctions = [
+            'exec' => function_exists('exec'),
+            'shell_exec' => function_exists('shell_exec'),
+        ];
+
+        // 优先使用 exec（更可靠，不依赖 passthru）
+        if ($availableFunctions['exec']) {
+            // 执行命令并捕获输出（包含错误输出）
+            exec($command . ' 2>&1', $output, $returnCode);
+            return $returnCode === 0;
+        }
+
+        // 备选：使用 shell_exec
+        if ($availableFunctions['shell_exec']) {
+            $result = shell_exec($command . ' 2>&1');
+            $output = $result ? explode("\n", trim($result)) : [];
+            $returnCode = $result !== null ? 0 : 1;
+            return $returnCode === 0;
+        }
+
+        // 所有方法都不可用
+        $output = ['错误：没有可用的命令执行函数（exec 或 shell_exec）'];
+        $returnCode = -1;
+        return false;
+    }
 }
