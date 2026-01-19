@@ -1,0 +1,82 @@
+<?php
+/**
+ * Jion Landing 模板 - Purple 色系配置
+ * 定义紫色主题的所有颜色值
+ * 
+ * 色系元信息（约定格式）：
+ * SCHEME_NAME: purple
+ * SCHEME_DISPLAY_NAME: 紫色主题
+ * SCHEME_DESCRIPTION: 神秘的紫色调，适合创意和艺术类网站，提供独特的视觉体验
+ * 
+ * 颜色配置协议：
+ * - 所有颜色值使用 $colors 数组定义
+ * - 颜色值可以是 hex (#RRGGBB)、rgb/rgba 或 CSS 颜色名称
+ * - 颜色键名使用 snake_case 命名规范
+ * - 必须确保所有色系的配置 key 完全一致，仅值不同
+ */
+
+$colors = [
+    // ========== 主背景色 ==========
+    'primary_bg' => '#1a0d2e',           // 主背景色（深紫色调）
+    'banner_bg' => '#0A1128',            // Banner 背景色（保持 #0A1128）
+    'body_bg' => '#1a0d2e',              // Body 背景色（深紫色）
+    'header_bg' => '#0A1128',            // Header 专用背景色
+    'card_bg' => '#2d1b3d',              // 卡片背景色（深紫色）
+    'section_bg' => '#1a0d2e',           // 区块背景色（深紫色）
+    'banner_overlay' => 'rgba(26, 13, 46, 0.3)', // Banner遮罩层颜色
+    
+    // ========== 文字颜色 ==========
+    'text_primary' => '#FFFFFF',         // 主文字颜色（白色）
+    'text_secondary' => '#E0E0E0',       // 次要文字颜色（浅灰色）
+    'text_muted' => '#999999',           // 弱化文字颜色（灰色）
+    // Banner 专用文字颜色
+    'banner_heading_text' => '#FFFFFF',  // Banner 标题文字颜色
+    'banner_subtitle_text' => '#FFFFFF', // Banner 副标题文字颜色
+    
+    // ========== 强调色（紫色） ==========
+    'accent_blue' => '#9d35d0',          // 强调紫色
+    'accent_blue_hover' => '#7a2aa3',    // 强调紫色悬停
+    'accent_blue_light' => '#b855e8',    // 浅紫色
+    
+    // ========== 按钮颜色 ==========
+    'button_primary_bg' => '#7a2aa3',    // 按钮背景色（深紫色）
+    'button_primary_text' => '#FFFFFF',  // 按钮文字颜色
+    'button_primary_hover' => '#5d1f7a', // 按钮悬停背景色
+    // Header 专用按钮（独立配置，不与其他按钮统一）
+    'header_button_bg' => '#111e38',
+    'header_button_text' => '#FFFFFF',
+    'header_button_hover' => '#5d1f7a',
+    'header_button_border' => '#9d35d0', // Header 按钮边框色（紫色系）
+    
+    // ========== 边框颜色 ==========
+    'border_light' => 'rgba(157, 53, 208, 0.3)', // 浅边框（透明紫色）
+    'border_default' => '#3d2a4d',       // 默认边框（深紫色）
+    'card_border' => '#9d35d0',          // 卡片边框颜色（紫色）
+    'card_border_glow' => 'rgba(157, 53, 208, 0.5)', // 卡片边框发光效果
+    
+    // ========== 图标颜色 ==========
+    'icon_color' => '#9d35d0',           // 图标颜色（紫色）
+    
+    // ========== 渐变背景 ==========
+    'section_bg_gradient_start' => '#1a0d2e', // 区块背景渐变开始（深紫色）
+    'section_bg_gradient_end' => '#2d1b3d',   // 区块背景渐变结束（稍浅紫色）
+    // Why Jion 卡片渐变背景（自上而下）
+    'why_jion_card_grad_start' => '#381676',
+    'why_jion_card_grad_end' => '#6136d2',
+    // Community Preview 卡片背景色
+    'community_preview_card_bg' => '#5823b4',
+    // CTA 卡片背景色
+    'cta_card_bg' => '#471b94',
+    // CTA 卡片边框颜色
+    'cta_card_border' => 'transparent',
+    // Social Proof 卡片背景色
+    'social_proof_card_bg' => '#471b94',
+    // Social Proof 卡片边框颜色
+    'social_proof_card_border' => 'transparent',
+    // Footer 背景色
+    'footer_bg' => '#0b1220',
+    // Footer 文字颜色
+    'footer_copyright_text' => null, // 使用 text_primary
+    'footer_disclaimer_text' => '#999999',
+];
+
