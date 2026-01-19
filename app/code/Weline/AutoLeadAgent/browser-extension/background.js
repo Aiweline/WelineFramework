@@ -1091,9 +1091,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         handleHfSearchModels(request, wrappedSendResponse).catch(error => {
             console.error('[AutoLeadAgent Extension] HF_SEARCH_MODELS 处理异常:', error);
             if (!hasResponded) {
+                // 判断错误类型
+                let errorType = 'Error';
+                if (error.message && error.message.includes('网络连接失败')) {
+                    errorType = 'NetworkError';
+                } else if (error.message && error.message.includes('超时')) {
+                    errorType = 'TimeoutError';
+                }
+                
                 wrappedSendResponse({
                     success: false,
-                    error: '搜索模型失败: ' + (error.message || '未知错误')
+                    error: error.message || '搜索模型失败: 未知错误',
+                    errorType: errorType,
+                    originalError: error.toString()
                 });
             }
         });
@@ -7719,12 +7729,12 @@ async function handleHfSearchModels(request, sendResponse) {
 
         let response;
         try {
+            // 在 Chrome Manifest V3 中，fetch 请求需要简化配置
+            // 移除 credentials 和 User-Agent（可能导致请求失败）
             response = await fetch(url, {
                 method: 'GET',
-                credentials: 'include',
                 headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'WelineFramework-AutoLeadAgent/1.0'
+                    'Accept': 'application/json'
                 },
                 signal: controller.signal
             });
@@ -7745,6 +7755,25 @@ async function handleHfSearchModels(request, sendResponse) {
             console.error('[AutoLeadAgent Extension] Fetch 失败:', fetchError);
             console.error('[AutoLeadAgent Extension] 错误类型:', fetchError.name);
             console.error('[AutoLeadAgent Extension] 错误消息:', fetchError.message);
+            console.error('[AutoLeadAgent Extension] 请求 URL:', url);
+            
+            // 尝试获取更详细的错误信息
+            try {
+                const errorDetails = {
+                    name: fetchError.name,
+                    message: fetchError.message,
+                    stack: fetchError.stack,
+                    cause: fetchError.cause
+                };
+                console.error('[AutoLeadAgent Extension] 完整错误对象:', JSON.stringify(errorDetails, null, 2));
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 无法序列化错误对象:', e);
+            }
+
+            // 检查是否是网络连接问题
+            if (fetchError.message && (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError'))) {
+                errorMessage = '网络连接失败，请检查：\n1. 网络连接是否正常\n2. 是否可以访问 huggingface.co\n3. 防火墙或代理设置\n4. 扩展权限是否正确配置\n\n提示：系统将自动切换到后端 API 进行搜索';
+            }
 
             throw new Error(errorMessage);
         }
