@@ -613,14 +613,28 @@ class Countries extends BaseController
         
         if ($existingLocale && $existingLocale->getId()) {
             // 已存在，更新为已安装且已激活
+            // 如果简码字段为空，自动计算并保存
+            if (!$existingLocale->getData(\Weline\I18n\Model\Locale::fields_SHORT_CODE)) {
+                $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes('zh_Hans_CN');
+                $existingLocale->setData(\Weline\I18n\Model\Locale::fields_SHORT_CODE, $localeCodes['short_code'])
+                    ->setData(\Weline\I18n\Model\Locale::fields_ISO2, $localeCodes['iso2'])
+                    ->setData(\Weline\I18n\Model\Locale::fields_ISO3, $localeCodes['iso3']);
+            }
+            
             $existingLocale->setData(\Weline\I18n\Model\Locale::fields_IS_INSTALL, 1)
                           ->setData(\Weline\I18n\Model\Locale::fields_IS_ACTIVE, 1)
                           ->save(true);
         } else {
             // 不存在，创建新的区域记录
+            // 提取简码、ISO2和ISO3
+            $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes('zh_Hans_CN');
+            
             $localeData = [
                 \Weline\I18n\Model\Locale::fields_CODE => 'zh_Hans_CN',
                 \Weline\I18n\Model\Locale::fields_COUNTRY_CODE => 'CN',
+                \Weline\I18n\Model\Locale::fields_SHORT_CODE => $localeCodes['short_code'],
+                \Weline\I18n\Model\Locale::fields_ISO2 => $localeCodes['iso2'],
+                \Weline\I18n\Model\Locale::fields_ISO3 => $localeCodes['iso3'],
                 \Weline\I18n\Model\Locale::fields_IS_INSTALL => 1,
                 \Weline\I18n\Model\Locale::fields_IS_ACTIVE => 1,
                 \Weline\I18n\Model\Locale::fields_FLAG => ''
