@@ -1353,7 +1353,7 @@ class MetaData
                 // 支持通配符：如果 metaIdentify 以 * 结尾，使用 LIKE 查询
                 if (str_ends_with($metaIdentify, '*')) {
                     $pattern = rtrim($metaIdentify, '*');
-                    $query->where(Meta::fields_META_IDENTIFY . ' LIKE', $pattern . '%');
+                    $query->where(Meta::fields_META_IDENTIFY, $pattern . '%', 'LIKE');
                 } else {
                     $query->where(Meta::fields_META_IDENTIFY, $metaIdentify);
                 }
@@ -1384,7 +1384,7 @@ class MetaData
                 // 支持通配符
                 if (str_ends_with($metaIdentify, '*')) {
                     $pattern = rtrim($metaIdentify, '*');
-                    $query->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY . ' LIKE', $pattern . '%');
+                    $query->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $pattern . '%', 'LIKE');
                 } else {
                     $query->where(\Weline\Meta\Model\MetaConfig::fields_META_IDENTIFY, $metaIdentify);
                 }
