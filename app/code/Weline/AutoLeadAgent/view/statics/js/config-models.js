@@ -87,54 +87,108 @@
 
             ConfigUIRenderer.renderModelList(null); // 显示加载中状态
 
+            // 先尝试通过扩展搜索，如果扩展不可用则降级到后端 API
             ConfigExtensionClient.sendMessage({
                 type: 'HF_SEARCH_MODELS',
                 query: q,
                 task: task,
                 limit: 50
             }, function (response) {
-                if (!response) {
-                    ConfigUIRenderer.renderModelList([]); // 清空加载状态
-                    ConfigUtils.safeToast('error', '扩展未响应，请检查扩展是否已安装并启用');
-                    return;
-                }
-                if (!response.success) {
-                    ConfigUIRenderer.renderModelList([]); // 清空加载状态
-                    ConfigUtils.safeToast('error', response.error || '搜索模型失败');
-                    return;
-                }
-
-                // 兼容性检查：过滤掉不支持 WebLLM/ONNX 格式的模型
-                var filteredModels = response.data;
-                if (response.data && response.data.length > 0) {
-                    if (typeof HFModelManager !== 'undefined' && HFModelManager.isModelSupportedForWebLLM) {
-                        filteredModels = response.data.filter(function (m) {
-                            var modelId = m.id || m.name || '';
-                            var isSupported = HFModelManager.isModelSupportedForWebLLM(modelId);
-                            if (!isSupported) {
-                                console.log('[HFModelConfig] 过滤不支持的模型:', modelId);
-                            }
-                            return isSupported;
-                        });
+                // 如果扩展未响应或失败，降级到后端 API
+                if (!response || !response.success) {
+                    var errorMsg = response && response.error ? response.error : '扩展搜索失败';
+                    console.log('[HFModelConfig] 扩展搜索失败，降级到后端 API', errorMsg);
+                    
+                    // 如果是网络错误，显示提示但不显示错误 toast（因为会使用后端 API）
+                    if (response && response.errorType === 'NetworkError') {
+                        console.warn('[HFModelConfig] 网络连接问题，自动切换到后端 API');
+                    } else if (response && response.error) {
+                        // 其他错误也显示提示
+                        ConfigUtils.safeToast('warning', '扩展搜索失败，正在使用后端 API: ' + errorMsg.replace(/\n/g, ' '));
                     }
+                    
+                    // 自动降级到后端 API
+                    searchModelsViaBackend(q, task);
+                    return;
                 }
 
-                ConfigUIRenderer.renderModelList(filteredModels, function (id, info) {
-                    selectedModelId = id;
-                    loadModelInfo(id);
+                // 处理扩展返回的数据
+                handleSearchResponse(response.data);
+            });
+        }
 
-                    // 检查该模型是否已下载
-                    if (typeof LocalFileStorage !== 'undefined') {
-                        var downloadStatus = LocalFileStorage.checkModelDownloadedByMetadata(id);
-                        if (downloadStatus.downloaded) {
-                            ConfigUIRenderer.updateCurrentBadge(id + ' (已下载，待保存)');
-                        } else {
-                            ConfigUIRenderer.updateCurrentBadge(id + ' (待保存)');
+        /**
+         * 通过后端 API 搜索模型（降级方案）
+         */
+        function searchModelsViaBackend(query, task) {
+            var url = ConfigUtils.buildUrl('search-hugging-face-models', {
+                q: query,
+                task: task,
+                limit: 50
+            });
+
+            console.log('[HFModelConfig] 通过后端 API 搜索模型:', url);
+
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(function(result) {
+                    if (!result.success) {
+                        throw new Error(result.message || '搜索模型失败');
+                    }
+                    handleSearchResponse(result.data || []);
+                })
+                .catch(function(error) {
+                    console.error('[HFModelConfig] 后端 API 搜索失败:', error);
+                    ConfigUIRenderer.renderModelList([]); // 清空加载状态
+                    ConfigUtils.safeToast('error', '搜索模型失败: ' + error.message);
+                });
+        }
+
+        /**
+         * 处理搜索响应数据
+         */
+        function handleSearchResponse(models) {
+            if (!models || !Array.isArray(models)) {
+                ConfigUIRenderer.renderModelList([]);
+                ConfigUtils.safeToast('error', '模型列表格式错误');
+                return;
+            }
+
+            // 兼容性检查：过滤掉不支持 WebLLM/ONNX 格式的模型
+            var filteredModels = models;
+            if (models.length > 0) {
+                if (typeof HFModelManager !== 'undefined' && HFModelManager.isModelSupportedForWebLLM) {
+                    filteredModels = models.filter(function (m) {
+                        var modelId = m.id || m.name || '';
+                        var isSupported = HFModelManager.isModelSupportedForWebLLM(modelId);
+                        if (!isSupported) {
+                            console.log('[HFModelConfig] 过滤不支持的模型:', modelId);
                         }
+                        return isSupported;
+                    });
+                }
+            }
+
+            ConfigUIRenderer.renderModelList(filteredModels, function (id, info) {
+                selectedModelId = id;
+                loadModelInfo(id);
+
+                // 检查该模型是否已下载
+                if (typeof LocalFileStorage !== 'undefined') {
+                    var downloadStatus = LocalFileStorage.checkModelDownloadedByMetadata(id);
+                    if (downloadStatus.downloaded) {
+                        ConfigUIRenderer.updateCurrentBadge(id + ' (已下载，待保存)');
                     } else {
                         ConfigUIRenderer.updateCurrentBadge(id + ' (待保存)');
                     }
-                });
+                } else {
+                    ConfigUIRenderer.updateCurrentBadge(id + ' (待保存)');
+                }
             });
         }
 
@@ -142,16 +196,55 @@
          * 加载详情
          */
         function loadModelInfo(modelId) {
+            if (!modelId) {
+                ConfigUtils.safeToast('error', '模型ID不能为空');
+                return;
+            }
+
+            // 先尝试通过扩展获取，如果扩展不可用则降级到后端 API
             ConfigExtensionClient.sendMessage({
                 type: 'HF_GET_MODEL_INFO',
                 modelId: modelId
             }, function (response) {
-                if (response && response.success) {
-                    ConfigUIRenderer.renderModelDetail(response.data);
-                } else {
-                    ConfigUtils.safeToast('error', '获取模型信息失败');
+                // 如果扩展未响应或失败，降级到后端 API
+                if (!response || !response.success) {
+                    console.log('[HFModelConfig] 扩展获取模型信息失败，降级到后端 API');
+                    loadModelInfoViaBackend(modelId);
+                    return;
                 }
+
+                // 处理扩展返回的数据
+                ConfigUIRenderer.renderModelDetail(response.data);
             });
+        }
+
+        /**
+         * 通过后端 API 获取模型信息（降级方案）
+         */
+        function loadModelInfoViaBackend(modelId) {
+            var url = ConfigUtils.buildUrl('get-model-info', {
+                model_id: modelId
+            });
+
+            console.log('[HFModelConfig] 通过后端 API 获取模型信息:', url);
+
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(function(result) {
+                    if (!result.success) {
+                        throw new Error(result.message || '获取模型信息失败');
+                    }
+                    ConfigUIRenderer.renderModelDetail(result.data);
+                })
+                .catch(function(error) {
+                    console.error('[HFModelConfig] 后端 API 获取模型信息失败:', error);
+                    ConfigUtils.safeToast('error', '获取模型信息失败: ' + error.message);
+                });
         }
 
         /**
