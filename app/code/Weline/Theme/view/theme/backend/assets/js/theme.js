@@ -854,9 +854,18 @@
 
             switchLang: async (lang) => {
                 localStorage.setItem('weline_user_lang', lang);
-                const url = new URL(window.location.href);
-                url.searchParams.set('lang', lang);
-                window.location.href = url.toString();
+                // 使用 url-backend 模块的 select_language 函数（如果已加载）
+                if (typeof window.select_language === 'function') {
+                    window.select_language(lang);
+                } else if (typeof window.urlWithLang === 'function') {
+                    const langUrl = window.urlWithLang(window.location.pathname, lang);
+                    window.location.href = langUrl + window.location.search;
+                } else {
+                    // 降级方案：使用 URL 参数
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('lang', lang);
+                    window.location.href = url.toString();
+                }
             },
         },
 
@@ -869,9 +878,18 @@
 
             switchCurrency: async (currency) => {
                 localStorage.setItem('weline_user_currency', currency);
-                const url = new URL(window.location.href);
-                url.searchParams.set('currency', currency);
-                window.location.href = url.toString();
+                // 使用 url-backend 模块的 select_currency 函数（如果已加载）
+                if (typeof window.select_currency === 'function') {
+                    window.select_currency(currency);
+                } else if (typeof window.urlWithCurrency === 'function') {
+                    const currencyUrl = window.urlWithCurrency(window.location.pathname, currency);
+                    window.location.href = currencyUrl + window.location.search;
+                } else {
+                    // 降级方案：使用 URL 参数
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('currency', currency);
+                    window.location.href = url.toString();
+                }
             },
 
             switchLang: async (lang) => {
@@ -1071,6 +1089,20 @@
                 }
             }
         });
+    })();
+
+    // ========== 声明并加载 URL 模块 ==========
+    // 后端使用 url-backend 模块
+    (function loadUrlModule() {
+        const config = window.__WelineThemeConfig || {};
+        const area = config.theme?.area || config.area || 'backend';
+        
+        if (window.Weline && window.Weline.declare) {
+            Weline.declare('url-backend', true, 'Weline_Framework::js/url-backend.js');
+        } else if (window.Weline && window.Weline.load) {
+            // 如果 declare 不可用，直接加载
+            window.Weline.load('url-backend', 'Weline_Framework::js/url-backend.js');
+        }
     })();
 
 })(window, document);
