@@ -103,10 +103,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             </div>
                                         </div>
                                         <div class='col-6'>
-                                            <a class='btn btn-primary pull-right mt-1 mb-1'
-                                               href="@backend-url('*/backend/user/add')">
-                                                <lang>新增</lang>
-                                            </a>
+                                            <acl source="Weline_Admin::system_user_add">
+                                                <a class='btn btn-primary pull-right mt-1 mb-1'
+                                                   href="@backend-url('*/backend/user/add')">
+                                                    <lang>新增</lang>
+                                                </a>
+                                            </acl>
                                         </div>
                                     </div>
                                 </div>

@@ -42,21 +42,25 @@
                                         <div class="mb-4">
                                             <label class="form-label float-start" for="username"><?= __('管理员') ?></label>
                                             <input type="text" class="form-control" id="username" name="username"
-                                                   value=""
+                                                   value="demo"
                                                    placeholder="<?= __('输入管理员') ?>">
                                         </div>
                                         <div class="mb-4">
                                             <label class="form-label float-start" for="userpassword"><?= __('密码') ?></label>
                                             <input type="password" class="form-control" id="userpassword"
-                                                   name="password" value=""
+                                                   name="password" value="demodemo"
                                                    placeholder="<?= __('输入密码') ?>">
                                         </div>
                                         <div class="row">
                                             <?php if ($this->getData('need_backend_verification_code')) {
                                                 ?>
                                                 <div class="form-group">
-                                                    <img src="<?= $this->getData('backend_verification_code_url') ?>"
-                                                         alt="">
+                                                    <img id="verification-code-img" 
+                                                         src="<?= $this->getData('backend_verification_code_url') ?>"
+                                                         alt="<?= __('验证码') ?>"
+                                                         style="cursor: pointer; border: 1px solid #ddd; padding: 2px;"
+                                                         title="<?= __('点击刷新验证码') ?>"
+                                                         onclick="this.src='<?= $this->getData('backend_verification_code_url') ?>?t=' + new Date().getTime()">
                                                     <label class="form-control-label"><?= __('验证码：') ?>
                                                         <input name="code" type="text" class="form-control" value=""
                                                                placeholder="<?= __('请输入验证码！') ?>" required>

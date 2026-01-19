@@ -20,6 +20,7 @@ WelineFramework,WelineFramework
 账户被禁用！,"Account is disabled!"
 登录异常！,"Login exception!"
 验证码错误！,"Verification code error!"
+您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
 登录凭据错误！,"Invalid login credentials!"
 系统菜单无法删除！,"System menu cannot be deleted!"
 关键参数ID不存在！,"Key parameter ID does not exist!"
@@ -168,6 +169,8 @@ RTL模式,"RTL Mode"
 "登录 Weline 管理面板","Login to Weline Admin Panel"
 输入管理员,"Enter Administrator"
 输入密码,"Enter Password"
+验证码,验证码
+点击刷新验证码,点击刷新验证码
 验证码：,"Verification Code:"
 请输入验证码！,"Please enter verification code!"
 忘记密码？,"Forgot Password?"
