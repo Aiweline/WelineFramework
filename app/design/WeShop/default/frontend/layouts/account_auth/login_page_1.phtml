@@ -1,0 +1,607 @@
+<?php
+/**
+ * 布局：登录页 - Login Page Variant 1
+ *
+ * 登录页布局变体1，完全按照UI设计实现
+ * @meta.name {default="登录页布局变体1",name="登录页布局变体1",description="登录页布局变体1，完全按照UI设计实现"}
+ * @meta.description {default="登录页布局变体1，包含登录表单、注册链接等",name="登录页布局变体1",description="登录页布局变体1，包含登录表单、注册链接等"}
+ * @param title {default="登录",name="页面标题",description="页面标题"}
+ * @param showHeader {default=false,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ */
+$meta = $this->getData('meta') ?? [];
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::head-after</w:hook>
+    
+    <!-- WeShop Theme CSS Variables -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_colors.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_spacing.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_typography.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_borders.css') ?>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <style>
+        body {
+            font-family: "Work Sans", "Noto Sans", sans-serif;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* WeShop Login Layout 1 Styles */
+        .weshop-login-1 {
+            font-family: var(--weshop-font-display);
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem 1rem;
+        }
+        
+        @media (min-width: 640px) {
+            .weshop-login-1 {
+                padding: 2.5rem 1rem;
+            }
+        }
+        
+        .weshop-login-header {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .weshop-login-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .weshop-login-logo-icon {
+            width: 2rem;
+            height: 2rem;
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-login-logo-text {
+            font-size: 1.5rem;
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.025em;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-login-main {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        
+        .weshop-login-card {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--weshop-surface);
+            border-radius: var(--weshop-border-radius-lg);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--weshop-border);
+            padding: 1.5rem;
+        }
+        
+        @media (min-width: 640px) {
+            .weshop-login-card {
+                padding: 2rem;
+            }
+        }
+        
+        .weshop-login-title {
+            font-size: 1.875rem;
+            font-weight: var(--weshop-font-weight-bold);
+            line-height: 1.25;
+            letter-spacing: -0.015em;
+            color: var(--weshop-text-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .weshop-login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .weshop-login-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .weshop-login-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            line-height: 1.5;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-login-input {
+            width: 100%;
+            border-radius: var(--weshop-border-radius-lg);
+            border: 1px solid var(--weshop-border);
+            background-color: var(--weshop-surface);
+            height: 3rem;
+            padding: 0 1rem;
+            font-size: var(--weshop-font-size-base);
+            color: var(--weshop-text-primary);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .weshop-login-input::placeholder {
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-login-input:focus {
+            border-color: var(--weshop-primary);
+            box-shadow: 0 0 0 1px var(--weshop-primary);
+        }
+        
+        .weshop-login-password-wrapper {
+            position: relative;
+            display: flex;
+            width: 100%;
+            align-items: center;
+        }
+        
+        .weshop-login-password-toggle {
+            position: absolute;
+            right: 0;
+            height: 100%;
+            padding: 0 0.75rem;
+            color: var(--weshop-text-secondary);
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        
+        .weshop-login-password-toggle:hover {
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-login-password-input {
+            padding-right: 3rem;
+        }
+        
+        .weshop-login-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        
+        .weshop-login-forgot {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-login-forgot:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-login-submit {
+            width: 100%;
+            background-color: var(--weshop-primary);
+            color: white;
+            font-weight: var(--weshop-font-weight-medium);
+            border-radius: var(--weshop-border-radius-lg);
+            height: 3rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            border: none;
+            cursor: pointer;
+            font-size: var(--weshop-font-size-base);
+            transition: background-color 0.2s;
+            margin-top: 0.5rem;
+        }
+        
+        .weshop-login-submit:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-login-options {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-top: 0.25rem;
+        }
+        
+        .weshop-login-checkbox {
+            width: 1rem;
+            height: 1rem;
+            border-radius: var(--weshop-border-radius);
+            border: 1px solid var(--weshop-border);
+            background-color: transparent;
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-login-checkbox-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-normal);
+            color: var(--weshop-text-primary);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .weshop-login-checkbox-label:hover {
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-login-divider {
+            color: var(--weshop-text-secondary);
+            user-select: none;
+        }
+        
+        .weshop-login-details-link {
+            font-size: var(--weshop-font-size-sm);
+            color: var(--weshop-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: transform 0.2s;
+        }
+        
+        .weshop-login-details-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-login-details-link:hover .weshop-login-details-arrow {
+            transform: translateX(0.125rem);
+        }
+        
+        .weshop-login-security {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+            font-size: var(--weshop-font-size-sm);
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            padding: 0.75rem;
+            border-radius: var(--weshop-border-radius);
+            border: 1px solid var(--weshop-border);
+            color: var(--weshop-text-secondary);
+            line-height: 1.375;
+        }
+        
+        .weshop-login-security-icon {
+            flex-shrink: 0;
+            margin-top: 0.125rem;
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-login-security-link {
+            color: var(--weshop-primary);
+            text-decoration: none;
+            font-weight: var(--weshop-font-weight-medium);
+        }
+        
+        .weshop-login-security-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-login-terms {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+            margin-top: 1rem;
+            line-height: 1.75;
+        }
+        
+        .weshop-login-terms-link {
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-login-terms-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-login-separator {
+            position: relative;
+            padding: 0.5rem 0;
+        }
+        
+        .weshop-login-separator-line {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .weshop-login-separator-line::before {
+            content: '';
+            width: 100%;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-login-separator-text {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            font-size: var(--weshop-font-size-sm);
+            background-color: var(--weshop-surface);
+            padding: 0 0.5rem;
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-login-register-button {
+            width: 100%;
+            background-color: transparent;
+            color: var(--weshop-text-primary);
+            border: 1px solid var(--weshop-border);
+            font-weight: var(--weshop-font-weight-medium);
+            border-radius: var(--weshop-border-radius-lg);
+            height: 2.75rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            font-size: var(--weshop-font-size-sm);
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-login-register-button:hover {
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+        }
+        
+        .weshop-login-footer {
+            width: 100%;
+            margin-top: 2.5rem;
+            padding-bottom: 1.5rem;
+            padding: 0 1rem;
+        }
+        
+        .weshop-login-footer-content {
+            max-width: 960px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .weshop-login-footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-login-footer-link {
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-login-footer-link:hover {
+            text-decoration: underline;
+            color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-login-footer-copyright {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+        }
+    </style>
+</head>
+<body class="weshop-login-1">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::body-start</w:hook>
+    
+    <div class="weshop-login-1">
+        
+        <!-- Header -->
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::header-before</w:hook>
+            <header class="weshop-login-header">
+                <a href="<?= $this->getUrl('') ?>" class="weshop-login-logo">
+                    <div class="weshop-login-logo-icon">
+                        <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="weshop-login-logo-text"><?= $this->getStoreName() ?></h1>
+                </a>
+            </header>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+        
+        <!-- Main Content -->
+        <main class="weshop-login-main">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::content-before</w:hook>
+            
+            <div class="weshop-login-card">
+                <div>
+                    <h2 class="weshop-login-title"><?= __('Sign in') ?></h2>
+                </div>
+                
+                <w:hook>WeShop_Customer::login::form_before</w:hook>
+                <form action="<?= $this->getUrl('customer/account/loginPost') ?>" method="post" class="weshop-login-form" onsubmit="return validateLoginForm(this);">
+                    <div class="weshop-login-field">
+                        <label for="email" class="weshop-login-label">
+                            <?= __('Email or mobile phone number') ?>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="email" 
+                            name="login[username]" 
+                            class="weshop-login-input" 
+                            placeholder="<?= __('Enter your email') ?>" 
+                            required
+                        />
+                    </div>
+                    
+                    <div class="weshop-login-field">
+                        <div class="weshop-login-label-row">
+                            <label for="password" class="weshop-login-label">
+                                <?= __('Password') ?>
+                            </label>
+                            <a href="<?= $this->getUrl('customer/account/forgotPassword') ?>" class="weshop-login-forgot">
+                                <?= __('Forgot your password?') ?>
+                            </a>
+                        </div>
+                        <div class="weshop-login-password-wrapper">
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="login[password]" 
+                                class="weshop-login-input weshop-login-password-input" 
+                                required
+                            />
+                            <button type="button" class="weshop-login-password-toggle" onclick="togglePassword()">
+                                <span class="material-symbols-outlined" style="font-size: 1.25rem;">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="weshop-login-submit">
+                        <?= __('Sign in') ?>
+                    </button>
+                    
+                    <div class="weshop-login-options">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" name="login[remember]" class="weshop-login-checkbox form-checkbox">
+                            <span class="weshop-login-checkbox-label group-hover:text-primary transition-colors">
+                                <?= __('Keep me signed in') ?>
+                            </span>
+                        </label>
+                        <span class="weshop-login-divider">|</span>
+                        <a href="<?= $this->getUrl('customer/account/help') ?>" class="weshop-login-details-link">
+                            <?= __('Details') ?>
+                            <span class="material-symbols-outlined weshop-login-details-arrow" style="font-size: 1rem;">arrow_right</span>
+                        </a>
+                    </div>
+                    
+                    <div class="weshop-login-security">
+                        <span class="material-symbols-outlined weshop-login-security-icon" style="font-size: 1.25rem;">phonelink_lock</span>
+                        <p>
+                            <?= __('Keep your account secure with Two-Factor Authentication (2FA).') ?>
+                            <a href="<?= $this->getUrl('customer/account/twoFactor') ?>" class="weshop-login-security-link">
+                                <?= __('Enable or manage settings') ?>
+                            </a>.
+                        </p>
+                    </div>
+                    
+                    <p class="weshop-login-terms">
+                        <?= __('By continuing, you agree to %1\'s', $this->getStoreName()) ?>
+                        <a href="<?= $this->getUrl('cms/page/terms') ?>" class="weshop-login-terms-link">
+                            <?= __('Conditions of Use') ?>
+                        </a>
+                        <?= __('and') ?>
+                        <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-login-terms-link">
+                            <?= __('Privacy Notice') ?>
+                        </a>.
+                    </p>
+                </form>
+                <w:hook>WeShop_Customer::login::form_after</w:hook>
+                
+                <div class="weshop-login-separator">
+                    <div class="weshop-login-separator-line" aria-hidden="true"></div>
+                    <div class="weshop-login-separator-text">
+                        <?= __('New to %1?', $this->getStoreName()) ?>
+                    </div>
+                </div>
+                
+                <a href="<?= $this->getUrl('customer/account/create') ?>" class="weshop-login-register-button">
+                    <?= __('Create your account') ?>
+                </a>
+                
+                <!-- Content Template -->
+                <if condition="contentTemplate">
+                    <?= $this->fetch($this->getData('contentTemplate')) ?>
+                </if>
+            </div>
+            
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </main>
+        
+        <!-- Footer -->
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::footer-before</w:hook>
+            <footer class="weshop-login-footer">
+                <div class="weshop-login-footer-content">
+                    <div class="weshop-login-footer-links">
+                        <a href="<?= $this->getUrl('cms/page/terms') ?>" class="weshop-login-footer-link">
+                            <?= __('Conditions of Use') ?>
+                        </a>
+                        <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-login-footer-link">
+                            <?= __('Privacy Notice') ?>
+                        </a>
+                        <a href="<?= $this->getUrl('cms/page/help') ?>" class="weshop-login-footer-link">
+                            <?= __('Help') ?>
+                        </a>
+                    </div>
+                    <p class="weshop-login-footer-copyright">
+                        © <?= date('Y') ?> <?= $this->getStoreName() ?>, Inc. <?= __('or its affiliates') ?>
+                    </p>
+                </div>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+        
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.querySelector('.weshop-login-password-toggle span');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.textContent = 'visibility_off';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.textContent = 'visibility';
+            }
+        }
+        
+        function validateLoginForm(form) {
+            const email = form.querySelector('#email').value;
+            const password = form.querySelector('#password').value;
+            
+            if (!email || !password) {
+                alert('<?= __('Please fill in all fields') ?>');
+                return false;
+            }
+            
+            return true;
+        }
+    </script>
+</body>
+</html>

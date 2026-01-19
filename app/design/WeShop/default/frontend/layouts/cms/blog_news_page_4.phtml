@@ -1,0 +1,36 @@
+<?php
+/**
+ * 布局：CMS页面 - blog news Page 4
+ *
+ * CMS页面布局，完全按照UI设计实现
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <div class="relative flex min-h-screen w-full flex-col">
+        <div class="layout-container flex h-full grow flex-col">
+            <if condition="meta.showHeader">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default"/>
+            </if>
+            <main class="flex-1">
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <?= $this->getChildHtml('content') ?>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+            </main>
+            <if condition="meta.showFooter">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </if>
+        </div>
+    </div>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>
+

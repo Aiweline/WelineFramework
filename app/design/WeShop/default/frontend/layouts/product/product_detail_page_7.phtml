@@ -1,0 +1,950 @@
+<?php
+/**
+ * 布局：产品详情页 - Product Detail Page Variant 7
+ *
+ * 产品详情页布局变体1，完全按照UI设计实现
+ * @meta.name {default="产品详情页布局变体1",name="产品详情页布局变体1",description="产品详情页布局变体1，完全按照UI设计实现"}
+ * @meta.description {default="产品详情页布局变体1，包含产品图片、信息、选项、评论等",name="产品详情页布局变体1",description="产品详情页布局变体1，包含产品图片、信息、选项、评论等"}
+ * @param title {default="产品详情",name="页面标题",description="页面标题"}
+ * @param breadcrumb {default="",name="面包屑导�?,description="面包屑导航（HTML字符串）"}
+ * @param product {default="",name="产品信息",description="产品信息（HTML字符串）"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ */
+$meta = $this->getData('meta') ?? [];
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+$product = $this->getData('product');
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product::head-after</w:hook>
+    
+    <!-- WeShop Theme CSS Variables -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_colors.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_spacing.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_typography.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_borders.css') ?>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+    
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* WeShop Product Detail Layout 1 Styles */
+        .weshop-product-detail-1 {
+            font-family: var(--weshop-font-display);
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--weshop-border);
+            padding: 0.75rem var(--weshop-container-padding);
+            background-color: var(--weshop-surface);
+        }
+        
+        .weshop-header-left {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        
+        .weshop-logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-logo-icon {
+            color: var(--weshop-primary);
+            font-size: 1.5rem;
+        }
+        
+        .weshop-logo-text {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.015em;
+        }
+        
+        .weshop-nav {
+            display: none;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-nav {
+                display: flex;
+                align-items: center;
+                gap: 2.25rem;
+            }
+        }
+        
+        .weshop-nav-link {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .weshop-nav-link:hover {
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-header-right {
+            display: flex;
+            flex: 1;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .weshop-search-wrapper {
+            display: none;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-search-wrapper {
+                display: flex;
+                flex-direction: column;
+                min-width: 10rem;
+                max-width: 16rem;
+                width: 100%;
+            }
+        }
+        
+        .weshop-search-form {
+            display: flex;
+            width: 100%;
+            height: 2.5rem;
+            border-radius: var(--weshop-border-radius-lg);
+            overflow: hidden;
+        }
+        
+        .weshop-search-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            color: var(--weshop-text-secondary);
+            border-radius: var(--weshop-border-radius-lg) 0 0 var(--weshop-border-radius-lg);
+        }
+        
+        .weshop-search-input {
+            flex: 1;
+            padding: 0 1rem;
+            border: none;
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            color: var(--weshop-text-primary);
+            font-size: var(--weshop-font-size-base);
+            outline: none;
+        }
+        
+        .weshop-action-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 2.5rem;
+            padding: 0 0.625rem;
+            border-radius: var(--weshop-border-radius-lg);
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-action-button:hover {
+            background-color: rgba(var(--weshop-background-rgb), 0.7);
+        }
+        
+        /* Main Content */
+        .weshop-main-content {
+            padding: 2.5rem var(--weshop-container-padding);
+        }
+        
+        .weshop-content-wrapper {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        
+        /* Breadcrumb */
+        .weshop-breadcrumb {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .weshop-breadcrumb-link {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .weshop-breadcrumb-link:hover {
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-breadcrumb-separator {
+            font-size: var(--weshop-font-size-sm);
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-breadcrumb-current {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+        }
+        
+        /* Product Section */
+        .weshop-product-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-product-section {
+                grid-template-columns: 1fr 1fr;
+                gap: 4rem;
+            }
+        }
+        
+        /* Product Images */
+        .weshop-product-images {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .weshop-product-main-image {
+            width: 100%;
+            aspect-ratio: 1;
+            background-size: cover;
+            background-position: center;
+            border-radius: var(--weshop-border-radius-xl);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .weshop-product-thumbnails {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 1rem;
+        }
+        
+        .weshop-product-thumbnail {
+            width: 100%;
+            aspect-ratio: 1;
+            background-size: cover;
+            background-position: center;
+            border-radius: var(--weshop-border-radius-lg);
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .weshop-product-thumbnail:hover {
+            opacity: 1;
+        }
+        
+        .weshop-product-thumbnail.active {
+            opacity: 1;
+            border-color: var(--weshop-primary);
+        }
+        
+        /* Product Info */
+        .weshop-product-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .weshop-product-title-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .weshop-product-title {
+            font-size: 2.25rem;
+            font-weight: var(--weshop-font-weight-black);
+            line-height: 1.25;
+            letter-spacing: -0.033em;
+            color: var(--weshop-text-primary);
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-product-title {
+                font-size: 2.5rem;
+            }
+        }
+        
+        .weshop-product-brand {
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-normal);
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-product-brand-link {
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-product-brand-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-product-rating {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .weshop-product-stars {
+            display: flex;
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-product-rating-text {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-price-section {
+            display: flex;
+            align-items: baseline;
+            gap: 0.75rem;
+        }
+        
+        .weshop-product-price {
+            font-size: 2.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-price-original {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-secondary);
+            text-decoration: line-through;
+        }
+        
+        .weshop-product-options {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-product-options-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        
+        .weshop-product-option {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .weshop-product-option-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-option-select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: var(--weshop-border-radius-lg);
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            border: 1px solid transparent;
+            color: var(--weshop-text-primary);
+            font-size: var(--weshop-font-size-sm);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .weshop-product-option-select:focus {
+            border-color: var(--weshop-primary);
+        }
+        
+        .weshop-product-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding-top: 1rem;
+        }
+        
+        .weshop-product-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            height: 3rem;
+            border-radius: var(--weshop-border-radius-lg);
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: 0.05em;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        
+        .weshop-product-button-primary {
+            background-color: var(--weshop-primary);
+            color: white;
+        }
+        
+        .weshop-product-button-primary:hover {
+            opacity: 0.9;
+        }
+        
+        .weshop-product-button-secondary {
+            background-color: rgba(var(--weshop-primary-rgb), 0.2);
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-product-button-secondary:hover {
+            background-color: rgba(var(--weshop-primary-rgb), 0.3);
+        }
+        
+        .weshop-product-highlights {
+            padding-top: 1rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-product-highlights-title {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            margin-bottom: 0.5rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-highlights-list {
+            list-style: disc;
+            list-style-position: inside;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            color: var(--weshop-text-secondary);
+        }
+        
+        /* Tabs Section */
+        .weshop-product-tabs {
+            margin-top: 4rem;
+        }
+        
+        .weshop-product-tabs-nav {
+            display: flex;
+            border-bottom: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-product-tab {
+            white-space: nowrap;
+            padding: 1rem 0.25rem;
+            border-bottom: 2px solid transparent;
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-secondary);
+            text-decoration: none;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        
+        .weshop-product-tab:hover {
+            color: var(--weshop-text-primary);
+            border-bottom-color: var(--weshop-border);
+        }
+        
+        .weshop-product-tab.active {
+            color: var(--weshop-primary);
+            border-bottom-color: var(--weshop-primary);
+        }
+        
+        .weshop-product-tab-content {
+            padding: 2.5rem 0;
+        }
+        
+        .weshop-product-tab-title {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            margin-bottom: 1rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-tab-text {
+            color: var(--weshop-text-secondary);
+            line-height: 1.75;
+        }
+        
+        /* Reviews Section */
+        .weshop-product-reviews {
+            margin-top: 4rem;
+            padding-top: 2.5rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-product-reviews-title {
+            font-size: 1.5rem;
+            font-weight: var(--weshop-font-weight-bold);
+            margin-bottom: 1.5rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-reviews-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            padding: 1rem;
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            border-radius: var(--weshop-border-radius-lg);
+        }
+        
+        .weshop-product-reviews-rating {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .weshop-product-reviews-score {
+            font-size: 2.25rem;
+            font-weight: var(--weshop-font-weight-black);
+            line-height: 1.25;
+            letter-spacing: -0.033em;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-reviews-count {
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-normal);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-reviews-breakdown {
+            display: grid;
+            grid-template-columns: 20px 1fr 40px;
+            align-items: center;
+            gap: 1rem;
+            min-width: 200px;
+            max-width: 400px;
+            flex: 1;
+        }
+        
+        .weshop-product-reviews-rating-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-normal);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-reviews-bar {
+            display: flex;
+            height: 0.5rem;
+            flex: 1;
+            overflow: hidden;
+            border-radius: var(--weshop-border-radius-full);
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+        }
+        
+        .weshop-product-reviews-bar-fill {
+            border-radius: var(--weshop-border-radius-full);
+            background-color: var(--weshop-primary);
+        }
+        
+        .weshop-product-reviews-percentage {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-normal);
+            color: var(--weshop-text-secondary);
+            text-align: right;
+        }
+        
+        /* Related Products */
+        .weshop-product-related {
+            margin-top: 4rem;
+            padding-top: 2.5rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-product-related-title {
+            font-size: 1.5rem;
+            font-weight: var(--weshop-font-weight-bold);
+            margin-bottom: 1.5rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-product-related-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 640px) {
+            .weshop-product-related-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-product-related-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-product-related-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        .weshop-product-related-card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .weshop-product-related-image {
+            width: 100%;
+            aspect-ratio: 1;
+            background-size: cover;
+            background-position: center;
+            border-radius: var(--weshop-border-radius-lg);
+            overflow: hidden;
+        }
+        
+        .weshop-product-related-name {
+            font-weight: var(--weshop-font-weight-bold);
+            font-size: var(--weshop-font-size-base);
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .weshop-product-related-name:hover {
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-product-related-rating {
+            font-size: var(--weshop-font-size-sm);
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-product-related-price {
+            font-weight: var(--weshop-font-weight-bold);
+            margin-top: 0.25rem;
+            color: var(--weshop-text-primary);
+        }
+    </style>
+</head>
+<body class="weshop-product-detail-1">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product::body-start</w:hook>
+    
+    <div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            
+            <!-- Header -->
+            <if condition="meta.showHeader">
+                <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product::header-before</w:hook>
+                <header class="weshop-header">
+                    <div class="weshop-header-left">
+                        <a href="<?= $this->getUrl('') ?>" class="weshop-logo">
+                            <span class="material-symbols-outlined weshop-logo-icon">storefront</span>
+                            <h2 class="weshop-logo-text"><?= $this->getStoreName() ?></h2>
+                        </a>
+                        <nav class="weshop-nav">
+                            <a href="<?= $this->getUrl('catalog/category') ?>" class="weshop-nav-link"><?= __('Categories') ?></a>
+                            <a href="<?= $this->getUrl('promotion/deals') ?>" class="weshop-nav-link"><?= __('Deals') ?></a>
+                            <a href="<?= $this->getUrl('customer/account') ?>" class="weshop-nav-link"><?= __('My Account') ?></a>
+                        </nav>
+                    </div>
+                    <div class="weshop-header-right">
+                        <div class="weshop-search-wrapper">
+                            <form action="<?= $this->getUrl('search') ?>" method="get" class="weshop-search-form">
+                                <div class="weshop-search-icon">
+                                    <span class="material-symbols-outlined">search</span>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    name="q" 
+                                    class="weshop-search-input" 
+                                    placeholder="<?= __('Search') ?>" 
+                                    value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
+                                />
+                            </form>
+                        </div>
+                        <a href="<?= $this->getUrl('cart') ?>" class="weshop-action-button">
+                            <span class="material-symbols-outlined">shopping_cart</span>
+                        </a>
+                    </div>
+                </header>
+                <w:hook>Weline_Theme::frontend::layouts::product::header-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+            </if>
+            
+            <!-- Main Content -->
+            <main class="weshop-main-content">
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product::content-before</w:hook>
+                
+                <div class="weshop-content-wrapper">
+                    
+                    <!-- Breadcrumb -->
+                    <if condition="meta.breadcrumb">
+                        {{meta.breadcrumb}}
+                    <else/>
+                        <w:hook>WeShop_Product::product_detail::breadcrumb_before</w:hook>
+                        <nav class="weshop-breadcrumb">
+                            <a href="<?= $this->getUrl('') ?>" class="weshop-breadcrumb-link"><?= __('Home') ?></a>
+                            <span class="weshop-breadcrumb-separator">/</span>
+                            <?php $breadcrumbs = $this->getData('breadcrumbs') ?? []; ?>
+                            <?php foreach ($breadcrumbs as $index => $crumb): ?>
+                                <?php if ($index < count($breadcrumbs) - 1): ?>
+                                    <a href="<?= $crumb['url'] ?>" class="weshop-breadcrumb-link"><?= htmlspecialchars($crumb['name']) ?></a>
+                                    <span class="weshop-breadcrumb-separator">/</span>
+                                <?php else: ?>
+                                    <span class="weshop-breadcrumb-current"><?= htmlspecialchars($crumb['name']) ?></span>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </nav>
+                        <w:hook>WeShop_Product::product_detail::breadcrumb_after</w:hook>
+                    </if>
+                    
+                    <!-- Product Section -->
+                    <if condition="meta.product">
+                        {{meta.product}}
+                    <else/>
+                        <w:hook>WeShop_Product::product_detail::product_before</w:hook>
+                        <div class="weshop-product-section">
+                            
+                            <!-- Product Images -->
+                            <div class="weshop-product-images">
+                                <?php $mainImage = $product['main_image'] ?? $product['images'][0] ?? ''; ?>
+                                <div class="weshop-product-main-image" id="product-main-image" style="background-image: url('<?= $mainImage ?>');"></div>
+                                <div class="weshop-product-thumbnails">
+                                    <?php $images = $product['images'] ?? []; ?>
+                                    <?php foreach ($images as $index => $image): ?>
+                                        <div 
+                                            class="weshop-product-thumbnail <?= $index === 0 ? 'active' : '' ?>" 
+                                            style="background-image: url('<?= $image ?>');"
+                                            onclick="changeMainImage('<?= $image ?>', this)"
+                                        ></div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            
+                            <!-- Product Info -->
+                            <div class="weshop-product-info">
+                                <div class="weshop-product-title-section">
+                                    <h1 class="weshop-product-title"><?= htmlspecialchars($product['name'] ?? __('Product Name')) ?></h1>
+                                    <p class="weshop-product-brand">
+                                        <?= __('by') ?> 
+                                        <a href="<?= $this->getUrl('catalog/brand', ['id' => $product['brand_id'] ?? '']) ?>" class="weshop-product-brand-link">
+                                            <?= htmlspecialchars($product['brand_name'] ?? __('Brand')) ?>
+                                        </a>
+                                    </p>
+                                </div>
+                                
+                                <div class="weshop-product-rating">
+                                    <div class="weshop-product-stars">
+                                        <?php $rating = $product['rating'] ?? 0; ?>
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' <?= $i <= floor($rating) ? 1 : ($i == ceil($rating) && $rating % 1 >= 0.5 ? 1 : 0) ?>;">
+                                                <?= $i <= floor($rating) ? 'star' : ($i == ceil($rating) && $rating % 1 >= 0.5 ? 'star_half' : 'star') ?>
+                                            </span>
+                                        <?php endfor; ?>
+                                    </div>
+                                    <span class="weshop-product-rating-text">
+                                        <?= number_format($rating, 1) ?> (<?= $product['reviews_count'] ?? 0 ?> <?= __('reviews') ?>)
+                                    </span>
+                                </div>
+                                
+                                <div class="weshop-product-price-section">
+                                    <span class="weshop-product-price"><?= $this->formatPrice($product['special_price'] ?? $product['price'] ?? 0) ?></span>
+                                    <?php if ($product['special_price'] ?? null): ?>
+                                        <span class="weshop-product-price-original"><?= $this->formatPrice($product['price']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="weshop-product-options">
+                                    <div class="weshop-product-options-grid">
+                                        <div class="weshop-product-option">
+                                            <label for="product-color" class="weshop-product-option-label"><?= __('Color') ?></label>
+                                            <select id="product-color" name="color" class="weshop-product-option-select">
+                                                <?php $colors = $product['colors'] ?? []; ?>
+                                                <?php foreach ($colors as $color): ?>
+                                                    <option value="<?= $color['value'] ?>"><?= htmlspecialchars($color['label']) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="weshop-product-option">
+                                            <label for="product-quantity" class="weshop-product-option-label"><?= __('Quantity') ?></label>
+                                            <select id="product-quantity" name="quantity" class="weshop-product-option-select">
+                                                <?php for ($qty = 1; $qty <= 10; $qty++): ?>
+                                                    <option value="<?= $qty ?>"><?= $qty ?></option>
+                                                <?php endfor; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="weshop-product-actions">
+                                    <button class="weshop-product-button weshop-product-button-primary" onclick="addToCart(<?= $product['product_id'] ?? 0 ?>)">
+                                        <span class="material-symbols-outlined">add_shopping_cart</span>
+                                        <?= __('Add to Cart') ?>
+                                    </button>
+                                    <button class="weshop-product-button weshop-product-button-secondary" onclick="addToWishlist(<?= $product['product_id'] ?? 0 ?>)">
+                                        <span class="material-symbols-outlined">favorite</span>
+                                        <?= __('Add to Wishlist') ?>
+                                    </button>
+                                </div>
+                                
+                                <div class="weshop-product-highlights">
+                                    <h3 class="weshop-product-highlights-title"><?= __('Product Highlights') ?></h3>
+                                    <ul class="weshop-product-highlights-list">
+                                        <?php $highlights = $product['highlights'] ?? []; ?>
+                                        <?php foreach ($highlights as $highlight): ?>
+                                            <li><?= htmlspecialchars($highlight) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                                
+                            </div>
+                            
+                        </div>
+                        <w:hook>WeShop_Product::product_detail::product_after</w:hook>
+                    </if>
+                    
+                    <!-- Tabs Section -->
+                    <div class="weshop-product-tabs">
+                        <div class="weshop-product-tabs-nav">
+                            <a href="#description" class="weshop-product-tab active"><?= __('Product Description') ?></a>
+                            <a href="#specifications" class="weshop-product-tab"><?= __('Specifications') ?></a>
+                            <a href="#reviews" class="weshop-product-tab"><?= __('Reviews') ?></a>
+                        </div>
+                        <div class="weshop-product-tab-content">
+                            <w:hook>WeShop_Product::product_detail::tabs_content</w:hook>
+                            <h3 class="weshop-product-tab-title"><?= __('Experience Immersive Sound') ?></h3>
+                            <p class="weshop-product-tab-text">
+                                <?= htmlspecialchars($product['description'] ?? __('Product description will be displayed here.')) ?>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Reviews Section -->
+                    <div class="weshop-product-reviews">
+                        <h2 class="weshop-product-reviews-title"><?= __('Customer Reviews') ?></h2>
+                        <w:hook>WeShop_Review::product_detail::reviews_before</w:hook>
+                        <div class="weshop-product-reviews-summary">
+                            <div class="weshop-product-reviews-rating">
+                                <p class="weshop-product-reviews-score"><?= number_format($product['rating'] ?? 0, 1) ?></p>
+                                <div class="weshop-product-stars">
+                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <span class="material-symbols-outlined" style="font-size: 1.125rem; font-variation-settings: 'FILL' <?= $i <= floor($product['rating'] ?? 0) ? 1 : ($i == ceil($product['rating'] ?? 0) && ($product['rating'] ?? 0) % 1 >= 0.5 ? 1 : 0) ?>;">
+                                            <?= $i <= floor($product['rating'] ?? 0) ? 'star' : ($i == ceil($product['rating'] ?? 0) && ($product['rating'] ?? 0) % 1 >= 0.5 ? 'star_half' : 'star') ?>
+                                        </span>
+                                    <?php endfor; ?>
+                                </div>
+                                <p class="weshop-product-reviews-count"><?= __('Based on %1 reviews', $product['reviews_count'] ?? 0) ?></p>
+                            </div>
+                            <div class="weshop-product-reviews-breakdown">
+                                <?php $ratingBreakdown = $product['rating_breakdown'] ?? [5 => 75, 4 => 15, 3 => 5, 2 => 3, 1 => 2]; ?>
+                                <?php for ($rating = 5; $rating >= 1; $rating--): ?>
+                                    <p class="weshop-product-reviews-rating-label"><?= $rating ?></p>
+                                    <div class="weshop-product-reviews-bar">
+                                        <div class="weshop-product-reviews-bar-fill" style="width: <?= $ratingBreakdown[$rating] ?? 0 ?>%;"></div>
+                                    </div>
+                                    <p class="weshop-product-reviews-percentage"><?= $ratingBreakdown[$rating] ?? 0 ?>%</p>
+                                <?php endfor; ?>
+                            </div>
+                        </div>
+                        <w:hook>WeShop_Review::product_detail::reviews_after</w:hook>
+                    </div>
+                    
+                    <!-- Related Products -->
+                    <div class="weshop-product-related">
+                        <h2 class="weshop-product-related-title"><?= __('You Might Also Like') ?></h2>
+                        <w:hook>WeShop_Product::product_detail::related_before</w:hook>
+                        <div class="weshop-product-related-grid">
+                            <?php $relatedProducts = $this->getData('related_products') ?? []; ?>
+                            <?php foreach ($relatedProducts as $related): ?>
+                                <div class="weshop-product-related-card">
+                                    <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="weshop-product-related-image" style="background-image: url('<?= $related['image'] ?? '' ?>');"></a>
+                                    <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="weshop-product-related-name"><?= htmlspecialchars($related['name'] ?? '') ?></a>
+                                    <p class="weshop-product-related-rating">
+                                        <?= number_format($related['rating'] ?? 0, 1) ?> �?(<?= $related['reviews_count'] ?? 0 ?>)
+                                    </p>
+                                    <p class="weshop-product-related-price"><?= $this->formatPrice($related['price'] ?? 0) ?></p>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <w:hook>WeShop_Product::product_detail::related_after</w:hook>
+                    </div>
+                    
+                    <!-- Content Template -->
+                    <if condition="contentTemplate">
+                        <?= $this->fetch($this->getData('contentTemplate')) ?>
+                    </if>
+                    
+                </div>
+                
+                <w:hook>Weline_Theme::frontend::layouts::product::content-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+            </main>
+            
+            <!-- Footer -->
+            <if condition="meta.showFooter">
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::product::footer-before</w:hook>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+                <w:hook>Weline_Theme::frontend::layouts::product::footer-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+            </if>
+            
+        </div>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::product::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <script>
+        function changeMainImage(imageUrl, thumbnail) {
+            document.getElementById('product-main-image').style.backgroundImage = 'url(\'' + imageUrl + '\')';
+            document.querySelectorAll('.weshop-product-thumbnail').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            thumbnail.classList.add('active');
+        }
+        
+        function addToCart(productId) {
+            console.log('Add to cart:', productId);
+        }
+        
+        function addToWishlist(productId) {
+            console.log('Add to wishlist:', productId);
+        }
+    </script>
+</body>
+</html>

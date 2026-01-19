@@ -1,0 +1,29 @@
+/**
+ * WeShop Default Theme - 间距变量
+ */
+
+:root {
+    --weshop-spacing-xs: 0.25rem;    /* 4px */
+    --weshop-spacing-sm: 0.5rem;     /* 8px */
+    --weshop-spacing-md: 1rem;        /* 16px */
+    --weshop-spacing-lg: 1.5rem;     /* 24px */
+    --weshop-spacing-xl: 2rem;       /* 32px */
+    --weshop-spacing-2xl: 3rem;      /* 48px */
+    --weshop-spacing-3xl: 4rem;      /* 64px */
+    
+    /* 容器最大宽度 */
+    --weshop-container-max-width: 1280px;
+    --weshop-container-padding: 1rem;
+}
+
+@media (min-width: 640px) {
+    :root {
+        --weshop-container-padding: 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    :root {
+        --weshop-container-padding: 2rem;
+    }
+}

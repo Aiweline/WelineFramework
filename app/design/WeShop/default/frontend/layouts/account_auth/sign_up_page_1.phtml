@@ -1,0 +1,563 @@
+<?php
+/**
+ * 布局：注册页 - Sign Up Page Variant 1
+ *
+ * 注册页布局变体1，完全按照UI设计实现
+ * @meta.name {default="注册页布局变体1",name="注册页布局变体1",description="注册页布局变体1，完全按照UI设计实现"}
+ * @meta.description {default="注册页布局变体1，包含注册表单、登录链接等",name="注册页布局变体1",description="注册页布局变体1，包含注册表单、登录链接等"}
+ * @param title {default="注册",name="页面标题",description="页面标题"}
+ * @param showHeader {default=false,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ */
+$meta = $this->getData('meta') ?? [];
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::head-after</w:hook>
+    
+    <!-- WeShop Theme CSS Variables -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_colors.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_spacing.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_typography.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_borders.css') ?>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <style>
+        body {
+            font-family: "Work Sans", "Noto Sans", sans-serif;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* WeShop Sign Up Layout 1 Styles */
+        .weshop-signup-1 {
+            font-family: var(--weshop-font-display);
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem 1rem;
+        }
+        
+        @media (min-width: 640px) {
+            .weshop-signup-1 {
+                padding: 2.5rem 1rem;
+            }
+        }
+        
+        .weshop-signup-header {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .weshop-signup-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .weshop-signup-logo-icon {
+            width: 2rem;
+            height: 2rem;
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-signup-logo-text {
+            font-size: 1.5rem;
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.025em;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-signup-main {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        
+        .weshop-signup-card {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--weshop-surface);
+            border-radius: var(--weshop-border-radius-lg);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--weshop-border);
+            padding: 1.5rem;
+        }
+        
+        @media (min-width: 640px) {
+            .weshop-signup-card {
+                padding: 2rem;
+            }
+        }
+        
+        .weshop-signup-title {
+            font-size: 1.875rem;
+            font-weight: var(--weshop-font-weight-bold);
+            line-height: 1.25;
+            letter-spacing: -0.015em;
+            color: var(--weshop-text-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .weshop-signup-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .weshop-signup-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .weshop-signup-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            line-height: 1.5;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-signup-input {
+            width: 100%;
+            border-radius: var(--weshop-border-radius-lg);
+            border: 1px solid var(--weshop-border);
+            background-color: var(--weshop-surface);
+            height: 3rem;
+            padding: 0 1rem;
+            font-size: var(--weshop-font-size-base);
+            color: var(--weshop-text-primary);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .weshop-signup-input::placeholder {
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-signup-input:focus {
+            border-color: var(--weshop-primary);
+            box-shadow: 0 0 0 1px var(--weshop-primary);
+        }
+        
+        .weshop-signup-password-wrapper {
+            position: relative;
+            display: flex;
+            width: 100%;
+            align-items: center;
+        }
+        
+        .weshop-signup-password-toggle {
+            position: absolute;
+            right: 0;
+            height: 100%;
+            padding: 0 0.75rem;
+            color: var(--weshop-text-secondary);
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        
+        .weshop-signup-password-toggle:hover {
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-signup-password-input {
+            padding-right: 3rem;
+        }
+        
+        .weshop-signup-help {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        .weshop-signup-submit {
+            width: 100%;
+            background-color: var(--weshop-primary);
+            color: white;
+            font-weight: var(--weshop-font-weight-medium);
+            border-radius: var(--weshop-border-radius-lg);
+            height: 3rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            border: none;
+            cursor: pointer;
+            font-size: var(--weshop-font-size-base);
+            transition: background-color 0.2s;
+            margin-top: 0.5rem;
+        }
+        
+        .weshop-signup-submit:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-signup-terms {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+            margin-top: 1rem;
+            line-height: 1.75;
+        }
+        
+        .weshop-signup-terms-link {
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-signup-terms-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-signup-separator {
+            position: relative;
+            padding: 0.5rem 0;
+        }
+        
+        .weshop-signup-separator-line {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .weshop-signup-separator-line::before {
+            content: '';
+            width: 100%;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-signup-separator-text {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            font-size: var(--weshop-font-size-sm);
+            background-color: var(--weshop-surface);
+            padding: 0 0.5rem;
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-signup-login-button {
+            width: 100%;
+            background-color: transparent;
+            color: var(--weshop-text-primary);
+            border: 1px solid var(--weshop-border);
+            font-weight: var(--weshop-font-weight-medium);
+            border-radius: var(--weshop-border-radius-lg);
+            height: 2.75rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            font-size: var(--weshop-font-size-sm);
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-signup-login-button:hover {
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+        }
+        
+        .weshop-signup-footer {
+            width: 100%;
+            margin-top: 2.5rem;
+            padding-bottom: 1.5rem;
+            padding: 0 1rem;
+        }
+        
+        .weshop-signup-footer-content {
+            max-width: 960px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .weshop-signup-footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-signup-footer-link {
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-signup-footer-link:hover {
+            text-decoration: underline;
+            color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-signup-footer-copyright {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+        }
+    </style>
+</head>
+<body class="weshop-signup-1">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::body-start</w:hook>
+    
+    <div class="weshop-signup-1">
+        
+        <!-- Header -->
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::header-before</w:hook>
+            <header class="weshop-signup-header">
+                <a href="<?= $this->getUrl('') ?>" class="weshop-signup-logo">
+                    <div class="weshop-signup-logo-icon">
+                        <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z"></path>
+                        </svg>
+                    </div>
+                    <h1 class="weshop-signup-logo-text"><?= $this->getStoreName() ?></h1>
+                </a>
+            </header>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+        
+        <!-- Main Content -->
+        <main class="weshop-signup-main">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::content-before</w:hook>
+            
+            <div class="weshop-signup-card">
+                <div>
+                    <h2 class="weshop-signup-title"><?= __('Create account') ?></h2>
+                </div>
+                
+                <w:hook>WeShop_Customer::register::form_before</w:hook>
+                <form action="<?= $this->getUrl('customer/account/createPost') ?>" method="post" class="weshop-signup-form" onsubmit="return validateSignupForm(this);">
+                    <div class="weshop-signup-field">
+                        <label for="firstname" class="weshop-signup-label">
+                            <?= __('First name') ?>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="firstname" 
+                            name="firstname" 
+                            class="weshop-signup-input" 
+                            placeholder="<?= __('Enter your first name') ?>" 
+                            required
+                        />
+                    </div>
+                    
+                    <div class="weshop-signup-field">
+                        <label for="lastname" class="weshop-signup-label">
+                            <?= __('Last name') ?>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="lastname" 
+                            name="lastname" 
+                            class="weshop-signup-input" 
+                            placeholder="<?= __('Enter your last name') ?>" 
+                            required
+                        />
+                    </div>
+                    
+                    <div class="weshop-signup-field">
+                        <label for="email" class="weshop-signup-label">
+                            <?= __('Email') ?>
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            class="weshop-signup-input" 
+                            placeholder="<?= __('Enter your email') ?>" 
+                            required
+                        />
+                    </div>
+                    
+                    <div class="weshop-signup-field">
+                        <label for="password" class="weshop-signup-label">
+                            <?= __('Password') ?>
+                        </label>
+                        <div class="weshop-signup-password-wrapper">
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="password" 
+                                class="weshop-signup-input weshop-signup-password-input" 
+                                placeholder="<?= __('At least 8 characters') ?>" 
+                                required
+                                minlength="8"
+                            />
+                            <button type="button" class="weshop-signup-password-toggle" onclick="togglePassword()">
+                                <span class="material-symbols-outlined" style="font-size: 1.25rem;">visibility</span>
+                            </button>
+                        </div>
+                        <span class="weshop-signup-help">
+                            <?= __('Passwords must be at least 8 characters.') ?>
+                        </span>
+                    </div>
+                    
+                    <div class="weshop-signup-field">
+                        <label for="password-confirm" class="weshop-signup-label">
+                            <?= __('Re-enter password') ?>
+                        </label>
+                        <div class="weshop-signup-password-wrapper">
+                            <input 
+                                type="password" 
+                                id="password-confirm" 
+                                name="password_confirmation" 
+                                class="weshop-signup-input weshop-signup-password-input" 
+                                placeholder="<?= __('Re-enter password') ?>" 
+                                required
+                            />
+                            <button type="button" class="weshop-signup-password-toggle" onclick="togglePasswordConfirm()">
+                                <span class="material-symbols-outlined" style="font-size: 1.25rem;">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="weshop-signup-submit">
+                        <?= __('Create your account') ?>
+                    </button>
+                    
+                    <p class="weshop-signup-terms">
+                        <?= __('By creating an account, you agree to %1\'s', $this->getStoreName()) ?>
+                        <a href="<?= $this->getUrl('cms/page/terms') ?>" class="weshop-signup-terms-link">
+                            <?= __('Conditions of Use') ?>
+                        </a>
+                        <?= __('and') ?>
+                        <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-signup-terms-link">
+                            <?= __('Privacy Notice') ?>
+                        </a>.
+                    </p>
+                </form>
+                <w:hook>WeShop_Customer::register::form_after</w:hook>
+                
+                <div class="weshop-signup-separator">
+                    <div class="weshop-signup-separator-line" aria-hidden="true"></div>
+                    <div class="weshop-signup-separator-text">
+                        <?= __('Already have an account?') ?>
+                    </div>
+                </div>
+                
+                <a href="<?= $this->getUrl('customer/account/login') ?>" class="weshop-signup-login-button">
+                    <?= __('Sign in') ?>
+                </a>
+                
+                <!-- Content Template -->
+                <if condition="contentTemplate">
+                    <?= $this->fetch($this->getData('contentTemplate')) ?>
+                </if>
+            </div>
+            
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </main>
+        
+        <!-- Footer -->
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::footer-before</w:hook>
+            <footer class="weshop-signup-footer">
+                <div class="weshop-signup-footer-content">
+                    <div class="weshop-signup-footer-links">
+                        <a href="<?= $this->getUrl('cms/page/terms') ?>" class="weshop-signup-footer-link">
+                            <?= __('Conditions of Use') ?>
+                        </a>
+                        <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-signup-footer-link">
+                            <?= __('Privacy Notice') ?>
+                        </a>
+                        <a href="<?= $this->getUrl('cms/page/help') ?>" class="weshop-signup-footer-link">
+                            <?= __('Help') ?>
+                        </a>
+                    </div>
+                    <p class="weshop-signup-footer-copyright">
+                        © <?= date('Y') ?> <?= $this->getStoreName() ?>, Inc. <?= __('or its affiliates') ?>
+                    </p>
+                </div>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::account_auth::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+        
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.querySelector('.weshop-signup-password-toggle');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.querySelector('span').textContent = 'visibility_off';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.querySelector('span').textContent = 'visibility';
+            }
+        }
+        
+        function togglePasswordConfirm() {
+            const passwordInput = document.getElementById('password-confirm');
+            const toggleButton = document.querySelectorAll('.weshop-signup-password-toggle')[1];
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.querySelector('span').textContent = 'visibility_off';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.querySelector('span').textContent = 'visibility';
+            }
+        }
+        
+        function validateSignupForm(form) {
+            const firstname = form.querySelector('#firstname').value;
+            const lastname = form.querySelector('#lastname').value;
+            const email = form.querySelector('#email').value;
+            const password = form.querySelector('#password').value;
+            const passwordConfirm = form.querySelector('#password-confirm').value;
+            
+            if (!firstname || !lastname || !email || !password || !passwordConfirm) {
+                alert('<?= __('Please fill in all fields') ?>');
+                return false;
+            }
+            
+            if (password.length < 8) {
+                alert('<?= __('Password must be at least 8 characters') ?>');
+                return false;
+            }
+            
+            if (password !== passwordConfirm) {
+                alert('<?= __('Passwords do not match') ?>');
+                return false;
+            }
+            
+            return true;
+        }
+    </script>
+</body>
+</html>

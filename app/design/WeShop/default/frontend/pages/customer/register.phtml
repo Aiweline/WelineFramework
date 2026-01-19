@@ -1,0 +1,169 @@
+<?php
+/**
+ * WeShop Default Theme - Customer Registration Page
+ * 客户注册页模板
+ */
+$captchaHtml = $this->getData('captcha_html') ?? '';
+?>
+<main class="flex-1 flex items-center justify-center py-12 px-4">
+    <div class="w-full max-w-md">
+        <w:hook name="WeShop_Customer::register::before"/>
+        
+        <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark p-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="flex justify-center mb-4">
+                    <div class="p-3 bg-primary/10 rounded-full">
+                        <span class="material-symbols-outlined text-4xl text-primary">person_add</span>
+                    </div>
+                </div>
+                <h1 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Create Account') ?></h1>
+                <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><?= __('Join us and start shopping') ?></p>
+            </div>
+            
+            <!-- Register Form -->
+            <form action="<?= $this->getUrl('customer/account/register') ?>" method="post" class="space-y-5">
+                <?= $this->getFormKey() ?>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="firstname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('First Name') ?></label>
+                        <input type="text" id="firstname" name="firstname" required 
+                               class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 px-4 focus:border-primary focus:ring-primary" 
+                               placeholder="<?= __('John') ?>">
+                    </div>
+                    <div>
+                        <label for="lastname" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Last Name') ?></label>
+                        <input type="text" id="lastname" name="lastname" required 
+                               class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 px-4 focus:border-primary focus:ring-primary" 
+                               placeholder="<?= __('Doe') ?>">
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="email" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Email Address') ?></label>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">mail</span>
+                        <input type="email" id="email" name="email" required 
+                               class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary" 
+                               placeholder="<?= __('you@example.com') ?>">
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Password') ?></label>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">lock</span>
+                        <input type="password" id="password" name="password" required minlength="8"
+                               class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-12 focus:border-primary focus:ring-primary" 
+                               placeholder="<?= __('At least 8 characters') ?>">
+                        <button type="button" class="toggle-password absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark hover:text-primary">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </button>
+                    </div>
+                    <div class="mt-2 flex gap-1">
+                        <div class="h-1 flex-1 rounded bg-border-light dark:bg-border-dark password-strength" data-strength="1"></div>
+                        <div class="h-1 flex-1 rounded bg-border-light dark:bg-border-dark password-strength" data-strength="2"></div>
+                        <div class="h-1 flex-1 rounded bg-border-light dark:bg-border-dark password-strength" data-strength="3"></div>
+                        <div class="h-1 flex-1 rounded bg-border-light dark:bg-border-dark password-strength" data-strength="4"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="confirm_password" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Confirm Password') ?></label>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark">lock</span>
+                        <input type="password" id="confirm_password" name="confirm_password" required 
+                               class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 pl-10 pr-4 focus:border-primary focus:ring-primary" 
+                               placeholder="<?= __('Re-enter your password') ?>">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="flex items-start gap-3">
+                        <input type="checkbox" name="subscribe" class="form-checkbox rounded text-primary focus:ring-primary mt-1">
+                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Subscribe to our newsletter for exclusive deals and updates') ?></span>
+                    </label>
+                </div>
+                
+                <div>
+                    <label class="flex items-start gap-3">
+                        <input type="checkbox" name="agree_terms" required class="form-checkbox rounded text-primary focus:ring-primary mt-1">
+                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                            <?= __('I agree to the') ?> <a href="<?= $this->getUrl('cms/page/terms') ?>" class="text-primary hover:underline"><?= __('Terms of Service') ?></a> <?= __('and') ?> <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="text-primary hover:underline"><?= __('Privacy Policy') ?></a>
+                        </span>
+                    </label>
+                </div>
+                
+                <!-- Captcha -->
+                <?php if ($captchaHtml): ?>
+                    <div class="captcha-container">
+                        <?= $captchaHtml ?>
+                    </div>
+                <?php endif; ?>
+                
+                <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">person_add</span>
+                    <?= __('Create Account') ?>
+                </button>
+            </form>
+            
+            <!-- Login Link -->
+            <p class="text-center mt-8 text-text-secondary-light dark:text-text-secondary-dark">
+                <?= __('Already have an account?') ?>
+                <a href="<?= $this->getUrl('customer/account/login') ?>" class="text-primary hover:underline font-medium"><?= __('Sign in') ?></a>
+            </p>
+        </div>
+        
+        <w:hook name="WeShop_Customer::register::after"/>
+    </div>
+</main>
+
+<script>
+// Toggle password visibility
+document.querySelectorAll('.toggle-password').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var input = this.parentElement.querySelector('input');
+        var icon = this.querySelector('.material-symbols-outlined');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.textContent = 'visibility_off';
+        } else {
+            input.type = 'password';
+            icon.textContent = 'visibility';
+        }
+    });
+});
+
+// Password strength indicator
+document.getElementById('password')?.addEventListener('input', function() {
+    var password = this.value;
+    var strength = 0;
+    
+    if (password.length >= 8) strength++;
+    if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+    if (password.match(/\d/)) strength++;
+    if (password.match(/[^a-zA-Z\d]/)) strength++;
+    
+    var colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+    
+    document.querySelectorAll('.password-strength').forEach(function(el, index) {
+        el.className = 'h-1 flex-1 rounded';
+        if (index < strength) {
+            el.classList.add(colors[strength - 1] || 'bg-border-light');
+        } else {
+            el.classList.add('bg-border-light', 'dark:bg-border-dark');
+        }
+    });
+});
+
+// Confirm password validation
+document.getElementById('confirm_password')?.addEventListener('input', function() {
+    var password = document.getElementById('password').value;
+    if (this.value !== password) {
+        this.setCustomValidity('<?= __('Passwords do not match') ?>');
+    } else {
+        this.setCustomValidity('');
+    }
+});
+</script>
