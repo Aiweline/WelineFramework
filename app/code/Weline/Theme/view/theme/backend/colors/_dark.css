@@ -1,0 +1,102 @@
+/**
+ * Backend Theme - 暗色主题颜色
+ * 
+ * 后端管理界面暗色主题的颜色覆盖文件
+ * 字段
+ * @meta.name {default="Backend暗色主题颜色",name="Backend暗色主题颜色",description="Backend暗色主题颜色，用于描述色系的名称"}
+ * @meta.description {default="后端管理界面暗色主题的颜色覆盖，提供深色背景和浅色文本",name="后端管理界面暗色主题的颜色覆盖",description="后端管理界面暗色主题的颜色覆盖，提供深色背景和浅色文本，用于描述色系的用途"}
+ * @meta.theme {default="dark",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ */
+
+[data-theme="dark"] {
+    /* ========================================
+       文本色 - 需要变亮
+       ======================================== */
+    --backend-color-text-primary: #e9ecef;
+    --backend-color-text-secondary: #adb5bd;
+    --backend-color-text-tertiary: #6c757d;
+    --backend-color-text-disabled: #495057;
+    --backend-color-text-muted: #adb5bd;
+    --backend-color-text-light: #f8f9fa;
+    --backend-color-text-light-secondary: #dee2e6;
+    --backend-color-text-dark: #f8f9fa;
+    --backend-color-text-placeholder: #6c757d;
+    --backend-color-text-inverse: #212529;
+
+    /* ========================================
+       背景色 - 需要变暗
+       ======================================== */
+    --backend-color-bg-primary: #1a1a1a;
+    --backend-color-bg-secondary: #2d2d2d;
+    --backend-color-bg-tertiary: #3a3a3a;
+    --backend-color-bg-dark: #0f1419;
+    --backend-color-bg-dark-secondary: #1e293b;
+    --backend-color-bg-dark-tertiary: #334155;
+    --backend-color-bg-body: #1a1a1a;
+    --backend-color-bg-surface: #2d2d2d;
+    --backend-color-bg-overlay: rgba(0, 0, 0, 0.7);
+
+    /* ========================================
+       边框色 - 需要调整
+       ======================================== */
+    --backend-color-border-default: #495057;
+    --backend-color-border-emphasis: #6c757d;
+    --backend-color-border-focus: var(--backend-color-primary);
+    --backend-color-border-light: rgba(255, 255, 255, 0.1);
+    --backend-color-border-dark: #adb5bd;
+
+    /* ========================================
+       功能色 - 可能需要调整
+       ======================================== */
+    /* 成功色 - 暗色下更亮 */
+    --backend-color-success: #34c38f;
+    --backend-color-success-hover: #2ab57d;
+    --backend-color-success-bg-subtle: rgba(52, 195, 143, 0.15);
+    
+    /* 危险色 - 暗色下更亮 */
+    --backend-color-danger: #f46a6a;
+    --backend-color-danger-hover: #f24a4a;
+    --backend-color-danger-bg-subtle: rgba(244, 106, 106, 0.15);
+    
+    /* 警告色 */
+    --backend-color-warning: #f1b44c;
+    --backend-color-warning-hover: #eea428;
+    --backend-color-warning-bg-subtle: rgba(241, 180, 76, 0.15);
+    
+    /* 信息色 */
+    --backend-color-info: #50a5f1;
+    --backend-color-info-hover: #3a95ef;
+    --backend-color-info-bg-subtle: rgba(80, 165, 241, 0.15);
+
+    /* ========================================
+       组件特定颜色
+       ======================================== */
+    /* 侧边栏 */
+    --backend-color-sidebar-bg: #212529;
+    --backend-color-sidebar-text: var(--backend-color-text-primary);
+    --backend-color-sidebar-hover: #343a40;
+    --backend-color-sidebar-active: rgba(85, 110, 230, 0.15);
+    --backend-color-sidebar-border: rgba(255, 255, 255, 0.1);
+    
+    /* 头部 */
+    --backend-color-header-bg: #212529;
+    --backend-color-header-text: var(--backend-color-text-primary);
+    --backend-color-header-border: rgba(255, 255, 255, 0.1);
+    
+    /* 表格 */
+    --backend-color-table-bg: #2d2d2d;
+    --backend-color-table-bg-striped: #343a40;
+    --backend-color-table-bg-hover: #3a3a3a;
+    --backend-color-table-border: rgba(255, 255, 255, 0.1);
+    
+    /* 卡片 */
+    --backend-color-card-bg: #2d2d2d;
+    --backend-color-card-border: rgba(255, 255, 255, 0.1);
+    --backend-color-card-header-bg: #343a40;
+    
+    /* 输入框 */
+    --backend-color-input-bg: #2d2d2d;
+    --backend-color-input-border: rgba(255, 255, 255, 0.1);
+    --backend-color-input-focus-border: var(--backend-color-primary);
+    --backend-color-input-disabled-bg: #343a40;
+}
