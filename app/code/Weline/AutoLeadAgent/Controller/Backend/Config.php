@@ -306,32 +306,114 @@ class Config extends BackendController
             }
 
             $ch = curl_init($url . '?' . http_build_query($params));
+            
+            // 检测环境
+            $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $isDev = stripos($host, 'localhost') !== false || 
+                     stripos($host, '127.0.0.1') !== false ||
+                     getenv('APP_ENV') === 'development';
+            
+            // 决定是否禁用 SSL 验证
+            $disableSslVerify = $isWindows || $isDev;
+            
             $curlOptions = [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
                 CURLOPT_HTTPHEADER => [
                     'User-Agent: WelineFramework-AutoLeadAgent/1.0',
+                    'Accept: application/json',
                 ],
             ];
-            // 开发环境下（本地 127.0.0.1 / localhost）关闭 SSL 验证，避免自签名证书问题
-            $host = $_SERVER['HTTP_HOST'] ?? '';
-            if (stripos($host, 'localhost') !== false || stripos($host, '127.0.0.1') !== false) {
+            
+            // SSL 配置
+            if ($disableSslVerify) {
+                // 开发环境或 Windows 环境禁用 SSL 验证
                 $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
-                $curlOptions[CURLOPT_SSL_VERIFYHOST] = false;
+                $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+            } else {
+                // 生产环境启用 SSL 验证，尝试设置 CA 证书路径
+                $curlOptions[CURLOPT_SSL_VERIFYPEER] = true;
+                $curlOptions[CURLOPT_SSL_VERIFYHOST] = 2;
+                
+                // 尝试查找 CA 证书包
+                $caPaths = [
+                    ini_get('curl.cainfo'),
+                    ini_get('openssl.cafile'),
+                    '/etc/ssl/certs/ca-certificates.crt', // Debian/Ubuntu
+                    '/etc/pki/tls/certs/ca-bundle.crt',   // CentOS/RHEL
+                    '/usr/local/etc/openssl/cert.pem',     // macOS (Homebrew)
+                    '/etc/ssl/cert.pem',                   // macOS (系统)
+                ];
+                
+                if ($isWindows) {
+                    $caPaths = array_merge($caPaths, [
+                        getenv('WINDIR') . '\\System32\\curl-ca-bundle.crt',
+                        getenv('WINDIR') . '\\System32\\ca-bundle.crt',
+                        getenv('LOCALAPPDATA') . '\\cacert.pem',
+                    ]);
+                }
+                
+                $caBundlePath = null;
+                foreach ($caPaths as $caPath) {
+                    if ($caPath && file_exists($caPath)) {
+                        $caBundlePath = $caPath;
+                        break;
+                    }
+                }
+                
+                if ($caBundlePath) {
+                    $curlOptions[CURLOPT_CAINFO] = $caBundlePath;
+                } else {
+                    // 如果找不到 CA 证书包，在非生产环境禁用验证
+                    if (getenv('APP_ENV') !== 'production') {
+                        $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
+                        $curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+                    }
+                }
             }
+            
             curl_setopt_array($ch, $curlOptions);
 
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlError = curl_error($ch);
+            $curlErrno = curl_errno($ch);
             curl_close($ch);
 
             if ($curlError) {
-                throw new \Exception(__('请求失败：%{1}', [$curlError]));
+                // 提供更详细的错误信息
+                $errorMsg = $curlError;
+                if ($curlErrno === CURLE_SSL_CONNECT_ERROR || 
+                    $curlErrno === CURLE_SSL_CERTPROBLEM ||
+                    stripos($curlError, 'TLS') !== false ||
+                    stripos($curlError, 'SSL') !== false) {
+                    // SSL/TLS 错误，如果已经禁用了验证但仍然失败，可能是网络问题
+                    if ($disableSslVerify) {
+                        $errorMsg = 'SSL/TLS 连接错误（已禁用验证）：' . $curlError . 
+                                    '。可能是网络连接问题或防火墙阻止。';
+                    } else {
+                        $errorMsg = 'SSL/TLS 连接错误：' . $curlError . 
+                                    '。系统将尝试禁用 SSL 验证重试。';
+                    }
+                }
+                throw new \Exception(__('请求失败：%{1}', [$errorMsg]));
             }
 
             if ($httpCode !== 200) {
-                throw new \Exception(__('API 请求失败，状态码：%{1}', [$httpCode]));
+                $errorText = '';
+                if ($response) {
+                    $errorData = json_decode($response, true);
+                    if (isset($errorData['error'])) {
+                        $errorText = ': ' . $errorData['error'];
+                    } elseif (strlen($response) < 500) {
+                        $errorText = ': ' . substr($response, 0, 200);
+                    }
+                }
+                throw new \Exception(__('API 请求失败，状态码：%{1}%{2}', [$httpCode, $errorText]));
             }
 
             $models = json_decode($response, true);

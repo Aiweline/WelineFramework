@@ -91,9 +91,43 @@ class Compile implements CommandInterface
             if ($installOnly) {
                 $this->printing->note(__(''));
                 $this->printing->note(__('【安装依赖】'));
+                
+                // 检查是否需要重新安装
+                $reinstall = isset($args['reinstall']) || isset($args['r']);
+                if ($reinstall) {
+                    $this->printing->note(__('强制重新安装 WASI SDK...'));
+                    $reinstallResult = $compileService->reinstallWasiSdk();
+                    if ($reinstallResult['success']) {
+                        $this->printing->success(__('✓ WASI SDK 重新安装成功'));
+                    } else {
+                        $this->printing->error(__('✗ WASI SDK 重新安装失败：%{1}', [$reinstallResult['error']]));
+                    }
+                    return;
+                }
+                
                 $installResult = $compileService->installDependencies();
                 $this->displayInstallResult($installResult);
                 return;
+            }
+
+            // 检查是否需要重新安装 WASI SDK
+            $reinstall = isset($args['reinstall']) || isset($args['r']);
+            if ($reinstall && $envCheck['wasi_sdk']) {
+                $this->printing->note(__(''));
+                $this->printing->note(__('【步骤 2/4】强制重新安装 WASI SDK...'));
+                $reinstallResult = $compileService->reinstallWasiSdk();
+                if (!$reinstallResult['success']) {
+                    $this->printing->error(__('WASI SDK 重新安装失败：%{1}', [$reinstallResult['error']]));
+                    $this->printing->note(__(''));
+                    $this->printing->note(__('请尝试：'));
+                    $this->printing->note(__('  1. 以管理员身份运行此命令'));
+                    $this->printing->note(__('  2. 手动删除目录：%{1}wasi-sdk/', [$compileService->getDepsPath()]));
+                    $this->printing->note(__('  3. 然后重新运行编译命令'));
+                    return;
+                }
+                $this->printing->success(__('✓ WASI SDK 重新安装成功'));
+                // 重新检查环境
+                $envCheck = $compileService->checkEnvironment();
             }
 
             // 检查是否需要安装 WASI SDK
@@ -119,8 +153,11 @@ class Compile implements CommandInterface
                 if (!$installResult['success']) {
                     $this->printing->error(__('WASI SDK 安装失败，无法继续编译'));
                     $this->printing->note(__(''));
-                    $this->printing->note(__('请手动下载 WASI SDK：'));
-                    $this->printing->note(__('  https://github.com/WebAssembly/wasi-sdk/releases'));
+                    $this->printing->note(__('请尝试：'));
+                    $this->printing->note(__('  1. 以管理员身份运行此命令'));
+                    $this->printing->note(__('  2. 使用 --reinstall 参数强制重新安装'));
+                    $this->printing->note(__('  3. 手动下载 WASI SDK：'));
+                    $this->printing->note(__('     https://github.com/WebAssembly/wasi-sdk/releases'));
                     $this->printing->note(__(''));
                     $this->printing->note(__('下载后解压到：'));
                     $this->printing->note(__('  %{1}wasi-sdk/', [$compileService->getDepsPath()]));
@@ -310,6 +347,7 @@ class Compile implements CommandInterface
                 '-f, --force' => __('强制重新编译，即使 WASM 文件已是最新'),
                 '-n, --no-install' => __('跳过自动安装 WASI SDK'),
                 '-i, --install-deps' => __('仅安装 WASI SDK，不执行编译'),
+                '-r, --reinstall' => __('强制重新安装 WASI SDK（解决权限问题）'),
                 '-c, --clean' => __('清理构建目录'),
                 '-e, --env' => __('显示编译环境信息'),
                 '-d, --debug' => __('显示调试信息'),
@@ -318,6 +356,7 @@ class Compile implements CommandInterface
             [
                 __('编译（自动安装）') => 'php bin/m wasm:compile',
                 __('强制重新编译') => 'php bin/m wasm:compile --force',
+                __('重新安装 WASI SDK') => 'php bin/m wasm:compile --reinstall',
                 __('跳过自动安装') => 'php bin/m wasm:compile --no-install',
                 __('仅安装 WASI SDK') => 'php bin/m wasm:compile --install-deps',
                 __('清理后重新编译') => 'php bin/m wasm:compile --clean --force',
