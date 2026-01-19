@@ -465,7 +465,23 @@ class Template extends BackendController
                             if (isset($group['configs']) && is_array($group['configs'])) {
                                 foreach ($group['configs'] as $configKey => &$config) {
                                     if (isset($pageSettings[$configKey])) {
-                                        $config['value'] = $pageSettings[$configKey];
+                                        $savedValue = $pageSettings[$configKey];
+                                        
+                                        // 对于 select 类型，验证值是否在选项列表中
+                                        // 如果值不在选项中，使用默认值（修复元数据解析问题）
+                                        if ($config['type'] === 'select' && !empty($config['options'])) {
+                                            // 检查保存的值是否在选项列表中
+                                            if (!isset($config['options'][$savedValue])) {
+                                                // 值不在选项中，使用默认值
+                                                $config['value'] = $config['default'] ?? '';
+                                            } else {
+                                                // 值在选项中，使用保存的值
+                                                $config['value'] = $savedValue;
+                                            }
+                                        } else {
+                                            // 非 select 类型，直接使用保存的值
+                                            $config['value'] = $savedValue;
+                                        }
                                     }
                                 }
                             }
@@ -555,6 +571,19 @@ class Template extends BackendController
             
             // 获取样式配置
             $styleConfig = $data['style_config'] ?? [];
+            
+            // 过滤空字符串值，避免覆盖原有配置（保留0、false等有效值）
+            // 对于有默认值的字段（如hero.banner_image_mobile），空字符串表示使用默认值，不应保存
+            $filteredStyleConfig = [];
+            foreach ($styleConfig as $key => $value) {
+                // 如果值为空字符串，跳过不保存（保留原有配置）
+                // 但保留其他类型的空值（如0、false等）
+                if ($value === '' || $value === null) {
+                    continue;
+                }
+                $filteredStyleConfig[$key] = $value;
+            }
+            $styleConfig = $filteredStyleConfig;
             
             // 获取页面的默认语言
             $defaultLocale = $page->getData('default_locale') ?: '';

@@ -8,9 +8,11 @@ $page = $this->getData('page');
 $content = $this->getData('content');
 $seo = $this->getData('seo');
 $currentLocale = $this->getData('current_locale');
+// 转换为BCP 47格式（将下划线替换为连字符）
+$htmlLang = $currentLocale ? str_replace('_', '-', $currentLocale) : 'zh-Hans-CN';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($currentLocale ?: 'zh_Hans_CN') ?>">
+<html lang="<?= htmlspecialchars($htmlLang) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

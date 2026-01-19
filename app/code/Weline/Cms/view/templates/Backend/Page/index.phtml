@@ -246,11 +246,7 @@
                                          class="accordion-collapse collapse <?= $isFirst ? 'show' : '' ?>" 
                                          aria-labelledby="heading-<?= $accordionId ?>"
                                          data-bs-parent="#pageAccordion">
-<<<<<<< HEAD
                                         <div class="accordion-body bg-white p-0">
-=======
-                                        <div class="accordion-body p-0">
->>>>>>> dev-new
                                             <div class="list-group list-group-flush">
                                                 <?php foreach ($childPages[$page->getId()] as $childPage): ?>
                                                     <div class="list-group-item">
@@ -377,6 +373,10 @@
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 拷贝链接功能
@@ -482,9 +482,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     toast.style.opacity = '0';
                     setTimeout(() => document.body.removeChild(toast), 300);
                 }, 3000);
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'info',
+                    title: title,
+                    text: message || '',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
             } else {
-                alert(title + '\n' + (message || ''));
+                console.log(title + '\n' + (message || ''));
             }
+        }
         }
     }
 });
