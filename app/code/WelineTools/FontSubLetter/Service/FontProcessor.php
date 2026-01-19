@@ -468,9 +468,6 @@ class FontProcessor
      */
     private function validateFile(array $fileData): void
     {
-        // 记录详细的文件信息用于调试
-        error_log('文件上传调试信息: ' . json_encode($fileData));
-        
         if ($fileData['error'] !== UPLOAD_ERR_OK) {
             $errorMessages = [
                 UPLOAD_ERR_INI_SIZE => '文件大小超过了php.ini中upload_max_filesize的限制 (当前限制: ' . ini_get('upload_max_filesize') . ')',
