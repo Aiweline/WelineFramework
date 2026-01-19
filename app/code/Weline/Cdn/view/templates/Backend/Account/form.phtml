@@ -11,15 +11,28 @@ $account = $this->getData('account');
 $adapters = $this->getData('adapters') ?: [];
 $isEdit = $account && $account->getData('account_id');
 $credentials = $account ? $account->getCredentialsArray() : [];
+$isIframe = $this->request->getGet('isIframe') === 'true';
 ?>
 <!DOCTYPE html>
 <html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
     @template(Weline_Admin::common/head.phtml)
     <title><?= $isEdit ? __('编辑账户') : __('添加账户') ?></title>
+    <?php if ($isIframe): ?>
+    <style>
+        body {
+            padding: 20px;
+            background: transparent;
+        }
+        .container-fluid {
+            padding: 0;
+        }
+    </style>
+    <?php endif; ?>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
+<?php if (!$isIframe): ?>
 @template(Weline_Admin::common/page/loading.phtml)
 
 <div id="layout-wrapper">
@@ -40,8 +53,8 @@ $credentials = $account ? $account->getCredentialsArray() : [];
                             </h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/account/index') ?>"><?= __('账户管理') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="@backend-url('*/backend/account/index')"><?= __('账户管理') ?></a></li>
                                     <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('添加') ?></li>
                                 </ol>
                             </div>
@@ -53,13 +66,16 @@ $credentials = $account ? $account->getCredentialsArray() : [];
                 <div class='row'>
                     <template>Weline_Component::message.phtml</template>
                 </div>
+<?php else: ?>
+<div class="container-fluid">
+<?php endif; ?>
 
                 <!-- 表单 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form id="accountForm" method="post" action="<?= $this->getBackendUrl('*/backend/account/save') ?>">
+                                <form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
                                     <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
                                     
                                     <div class="row mb-3">
@@ -161,12 +177,14 @@ $credentials = $account ? $account->getCredentialsArray() : [];
 
                                     <div class="row">
                                         <div class="col-md-10 offset-md-2">
+                                            <?php if (!$isIframe): ?>
                                             <button type="submit" class="btn btn-primary">
                                                 <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                                             </button>
-                                            <a href="<?= $this->getBackendUrl('*/backend/account/index') ?>" class="btn btn-secondary">
+                                            <a href="@backend-url('*/backend/account/index')" class="btn btn-secondary">
                                                 <i class="mdi mdi-close"></i> <?= __('取消') ?>
                                             </a>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </form>
@@ -174,13 +192,20 @@ $credentials = $account ? $account->getCredentialsArray() : [];
                         </div>
                     </div>
                 </div>
+<?php if (!$isIframe): ?>
             </div>
         </div>
         @template(Weline_Admin::common/footer.phtml)
     </div>
 </div>
+<?php else: ?>
+</div>
+<?php endif; ?>
 
-
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 // 适配器选择变化时自动填充账户名称和显示权限说明
 document.getElementById('adapterSelect')?.addEventListener('change', function() {
@@ -218,7 +243,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// 表单提交
+<?php if (!$isIframe): ?>
+// 表单提交（非 iframe 模式）
 document.getElementById('accountForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -231,22 +257,59 @@ document.getElementById('accountForm').addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            if (data.redirect) {
-                window.location.href = data.redirect;
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?php echo __('成功'); ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        window.location.href = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
+                    }
+                });
             } else {
-                window.location.href = '<?= $this->getBackendUrl('*/backend/account/index') ?>';
+                console.log(data.message);
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    window.location.href = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
+                }
             }
         } else {
-            alert('<?= __('保存失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?php echo __('保存失败'); ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?php echo __('保存失败：'); ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?php echo __('请求失败'); ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?php echo __('请求失败：'); ?>' + error.message);
+        }
     });
 });
+<?php endif; ?>
 </script>
 
+<?php if (!$isIframe): ?>
 </body>
 </html>
+<?php endif; ?>
 
