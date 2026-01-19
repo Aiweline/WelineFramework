@@ -43,6 +43,10 @@
     <div id="push-result" style="display: none; margin-top: 20px;"></div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.getElementById('push-form').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -52,7 +56,16 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
         .map(input => input.value);
     
     if (!formData.get('feed_id') || platformIds.length === 0) {
-        alert('<?= __('请选择Feed和至少一个平台') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择Feed和至少一个平台') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请选择Feed和至少一个平台') ?>');
+        }
         return;
     }
     
@@ -75,7 +88,16 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('<?= __('推送失败') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('推送失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('推送失败') ?>');
+        }
     });
 });
 </script>
