@@ -15,37 +15,282 @@ namespace Weline\Framework\Setup\Console\Setup;
 
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Console\Console\Server\Server;
+use Weline\Framework\App\Exception;
+use Weline\Framework\App\System;
+use Weline\Framework\Database\Model\ModelManager;
 use Weline\Framework\Event\EventRegistry;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Extends\ExtendsRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Module\Handle;
+use Weline\Framework\Module\Helper\Data;
+use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Register\Register;
+use Weline\Framework\Rules\RulesManager;
+use Weline\Framework\Setup\Stage\StageUpdateManager;
+use Weline\Framework\Setup\Stage\RouteUpdateStage;
+use Weline\Framework\Setup\Stage\FileUpdateStage;
+use Weline\Framework\Setup\Stage\DatabaseUpdateStage;
+use Weline\Framework\Setup\Stage\ModuleSetupStage;
+use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
+use Weline\Hook\HookRegistry;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
 {
+    /**
+     * 记录是否有模块被安装或升级
+     * @var bool
+     */
+    private bool $hasModuleInstalledOrUpgraded = false;
+    
+    /**
+     * 标识符文件路径，用于标记是否需要再次收集信息
+     * @var string
+     */
+    private string $recollectFlagFile = '';
 
     function __construct(
         private Printing $printing
     )
     {
-
+        // 构造函数只负责初始化，不执行具体逻辑
+        // 所有逻辑都在 execute() 方法中按正确顺序执行
+    }
+    
+    /**
+     * 运行 composer dump-autoload 命令
+     * 如果找不到 composer 命令则抛出异常
+     * 
+     * @return void
+     * @throws Exception
+     */
+    private function runComposerDump(): void
+    {
+        $this->printing->note(__('正在检查 composer 命令...'));
+        
+        // 检查 composer 命令是否存在
+        $composerCommand = $this->findComposerCommand();
+        
+        if (!$composerCommand) {
+            throw new Exception(__('未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。'));
+        }
+        
+        $this->printing->note(__('找到 composer 命令: %{1}', [$composerCommand]));
+        
+        // 在运行 composer dump-autoload 之前，先清理 generated/code 目录
+        // 这样可以避免 Composer 扫描不存在的拦截器文件
+        $this->printing->note(__('正在清理 generated/code 目录...'));
+        $this->cleanGeneratedCodeDirectory();
+        
+        $this->printing->note(__('正在运行 composer dump-autoload...'));
+        
+        // 执行 composer dump-autoload
+        // 先切换到项目根目录
+        $originalCwd = getcwd();
+        try {
+            chdir(BP);
+        } catch (\Exception $e) {
+            throw new Exception(__('无法切换到项目根目录: %{1}', [$e->getMessage()]));
+        }
+        
+        try {
+            /** @var System $system */
+            $system = ObjectManager::getInstance(System::class);
+            
+            // 构建命令（不需要 cd，因为已经切换了目录）
+            $command = $composerCommand . ' dump-autoload';
+            
+            $result = $system->exec($command);
+            
+            // 检查返回码
+            $returnCode = $result['return_vars'] ?? -1;
+            if ($returnCode !== 0) {
+                $errorOutput = implode("\n", $result['output'] ?? []);
+                throw new Exception(__('composer dump-autoload 执行失败（返回码: %{1}）: %{2}', [$returnCode, $errorOutput]));
+            }
+            
+            $this->printing->success(__('✓ composer dump-autoload 执行成功。'));
+            
+            // 输出 composer 的输出信息（如果有）
+            if (!empty($result['output'])) {
+                foreach ($result['output'] as $line) {
+                    if (trim($line) !== '') {
+                        $this->printing->printing($line);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果是我们抛出的异常，直接抛出
+            if (strpos($e->getMessage(), 'composer dump-autoload') !== false || 
+                strpos($e->getMessage(), '未找到 composer') !== false ||
+                strpos($e->getMessage(), '无法切换到项目根目录') !== false) {
+                throw $e;
+            }
+            // 其他异常也抛出
+            throw new Exception(__('执行 composer dump-autoload 时发生错误: %{1}', [$e->getMessage()]), 0, $e);
+        } finally {
+            // 恢复原始工作目录
+            if (isset($originalCwd) && $originalCwd) {
+                @chdir($originalCwd);
+            }
+        }
+    }
+    
+    /**
+     * 查找 composer 命令路径
+     * 优先检查 composer.phar，然后检查全局 composer 命令
+     * 
+     * @return string|null
+     */
+    private function findComposerCommand(): ?string
+    {
+        // 1. 检查项目根目录下的 composer.phar
+        // 注意：在 Windows 上，is_executable() 对 .phar 文件可能返回 false
+        // 所以只要文件存在，就尝试使用 PHP 执行它
+        $composerPhar = BP . 'composer.phar';
+        if (file_exists($composerPhar)) {
+            // 验证文件是否真的是 composer.phar（尝试执行 --version）
+            $testCommand = PHP_BINARY . ' ' . escapeshellarg($composerPhar) . ' --version 2>&1';
+            exec($testCommand, $testOutput, $testReturnCode);
+            if ($testReturnCode === 0) {
+                return PHP_BINARY . ' ' . $composerPhar;
+            }
+        }
+        
+        // 2. 检查全局 composer 命令（Windows 使用 where，Linux/Mac 使用 which）
+        $checkCommand = IS_WIN ? 'where composer' : 'which composer';
+        exec($checkCommand . ' 2>&1', $output, $returnCode);
+        
+        if ($returnCode === 0 && !empty($output[0])) {
+            $composerPath = trim($output[0]);
+            // 验证找到的路径是否有效
+            if (file_exists($composerPath)) {
+                return $composerPath;
+            }
+            // 如果路径包含 composer，也尝试使用（可能是符号链接）
+            if (strpos($composerPath, 'composer') !== false) {
+                // 验证命令是否可用
+                exec($composerPath . ' --version 2>&1', $verifyOutput, $verifyReturnCode);
+                if ($verifyReturnCode === 0) {
+                    return $composerPath;
+                }
+            }
+        }
+        
+        // 3. 尝试直接使用 composer（可能在 PATH 中）
+        exec('composer --version 2>&1', $output, $returnCode);
+        if ($returnCode === 0) {
+            return 'composer';
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 清理 generated/code 目录
+     * 在运行 composer dump-autoload 之前清理，避免扫描不存在的拦截器文件
+     * 
+     * @return void
+     */
+    private function cleanGeneratedCodeDirectory(): void
+    {
+        $generatedCodePath = BP . 'generated' . DS . 'code';
+        
+        if (!is_dir($generatedCodePath)) {
+            // 目录不存在，创建它
+            mkdir($generatedCodePath, 0755, true);
+            return;
+        }
+        
+        // 清理目录内容，但保留目录本身
+        /** @var System $system */
+        $system = ObjectManager::getInstance(System::class);
+        
+        try {
+            // 扫描目录中的文件和子目录
+            $files = scandir($generatedCodePath);
+            $hasContent = false;
+            
+            foreach ($files as $file) {
+                if ($file != '.' && $file != '..') {
+                    $filePath = $generatedCodePath . DS . $file;
+                    if (is_dir($filePath)) {
+                        $system->exec('rm -rf ' . escapeshellarg($filePath));
+                        $hasContent = true;
+                    } elseif (is_file($filePath)) {
+                        @unlink($filePath);
+                        $hasContent = true;
+                    }
+                }
+            }
+            
+            if ($hasContent) {
+                $this->printing->success(__('✓ generated/code 目录已清理。'));
+            } else {
+                $this->printing->note(__('generated/code 目录为空，无需清理。'));
+            }
+        } catch (\Exception $e) {
+            // 清理失败不影响主流程，只记录警告
+            $this->printing->warning(__('清理 generated/code 目录时发生错误: %{1}，将继续执行。', [$e->getMessage()]));
+        }
     }
 
     /**
      * @inheritDoc
+     * 系统升级主流程，按照 SOLID 原则组织：
+     * 1. 准备阶段：获取锁、检查系统状态、准备环境
+     * 2. 执行阶段：收集注册表、执行升级、重新收集（如需要）
+     * 3. 清理阶段：释放锁、关闭维护模式
      */
     public function execute(array $args = [], array $data = [])
     {
-        # 获取锁文件路径
+        
         $lockFile = $this->getLockFile();
         $lockHandle = null;
+        $maintenanceEnabled = false;
         
-        # 尝试获取文件锁
+        try {
+            // ========== 准备阶段 ==========
+            $this->prepareUpgrade($lockFile, $lockHandle);
+            
+            // 检查系统是否已安装
+            if (!$this->checkSystemInstalled()) {
+                $this->releaseLock($lockHandle, $lockFile);
+                $this->handleSystemNotInstalled();
+                return;
+            }
+            
+            // ========== 执行阶段 ==========
+            $this->executeUpgradeProcess($args, $data, $maintenanceEnabled);
+            
+            // ========== 完成阶段 ==========
+            $this->completeUpgrade();
+            
+        } catch (\Exception $e) {
+            $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
+            throw $e;
+        } finally {
+            // ========== 清理阶段 ==========
+            $this->cleanupUpgrade($lockHandle, $lockFile, $maintenanceEnabled);
+        }
+    }
+    
+    /**
+     * 准备升级：获取锁、清理环境、运行 composer
+     * 
+     * @param string $lockFile 锁文件路径
+     * @param mixed $lockHandle 锁句柄（引用传递）
+     * @return void
+     * @throws Exception
+     */
+    private function prepareUpgrade(string $lockFile, &$lockHandle): void
+    {
+        // 1. 获取文件锁
         try {
             $lockHandle = $this->acquireLock($lockFile);
             if ($lockHandle === null) {
-                # 锁已被占用，提示用户稍后再试
                 $this->printing->warning(__('系统升级命令正在执行中，请稍后再试。'));
                 $this->printing->note(__('如果确认没有其他升级进程在运行，可以手动删除锁文件：%{1}', [$lockFile]));
                 exit(1);
@@ -55,57 +300,110 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             exit(1);
         }
         
-        # 检查系统是否已安装
-        $is_installed = $this->checkSystemInstalled();
+        // 2. 创建标识符文件，标记需要再次收集（升级过程中可能有新模块安装）
+        $this->createRecollectFlag();
         
-        # 如果未安装，提供安装选项
-        if (!$is_installed) {
-            # 释放锁
-            $this->releaseLock($lockHandle, $lockFile);
-            $this->handleSystemNotInstalled();
-            return;
+        // 3. 运行 composer dump-autoload（必须在注册表收集之前）
+        $this->runComposerDump();
+        
+        // 4. 收集框架注册表（必须在升级前完成，确保系统可用）
+        $this->printing->note(__('正在准备系统环境...'));
+        $this->collectFrameworkRegistries();
+        
+        // 5. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
+        $this->validateFrameworkRules();
+    }
+    
+    /**
+     * 验证框架约束规则
+     * 
+     * 职责：调用规则管理器验证所有框架约束规则
+     * 
+     * @return void
+     * @throws Exception 如果有任何规则验证失败
+     */
+    private function validateFrameworkRules(): void
+    {
+        try {
+            /** @var RulesManager $rulesManager */
+            $rulesManager = ObjectManager::getInstance(RulesManager::class);
+            $rulesManager->validateAll();
+        } catch (Exception $e) {
+            // 规则验证失败，必须停止升级
+            // 这是框架约束，不允许继续执行
+            throw $e;
+        } catch (\Throwable $e) {
+            // 规则管理器本身的错误（如找不到规则类等），也停止升级
+            // 确保规则系统正常工作
+            $this->printing->error(__('框架约束规则系统错误：%{1}', [$e->getMessage()]));
+            throw new Exception(__('框架约束规则系统错误，无法继续升级。请检查规则系统配置。'), 0, $e);
+        }
+    }
+    
+    /**
+     * 执行升级流程：维护模式、模块升级、注册表重新收集
+     * 
+     * @param array $args 命令参数
+     * @param array $data 命令数据
+     * @param bool $maintenanceEnabled 维护模式状态（引用传递）
+     * @return void
+     * @throws Exception
+     */
+    private function executeUpgradeProcess(array $args, array $data, bool &$maintenanceEnabled): void
+    {
+        
+        // 1. 启用维护模式
+        Env::getInstance()->setConfig('maintenance', true);
+        $maintenanceEnabled = true;
+        $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
+        
+        // 2. 执行模块升级流程
+        $this->executeModuleUpgrade($args, $data);
+        
+        // 3. 检测是否有模块被安装或升级，如果有则重新收集注册表
+        if ($this->hasModuleInstalledOrUpgraded) {
+            $this->printing->note(__('检测到模块安装或升级，正在重新收集注册表信息...'));
+            $this->recollectRegistryAfterModuleChange();
         }
         
-        # 系统已安装，在升级开始前启用维护模式
-        try {
-            # 启用维护模式
-            Env::getInstance()->setConfig('maintenance', true);
-            $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
-            
-            # 在升级前重建事件注册表，确保新事件能被正确收集
-            try {
-                $this->printing->note(__('正在重建事件注册表...'));
-                /** @var EventRegistry $eventRegistry */
-                $eventRegistry = ObjectManager::getInstance(EventRegistry::class);
-                $ok = $eventRegistry->refresh();
-                if ($ok) {
-                    $this->printing->success(__('✓ 事件注册表已重建完成。'));
-                } else {
-                    $this->printing->warning(__('事件注册表重建失败，但将继续执行升级流程。'));
-                }
-            } catch (\Exception $e) {
-                # 事件重建失败不影响主流程，只记录警告
-                $this->printing->warning(__('事件注册表重建时发生错误：%{1}，但将继续执行升级流程。', [$e->getMessage()]));
-            }
-            # 执行正常的升级流程
-            /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
-            $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
-            $moduleUpdate->execute($args, $data);
-            
-            # 触发系统升级后事件
-            /**@var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
-            
-            $this->printing->success(__('系统升级完成！'));
-        } catch (\Exception $e) {
-            $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
-            throw $e;
-        } finally {
-            # 释放锁
-            $this->releaseLock($lockHandle, $lockFile);
-            
-            # 升级完成后自动关闭维护模式
+        // 4. 触发系统升级后事件
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+        
+        // 5. 检查是否需要再次收集（升级过程中可能有新模块安装）
+        $this->checkAndRecollectIfNeeded();
+    }
+    
+    /**
+     * 完成升级：显示成功信息
+     * 
+     * @return void
+     */
+    private function completeUpgrade(): void
+    {
+        $this->printing->success(__('系统升级完成！'));
+    }
+    
+    /**
+     * 清理升级：释放锁、关闭维护模式
+     * 
+     * @param mixed $lockHandle 锁句柄
+     * @param string $lockFile 锁文件路径
+     * @param bool $maintenanceEnabled 维护模式是否已启用
+     * @return void
+     */
+    private function cleanupUpgrade($lockHandle, string $lockFile, bool $maintenanceEnabled): void
+    {
+        // 释放锁
+        $this->releaseLock($lockHandle, $lockFile);
+        
+        // 注意：标识符文件的清理在 checkAndRecollectIfNeeded() 中完成
+        // 如果标识符文件在 cleanupUpgrade 时还存在，说明可能发生了异常
+        // 这种情况下，标识符文件会保留到下次运行，以便检测到需要再次收集
+        
+        // 关闭维护模式
+        if ($maintenanceEnabled) {
             try {
                 $result = Env::getInstance()->setConfig('maintenance', false);
                 if ($result) {
@@ -114,9 +412,874 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     $this->printing->warning(__('关闭维护模式失败，配置可能未保存。请手动运行 php bin/w maintenance:disable 关闭维护模式。'));
                 }
             } catch (\Exception $e) {
-                # 如果关闭维护模式失败，输出警告但不影响主流程
                 $this->printing->warning(__('关闭维护模式时发生错误：%{1}。请手动运行 php bin/w maintenance:disable 关闭维护模式。', [$e->getMessage()]));
             }
+        }
+    }
+    
+    
+    /**
+     * 收集所有框架自带的注册表信息
+     * 顺序：Extends -> 插件 -> 事件 -> Hook
+     * 系统更新前必须运行，更新后如果有模块安装或升级也要再次运行
+     * 
+     * @return void
+     */
+    private function collectFrameworkRegistries(): void
+    {
+        // 使用统一服务更新所有注册表
+        try {
+            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+            $this->printing->note(__('正在更新所有注册表...'));
+            // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
+            $ok = $registryService->updateAllRegistries(false, false);
+            if ($ok) {
+                $this->printing->success(__('✓ 所有注册表已更新完成。'));
+            } else {
+                $this->printing->warning(__('部分注册表更新失败，但将继续执行。'));
+            }
+        } catch (\Exception $e) {
+            // 检查是否是致命错误（包含"【致命错误】"标记）
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, '【致命错误】')) {
+                // 在开发环境下，致命错误必须中断系统更新
+                if (defined('DEV') && DEV) {
+                    $this->printing->error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]));
+                    \Weline\Framework\App\Env::log_error('registry_update.log', __('注册表更新失败（致命错误）: %{1}', [$errorMessage]));
+                    throw $e; // 重新抛出异常，中断系统更新
+                }
+            }
+            // 注册表更新失败不影响系统更新，只记录错误日志
+            \Weline\Framework\App\Env::log_warning('registry_update.log', __('注册表更新失败: %{1}', [$e->getMessage()]));
+            $this->printing->warning(__('注册表更新失败：%{1}，但将继续执行。', [$e->getMessage()]));
+        }
+        
+        // 收集 Tag 注册表（Tag 不是框架自带的，需要单独收集）
+        try {
+            $this->printing->note(__('收集标签注册表...'));
+            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
+            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
+            $taglibCollect->execute([], []);
+            $this->printing->success(__('✓ 标签注册表已收集完成。'));
+        } catch (\Exception $e) {
+            // 标签收集失败不影响系统更新，只记录警告
+            \Weline\Framework\App\Env::log_warning('registry_update.log', __('标签注册表收集失败: %{1}', [$e->getMessage()]));
+            $this->printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
+        }
+    }
+    
+    /**
+     * 在模块安装或升级后重新收集注册表信息
+     * 包括：框架注册表（Extends、插件、事件、Hook）和其他注册表（Tag）
+     * 
+     * @return void
+     */
+    private function recollectRegistryAfterModuleChange(): void
+    {
+        // 重新收集框架注册表（Extends、插件、事件、Hook）
+        $this->printing->note(__('检测到模块安装或升级，正在重新收集框架注册表信息...'));
+        $this->collectFrameworkRegistries();
+        
+        // 收集 Tag 注册表（Tag 不是框架自带的，需要单独收集）
+        try {
+            $this->printing->note(__('重新收集标签注册表...'));
+            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
+            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
+            $taglibCollect->execute([], []);
+            $this->printing->success(__('✓ 标签注册表已重新收集完成。'));
+        } catch (\Exception $e) {
+            $this->printing->warning(__('标签注册表重新收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
+        }
+    }
+    
+    /**
+     * 执行模块升级流程（原 module:upgrade 的功能）
+     * @param array $args
+     * @param array $data
+     * @return void
+     * @throws Exception
+     * @throws \ReflectionException
+     */
+    private function executeModuleUpgrade(array $args = [], array $data = []): void
+    {
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade_before');
+        $appoint = false;
+        // 支持 --module 和 -m 两种写法，以及位置参数
+        $argsModule = $args['module'] ?? $args['m'] ?? [];
+        if (is_string($argsModule)) {
+            $argsModule = explode(' ', $argsModule);
+        }
+        
+        // 如果没有通过 --module 或 -m 指定模块，检查位置参数
+        if (empty($argsModule)) {
+            // 检查是否有位置参数（非选项参数）
+            $positionalArgs = [];
+            foreach ($args as $key => $value) {
+                // 如果是数字键且不是选项参数，则认为是位置参数
+                // 排除命令本身（通常是第一个位置参数）
+                if (is_numeric($key) && !str_starts_with($value, '-') && $key > 0) {
+                    $positionalArgs[] = $value;
+                }
+            }
+            if (!empty($positionalArgs)) {
+                $argsModule = $positionalArgs;
+            }
+        }
+        
+        // 如果指定了模块，显示提示信息
+        if ($argsModule) {
+            $this->printing->setup(__('指定模块升级模式：仅升级 %{1}', [implode(', ', $argsModule)]));
+        }
+        
+        // 检查是否指定了部分更新模式
+        $doModel = isset($args['model']);
+        $doRoute = isset($args['route']);
+        $appoint = $doModel || $doRoute;
+        
+        if ($doModel) {
+            $stageNum = 1;
+            /**@var ModelManager $modelManager */
+            $modelManager = ObjectManager::getInstance(ModelManager::class);
+            /**@var Handle $module_handle */
+            $module_handle = ObjectManager::getInstance(Handle::class);
+            // 安装Setup信息
+            $this->printing->note($stageNum . '、指定安装Setup信息...', '系统');
+            $modules = $module_handle->getModules();
+            foreach ($modules as $module_name => $module) {
+                if ($argsModule and !in_array($module_name, $argsModule)) {
+                    continue;
+                }
+                if (is_file($module['base_path'] . '/register.php')) {
+                    require $module['base_path'] . '/register.php';
+                }
+                $module_handle->setupInstall(new Module($module));
+            }
+            // 注册模型数据库信息
+            $stageNum++;
+            $this->printing->note($stageNum . '、指定注册模型数据库信息...', '系统');
+            foreach ($modules as $module_name => $module) {
+                if ($argsModule and !in_array($module_name, $argsModule)) {
+                    continue;
+                }
+                $module_handle->setupInstall(new Module($module));
+                $module_handle->setupModel(new Module($module));
+            }
+        }
+        
+        if ($doRoute) {
+            
+            $stageNum = 1;
+            // 扫描模型注册代码
+            list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+            // 注册路由信息
+            /**@var Handle $module_handle */
+            $module_handle = ObjectManager::getInstance(Handle::class);
+            $modules = $module_handle->getModules();
+            $this->printing->note($stageNum . '、指定注册路由信息...', '系统');
+            
+            // 使用阶段更新管理器确保原子性
+            /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+            $routeStage = ObjectManager::make(RouteUpdateStage::class, ['routerHelper' => $routerHelper]);
+            
+            // 准备路由更新阶段
+            $routeStage->prepare([
+                'modules_to_clear' => $argsModule ?: []
+            ]);
+            
+            foreach ($modules as $module_name => $module) {
+                if ($argsModule and !in_array($module_name, $argsModule)) {
+                    continue;
+                }
+                // 注册模组
+                if (is_file($module['base_path'] . '/register.php')) {
+                    require $module['base_path'] . '/register.php';
+                }
+                try {
+                    $module_handle->registerRoute(new Module($module));
+                } catch (Exception $exception) {
+                    $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                    $routeStage->rollback();
+                    throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
+                }
+            }
+            
+            // 验证并提交路由更新（一次性写入所有路由文件）
+            $stageNum++;
+            $this->printing->note($stageNum . '、验证并提交路由更新...', '系统');
+            try {
+                if (!$routeStage->validate()) {
+                    $status = $routeStage->getStatus();
+                    $errors = $status['errors'] ?? [];
+                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
+                    throw new Exception(__('路由更新验证失败：%{1}', [$errorMsg]));
+                }
+                
+                $this->printing->note(__('   - 正在写入路由文件...'));
+                $routeStage->commit();
+                $this->printing->success(__('✓ 路由文件写入完成！'));
+            } catch (Exception $exception) {
+                $this->printing->error(__('路由文件写入失败：%{1}', [$exception->getMessage()]));
+                $routeStage->rollback();
+                throw new Exception(__('路由文件写入失败：%{1}', [$exception->getMessage()]), 0, $exception);
+            }
+        }
+        
+        if ($appoint) {
+            $this->printing->success(__('委托部分更新已运行！'));
+            return;
+        }
+        
+        $i = 1;
+        // 如果没有指定模块，执行全局清理操作
+        if (!$argsModule) {
+            //        // 删除路由文件
+            $this->printing->warning($i . '、路由更新...', '系统');
+            $this->printing->warning('清除文件：');
+            /**@var System $system */
+            $system = ObjectManager::getInstance(System::class);
+            foreach (Env::router_files_PATH as $path) {
+                $this->printing->warning($path);
+                if (is_file($path)) {
+                    $data = $system->exec('rm -f ' . $path);
+                    if ($data) {
+                        $this->printing->printList($data);
+                    }
+                }
+            }
+            $i += 1;
+            $this->printing->note($i . '、命令行更新...');
+            /**@var \Weline\Framework\Console\Console\Command\Upgrade $commandManagerConsole */
+            $commandManagerConsole = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
+            $commandManagerConsole->execute();
+
+            $this->printing->note($i . '、事件清理...');
+            /**@var \Weline\Framework\Event\Console\Event\Cache\Clear $cacheManagerConsole */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Event\Console\Event\Cache\Clear::class);
+            $cacheManagerConsole->execute();
+
+            $i += 1;
+            $this->printing->note($i . '、插件编译...');
+            /**@var \Weline\Framework\Plugin\Console\Plugin\Di\Compile $cacheManagerConsole */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
+            $cacheManagerConsole->execute();
+            $i += 1;
+        } else {
+            $this->printing->note('指定模块升级，跳过全局清理操作...');
+        }
+        
+        // 扫描代码
+        $this->printing->note($i . '、清理模板缓存', '系统');
+        list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+        /**@var System $system */
+        $system = ObjectManager::getInstance(System::class);
+        foreach ($origin_vendor_modules as $modules) {
+            foreach ($modules as $module) {
+                if ($argsModule and !in_array($module['name'], $argsModule)) {
+                    continue;
+                }
+                $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
+                if (is_dir($tpl_dir)) {
+                    $system->exec("rm -rf {$tpl_dir}");
+                }
+            }
+        }
+        
+        if (!$argsModule) {
+            $i += 1;
+            $this->printing->note($i . '、清理缓存...');
+            /**@var \Weline\Framework\Cache\Console\Cache\Flush $cacheManagerConsole */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
+            $cacheManagerConsole->execute();
+            $system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
+        } elseif ($argsModule) {
+            // 指定模块时，清理指定模块的缓存
+            $i += 1;
+            $this->printing->note($i . '、清理指定模块缓存...');
+            foreach ($argsModule as $moduleName) {
+                $this->printing->note(__('清理模块 %{1} 的缓存...', [$moduleName]));
+                // 清理模块特定的缓存目录
+                $moduleCacheDirs = [
+                    BP . 'var' . DS . 'cache' . DS . strtolower(str_replace('_', DS, $moduleName)),
+                    BP . 'generated' . DS . 'code' . DS . str_replace('_', '\\', $moduleName),
+                    BP . 'generated' . DS . 'metadata' . DS . str_replace('_', '\\', $moduleName),
+                ];
+                foreach ($moduleCacheDirs as $cacheDir) {
+                    if (is_dir($cacheDir)) {
+                        $system->exec('rm -rf ' . $cacheDir);
+                        $this->printing->success(__('已清理：%{1}', [$cacheDir]));
+                    }
+                }
+            }
+            // 清理模板缓存（已在前面处理，这里只是确保）
+            $this->printing->note(__('指定模块缓存清理完成'));
+        }
+
+        $this->printing->note($i . '、module模块更新...');
+        // 注册模块
+        $all_modules = [];
+        // 扫描模型注册代码
+        list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+        // 注册模组
+        $this->printing->note(__('1)注册模组'));
+        foreach ($dependencyModules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
+            if (is_file($module['register'])) {
+                require $module['register'];
+            }
+        }
+        $modules = Env::getInstance()->getModuleList();
+        $no_modules = [];
+        $diff_base_path_modules = [];
+        $missing_register_files = [];
+        foreach ($modules as $module) {
+            if (!isset($dependencyModules[$module['name']])) {
+                // 检查模块的 register.php 文件是否存在
+                $expected_register_file = ($module['base_path'] ?? '') . DS . 'register.php';
+                if (file_exists($expected_register_file)) {
+                    // register.php 文件存在但无法解析，可能是文件格式问题
+                    // 这种情况下，模块实际上是存在的，只是 register.php 无法解析
+                    // 我们应该允许继续执行，但给出警告
+                    $missing_register_files[$module['name']] = $expected_register_file;
+                } else {
+                    // register.php 文件不存在，这是真正的"未找到"模块
+                    $no_modules[] = $module['name'];
+                }
+            }
+            $dependencyModule = $dependencyModules[$module['name']]??[];
+            $moduleBasePath = $module['base_path'] ?? '';
+            $dependencyBasePath = $dependencyModule['base_path'] ?? '';
+            if ($moduleBasePath != $dependencyBasePath) {
+                $diff_base_path_modules[] = $module['name'];
+            }
+        }
+        
+        // 如果有 register.php 文件存在但无法解析的模块，输出详细信息
+        // 这些模块实际上是存在的，只是 register.php 无法解析，不应该阻止升级
+        if (!empty($missing_register_files)) {
+            $this->printing->warning(__('以下模块的 register.php 文件存在但无法解析，将尝试手动注册：'));
+            foreach ($missing_register_files as $moduleName => $registerFile) {
+                $this->printing->warning(__('  - %{1}: %{2}', [$moduleName, $registerFile]));
+                // 尝试读取文件内容，帮助调试
+                $fileContent = file_get_contents($registerFile);
+                if (trim($fileContent) === '') {
+                    $this->printing->warning(__('    文件为空，将跳过该模块的自动注册。'));
+                } elseif (strpos($fileContent, 'Register::register') === false) {
+                    $this->printing->warning(__('    文件中未找到 Register::register() 调用，将跳过该模块的自动注册。'));
+                } else {
+                    $this->printing->warning(__('    文件中包含 Register::register() 调用，但解析失败，可能是语法错误。将尝试直接执行该文件。'));
+                    // 尝试直接执行 register.php 文件
+                    try {
+                        if (is_file($registerFile)) {
+                            require $registerFile;
+                            $this->printing->success(__('    ✓ 已成功执行 register.php 文件。'));
+                        }
+                    } catch (\Exception $e) {
+                        $this->printing->warning(__('    执行 register.php 文件时出错：%{1}', [$e->getMessage()]));
+                    }
+                }
+            }
+            $this->printing->note(__('这些模块的 register.php 文件无法自动解析，但不会中断升级流程。'));
+        }
+        
+        // 只有真正找不到 register.php 文件的模块才抛出异常
+        if ($no_modules) {
+            $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
+            $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->printing->setup(__('%{modules} 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $no_modules)]));
+            // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+            throw new Exception(__('模块检查失败：%{modules} 模块未找到(异常卸载)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $no_modules)]));
+        }
+        if ($diff_base_path_modules) {
+            $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
+            $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->printing->setup(__('%{modules} 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $diff_base_path_modules)]));
+            // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+            throw new Exception(__('模块检查失败：%{modules} 模块路径不一致(异常搬迁)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $diff_base_path_modules)]));
+        }
+
+        $dependencyModuleNames = array_keys($dependencyModules);
+        foreach ($modules as $module) {
+            if (!in_array($module['name'], $dependencyModuleNames)) {
+                $this->printing->error(__('发现严重错误！请检查 %{1} 模块是否已经被删除，请手动确认并删除 %{2} 中关于此模块的信息！', [$module['name'], Env::path_MODULES_FILE]));
+                $this->printing->note(__('输入以下信息选项，确认操作！'));
+                $this->printing->note(__('1) 停止执行。手动确认模块信息并处理。【默认】'));
+                $this->printing->note(__('2) 继续执行。（可能会出现不可预知的错误）'));
+                $anser = $system->input();
+                if ($anser == '1' || ($anser != '2')) {
+                    $this->printing->setup(__('程序停止运行，请检查问题后继续执行！'));
+                    // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+                    throw new Exception(__('用户选择停止执行：模块 %{1} 已被删除，请手动确认并删除 %{2} 中关于此模块的信息', [$module['name'], Env::path_MODULES_FILE]));
+                }
+                $this->printing->setup(__('你选择了继续执行，可能会出现不可预知的错误。'));
+                $total = 3;
+                for ($i = 1; $i <= $total; $i++) {
+                    echo __("%{1} 秒后程序继续执行 %{2} ...\r", [$total, $i]);
+                    // 模拟处理时间
+                    usleep(1000000);
+                }
+            }
+        }
+        /**@var Handle $module_handle */
+        $module_handle = ObjectManager::getInstance(Handle::class);
+        $modules = $module_handle->getModules();
+        
+        // ========== 使用阶段更新管理器统一管理所有更新 ==========
+        $stageNumber = 1;
+        $this->printing->note($stageNumber . '、初始化阶段更新管理器...', '系统');
+        /**@var StageUpdateManager $stageManager */
+        $stageManager = ObjectManager::getInstance(StageUpdateManager::class);
+        
+        // 创建各个更新阶段
+        $moduleSetupStage = ObjectManager::make(ModuleSetupStage::class, ['moduleHandle' => $module_handle]);
+        $stageManager->registerStage($moduleSetupStage, 1);
+        
+        /**@var ModelManager $modelManager */
+        $modelManager = ObjectManager::getInstance(ModelManager::class);
+        $databaseStage = ObjectManager::make(DatabaseUpdateStage::class, ['modelManager' => $modelManager]);
+        $stageManager->registerStage($databaseStage, 2);
+        
+        /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+        $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+        $routeStage = ObjectManager::make(RouteUpdateStage::class, ['routerHelper' => $routerHelper]);
+        $stageManager->registerStage($routeStage, 3);
+        
+        $fileStage = ObjectManager::make(FileUpdateStage::class);
+        $stageManager->registerStage($fileStage, 4);
+        
+        // ========== 批量收集所有更新任务 ==========
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、批量收集模块更新任务...', '系统');
+        
+        // 收集模块安装/升级任务
+        foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
+            
+            $moduleObj = new Module($module);
+            
+            if (isset($module['upgrading']) and $module['upgrading']) {
+                $moduleSetupStage->addUpgradeTask($moduleObj);
+                $this->printing->note(__('收集模块升级任务：%{1}', [$module_name]));
+            }
+            
+            if (isset($module['installing']) and $module['installing']) {
+                $moduleSetupStage->addInstallTask($moduleObj);
+                $this->printing->note(__('收集模块安装任务：%{1}', [$module_name]));
+            }
+        }
+        
+        // 收集数据库更新任务
+        $this->printing->note(__('   - 批量收集数据库更新任务...'));
+        foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
+            
+            $moduleObj = new Module($module);
+            $setupContext = ObjectManager::make(SetupContext::class, [
+                'module_name' => $moduleObj->getName(),
+                'module_version' => $moduleObj->getVersion(),
+                'module_description' => $moduleObj->getDescription()
+            ], '__construct');
+            
+            // 根据模块状态决定更新类型
+            /**@var \Weline\Framework\Module\Helper\Data $moduleHelper */
+            $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+            $oldModules = $module_handle->getModules(); // 获取旧模块列表（在注册前）
+            
+            if (isset($module['installing']) and $module['installing']) {
+                // 新安装的模块
+                $databaseStage->addUpdateTask($moduleObj, $setupContext, 'install');
+                if (DEV) {
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                }
+            } elseif (isset($module['upgrading']) and $module['upgrading']) {
+                // 升级的模块
+                $old_version = $moduleHelper->isInstalled($oldModules, $moduleObj->getName()) 
+                    ? ($oldModules[$moduleObj->getName()]['version'] ?? '1.0.0')
+                    : '1.0.0';
+                if ($moduleHelper->isUpgrade($old_version, $moduleObj->getVersion())) {
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'upgrade');
+                }
+                if (DEV) {
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                }
+            } else {
+                // 已存在的模块，只执行 setup（开发模式）
+                if (DEV) {
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                }
+            }
+        }
+        
+        // 准备路由更新阶段
+        $routeStage->prepare([
+            'modules_to_clear' => $argsModule ?: []
+        ]);
+        
+        // 收集路由注册任务（在内存中收集，不立即写入）
+        $this->printing->note(__('   - 批量收集路由注册任务...'));
+        
+        
+        foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
+            try {
+                $module_handle->registerRoute(new Module($module));
+            } catch (Exception $exception) {
+                $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                // 回滚已准备的路由阶段
+                $routeStage->rollback();
+                throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
+            }
+        }
+        
+        // ========== 准备所有阶段 ==========
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、准备所有更新阶段...', '系统');
+        try {
+            $stageManager->prepareAll();
+            $this->printing->success(__('✓ 所有阶段准备完成'));
+        } catch (Exception $e) {
+            $this->printing->error(__('阶段准备失败：%{1}', [$e->getMessage()]));
+            throw $e;
+        }
+        
+        // ========== 验证所有阶段 ==========
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、验证所有更新阶段...', '系统');
+        try {
+            $stageManager->validateAll();
+            $this->printing->success(__('✓ 所有阶段验证通过'));
+        } catch (Exception $e) {
+            $this->printing->error(__('阶段验证失败：%{1}', [$e->getMessage()]));
+            // 回滚所有已准备的阶段
+            foreach ($stageManager->getStatus() as $stageName => $status) {
+                $stage = $stageManager->getStage($stageName);
+                if ($stage && $stage->isPrepared()) {
+                    $stage->rollback();
+                }
+            }
+            throw $e;
+        }
+        
+        // ========== 提交所有阶段（分步执行，支持动态收集） ==========
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、提交所有更新阶段（批量执行）...', '系统');
+        try {
+            // 第一步：先提交模块安装/升级阶段（可能产生新的模块，需要重新收集任务）
+            $this->printing->note(__('   - 提交模块安装/升级阶段...'));
+            $moduleSetupStage->commit();
+            
+            // 检查是否有模块被安装或升级
+            if ($moduleSetupStage->hasModuleInstalledOrUpgraded()) {
+                $this->hasModuleInstalledOrUpgraded = true;
+                
+                // 模块安装/升级后，需要重新收集可能产生的新任务
+                $this->printing->note(__('检测到模块安装/升级，重新收集后续任务...'));
+                
+                // 重新加载模块列表（可能有新模块被安装，或者模块状态已更新）
+                $module_handle = ObjectManager::getInstance(Handle::class);
+                $updatedModules = $module_handle->getModules();
+                
+                // 重新收集数据库更新任务（检查是否有遗漏的任务）
+                $this->printing->note(__('   - 重新收集数据库更新任务...'));
+                foreach ($updatedModules as $module_name => $module) {
+                    if ($argsModule and !in_array($module_name, $argsModule)) {
+                        continue;
+                    }
+                    
+                    $moduleObj = new Module($module);
+                    $setupContext = ObjectManager::make(SetupContext::class, [
+                        'module_name' => $moduleObj->getName(),
+                        'module_version' => $moduleObj->getVersion(),
+                        'module_description' => $moduleObj->getDescription()
+                    ], '__construct');
+                    
+                    // 检查该模块是否已有数据库任务
+                    $hasDatabaseTask = false;
+                    try {
+                        $reflection = new \ReflectionClass($databaseStage);
+                        $property = $reflection->getProperty('updateTasks');
+                        $property->setAccessible(true);
+                        $existingTasks = $property->getValue($databaseStage);
+                        
+                        foreach ($existingTasks as $task) {
+                            if ($task['module']->getName() === $moduleObj->getName()) {
+                                $hasDatabaseTask = true;
+                                break;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        // 反射失败，继续执行
+                    }
+                    
+                    // 注意：模块安装时，setupInstall 内部会调用 modelManager->update(install)
+                    // 所以数据库更新任务已经在模块安装阶段执行了
+                    // 这里主要是检查是否有新注册的模块（依赖模块）需要数据库初始化
+                    // 新注册的模块不会有 installing 标志，因为它们是在安装过程中被注册的
+                    // 所以这里我们主要检查是否有遗漏的模块
+                }
+                
+                // 重新收集路由注册任务（新安装的模块或新注册的依赖模块可能需要路由注册）
+                $this->printing->note(__('   - 重新收集路由注册任务...'));
+                foreach ($updatedModules as $module_name => $module) {
+                    if ($argsModule and !in_array($module_name, $argsModule)) {
+                        continue;
+                    }
+                    try {
+                        // 检查路由是否已经注册（通过检查批量缓存）
+                        $needsRoute = true;
+                        foreach (Env::router_files_PATH as $path) {
+                            $routers = $routerHelper->getBatchRouters($path);
+                            foreach ($routers as $router) {
+                                $routerModule = '';
+                                if (is_array($router)) {
+                                    if (isset($router['module'])) {
+                                        $routerModule = $router['module'];
+                                    } elseif (isset($router['rule']) && is_array($router['rule']) && isset($router['rule']['module'])) {
+                                        $routerModule = $router['rule']['module'];
+                                    }
+                                }
+                                if ($routerModule === $module_name) {
+                                    $needsRoute = false;
+                                    break 2;
+                                }
+                            }
+                        }
+                        
+                        if ($needsRoute) {
+                            $this->printing->note(__('   - 为模块 %{1} 注册路由...', [$module_name]));
+                            $module_handle->registerRoute(new Module($module));
+                        }
+                    } catch (Exception $exception) {
+                        $this->printing->warning(__('模块 %{1} 路由重新注册失败：%{2}，继续执行...', [
+                            $module_name, 
+                            $exception->getMessage()
+                        ]));
+                    }
+                }
+                
+                // 重新验证已更新的阶段（确保新添加的任务有效）
+                $this->printing->note(__('   - 重新验证更新的阶段...'));
+                if (!$databaseStage->validate()) {
+                    $status = $databaseStage->getStatus();
+                    $errors = $status['errors'] ?? [];
+                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
+                    throw new Exception(__('数据库更新阶段验证失败：%{1}', [$errorMsg]));
+                }
+                if (!$routeStage->validate()) {
+                    $status = $routeStage->getStatus();
+                    $errors = $status['errors'] ?? [];
+                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
+                    throw new Exception(__('路由更新阶段验证失败：%{1}', [$errorMsg]));
+                }
+            }
+            
+            // 第二步：提交数据库更新阶段
+            $this->printing->note(__('   - 提交数据库更新阶段...'));
+            $databaseStage->commit();
+            
+            // 第三步：提交路由更新阶段
+            $this->printing->note(__('   - 提交路由更新阶段...'));
+            $routeStage->commit();
+            
+            // 第四步：提交文件更新阶段
+            $this->printing->note(__('   - 提交文件更新阶段...'));
+            $fileStage->commit();
+            
+            $this->printing->success(__('✓ 所有阶段更新完成！'));
+        } catch (Exception $e) {
+            $this->printing->error(__('阶段提交失败：%{1}', [$e->getMessage()]));
+            throw $e;
+        }
+        
+        if ($argsModule) {
+            $this->printing->note(__('指定模块 %{1} 更新完毕！', [implode(', ', $argsModule)]));
+        } else {
+            $this->printing->note('模块更新完毕！');
+        }
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、收集模块信息', '系统');
+        # 加载module中的助手函数
+        $modules = Env::getInstance()->getActiveModules();
+        $function_files_content = '';
+        
+        // 文件头部：必须包含 <?php 和 declare(strict_types=1);
+        $file_header = "<?php" . PHP_EOL . "declare(strict_types=1);" . PHP_EOL;
+        
+        // 如果指定了模块，先读取现有文件内容（保留其他模块的函数）
+        $existing_content = '';
+        if ($argsModule && is_file(Env::path_FUNCTIONS_FILE)) {
+            $existing_content = file_get_contents(Env::path_FUNCTIONS_FILE);
+            // 移除文件头部（如果存在），保留实际内容
+            $existing_content = preg_replace('/^<\?php\s*declare\(strict_types=1\);\s*/i', '', $existing_content);
+            // 尝试移除指定模块的旧函数（通过注释标记识别）
+            // 注意：这是一个简化的实现，假设函数文件中有模块标记注释
+            foreach ($argsModule as $moduleName) {
+                // 移除以 "// Module: $moduleName" 开头的块直到下一个 "// Module:" 或文件结束
+                $pattern = '/\/\/\s*Module:\s*' . preg_quote($moduleName, '/') . '.*?(?=\/\/\s*Module:|$)/s';
+                $existing_content = preg_replace($pattern, '', $existing_content);
+            }
+            // 清理多余的空行
+            $existing_content = preg_replace('/\n{3,}/', "\n\n", $existing_content);
+            $existing_content = trim($existing_content);
+        }
+        
+        foreach ($modules as $module) {
+            if ($argsModule and !in_array($module['name'], $argsModule)) {
+                continue;
+            }
+            $global_file_pattern = $module['base_path'] . 'Global' . DS . '*.php';
+            $global_files = glob($global_file_pattern);
+            if (!empty($global_files)) {
+                // 添加模块标记注释（放在 declare 之后）
+                $function_files_content .= PHP_EOL . '// Module: ' . $module['name'] . PHP_EOL;
+                foreach ($global_files as $global_file) {
+                    # 读取文件内容 去除注释以及每个文件末尾的 '\?\>'结束符
+                    $file_content = file_get_contents($global_file);
+                    // 移除文件中的 <?php 和 declare 语句（如果存在），因为已经在文件头部统一处理
+                    $file_content = preg_replace('/^<\?php\s*/i', '', $file_content);
+                    $file_content = preg_replace('/declare\(strict_types=1\);\s*/i', '', $file_content);
+                    $file_content = str_replace('?>', '', $file_content);
+                    $function_files_content .= trim($file_content) . PHP_EOL;
+                }
+            }
+        }
+        
+        // 使用阶段更新管理器写入文件（确保原子性）
+        /**@var FileUpdateStage $fileStage */
+        $fileStage = ObjectManager::make(FileUpdateStage::class);
+        
+        // 准备函数文件内容
+        if ($argsModule && $function_files_content) {
+            # 合并现有内容和新内容，确保文件头部正确
+            $final_content = $file_header;
+            if ($existing_content) {
+                $final_content .= $existing_content . PHP_EOL;
+            }
+            $final_content .= trim($function_files_content);
+            $fileStage->addFunctionsFile($final_content);
+        } elseif (!$argsModule) {
+            # 写入文件（完整升级，覆盖所有内容），确保文件头部正确
+            $final_content = $file_header;
+            if ($function_files_content) {
+                $final_content .= trim($function_files_content);
+            }
+            $fileStage->addFunctionsFile($final_content);
+        }
+        
+        // 准备并提交文件更新（只有在有内容需要写入时才执行）
+        if (!empty($function_files_content)) {
+            try {
+                $this->printing->note(__('   - 准备函数文件更新...'));
+                $fileStage->prepare();
+                if ($fileStage->validate()) {
+                    $this->printing->note(__('   - 写入函数文件：%{1}', [Env::path_FUNCTIONS_FILE]));
+                    $fileStage->commit();
+                    $this->printing->success(__('✓ 函数文件写入完成！'));
+                } else {
+                    $status = $fileStage->getStatus();
+                    $errors = $status['errors'] ?? [];
+                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
+                    throw new Exception(__('函数文件更新验证失败：%{1}', [$errorMsg]));
+                }
+            } catch (Exception $exception) {
+                $this->printing->error(__('函数文件写入失败：%{1}', [$exception->getMessage()]));
+                $fileStage->rollback();
+                throw $exception;
+            }
+        }
+
+        $stageNumber++;
+
+        // 清理其他
+        $this->printing->note($stageNumber . '、触发模块升级后事件...', '系统');
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        
+        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade');
+        
+        // 生成 modules.json 用于 E2E 测试用例收集
+        $stageNumber++;
+        $this->printing->note($stageNumber . '、生成模块信息文件...', '系统');
+        $this->generateModulesJson();
+    }
+    
+    /**
+     * 生成 modules.json 文件，用于 E2E 测试用例收集
+     * 
+     * @return void
+     */
+    private function generateModulesJson(): void
+    {
+        try {
+            $this->printing->note(__('生成 modules.json 用于 E2E 测试用例收集...'));
+            
+            // 获取所有模块信息
+            $modules = Env::getInstance()->getModuleList();
+            
+            // 构建 modules.json 数据结构
+            $modulesData = [
+                'generated_at' => date('c'), // ISO 8601 格式
+                'modules' => []
+            ];
+            
+            // 遍历所有模块，检查是否有测试目录
+            foreach ($modules as $moduleName => $module) {
+                $basePath = $module['base_path'] ?? '';
+                if (empty($basePath)) {
+                    continue;
+                }
+                
+                // 检查测试目录是否存在
+                $testPath = $basePath . DS . 'test' . DS . 'e2e';
+                $hasTests = is_dir($testPath);
+                
+                // 转换为相对路径（统一使用正斜杠，兼容 Windows 和 Linux）
+                $relativeBasePath = str_replace([BP . DS, DS], ['', '/'], $basePath);
+                $relativeTestPath = $hasTests ? str_replace([BP . DS, DS], ['', '/'], $testPath) : null;
+                
+                // 移除末尾的斜杠
+                $relativeBasePath = rtrim($relativeBasePath, '/');
+                if ($relativeTestPath) {
+                    $relativeTestPath = rtrim($relativeTestPath, '/');
+                }
+                
+                $modulesData['modules'][$moduleName] = [
+                    'name' => $moduleName,
+                    'base_path' => $relativeBasePath,
+                    'test_path' => $relativeTestPath,
+                    'status' => $module['status'] ?? false,
+                    'version' => $module['version'] ?? '1.0.0',
+                    'has_tests' => $hasTests
+                ];
+            }
+            
+            // 确保 tests/e2e 目录存在
+            $e2eDir = BP . 'tests' . DS . 'e2e';
+            if (!is_dir($e2eDir)) {
+                mkdir($e2eDir, 0755, true);
+            }
+            
+            // 写入 modules.json
+            $jsonFile = $e2eDir . DS . 'modules.json';
+            $jsonContent = json_encode($modulesData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            file_put_contents($jsonFile, $jsonContent);
+            
+            $this->printing->success(__('✓ modules.json 已生成: %{1}', [$jsonFile]));
+        } catch (\Exception $e) {
+            // 生成失败不影响系统升级，只记录警告
+            \Weline\Framework\App\Env::log_warning('modules_json.log', __('生成 modules.json 失败: %{1}', [$e->getMessage()]));
+            $this->printing->warning(__('生成 modules.json 时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
         }
     }
     
@@ -244,6 +1407,110 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
+     * 获取标识符文件路径
+     * 
+     * @return string
+     */
+    private function getRecollectFlagFile(): string
+    {
+        $processDir = BP . 'var' . DS . 'process';
+        if (!is_dir($processDir)) {
+            mkdir($processDir, 0755, true);
+        }
+        return $processDir . DS . 'setup_upgrade_recollect.flag';
+    }
+    
+    /**
+     * 创建标识符文件，标记需要再次收集
+     * 在升级开始时创建，升级过程中如果有新模块安装，会保持这个标识符
+     * 
+     * @return void
+     */
+    private function createRecollectFlag(): void
+    {
+        if (empty($this->recollectFlagFile)) {
+            $this->recollectFlagFile = $this->getRecollectFlagFile();
+        }
+        
+        // 记录升级开始时的模块列表
+        $modulesBefore = $this->getModuleList();
+        $flagData = [
+            'created_at' => date('Y-m-d H:i:s'),
+            'modules_before' => $modulesBefore,
+            'need_recollect' => true
+        ];
+        
+        file_put_contents($this->recollectFlagFile, json_encode($flagData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+    
+    /**
+     * 检查是否需要再次收集，如果需要则执行收集
+     * 
+     * @return void
+     */
+    private function checkAndRecollectIfNeeded(): void
+    {
+        if (empty($this->recollectFlagFile)) {
+            $this->recollectFlagFile = $this->getRecollectFlagFile();
+        }
+        
+        // 检查标识符文件是否存在
+        if (!file_exists($this->recollectFlagFile)) {
+            return;
+        }
+        
+        // 读取标识符文件
+        $flagContent = @file_get_contents($this->recollectFlagFile);
+        if ($flagContent === false) {
+            return;
+        }
+        
+        $flagData = @json_decode($flagContent, true);
+        if (!is_array($flagData) || !isset($flagData['need_recollect']) || !$flagData['need_recollect']) {
+            // 不需要再次收集，删除标识符文件
+            @unlink($this->recollectFlagFile);
+            return;
+        }
+        
+        // 获取升级后的模块列表
+        $modulesAfter = $this->getModuleList();
+        $modulesBefore = $flagData['modules_before'] ?? [];
+        
+        // 比较模块列表，检查是否有新模块
+        $newModules = array_diff($modulesAfter, $modulesBefore);
+        
+        if (!empty($newModules)) {
+            $this->printing->note(__('检测到新安装的模块：%{1}，正在重新收集注册表信息...', [implode(', ', $newModules)]));
+            $this->recollectRegistryAfterModuleChange();
+            $this->printing->success(__('✓ 信息收集完成。'));
+        } else {
+            // 没有新模块，但标识符文件存在，说明可能是从上次异常恢复
+            // 这种情况下，我们仍然需要删除标识符文件，因为升级已经完成
+            $this->printing->note(__('未检测到新安装的模块，跳过信息收集。'));
+        }
+        
+        // 收集完成（无论是否有新模块），删除标识符文件
+        @unlink($this->recollectFlagFile);
+    }
+    
+    /**
+     * 获取当前模块列表
+     * 
+     * @return array 模块名数组
+     */
+    private function getModuleList(): array
+    {
+        try {
+            $env = Env::getInstance();
+            $modules = $env->getModuleList();
+            return array_keys($modules);
+        } catch (\Exception $e) {
+            // 如果获取模块列表失败，返回空数组
+            return [];
+        }
+    }
+    
+    /**
      * @inheritDoc
      */
     public function tip(): string
@@ -256,21 +1523,24 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 基于tip的默认help实现
         return \Weline\Framework\Console\CommandHelper::formatHelp(
             'setup:upgrade',
-            $this->tip(),
+            '升级模块系统，包括数据库模型、路由等',
             [
                 '--model' => '仅升级数据库模型',
                 '--route' => '仅升级路由',
-                '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Ai）',
+                '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
                 '-h, --help' => '显示帮助信息',
             ],
             [],
             [
-                '完整系统升级' => 'php bin/w setup:upgrade',
-                '仅升级路由' => 'php bin/w setup:upgrade --route',
+                '升级所有模块' => 'php bin/w setup:upgrade',
                 '仅升级数据库模型' => 'php bin/w setup:upgrade --model',
-                '升级指定模块' => 'php bin/w setup:upgrade -m Weline_Ai',
-                '升级指定模块的路由' => 'php bin/w setup:upgrade --route -m Weline_Ai',
-            ]
+                '仅升级路由' => 'php bin/w setup:upgrade --route',
+                '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Weline_Demo',
+                '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Weline_Demo',
+                '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
+                '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
+            ],
+            'php bin/w setup:upgrade [--model|--route] [-m|--module=<模块名>]'
         );
     }
 
@@ -479,9 +1749,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             Env::set('api_admin', Text::random_string(32));
         }
         
-        /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
-        $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
-        $moduleUpdate->execute([], []);
+        // 执行模块升级流程（原 module:upgrade 的功能）
+        $this->executeModuleUpgrade([], []);
         
         # 触发系统升级后事件
         /**@var EventsManager $eventsManager */

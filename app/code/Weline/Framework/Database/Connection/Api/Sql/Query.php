@@ -370,8 +370,23 @@ abstract class Query implements QueryInterface
         return $this;
     }
 
-    public function fields(string $fields): QueryInterface
+    public function fields(string|array $fields): QueryInterface
     {
+        // 处理数组参数
+        if (is_array($fields)) {
+            $fieldsStringParts = [];
+            foreach ($fields as $alias => $expression) {
+                if (is_string($alias) && is_string($expression)) {
+                    // 关联数组格式：['alias' => 'expression'] -> 'expression AS alias'
+                    $fieldsStringParts[] = $expression . ' AS ' . $alias;
+                } else {
+                    // 普通数组格式：['field1', 'field2'] -> 'field1,field2'
+                    $fieldsStringParts[] = is_string($expression) ? $expression : (string)$expression;
+                }
+            }
+            $fields = implode(',', $fieldsStringParts);
+        }
+        
         if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
             $this->fields = $fields;
         } else {
@@ -699,6 +714,12 @@ abstract class Query implements QueryInterface
             // 如果 SQL 包含多个命令，prepare() 会抛出异常，我们捕获并处理
             try {
                 $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                // 🔧 PostgreSQL 参数类型绑定：
+                // 对于数字字符串参数，使用 PDO::PARAM_INT 或 PDO::PARAM_STR
+                // 让 PostgreSQL 的 PDO 驱动自动处理类型转换
+                // 但是，由于无法推测类型，我们只能让 PostgreSQL 自动处理
+                // 如果出现类型不匹配错误，说明需要显式转换
+                // 但我们无法推测类型，所以只能保持原样
                 $this->PDOStatement->execute($this->bound_values);
             } catch (\PDOException $e) {
                 // 检查是否是"不能插入多个命令"的错误
@@ -712,7 +733,8 @@ abstract class Query implements QueryInterface
             // 检查是否有多个结果集
             $origin_data = [];
             do {
-                $origin_data[] = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                $fetched = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                $origin_data[] = $fetched;
             } while ($this->PDOStatement->nextRowset());
             if (count($origin_data) == 1) {
                 $origin_data = $origin_data[0];
@@ -799,7 +821,17 @@ abstract class Query implements QueryInterface
                 break;
             case 'delete':
             case 'update':
-                $result = (bool)$data;
+                // 🔧 修复 PostgreSQL UPDATE 返回 false 的问题
+                // 如果使用了 RETURNING 子句（PostgreSQL），$data 可能包含返回的数据
+                // 如果没有 RETURNING，$data 是空数组，应该使用 rowCount() 来判断
+                if (is_array($data) && empty($data)) {
+                    // 没有 RETURNING 结果，使用 rowCount() 判断受影响的行数
+                    $rowCount = $this->PDOStatement ? $this->PDOStatement->rowCount() : 0;
+                    $result = $rowCount > 0;
+                } else {
+                    // 有 RETURNING 结果，说明更新成功
+                    $result = !empty($data);
+                }
                 break;
             default:
                 throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}', $this->fetch_type));

@@ -24,6 +24,7 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Create;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Helper\Standar;
@@ -50,39 +51,70 @@ final class Connector extends Query implements ConnectorInterface
 
     protected ?PDO $link = null;
     protected ?Query $query = null;
+    protected bool $fromPool = false; // 标记连接是否来自连接池
 
     public function create(): static
     {
+        if ($this->link !== null) {
+            return $this;
+        }
+
         $db_type = $this->configProvider->getDbType();
         if (!in_array($db_type, PDO::getAvailableDrivers())) {
             throw new LinkException(__('驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。', [$db_type, implode(',', PDO::getAvailableDrivers())]));
         }
-        
-        // PostgreSQL DSN 格式: pgsql:host=hostname;port=5432;dbname=database;user=username;password=password
-        $dsn = "pgsql:host={$this->configProvider->getHostName()};port={$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()}";
-        if ($this->configProvider->getCharset()) {
-            $dsn .= ";options='--client_encoding={$this->configProvider->getCharset()}'";
-        }
-        
-        try {
-            //初始化一个Connection对象
-            $this->link = new PDO($dsn, $this->configProvider->getUsername(), $this->configProvider->getPassword(), $this->configProvider->getOptions());
-            if ($this->configProvider->getPreSql()) {
-                $this->link->exec($this->configProvider->getPreSql());
+
+        // 从连接池获取连接
+        $this->link = ConnectionPool::getConnection(
+            $this->configProvider,
+            function () {
+                // PostgreSQL DSN 格式: pgsql:host=hostname;port=5432;dbname=database;user=username;password=password
+                $dsn = "pgsql:host={$this->configProvider->getHostName()};port={$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()}";
+                if ($this->configProvider->getCharset()) {
+                    $dsn .= ";options='--client_encoding={$this->configProvider->getCharset()}'";
+                }
+                
+                try {
+                    $connection = new PDO($dsn, $this->configProvider->getUsername(), $this->configProvider->getPassword(), $this->configProvider->getOptions());
+                    // 确保错误模式已设置（如果选项中没有设置）
+                    if (!$connection->getAttribute(PDO::ATTR_ERRMODE)) {
+                        $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    }
+                    if ($this->configProvider->getPreSql()) {
+                        $connection->exec($this->configProvider->getPreSql());
+                    }
+                    // 设置字符集
+                    if ($this->configProvider->getCharset()) {
+                        $connection->exec("SET NAMES '{$this->configProvider->getCharset()}'");
+                    }
+                    return $connection;
+                } catch (PDOException $e) {
+                    throw new LinkException($e->getMessage());
+                }
             }
-            // 设置字符集
-            if ($this->configProvider->getCharset()) {
-                $this->link->exec("SET NAMES '{$this->configProvider->getCharset()}'");
-            }
-        } catch (PDOException $e) {
-            throw new LinkException($e->getMessage());
-        }
+        );
+        $this->fromPool = true;
         return $this;
     }
 
     public function close(): void
     {
-        $this->link = null;
+        // 如果连接来自连接池，归还到池中；否则直接释放
+        if ($this->link !== null) {
+            if ($this->fromPool) {
+                ConnectionPool::releaseConnection($this->link, $this->configProvider);
+            }
+            $this->link = null;
+            $this->fromPool = false;
+        }
+    }
+
+    /**
+     * 析构函数：确保连接在使用后被归还到连接池
+     */
+    public function __destruct()
+    {
+        $this->close();
     }
 
     public function getLink(): PDO

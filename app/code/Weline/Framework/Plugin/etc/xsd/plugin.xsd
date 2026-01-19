@@ -23,7 +23,7 @@
                     <xs:unique name="uniqueInterceptorName">
                         <xs:annotation>
                             <xs:documentation>
-                                Interceptor name must be unique.
+                                拦截器名称必须唯一。
                             </xs:documentation>
                         </xs:annotation>
                         <xs:selector xpath="interceptor"/>
@@ -35,7 +35,7 @@
         <xs:unique name="uniquePluginName">
             <xs:annotation>
                 <xs:documentation>
-                    Plugin name must be unique.
+                    插件名称必须唯一。
                 </xs:documentation>
             </xs:annotation>
             <xs:selector xpath="plugin"/>
@@ -46,7 +46,7 @@
     <xs:complexType name="pluginDeclaration">
         <xs:annotation>
             <xs:documentation>
-                Plugin declaration.
+                插件声明。
             </xs:documentation>
         </xs:annotation>
         <xs:sequence>
@@ -59,18 +59,45 @@
     <xs:complexType name="interceptorDeclaration">
         <xs:annotation>
             <xs:documentation>
-                Interceptor declaration.
+                拦截器声明。
             </xs:documentation>
         </xs:annotation>
-        <xs:attribute name="name" type="xs:string" use="required"/>
-        <xs:attribute name="instance" type="xs:string" use="optional"/>
-        <xs:attribute name="disabled" type="xs:boolean" use="optional"/>
-        <xs:attribute name="sort" type="xs:integer" use="optional"/>
+        <xs:attribute name="name" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    拦截器名称，在插件内必须唯一。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="instance" type="xs:string" use="required">
+            <xs:annotation>
+                <xs:documentation>
+                    实现拦截器方法的插件实例类名。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="disabled" type="xs:boolean" use="optional" default="false">
+            <xs:annotation>
+                <xs:documentation>
+                    是否禁用该拦截器。默认为 false。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="sort" type="xs:integer" use="optional" default="10000">
+            <xs:annotation>
+                <xs:documentation>
+                    拦截器的排序顺序。数值越小越先执行。
+                    当同一个类和方法定义了多个拦截器时，
+                    它们将按照 sort 值的升序执行。
+                    如果未指定，默认值为 10000。
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
     </xs:complexType>
     <xs:simpleType name="pluginName">
         <xs:annotation>
             <xs:documentation>
-                Plugin name can contain only [a-zA-Z0-9_].
+                插件名称只能包含 [a-zA-Z0-9_]。
             </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
@@ -80,7 +107,7 @@
     <xs:simpleType name="pluginClass">
         <xs:annotation>
             <xs:documentation>
-                Plugin class can contain only [a-zA-Z0-9_].
+                插件类名只能包含 [a-zA-Z0-9_]。
             </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">

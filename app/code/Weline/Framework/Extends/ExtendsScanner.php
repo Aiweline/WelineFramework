@@ -158,8 +158,16 @@ class ExtendsScanner
                 $relativePath = str_replace('\\', '/', $relativePath);
                 
                 // 确保路径以 extends/ 开头
+                // 注意：如果 basePath 末尾没有分隔符，str_replace 可能无法正确替换
+                // 需要处理两种情况：basePath/extends/... 和 basePath\extends\...
                 if (!str_starts_with($relativePath, 'extends/')) {
-                    continue;
+                    // 尝试使用 rtrim 后的 basePath 再次替换
+                    $basePathTrimmed = rtrim($basePath, '/\\');
+                    $relativePath = str_replace($basePathTrimmed . DIRECTORY_SEPARATOR, '', $filePath);
+                    $relativePath = str_replace('\\', '/', $relativePath);
+                    if (!str_starts_with($relativePath, 'extends/')) {
+                        continue;
+                    }
                 }
 
                 // 解析目标模块
@@ -175,12 +183,33 @@ class ExtendsScanner
                     continue;
                 }
 
-                // 将路径转换为模块名 (Weline/Ai -> Weline_Ai, Weline_Sticker -> Weline_Sticker)
+                // 将路径转换为模块名
+                // 如果路径已经是模块名格式 (Weline_Ai)，直接使用
+                // 如果路径是目录格式 (Weline/Ai)，转换为模块名格式
                 $targetModule = str_replace('/', '_', $targetModulePath);
+                $fileRelativePath = null; // 初始化 fileRelativePath
                 
-                // 验证模块名格式（必须是 Vendor_Module 格式，且不包含特殊字符）
+                // 如果转换后仍不符合模块名格式，尝试从后续路径段构建模块名
+                // 例如：extends/module/Weline/Ai/Adapter/... -> Weline_Ai
                 if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*_[A-Za-z][A-Za-z0-9_]*$/', $targetModule)) {
-                    continue; // 跳过无效的模块名
+                    // 尝试从后续路径段构建模块名
+                    if (count($pathParts) >= 4) {
+                        $vendor = $targetModulePath; // 第一个路径段作为 Vendor
+                        $module = $pathParts[3] ?? ''; // 第二个路径段作为 Module
+                        if (!empty($vendor) && !empty($module)) {
+                            $targetModule = $vendor . '_' . $module;
+                            // 验证新构建的模块名格式
+                            if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*_[A-Za-z][A-Za-z0-9_]*$/', $targetModule)) {
+                                continue; // 跳过无效的模块名
+                            }
+                            // 调整 fileRelativePath，因为多使用了一个路径段
+                            $fileRelativePath = implode('/', array_slice($pathParts, 4));
+                        } else {
+                            continue; // 跳过无效的模块名
+                        }
+                    } else {
+                        continue; // 跳过无效的模块名
+                    }
                 }
 
                 // 特殊处理：如果是 Weline_Sticker 扩展，则跳过后续的路径解析
@@ -209,7 +238,10 @@ class ExtendsScanner
                     }
                 } else {
                     // 提取文件相对路径（去掉 extends/{type}/{ModuleName}/ 前缀）
-                    $fileRelativePath = implode('/', array_slice($pathParts, 3));
+                    // 如果 fileRelativePath 还没有设置（即 targetModule 是直接匹配的），则设置它
+                    if ($fileRelativePath === null) {
+                        $fileRelativePath = implode('/', array_slice($pathParts, 3));
+                    }
                 }
 
                 if (!isset($result[$targetModule])) {
@@ -227,7 +259,17 @@ class ExtendsScanner
                 ];
 
                 // 如果是 Sticker 扩展，添加特殊信息
-                if ($pathParts[2] ?? '' === 'Weline_Sticker') {
+                // 注意：只有在 targetModule 是 Weline_Sticker 时才标记为 Sticker 扩展
+                // 但是，如果 targetModule 已经被重新解析（例如从 Weline_Sticker 解析为其他模块），则不应该标记为 Sticker 扩展
+                // 这里需要检查原始路径，而不是解析后的 targetModule
+                $originalTargetModulePath = $pathParts[2] ?? '';
+                if ($originalTargetModulePath === 'Weline_Sticker' && $targetModule !== 'Weline_Sticker') {
+                    // 这是 Sticker 扩展，但目标模块已经被重新解析
+                    $extendInfo['is_sticker_extension'] = true;
+                    $extendInfo['sticker_type'] = $type; // module 或 theme
+                } elseif ($targetModule === 'Weline_Sticker') {
+                    // 这是直接扩展 Weline_Sticker 的扩展（不应该发生，因为 Weline_Sticker 扩展会被重新解析）
+                    // 但为了安全起见，也标记为 Sticker 扩展
                     $extendInfo['is_sticker_extension'] = true;
                     $extendInfo['sticker_type'] = $type; // module 或 theme
                 }

@@ -188,8 +188,19 @@ class Taglib
         return $name_str;
     }
 
+    /**
+     * 静态缓存：在同一个请求中缓存已收集的标签配置
+     * 避免重复的事件分发和标签类实例化
+     */
+    private static ?array $cachedTags = null;
+
     public function getTags(Template $template, string $fileName = '', $content = ''): array
     {
+        // 优化：使用静态缓存，避免同一请求内重复收集标签
+        if (self::$cachedTags !== null) {
+            return self::$cachedTags;
+        }
+        
         $tags = [
             'php' => [
                 'tag-start' => 1,
@@ -310,6 +321,9 @@ class Taglib
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
+                        // 优化：使用静态缓存 HookReader 实例，避免重复实例化（在函数最外层声明）
+                        static $cachedHookReader = null;
+                        
                         // 处理成对标签的情况（支持 else）
                         if ($tag_key === 'tag') {
                             $content = $tag_data[2] ?? '';
@@ -323,25 +337,44 @@ class Taglib
                                 $else_pos = is_int($else_matches[0][1]) ? $else_matches[0][1] : (int)$else_matches[0][1];
                                 $else_match_str = $else_matches[0][0] ?? '';
                                 $hook_name = trim(substr($content, 0, $else_pos));
+                                // 移除 hook 名称中的所有空白字符（包括换行符、制表符等）
+                                $hook_name = preg_replace('/\s+/', '', $hook_name);
                                 $else_content = substr($content, $else_pos + strlen($else_match_str));
                             } else {
-                                // 没有 else 标签，但可能内容中混入了 HTML 或其他内容
-                                // 尝试找到第一个 HTML 标签或 PHP 代码的位置，在那之前提取 hook 名称
+                                // 没有 else 标签的情况
+                                // 支持简单格式：<w:hook>HookName</w:hook>
+                                $trimmed_content = trim($content);
+                                
+                                // 检查是否包含 HTML 标签或 PHP 代码
                                 $html_pos = strpos($content, '<');
                                 $php_pos = strpos($content, '<?');
-                                $min_pos = false;
-                                if ($html_pos !== false) {
-                                    $min_pos = $html_pos;
-                                }
-                                if ($php_pos !== false) {
-                                    $min_pos = ($min_pos === false) ? $php_pos : min($min_pos, $php_pos);
-                                }
-                                if ($min_pos !== false) {
-                                    $hook_name = trim(substr($content, 0, $min_pos));
-                                    $else_content = substr($content, $min_pos);
-                                } else {
-                                    $hook_name = trim($content);
+                                
+                                if ($html_pos === false && $php_pos === false) {
+                                    // 没有 HTML 标签和 PHP 代码，直接作为 hook 名称处理
+                                    // 移除所有空白字符（包括换行符、制表符等），只保留 hook 名称
+                                    $hook_name = preg_replace('/\s+/', '', $trimmed_content);
                                     $else_content = '';
+                                } else {
+                                    // 可能内容中混入了 HTML 或其他内容
+                                    // 找到第一个 HTML 标签或 PHP 代码的位置，在那之前提取 hook 名称
+                                    $min_pos = false;
+                                    if ($html_pos !== false) {
+                                        $min_pos = $html_pos;
+                                    }
+                                    if ($php_pos !== false) {
+                                        $min_pos = ($min_pos === false) ? $php_pos : min($min_pos, $php_pos);
+                                    }
+                                    if ($min_pos !== false) {
+                                        $hook_name = trim(substr($content, 0, $min_pos));
+                                        // 移除 hook 名称中的空白字符
+                                        $hook_name = preg_replace('/\s+/', '', $hook_name);
+                                        $else_content = substr($content, $min_pos);
+                                    } else {
+                                        // 如果没找到 HTML 或 PHP 标签，尝试提取 hook 名称（在遇到非合法字符前停止）
+                                        $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $trimmed_content);
+                                        $hook_name = preg_replace('/\s+/', '', $hook_name);
+                                        $else_content = '';
+                                    }
                                 }
                             }
                             
@@ -355,19 +388,21 @@ class Taglib
                             // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
                             $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
                             $hook_name = trim($hook_name);
-                            
                             // 检查 hook 是否存在
                             $hook_exists = false;
                             $hook_has_files = false;
                             
                             try {
                                 // 使用 HookData 检查 hook 是否存在
-                                $hook_exists = HookData::hookExists($hook_name);
-                                
+                                $hook_exists = \Weline\Hook\HookData::hookExists($hook_name);
                                 // 检查 hook 是否有实现文件
                                 if ($hook_exists) {
                                     try {
-                                        $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        // 使用缓存的 HookReader 实例
+                                        if ($cachedHookReader === null) {
+                                            $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        }
+                                        $hookReader = $cachedHookReader;
                                         $hookReader->setPath($hook_name);
                                         $hook_files = $hookReader->getFileList();
                                         $hook_has_files = !empty($hook_files);
@@ -387,16 +422,18 @@ class Taglib
                                     try {
                                         $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
                                         
-                                        // 在开发环境下，如果 generated/hooks.php 不存在，自动刷新
+                                        // 在开发环境下，如果 generated/hooks.php 不存在，提示需要运行 setup:upgrade
                                         $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
                                         if (!file_exists($registryFile)) {
-                                            $hookRegistry->refresh();
+                                            throw new \Exception(
+                                                sprintf(
+                                                    'Hook 注册表文件不存在，请先运行 php bin/w setup:upgrade 命令收集注册表信息。'
+                                                )
+                                            );
                                         }
                                         
-                                        // 如果钩子没有规约，尝试刷新注册表后再检查一次
+                                        // 如果钩子没有规约，提示需要运行 setup:upgrade
                                         if (!$hookRegistry->hasSpec($hook_name)) {
-                                            // 强制刷新注册表，确保最新
-                                            $hookRegistry->refresh();
                                             // 重新检查
                                             if (!$hookRegistry->hasSpec($hook_name)) {
                                                 // 解析模块名
@@ -436,7 +473,11 @@ class Taglib
                                     
                                     // 在开发模式下，获取 hook 实现文件列表并添加注释
                                     try {
-                                        $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        // 使用缓存的 HookReader 实例
+                                        if ($cachedHookReader === null) {
+                                            $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        }
+                                        $hookReader = $cachedHookReader;
                                         $hookReader->setPath($hook_name);
                                         // 获取原始文件列表（不使用 callback，获取绝对路径）
                                         $hook_files_raw = $hookReader->getFileList(function($modules_files) {
@@ -482,36 +523,65 @@ class Taglib
                                 return $else_content;
                             }
                         } else {
-                            // 单标签情况（向后兼容）
-                            $hook_name = trim($tag_data[1] ?? '');
-                            // 清理 hook 名称，移除可能混入的 PHP 代码标签和 HTML 标签
-                            $hook_name = preg_replace('/<\?php\s*else\s*:?\s*\?>/i', '', $hook_name);
-                            $hook_name = preg_replace('/<\?=\s*else\s*\?>/i', '', $hook_name);
-                            // 移除可能混入的 HTML 标签
-                            $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
-                            // 移除可能混入的 PHP 代码
-                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
-                            // 只保留 hook 名称（在遇到非合法字符前停止）
-                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
-                            $hook_name = trim($hook_name);
-                            
-                            // 在开发环境下，检查 hook 是否有规约（在 hook.php 中定义）
-                            // 统一要求所有 hook 都必须定义规约
-                            // 再次清理 hook 名称，确保没有混入其他内容
-                            $hook_name = preg_replace('/<[^>]+>/', '', $hook_name); // 移除 HTML 标签
-                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name); // 移除 PHP 代码
-                            // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
-                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
-                            $hook_name = trim($hook_name);
+                            // 单标签情况：支持 @hook() 和 @hook{} 两种格式
+                            // 处理方式与其他标签一致（如 @var(), @lang() 等）
+                            if ($tag_key === '@tag()' || $tag_key === '@tag{}') {
+                                $hook_name = trim($tag_data[1] ?? '');
+                                
+                                // 对于 @hook() 或 @hook{} 格式，括号/花括号内的内容应该就是 hook 名称
+                                // 但是可能包含后续内容（如另一个 @hook() 调用），需要清理
+                                
+                                // 先检查是否包含后续的 @hook( 或 @hook{ 或其他标签调用
+                                // 如果包含，只保留第一个 hook 名称部分（在遇到后续 hook 调用之前截断）
+                                $next_hook_pos = strpos($hook_name, '@hook(');
+                                if ($next_hook_pos === false) {
+                                    $next_hook_pos = strpos($hook_name, '@hook{');
+                                }
+                                if ($next_hook_pos !== false) {
+                                    $hook_name = trim(substr($hook_name, 0, $next_hook_pos));
+                                }
+                                
+                                // 移除可能混入的 PHP 代码标签和 HTML 标签
+                                $hook_name = preg_replace('/<\?php\s*else\s*:?\s*\?>/i', '', $hook_name);
+                                $hook_name = preg_replace('/<\?=\s*else\s*\?>/i', '', $hook_name);
+                                // 移除可能混入的 HTML 标签
+                                $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
+                                // 移除可能混入的 PHP 代码
+                                $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
+                                
+                                // 只保留 hook 名称（在遇到非合法字符前停止）
+                                // hook 名称格式：Module::area::type::component::position，只允许字母、数字、下划线、连字符、冒号
+                                // 遇到空格、括号等字符时，应该截断
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = trim($hook_name);
+                                
+                                // 在开发环境下，检查 hook 是否有规约（在 hook.php 中定义）
+                                // 统一要求所有 hook 都必须定义规约
+                                // 再次清理 hook 名称，确保没有混入其他内容
+                                $hook_name = preg_replace('/<[^>]+>/', '', $hook_name); // 移除 HTML 标签
+                                $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name); // 移除 PHP 代码
+                                // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = trim($hook_name);
+                            } else {
+                                // 其他格式（向后兼容）
+                                $hook_name = trim($tag_data[1] ?? '');
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = trim($hook_name);
+                            }
                             
                             if (defined('DEV') && DEV) {
                                 try {
                                     $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
                                     
-                                    // 在开发环境下，如果 generated/hooks.php 不存在，自动刷新
+                                    // 在开发环境下，如果 generated/hooks.php 不存在，提示需要运行 setup:upgrade
                                     $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
                                     if (!file_exists($registryFile)) {
-                                        $hookRegistry->refresh();
+                                        throw new \Exception(
+                                            sprintf(
+                                                'Hook 注册表文件不存在，请先运行 php bin/w setup:upgrade 命令收集注册表信息。'
+                                            )
+                                        );
                                     }
                                     
                                     if (!$hookRegistry->hasSpec($hook_name)) {
@@ -551,48 +621,51 @@ class Taglib
                                 }
                             }
                         
-                        // 在编译阶段检查 hook 是否有实现文件，如果没有就直接返回空字符串
+                        // 在编译阶段尝试检查 hook 是否有实现文件（用于开发模式注释）
+                        // 但即使没有找到文件，也生成 getHook() 调用，让运行时处理
+                        $hook_files = [];
                         try {
-                            $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                            // 使用缓存的 HookReader 实例
+                            if ($cachedHookReader === null) {
+                                $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                            }
+                            $hookReader = $cachedHookReader;
                             $hookReader->setPath($hook_name);
                             $hook_files = $hookReader->getFileList();
-                            // 如果没有实现文件，直接返回空字符串，不生成 PHP 代码
-                            if (empty($hook_files)) {
-                                return '';
-                            }
-                            
-                            // 在开发模式下，添加 hook 实现来源注释
-                            if (defined('DEV') && DEV && !empty($hook_files)) {
-                                $hook_comment = "<!-- Hook: {$hook_name} -->\n";
-                                $hook_comment .= "<!-- Hook 实现来源（开发模式显示）:\n";
-                                foreach ($hook_files as $module => $file) {
-                                    // 提取相对路径
-                                    if (strpos($file, BP) === 0) {
-                                        $relativePath = str_replace(BP, '', $file);
-                                        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
-                                    } else {
-                                        // 如果已经是相对路径格式（Module::path），直接使用
-                                        $relativePath = str_replace($module . '::', '', $file);
-                                    }
-                                    
-                                    $hook_comment .= "  - 模块: {$module}\n";
-                                    $hook_comment .= "    文件: {$relativePath}\n";
-                                    
-                                    // 检查是否有 hover 相关的 CSS 类
-                                    $cssClass = str_replace(['::', '-'], ['-', '-'], $hook_name);
-                                    $hook_comment .= "    CSS 类: .{$cssClass}, .header-{$cssClass}\n";
-                                }
-                                $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
-                                $hook_comment .= "-->\n";
-                                
-                                return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
-                            }
                         } catch (\Throwable $e) {
-                            // 如果检查失败（例如 Hook 模块未安装或 HookReader 不可用），仍然生成 PHP 代码
+                            // 如果检查失败（例如 Hook 模块未安装或 HookReader 不可用），继续生成 PHP 代码
                             // 这样可以在运行时处理
                         }
                         
-                        // 有实现时，生成 PHP 代码
+                        // 在开发模式下，如果有实现文件，添加 hook 实现来源注释
+                        if (defined('DEV') && DEV && !empty($hook_files)) {
+                            $hook_comment = "<!-- Hook: {$hook_name} -->\n";
+                            $hook_comment .= "<!-- Hook 实现来源（开发模式显示）:\n";
+                            foreach ($hook_files as $module => $file) {
+                                // 提取相对路径
+                                if (strpos($file, BP) === 0) {
+                                    $relativePath = str_replace(BP, '', $file);
+                                    $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+                                } else {
+                                    // 如果已经是相对路径格式（Module::path），直接使用
+                                    $relativePath = str_replace($module . '::', '', $file);
+                                }
+                                
+                                $hook_comment .= "  - 模块: {$module}\n";
+                                $hook_comment .= "    文件: {$relativePath}\n";
+                                
+                                // 检查是否有 hover 相关的 CSS 类
+                                $cssClass = str_replace(['::', '-'], ['-', '-'], $hook_name);
+                                $hook_comment .= "    CSS 类: .{$cssClass}, .header-{$cssClass}\n";
+                            }
+                            $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
+                            $hook_comment .= "-->\n";
+                            
+                            return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
+                        }
+                        
+                        // 始终生成 PHP 代码，让运行时处理 hook 文件查找
+                        // 即使编译时没有找到文件，运行时可能能找到（因为缓存可能已更新）
                         return "<?=\$this->getHook('" . $hook_name . "')?>";
                         }
                     }
@@ -1268,28 +1341,35 @@ class Taglib
             $reordered_tags[$tag] = $tag_data;      // 原始标签紧随其后
         }
         $tags = $reordered_tags;
+        
+        // 缓存结果，避免同一请求内重复收集
+        self::$cachedTags = $tags;
+        
         return $tags;
     }
 
     public function tagReplace(Template &$template, string &$content, string &$fileName = ''): array|string
     {
-        # 替换{{key}}标签
+        // 替换{{key}}标签
         preg_match_all('/\{\{([\s\S]*?)\}\}/', $content, $matches, PREG_SET_ORDER);
         foreach ($matches as $key => $value) {
             $content = str_replace($value[0], "<?={$this->varParser(trim($value[1]))};?>", $content);
         }
-        # 非开发环境清除所有注释
+        
+        // 非开发环境清除所有注释
         if (PROD) {
             preg_match_all('/\<!--([\s\S]*?)-->/', $content, $matches, PREG_SET_ORDER);
             foreach ($matches as $key => $value) {
                 $content = str_replace($value[0], '', $content);
             }
         }
-
-        # 系统自带的标签
+        
+        // 系统自带的标签
         $tags = $this->getTags($template, $fileName, $content);
         
-        # 直接按getTags返回的顺序处理标签
+        // 直接按getTags返回的顺序处理标签
+        $totalTagProcessTime = 0;
+        $tagCount = 0;
         foreach ($tags as $tag => $tag_configs) {
             $tag_patterns = [
                 'tag-self-close-with-attrs' => '/<' . $tag . '([\s\S]*?)\/>/m',
@@ -1319,11 +1399,15 @@ class Taglib
             $tag_config_patterns['@tag()'] = $tag_patterns['@tag()'];
             $tag_config_patterns['@tag{}'] = $tag_patterns['@tag{}'];
 
+            $tagMatchCount = 0;
+            $tagCallbackTime = 0;
             foreach ($tag_config_patterns as $tag_key => $tag_pattern) {
                 preg_match_all($tag_pattern, $content, $customTags, PREG_SET_ORDER);
+                $tagMatchCount += count($customTags);
+                
                 foreach ($customTags as $customTag) {
-                    $format_function = $tag_configs['callback'];
                     
+                    $format_function = $tag_configs['callback'];
                     if (isset($customTag[1])) {
                         if ($tag_key == 'tag' or $tag_key == 'tag-self-close-with-attrs' or $tag_key == 'tag-start') {
                             // 替换操作符
@@ -1379,7 +1463,6 @@ class Taglib
                             }
                         }
                     }
-
                     $result = $format_function($tag_key, $tag_configs, $customTag, $formatedAttributes);
                     $content = str_replace($customTag[0], $result, $content);
                 }

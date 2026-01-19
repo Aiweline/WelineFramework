@@ -224,4 +224,52 @@ interface ConfigProviderInterface
      * @return array
      */
     public function getOptions(): array;
+
+    /**
+     * @DESC          # 获取连接池大小
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     * @return int
+     */
+    public function getPoolSize(): int;
+
+    /**
+     * @DESC          # 设置连接池大小
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     *
+     * @param int $poolSize
+     *
+     * @return ConfigProviderInterface
+     */
+    public function setPoolSize(int $poolSize): ConfigProviderInterface;
+
+    /**
+     * @DESC          # 是否启用持久连接
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2025/1/20
+     * 参数区：
+     * @return bool
+     */
+    public function isPersistent(): bool;
+
+    /**
+     * @DESC          # 设置是否启用持久连接
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2025/1/20
+     * 参数区：
+     * @param bool $persistent
+     * @return ConfigProviderInterface
+     */
+    public function setPersistent(bool $persistent): ConfigProviderInterface;
 }

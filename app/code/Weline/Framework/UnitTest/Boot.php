@@ -11,4 +11,15 @@ namespace Weline\Framework\UnitTest;
 
 trait Boot
 {
+    /**
+     * @DESC         |获取测试实例
+     *
+     * 参数区：
+     * @param string $class
+     * @return mixed
+     */
+    public function getInstance(string $class)
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance($class);
+    }
 }
