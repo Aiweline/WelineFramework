@@ -10,13 +10,14 @@
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Model\WelineTheme;
 
 /**
  * 主题配置合并助手类
  * 
- * 支持JSON配置文件的深度合并，处理主题继承链
+ * 职责：合并主题配置，支持JSON配置文件的深度合并，处理主题继承链
+ * 遵循：单一职责原则 (SRP)、依赖倒置原则 (DIP)
  */
 class ConfigMerger
 {
@@ -24,10 +25,24 @@ class ConfigMerger
      * @var WelineTheme
      */
     private WelineTheme $welineTheme;
+    
+    /**
+     * @var ThemeChainResolverInterface
+     */
+    private ThemeChainResolverInterface $themeChainResolver;
 
-    public function __construct(WelineTheme $welineTheme)
-    {
+    /**
+     * 依赖注入：遵循依赖倒置原则 (DIP)
+     * 
+     * @param WelineTheme $welineTheme
+     * @param ThemeChainResolverInterface $themeChainResolver
+     */
+    public function __construct(
+        WelineTheme $welineTheme,
+        ThemeChainResolverInterface $themeChainResolver
+    ) {
         $this->welineTheme = $welineTheme;
+        $this->themeChainResolver = $themeChainResolver;
     }
 
     /**
@@ -56,7 +71,7 @@ class ConfigMerger
         }
 
         // 2. 获取主题继承链（从基础到当前）
-        $themeChain = $this->getThemeChain($theme);
+        $themeChain = $this->themeChainResolver->getThemeChain($theme);
 
         // 3. 按继承链顺序合并配置（父主题在前，子主题在后）
         foreach ($themeChain as $chainTheme) {
@@ -71,54 +86,6 @@ class ConfigMerger
         }
 
         return $config;
-    }
-
-    /**
-     * 获取主题继承链（从基础到当前）
-     * 
-     * @param WelineTheme $theme 当前主题
-     * @return WelineTheme[] 主题继承链数组
-     */
-    private function getThemeChain(WelineTheme $theme): array
-    {
-        $chain = [];
-        $visited = [];
-        $currentTheme = $theme;
-
-        // 递归收集父主题
-        while ($currentTheme && $currentTheme->getId()) {
-            $themeId = $currentTheme->getId();
-            
-            // 防止循环引用
-            if (in_array($themeId, $visited)) {
-                break;
-            }
-            $visited[] = $themeId;
-
-            // 将父主题添加到链的前面（保证顺序：基础 → 父 → 子）
-            array_unshift($chain, $currentTheme);
-
-            // 获取父主题
-            $parentId = $currentTheme->getParentId();
-            if ($parentId) {
-                try {
-                    /** @var WelineTheme $parentTheme */
-                    $parentTheme = ObjectManager::getInstance(WelineTheme::class);
-                    $parentTheme->load($parentId);
-                    if ($parentTheme->getId()) {
-                        $currentTheme = $parentTheme;
-                    } else {
-                        break;
-                    }
-                } catch (\Exception $e) {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        return $chain;
     }
 
     /**

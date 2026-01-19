@@ -54,6 +54,23 @@
 - ✅ 设置和获取变量值
 - ✅ 获取配置列表
 
+### 7. ThemeFileOverrideTest.php
+**测试范围**：主题文件覆盖机制
+- ✅ 模板文件覆盖机制（激活主题优先）
+- ✅ JS模块文件覆盖机制（同名文件以激活主题为准）
+- ✅ CSS文件覆盖机制
+- ✅ 主题继承链中的文件查找顺序
+- ✅ 同名文件覆盖规则验证
+- ✅ AssetMerger的去重机制
+
+### 8. AssetMergerOverrideTest.php
+**测试范围**：AssetMerger文件覆盖机制
+- ✅ 同名JS文件覆盖机制
+- ✅ 同名CSS文件覆盖机制
+- ✅ AssetMerger从激活主题开始收集
+- ✅ 主题继承链中的文件收集
+- ✅ 去重逻辑验证（同名文件只保留激活主题的版本）
+
 ## 运行测试
 
 ### 运行所有Theme模块测试
@@ -120,6 +137,17 @@ vendor/bin/phpunit --filter testExtractInlineCss app/code/Weline/Theme/test/Unit
 10. ✅ **依赖关系正确追踪**
     - `LayoutDependencyTrackerTest::testExtractGetPartialsPathDependencies()`
     - `LayoutDependencyTrackerTest::testExtractFetchDependencies()`
+
+11. ✅ **主题文件覆盖机制：同名文件以激活主题为准**
+    - `ThemeFileOverrideTest::testTemplateFileOverrideMechanism()` - 模板文件覆盖
+    - `ThemeFileOverrideTest::testJsModuleFileOverrideMechanism()` - JS模块文件覆盖
+    - `ThemeFileOverrideTest::testCssFileOverrideMechanism()` - CSS文件覆盖
+    - `ThemeFileOverrideTest::testSameNameFileOverrideRule()` - 同名文件覆盖规则
+
+12. ✅ **AssetMerger文件覆盖机制**
+    - `AssetMergerOverrideTest::testSameNameJsFileOverride()` - 同名JS文件覆盖
+    - `AssetMergerOverrideTest::testSameNameCssFileOverride()` - 同名CSS文件覆盖
+    - `AssetMergerOverrideTest::testDeduplicationLogic()` - 去重逻辑验证
 
 ## 测试环境要求
 

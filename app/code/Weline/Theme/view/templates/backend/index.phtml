@@ -457,6 +457,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     'use strict';
@@ -1413,7 +1417,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     fullscreenWindow.focus();
                 } else {
                     // 如果弹窗被阻止，提示用户
-                    alert('<?= __('无法打开全屏预览窗口，请检查浏览器是否阻止了弹窗') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '<?= __('提示') ?>',
+                            text: '<?= __('无法打开全屏预览窗口，请检查浏览器是否阻止了弹窗') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __('无法打开全屏预览窗口，请检查浏览器是否阻止了弹窗') ?>');
+                    }
                 }
             });
         }
@@ -1775,7 +1788,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         }
 
         if (!currentThemeId) {
-            alert('<?= __('请先选择需要配置的主题') ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择需要配置的主题') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择需要配置的主题') ?>');
+            }
             return;
         }
 
@@ -3361,7 +3383,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     fullscreenWindow.focus();
                 } else {
                     // 如果弹窗被阻止，提示用户
-                    alert('<?= __('请允许弹出窗口以进行全屏预览') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '<?= __('提示') ?>',
+                            text: '<?= __('请允许弹出窗口以进行全屏预览') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __('请允许弹出窗口以进行全屏预览') ?>');
+                    }
                 }
             });
         });
@@ -3687,17 +3718,45 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 if (typeof showMessage === 'function') {
                     showMessage('success', data.msg || '<?= __('配置保存成功') ?>');
                 } else {
-                    alert(data.msg || '<?= __('配置保存成功') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: data.msg || '<?= __('配置保存成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log(data.msg || '<?= __('配置保存成功') ?>');
+                    }
                 }
             } else {
-                alert(data.msg || '<?= __('保存失败') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: data.msg || '<?= __('保存失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(data.msg || '<?= __('保存失败') ?>');
+                }
                 saveBtn.disabled = false;
                 saveBtn.textContent = originalText;
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __('保存失败') ?>: ' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('保存失败') ?>: ' + error.message);
+            }
             saveBtn.disabled = false;
             saveBtn.textContent = originalText;
         });
@@ -3797,17 +3856,45 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 if (typeof showMessage === 'function') {
                     showMessage('success', data.message || '<?= __('配置保存成功') ?>');
                 } else {
-                    alert(data.message || '<?= __('配置保存成功') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: data.message || '<?= __('配置保存成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log(data.message || '<?= __('配置保存成功') ?>');
+                    }
                 }
             } else {
-                alert(data.message || '<?= __('保存失败') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: data.message || '<?= __('保存失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(data.message || '<?= __('保存失败') ?>');
+                }
                 saveBtn.disabled = false;
                 saveBtn.textContent = originalText;
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __('保存失败') ?>: ' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('保存失败') ?>: ' + error.message);
+            }
             saveBtn.disabled = false;
             saveBtn.textContent = originalText;
         });

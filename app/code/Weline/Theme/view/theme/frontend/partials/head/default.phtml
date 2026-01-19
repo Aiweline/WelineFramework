@@ -176,6 +176,8 @@ $this->setData('envConfig', $envConfig);
 <!-- 注意：Token存储管理器、Switcher组件等 Frontend 资源由 Frontend 模块负责加载 -->
 <!-- 主题JS -->
 <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+<!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
+<w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
 <!-- 注意：getHeader()->getHtml() 由 Frontend 模块的 head.phtml 负责 -->
 
 <style>
