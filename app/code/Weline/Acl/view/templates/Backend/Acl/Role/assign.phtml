@@ -126,6 +126,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <li id='{{tree.source_id}}' {{attr}}>{{tree.source_name}}
                                                 <if condition="tree.method">
                                                     ({{tree.method}})
+                                                <else/>
+                                                    (ALL)
                                                 </if>
                                                 <?php
                                                 /**@var \Weline\Acl\Model\Acl $tree */
@@ -143,7 +145,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             $result .= '<ul>';
                                             /**@var \Weline\Acl\Model\Acl $sub */
                                             foreach ($tree->getSub() as $sub) {
-                                                $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
+                                                $method = $sub->getMethod() ? "({$sub->getMethod()})" : '(ALL)';
                                                 $attr = getLiAttr($sub);
                                                 $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sub->getSourceName()}{$method}";
                                                 $result .= getTreeNode($sub);

@@ -44,18 +44,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         WhiteAclSource $whiteAclSource,
         AclCache       $aclCache
     )
-    {
-        $this->session = $session;
-        $this->whiteAclSource = $whiteAclSource;
-        $this->aclCache = $aclCache->create();
-    }
+    {$this->session = $session;$this->whiteAclSource = $whiteAclSource;$this->aclCache = $aclCache->create();}
 
     /**
      * @inheritDoc
      */
     public function execute(Event &$event): void
-    {
-        // 从事件中获取 route 对象
+    {// 从事件中获取 route 对象
         // 事件数据格式：['route' => $routeObject]
         // 由于 Event 类将数据直接存储在 _data 中（而不是 _data['data']），
         // 需要直接从事件数据中获取 route
@@ -93,15 +88,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         $request = $route->getRequest();
 
         // 处理后台和后台API请求
-        if ($request->isBackend() || $request->isApiBackend()) {
-            $this->validateBackendAccess($request, $event);
-        }
+        if ($request->isBackend() || $request->isApiBackend()) {$this->validateBackendAccess($request, $event);}
         
         // 处理前端API请求（需要Acl验证的）
-        if ($request->isApiFrontend()) {
-            $this->validateFrontendApiAccess($request, $event);
-        }
-    }
+        if ($request->isApiFrontend()) {$this->validateFrontendApiAccess($request, $event);}}
 
     /**
      * 验证后台访问权限（包括后台和后台API）

@@ -56,19 +56,73 @@ class Role extends \Weline\Admin\Controller\BaseController
         }
 
         if ($this->request->isPost()) {
-            $role = $this->role->clear()->where($this->role::fields_ROLE_NAME, $this->request->getPost('role_name'))->find()->fetch();
+            // 对于 AJAX 请求，优先从 body 中获取 JSON 数据，否则使用 POST 数据
+            if ($this->request->isAjax()) {
+                // 尝试从 body 中获取 JSON 数据
+                $bodyParams = $this->request->getBodyParams(true);
+                // 如果 body 参数存在且是数组，使用 body 参数，否则使用 POST 数据
+                if (is_array($bodyParams) && !empty($bodyParams)) {
+                    $postData = $bodyParams;
+                } else {
+                    // 如果 body 参数为空，尝试使用 getParams()，它会合并 body 和 POST 数据
+                    $postData = $this->request->getParams();
+                }
+            } else {
+                $postData = $this->request->getPost();
+            }
+            
+            $role_name = $postData['role_name'] ?? '';
+            if (empty($role_name)) {
+                if ($this->request->isAjax()) {
+                    return $this->jsonResponse(false, __('角色名不能为空！'));
+                }
+                $this->getMessageManager()->addError(__('角色名不能为空！'));
+                $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/acl/role/add'));
+                return $this->fetch('form');
+            }
+            
+            $role = $this->role->clear()->where($this->role::fields_ROLE_NAME, $role_name)->find()->fetch();
             if ($role->getId()) {
+                if ($this->request->isAjax()) {
+                    return $this->jsonResponse(false, __('角色已存在！'));
+                }
                 $this->getMessageManager()->addWarning(__('角色已存在！'));
                 $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/acl/role/add'));
                 return $this->fetch('form');
             }
+            
             try {
-                $this->role->setData($this->request->getPost())
+                $save_result = $this->role->setData($postData)
                     ->save(true, $this->role::fields_ROLE_NAME);
+                
+                if ($this->request->isAjax()) {
+                    if ($save_result) {
+                        return $this->jsonResponse(true, __('角色创建成功！'));
+                    } else {
+                        return $this->jsonResponse(false, __('角色创建失败！'));
+                    }
+                }
+                
+                if ($save_result) {
+                    $this->getMessageManager()->addSuccess(__('角色创建成功！'));
+                } else {
+                    $this->getMessageManager()->addError(__('角色创建失败！'));
+                }
             } catch (\Exception $exception) {
+                if ($this->request->isAjax()) {
+                    $error_msg = $exception->getMessage();
+                    // 检查是否是唯一约束错误
+                    if (str_contains($error_msg, 'duplicate key') || str_contains($error_msg, 'Unique violation')) {
+                        $error_msg = __('角色已存在！');
+                    }
+                    return $this->jsonResponse(false, $error_msg);
+                }
                 $this->getMessageManager()->addException($exception);
             }
-            $this->redirect('*/backend/acl/role');
+            
+            if (!$this->request->isAjax()) {
+                $this->redirect('*/backend/acl/role');
+            }
         } else {
             $this->redirect(404);
         }
@@ -195,6 +249,24 @@ class Role extends \Weline\Admin\Controller\BaseController
             $this->getMessageManager()->addError(__('权限分配失败！'));
         }
         $this->redirect('*/backend/acl/role/assign', ['id' => $role_id]);
+    }
+
+    /**
+     * JSON响应辅助方法
+     * 
+     * @param bool $success
+     * @param string $message
+     * @param array $data
+     * @return string
+     */
+    private function jsonResponse(bool $success, string $message, array $data = []): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data,
+        ], JSON_UNESCAPED_UNICODE);
     }
 
 }
