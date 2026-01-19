@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Cms\Controller;
 
 use Weline\Cms\Model\Page;
+use Weline\Framework\App\Env;
+use Weline\Framework\Cache\CacheFactory;
+use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 
@@ -17,9 +20,21 @@ use Weline\Framework\Router\RouterInterface;
 class Router implements RouterInterface
 {
     /**
-     * 静态缓存，避免重复查询数据库
+     * 静态缓存，避免重复查询数据库（请求内缓存）
      */
     private static array $handleCache = [];
+    
+    /**
+     * 跨请求缓存实例（文件缓存或Redis缓存）
+     */
+    private static ?CacheInterface $crossRequestCache = null;
+    
+    /**
+     * 缓存配置常量
+     */
+    private const CACHE_TTL_FOUND = 3600; // 找到的handle缓存1小时
+    private const CACHE_TTL_NOT_FOUND = 300; // 未找到的handle缓存5分钟
+    private const CACHE_KEY_PREFIX = 'cms_handle_exists_';
     
     /**
      * @inheritDoc
@@ -137,9 +152,19 @@ class Router implements RouterInterface
         // 预览模式下，使用不同的缓存键，避免与正常模式冲突
         $cacheKey = $handle . ($isPreview ? '_preview' : '');
         
-        // 使用静态缓存避免重复查询
+        // 1. 首先检查请求内静态缓存（最快）
         if (isset(self::$handleCache[$cacheKey])) {
             return self::$handleCache[$cacheKey];
+        }
+        
+        // 2. 检查跨请求缓存（文件缓存或Redis缓存）
+        $crossRequestCacheKey = self::CACHE_KEY_PREFIX . md5($cacheKey);
+        $cachedResult = self::getCrossRequestCache()->get($crossRequestCacheKey);
+        if ($cachedResult !== null) {
+            // 缓存命中，更新静态缓存并返回
+            $exists = (bool)$cachedResult;
+            self::$handleCache[$cacheKey] = $exists;
+            return $exists;
         }
         
         try {
@@ -174,17 +199,35 @@ class Router implements RouterInterface
             
             $exists = (bool)$page->getId();
             
-            // 缓存结果
+            // 3. 缓存结果到静态缓存和跨请求缓存
             self::$handleCache[$cacheKey] = $exists;
+            
+            // 根据结果设置不同的TTL：找到的缓存1小时，未找到的缓存5分钟
+            $ttl = $exists ? self::CACHE_TTL_FOUND : self::CACHE_TTL_NOT_FOUND;
+            self::getCrossRequestCache()->set($crossRequestCacheKey, $exists ? '1' : '0', $ttl);
             
             return $exists;
         } catch (\Exception $e) {
             // 如果查询失败，记录日志并返回false
-            if (defined('DEV') && DEV) {
-                error_log('Cms Router Error: ' . $e->getMessage());
+            if (DEV) {
+                \Weline\Framework\App\Env::log_error('cms_router', 'Cms Router Error: ' . $e->getMessage());
             }
             return false;
         }
+    }
+    
+    /**
+     * 获取跨请求缓存实例
+     * 
+     * @return CacheInterface
+     */
+    private static function getCrossRequestCache(): CacheInterface
+    {
+        if (self::$crossRequestCache === null) {
+            $cacheFactory = new CacheFactory('cms_handle_cache', 'CMS Handle存在性缓存', true);
+            self::$crossRequestCache = $cacheFactory->create();
+        }
+        return self::$crossRequestCache;
     }
     
     /**
@@ -193,6 +236,9 @@ class Router implements RouterInterface
     public static function clearCache(): void
     {
         self::$handleCache = [];
+        if (self::$crossRequestCache !== null) {
+            self::$crossRequestCache->clear();
+        }
     }
 }
 

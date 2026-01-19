@@ -489,6 +489,19 @@ class Preview extends BackendController
             // 获取样式配置
             $styleConfig = $data['style_config'] ?? [];
             
+            // 过滤空字符串值，避免覆盖原有配置（保留0、false等有效值）
+            // 对于有默认值的字段（如hero.banner_image_mobile），空字符串表示使用默认值，不应保存
+            $filteredStyleConfig = [];
+            foreach ($styleConfig as $key => $value) {
+                // 如果值为空字符串，跳过不保存（保留原有配置）
+                // 但保留其他类型的空值（如0、false等）
+                if ($value === '' || $value === null) {
+                    continue;
+                }
+                $filteredStyleConfig[$key] = $value;
+            }
+            $styleConfig = $filteredStyleConfig;
+            
             // 如果没有指定样式代码，使用页面当前的样式
             if (!$styleCode) {
                 $styleCode = $page->getData('style') ?: 'default';
