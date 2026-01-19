@@ -239,6 +239,10 @@ $backUrl = $this->getBackendUrl('meta/backend/meta');
         @template(Weline_Admin::common/footer.phtml)
     </div>
 </div>
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
     (function () {
         const beautify = (textarea) => {
@@ -264,9 +268,32 @@ $backUrl = $this->getBackendUrl('meta/backend/meta');
         document.getElementById('validateMetaJson').addEventListener('click', () => {
             try {
                 JSON.parse(metaJsonTextarea.value);
-                window.Toast ? Toast.success('JSON 校验通过') : alert('JSON 校验通过');
+                if (window.Toast) {
+                    Toast.success('JSON 校验通过');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('校验通过') ?>',
+                        text: 'JSON 校验通过',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log('JSON 校验通过');
+                }
             } catch (e) {
-                window.Toast ? Toast.error(e.message) : alert(e.message);
+                if (window.Toast) {
+                    Toast.error(e.message);
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('校验失败') ?>',
+                        text: e.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(e.message);
+                }
             }
         });
 
