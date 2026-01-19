@@ -165,6 +165,10 @@ $backups = $backups ?? [];
     @template(Weline_Admin::common/footer.phtml)
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function createBackup(event) {
     event.preventDefault();
@@ -192,7 +196,17 @@ function createBackup(event) {
 
 function downloadBackup(filename) {
     // TODO: 实现下载功能
-    alert('<?= __('下载备份：') ?>' + filename);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'info',
+            title: '<?= __('下载备份') ?>',
+            text: filename,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } else {
+        console.log('<?= __('下载备份：') ?>' + filename);
+    }
 }
 
 function deleteBackup(filename) {
@@ -200,7 +214,17 @@ function deleteBackup(filename) {
         return;
     }
     // TODO: 实现删除功能
-    alert('<?= __('删除备份：') ?>' + filename);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'info',
+            title: '<?= __('删除备份') ?>',
+            text: filename,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } else {
+        console.log('<?= __('删除备份：') ?>' + filename);
+    }
 }
 </script>
 
