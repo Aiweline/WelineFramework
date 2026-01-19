@@ -140,6 +140,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <tr>
                                                 <th data-priority='1'><?= __('排序') ?></th>
                                                 <th data-priority='1'><?= __('代码') ?></th>
+                                                <th data-priority='2'><?= __('简码') ?></th>
                                                 <th data-priority='3'><?= __('名称') ?></th>
                                                 <th data-priority='3'><?= __('国家代码') ?></th>
                                                 <th data-priority='3'><?= __('国家名称') ?></th>
@@ -155,6 +156,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <tr>
                                                         <td>{{key}}</td>
                                                         <td class='co-name'>{{locale.code}}</td>
+                                                        <td class='co-name'>
+                                                            <if condition='locale.short_code'>
+                                                                <span class="badge bg-info bg-opacity-10 text-info fw-medium px-2 py-1 rounded-pill">
+                                                                    {{locale.short_code}}
+                                                                </span>
+                                                                <else/>
+                                                                <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                                    -
+                                                                </span>
+                                                            </if>
+                                                        </td>
                                                         <td class='co-name'>{{locale.locale_name}}</td>
                                                         <td class='co-name'>{{locale.country_code}}</td>
                                                         <td class='co-name'>{{locale.country_name}}</td>
