@@ -1,0 +1,117 @@
+<?php
+/**
+ * Header Categories Menu Hook
+ * 在header-main-nav位置渲染分类菜单
+ * Hook名称：Weline_Theme::frontend::partials::header::categories-before
+ * 
+ * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use WeShop\Catalog\Service\CategoryService;
+
+// 获取分类服务
+/** @var CategoryService $categoryService */
+$categoryService = ObjectManager::getInstance(CategoryService::class);
+
+// 获取分类树（只获取启用的分类）
+$categories = $categoryService->getCategoryTree(0);
+
+// 如果分类为空，不输出任何内容
+if (empty($categories)) {
+    return;
+}
+
+// 获取前端URL
+$frontendUrl = $this->getUrl('');
+
+// 递归函数：将分类数据转换为菜单项格式
+$convertCategoryToMenuItem = function($category) use (&$convertCategoryToMenuItem, $frontendUrl) {
+    // 只处理启用的分类
+    if (empty($category['is_active']) || $category['is_active'] != 1) {
+        return null;
+    }
+    
+    $menuItem = [
+        'text' => $category['name'] ?? '',
+        'url' => $frontendUrl . 'catalog/category/view?url_key=' . urlencode($category['url_key'] ?? ''),
+    ];
+    
+    // 如果有子分类，递归处理
+    if (!empty($category['children']) && is_array($category['children'])) {
+        $menuItem['children'] = [];
+        foreach ($category['children'] as $child) {
+            $childMenuItem = $convertCategoryToMenuItem($child);
+            if ($childMenuItem !== null) {
+                $menuItem['children'][] = $childMenuItem;
+            }
+        }
+        // 如果所有子分类都被过滤掉了，移除children数组
+        if (empty($menuItem['children'])) {
+            unset($menuItem['children']);
+        }
+    }
+    
+    return $menuItem;
+};
+
+// 转换分类数据为菜单项（只包含启用的分类）
+$navItems = [];
+foreach ($categories as $category) {
+    $menuItem = $convertCategoryToMenuItem($category);
+    if ($menuItem !== null) {
+        $navItems[] = $menuItem;
+    }
+}
+
+// 设置navItems变量，供header模板使用（水平菜单和汉堡菜单共用）
+// 通过 setData 设置到模板数据中，这样模板中的 $navItems 变量会被覆盖
+$this->setData('navItems', $navItems);
+// 标记 navItems 是由 hook 设置的，这样模板就知道是否使用默认值
+$this->setData('navItems_set_by_hook', true);
+
+// 同时设置到 meta 数据中，确保能够被正确使用
+$meta = $this->getData('meta') ?? [];
+$meta['navItems'] = $navItems;
+$this->setData('meta', $meta);
+
+// 直接输出水平菜单的HTML（参考原始布局）
+?>
+<div class="header-categories">
+    <?php if (!empty($navItems)): ?>
+        <nav class="categories-nav">
+            <ul class="categories-list" id="categories-list">
+                <?php 
+                // 递归函数：渲染菜单项（支持多级）
+                $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem) {
+                    $hasChildren = !empty($item['children']) && is_array($item['children']);
+                    ?>
+                    <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
+                        <div class="category-link-wrapper">
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
+                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                            </a>
+                            <?php if ($hasChildren): ?>
+                                <span class="category-arrow" role="button" aria-label="展开子菜单"></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($hasChildren): ?>
+                            <ul class="category-submenu">
+                                <?php foreach ($item['children'] as $child): ?>
+                                    <?php $renderMenuItem($child, $level + 1); ?>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </li>
+                <?php };
+                
+                foreach ($navItems as $item): 
+                    $renderMenuItem($item);
+                endforeach; 
+                ?>
+            </ul>
+        </nav>
+    <?php endif; ?>
+</div>

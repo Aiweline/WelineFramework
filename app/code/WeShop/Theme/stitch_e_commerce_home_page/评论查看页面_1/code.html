@@ -1,0 +1,420 @@
+<html class="light" lang="en"><head></head><body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 flex flex-col min-h-screen">```html
+
+
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Customer Reviews - Weline</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2563EB", 
+                        "primary-dark": "#1d4ed8",
+                        "secondary": "#F59E0B", 
+                        "background-light": "#F9FAFB",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1F2937",
+                        "subtle": "#9CA3AF",
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "sans-serif"]
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+
+
+<header class="bg-surface-light dark:bg-surface-dark sticky top-0 z-50 shadow-sm border-b border-gray-100 dark:border-gray-800">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex items-center justify-between h-16 gap-8">
+<div class="flex items-center gap-2 shrink-0 cursor-pointer">
+<div class="size-8 bg-primary text-white rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Weline</h1>
+</div>
+<div class="hidden md:flex flex-1 max-w-2xl">
+<div class="relative w-full">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-gray-400">search</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-2 border-none rounded-full bg-gray-100 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary focus:bg-white dark:focus:bg-gray-900 transition-colors placeholder-gray-500" placeholder="Search for products, brands and more..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4 shrink-0">
+<button class="p-2 text-gray-500 hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 size-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+</button>
+<button class="p-2 text-gray-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+<button class="flex items-center gap-2 p-1 pl-2 pr-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<div class="size-8 rounded-full bg-gray-200 overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuQ5al53J81m_2KrxQ_8l88wMtAB3FGSVCRWAchb4ufgL9dtQJtDklWLd-GYLQ8RWfq2RA1UHATpmZ8zI5lcY2TaTny-0tmtFGG3Kb61LlXClav26538QNu8mMrOqH_7DIjyGk3_t-8geleKeiJTMGv796jTlEFhdA7ky52_s4EA4Pt9a-IFrjo8ypZFEMWteSvCYJlydN1Fu8KeuSxbQOk5-IP7J3mm700qspft6ZG272982IxZGGD5W3ERLRybwYwFYWPZvcFNZ_"/>
+</div>
+</button>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<nav class="flex mb-8 text-sm font-medium text-gray-500 dark:text-gray-400">
+<ol class="flex items-center space-x-2">
+<li><a class="hover:text-primary transition-colors" href="#">Home</a></li>
+<li><span class="material-symbols-outlined text-base">chevron_right</span></li>
+<li><a class="hover:text-primary transition-colors" href="#">Electronics</a></li>
+<li><span class="material-symbols-outlined text-base">chevron_right</span></li>
+<li><a class="hover:text-primary transition-colors" href="#">Audio</a></li>
+<li><span class="material-symbols-outlined text-base">chevron_right</span></li>
+<li class="text-gray-900 dark:text-white">Sony WH-1000XM4 Reviews</li>
+</ol>
+</nav>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+<div class="lg:col-span-4 space-y-8">
+<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-gray-100 dark:border-gray-800 sticky top-24">
+<div class="flex gap-4">
+<div class="size-24 rounded-xl bg-gray-100 dark:bg-gray-800 shrink-0 border border-gray-200 dark:border-gray-700 overflow-hidden">
+<div class="w-full h-full bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDYmThNFYs1xCZgaOZy8DjCcgqtRfqvrdXh1r5ndR5Qe8bLtOhWNBRUuGptwIVI2QNRyx_YDJG93iSTNs6CklxuWIQgrOSpUcSm-wk7KHIbizAe8vAZPpLjtRUw-baL9QRFV4TI7hss47NSZckgr3YHTc69jR2RJFet62dk6PkxfyOsEsFAQIlGEgns2Dt_tl6P9VR0R7c_FdqgnBT5Iw2kLIpCtn9D21bT3fXAkcbcrJUypv6EiWBnAxsRKA7f2U_R_NMtoNFbxGa8");'></div>
+</div>
+<div class="flex flex-col">
+<h2 class="text-base font-bold text-gray-900 dark:text-white leading-snug line-clamp-2">Sony WH-1000XM4 Wireless Noise Canceling Overhead Headphones</h2>
+<div class="mt-auto pt-2">
+<span class="text-xl font-bold text-gray-900 dark:text-white">$348.00</span>
+<span class="text-sm text-gray-500 line-through ml-2">$399.00</span>
+</div>
+</div>
+</div>
+<button class="mt-6 w-full flex items-center justify-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-3 rounded-xl font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-all">
+<span class="material-symbols-outlined text-xl">rate_review</span>
+                        Write a review
+                    </button>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 shadow-soft border border-gray-100 dark:border-gray-800">
+<div class="flex items-end gap-3 mb-6">
+<div class="text-5xl font-bold text-gray-900 dark:text-white">4.6</div>
+<div class="flex flex-col mb-1">
+<div class="flex text-secondary mb-1">
+<span class="material-symbols-outlined fill-current">star</span>
+<span class="material-symbols-outlined fill-current">star</span>
+<span class="material-symbols-outlined fill-current">star</span>
+<span class="material-symbols-outlined fill-current">star</span>
+<span class="material-symbols-outlined fill-current">star_half</span>
+</div>
+<span class="text-sm text-gray-500">Based on 14,203 reviews</span>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center gap-3 text-sm">
+<span class="w-9 font-medium text-gray-600 dark:text-gray-400">5 ★</span>
+<div class="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 78%"></div>
+</div>
+<span class="w-9 text-right text-gray-500">78%</span>
+</div>
+<div class="flex items-center gap-3 text-sm">
+<span class="w-9 font-medium text-gray-600 dark:text-gray-400">4 ★</span>
+<div class="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 12%"></div>
+</div>
+<span class="w-9 text-right text-gray-500">12%</span>
+</div>
+<div class="flex items-center gap-3 text-sm">
+<span class="w-9 font-medium text-gray-600 dark:text-gray-400">3 ★</span>
+<div class="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 5%"></div>
+</div>
+<span class="w-9 text-right text-gray-500">5%</span>
+</div>
+<div class="flex items-center gap-3 text-sm">
+<span class="w-9 font-medium text-gray-600 dark:text-gray-400">2 ★</span>
+<div class="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 2%"></div>
+</div>
+<span class="w-9 text-right text-gray-500">2%</span>
+</div>
+<div class="flex items-center gap-3 text-sm">
+<span class="w-9 font-medium text-gray-600 dark:text-gray-400">1 ★</span>
+<div class="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 3%"></div>
+</div>
+<span class="w-9 text-right text-gray-500">3%</span>
+</div>
+</div>
+</div>
+<div>
+<h3 class="font-semibold text-gray-900 dark:text-white mb-4">Filter by Feature</h3>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors bg-white dark:bg-gray-800">Noise Cancellation</button>
+<button class="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors bg-white dark:bg-gray-800">Battery Life</button>
+<button class="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors bg-white dark:bg-gray-800">Sound Quality</button>
+<button class="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors bg-white dark:bg-gray-800">Comfort</button>
+</div>
+</div>
+</div>
+<div class="lg:col-span-8">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white">All Reviews (241)</h2>
+<div class="flex items-center gap-3">
+<span class="text-sm text-gray-500">Sort by:</span>
+<div class="relative group">
+<button class="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                Top Reviews
+                                <span class="material-symbols-outlined text-base text-gray-500">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<div class="flex gap-3 mb-8 overflow-x-auto pb-1 no-scrollbar">
+<button class="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm font-medium transition-colors">
+                        Verified Purchase
+                        <span class="material-symbols-outlined text-base">close</span>
+</button>
+<button class="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        With Photos
+                    </button>
+<button class="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        5 Stars Only
+                    </button>
+</div>
+<div class="space-y-8">
+<article class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 sm:p-8 shadow-soft border border-gray-100 dark:border-gray-800 transition-shadow hover:shadow-md">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+<img alt="Sarah" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuQ5al53J81m_2KrxQ_8l88wMtAB3FGSVCRWAchb4ufgL9dtQJtDklWLd-GYLQ8RWfq2RA1UHATpmZ8zI5lcY2TaTny-0tmtFGG3Kb61LlXClav26538QNu8mMrOqH_7DIjyGk3_t-8geleKeiJTMGv796jTlEFhdA7ky52_s4EA4Pt9a-IFrjo8ypZFEMWteSvCYJlydN1Fu8KeuSxbQOk5-IP7J3mm700qspft6ZG272982IxZGGD5W3ERLRybwYwFYWPZvcFNZ_"/>
+</div>
+<div>
+<h4 class="font-bold text-gray-900 dark:text-white">Sarah Jenkins</h4>
+<div class="flex items-center gap-2 text-xs text-gray-500">
+<span>US</span>
+<span class="size-1 rounded-full bg-gray-300"></span>
+<span>Oct 12, 2023</span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-100 dark:border-green-900/30">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Verified
+                            </span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<div class="flex text-secondary">
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+</div>
+<h3 class="font-bold text-gray-900 dark:text-white">Worth every penny for the silence</h3>
+</div>
+<div class="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+<p>I upgraded from the XM3s and the difference is subtle but noticeable. The multipoint connection is a game changer for working from home - I can switch between my laptop for calls and phone for music seamlessly. The noise cancellation effectively blocks out my AC unit and street noise.</p>
+</div>
+<div class="flex gap-3 mb-6">
+<div class="size-20 rounded-xl bg-gray-100 dark:bg-gray-800 bg-cover bg-center cursor-pointer hover:ring-2 hover:ring-primary transition-all" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBBLZlsLnzhK67SOCIJyxJYnUMU3H6Hfkcu6jlQ5krBVokYgMP55kqR5qqqvBSdzcdaOGKEr3QFX1WBB6r602WC9uSo1jnRz64UAy2nkAqLPC4xoNXao96ZrSn5HD24fW-ItyIqWfyJ93Pibq4xOhvXsJCFJzmZugAJR2OJ_W1djqUXTVt6fDNNeFRwry5iVMHD3G7jpP3ecttnnXRTIPfAnDII37BAlfUqNvWk1gh7gdMn8DQ4xTQotjVJWJJ45ZdUO__3E2Zghwro');"></div>
+<div class="size-20 rounded-xl bg-gray-100 dark:bg-gray-800 bg-cover bg-center cursor-pointer hover:ring-2 hover:ring-primary transition-all" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA2OYqQUyhWECI_8HwGZgMO6qbBCP0RHDgJNRYvFdDhqFw7PYyL5sSB1vZmiq0RnpQ3jQCtswG55E6fQGcIQJVAuPSblnQqEBbfEdOsmol6_wzAlwQmE6Su8rx2i0GKEx4cWia8J7UbeEk2FDyLVTGcJRGAfkOJOu3OK3zvBk-jbJb5ozG1CkMTMNeN4ySdo91yAC4iuXZyzKVxwN8eJ2N4HRf0x4BkiO0Yrvx7o0THjXoiuL6O7R1zVSZV8uckwINBn80JbNZ9gKUa');"></div>
+</div>
+<div class="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-4">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">thumb_up</span>
+                                    Helpful (42)
+                                </button>
+<button class="text-sm font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                                    Report
+                                </button>
+</div>
+<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+</article>
+<article class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 sm:p-8 shadow-soft border border-gray-100 dark:border-gray-800 transition-shadow hover:shadow-md">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm">
+                                    MD
+                                </div>
+<div>
+<h4 class="font-bold text-gray-900 dark:text-white">Michael D.</h4>
+<div class="flex items-center gap-2 text-xs text-gray-500">
+<span>US</span>
+<span class="size-1 rounded-full bg-gray-300"></span>
+<span>Sep 28, 2023</span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-100 dark:border-green-900/30">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Verified
+                            </span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<div class="flex text-secondary">
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+</div>
+<h3 class="font-bold text-gray-900 dark:text-white">Great sound, but gets warm</h3>
+</div>
+<div class="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+<p>Sound quality is phenomenal, bass is punchy without being muddy. However, the earcups aren't very breathable. After about 45 minutes of listening in a warm room, my ears get pretty hot. Might not be the best for the gym or summer walks.</p>
+</div>
+<div class="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-4">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">thumb_up</span>
+                                    Helpful (12)
+                                </button>
+<button class="text-sm font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                                    Report
+                                </button>
+</div>
+</div>
+</article>
+<article class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 sm:p-8 shadow-soft border border-gray-100 dark:border-gray-800 transition-shadow hover:shadow-md">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold text-sm">
+                                    AL
+                                </div>
+<div>
+<h4 class="font-bold text-gray-900 dark:text-white">Alex Lee</h4>
+<div class="flex items-center gap-2 text-xs text-gray-500">
+<span>CA</span>
+<span class="size-1 rounded-full bg-gray-300"></span>
+<span>Aug 15, 2023</span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-100 dark:border-green-900/30">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Verified
+                            </span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<div class="flex text-secondary">
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+</div>
+<h3 class="font-bold text-gray-900 dark:text-white">Best travel companion</h3>
+</div>
+<div class="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+<p>Used these on a 14-hour flight. The battery lasted the entire trip with ANC on. The app lets you customize the EQ which is nice because out of the box they are a bit bass heavy for my taste. Highly recommend!</p>
+</div>
+<div class="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-4">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">thumb_up</span>
+                                    Helpful (8)
+                                </button>
+<button class="text-sm font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                                    Report
+                                </button>
+</div>
+</div>
+</article>
+<article class="bg-surface-light dark:bg-surface-dark rounded-2xl p-6 sm:p-8 shadow-soft border border-gray-100 dark:border-gray-800 transition-shadow hover:shadow-md">
+<div class="flex items-start justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+<img alt="Chris" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGukNnGyKjXnID38chDqBfnNTL2uf5tRYQdlpov-_Ns9e8LGwTcAojPyYrNkRwAvKZSUM3uHpVKQjsaamN9bY1BSXMQaXh59VPCZ7bH-bb2mipDKTxr10IXfBVdoojscWJxXLe-Aum05bydIaG9-373_c9gUNMBEpH1kqJp2xpFzpAvmo5f0AqvvrHFGiltcDo9zLdm1563P_eH1QU79-EE5A9g4FimfMvoEAKGeVW5LNTlK8I7wwgdzdcopc_fnu2pdQcjBloDnX_"/>
+</div>
+<div>
+<h4 class="font-bold text-gray-900 dark:text-white">Chris P.</h4>
+<div class="flex items-center gap-2 text-xs text-gray-500">
+<span>US</span>
+<span class="size-1 rounded-full bg-gray-300"></span>
+<span>Jul 02, 2023</span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-100 dark:border-green-900/30">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Verified
+                            </span>
+</div>
+<div class="flex items-center gap-2 mb-3">
+<div class="flex text-secondary">
+<span class="material-symbols-outlined text-[20px] fill-current">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+<span class="material-symbols-outlined text-[20px] text-gray-200 dark:text-gray-700">star</span>
+</div>
+<h3 class="font-bold text-gray-900 dark:text-white">Arrived damaged</h3>
+</div>
+<div class="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+<p>The box was crushed when it arrived and the left ear cup hinge feels loose. Disappointed with the shipping, returning for a replacement.</p>
+</div>
+<div class="flex gap-3 mb-6">
+<div class="size-20 rounded-xl bg-gray-100 dark:bg-gray-800 bg-cover bg-center cursor-pointer hover:ring-2 hover:ring-primary transition-all" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuClG26q4amfQw8X7L2o1638fDTo18ybF5ehGwqlVIwo8ee5WVj6t4sqBg6daWoOVWV3iPZb2Z-Vo9_uxQenQXH1m2EtmwCFQ7cCjRJvVsKIrofRqvzQ_R7nNfQIwxFobV4MAFBycnA4dPrItmhwe9CjEEy4jd8H5jkPrSx4psayrjQmJrDLoT4KYr371KOsCiaz9jNjTpINoKRStOKXZKBrYR133w3PStksthhVGH6OnMiF6bqe4FRydxi6wm6aRy03SJQbDtWs_OLf');"></div>
+</div>
+<div class="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-4">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">thumb_up</span>
+                                    Helpful (21)
+                                </button>
+<button class="text-sm font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                                    Report
+                                </button>
+</div>
+</div>
+</article>
+</div>
+<div class="flex justify-center items-center gap-2 mt-12">
+<button class="flex items-center justify-center size-10 rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-sm">arrow_back</span>
+</button>
+<button class="flex items-center justify-center size-10 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold shadow-md">1</button>
+<button class="flex items-center justify-center size-10 rounded-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium transition-colors">2</button>
+<button class="flex items-center justify-center size-10 rounded-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium transition-colors">3</button>
+<span class="flex items-center justify-center size-10 text-gray-400">...</span>
+<button class="flex items-center justify-center size-10 rounded-full text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm font-medium transition-colors">8</button>
+<button class="flex items-center justify-center size-10 rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+
+</body></html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Secure Checkout</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f49d25",
+                        "primary-dark": "#d68b20",
+                        "background-light": "#f8f7f5",
+                        "background-dark": "#221a10",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1e1e1e",
+                        "border-light": "#e6e1db",
+                        "border-dark": "#3a3a3a",
+                        "text-main": "#181511",
+                        "text-muted": "#8a7960",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-main dark:text-gray-100 min-h-screen flex flex-col">
+<header class="flex items-center justify-between border-b border-solid border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark px-6 py-4 sticky top-0 z-50">
+<div class="flex items-center gap-4">
+<div class="flex items-center justify-center size-8 bg-primary rounded-lg text-white">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<h2 class="text-xl font-bold leading-tight tracking-tight">Amazonia <span class="font-normal text-sm ml-2 text-text-muted dark:text-gray-400">Checkout</span></h2>
+</div>
+<div class="flex items-center gap-2 text-text-muted dark:text-gray-400">
+<span class="material-symbols-outlined text-lg">lock</span>
+<span class="text-sm font-medium">Secure Checkout</span>
+</div>
+</header>
+<main class="flex-1 w-full max-w-[1200px] mx-auto p-4 md:p-6 lg:p-8">
+<div class="mb-8">
+<h1 class="text-3xl font-bold text-text-main dark:text-white">Checkout (1 item)</h1>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<div class="lg:col-span-8 flex flex-col gap-6">
+<div class="flex items-center justify-between px-4 mb-2">
+<div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3">
+<div class="flex items-center w-full">
+<div class="w-full h-[2px] bg-primary rounded-l-full"></div>
+<div class="size-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0 ring-4 ring-primary/20">1</div>
+<div class="w-full h-[2px] bg-primary"></div>
+</div>
+<span class="text-sm font-bold text-primary">Shipping</span>
+</div>
+<div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3 opacity-50">
+<div class="flex items-center w-full">
+<div class="w-full h-[2px] bg-gray-300 dark:bg-gray-700"></div>
+<div class="size-8 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex items-center justify-center font-bold text-sm shrink-0 border border-gray-300 dark:border-gray-600">2</div>
+<div class="w-full h-[2px] bg-gray-300 dark:bg-gray-700"></div>
+</div>
+<span class="text-sm font-medium text-text-muted dark:text-gray-400">Payment</span>
+</div>
+<div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3 opacity-50">
+<div class="flex items-center w-full">
+<div class="w-full h-[2px] bg-gray-300 dark:bg-gray-700"></div>
+<div class="size-8 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex items-center justify-center font-bold text-sm shrink-0 border border-gray-300 dark:border-gray-600">3</div>
+<div class="w-full h-[2px] bg-gray-300 dark:bg-gray-700 rounded-r-full"></div>
+</div>
+<span class="text-sm font-medium text-text-muted dark:text-gray-400">Review</span>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl border border-primary shadow-sm overflow-hidden">
+<div class="flex items-center justify-between px-6 py-4 bg-primary/5 border-b border-primary/20">
+<h3 class="text-lg font-bold text-primary flex items-center gap-2">
+                        1. Shipping Address
+                    </h3>
+</div>
+<div class="p-6">
+<form class="space-y-6">
+<div class="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm mb-4">
+<span class="material-symbols-outlined text-base">info</span>
+<p>Already a customer? <a class="font-bold underline" href="#">Sign in</a> for faster checkout.</p>
+</div>
+<div class="flex flex-col md:flex-row gap-4">
+<label class="flex flex-col flex-1">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">First name</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="e.g. Jane" type="text"/>
+</label>
+<label class="flex flex-col flex-1">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">Last name</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="e.g. Doe" type="text"/>
+</label>
+</div>
+<label class="flex flex-col w-full">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">Street Address</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="e.g. 123 Main St, Apt 4B" type="text"/>
+</label>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<label class="flex flex-col">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">City</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" type="text"/>
+</label>
+<label class="flex flex-col">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">State</span>
+<div class="relative">
+<select class="form-select w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors appearance-none">
+<option>Select State</option>
+<option>California</option>
+<option>New York</option>
+<option>Texas</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+</div>
+</label>
+<label class="flex flex-col">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">Zip Code</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" type="text"/>
+</label>
+</div>
+<label class="flex flex-col w-full">
+<span class="text-sm font-medium text-text-main dark:text-gray-300 pb-2">Phone Number</span>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">call</span>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#2a2a2a] h-11 pl-10 pr-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="(555) 123-4567" type="tel"/>
+</div>
+<span class="text-xs text-text-muted mt-1">May be used for delivery assistance.</span>
+</label>
+<div class="pt-4 flex justify-end">
+<button class="bg-primary hover:bg-primary-dark text-white font-medium py-3 px-8 rounded-lg shadow-sm transition-colors text-base flex items-center gap-2" type="button">
+                                Use this address
+                            </button>
+</div>
+</form>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
+<button class="flex items-center justify-between w-full px-6 py-4 text-left group">
+<h3 class="text-lg font-bold text-text-muted dark:text-gray-400 group-hover:text-text-main dark:group-hover:text-gray-200 transition-colors">
+                        2. Payment Method
+                    </h3>
+<span class="material-symbols-outlined text-text-muted">expand_more</span>
+</button>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
+<button class="flex items-center justify-between w-full px-6 py-4 text-left group">
+<h3 class="text-lg font-bold text-text-muted dark:text-gray-400 group-hover:text-text-main dark:group-hover:text-gray-200 transition-colors">
+                        3. Review items and shipping
+                    </h3>
+<span class="material-symbols-outlined text-text-muted">expand_more</span>
+</button>
+</div>
+</div>
+<div class="lg:col-span-4 space-y-4">
+<div class="sticky top-24 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark p-6 shadow-sm">
+<h2 class="text-xl font-bold text-text-main dark:text-white mb-4">Order Summary</h2>
+<div class="flex flex-col gap-3 pb-4 border-b border-border-light dark:border-border-dark">
+<div class="flex justify-between text-sm text-text-main dark:text-gray-300">
+<span>Items (1):</span>
+<span>$1,499.00</span>
+</div>
+<div class="flex justify-between text-sm text-text-main dark:text-gray-300">
+<span>Shipping &amp; handling:</span>
+<span>$0.00</span>
+</div>
+<div class="flex justify-between text-sm text-text-main dark:text-gray-300">
+<span>Total before tax:</span>
+<span>$1,499.00</span>
+</div>
+<div class="flex justify-between text-sm text-text-main dark:text-gray-300">
+<span>Estimated tax to be collected:</span>
+<span>$120.00</span>
+</div>
+</div>
+<div class="flex justify-between items-center py-4">
+<span class="text-xl font-bold text-[#b12704] dark:text-primary">Order Total:</span>
+<span class="text-xl font-bold text-[#b12704] dark:text-primary">$1,619.00</span>
+</div>
+<button class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3.5 px-4 rounded-lg shadow-md transition-all active:scale-[0.98] mb-4 text-base">
+                    Place your order
+                </button>
+<p class="text-xs text-text-muted text-center leading-relaxed">
+                    By placing your order, you agree to Amazonia's <a class="text-blue-600 dark:text-blue-400 hover:underline" href="#">privacy notice</a> and <a class="text-blue-600 dark:text-blue-400 hover:underline" href="#">conditions of use</a>.
+                </p>
+<div class="mt-6 pt-6 border-t border-border-light dark:border-border-dark">
+<h4 class="text-sm font-semibold text-text-muted mb-3">In your cart</h4>
+<div class="flex gap-3">
+<div class="w-16 h-16 bg-gray-100 rounded-md shrink-0 border border-border-light overflow-hidden bg-center bg-cover" data-alt="Laptop computer showing screen with modern wallpaper" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA5xK-tAo98di05OApK-HeAhLyCHaawSj_ma1t-1-BgmLUFxMn8EN8QV7Z7UVMarORX_RIr2GTgRyid43Zc2MGQ7YNzKW6YvusDns4X_fxC8DhFIxCHbohWsNBioUytRkINEGgwsZq2EW3FBrANLa3__oqyE-jKb8eAY2J7CoyrdIUKTPnxHn9B-Ak_hqCiRZnwkZj66j6MM2vCmhQg3KUp3NaaZmH7nZP8RxjTRVkMV9x_A_imJS2zjE_NTWbwHabaWJ1zBLbr6yOt');">
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-medium text-text-main dark:text-white line-clamp-2">Ultra-Slim 15" Laptop - 512GB SSD, 16GB RAM</span>
+<span class="text-xs text-text-muted mt-1">Qty: 1</span>
+<span class="text-sm font-bold text-[#b12704] dark:text-primary mt-1">$1,499.00</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark p-4 flex flex-col gap-3">
+<div class="flex items-center gap-2 text-text-muted">
+<span class="material-symbols-outlined text-primary">verified_user</span>
+<span class="text-xs font-medium">Secure transaction</span>
+</div>
+<div class="flex gap-2 opacity-60 grayscale">
+<div class="h-6 w-10 bg-gray-200 rounded"></div> 
+<div class="h-6 w-10 bg-gray-200 rounded"></div> 
+<div class="h-6 w-10 bg-gray-200 rounded"></div> 
+</div>
+</div>
+</div>
+</div>
+</main>
+<footer class="mt-auto border-t border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark pt-10 pb-8">
+<div class="max-w-5xl mx-auto px-4 flex flex-col items-center">
+<nav class="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-8 text-sm font-medium text-text-main dark:text-gray-300">
+<a class="hover:text-primary hover:underline transition-colors" href="#">About Us</a>
+<a class="hover:text-primary hover:underline transition-colors" href="#">Customer Service</a>
+<a class="hover:text-primary hover:underline transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-primary hover:underline transition-colors" href="#">Terms &amp; Conditions</a>
+</nav>
+<div class="flex items-center gap-6 mb-8">
+<a aria-label="Facebook" class="text-text-muted hover:text-[#1877F2] transition-colors dark:hover:text-white" href="#">
+<svg aria-hidden="true" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+<path clip-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" fill-rule="evenodd"></path>
+</svg>
+</a>
+<a aria-label="Twitter" class="text-text-muted hover:text-[#1DA1F2] transition-colors dark:hover:text-white" href="#">
+<svg aria-hidden="true" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+<path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
+</svg>
+</a>
+<a aria-label="Instagram" class="text-text-muted hover:text-[#E4405F] transition-colors dark:hover:text-white" href="#">
+<svg aria-hidden="true" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+<path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.468 2.373c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z" fill-rule="evenodd"></path>
+</svg>
+</a>
+</div>
+<div class="text-center border-t border-border-light dark:border-border-dark w-full pt-6">
+<p class="text-xs text-text-muted">" 1996-2024, Amazonia.com, Inc. or its affiliates</p>
+</div>
+</div>
+</footer>
+
+</body></html>

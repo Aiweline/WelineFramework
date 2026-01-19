@@ -1,0 +1,149 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$total_count = $total_count ?? 0;
+$active_count = $active_count ?? 0;
+$inactive_count = $inactive_count ?? 0;
+$today_count = $today_count ?? 0;
+$title = $title ?? __('客户管理');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $title ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? '' ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><?= $title ?></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                        <div id="page-message-container"></div>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                            <span class="avatar-title bg-primary rounded-circle">
+                                                <i class="mdi mdi-account-multiple font-size-24"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('总客户数') ?></p>
+                                        <h4 class="mb-0"><?= number_format($total_count) ?></h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                            <span class="avatar-title bg-success rounded-circle">
+                                                <i class="mdi mdi-account-check font-size-24"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('活跃客户') ?></p>
+                                        <h4 class="mb-0"><?= number_format($active_count) ?></h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                            <span class="avatar-title bg-warning rounded-circle">
+                                                <i class="mdi mdi-account-off font-size-24"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('非活跃客户') ?></p>
+                                        <h4 class="mb-0"><?= number_format($inactive_count) ?></h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                            <span class="avatar-title bg-info rounded-circle">
+                                                <i class="mdi mdi-account-plus font-size-24"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('今日新增') ?></p>
+                                        <h4 class="mb-0"><?= number_format($today_count) ?></h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 客户列表区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4"><?= __('客户列表') ?></h5>
+                                <p class="text-muted"><?= __('客户管理功能开发中...') ?></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+</body>
+</html>

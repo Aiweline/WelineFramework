@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create Account - Amazon Clone</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "primary-hover": "#154dbf",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1a2233",
+                        "border-light": "#dcdfe5",
+                        "border-dark": "#2a3445",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col items-center">
+<!-- Header / Logo Area -->
+<header class="w-full flex justify-center py-6">
+<a class="flex items-center gap-2 text-[#111318] dark:text-white hover:opacity-80 transition-opacity" href="#">
+<div class="size-8 text-primary">
+<svg class="w-full h-full" fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_logo)">
+<path clip-rule="evenodd" d="M47.2426 24L24 47.2426L0.757355 24L24 0.757355L47.2426 24ZM12.2426 21H35.7574L24 9.24264L12.2426 21Z" fill="currentColor" fill-rule="evenodd"></path>
+</g>
+<defs>
+<clippath id="clip0_logo"><rect fill="white" height="48" width="48"></rect></clippath>
+</defs>
+</svg>
+</div>
+<span class="text-2xl font-bold tracking-tight">Amazon Clone</span>
+</a>
+</header>
+<!-- Main Registration Card -->
+<main class="w-full max-w-[400px] px-4 pb-12">
+<div class="bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-lg shadow-sm p-8">
+<!-- Page Heading -->
+<h1 class="text-3xl font-normal mb-6 text-[#111318] dark:text-white">Create account</h1>
+<form action="#" class="flex flex-col gap-5" method="POST">
+<!-- Name Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-[#111318] dark:text-gray-200" for="name">Your name</label>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#111621] text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 py-2 text-sm shadow-sm transition-all" id="name" name="name" placeholder="First and last name" type="text"/>
+</div>
+<!-- Email Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-[#111318] dark:text-gray-200" for="email">Mobile number or email</label>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#111621] text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 py-2 text-sm shadow-sm transition-all" id="email" name="email" type="email"/>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-[#111318] dark:text-gray-200" for="password">Password</label>
+<div class="relative">
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#111621] text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 py-2 text-sm shadow-sm transition-all pr-10" id="password" name="password" placeholder="At least 6 characters" type="password"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-200">
+<span class="material-symbols-outlined text-[20px]">visibility_off</span>
+</span>
+</div>
+<p class="text-xs text-[#636f88] dark:text-gray-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">info</span>
+                        Passwords must be at least 6 characters.
+                    </p>
+</div>
+<!-- Re-enter Password Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-sm font-bold text-[#111318] dark:text-gray-200" for="password_confirm">Re-enter password</label>
+<input class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-[#111621] text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary h-10 px-3 py-2 text-sm shadow-sm transition-all" id="password_confirm" name="password_confirm" type="password"/>
+</div>
+<!-- Terms & Privacy Checkbox -->
+<div class="flex items-start gap-3 py-1">
+<div class="flex h-6 items-center">
+<input class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700" id="terms" name="terms" type="checkbox"/>
+</div>
+<div class="text-sm leading-6">
+<label class="font-normal text-gray-900 dark:text-gray-300" for="terms">
+                            I agree to the <a class="text-primary hover:text-primary-hover hover:underline" href="#">Conditions of Use</a> and <a class="text-primary hover:text-primary-hover hover:underline" href="#">Privacy Notice</a>.
+                        </label>
+</div>
+</div>
+<!-- Submit Button -->
+<button class="mt-2 w-full flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-background-dark transition-colors" type="button">
+                    Continue
+                </button>
+<!-- Divider -->
+<div class="relative mt-4">
+<div aria-hidden="true" class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-border-light dark:border-border-dark"></div>
+</div>
+<div class="relative flex justify-start">
+<span class="bg-surface-light dark:bg-surface-dark pr-2 text-sm text-gray-500 dark:text-gray-400">Already have an account?</span>
+</div>
+</div>
+<!-- Sign in link -->
+<a class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary-hover hover:underline" href="#">
+                    Sign in
+                    <span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_right_alt</span>
+</a>
+<div class="mt-2 text-sm text-gray-900 dark:text-gray-300">
+                    Buying for work? <a class="text-primary hover:text-primary-hover hover:underline" href="#">Create a free business account</a>
+</div>
+</form>
+</div>
+<!-- Simple Footer -->
+<div class="mt-8">
+<div class="flex justify-center gap-6 text-xs text-primary mb-4">
+<a class="hover:underline hover:text-primary-hover" href="#">Conditions of Use</a>
+<a class="hover:underline hover:text-primary-hover" href="#">Privacy Notice</a>
+<a class="hover:underline hover:text-primary-hover" href="#">Help</a>
+</div>
+<p class="text-center text-xs text-gray-500 dark:text-gray-400">
+                " 1996-2024, Amazon Clone, Inc. or its affiliates
+            </p>
+</div>
+</main>
+<!-- Abstract Background Pattern (Visual Enhancement) -->
+<div class="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
+<div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-white to-transparent dark:from-white/5 dark:to-transparent opacity-60"></div>
+</div>
+</body></html>

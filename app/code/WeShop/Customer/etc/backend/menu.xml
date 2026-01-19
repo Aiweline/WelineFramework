@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- 客户管理 -->
+    <add source="WeShop_Customer::customer_main" name="customer_main" title="客户管理" action=""
+         parent="WeShop_Shop::main"
+         icon="mdi mdi-account-group"
+         order="30"/>
+    <!-- 客户列表 -->
+    <add source="WeShop_Customer::customer_list" name="customer_list" title="客户列表" action="/*/backend/customer"
+         parent="WeShop_Customer::customer_main"
+         icon="mdi mdi-account-multiple"
+         order="10"/>
+    <!-- 客户组 -->
+    <add source="WeShop_Customer::customer_group" name="customer_group" title="客户组" action="/*/backend/customer/group"
+         parent="WeShop_Customer::customer_main"
+         icon="mdi mdi-account-group-outline"
+         order="20"/>
+</menus>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mini Shopping Cart</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f49d25",
+                        "primary-hover": "#d68a20",
+                        "background-light": "#f8f7f5",
+                        "background-dark": "#221a10",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-white h-screen overflow-hidden flex">
+<!-- Backdrop / Main Content Simulation -->
+<div class="flex-1 relative hidden md:block">
+<!-- Simulated blurred background content -->
+<div class="absolute inset-0 bg-cover bg-center opacity-40 blur-[2px]" data-alt="Blurred background representing an ecommerce product listing page" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDNQrzsiwC2fzSZlYV1TESDr96nKcpzYJolR8M_w4Aqew1jJBWomOh3ba05XEEhvLsdWqVs2LNqOIWEn7m7FGOCcpRC6uSUNqwkV-iUGnnWfy7BOBXqgMlewKcz_WlR218oTSPFQFdBrcu-U7-j4hPjV7QN4C4XF6LwbcwGHfIDAiaOBBc7nQ7BAEbH8IT5qI0dhIJuJUeokIAgXKKcBgfnmuZIeU3GWH_Z3x0EHEHqT6qdubgF6XmL3aC763kJkLOdEjBJIEmB20y4');">
+</div>
+<!-- Dark overlay to focus on cart -->
+<div class="absolute inset-0 bg-black/60 z-10 transition-opacity duration-300"></div>
+</div>
+<!-- Mini Cart Sidebar -->
+<div class="w-full md:w-[480px] h-full bg-white dark:bg-[#1a1a1a] shadow-2xl z-20 flex flex-col relative animate-in slide-in-from-right duration-300 border-l border-gray-200 dark:border-gray-800">
+<!-- Header -->
+<div class="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shrink-0 sticky top-0 z-30">
+<div class="flex flex-col">
+<h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                    Shopping Cart
+                </h2>
+<p class="text-sm text-slate-500 dark:text-slate-400 font-medium">3 items in your cart</p>
+</div>
+<button class="group p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<span class="material-symbols-outlined text-gray-500 group-hover:text-gray-800 dark:text-gray-400 dark:group-hover:text-white">close</span>
+</button>
+</div>
+<!-- Scrollable Items List -->
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+<!-- Item 1 -->
+<div class="flex gap-4 group">
+<div class="relative shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+<div class="h-24 w-24 bg-cover bg-center bg-no-repeat group-hover:scale-105 transition-transform duration-300" data-alt="Wireless Noise Cancelling Headphones" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuByqHnXwFdsBeHFczgo6-OR3AIWBkN5E7LZKZF5TvVc1-j-qAoZut6htRGTGAsrO3cPBCs6Q6VwwyRJTUbHqN42Zd7_slElVBcESVJY3Qyz6oJOKnWwmTKYxIVCAdVNhtDXetiyPVroayujDuoUDekfLMtdQkGmrf4xq6eEEpRSFjwJ6ZYGOaxawh3l6Av-jIX5HxSF5DSF63N1YTT3QcqQS6_1yd12qmvKuLXrpOLlE4uRR_XhgaprpOlnXGjD_OWQ0BoYtfiLCSSJ");'></div>
+</div>
+<div class="flex flex-1 flex-col justify-between py-1">
+<div>
+<div class="flex justify-between items-start gap-2">
+<h3 class="text-slate-900 dark:text-white text-base font-semibold leading-snug line-clamp-2">Wireless Noise Cancelling Headphones</h3>
+<p class="text-slate-900 dark:text-white font-bold whitespace-nowrap">$299.00</p>
+</div>
+<p class="text-green-600 dark:text-green-500 text-xs font-medium mt-1">In Stock</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<div class="flex items-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black/20 overflow-hidden h-8">
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<input class="w-10 h-full p-0 text-center text-sm font-medium border-none bg-transparent focus:ring-0 text-slate-900 dark:text-white [appearance:textfield] [&amp;::-webkit-inner-spin-button]:appearance-none [&amp;::-webkit-outer-spin-button]:appearance-none" type="number" value="1"/>
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+<button class="text-xs font-medium text-red-500 hover:text-red-700 hover:underline transition-colors flex items-center gap-1">
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<div class="h-px bg-gray-100 dark:bg-gray-800 w-full"></div>
+<!-- Item 2 -->
+<div class="flex gap-4 group">
+<div class="relative shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+<div class="h-24 w-24 bg-cover bg-center bg-no-repeat group-hover:scale-105 transition-transform duration-300" data-alt="USB-C Fast Charger Cable 6ft" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC-Kmd1OXooHF9vbzwgWzi3LJmxJDyKqbH07nH8sQS2h2YFuLihFTKbbJ8xrWBO_ORxgKM9pPlQdfEJjzyWVpU9QolP4rROjIf0DQ6cgp8qowwGxAuCAmo3cMq8AsImxBDGmUvz2WIZGWka1UYDS94cbRlC3xRuyEmOV1xOdHR356pbMcRUy_YOurEEJVtlDpun3uamNVPln6IH8lGs9aeTHTGTJagjz4HmcqzebWSgxuPrVIPhGdTKe5NDZ3vSbWoNJDrQIts1xpdS");'></div>
+</div>
+<div class="flex flex-1 flex-col justify-between py-1">
+<div>
+<div class="flex justify-between items-start gap-2">
+<h3 class="text-slate-900 dark:text-white text-base font-semibold leading-snug line-clamp-2">USB-C Fast Charger Cable 6ft</h3>
+<p class="text-slate-900 dark:text-white font-bold whitespace-nowrap">$31.98</p>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">$15.99 each</p>
+<p class="text-green-600 dark:text-green-500 text-xs font-medium mt-1">In Stock</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<div class="flex items-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black/20 overflow-hidden h-8">
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<input class="w-10 h-full p-0 text-center text-sm font-medium border-none bg-transparent focus:ring-0 text-slate-900 dark:text-white [appearance:textfield] [&amp;::-webkit-inner-spin-button]:appearance-none [&amp;::-webkit-outer-spin-button]:appearance-none" type="number" value="2"/>
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+<button class="text-xs font-medium text-red-500 hover:text-red-700 hover:underline transition-colors flex items-center gap-1">
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<div class="h-px bg-gray-100 dark:bg-gray-800 w-full"></div>
+<!-- Item 3 -->
+<div class="flex gap-4 group">
+<div class="relative shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+<div class="h-24 w-24 bg-cover bg-center bg-no-repeat group-hover:scale-105 transition-transform duration-300" data-alt="Ergonomic Mouse Pad - Black" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCdlS_7hvnKrJcUwjXKhodBv8iLmNfZrJdP3e1gvMq-RCZNPQkvlbbE2FMxy_Ev0Md0Eh_-xJYBpE7dDD7RyyQVTlgSHEjbDMXkJfSaqvTJBQDsxamg-7sJFBjYfd7pBbsyAOTStpn9EFf_qw54vpcvarw2Z_RqZmiL77yDLkfSKYkzhOfB4dBuGCqV9exxxgfjOCfhx0aUAwUhqXxY1EkN2l6EKcF7VqA2Tg1aSXAo9XCrKPV4EHmpGwBZ5lkRcZG8gYjWa8fSdO9s");'></div>
+</div>
+<div class="flex flex-1 flex-col justify-between py-1">
+<div>
+<div class="flex justify-between items-start gap-2">
+<h3 class="text-slate-900 dark:text-white text-base font-semibold leading-snug line-clamp-2">Ergonomic Mouse Pad - Black</h3>
+<p class="text-slate-900 dark:text-white font-bold whitespace-nowrap">$12.50</p>
+</div>
+<p class="text-orange-600 dark:text-orange-500 text-xs font-medium mt-1">Only 3 left in stock</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<div class="flex items-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black/20 overflow-hidden h-8">
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<input class="w-10 h-full p-0 text-center text-sm font-medium border-none bg-transparent focus:ring-0 text-slate-900 dark:text-white [appearance:textfield] [&amp;::-webkit-inner-spin-button]:appearance-none [&amp;::-webkit-outer-spin-button]:appearance-none" type="number" value="1"/>
+<button class="w-8 h-full flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-slate-900 transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+<button class="text-xs font-medium text-red-500 hover:text-red-700 hover:underline transition-colors flex items-center gap-1">
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Footer -->
+<div class="shrink-0 p-6 bg-slate-50 dark:bg-[#252525] border-t border-gray-200 dark:border-gray-800">
+<!-- Promo / Note (Optional) -->
+<div class="flex items-center gap-2 mb-4 text-xs text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-3 py-2 rounded border border-green-200 dark:border-green-800">
+<span class="material-symbols-outlined text-sm">local_shipping</span>
+                Your order qualifies for FREE Shipping
+            </div>
+<!-- Totals -->
+<div class="flex justify-between items-center mb-6">
+<span class="text-slate-600 dark:text-slate-400 font-medium">Subtotal (4 items)</span>
+<span class="text-2xl font-bold text-slate-900 dark:text-white">$343.48</span>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-3">
+<button class="w-full bg-primary hover:bg-primary-hover text-white dark:text-slate-900 font-bold text-lg py-3.5 rounded-lg shadow-sm hover:shadow-md transition-all flex justify-center items-center gap-2">
+                    Proceed to Checkout
+                    <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<button class="w-full bg-white dark:bg-transparent border border-gray-300 dark:border-gray-600 text-slate-700 dark:text-gray-300 font-medium py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm">
+                    View Cart
+                </button>
+</div>
+<!-- Security / Cards -->
+<div class="mt-4 flex justify-center gap-2 opacity-60">
+<div class="h-6 w-10 bg-gray-200 dark:bg-gray-700 rounded-sm"></div>
+<div class="h-6 w-10 bg-gray-200 dark:bg-gray-700 rounded-sm"></div>
+<div class="h-6 w-10 bg-gray-200 dark:bg-gray-700 rounded-sm"></div>
+</div>
+</div>
+</div>
+</body></html>
