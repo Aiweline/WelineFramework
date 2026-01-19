@@ -149,7 +149,6 @@ class WebsiteData
             self::$currencyCodes = [];
             return self::$currencyCodes;
         }
-
         $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
         self::$currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes(self::$website->getWebsiteId());
         
@@ -171,7 +170,6 @@ class WebsiteData
             self::$languageCodes = [];
             return self::$languageCodes;
         }
-
         $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
         self::$languageCodes = $websiteLanguage->getWebsiteLanguageCodes(self::$website->getWebsiteId());
         
