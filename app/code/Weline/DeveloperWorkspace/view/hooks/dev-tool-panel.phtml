@@ -1,6 +1,13 @@
 <?php
 /**
  * 开发工具面板
+ * 
+ * Hook名称：dev-tool-panel
+ * 
+ * @hook-priority 200      Hook优先级：200（app模块默认优先级）
+ * @hook-sort-order 0       Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ * 
  * 变量说明：
  * $isBackend - 是否后端页面
  * $panelType - 面板类型 (frontend/backend)
@@ -671,6 +678,111 @@ $panelType = $panelType ?? 'frontend';
         animation: spin 1s linear infinite;
     }
 
+    /* 性能统计样式 */
+    .performance-stats {
+        padding: 12px;
+    }
+
+    .performance-section {
+        margin-bottom: 20px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border-left: 3px solid #667eea;
+    }
+
+    .performance-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .performance-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #e8e8e8;
+    }
+
+    .performance-item:last-child {
+        border-bottom: none;
+    }
+
+    .performance-label {
+        font-size: 13px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .performance-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #333;
+        font-family: 'Courier New', monospace;
+    }
+
+    .performance-value.fast {
+        color: #4caf50;
+    }
+
+    .performance-value.medium {
+        color: #ff9800;
+    }
+
+    .performance-value.slow {
+        color: #f44336;
+    }
+
+    .performance-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 10px;
+        border-radius: 3px;
+        margin-left: 6px;
+    }
+
+    .performance-badge.fast {
+        background: #e8f5e9;
+        color: #4caf50;
+    }
+
+    .performance-badge.medium {
+        background: #fff3e0;
+        color: #ff9800;
+    }
+
+    .performance-badge.slow {
+        background: #ffebee;
+        color: #f44336;
+    }
+
+    .api-request-item {
+        padding: 8px;
+        margin-bottom: 6px;
+        background: white;
+        border-radius: 4px;
+        border-left: 2px solid #667eea;
+        font-size: 12px;
+    }
+
+    .api-request-url {
+        color: #667eea;
+        word-break: break-all;
+        margin-bottom: 4px;
+    }
+
+    .api-request-time {
+        color: #999;
+        font-size: 11px;
+    }
+
     /* ==================== 移动端响应式设计 ==================== */
     
     /* 平板设备 (768px 及以下) */
@@ -1012,6 +1124,11 @@ $panelType = $panelType ?? 'frontend';
                 <a href="/dev/tool/docs?catalog=api" target="_blank" class="dev-tool-quick-btn">
                     <i class="fa fa-code"></i> API文档
                 </a>
+                <?php if (isset($showCloseButton) && $showCloseButton): ?>
+                <button class="dev-tool-quick-btn" onclick="DevToolPanel.closePanel()" title="关闭开发工具面板（删除Cookie）">
+                    <i class="fa fa-times"></i> 关闭面板
+                </button>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -1022,6 +1139,9 @@ $panelType = $panelType ?? 'frontend';
             </button>
             <button class="dev-tool-tab active" data-tab="docs" onclick="DevToolPanel.switchMainTab(this, 'docs')">
                 <i class="fa fa-file-text"></i> 文档
+            </button>
+            <button class="dev-tool-tab" data-tab="performance" onclick="DevToolPanel.switchMainTab(this, 'performance')">
+                <i class="fa fa-clock-o"></i> 耗时统计
             </button>
         </div>
         
@@ -1055,6 +1175,13 @@ $panelType = $panelType ?? 'frontend';
                 </select>
                 <input type="text" id="doc-search-input" placeholder="🔍 搜索文档标题或内容..." onkeyup="DevToolPanel.searchDocs(event)">
             </div>
+            
+            <!-- 性能统计区域 (performance tab) -->
+            <div id="performance-search-area" style="display: none;">
+                <div style="padding: 8px; font-size: 12px; color: #666;">
+                    <i class="fa fa-info-circle"></i> 实时性能监控和耗时统计
+                </div>
+            </div>
         </div>
         
         <!-- 内容区域 -->
@@ -1074,7 +1201,7 @@ const DevToolPanel = (function() {
     const state = {
         // 面板状态
         collapsed: true,
-        activeMainTab: 'docs', // 'routes' or 'docs'
+        activeMainTab: 'docs', // 'routes' or 'docs' or 'performance'
         
         // 路由相关
         currentRouteType: '<?php echo $panelType; ?>',
@@ -1098,6 +1225,10 @@ const DevToolPanel = (function() {
         dragStartY: 0,
         panelStartX: 0,
         panelStartY: 0,
+        
+        // 性能统计相关
+        pageLoadStartTime: performance.timing ? performance.timing.navigationStart : Date.now(),
+        apiRequests: [], // 存储API请求记录
     };
 
     // ========== LocalStorage 管理 ==========
@@ -1167,6 +1298,11 @@ const DevToolPanel = (function() {
             loadRoutes(state.currentRouteType);
         }
         
+        // 如果是性能标签，渲染性能统计
+        if (state.activeMainTab === 'performance') {
+            renderPerformanceStats();
+        }
+        
         // 恢复面板位置（包括第一次加载，默认位置0,0也要设置）
         panel.style.left = (state.panelX || 0) + 'px';
         panel.style.top = (state.panelY || 0) + 'px';
@@ -1185,6 +1321,27 @@ const DevToolPanel = (function() {
         
         // 初始化拖拽
         initDrag();
+        
+        // 初始化性能监控
+        initPerformanceMonitoring();
+        
+        // 页面加载完成后更新性能统计
+        if (document.readyState === 'complete') {
+            // 如果页面已经加载完成，延迟一下再更新性能数据（确保performance API数据完整）
+            setTimeout(() => {
+                if (state.activeMainTab === 'performance') {
+                    renderPerformanceStats();
+                }
+            }, 500);
+        } else {
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    if (state.activeMainTab === 'performance') {
+                        renderPerformanceStats();
+                    }
+                }, 500);
+            });
+        }
         
         // 监听窗口大小变化，自动调整位置
         window.addEventListener('resize', function() {
@@ -1794,6 +1951,18 @@ const DevToolPanel = (function() {
         
         console.log('面板' + (state.collapsed ? '收起' : '展开'));
     }
+    
+    // ========== 关闭面板（删除Cookie） ==========
+    function closePanel() {
+        // 获取Cookie名称（从PHP传递）
+        const cookieName = '<?php echo isset($devToolCookieNameJs) ? $devToolCookieNameJs : "w_dev_tool"; ?>';
+        
+        // 删除Cookie（设置过期时间为过去的时间）
+        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        
+        // 刷新页面以应用更改
+        window.location.reload();
+    }
 
     function switchMainTab(button, tab, shouldSave = true) {
         // 更新标签状态
@@ -1806,14 +1975,22 @@ const DevToolPanel = (function() {
         // 显示/隐藏搜索区域
         const routeSearchArea = document.getElementById('route-search-area');
         const docSearchArea = document.getElementById('doc-search-area');
+        const performanceSearchArea = document.getElementById('performance-search-area');
         
         if (tab === 'routes') {
             routeSearchArea.style.display = 'block';
             docSearchArea.style.display = 'none';
+            performanceSearchArea.style.display = 'none';
             loadRoutes(state.currentRouteType);
+        } else if (tab === 'performance') {
+            routeSearchArea.style.display = 'none';
+            docSearchArea.style.display = 'none';
+            performanceSearchArea.style.display = 'block';
+            renderPerformanceStats();
         } else {
             routeSearchArea.style.display = 'none';
             docSearchArea.style.display = 'block';
+            performanceSearchArea.style.display = 'none';
             if (state.currentDocId) {
                 // 如果有打开的文档，恢复它
                 loadDocDetail(state.currentDocId);
@@ -2186,10 +2363,305 @@ const DevToolPanel = (function() {
         }
     }
 
+    // ========== 性能统计功能 ==========
+    function initPerformanceMonitoring() {
+        // 拦截fetch请求，记录API耗时
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            const startTime = performance.now();
+            const url = args[0] || '';
+            
+            return originalFetch.apply(this, args)
+                .then(response => {
+                    const endTime = performance.now();
+                    const duration = endTime - startTime;
+                    
+                    // 记录API请求（只记录开发工具面板的API请求）
+                    if (typeof url === 'string' && url.includes('/dev/tool/')) {
+                        state.apiRequests.push({
+                            url: url,
+                            method: 'GET',
+                            duration: duration,
+                            timestamp: Date.now(),
+                            status: response.status
+                        });
+                        
+                        // 只保留最近50条记录
+                        if (state.apiRequests.length > 50) {
+                            state.apiRequests.shift();
+                        }
+                        
+                        // 如果当前在性能标签页，更新显示
+                        if (state.activeMainTab === 'performance') {
+                            renderPerformanceStats();
+                        }
+                    }
+                    
+                    return response;
+                })
+                .catch(error => {
+                    const endTime = performance.now();
+                    const duration = endTime - startTime;
+                    
+                    if (typeof url === 'string' && url.includes('/dev/tool/')) {
+                        state.apiRequests.push({
+                            url: url,
+                            method: 'GET',
+                            duration: duration,
+                            timestamp: Date.now(),
+                            status: 'error',
+                            error: error.message
+                        });
+                        
+                        if (state.apiRequests.length > 50) {
+                            state.apiRequests.shift();
+                        }
+                        
+                        if (state.activeMainTab === 'performance') {
+                            renderPerformanceStats();
+                        }
+                    }
+                    
+                    throw error;
+                });
+        };
+    }
+
+    function getPerformanceTiming() {
+        const timing = performance.timing;
+        if (!timing) {
+            return null;
+        }
+        
+        return {
+            // DNS查询耗时
+            dns: timing.domainLookupEnd - timing.domainLookupStart,
+            // TCP连接耗时
+            tcp: timing.connectEnd - timing.connectStart,
+            // 请求耗时
+            request: timing.responseStart - timing.requestStart,
+            // 响应耗时
+            response: timing.responseEnd - timing.responseStart,
+            // DOM解析耗时
+            domParsing: timing.domInteractive - timing.responseEnd,
+            // DOMContentLoaded耗时
+            domContentLoaded: timing.domContentLoadedEventEnd - timing.navigationStart,
+            // 页面完全加载耗时
+            loadComplete: timing.loadEventEnd - timing.navigationStart,
+            // 首次渲染时间
+            firstPaint: performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0,
+            // 首次内容绘制时间
+            firstContentfulPaint: performance.getEntriesByType('paint').find(entry => entry.name === 'first-contentful-paint')?.startTime || 0
+        };
+    }
+
+    function formatTime(ms) {
+        if (ms < 1) {
+            return (ms * 1000).toFixed(2) + ' μs';
+        } else if (ms < 1000) {
+            return ms.toFixed(2) + ' ms';
+        } else {
+            return (ms / 1000).toFixed(2) + ' s';
+        }
+    }
+
+    function getTimeClass(ms, fast = 100, slow = 500) {
+        if (ms < fast) return 'fast';
+        if (ms < slow) return 'medium';
+        return 'slow';
+    }
+
+    function renderPerformanceStats() {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return;
+        
+        let html = '<div class="performance-stats">';
+        
+        // 页面加载性能
+        html += '<div class="performance-section">';
+        html += '<div class="performance-section-title">';
+        html += '<i class="fa fa-globe"></i> 页面加载性能';
+        html += '</div>';
+        
+        const timing = getPerformanceTiming();
+        if (timing) {
+            const items = [
+                { label: 'DNS查询', value: timing.dns, unit: 'ms' },
+                { label: 'TCP连接', value: timing.tcp, unit: 'ms' },
+                { label: '请求发送', value: timing.request, unit: 'ms' },
+                { label: '响应接收', value: timing.response, unit: 'ms' },
+                { label: 'DOM解析', value: timing.domParsing, unit: 'ms' },
+                { label: 'DOMContentLoaded', value: timing.domContentLoaded, unit: 'ms' },
+                { label: '页面完全加载', value: timing.loadComplete, unit: 'ms' }
+            ];
+            
+            if (timing.firstPaint > 0) {
+                items.push({ label: '首次渲染 (FCP)', value: timing.firstPaint, unit: 'ms' });
+            }
+            if (timing.firstContentfulPaint > 0) {
+                items.push({ label: '首次内容绘制 (FCP)', value: timing.firstContentfulPaint, unit: 'ms' });
+            }
+            
+            items.forEach(item => {
+                const timeClass = getTimeClass(item.value);
+                html += '<div class="performance-item">';
+                html += '<span class="performance-label">' + item.label + '</span>';
+                html += '<span class="performance-value ' + timeClass + '">';
+                html += formatTime(item.value);
+                html += ' <span class="performance-badge ' + timeClass + '">' + 
+                    (timeClass === 'fast' ? '快' : timeClass === 'medium' ? '中' : '慢') + 
+                    '</span>';
+                html += '</span>';
+                html += '</div>';
+            });
+        } else {
+            html += '<div class="performance-item">';
+            html += '<span class="performance-label">性能API不可用</span>';
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        
+        // 资源加载统计
+        html += '<div class="performance-section">';
+        html += '<div class="performance-section-title">';
+        html += '<i class="fa fa-cubes"></i> 资源加载统计';
+        html += '</div>';
+        
+        const resources = performance.getEntriesByType('resource');
+        const resourceStats = {
+            total: resources.length,
+            js: 0,
+            css: 0,
+            img: 0,
+            font: 0,
+            other: 0,
+            totalSize: 0,
+            totalTime: 0
+        };
+        
+        resources.forEach(resource => {
+            const name = resource.name.toLowerCase();
+            if (name.endsWith('.js')) resourceStats.js++;
+            else if (name.endsWith('.css')) resourceStats.css++;
+            else if (name.match(/\.(jpg|jpeg|png|gif|svg|webp)$/)) resourceStats.img++;
+            else if (name.match(/\.(woff|woff2|ttf|eot)$/)) resourceStats.font++;
+            else resourceStats.other++;
+            
+            if (resource.transferSize) {
+                resourceStats.totalSize += resource.transferSize;
+            }
+            resourceStats.totalTime += resource.duration || 0;
+        });
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">总资源数</span>';
+        html += '<span class="performance-value">' + resourceStats.total + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">JS文件</span>';
+        html += '<span class="performance-value">' + resourceStats.js + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">CSS文件</span>';
+        html += '<span class="performance-value">' + resourceStats.css + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">图片文件</span>';
+        html += '<span class="performance-value">' + resourceStats.img + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">字体文件</span>';
+        html += '<span class="performance-value">' + resourceStats.font + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">其他资源</span>';
+        html += '<span class="performance-value">' + resourceStats.other + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">总传输大小</span>';
+        html += '<span class="performance-value">' + formatBytes(resourceStats.totalSize) + '</span>';
+        html += '</div>';
+        
+        html += '<div class="performance-item">';
+        html += '<span class="performance-label">总加载时间</span>';
+        html += '<span class="performance-value ' + getTimeClass(resourceStats.totalTime) + '">' + 
+            formatTime(resourceStats.totalTime) + '</span>';
+        html += '</div>';
+        
+        html += '</div>';
+        
+        // API请求统计
+        html += '<div class="performance-section">';
+        html += '<div class="performance-section-title">';
+        html += '<i class="fa fa-exchange"></i> API请求统计 (最近' + state.apiRequests.length + '条)';
+        html += '</div>';
+        
+        if (state.apiRequests.length === 0) {
+            html += '<div class="performance-item">';
+            html += '<span class="performance-label">暂无API请求记录</span>';
+            html += '</div>';
+        } else {
+            // 显示最近10条
+            const recentRequests = state.apiRequests.slice(-10).reverse();
+            recentRequests.forEach(req => {
+                const timeClass = getTimeClass(req.duration, 50, 200);
+                html += '<div class="api-request-item">';
+                html += '<div class="api-request-url">' + req.url + '</div>';
+                html += '<div class="api-request-time">';
+                html += '<span class="performance-value ' + timeClass + '">' + formatTime(req.duration) + '</span>';
+                html += ' · 状态: ' + (req.status || req.error || 'unknown');
+                html += ' · ' + new Date(req.timestamp).toLocaleTimeString();
+                html += '</div>';
+                html += '</div>';
+            });
+            
+            // 统计信息
+            const avgDuration = state.apiRequests.reduce((sum, req) => sum + req.duration, 0) / state.apiRequests.length;
+            const maxDuration = Math.max(...state.apiRequests.map(req => req.duration));
+            const minDuration = Math.min(...state.apiRequests.map(req => req.duration));
+            
+            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8e8e8;">';
+            html += '<div class="performance-item">';
+            html += '<span class="performance-label">平均耗时</span>';
+            html += '<span class="performance-value ' + getTimeClass(avgDuration) + '">' + formatTime(avgDuration) + '</span>';
+            html += '</div>';
+            html += '<div class="performance-item">';
+            html += '<span class="performance-label">最大耗时</span>';
+            html += '<span class="performance-value ' + getTimeClass(maxDuration) + '">' + formatTime(maxDuration) + '</span>';
+            html += '</div>';
+            html += '<div class="performance-item">';
+            html += '<span class="performance-label">最小耗时</span>';
+            html += '<span class="performance-value ' + getTimeClass(minDuration) + '">' + formatTime(minDuration) + '</span>';
+            html += '</div>';
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        
+        html += '</div>';
+        content.innerHTML = html;
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
     // ========== 导出公共API ==========
     return {
         init,
         toggle,
+        closePanel,
         updateExpandDirection,
         switchMainTab,
         switchRouteTab,
