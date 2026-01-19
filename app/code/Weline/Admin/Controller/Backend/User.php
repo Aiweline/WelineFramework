@@ -16,6 +16,7 @@ use Weline\Acl\Model\Role;
 use Weline\Backend\Model\Backend\Acl\UserRole;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\BackendUserData;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
 #[\Weline\Framework\Acl\Acl('Weline_Admin::system_user_listing', '用户管理', '管理后台用户', '')]
@@ -74,12 +75,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 $this->backendUser->setPassword($password);
             }
             $this->backendUser->save(true);
-            $this->getMessageManager()->addSuccess(__('修改成功！'));
+            MessageManager::success(__('修改成功！'));
             $this->backendUserData->deleteScope('w_user');
             $this->redirect('*/backend/user/edit', ['id' => $this->backendUser->getId()]);
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('修改失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('修改失败！'));
+            if (DEV) MessageManager::exception($exception);
             $this->redirect('*/backend/user/add');
         }
     }
@@ -92,12 +93,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ->setEmail($this->request->getPost('email'))
                 ->setPassword(trim($this->request->getPost('password')))
                 ->save(true);
-            $this->getMessageManager()->addSuccess(__('添加成功！'));
+            MessageManager::success(__('添加成功！'));
             $this->backendUserData->deleteScope('w_user');
             $this->redirect('*/backend/user/edit', ['id' => $this->backendUser->getId()]);
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('添加失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('添加失败！'));
+            if (DEV) MessageManager::exception($exception);
             $this->redirect('*/backend/user/add');
         }
     }
@@ -127,7 +128,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->getMessageManager()->addSuccess(__('删除成功！'));
+            MessageManager::success(__('删除成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
             // 如果是AJAX请求，返回JSON
@@ -139,8 +140,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->getMessageManager()->addWarning(__('删除失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('删除失败！'));
+            if (DEV) MessageManager::exception($exception);
             $this->redirect('*/backend/user/listing');
         }
     }
@@ -153,11 +154,11 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ->setIsDeleted(false)
                 ->setIsEnabled(true)
                 ->save();
-            $this->getMessageManager()->addSuccess(__('激活成功！'));
+            MessageManager::success(__('激活成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('激活失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('激活失败！'));
+            if (DEV) MessageManager::exception($exception);
             $this->redirect('*/backend/user/listing');
         }
     }
@@ -169,11 +170,11 @@ class User extends \Weline\Framework\App\Controller\BackendController
             $this->backendUser->clearData()->load($this->request->getPost('id'))
                 ->setIsEnabled(false)
                 ->save();
-            $this->getMessageManager()->addSuccess(__('禁用成功！'));
+            MessageManager::success(__('禁用成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('禁用失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('禁用失败！'));
+            if (DEV) MessageManager::exception($exception);
             $this->redirect('*/backend/user/listing');
         }
     }
@@ -203,17 +204,17 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postAssignRole()
     {
         if ($this->session->getLoginUserID() === $this->request->getGet('user_id')) {
-            $this->getMessageManager()->addWarning(__('不能给自己分配权限！'));
+            MessageManager::warning(__('不能给自己分配权限！'));
             $this->redirect('*/backend/user/listing');
         }
         /**@var UserRole $userRole */
         $userRole = ObjectManager::getInstance(UserRole::class);
         try {
             $userRole->clearData()->setData($this->request->getPost())->save(true);
-            $this->getMessageManager()->addSuccess(__('角色分配成功！'));
+            MessageManager::success(__('角色分配成功！'));
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('角色分配失败！'));
-            if (DEV) $this->getMessageManager()->addException($exception);
+            MessageManager::warning(__('角色分配失败！'));
+            if (DEV) MessageManager::exception($exception);
         }
         $this->redirect('*/backend/user/assign-role');
     }

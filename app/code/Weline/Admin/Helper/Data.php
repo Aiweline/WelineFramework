@@ -41,7 +41,10 @@ class Data extends \Weline\Framework\App\Helper
     {
         $username = $this->request->getParam('username');
         try {
-            return clone $this->adminUser->clear()->load('username', $username);
+            // 使用 where 查询，确保大小写不敏感匹配
+            $user = clone $this->adminUser->clear();
+            $user->where('username', $username)->find()->fetch();
+            return $user;
         } catch (\Exception $exception) {
             return $this->adminUser;
         }

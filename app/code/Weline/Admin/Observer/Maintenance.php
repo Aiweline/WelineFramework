@@ -67,6 +67,12 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         }
         $data->setData('white_urls', $white_urls);
         if (!$white) {
+            // 获取语言（从事件数据中读取，如果事件数据中有的话）
+            $lang = $data->getData('language') ?? $_SERVER['WELINE_USER_LANG'] ?? $_COOKIE['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            // 设置语言到 Request，以便模板能够使用正确的语言
+            $request->setData('WELINE_USER_LANG', $lang);
+            $_SERVER['WELINE_USER_LANG'] = $lang;
+            
             // 标记为已处理，阻止 MaintenanceInterceptor 继续执行
             $data->setData('handled', true);
             echo $block->fetchHtml('Weline_Admin::templates/maintenance.phtml');
