@@ -43,14 +43,21 @@
 暂无可用的优惠方式。请确保营销模块已正确安装。,暂无可用的优惠方式。请确保营销模块已正确安装。
 保存,Save
 返回,Back
+成功,成功
 保存成功,"Saved successfully"
 保存失败,"Save failed"
+确定,确定
+请重试,请重试
 支付方式管理,"Payment Method Management"
 支付提供商,"Payment Provider"
 操作,Actions
 暂无支付方式,"No payment methods"
 编辑,Edit
+确认切换状态,确认切换状态
 确定要切换支付方式状态吗？,"Are you sure you want to toggle payment method status?"
+确定切换,确定切换
+取消,取消
+状态已切换,状态已切换
 操作失败,"Operation failed"
 交易记录管理,交易记录管理
 交易号/订单ID,"Transaction No/Order ID"
