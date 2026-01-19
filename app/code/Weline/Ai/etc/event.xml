@@ -6,5 +6,10 @@
     <event name="Weline_Framework_Module::module_upgrade">
         <observer name="Weline_Ai::module_upgrade" instance="Weline\Ai\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="0"/>
     </event>
+    
+    <!-- 系统升级后自动扫描AI模块资源（场景适配器和模型） -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Ai::setup_upgrade_after" instance="Weline\Ai\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="200"/>
+    </event>
 </config>
 

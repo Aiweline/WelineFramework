@@ -37,6 +37,7 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
     public const fields_DESCRIPTION = 'description';
     public const fields_VERSION = 'version';
     public const fields_CLASS_NAME = 'class_name';
+    public const fields_FILE_PATH = 'file_path'; // 相对根目录的文件路径
     public const fields_SUPPORTED_MODELS = 'supported_models'; // JSON
     public const fields_PARAM_TEMPLATE = 'param_template'; // JSON
     public const fields_EXAMPLES = 'examples'; // JSON
@@ -96,24 +97,29 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '主键ID')
-                ->addColumn(self::fields_CODE, TableInterface::column_type_VARCHAR, 255, 'not null unique', '适配器代码')
-                ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '适配器名称')
-                ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, null, 'null', '适配器描述')
-                ->addColumn(self::fields_VERSION, TableInterface::column_type_VARCHAR, 50, 'not null', '适配器版本')
-                ->addColumn(self::fields_CLASS_NAME, TableInterface::column_type_VARCHAR, 500, 'not null', '适配器类名')
-                ->addColumn(self::fields_SUPPORTED_MODELS, TableInterface::column_type_TEXT, null, 'null', '支持的模型类型JSON')
-                ->addColumn(self::fields_PARAM_TEMPLATE, TableInterface::column_type_TEXT, null, 'null', '参数模板JSON')
-                ->addColumn(self::fields_EXAMPLES, TableInterface::column_type_TEXT, null, 'null', '使用示例JSON')
-                ->addColumn(self::fields_IS_ACTIVE, TableInterface::column_type_SMALLINT, 1, 'default 1', '是否激活')
-                ->addColumn(self::fields_CREATED_TIME, TableInterface::column_type_INTEGER, null, 'not null', '创建时间')
-                ->addColumn(self::fields_UPDATED_TIME, TableInterface::column_type_INTEGER, null, 'not null', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_code', self::fields_CODE, '适配器代码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '激活状态索引')
-                ->create();
+        // 重装：如果表已存在，先删除
+        if ($setup->tableExist()) {
+            $setup->dropTable();
         }
+        
+        // 创建新表
+        $setup->createTable()
+            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '主键ID')
+            ->addColumn(self::fields_CODE, TableInterface::column_type_VARCHAR, 255, 'not null unique', '适配器代码')
+            ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '适配器名称')
+            ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, null, 'null', '适配器描述')
+            ->addColumn(self::fields_VERSION, TableInterface::column_type_VARCHAR, 50, 'not null', '适配器版本')
+            ->addColumn(self::fields_CLASS_NAME, TableInterface::column_type_VARCHAR, 500, 'not null', '适配器类名')
+            ->addColumn(self::fields_FILE_PATH, TableInterface::column_type_VARCHAR, 500, 'null', '适配器文件路径（相对根目录）')
+            ->addColumn(self::fields_SUPPORTED_MODELS, TableInterface::column_type_TEXT, null, 'null', '支持的模型类型JSON')
+            ->addColumn(self::fields_PARAM_TEMPLATE, TableInterface::column_type_TEXT, null, 'null', '参数模板JSON')
+            ->addColumn(self::fields_EXAMPLES, TableInterface::column_type_TEXT, null, 'null', '使用示例JSON')
+            ->addColumn(self::fields_IS_ACTIVE, TableInterface::column_type_SMALLINT, 1, 'default 1', '是否激活')
+            ->addColumn(self::fields_CREATED_TIME, TableInterface::column_type_INTEGER, null, 'not null', '创建时间')
+            ->addColumn(self::fields_UPDATED_TIME, TableInterface::column_type_INTEGER, null, 'not null', '更新时间')
+            ->addIndex(TableInterface::index_type_KEY, 'idx_code', self::fields_CODE, '适配器代码索引')
+            ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '激活状态索引')
+            ->create();
     }
 
     /**

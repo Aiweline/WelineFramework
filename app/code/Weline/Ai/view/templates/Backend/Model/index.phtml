@@ -472,7 +472,16 @@ function getSelectedIds() {
 function bulkActivate() {
     const ids = getSelectedIds();
     if (ids.length === 0) {
-        alert('<?= __('请先选择要激活的模型') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择要激活的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请先选择要激活的模型') ?>');
+        }
         return;
     }
     
@@ -488,10 +497,29 @@ function bulkActivate() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
@@ -500,7 +528,16 @@ function bulkActivate() {
 function bulkDeactivate() {
     const ids = getSelectedIds();
     if (ids.length === 0) {
-        alert('<?= __('请先选择要禁用的模型') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择要禁用的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请先选择要禁用的模型') ?>');
+        }
         return;
     }
     
@@ -516,10 +553,29 @@ function bulkDeactivate() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
@@ -528,7 +584,16 @@ function bulkDeactivate() {
 function bulkDelete() {
     const ids = getSelectedIds();
     if (ids.length === 0) {
-        alert('<?= __('请先选择要删除的模型') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择要删除的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请先选择要删除的模型') ?>');
+        }
         return;
     }
     
@@ -544,10 +609,29 @@ function bulkDelete() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
@@ -556,7 +640,16 @@ function bulkDelete() {
 function bulkTestConnection() {
     const ids = getSelectedIds();
     if (ids.length === 0) {
-        alert('<?= __('请先选择要测试的模型') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择要测试的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请先选择要测试的模型') ?>');
+        }
         return;
     }
     
@@ -582,12 +675,30 @@ function bulkTestConnection() {
             // 刷新页面以更新连接状态
             setTimeout(() => location.reload(), 3000);
         } else {
-            alert('<?= __('测试失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('测试失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('测试失败：') ?>' + data.message);
+            }
             progressModal.hide();
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('请求失败') ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请求失败：') ?>' + error.message);
+        }
         progressModal.hide();
     });
 }
@@ -720,9 +831,16 @@ function clearAllModels() {
         '<?= __('（区分大小写）') ?>');
     
     if (confirmText !== 'CLEAR ALL MODELS') {
-        alert('<?= __('❌ 确认文本不正确，操作已取消') ?>' + '\n\n' +
-            '<?= __('请确保输入：') ?>' + 'CLEAR ALL MODELS\n' +
-            '<?= __('（区分大小写）') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('确认文本不正确') ?>',
+                html: '<?= __('操作已取消') ?><br><br><?= __('请确保输入：') ?>CLEAR ALL MODELS<br><?= __('（区分大小写）') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('❌ 确认文本不正确，操作已取消') ?>');
+        }
         return;
     }
     
@@ -733,10 +851,96 @@ function clearAllModels() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
+        }
+    });
+}
+
+// 删除单个模型
+function deleteModel(modelId, modelCode) {
+    if (!modelCode || modelCode.startsWith('weline_')) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
+        }
+        return;
+    }
+    
+    if (!confirm('<?= __('确定要删除模型吗？此操作不可恢复！') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: modelId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message || '<?= __('删除成功') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message || '<?= __('删除成功') ?>');
+                location.reload();
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('删除失败') ?>',
+                    text: data.message || '<?= __('删除失败') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(data.message || '<?= __('删除失败') ?>');
+            }
+        }
+    })
+    .catch(error => {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('错误') ?>',
+                text: '<?= __('删除失败，请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('删除失败，请重试') ?>');
         }
     });
 }
@@ -752,14 +956,42 @@ function collectModels() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('<?= __('收集成功！') ?>' + '\n' + data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('收集成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log('<?= __('收集成功！') ?>' + '\n' + data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('收集失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('收集失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('收集失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('请求失败') ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请求失败：') ?>' + error.message);
+        }
     })
     .finally(() => {
         btn.disabled = false;
@@ -780,14 +1012,32 @@ function toggleStatusByCode(modelCode) {
         if (data.success) {
             location.reload();
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
 
 function deleteModel(modelId, modelCode, isCopied) {
     if (!isCopied) {
-        alert('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
+        }
         return;
     }
     
@@ -807,16 +1057,44 @@ function deleteModel(modelId, modelCode, isCopied) {
     .then(data => {
         if (data.success) {
             // 删除成功，刷新页面
-            alert(data.message || '<?= __('删除成功') ?>');
-            window.location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message || '<?= __('删除成功') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => window.location.reload());
+            } else {
+                console.log(data.message || '<?= __('删除成功') ?>');
+                window.location.reload();
+            }
         } else {
             // 删除失败，显示错误消息
-            alert(data.message || '<?= __('删除失败') ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('删除失败') ?>',
+                    text: data.message || '<?= __('删除失败') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error(data.message || '<?= __('删除失败') ?>');
+            }
         }
     })
     .catch(error => {
         console.error('<?= __('删除失败:') ?>', error);
-        alert('<?= __('删除失败，请重试') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('错误') ?>',
+                text: '<?= __('删除失败，请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('删除失败，请重试') ?>');
+        }
     });
 }
 
@@ -840,7 +1118,16 @@ function resetFilters() {
 // 测试模型连通性
 function testModelConnection(modelCode) {
     if (!modelCode) {
-        alert('<?= __('模型代码不能为空') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('模型代码不能为空') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('模型代码不能为空') ?>');
+        }
         return;
     }
     
@@ -909,7 +1196,16 @@ function testModelConnection(modelCode) {
 // 测试自配置连通性
 function testSelfConfigConnection(modelCode) {
     if (!modelCode) {
-        alert('<?= __('模型代码不能为空') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('模型代码不能为空') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('模型代码不能为空') ?>');
+        }
         return;
     }
     
@@ -1041,9 +1337,27 @@ function closeResultModal(btn) {
 function showActivateBlocked(btn) {
     try {
         const reason = btn.getAttribute('data-reason') || '<?= __('条件不足') ?>';
-        alert('<?= __('无法激活: ') ?>' + reason);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('无法激活') ?>',
+                text: reason,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('无法激活: ') ?>' + reason);
+        }
     } catch (e) {
-        alert('<?= __('无法激活') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('无法激活') ?>',
+                text: '<?= __('条件不足') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('无法激活') ?>');
+        }
     }
 }
 </script>
@@ -1058,6 +1372,10 @@ function showActivateBlocked(btn) {
 
 <!-- 页脚 -->
 @template(Weline_Admin::common/footer.phtml)
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 </body>
 </html>
