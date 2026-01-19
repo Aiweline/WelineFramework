@@ -77,10 +77,11 @@ class HookDataService
         // 初始化注册表
         $this->getHookRegistry()->initialize();
         
-        // 确保注册表已刷新（如果 generated/hooks.php 不存在）
+        // 检查注册表文件是否存在（如果不存在，需要运行 setup:upgrade）
         $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
         if (!file_exists($registryFile)) {
-            $this->getHookRegistry()->refresh();
+            // 注册表文件不存在，返回空数组，提示用户运行 setup:upgrade
+            return [];
         }
         
         // 从注册表获取所有 Hook（包含规约信息）
@@ -436,14 +437,27 @@ class HookDataService
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
                 if ($file->isFile() && $file->getExtension() === 'phtml') {
-                    // 文件名格式：ModuleName--area--type--component--position.phtml
-                    $fileName = $file->getBasename('.phtml');
-                    // 将 -- 替换为 :: 得到 Hook 名称
-                    $hookName = str_replace('--', '::', $fileName);
+                    // 目录层级结构格式：从目录结构提取Hook名称
+                    // 文件路径格式：view/hooks/Weline_Backend/backend/partials/head/before.phtml
+                    // Hook名称格式：Weline_Backend::backend::partials::head::before
                     
-                    // 构建文件路径标识
-                    $relativePath = str_replace($basePath . DS, '', $file->getPathname());
-                    $fileIdentifier = $moduleName . '::' . $relativePath;
+                    // 获取相对于hooks目录的路径
+                    $relativePath = str_replace($hooksDir . DS, '', $file->getPathname());
+                    // 标准化路径分隔符
+                    $relativePath = str_replace(['/', '\\'], DS, $relativePath);
+                    // 移除文件扩展名
+                    $relativePathWithoutExt = str_replace('.phtml', '', $relativePath);
+                    
+                    // 将路径分隔符转换为 :: 得到 Hook 名称
+                    $hookName = str_replace(DS, '::', $relativePathWithoutExt);
+                    
+                    // 构建文件路径标识（相对于模块根目录）
+                    $fileRelativePath = str_replace($basePath . DS, '', $file->getPathname());
+                    
+                    // 使用与 HookRegistry 相同的格式（数组格式，包含元数据）
+                    // 注意：HookDataService 主要用于后台显示，不需要解析元数据
+                    // 但为了保持一致性，使用相同的文件路径格式
+                    $fileIdentifier = $moduleName . '::' . $fileRelativePath;
                     
                     if (!isset($result[$hookName])) {
                         $result[$hookName] = [];
