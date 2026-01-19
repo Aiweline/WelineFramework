@@ -1,5 +1,19 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Backend\Model\Config as BackendConfig;
+
+// 获取后台配置
+/** @var BackendConfig $backendConfig */
+$backendConfig = ObjectManager::getInstance(BackendConfig::class);
+$logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend');
+$logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend');
+$logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend');
+
+// 设置默认值
+$logoDark = $logoDark ?: '@static(Weline_Admin::assets/images/logo-dark.png)';
+$logoLight = $logoLight ?: '@static(Weline_Admin::assets/images/logo-light.png)';
+$logoSm = $logoSm ?: '@static(Weline_Admin::assets/images/logo-sm.png)';
 ?>
 <header id="page-topbar">
     <div class="navbar-header">
@@ -8,22 +22,22 @@
             <div class="navbar-brand-box text-center">
                 <a href="@admin-url('admin')" class="logo logo-dark">
                                 <span class="logo-sm">
-                                    <img src="@static(Weline_Admin::assets/images/logo-sm.png)" alt="logo-sm-dark"
+                                    <img src="<?= $logoSm ?>" alt="logo-sm-dark"
                                          height="50">
                                 </span>
                     <span class="logo-lg">
-                                    <img src="@static(Weline_Admin::assets/images/logo-dark.png)" alt="logo-dark"
+                                    <img src="<?= $logoDark ?>" alt="logo-dark"
                                          height="70">
                                 </span>
                 </a>
 
                 <a href="@admin-url('admin')" class="logo logo-light">
                                 <span class="logo-sm">
-                                    <img src="@static(Weline_Admin::assets/images/logo-sm.png)" alt="logo-sm-light"
+                                    <img src="<?= $logoSm ?>" alt="logo-sm-light"
                                          height="50">
                                 </span>
                     <span class="logo-lg">
-                                    <img src="@static(Weline_Admin::assets/images/logo-light.png)" alt="logo-light"
+                                    <img src="<?= $logoLight ?>" alt="logo-light"
                                          height="70">
                                 </span>
                 </a>
