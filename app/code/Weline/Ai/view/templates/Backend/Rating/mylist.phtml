@@ -232,6 +232,10 @@ $totalPages = $this->totalPages ?? 1;
 <!-- 页脚 -->
 @template(Weline_Admin::common/footer.phtml)
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function changePage(page) {
     window.location.href = '<?= $this->getBackendUrl('*/backend/rating/mylist') ?>?page=' + page;
@@ -239,7 +243,16 @@ function changePage(page) {
 
 function editRating(ratingId) {
     // TODO: 实现编辑评分功能
-    alert('编辑评分功能待实现，评分ID：' + ratingId);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'info',
+            title: '<?= __('功能开发中') ?>',
+            text: '<?= __('编辑评分功能待实现，评分ID：') ?>' + ratingId,
+            confirmButtonText: '<?= __('确定') ?>'
+        });
+    } else {
+        console.log('编辑评分功能待实现，评分ID：' + ratingId);
+    }
 }
 </script>
 
