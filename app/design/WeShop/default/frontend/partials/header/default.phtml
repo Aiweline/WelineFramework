@@ -1,0 +1,112 @@
+<?php
+/**
+ * WeShop Default Theme - Header Partial
+ * 头部模板 - 包含Logo、搜索、导航、购物车等
+ */
+?>
+<header class="sticky top-0 z-50 w-full bg-surface-light dark:bg-surface-dark shadow-sm font-display">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-3">
+        <!-- Logo and Navigation -->
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2 text-text-primary-light dark:text-text-primary-dark">
+                <span class="material-symbols-outlined text-primary text-3xl">local_mall</span>
+                <a href="<?= $this->getUrl('') ?>">
+                    <h2 class="text-xl font-bold tracking-tight"><?= $this->getStoreName() ?></h2>
+                </a>
+            </div>
+            
+            <!-- Navigation Menu -->
+            <div class="hidden lg:flex items-center gap-6">
+                <w:hook name="WeShop_Frontend::header::categories-menu"/>
+                <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('catalog/category') ?>"><?= __('Shop by Category') ?></a>
+                <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('promotion/deals') ?>"><?= __("Today's Deals") ?></a>
+                <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('catalog/bestsellers') ?>"><?= __('Best Sellers') ?></a>
+                <a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="<?= $this->getUrl('catalog/new-arrivals') ?>"><?= __('New Arrivals') ?></a>
+            </div>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="flex flex-1 items-center justify-center px-8">
+            <div class="w-full max-w-lg">
+                <form action="<?= $this->getUrl('search') ?>" method="get" class="relative flex flex-col w-full">
+                    <div class="flex w-full flex-1 items-stretch rounded-lg h-11 border border-border-light dark:border-border-dark focus-within:ring-2 focus-within:ring-primary">
+                        <w:hook name="WeShop_Frontend::header::search-before"/>
+                        <input 
+                            type="text" 
+                            name="q" 
+                            class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-lg bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-0 focus:ring-0 border-none h-full placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 text-sm font-normal" 
+                            placeholder="<?= __('Search for products, brands, and more...') ?>" 
+                            value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
+                        />
+                        <w:hook name="WeShop_Frontend::header::search-after"/>
+                        <button type="submit" class="flex items-center justify-center px-4 bg-primary text-white rounded-r-lg">
+                            <span class="material-symbols-outlined text-xl">search</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- User Actions -->
+        <div class="flex items-center gap-3">
+            <!-- Account -->
+            <w:hook name="WeShop_Frontend::header::account"/>
+            <a href="<?= $this->getUrl('customer/account') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 transition-colors">
+                <span class="material-symbols-outlined text-2xl">person_outline</span>
+                <span class="hidden md:inline text-sm font-medium"><?= __('Account') ?></span>
+            </a>
+            
+            <!-- Mini Cart -->
+            <w:hook name="WeShop_Frontend::header::mini_cart"/>
+            <div class="relative group z-50">
+                <a href="<?= $this->getUrl('cart') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 relative transition-colors duration-200">
+                    <span class="material-symbols-outlined text-2xl">shopping_cart</span>
+                    <span class="hidden md:inline text-sm font-medium"><?= __('Cart') ?></span>
+                    <?php $cartCount = $this->getData('cart_count') ?? 0; ?>
+                    <?php if ($cartCount > 0): ?>
+                        <span class="absolute top-1 right-1 md:right-2 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[10px] text-white font-bold group-hover:bg-primary transition-colors"><?= $cartCount ?></span>
+                    <?php endif; ?>
+                </a>
+                
+                <!-- Mini Cart Dropdown -->
+                <div class="absolute right-0 top-full pt-2 w-96 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-300 ease-in-out transform origin-top-right z-50">
+                    <div class="relative bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
+                        <div class="absolute -top-2 right-6 w-4 h-4 bg-surface-light dark:bg-surface-dark transform rotate-45 border-t border-l border-border-light/50 dark:border-border-dark/50"></div>
+                        <div class="relative flex flex-col z-10">
+                            <div class="px-5 py-4 border-b border-border-light dark:border-border-dark flex items-center justify-between bg-gray-50/50 dark:bg-white/5">
+                                <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Shopping Cart') ?></h3>
+                                <span class="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark bg-black/5 dark:bg-white/10 px-2 py-1 rounded-full"><?= $cartCount ?> <?= __('items') ?></span>
+                            </div>
+                            
+                            <!-- Cart Items -->
+                            <w:hook name="WeShop_Cart::header::mini_cart_items"/>
+                            
+                            <!-- Cart Summary -->
+                            <div class="p-5 bg-gray-50/50 dark:bg-white/5 border-t border-border-light dark:border-border-dark">
+                                <?php $cartTotal = $this->getData('cart_total') ?? 0; ?>
+                                <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Subtotal') ?></span>
+                                    <span class="text-xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($cartTotal) ?></span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <a href="<?= $this->getUrl('cart') ?>" class="flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark py-2.5 text-sm font-bold text-text-primary-light dark:text-text-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                        <?= __('View Cart') ?>
+                                    </a>
+                                    <a href="<?= $this->getUrl('checkout') ?>" class="flex items-center justify-center rounded-lg bg-primary py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors">
+                                        <?= __('Checkout') ?>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Language Switcher -->
+            <w:hook name="WeShop_Frontend::header::language_switcher"/>
+            
+            <!-- Currency Switcher -->
+            <w:hook name="WeShop_Frontend::header::currency_switcher"/>
+        </div>
+    </div>
+</header>

@@ -1,0 +1,283 @@
+<?php
+/**
+ * WeShop Default Theme - Product Detail Page
+ * 商品详情页模板 - 根据UI设计创建
+ */
+$product = $this->getData('product') ?? [];
+$images = $this->getData('product_images') ?? [];
+$reviews = $this->getData('reviews') ?? [];
+$relatedProducts = $this->getData('related_products') ?? [];
+$breadcrumbs = $this->getData('breadcrumbs') ?? [];
+?>
+<main class="px-4 sm:px-6 lg:px-8 xl:px-20 py-10 flex-1">
+    <div class="mx-auto max-w-7xl">
+        <!-- Breadcrumb -->
+        <w:hook name="WeShop_Product::detail::breadcrumb_before"/>
+        <div class="flex flex-wrap gap-2 mb-8">
+            <a class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal hover:text-primary" href="<?= $this->getUrl('') ?>"><?= __('Home') ?></a>
+            <?php foreach ($breadcrumbs as $crumb): ?>
+                <span class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">/</span>
+                <?php if ($crumb['url']): ?>
+                    <a class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal hover:text-primary" href="<?= $crumb['url'] ?>"><?= htmlspecialchars($crumb['name']) ?></a>
+                <?php else: ?>
+                    <span class="text-text-primary-light dark:text-text-primary-dark text-sm font-medium leading-normal"><?= htmlspecialchars($crumb['name']) ?></span>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+        <w:hook name="WeShop_Product::detail::breadcrumb_after"/>
+        
+        <!-- Product Main Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
+            <!-- Product Images -->
+            <div class="flex flex-col gap-4">
+                <w:hook name="WeShop_Product::detail::gallery_before"/>
+                <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-xl shadow-sm product-main-image" id="main-product-image" style='background-image: url("<?= $product['main_image'] ?? '' ?>");' data-alt="<?= htmlspecialchars($product['name'] ?? '') ?>"></div>
+                <div class="grid grid-cols-[repeat(auto-fit,minmax(80px,1fr))] gap-4" id="product-thumbnails">
+                    <?php foreach ($images as $index => $image): ?>
+                        <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg cursor-pointer <?= $index === 0 ? 'border-2 border-primary' : 'opacity-70 hover:opacity-100' ?>" 
+                             style='background-image: url("<?= $image['url'] ?>");' 
+                             data-image="<?= $image['url'] ?>"
+                             data-alt="<?= htmlspecialchars($image['alt'] ?? '') ?>"
+                             onclick="changeMainImage(this)"></div>
+                    <?php endforeach; ?>
+                </div>
+                <w:hook name="WeShop_Product::detail::gallery_after"/>
+            </div>
+            
+            <!-- Product Info -->
+            <div class="flex flex-col gap-6">
+                <w:hook name="WeShop_Product::detail::info_before"/>
+                
+                <!-- Title and Brand -->
+                <div class="flex flex-col gap-2">
+                    <h1 class="text-3xl lg:text-4xl font-black leading-tight tracking-[-0.033em]"><?= htmlspecialchars($product['name'] ?? '') ?></h1>
+                    <?php if ($product['brand'] ?? null): ?>
+                        <p class="text-text-secondary-light dark:text-text-secondary-dark text-base font-normal leading-normal">
+                            <?= __('by') ?> <a class="font-medium text-primary hover:underline" href="<?= $this->getUrl('catalog/brand', ['id' => $product['brand_id']]) ?>"><?= htmlspecialchars($product['brand']) ?></a>
+                        </p>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Rating -->
+                <w:hook name="WeShop_Review::product::rating"/>
+                <?php $rating = $product['rating'] ?? 0; $reviewCount = $product['review_count'] ?? 0; ?>
+                <div class="flex items-center gap-2">
+                    <div class="flex text-primary">
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <?php if ($i <= $rating): ?>
+                                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+                            <?php elseif ($i - 0.5 <= $rating): ?>
+                                <span class="material-symbols-outlined">star_half</span>
+                            <?php else: ?>
+                                <span class="material-symbols-outlined">star</span>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                    </div>
+                    <span class="text-sm font-medium"><?= number_format($rating, 1) ?> (<?= number_format($reviewCount) ?> <?= __('reviews') ?>)</span>
+                </div>
+                
+                <!-- Price -->
+                <div class="flex items-baseline gap-3">
+                    <?php if ($product['special_price'] ?? null): ?>
+                        <span class="text-4xl font-bold text-red-500"><?= $this->formatPrice($product['special_price']) ?></span>
+                        <span class="text-xl font-medium text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($product['price']) ?></span>
+                    <?php else: ?>
+                        <span class="text-4xl font-bold"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Options -->
+                <w:hook name="WeShop_Product::detail::options_before"/>
+                <form id="product-form" action="<?= $this->getUrl('cart/add') ?>" method="post">
+                    <input type="hidden" name="product_id" value="<?= $product['product_id'] ?? 0 ?>">
+                    <div class="flex flex-col gap-4 pt-4 border-t border-border-light dark:border-border-dark">
+                        <div class="grid grid-cols-2 gap-4">
+                            <?php $options = $product['options'] ?? []; ?>
+                            <?php foreach ($options as $option): ?>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2" for="option_<?= $option['id'] ?>"><?= htmlspecialchars($option['label']) ?></label>
+                                    <select class="form-select w-full rounded-lg bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary" id="option_<?= $option['id'] ?>" name="options[<?= $option['id'] ?>]">
+                                        <?php foreach ($option['values'] as $value): ?>
+                                            <option value="<?= $value['id'] ?>"><?= htmlspecialchars($value['label']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endforeach; ?>
+                            <div>
+                                <label class="block text-sm font-medium mb-2" for="quantity"><?= __('Quantity') ?></label>
+                                <select class="form-select w-full rounded-lg bg-background-light dark:bg-background-dark border-border-light dark:border-border-dark focus:border-primary focus:ring-primary" id="quantity" name="qty">
+                                    <?php for ($i = 1; $i <= 10; $i++): ?>
+                                        <option value="<?= $i ?>"><?= $i ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <w:hook name="WeShop_Product::detail::options_after"/>
+                    
+                    <!-- Add to Cart -->
+                    <div class="flex flex-col gap-3 pt-4">
+                        <button type="submit" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity">
+                            <span class="material-symbols-outlined">add_shopping_cart</span>
+                            <?= __('Add to Cart') ?>
+                        </button>
+                        <w:hook name="WeShop_Product::detail::after_add_to_cart"/>
+                        <button type="button" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary/20 text-primary gap-2 text-base font-bold leading-normal tracking-wide hover:bg-primary/30 transition-colors add-to-wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
+                            <span class="material-symbols-outlined">favorite</span>
+                            <?= __('Add to Wishlist') ?>
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Highlights -->
+                <?php if ($product['highlights'] ?? null): ?>
+                    <div class="pt-4 border-t border-border-light dark:border-border-dark">
+                        <h3 class="text-lg font-bold mb-2"><?= __('Product Highlights') ?></h3>
+                        <ul class="list-disc list-inside space-y-1 text-text-secondary-light dark:text-text-secondary-dark">
+                            <?php foreach ($product['highlights'] as $highlight): ?>
+                                <li><?= htmlspecialchars($highlight) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+                
+                <w:hook name="WeShop_Product::detail::info_after"/>
+            </div>
+        </div>
+        
+        <!-- Tabs Section -->
+        <div class="mt-16">
+            <w:hook name="WeShop_Product::detail::tabs_before"/>
+            <div class="border-b border-border-light dark:border-border-dark">
+                <nav aria-label="Tabs" class="-mb-px flex space-x-8">
+                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-primary border-primary" href="#description" data-tab="description"><?= __('Product Description') ?></a>
+                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#specifications" data-tab="specifications"><?= __('Specifications') ?></a>
+                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#reviews" data-tab="reviews"><?= __('Reviews') ?></a>
+                </nav>
+            </div>
+            
+            <!-- Description Tab -->
+            <div class="tab-content py-10" id="description-content">
+                <h3 class="text-xl font-bold mb-4"><?= htmlspecialchars($product['description_title'] ?? __('Product Description')) ?></h3>
+                <div class="text-text-secondary-light dark:text-text-secondary-dark leading-relaxed prose dark:prose-invert max-w-none">
+                    <?= $product['description'] ?? '' ?>
+                </div>
+            </div>
+            
+            <!-- Specifications Tab -->
+            <div class="tab-content py-10 hidden" id="specifications-content">
+                <?php $specs = $product['specifications'] ?? []; ?>
+                <table class="w-full text-left">
+                    <tbody>
+                        <?php foreach ($specs as $spec): ?>
+                            <tr class="border-b border-border-light dark:border-border-dark">
+                                <th class="py-3 pr-4 font-medium text-text-primary-light dark:text-text-primary-dark w-1/3"><?= htmlspecialchars($spec['label']) ?></th>
+                                <td class="py-3 text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($spec['value']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Reviews Tab -->
+            <div class="tab-content py-10 hidden" id="reviews-content">
+                <w:hook name="WeShop_Review::product::reviews"/>
+            </div>
+            <w:hook name="WeShop_Product::detail::tabs_after"/>
+        </div>
+        
+        <!-- Customer Reviews Summary -->
+        <div class="mt-16 py-10 border-t border-border-light dark:border-border-dark">
+            <w:hook name="WeShop_Review::product::summary_before"/>
+            <h2 class="text-2xl font-bold mb-6"><?= __('Customer Reviews') ?></h2>
+            <div class="flex flex-wrap gap-x-8 gap-y-6 p-4 bg-background-light dark:bg-surface-dark rounded-lg">
+                <div class="flex flex-col gap-2">
+                    <p class="text-4xl font-black leading-tight tracking-[-0.033em]"><?= number_format($rating, 1) ?></p>
+                    <div class="flex gap-0.5 text-primary">
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <?php if ($i <= $rating): ?>
+                                <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+                            <?php elseif ($i - 0.5 <= $rating): ?>
+                                <span class="material-symbols-outlined text-lg">star_half</span>
+                            <?php else: ?>
+                                <span class="material-symbols-outlined text-lg">star</span>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                    </div>
+                    <p class="text-base font-normal leading-normal"><?= __('Based on %1 reviews', number_format($reviewCount)) ?></p>
+                </div>
+                <div class="grid min-w-[200px] max-w-[400px] flex-1 grid-cols-[20px_1fr_40px] items-center gap-x-4 gap-y-3">
+                    <?php $ratingDistribution = $product['rating_distribution'] ?? []; ?>
+                    <?php for ($i = 5; $i >= 1; $i--): ?>
+                        <?php $percent = $ratingDistribution[$i] ?? 0; ?>
+                        <p class="text-sm font-normal leading-normal"><?= $i ?></p>
+                        <div class="flex h-2 flex-1 overflow-hidden rounded-full bg-border-light dark:bg-border-dark"><div class="rounded-full bg-primary" style="width: <?= $percent ?>%;"></div></div>
+                        <p class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal text-right"><?= $percent ?>%</p>
+                    <?php endfor; ?>
+                </div>
+            </div>
+            <w:hook name="WeShop_Review::product::summary_after"/>
+        </div>
+        
+        <!-- Related Products -->
+        <?php if (!empty($relatedProducts)): ?>
+            <div class="mt-16 py-10 border-t border-border-light dark:border-border-dark">
+                <w:hook name="WeShop_Product::detail::related_before"/>
+                <h2 class="text-2xl font-bold mb-6"><?= __('You Might Also Like') ?></h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <?php foreach ($relatedProducts as $related): ?>
+                        <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="flex flex-col gap-3 group">
+                            <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg overflow-hidden" style='background-image: url("<?= $related['image'] ?? '' ?>");' data-alt="<?= htmlspecialchars($related['name']) ?>"></div>
+                            <div class="flex flex-col">
+                                <h3 class="font-bold text-base group-hover:text-primary transition-colors"><?= htmlspecialchars($related['name']) ?></h3>
+                                <p class="text-text-secondary-light dark:text-text-secondary-dark text-sm"><?= number_format($related['rating'] ?? 0, 1) ?> ★ (<?= $related['review_count'] ?? 0 ?>)</p>
+                                <p class="font-bold mt-1"><?= $this->formatPrice($related['price']) ?></p>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <w:hook name="WeShop_Product::detail::related_after"/>
+            </div>
+        <?php endif; ?>
+    </div>
+</main>
+
+<script>
+// Image Gallery
+function changeMainImage(thumbnail) {
+    var mainImage = document.getElementById('main-product-image');
+    var imageUrl = thumbnail.dataset.image;
+    mainImage.style.backgroundImage = 'url("' + imageUrl + '")';
+    
+    // Update thumbnails
+    var thumbnails = document.querySelectorAll('#product-thumbnails > div');
+    thumbnails.forEach(function(thumb) {
+        thumb.classList.remove('border-2', 'border-primary');
+        thumb.classList.add('opacity-70');
+    });
+    thumbnail.classList.add('border-2', 'border-primary');
+    thumbnail.classList.remove('opacity-70');
+}
+
+// Tabs
+document.querySelectorAll('.product-tab').forEach(function(tab) {
+    tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        var tabName = this.dataset.tab;
+        
+        // Update tab styles
+        document.querySelectorAll('.product-tab').forEach(function(t) {
+            t.classList.remove('text-primary', 'border-primary');
+            t.classList.add('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
+        });
+        this.classList.add('text-primary', 'border-primary');
+        this.classList.remove('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
+        
+        // Show/hide content
+        document.querySelectorAll('.tab-content').forEach(function(content) {
+            content.classList.add('hidden');
+        });
+        document.getElementById(tabName + '-content').classList.remove('hidden');
+    });
+});
+</script>

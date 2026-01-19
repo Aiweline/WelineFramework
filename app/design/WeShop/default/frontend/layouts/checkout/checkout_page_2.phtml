@@ -1,0 +1,904 @@
+<?php
+/**
+ * 布局：结账页 - Checkout Page Variant 2
+ *
+ * 结账页布局变体1，完全按照UI设计实现
+ * @meta.name {default="结账页布局变体1",name="结账页布局变体1",description="结账页布局变体1，完全按照UI设计实现"}
+ * @meta.description {default="结账页布局变体1，包含配送地址、支付方式、订单摘要等",name="结账页布局变体1",description="结账页布局变体1，包含配送地址、支付方式、订单摘要等"}
+ * @param title {default="结账",name="页面标题",description="页面标题"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ */
+$meta = $this->getData('meta') ?? [];
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::checkout::head-after</w:hook>
+    
+    <!-- WeShop Theme CSS Variables -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_colors.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_spacing.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_typography.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_borders.css') ?>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* WeShop Checkout Layout 1 Styles */
+        .weshop-checkout-1 {
+            font-family: var(--weshop-font-display);
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .weshop-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--weshop-border);
+            background-color: var(--weshop-surface);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .weshop-header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .weshop-logo-icon {
+            width: 2rem;
+            height: 2rem;
+            background-color: var(--weshop-primary);
+            border-radius: var(--weshop-border-radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .weshop-logo-text {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.025em;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-header-security {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+        }
+        
+        .weshop-main-content {
+            flex: 1;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-main-content {
+                padding: 1.5rem;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-main-content {
+                padding: 2rem;
+            }
+        }
+        
+        .weshop-checkout-title {
+            font-size: 1.875rem;
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-primary);
+            margin-bottom: 2rem;
+        }
+        
+        .weshop-content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-content-grid {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+        
+        /* Progress Steps */
+        .weshop-checkout-progress {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .weshop-checkout-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            width: 33.333%;
+            cursor: pointer;
+        }
+        
+        .weshop-checkout-step.disabled {
+            opacity: 0.5;
+        }
+        
+        .weshop-checkout-step-line {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .weshop-checkout-step-line-before,
+        .weshop-checkout-step-line-after {
+            width: 100%;
+            height: 2px;
+        }
+        
+        .weshop-checkout-step-line-before.active {
+            background-color: var(--weshop-primary);
+            border-radius: 9999px 0 0 9999px;
+        }
+        
+        .weshop-checkout-step-line-before.inactive {
+            background-color: rgba(var(--weshop-background-rgb), 0.3);
+        }
+        
+        .weshop-checkout-step-number {
+            width: 2rem;
+            height: 2rem;
+            border-radius: var(--weshop-border-radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: var(--weshop-font-weight-bold);
+            font-size: var(--weshop-font-size-sm);
+            flex-shrink: 0;
+        }
+        
+        .weshop-checkout-step-number.active {
+            background-color: var(--weshop-primary);
+            color: white;
+            box-shadow: 0 0 0 4px rgba(var(--weshop-primary-rgb), 0.2);
+        }
+        
+        .weshop-checkout-step-number.inactive {
+            background-color: rgba(var(--weshop-background-rgb), 0.2);
+            color: var(--weshop-text-secondary);
+            border: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-checkout-step-line-after.active {
+            background-color: var(--weshop-primary);
+        }
+        
+        .weshop-checkout-step-line-after.inactive {
+            background-color: rgba(var(--weshop-background-rgb), 0.3);
+        }
+        
+        .weshop-checkout-step-line-after.last {
+            border-radius: 0 9999px 9999px 0;
+        }
+        
+        .weshop-checkout-step-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-checkout-step-label.inactive {
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-secondary);
+        }
+        
+        /* Checkout Sections */
+        .weshop-checkout-section {
+            background-color: var(--weshop-surface);
+            border-radius: var(--weshop-border-radius-xl);
+            border: 1px solid var(--weshop-primary);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .weshop-checkout-section.disabled {
+            border-color: var(--weshop-border);
+            opacity: 0.8;
+        }
+        
+        .weshop-checkout-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem;
+            background-color: rgba(var(--weshop-primary-rgb), 0.05);
+            border-bottom: 1px solid rgba(var(--weshop-primary-rgb), 0.2);
+        }
+        
+        .weshop-checkout-section-title {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .weshop-checkout-section-content {
+            padding: 1.5rem;
+        }
+        
+        .weshop-checkout-section-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #1e40af;
+            border-radius: var(--weshop-border-radius-lg);
+            font-size: var(--weshop-font-size-sm);
+            margin-bottom: 1rem;
+        }
+        
+        .weshop-checkout-section-info-link {
+            font-weight: var(--weshop-font-weight-bold);
+            text-decoration: underline;
+            color: inherit;
+        }
+        
+        .weshop-checkout-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .weshop-checkout-form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-checkout-form-row {
+                flex-direction: row;
+            }
+        }
+        
+        .weshop-checkout-form-field {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        
+        .weshop-checkout-form-label {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+            padding-bottom: 0.5rem;
+        }
+        
+        .weshop-checkout-form-input {
+            width: 100%;
+            border-radius: var(--weshop-border-radius-lg);
+            border: 1px solid var(--weshop-border);
+            background-color: var(--weshop-surface);
+            height: 2.75rem;
+            padding: 0 1rem;
+            font-size: var(--weshop-font-size-base);
+            color: var(--weshop-text-primary);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .weshop-checkout-form-input:focus {
+            border-color: var(--weshop-primary);
+            box-shadow: 0 0 0 1px var(--weshop-primary);
+        }
+        
+        .weshop-checkout-form-select-wrapper {
+            position: relative;
+        }
+        
+        .weshop-checkout-form-select {
+            appearance: none;
+            padding-right: 3rem;
+        }
+        
+        .weshop-checkout-form-select-icon {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-checkout-form-input-icon {
+            position: relative;
+        }
+        
+        .weshop-checkout-form-input-icon-input {
+            padding-left: 2.5rem;
+        }
+        
+        .weshop-checkout-form-input-icon-symbol {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--weshop-text-secondary);
+            font-size: var(--weshop-font-size-lg);
+        }
+        
+        .weshop-checkout-form-help {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        .weshop-checkout-form-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 1rem;
+        }
+        
+        .weshop-checkout-form-button {
+            background-color: var(--weshop-primary);
+            color: white;
+            font-weight: var(--weshop-font-weight-medium);
+            padding: 0.75rem 2rem;
+            border-radius: var(--weshop-border-radius-lg);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            border: none;
+            cursor: pointer;
+            font-size: var(--weshop-font-size-base);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-checkout-form-button:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-checkout-section-collapsed {
+            padding: 1.5rem;
+        }
+        
+        .weshop-checkout-section-collapsed-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            text-align: left;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .weshop-checkout-section-collapsed-title {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-secondary);
+            transition: color 0.2s;
+        }
+        
+        .weshop-checkout-section-collapsed-button:hover .weshop-checkout-section-collapsed-title {
+            color: var(--weshop-text-primary);
+        }
+        
+        /* Order Summary */
+        .weshop-order-summary {
+            position: sticky;
+            top: 6rem;
+        }
+        
+        .weshop-order-summary-card {
+            background-color: var(--weshop-surface);
+            border-radius: var(--weshop-border-radius-xl);
+            border: 1px solid var(--weshop-border);
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .weshop-order-summary-title {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-primary);
+            margin-bottom: 1rem;
+        }
+        
+        .weshop-order-summary-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-order-summary-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--weshop-font-size-sm);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-order-summary-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+        
+        .weshop-order-summary-total-label {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            color: #b12704;
+        }
+        
+        .weshop-order-summary-total-value {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            color: #b12704;
+        }
+        
+        .weshop-order-summary-button {
+            width: 100%;
+            background-color: var(--weshop-primary);
+            color: white;
+            font-weight: var(--weshop-font-weight-bold);
+            padding: 0.875rem 1rem;
+            border-radius: var(--weshop-border-radius-lg);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: none;
+            cursor: pointer;
+            font-size: var(--weshop-font-size-base);
+            transition: all 0.2s;
+            margin-bottom: 1rem;
+        }
+        
+        .weshop-order-summary-button:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-order-summary-button:active {
+            transform: scale(0.98);
+        }
+        
+        .weshop-order-summary-terms {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+            text-align: center;
+            line-height: 1.75;
+        }
+        
+        .weshop-order-summary-terms-link {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        
+        .weshop-order-summary-terms-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-order-summary-cart {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .weshop-order-summary-cart-title {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-semibold);
+            color: var(--weshop-text-secondary);
+            margin-bottom: 0.75rem;
+        }
+        
+        .weshop-order-summary-cart-item {
+            display: flex;
+            gap: 0.75rem;
+        }
+        
+        .weshop-order-summary-cart-image {
+            width: 4rem;
+            height: 4rem;
+            border-radius: var(--weshop-border-radius-md);
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+            border: 1px solid var(--weshop-border);
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+        }
+        
+        .weshop-order-summary-cart-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .weshop-order-summary-cart-name {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+            line-height: 1.375;
+        }
+        
+        .weshop-order-summary-cart-price {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-primary);
+        }
+    </style>
+</head>
+<body class="weshop-checkout-1">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::checkout::body-start</w:hook>
+    
+    <div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            
+            <!-- Header -->
+            <if condition="meta.showHeader">
+                <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::header-before</w:hook>
+                <header class="weshop-header">
+                    <div class="weshop-header-left">
+                        <div class="weshop-logo-icon">
+                            <span class="material-symbols-outlined">shopping_bag</span>
+                        </div>
+                        <h2 class="weshop-logo-text">
+                            <?= $this->getStoreName() ?>
+                            <span class="font-normal text-sm ml-2 text-text-muted dark:text-gray-400"><?= __('Checkout') ?></span>
+                        </h2>
+                    </div>
+                    <div class="weshop-header-right">
+                        <div class="weshop-header-security">
+                            <span class="material-symbols-outlined" style="font-size: var(--weshop-font-size-lg);">lock</span>
+                            <span><?= __('Secure Checkout') ?></span>
+                        </div>
+                    </div>
+                </header>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::header-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+            </if>
+            
+            <!-- Main Content -->
+            <main class="weshop-main-content">
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::content-before</w:hook>
+                
+                <div class="weshop-checkout-title">
+                    <?php $itemCount = $this->getData('item_count') ?? 0; ?>
+                    <?= __('Checkout (%1 item)', $itemCount) ?>
+                </div>
+                
+                <div class="weshop-content-grid">
+                    
+                    <!-- Checkout Steps -->
+                    <div class="weshop-checkout-progress">
+                        <div class="weshop-checkout-step">
+                            <div class="weshop-checkout-step-line">
+                                <div class="weshop-checkout-step-line-before active"></div>
+                                <div class="weshop-checkout-step-number active">1</div>
+                                <div class="weshop-checkout-step-line-after active"></div>
+                            </div>
+                            <span class="weshop-checkout-step-label"><?= __('Shipping') ?></span>
+                        </div>
+                        <div class="weshop-checkout-step disabled">
+                            <div class="weshop-checkout-step-line">
+                                <div class="weshop-checkout-step-line-before inactive"></div>
+                                <div class="weshop-checkout-step-number inactive">2</div>
+                                <div class="weshop-checkout-step-line-after inactive"></div>
+                            </div>
+                            <span class="weshop-checkout-step-label inactive"><?= __('Payment') ?></span>
+                        </div>
+                        <div class="weshop-checkout-step disabled">
+                            <div class="weshop-checkout-step-line">
+                                <div class="weshop-checkout-step-line-before inactive"></div>
+                                <div class="weshop-checkout-step-step-number inactive">3</div>
+                                <div class="weshop-checkout-step-line-after inactive last"></div>
+                            </div>
+                            <span class="weshop-checkout-step-label inactive"><?= __('Review') ?></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Checkout Sections -->
+                    <div class="flex flex-col gap-6">
+                        
+                        <!-- Shipping Address -->
+                        <w:hook>WeShop_Checkout::checkout::shipping_before</w:hook>
+                        <div class="weshop-checkout-section">
+                            <div class="weshop-checkout-section-header">
+                                <h3 class="weshop-checkout-section-title">
+                                    <?= __('1. Shipping Address') ?>
+                                </h3>
+                            </div>
+                            <div class="weshop-checkout-section-content">
+                                <div class="weshop-checkout-section-info">
+                                    <span class="material-symbols-outlined" style="font-size: var(--weshop-font-size-base);">info</span>
+                                    <p>
+                                        <?= __('Already a customer?') ?>
+                                        <a href="<?= $this->getUrl('customer/account/login') ?>" class="weshop-checkout-section-info-link">
+                                            <?= __('Sign in') ?>
+                                        </a>
+                                        <?= __('for faster checkout.') ?>
+                                    </p>
+                                </div>
+                                
+                                <form class="weshop-checkout-form" action="<?= $this->getUrl('checkout/shipping/save') ?>" method="post">
+                                    <div class="weshop-checkout-form-row">
+                                        <div class="weshop-checkout-form-field">
+                                            <label for="firstname" class="weshop-checkout-form-label">
+                                                <?= __('First name') ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="firstname" 
+                                                name="shipping[firstname]" 
+                                                class="weshop-checkout-form-input" 
+                                                placeholder="<?= __('e.g. Jane') ?>" 
+                                                required
+                                            />
+                                        </div>
+                                        <div class="weshop-checkout-form-field">
+                                            <label for="lastname" class="weshop-checkout-form-label">
+                                                <?= __('Last name') ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="lastname" 
+                                                name="shipping[lastname]" 
+                                                class="weshop-checkout-form-input" 
+                                                placeholder="<?= __('e.g. Doe') ?>" 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="weshop-checkout-form-field">
+                                        <label for="street" class="weshop-checkout-form-label">
+                                            <?= __('Street Address') ?>
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            id="street" 
+                                            name="shipping[street]" 
+                                            class="weshop-checkout-form-input" 
+                                            placeholder="<?= __('e.g. 123 Main St, Apt 4B') ?>" 
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div class="weshop-checkout-form-row">
+                                        <div class="weshop-checkout-form-field">
+                                            <label for="city" class="weshop-checkout-form-label">
+                                                <?= __('City') ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="city" 
+                                                name="shipping[city]" 
+                                                class="weshop-checkout-form-input" 
+                                                required
+                                            />
+                                        </div>
+                                        <div class="weshop-checkout-form-field">
+                                            <label for="region" class="weshop-checkout-form-label">
+                                                <?= __('State') ?>
+                                            </label>
+                                            <div class="weshop-checkout-form-select-wrapper">
+                                                <select id="region" name="shipping[region_id]" class="weshop-checkout-form-input weshop-checkout-form-select" required>
+                                                    <option value=""><?= __('Select State') ?></option>
+                                                    <?php $regions = $this->getData('regions') ?? []; ?>
+                                                    <?php foreach ($regions as $region): ?>
+                                                        <option value="<?= $region['region_id'] ?>"><?= htmlspecialchars($region['name']) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <span class="material-symbols-outlined weshop-checkout-form-select-icon">expand_more</span>
+                                            </div>
+                                        </div>
+                                        <div class="weshop-checkout-form-field">
+                                            <label for="postcode" class="weshop-checkout-form-label">
+                                                <?= __('Zip Code') ?>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="postcode" 
+                                                name="shipping[postcode]" 
+                                                class="weshop-checkout-form-input" 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="weshop-checkout-form-field">
+                                        <label for="telephone" class="weshop-checkout-form-label">
+                                            <?= __('Phone Number') ?>
+                                        </label>
+                                        <div class="weshop-checkout-form-input-icon">
+                                            <span class="material-symbols-outlined weshop-checkout-form-input-icon-symbol">call</span>
+                                            <input 
+                                                type="tel" 
+                                                id="telephone" 
+                                                name="shipping[telephone]" 
+                                                class="weshop-checkout-form-input weshop-checkout-form-input-icon-input" 
+                                                placeholder="(555) 123-4567" 
+                                                required
+                                            />
+                                        </div>
+                                        <span class="weshop-checkout-form-help">
+                                            <?= __('May be used for delivery assistance.') ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="weshop-checkout-form-actions">
+                                        <button type="submit" class="weshop-checkout-form-button">
+                                            <?= __('Use this address') ?>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <w:hook>WeShop_Checkout::checkout::shipping_after</w:hook>
+                        
+                        <!-- Payment Method -->
+                        <w:hook>WeShop_Checkout::checkout::payment_before</w:hook>
+                        <div class="weshop-checkout-section disabled">
+                            <button class="weshop-checkout-section-collapsed-button">
+                                <h3 class="weshop-checkout-section-collapsed-title">
+                                    <?= __('2. Payment Method') ?>
+                                </h3>
+                                <span class="material-symbols-outlined" style="color: var(--weshop-text-secondary);">expand_more</span>
+                            </button>
+                        </div>
+                        <w:hook>WeShop_Checkout::checkout::payment_after</w:hook>
+                        
+                        <!-- Review -->
+                        <w:hook>WeShop_Checkout::checkout::review_before</w:hook>
+                        <div class="weshop-checkout-section disabled">
+                            <button class="weshop-checkout-section-collapsed-button">
+                                <h3 class="weshop-checkout-section-collapsed-title">
+                                    <?= __('3. Review items and shipping') ?>
+                                </h3>
+                                <span class="material-symbols-outlined" style="color: var(--weshop-text-secondary);">expand_more</span>
+                            </button>
+                        </div>
+                        <w:hook>WeShop_Checkout::checkout::review_after</w:hook>
+                        
+                    </div>
+                    
+                    <!-- Order Summary -->
+                    <div class="weshop-order-summary">
+                        <w:hook>WeShop_Checkout::checkout::summary_before</w:hook>
+                        <div class="weshop-order-summary-card">
+                            <h2 class="weshop-order-summary-title"><?= __('Order Summary') ?></h2>
+                            <div class="weshop-order-summary-details">
+                                <?php 
+                                $cartTotal = $this->getData('cart_total') ?? 0;
+                                $cartCount = $this->getData('cart_count') ?? 0;
+                                $shipping = $this->getData('shipping') ?? 0;
+                                $tax = $this->getData('tax') ?? 0;
+                                ?>
+                                <div class="weshop-order-summary-row">
+                                    <span><?= __('Items (%1):', $cartCount) ?></span>
+                                    <span><?= $this->formatPrice($cartTotal) ?></span>
+                                </div>
+                                <div class="weshop-order-summary-row">
+                                    <span><?= __('Shipping & handling:') ?></span>
+                                    <span><?= $this->formatPrice($shipping) ?></span>
+                                </div>
+                                <div class="weshop-order-summary-row">
+                                    <span><?= __('Total before tax:') ?></span>
+                                    <span><?= $this->formatPrice($cartTotal + $shipping) ?></span>
+                                </div>
+                                <div class="weshop-order-summary-row">
+                                    <span><?= __('Estimated tax to be collected:') ?></span>
+                                    <span><?= $this->formatPrice($tax) ?></span>
+                                </div>
+                            </div>
+                            <div class="weshop-order-summary-total">
+                                <span class="weshop-order-summary-total-label"><?= __('Order Total:') ?></span>
+                                <span class="weshop-order-summary-total-value"><?= $this->formatPrice($cartTotal + $shipping + $tax) ?></span>
+                            </div>
+                            <button class="weshop-order-summary-button" onclick="placeOrder()">
+                                <?= __('Place your order') ?>
+                            </button>
+                            <p class="weshop-order-summary-terms">
+                                <?= __('By placing your order, you agree to %1\'s', $this->getStoreName()) ?>
+                                <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="weshop-order-summary-terms-link">
+                                    <?= __('privacy notice') ?>
+                                </a>
+                                <?= __('and') ?>
+                                <a href="<?= $this->getUrl('cms/page/terms') ?>" class="weshop-order-summary-terms-link">
+                                    <?= __('conditions of use') ?>
+                                </a>.
+                            </p>
+                            <div class="weshop-order-summary-cart">
+                                <h4 class="weshop-order-summary-cart-title"><?= __('In your cart') ?></h4>
+                                <?php $cartItems = $this->getData('cart_items') ?? []; ?>
+                                <?php foreach (array_slice($cartItems, 0, 3) as $item): ?>
+                                    <div class="weshop-order-summary-cart-item">
+                                        <div class="weshop-order-summary-cart-image" style="background-image: url('<?= $item['image'] ?? '' ?>');"></div>
+                                        <div class="weshop-order-summary-cart-info">
+                                            <p class="weshop-order-summary-cart-name"><?= htmlspecialchars($item['name'] ?? '') ?></p>
+                                            <p class="weshop-order-summary-cart-price"><?= $this->formatPrice($item['price'] ?? 0) ?></p>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <w:hook>WeShop_Checkout::checkout::summary_after</w:hook>
+                    </div>
+                    
+                </div>
+                
+                <!-- Content Template -->
+                <if condition="contentTemplate">
+                    <?= $this->fetch($this->getData('contentTemplate')) ?>
+                </if>
+                
+                <w:hook>Weline_Theme::frontend::layouts::checkout::content-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+            </main>
+            
+            <!-- Footer -->
+            <if condition="meta.showFooter">
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::footer-before</w:hook>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+                <w:hook>Weline_Theme::frontend::layouts::checkout::footer-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+            </if>
+            
+        </div>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::checkout::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <script>
+        function placeOrder() {
+            console.log('Place order');
+            // Implement place order functionality
+        }
+    </script>
+</body>
+</html>
