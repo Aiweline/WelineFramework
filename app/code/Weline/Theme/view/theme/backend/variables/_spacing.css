@@ -1,0 +1,76 @@
+/**
+ * Backend Theme - 间距变量
+ * 
+ * 后端管理界面的间距系统
+ * 字段
+ * @meta.name {default="Backend间距变量",name="Backend间距变量",description="Backend间距变量，用于描述变量的名称"}
+ * @meta.description {default="定义统一的间距系统，包括基础间距、组件间距、布局间距等",name="定义统一的间距系统",description="定义统一的间距系统，包括基础间距、组件间距、布局间距等，用于描述变量的用途"}
+ * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ */
+
+:root {
+    /* ========================================
+       基础间距（Bootstrap兼容）
+       ======================================== */
+    --backend-spacing-0: 0;
+    --backend-spacing-xs: 0.25rem;    /* 4px */
+    --backend-spacing-sm: 0.5rem;      /* 8px */
+    --backend-spacing-md: 1rem;       /* 16px */
+    --backend-spacing-lg: 1.5rem;      /* 24px */
+    --backend-spacing-xl: 2rem;        /* 32px */
+    --backend-spacing-2xl: 3rem;      /* 48px */
+    --backend-spacing-3xl: 4rem;      /* 64px */
+    --backend-spacing-4xl: 5rem;      /* 80px */
+    --backend-spacing-5xl: 6rem;      /* 96px */
+    
+    /* ========================================
+       组件内边距
+       ======================================== */
+    --backend-padding-input: 0.5rem 0.75rem;      /* 8px 12px */
+    --backend-padding-input-sm: 0.25rem 0.5rem;   /* 4px 8px */
+    --backend-padding-input-lg: 0.75rem 1rem;     /* 12px 16px */
+    --backend-padding-button: 0.5rem 1rem;        /* 8px 16px */
+    --backend-padding-button-sm: 0.25rem 0.75rem; /* 4px 12px */
+    --backend-padding-button-lg: 0.75rem 1.5rem;   /* 12px 24px */
+    --backend-padding-card: 1.5rem;               /* 24px */
+    --backend-padding-card-sm: 1rem;              /* 16px */
+    --backend-padding-card-lg: 2rem;              /* 32px */
+    --backend-padding-modal: 1.5rem;              /* 24px */
+    --backend-padding-table-cell: 0.75rem;        /* 12px */
+    
+    /* ========================================
+       组件间距
+       ======================================== */
+    --backend-gap-component: var(--backend-spacing-md);
+    --backend-gap-component-sm: var(--backend-spacing-sm);
+    --backend-gap-component-lg: var(--backend-spacing-lg);
+    --backend-gap-form-group: var(--backend-spacing-md);
+    --backend-gap-form-row: var(--backend-spacing-lg);
+    --backend-gap-button-group: var(--backend-spacing-sm);
+    
+    /* ========================================
+       布局间距
+       ======================================== */
+    --backend-spacing-container-padding: var(--backend-spacing-md);
+    --backend-spacing-container-max-width: 1320px;
+    --backend-spacing-grid-gap: var(--backend-spacing-md);
+    --backend-spacing-section-margin: var(--backend-spacing-xl);
+    --backend-spacing-section-padding: var(--backend-spacing-lg);
+    
+    /* ========================================
+       侧边栏和头部间距
+       ======================================== */
+    --backend-spacing-sidebar-width: 260px;
+    --backend-spacing-sidebar-collapsed-width: 70px;
+    --backend-spacing-header-height: 70px;
+    --backend-spacing-sidebar-padding: var(--backend-spacing-md);
+    --backend-spacing-header-padding: var(--backend-spacing-md) var(--backend-spacing-lg);
+    
+    /* ========================================
+       内容区域间距
+       ======================================== */
+    --backend-spacing-content-padding: var(--backend-spacing-lg);
+    --backend-spacing-page-padding: var(--backend-spacing-xl);
+    --backend-spacing-page-title-margin: var(--backend-spacing-lg);
+    --backend-spacing-card-margin: var(--backend-spacing-md);
+}
