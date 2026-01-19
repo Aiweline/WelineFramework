@@ -245,9 +245,12 @@ class Acl extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-        if ($setup->tableExist()) {
-            $setup->query('TRUNCATE TABLE ' . $this->getTable());
-        }
+        // 注意：不再清空 ACL 表，因为权限收集是在升级过程中通过 ControllerAttributes 观察者进行的
+        // 在 install 时清空表会导致已收集的权限丢失
+        // 如果确实需要清理不存在的权限，应该在权限收集完成后进行清理，而不是在 install 时清空所有权限
+        // if ($setup->tableExist()) {
+        //     $setup->query('TRUNCATE TABLE ' . $this->getTable());
+        // }
 //        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()

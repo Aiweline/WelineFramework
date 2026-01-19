@@ -105,9 +105,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </div>
                                     </div>
                                     <div class='col-6'>
-                                        <a class='btn btn-primary pull-right mt-1 mb-1' href="@backend-url('*/backend/acl/role/add')">
+                                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
                                             <lang>添加</lang>
-                                        </a>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -198,6 +198,46 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <!--右边栏-->
 @template(Weline_Admin::common/right-sidebar.phtml)
 
+<!-- 添加角色 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="roleAddOffcanvas" aria-labelledby="roleAddOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="roleAddOffcanvasLabel">
+            <lang>添加角色</lang>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <form id="roleAddForm" class="needs-validation" novalidate>
+            <div class="mb-3">
+                <label for="role_name" class="form-label">
+                    <lang>角色名</lang> <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control" id="role_name" name="role_name" required placeholder="@lang{请输入角色名}">
+                <div class="invalid-feedback">
+                    <lang>请输入角色名称</lang>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="role_description" class="form-label">
+                    <lang>角色描述</lang> <span class="text-danger">*</span>
+                </label>
+                <textarea class="form-control" id="role_description" name="role_description" rows="3" required placeholder="@lang{请输入角色描述}"></textarea>
+                <div class="invalid-feedback">
+                    <lang>请输入角色描述</lang>
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <lang>提交</lang>
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">
+                    <lang>取消</lang>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Table Editable plugin -->
 <script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
 <script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
@@ -207,6 +247,103 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 <!-- Init js -->
 <script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 @template(Weline_Admin::common/footer.phtml)
+<script>
+(function() {
+    'use strict';
+    
+    // 获取表单和 offcanvas
+    const form = document.getElementById('roleAddForm');
+    const offcanvasElement = document.getElementById('roleAddOffcanvas');
+    const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
+    
+    // 表单提交处理
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // 验证表单
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        
+        // 获取表单数据
+        const formData = new FormData(form);
+        const data = {};
+        for (let [key, value] of formData.entries()) {
+            data[key] = value;
+        }
+        
+        // 显示加载提示
+        Swal.fire({
+            title: '<?= __('处理中') ?>',
+            text: '<?= __('正在创建角色...') ?>',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // 发送 AJAX 请求
+        fetch('@backend-url("*/backend/acl/role/add")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                // 成功提示
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: result.message || '<?= __('角色创建成功！') ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // 关闭 offcanvas
+                    offcanvas.hide();
+                    // 重置表单
+                    form.reset();
+                    form.classList.remove('was-validated');
+                    // 刷新页面
+                    window.location.reload();
+                });
+            } else {
+                // 失败提示
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('失败') ?>',
+                    text: result.message || '<?= __('角色创建失败！') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('错误') ?>',
+                text: '<?= __('请求失败：') ?>' + error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        });
+    });
+    
+    // 当 offcanvas 关闭时重置表单
+    offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
+        form.reset();
+        form.classList.remove('was-validated');
+    });
+})();
+</script>
 </body>
 </html>
