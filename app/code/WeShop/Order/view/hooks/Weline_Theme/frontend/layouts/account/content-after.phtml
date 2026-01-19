@@ -1,0 +1,478 @@
+<?php
+/**
+ * 订单列表Hook
+ * 
+ * 在账户布局的内容之后显示订单列表
+ * 支持支付失败订单的继续支付和作废功能
+ * Hook名称：Weline_Theme::frontend::layouts::account::content-after
+ * 
+ * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+use WeShop\Customer\Session\CustomerSession;
+use WeShop\Order\Service\OrderService;
+use Weline\Framework\Manager\ObjectManager;
+
+/** @var CustomerSession $customerSession */
+$customerSession = ObjectManager::getInstance(CustomerSession::class);
+$customer = $customerSession->getCustomer();
+
+if (!$customer || !$customer->getId()) {
+    return;
+}
+
+/** @var OrderService $orderService */
+$orderService = ObjectManager::getInstance(OrderService::class);
+
+// 获取订单列表（最近10条）
+$result = $orderService->getCustomerOrders($customer->getId(), 1, 10);
+
+// 获取未支付订单
+$unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
+?>
+
+<!-- 订单列表区域 -->
+<div class="weshop-account-orders" id="weshop-account-orders">
+    
+    <!-- 未支付订单提示 -->
+    <?php if (!empty($unpaidOrders)): ?>
+        <div class="weshop-unpaid-orders-alert">
+            <div class="weshop-alert-content">
+                <span class="material-symbols-outlined weshop-alert-icon">warning</span>
+                <div class="weshop-alert-text">
+                    <strong><?= __('您有 %1 个订单待支付', count($unpaidOrders)) ?></strong>
+                    <p><?= __('请及时完成支付，避免订单自动取消') ?></p>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+    
+    <!-- 订单列表标题 -->
+    <div class="weshop-orders-header">
+        <h2 class="weshop-orders-title"><?= __('我的订单') ?></h2>
+        <a href="<?= $this->getUrl('weshop/order/list') ?>" class="weshop-view-all-link">
+            <?= __('查看全部') ?>
+            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">arrow_forward</span>
+        </a>
+    </div>
+    
+    <!-- 订单列表 -->
+    <div class="weshop-orders-list">
+        <?php if (empty($result['items'])): ?>
+            <div class="weshop-empty-orders">
+                <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--weshop-text-secondary);">shopping_bag</span>
+                <p><?= __('您还没有订单') ?></p>
+                <a href="<?= $this->getUrl('weshop') ?>" class="weshop-shopping-button">
+                    <?= __('去购物') ?>
+                </a>
+            </div>
+        <?php else: ?>
+            <?php foreach ($result['items'] as $order): ?>
+                <?php
+                $orderId = $order['order_id'] ?? $order[\WeShop\Order\Model\Order::fields_ID] ?? 0;
+                $incrementId = $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::fields_increment_id] ?? '';
+                $status = $order['status'] ?? $order[\WeShop\Order\Model\Order::fields_status] ?? 'pending';
+                $paymentStatus = $order['payment_status'] ?? \WeShop\Order\Service\OrderService::PAYMENT_STATUS_PENDING;
+                $total = $order['total'] ?? $order[\WeShop\Order\Model\Order::fields_total] ?? 0;
+                $createdAt = $order['created_at'] ?? $order[\WeShop\Order\Model\Order::fields_created_at] ?? '';
+                
+                // 判断是否可以继续支付
+                $canRetryPayment = $orderService->canRetryPayment($orderId, $customer->getId());
+                
+                // 判断是否可以取消（使用新的检查方法）
+                $cancelCheck = $orderService->canCancelOrder($orderId, $customer->getId());
+                $canCancel = $cancelCheck['can_cancel'];
+                $cancelReason = $cancelCheck['reason'] ?? null;
+                $requireReturn = $cancelCheck['require_return'] ?? false;
+                $requireRefund = $cancelCheck['require_refund'] ?? false;
+                
+                // 状态显示文本
+                $statusText = [
+                    \WeShop\Order\Service\OrderService::STATUS_PENDING => __('待处理'),
+                    \WeShop\Order\Service\OrderService::STATUS_PROCESSING => __('处理中'),
+                    \WeShop\Order\Service\OrderService::STATUS_PAID => __('已支付'),
+                    \WeShop\Order\Service\OrderService::STATUS_FULFILLED => __('已发货'),
+                    \WeShop\Order\Service\OrderService::STATUS_COMPLETED => __('已完成'),
+                    \WeShop\Order\Service\OrderService::STATUS_CANCELLED => __('已取消'),
+                    \WeShop\Order\Service\OrderService::STATUS_REFUNDED => __('已退款'),
+                ];
+                
+                $statusLabel = $statusText[$status] ?? $status;
+                
+                // 支付状态显示
+                $isUnpaid = in_array($paymentStatus, [
+                    \WeShop\Order\Service\OrderService::PAYMENT_STATUS_PENDING,
+                    \WeShop\Order\Service\OrderService::PAYMENT_STATUS_FAILED
+                ]);
+                ?>
+                
+                <div class="weshop-order-item <?= $isUnpaid ? 'unpaid' : '' ?>">
+                    <div class="weshop-order-header">
+                        <div class="weshop-order-info">
+                            <span class="weshop-order-number">
+                                <?= __('订单号：%1', $incrementId) ?>
+                            </span>
+                            <span class="weshop-order-date">
+                                <?= date('Y-m-d H:i', strtotime($createdAt)) ?>
+                            </span>
+                        </div>
+                        <div class="weshop-order-status">
+                            <span class="weshop-status-badge status-<?= $status ?>">
+                                <?= $statusLabel ?>
+                            </span>
+                            <?php if ($isUnpaid): ?>
+                                <span class="weshop-payment-badge payment-failed">
+                                    <?= __('待支付') ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <div class="weshop-order-content">
+                        <div class="weshop-order-amount">
+                            <span class="weshop-amount-label"><?= __('订单金额：') ?></span>
+                            <span class="weshop-amount-value"><?= $this->formatPrice($total) ?></span>
+                        </div>
+                    </div>
+                    
+                    <div class="weshop-order-actions">
+                        <a href="<?= $this->getUrl('weshop/order/view', ['id' => $orderId]) ?>" class="weshop-action-link">
+                            <?= __('查看详情') ?>
+                        </a>
+                        
+                        <?php if ($canRetryPayment): ?>
+                            <a href="<?= $this->getUrl('weshop/order/retryPayment', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-retry-payment-button">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">payment</span>
+                                <?= __('继续支付') ?>
+                            </a>
+                        <?php endif; ?>
+                        
+                        <?php if ($canCancel): ?>
+                            <form method="POST" action="<?= $this->getUrl('weshop/order/cancel') ?>" class="weshop-cancel-form" onsubmit="return confirm('<?= $requireRefund ? __('确定要取消此订单吗？取消后将自动退款。') : __('确定要取消此订单吗？') ?>');">
+                                <input type="hidden" name="order_id" value="<?= $orderId ?>">
+                                <button type="submit" class="weshop-action-button weshop-cancel-button">
+                                    <span class="material-symbols-outlined" style="font-size: 1rem;">cancel</span>
+                                    <?= __('取消订单') ?>
+                                </button>
+                            </form>
+                        <?php elseif ($requireReturn): ?>
+                            <a href="<?= $this->getUrl('weshop/rma/create', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-return-button" title="<?= htmlspecialchars($cancelReason ?? '') ?>">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">assignment_return</span>
+                                <?= __('申请退货') ?>
+                            </a>
+                        <?php elseif ($cancelReason): ?>
+                            <span class="weshop-cancel-disabled" title="<?= htmlspecialchars($cancelReason) ?>">
+                                <?= __('不可取消') ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+    /* 订单列表样式 */
+    .weshop-account-orders {
+        margin-top: 2rem;
+    }
+    
+    .weshop-unpaid-orders-alert {
+        background-color: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: var(--weshop-border-radius-lg);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .weshop-alert-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    .weshop-alert-icon {
+        color: #ffc107;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+    
+    .weshop-alert-text {
+        flex: 1;
+    }
+    
+    .weshop-alert-text strong {
+        display: block;
+        color: var(--weshop-text-primary);
+        margin-bottom: 0.25rem;
+    }
+    
+    .weshop-alert-text p {
+        color: var(--weshop-text-secondary);
+        font-size: var(--weshop-font-size-sm);
+        margin: 0;
+    }
+    
+    .weshop-orders-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .weshop-orders-title {
+        font-size: 1.5rem;
+        font-weight: var(--weshop-font-weight-bold);
+        color: var(--weshop-text-primary);
+        margin: 0;
+    }
+    
+    .weshop-view-all-link {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: var(--weshop-primary);
+        text-decoration: none;
+        font-size: var(--weshop-font-size-sm);
+        font-weight: var(--weshop-font-weight-medium);
+        transition: color 0.2s;
+    }
+    
+    .weshop-view-all-link:hover {
+        color: var(--weshop-primary-hover);
+        text-decoration: underline;
+    }
+    
+    .weshop-orders-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .weshop-order-item {
+        background-color: var(--weshop-surface);
+        border: 1px solid var(--weshop-border);
+        border-radius: var(--weshop-border-radius-lg);
+        padding: 1.5rem;
+        transition: box-shadow 0.2s;
+    }
+    
+    .weshop-order-item:hover {
+        box-shadow: var(--weshop-shadow-md);
+    }
+    
+    .weshop-order-item.unpaid {
+        border-color: rgba(255, 193, 7, 0.5);
+        background-color: rgba(255, 193, 7, 0.05);
+    }
+    
+    .weshop-order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--weshop-border);
+    }
+    
+    .weshop-order-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .weshop-order-number {
+        font-size: var(--weshop-font-size-base);
+        font-weight: var(--weshop-font-weight-medium);
+        color: var(--weshop-text-primary);
+    }
+    
+    .weshop-order-date {
+        font-size: var(--weshop-font-size-sm);
+        color: var(--weshop-text-secondary);
+    }
+    
+    .weshop-order-status {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+    }
+    
+    .weshop-status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--weshop-border-radius-full);
+        font-size: var(--weshop-font-size-xs);
+        font-weight: var(--weshop-font-weight-medium);
+        background-color: rgba(var(--weshop-background-rgb), 0.5);
+        color: var(--weshop-text-primary);
+    }
+    
+    .weshop-status-badge.status-pending,
+    .weshop-status-badge.status-processing {
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+    }
+    
+    .weshop-status-badge.status-paid {
+        background-color: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+    }
+    
+    .weshop-status-badge.status-fulfilled {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+    
+    .weshop-status-badge.status-completed {
+        background-color: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+    }
+    
+    .weshop-status-badge.status-cancelled,
+    .weshop-status-badge.status-refunded {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+    
+    .weshop-payment-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--weshop-border-radius-full);
+        font-size: var(--weshop-font-size-xs);
+        font-weight: var(--weshop-font-weight-bold);
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+    
+    .weshop-order-content {
+        margin-bottom: 1rem;
+    }
+    
+    .weshop-order-amount {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .weshop-amount-label {
+        font-size: var(--weshop-font-size-sm);
+        color: var(--weshop-text-secondary);
+    }
+    
+    .weshop-amount-value {
+        font-size: var(--weshop-font-size-lg);
+        font-weight: var(--weshop-font-weight-bold);
+        color: var(--weshop-text-primary);
+    }
+    
+    .weshop-order-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .weshop-action-link {
+        color: var(--weshop-primary);
+        text-decoration: none;
+        font-size: var(--weshop-font-size-sm);
+        font-weight: var(--weshop-font-weight-medium);
+        transition: color 0.2s;
+    }
+    
+    .weshop-action-link:hover {
+        color: var(--weshop-primary-hover);
+        text-decoration: underline;
+    }
+    
+    .weshop-action-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: var(--weshop-border-radius-lg);
+        font-size: var(--weshop-font-size-sm);
+        font-weight: var(--weshop-font-weight-medium);
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .weshop-retry-payment-button {
+        background-color: var(--weshop-primary);
+        color: white;
+    }
+    
+    .weshop-retry-payment-button:hover {
+        background-color: var(--weshop-primary-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--weshop-shadow-md);
+    }
+    
+    .weshop-cancel-button {
+        background-color: transparent;
+        color: var(--weshop-text-secondary);
+        border: 1px solid var(--weshop-border);
+    }
+    
+    .weshop-cancel-button:hover {
+        background-color: rgba(var(--weshop-background-rgb), 0.5);
+        color: var(--weshop-text-primary);
+    }
+    
+    .weshop-return-button {
+        background-color: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+    
+    .weshop-return-button:hover {
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ff9800;
+    }
+    
+    .weshop-cancel-disabled {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        color: var(--weshop-text-secondary);
+        font-size: var(--weshop-font-size-sm);
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+    
+    .weshop-cancel-form {
+        display: inline-block;
+        margin: 0;
+    }
+    
+    .weshop-empty-orders {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .weshop-empty-orders p {
+        color: var(--weshop-text-secondary);
+        margin: 1rem 0;
+    }
+    
+    .weshop-shopping-button {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        background-color: var(--weshop-primary);
+        color: white;
+        text-decoration: none;
+        border-radius: var(--weshop-border-radius-lg);
+        font-weight: var(--weshop-font-weight-medium);
+        transition: background-color 0.2s;
+    }
+    
+    .weshop-shopping-button:hover {
+        background-color: var(--weshop-primary-hover);
+    }
+</style>

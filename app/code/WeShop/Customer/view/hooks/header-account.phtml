@@ -1,0 +1,369 @@
+<?php
+/**
+ * 
+ * @hook-priority 200   Hook优先级：200（默认值）
+ * @hook-sort-order 0  Hook排序顺序：0（默认值）
+ * @hook-solo false    Hook独享：false（不独占）
+ */
+
+use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Manager\ObjectManager;
+
+// 获取 CustomerSession
+/** @var CustomerSession $session */
+$session = ObjectManager::getInstance(CustomerSession::class);
+
+// 获取前端URL（使用模板的 getUrl 方法更安全）
+$frontendUrl = $this->getUrl('');
+
+// 检查是否登录
+$isLoggedIn = $session->isLoggedIn();
+$customer = null;
+
+if ($isLoggedIn) {
+    /** @var \WeShop\Customer\Model\Customer $customer */
+    $customer = $session->getCustomer();
+}
+?>
+
+<?php if ($isLoggedIn && $customer): ?>
+    <!-- 已登录状态：显示用户信息 -->
+    <a href="<?= $frontendUrl ?>weshop/customer/account/index" 
+       class="action-link header-account-link" 
+       title="<?= __('我的账户') ?>" 
+       aria-label="<?= __('我的账户') ?>"
+       id="header-account-link">
+        <span class="action-line-1">
+            <?= __('您好, %1', $customer->getUsername() ?? __('用户')) ?>
+            <!-- 未支付订单消息红点（异步加载） -->
+            <span class="unpaid-orders-badge" id="unpaid-orders-badge" style="display: none;">
+                <span class="badge-count" id="badge-count">0</span>
+            </span>
+        </span>
+        <span class="action-line-2"><?= __('我的账户') ?></span>
+    </a>
+    
+    <!-- 账户下拉菜单 -->
+    <div class="account-dropdown" id="account-dropdown">
+        <div class="dropdown-content">
+            <a href="<?= $frontendUrl ?>weshop/customer/account/index" class="dropdown-item">
+                <span class="material-symbols-outlined">account_circle</span>
+                <?= __('我的账户') ?>
+            </a>
+            <a href="<?= $frontendUrl ?>weshop/order/list" class="dropdown-item">
+                <span class="material-symbols-outlined">receipt_long</span>
+                <?= __('我的订单') ?>
+                <!-- 未支付订单提示 -->
+                <span class="unpaid-orders-indicator" id="unpaid-orders-indicator" style="display: none;">
+                    <span class="indicator-count" id="indicator-count">0</span>
+                </span>
+            </a>
+            <a href="<?= $frontendUrl ?>weshop/wishlist" class="dropdown-item">
+                <span class="material-symbols-outlined">favorite</span>
+                <?= __('我的收藏') ?>
+            </a>
+            <div class="dropdown-divider"></div>
+            <a href="<?= $frontendUrl ?>weshop/customer/account/logout" class="dropdown-item">
+                <span class="material-symbols-outlined">logout</span>
+                <?= __('退出登录') ?>
+            </a>
+        </div>
+        
+        <!-- 未支付订单列表（异步加载） -->
+        <div class="unpaid-orders-section" id="unpaid-orders-section" style="display: none;">
+            <div class="unpaid-orders-header">
+                <strong><?= __('待支付订单') ?></strong>
+            </div>
+            <div class="unpaid-orders-list" id="unpaid-orders-list">
+                <!-- 订单列表将通过JavaScript异步加载 -->
+            </div>
+            <div class="unpaid-orders-footer">
+                <a href="<?= $frontendUrl ?>weshop/order/list" class="view-all-orders-link">
+                    <?= __('查看全部订单') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        (function() {
+            // 异步加载未支付订单数量
+            function loadUnpaidOrdersCount() {
+                fetch('<?= $frontendUrl ?>api/rest/v1/weshop_order/order/unpaid-count')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.code === 200 && data.data.count > 0) {
+                            const count = data.data.count;
+                            
+                            // 显示消息红点
+                            const badge = document.getElementById('unpaid-orders-badge');
+                            const badgeCount = document.getElementById('badge-count');
+                            const indicator = document.getElementById('unpaid-orders-indicator');
+                            const indicatorCount = document.getElementById('indicator-count');
+                            
+                            if (badge && badgeCount) {
+                                badgeCount.textContent = count > 99 ? '99+' : count;
+                                badge.style.display = 'inline-block';
+                            }
+                            
+                            if (indicator && indicatorCount) {
+                                indicatorCount.textContent = count > 99 ? '99+' : count;
+                                indicator.style.display = 'inline-block';
+                            }
+                            
+                            // 加载未支付订单列表
+                            loadUnpaidOrdersList();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('加载未支付订单数量失败:', error);
+                    });
+            }
+            
+            // 异步加载未支付订单列表
+            function loadUnpaidOrdersList() {
+                fetch('<?= $frontendUrl ?>api/rest/v1/weshop_order/order/unpaid-list')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.code === 200 && data.data.orders.length > 0) {
+                            const orders = data.data.orders;
+                            const listContainer = document.getElementById('unpaid-orders-list');
+                            const section = document.getElementById('unpaid-orders-section');
+                            
+                            if (listContainer && section) {
+                                // 清空现有内容
+                                listContainer.innerHTML = '';
+                                
+                                // 显示最多3条订单
+                                const displayOrders = orders.slice(0, 3);
+                                
+                                displayOrders.forEach(order => {
+                                    const orderItem = document.createElement('div');
+                                    orderItem.className = 'unpaid-order-item';
+                                    orderItem.innerHTML = `
+                                        <div class="order-item-info">
+                                            <span class="order-item-number">${order.increment_id}</span>
+                                            <span class="order-item-amount"><?= __('金额：') ?>${formatPrice(order.total)}</span>
+                                        </div>
+                                        <a href="<?= $frontendUrl ?>weshop/order/retryPayment?order_id=${order.order_id}" class="retry-payment-link">
+                                            <?= __('继续支付') ?>
+                                        </a>
+                                    `;
+                                    listContainer.appendChild(orderItem);
+                                });
+                                
+                                // 显示未支付订单区域
+                                section.style.display = 'block';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('加载未支付订单列表失败:', error);
+                    });
+            }
+            
+            // 格式化价格
+            function formatPrice(price) {
+                return new Intl.NumberFormat('zh-CN', {
+                    style: 'currency',
+                    currency: 'CNY'
+                }).format(price);
+            }
+            
+            // 页面加载完成后执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadUnpaidOrdersCount);
+            } else {
+                loadUnpaidOrdersCount();
+            }
+            
+            // 定期刷新（每30秒）
+            setInterval(loadUnpaidOrdersCount, 30000);
+        })();
+    </script>
+    
+    <style>
+        /* Header账户链接样式 */
+        .header-account-link {
+            position: relative;
+        }
+        
+        .unpaid-orders-badge {
+            display: inline-block;
+            position: absolute;
+            top: -0.25rem;
+            right: -0.5rem;
+            min-width: 1.25rem;
+            height: 1.25rem;
+            padding: 0 0.375rem;
+            background-color: #ef4444;
+            color: white;
+            border-radius: var(--weshop-border-radius-full);
+            font-size: 0.75rem;
+            font-weight: var(--weshop-font-weight-bold);
+            line-height: 1.25rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .badge-count {
+            display: block;
+        }
+        
+        /* 账户下拉菜单样式 */
+        .account-dropdown {
+            position: relative;
+        }
+        
+        .account-dropdown:hover .dropdown-content {
+            display: block;
+        }
+        
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            min-width: 240px;
+            background-color: var(--weshop-surface);
+            border: 1px solid var(--weshop-border);
+            border-radius: var(--weshop-border-radius-lg);
+            box-shadow: var(--weshop-shadow-xl);
+            z-index: 1000;
+        }
+        
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            font-size: var(--weshop-font-size-sm);
+            transition: background-color 0.2s;
+            position: relative;
+        }
+        
+        .dropdown-item:hover {
+            background-color: rgba(var(--weshop-background-rgb), 0.5);
+        }
+        
+        .dropdown-item .material-symbols-outlined {
+            font-size: 1.25rem;
+            color: var(--weshop-text-secondary);
+        }
+        
+        .unpaid-orders-indicator {
+            margin-left: auto;
+            display: inline-block;
+            min-width: 1.125rem;
+            height: 1.125rem;
+            padding: 0 0.375rem;
+            background-color: #ef4444;
+            color: white;
+            border-radius: var(--weshop-border-radius-full);
+            font-size: 0.625rem;
+            font-weight: var(--weshop-font-weight-bold);
+            line-height: 1.125rem;
+            text-align: center;
+        }
+        
+        .dropdown-divider {
+            height: 1px;
+            background-color: var(--weshop-border);
+            margin: 0.5rem 0;
+        }
+        
+        /* 未支付订单区域 */
+        .unpaid-orders-section {
+            border-top: 1px solid var(--weshop-border);
+            padding-top: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        
+        .unpaid-orders-header {
+            padding: 0 1rem 0.5rem;
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-primary);
+        }
+        
+        .unpaid-orders-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .unpaid-order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--weshop-border);
+        }
+        
+        .unpaid-order-item:last-child {
+            border-bottom: none;
+        }
+        
+        .order-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            flex: 1;
+        }
+        
+        .order-item-number {
+            font-size: var(--weshop-font-size-xs);
+            color: var(--weshop-text-secondary);
+        }
+        
+        .order-item-amount {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+        }
+        
+        .retry-payment-link {
+            padding: 0.375rem 0.75rem;
+            background-color: var(--weshop-primary);
+            color: white;
+            text-decoration: none;
+            border-radius: var(--weshop-border-radius);
+            font-size: var(--weshop-font-size-xs);
+            font-weight: var(--weshop-font-weight-medium);
+            transition: background-color 0.2s;
+        }
+        
+        .retry-payment-link:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .unpaid-orders-footer {
+            padding: 0.75rem 1rem;
+            border-top: 1px solid var(--weshop-border);
+        }
+        
+        .view-all-orders-link {
+            display: block;
+            text-align: center;
+            color: var(--weshop-primary);
+            text-decoration: none;
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+        }
+        
+        .view-all-orders-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+<?php else: ?>
+    <!-- 未登录状态：显示登录链接 -->
+    <a href="<?= $frontendUrl ?>weshop/customer/account/login" 
+       class="action-link" 
+       title="<?= __('账户') ?>" 
+       aria-label="<?= __('账户及心愿单') ?>">
+        <span class="action-line-1"><?= __('您好, 登录') ?></span>
+        <span class="action-line-2"><?= __('账户及心愿单') ?></span>
+    </a>
+<?php endif; ?>

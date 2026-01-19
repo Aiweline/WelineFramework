@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>E-commerce Home Page</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#007BFF",
+              "secondary": "#FFA500",
+              "background-light": "#F8F9FA",
+              "background-dark": "#121212",
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#1E1E1E",
+              "text-primary-light": "#212529",
+              "text-primary-dark": "#EAEAEA",
+              "text-secondary-light": "#6C757D",
+              "text-secondary-dark": "#9E9E9E",
+              "border-light": "#E0E0E0",
+              "border-dark": "#424242",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
+<div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<header class="sticky top-0 z-50 w-full bg-surface-light dark:bg-surface-dark shadow-sm font-display">
+<div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-3">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 text-text-primary-light dark:text-text-primary-dark">
+<span class="material-symbols-outlined text-primary text-3xl">store</span>
+<h2 class="text-xl font-bold tracking-tight">Shopify</h2>
+</div>
+<div class="hidden lg:flex items-center gap-6">
+<a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="#">Shop by Category</a>
+<a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="#">Today's Deals</a>
+<a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="#">Best Sellers</a>
+<a class="text-sm font-medium hover:text-primary dark:hover:text-primary" href="#">New Arrivals</a>
+</div>
+</div>
+<div class="flex flex-1 items-center justify-center px-8">
+<div class="w-full max-w-lg">
+<label class="relative flex flex-col w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-11 border border-border-light dark:border-border-dark focus-within:ring-2 focus-within:ring-primary">
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-lg bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-0 focus:ring-0 border-none h-full placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 text-sm font-normal" placeholder="Search for products, brands, and more..." value=""/>
+<button class="flex items-center justify-center px-4 bg-primary text-white rounded-r-lg">
+<span class="material-symbols-outlined text-xl">search</span>
+</button>
+</div>
+</label>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10">
+<span class="material-symbols-outlined text-2xl">person_outline</span>
+<span class="hidden md:inline text-sm font-medium">Account</span>
+</button>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10">
+<span class="material-symbols-outlined text-2xl">shopping_cart</span>
+<span class="hidden md:inline text-sm font-medium">Cart</span>
+</button>
+</div>
+</div>
+</header>
+<main class="flex-1">
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+<div class="w-full rounded-xl overflow-hidden mb-12">
+<div class="relative w-full h-[400px] bg-cover bg-center flex items-center p-12 rounded-xl text-white" data-alt="Promotional banner showing a stylish living room setup with modern furniture." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBShX89_jJfkVFscm1tU01fqKTFGpzUL3J-_ozvF8qINPyudLYb3-vXbQvVPDY8dhBTYjxNRdviMwjq8GzBgKDhdeL2Sn1uc5fFrKbjQLzu9TbeiAAszcjAUd3PjF-tS0ysrA2WwcLFiU2Yl07DUuUIeZnzv0p6kCyskIjNwi8WMP6oJPNOQRmstcBTNV8bFHOPCehnRVSPDaBFKJFCoaUDuKNwQJkcQ2PwyEjjhgBIL4oAFC3pNG-S360OmEAjzsU9FT1PsfHSJbj3');">
+<div class="absolute inset-0 bg-black/40"></div>
+<div class="relative z-10 max-w-md">
+<h1 class="text-4xl font-bold mb-4">Summer Sale: Up to 50% Off</h1>
+<p class="text-lg mb-6">Find the best deals on your favorite summer items and refresh your space.</p>
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary text-white text-base font-bold tracking-[0.015em] hover:bg-blue-600 transition-colors">
+<span class="truncate">Shop Now</span>
+</button>
+</div>
+</div>
+</div>
+<section class="mb-12">
+<div class="flex justify-between items-center mb-4">
+<h2 class="text-2xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark">Deals of the Day</h2>
+<a class="text-sm font-medium text-primary hover:underline" href="#">View All</a>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+<div class="flex flex-col gap-3 rounded-lg bg-surface-light dark:bg-surface-dark p-4 border border-border-light dark:border-border-dark group transition-shadow hover:shadow-lg">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg overflow-hidden" data-alt="Laptop Pro X on a clean desk" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuByjtioptxvQpFSL5HmWhF1cSMXPN1Dy-AnBZwiMlX7QX6Wkr4UNIoBTHPeJSaLMZEjYGElHalI2oP-Pd_8LP3TvV2tvyDu0Ol8VOSjzmuVQZr4J_i1yI6SEllGb5o_xrOily-uZSDfn1ghP-WNL6VyMvNiATK5WTVmP0j9AS7Y7pNF5nKeyrZcKdNIiBktmyvJdG01K3oO2a5HbnvCx5BCdvAs-UO3CU9C3_yTW1J8HiSY37O90xof1iEDM7iPp7xZfCiFNOT4LOah");'></div>
+<div>
+<p class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Laptop Pro X</p>
+<div class="flex items-center gap-2">
+<p class="text-lg font-bold text-secondary-dark line-through">$1199.99</p>
+<p class="text-lg font-bold text-red-500">$999.99</p>
+</div>
+<span class="text-xs font-bold px-2 py-1 bg-secondary text-white rounded-full">20% OFF</span>
+</div>
+</div>
+<div class="flex flex-col gap-3 rounded-lg bg-surface-light dark:bg-surface-dark p-4 border border-border-light dark:border-border-dark group transition-shadow hover:shadow-lg">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg" data-alt="Smart Kitchen Blender on a kitchen counter" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBxfrnLkJjIlRDnsKvHEZ6mW44cXO0QfEexZnNy8YS0vZ7SNvvZN5wDVtHAVONx6FDNqUN0svYWWBTUotaryZ8kHlr4FOoVIzVkRVCsZkbzo6BQUcCQYGZAWXznN4htOdHqxwxW-FcJNxaj2VdzchWekbpQ_1mXvajMfhUWunuU-LuCD46_acRuEnBWfYg0zShwYezeCVU1m7zcN6GfQMJd7e9gWTirYevMBxEnHTS7QyGZsBIM0s4OlmQ8BitCUsxs7xvj2MudP4i6");'></div>
+<div>
+<p class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Smart Kitchen Blender</p>
+<div class="flex items-center gap-2">
+<p class="text-lg font-bold text-secondary-dark line-through">$109.99</p>
+<p class="text-lg font-bold text-red-500">$89.99</p>
+</div>
+<span class="text-xs font-bold px-2 py-1 bg-secondary text-white rounded-full">DEAL</span>
+</div>
+</div>
+<div class="flex flex-col gap-3 rounded-lg bg-surface-light dark:bg-surface-dark p-4 border border-border-light dark:border-border-dark group transition-shadow hover:shadow-lg">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg" data-alt="A person wearing a Fitness Tracker Watch" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCGspGWiYBeNF1w-8woL-2tc8AYBojifzM4Zs_hLz-pUJ5mUVApKssvHPnY3EV5nu_99CdfxzEXYv8BhR-peXZX_o_09AS8M2uphxo00wYhSCG2IcraZD-c1Psb3IVCn-3k_aWvatLNSGzn9jdTjTdLHOXO0dYHPETQxW_U2EAKCUCNQpPgwlytCSXYkALT5eAxW-xRlOB5rvNd2t28qBLIXSTJKATVsbMHS_73amtq99FwmuNPVllXgQ5n0pKxZ5dp0L2keM_q-0RJ");'></div>
+<div>
+<p class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Fitness Tracker Watch</p>
+<div class="flex items-center gap-2">
+<p class="text-lg font-bold text-secondary-dark line-through">$199.00</p>
+<p class="text-lg font-bold text-red-500">$149.00</p>
+</div>
+<span class="text-xs font-bold px-2 py-1 bg-secondary text-white rounded-full">25% OFF</span>
+</div>
+</div>
+<div class="flex flex-col gap-3 rounded-lg bg-surface-light dark:bg-surface-dark p-4 border border-border-light dark:border-border-dark group transition-shadow hover:shadow-lg">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg" data-alt="A pair of stylish Air Runner Shoes" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA5pnINacM3QFpQWg4vjpzQOj7FxHJ1IyRau0rAPw8B4Gzr3Y7P1bwROvuyEVS1dkSfj0JO6Nc9G9h2_iLedcX7OPItjncxnuZIuNwih-h1-xIMdr-PdcQfSpk7SmDSjXnkP-2HFrLHrj8GGFAWh4cHbj5gFJ8VF9uV6ffr4lmQNIJpJX8nFbV2_AfSci7vp6BbU_Q4gniTzngmoioXTHBsPpMcyTnhQueknm7lEbzKR1MoPu2oaoZJs1yxmdwnlGelzSyb1dVTvlud");'></div>
+<div>
+<p class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Air Runner Shoes</p>
+<div class="flex items-center gap-2">
+<p class="text-lg font-bold text-secondary-dark line-through">$99.50</p>
+<p class="text-lg font-bold text-red-500">$75.50</p>
+</div>
+<span class="text-xs font-bold px-2 py-1 bg-secondary text-white rounded-full">DEAL</span>
+</div>
+</div>
+<div class="flex flex-col gap-3 rounded-lg bg-surface-light dark:bg-surface-dark p-4 border border-border-light dark:border-border-dark group transition-shadow hover:shadow-lg">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg" data-alt="A sleek Gourmet Coffee Machine brewing coffee" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA5L3QFFXDyc-oLvCQ-mTSkMgj6hX8PsFcW7rBKjUSya-PGb-vyQXfUkXFEhtyQnprqE966nrs9_r_GReqRxbJqNJpdPQyYE-xkxjIg9VwYVbj4Gk18mxstr-j6Z9co5DhE8nqoRCW98ag1QbF6UMB7dE1hm1kBplGxvlTNFFnxxCLIdA4MIHRajewXk-Yp_VIfcXcWcofGCgbjmsmzaH9rF1TtKm0logVxjJpugodlKzi3EJeDpepEuDKRuZT4um66JvdlfllFvvXC");'></div>
+<div>
+<p class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate">Gourmet Coffee Machine</p>
+<div class="flex items-center gap-2">
+<p class="text-lg font-bold text-secondary-dark line-through">$150.00</p>
+<p class="text-lg font-bold text-red-500">$120.00</p>
+</div>
+<span class="text-xs font-bold px-2 py-1 bg-secondary text-white rounded-full">LIMITED TIME</span>
+</div>
+</div>
+</div>
+</section>
+<section class="mb-12">
+<h2 class="text-2xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark mb-4">Shop by Category</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+<a class="group" href="#">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col justify-end p-4 text-white font-bold text-lg transition-transform group-hover:scale-105" data-alt="A collection of modern electronic gadgets" style='background-image: linear-gradient(to top, rgba(0,0,0,0.7), transparent), url("https://lh3.googleusercontent.com/aida-public/AB6AXuBTJoXSwoMFNrT9oTE8O7J-UoHPMprH0a3hlGnTVcwJjO2ber_tl94205Cznfhp1GEWmomXuILrIq7_FTZEXTCBXFEJrjZcDfd61643wHhxjloSLqif_H8VRcZaP1EZHA5SLwvMh9MLUHV-8XF9JAZbUEV6swBJTwhH9VVuRyijQt7pA1oRUz48Aldb0CgKCdASwROhdXaX5GkBaYFgMWwlTrdfr1VWSkMtPxUBgR0KCfHid7XlaUl84EZ-CJ53YN4zi7PAEPyLH30P");'>
+                                    Electronics
+                                </div>
+</a>
+<a class="group" href="#">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col justify-end p-4 text-white font-bold text-lg transition-transform group-hover:scale-105" data-alt="Stylish apparel on display" style='background-image: linear-gradient(to top, rgba(0,0,0,0.7), transparent), url("https://lh3.googleusercontent.com/aida-public/AB6AXuBTSQjjWSnRCH468JPgM66n0bO7tMEi-eGRvH2Uag5Y_9E73g6-AEArUKMnT3pq3UwiHOhXjbpo5PG1dlnFfBKu7DkihsCKo5DOC1MAA5dZU0gcP4nm2ImdV6iZPyHytIGZpyJpetuV4iaipKGG0ZaYEOJJVLAVdKF0L5DpfYqxMDceDnTewmeS3IfWX4VJTONA-aQpbuohOLyE9d1pprDz0z_Fe9HpeEY_kIrP_xdrl2f8qsiIndghX3nf_Z7Cdn4cLO-gHt-J1HD2");'>
+                                    Fashion
+                                </div>
+</a>
+<a class="group" href="#">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col justify-end p-4 text-white font-bold text-lg transition-transform group-hover:scale-105" data-alt="A cozy and modern kitchen interior" style='background-image: linear-gradient(to top, rgba(0,0,0,0.7), transparent), url("https://lh3.googleusercontent.com/aida-public/AB6AXuCRK8DK2EN3VDUuUzT2gqzmtIBWyhsly9_oyE0ETgrhXynAZ9Yt86jeRwrMbCYu2YItdC9ujEEdnHd9jCeNt8M7F9X7VcPlQrsoRkcqE3xkfFoxi0kA8TatFOhsdKy3qUXzMdhRj97wp8w_vcyjAPiHrhUCVIKFe2EeoI5Rm5cbQtVjq22De9G1RrRQimaCPzRCZ-UiO2ERBZyXG1JUvQjnAh6rfoUuYF0LVkbasyIiIlQDPF8GC-hWWIrK5RU2pOWkmIYT42xDZulG");'>
+                                    Home &amp; Kitchen
+                                </div>
+</a>
+<a class="group" href="#">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col justify-end p-4 text-white font-bold text-lg transition-transform group-hover:scale-105" data-alt="A stack of old books" style='background-image: linear-gradient(to top, rgba(0,0,0,0.7), transparent), url("https://lh3.googleusercontent.com/aida-public/AB6AXuC-VDgfE6cyqURIwIHFmgDI-suFH2tFtcnFUYMdO3Gl7N18LipBj6LyM0_9XjKO-lRsawRcmlEvrEG8xcXLJiOkihr5NtMJ9trRfhCiuQagUf6cuEHdTOlEPJ5cVlFsUl_AMqVWYhKfpWUeA3lC9Pkj21NZzO_kY4PRB2jqxx-ORgJ47cDHZ_yyprZHFpJSkDAiJlTjM9Z8be7dvirxLXAlRA_pNuWc7kkK0VhrTvSqKUpKjJJ9FBP6WDcUwdSmcUvc51AlMu0wAuan");'>
+                                    Books
+                                </div>
+</a>
+</div>
+</section>
+</div>
+</main>
+<footer class="font-display">
+<a class="block w-full bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-center py-4 text-sm font-medium transition-colors" href="#">
+        Back to top
+    </a>
+<div class="bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark pt-16 pb-8">
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+<div>
+<h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base">Get to Know Us</h3>
+<ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+<li><a class="hover:text-primary hover:underline" href="#">About Us</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Careers</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Press Releases</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Shopify Science</a></li>
+</ul>
+</div>
+<div>
+<h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base">Customer Service</h3>
+<ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+<li><a class="hover:text-primary hover:underline" href="#">Contact Us</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">FAQ</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Shipping &amp; Returns</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Order Status</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Help Center</a></li>
+</ul>
+</div>
+<div>
+<h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base">Legal &amp; Policies</h3>
+<ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+<li><a class="hover:text-primary hover:underline" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Terms &amp; Conditions</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Cookie Preferences</a></li>
+<li><a class="hover:text-primary hover:underline" href="#">Accessibility</a></li>
+</ul>
+</div>
+<div>
+<h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base">Connect with Us</h3>
+<div class="flex space-x-4 text-text-secondary-light dark:text-text-secondary-dark mb-6">
+<a class="hover:text-primary transition-colors" href="#">
+<svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path clip-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" fill-rule="evenodd"></path></svg>
+</a>
+<a class="hover:text-primary transition-colors" href="#">
+<svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.71v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path></svg>
+</a>
+<a class="hover:text-primary transition-colors" href="#">
+<svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.345 4.22c.636-.247 1.363-.416 2.427-.465C9.793 2.013 10.147 2 12.315 2zm-1.002 11.833a4.833 4.833 0 100-9.666 4.833 4.833 0 000 9.666zM12 8.417a3.583 3.583 0 110 7.166 3.583 3.583 0 010-7.166zM16.516 8.243a1.229 1.229 0 01-2.458 0 1.229 1.229 0 012.458 0z" fill-rule="evenodd"></path></svg>
+</a>
+</div>
+<div class="space-y-2">
+<h3 class="font-bold text-text-primary-light dark:text-text-primary-dark text-base">Download App</h3>
+<div class="flex gap-2">
+<button class="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800">App Store</button>
+<button class="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800">Google Play</button>
+</div>
+</div>
+</div>
+</div>
+<div class="border-t border-border-light dark:border-border-dark pt-8">
+<div class="flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+<div class="flex items-center gap-2 text-text-primary-light dark:text-text-primary-dark">
+<span class="material-symbols-outlined text-primary text-2xl">store</span>
+<h2 class="text-lg font-bold tracking-tight">Shopify</h2>
+</div>
+<div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+<span>" 2024 Shopify, Inc.</span>
+<a class="hover:text-primary hover:underline" href="#">Privacy Policy</a>
+<a class="hover:text-primary hover:underline" href="#">Terms &amp; Conditions</a>
+<a class="hover:text-primary hover:underline" href="#">Sitemap</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</div>
+</div>
+</body></html>

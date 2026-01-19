@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Activity Promotions Page</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                        "deal-red": "#cc0c39", // Adding a standard e-commerce red for discounts
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-[#111318] dark:text-white">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#e5e7eb] dark:border-gray-800 bg-white dark:bg-[#1a202c] px-4 py-3 md:px-10 shadow-sm">
+<div class="flex flex-1 items-center gap-4 md:gap-8">
+<div class="flex items-center gap-4 text-[#111318] dark:text-white cursor-pointer">
+<div class="size-8 flex items-center justify-center bg-primary text-white rounded">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<h2 class="text-[#111318] dark:text-white text-xl font-bold leading-tight tracking-tight hidden md:block">ShopMall</h2>
+</div>
+<div class="flex w-full max-w-xl items-center rounded-lg h-10 bg-[#f0f2f4] dark:bg-gray-700 overflow-hidden focus-within:ring-2 focus-within:ring-primary">
+<div class="text-[#636f88] dark:text-gray-400 flex items-center justify-center pl-3">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="flex w-full bg-transparent border-none text-[#111318] dark:text-white placeholder:text-[#636f88] dark:placeholder:text-gray-400 px-3 text-sm focus:ring-0 h-full" placeholder="Search for deals, brands, and products" value=""/>
+<button class="bg-primary/10 hover:bg-primary/20 text-primary h-full px-4 font-medium text-sm transition-colors">
+                        Search
+                    </button>
+</div>
+</div>
+<div class="flex items-center justify-end gap-4 md:gap-8 pl-4">
+<div class="hidden lg:flex items-center gap-6">
+<a class="text-[#111318] dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Deals</a>
+<a class="text-[#111318] dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Service</a>
+<a class="text-[#111318] dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Registry</a>
+</div>
+<div class="flex gap-2 items-center">
+<button class="relative flex items-center justify-center text-[#111318] dark:text-white p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1 right-1 h-2 w-2 rounded-full bg-deal-red"></span>
+</button>
+<button class="hidden md:flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-[#111318] dark:text-white text-sm font-bold transition-colors">
+                        Sign In
+                    </button>
+<details class="relative group" open="">
+<summary class="list-none outline-none marker:hidden">
+<div class="flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white hover:bg-blue-700 text-sm font-bold gap-2 transition-colors">
+<span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+<span class="hidden sm:inline">Cart</span>
+<span class="flex items-center justify-center bg-white text-primary rounded-full text-[10px] font-bold h-5 w-5 ml-0.5 shadow-sm">2</span>
+</div>
+</summary>
+<div class="absolute right-0 top-full mt-3 w-80 md:w-96 bg-white dark:bg-[#1a202c] rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.15)] drop-shadow-xl border border-gray-100 dark:border-gray-700 z-[100] overflow-hidden flex flex-col">
+<div class="absolute top-[-6px] right-6 w-3 h-3 bg-white dark:bg-[#1a202c] border-t border-l border-gray-100 dark:border-gray-700 rotate-45"></div>
+<div class="p-4 bg-white dark:bg-[#1a202c] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center relative z-10">
+<h4 class="font-bold text-[#111318] dark:text-white text-base">Shopping Cart</h4>
+<span class="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">2 Items</span>
+</div>
+<div class="flex flex-col max-h-[360px] overflow-y-auto p-2 scrollbar-thin bg-white dark:bg-[#1a202c]">
+<div class="flex gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group/item relative">
+<div class="w-16 h-16 rounded-md bg-gray-100 border border-gray-200 dark:border-gray-700 bg-cover bg-center shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC8m2UCM0NGib5qTODkIDQ2VGNvWF3cHK3Lt1rk909FcpAEs52Aja6USOVFKXCCf2bNkoIgQWIdNVRBFbGFvy9MnfktVCTwP7MVlgJnVlxVOjixyvg0KHboJe_u6zP5OmR1PhCL0otnmoMMMKiKnyQUJWk8pIJGcVmvMKQz6mEW3aak8g1eA9y8jquOD9pQHpu5c8so3rM12UvS7Wg6HTXoFLPxiPVOhh3KETfWjwEq7lrr5cxiLHI4fAK5Oxa2jG02dXAigbXiGjry");'></div>
+<div class="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+<a class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 hover:text-primary leading-snug pr-6" href="#">SpeedForce Running Shoes - Men's Lightweight Performance</a>
+<div class="flex justify-between items-center mt-2">
+<span class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">Qty: 1</span>
+<span class="font-bold text-deal-red text-sm">$64.99</span>
+</div>
+</div>
+<button class="absolute top-3 right-3 text-gray-400 hover:text-deal-red transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20" title="Remove item">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+<div class="flex gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group/item relative">
+<div class="w-16 h-16 rounded-md bg-gray-100 border border-gray-200 dark:border-gray-700 bg-cover bg-center shrink-0" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBZr9a5Hh_knoljvhcNJkNI-ZWRzdzptXMDw2XxVMiutckUURGYNBxzNmyxU5nFaZPmgebefS08nJvIlj08mD8yRBhpQLMPRUkuIzdYyojFZHRw_k3tUp2lgngvMmILAbqIqNCncmxUGWOzbM9Gkr9UYGRnO6QNynlOSCpKYJqGGkz78TGtMFbwQMwhZ5go0rK_e1oBpzeqMceTyXESQsB4tDJj7DFDjYOHv4xcgzz5c1iEtHU28EbWtvwMMys9gsiT2og6m7MQyGnq");'></div>
+<div class="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+<a class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 hover:text-primary leading-snug pr-6" href="#">Retro Instant Camera with 20 Pack Film Bundle</a>
+<div class="flex justify-between items-center mt-2">
+<span class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">Qty: 1</span>
+<span class="font-bold text-deal-red text-sm">$79.99</span>
+</div>
+</div>
+<button class="absolute top-3 right-3 text-gray-400 hover:text-deal-red transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20" title="Remove item">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div class="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+<div class="flex justify-between items-baseline mb-4">
+<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Subtotal</span>
+<span class="text-xl font-bold text-[#111318] dark:text-white">$144.98</span>
+</div>
+<button class="w-full bg-[#ffd814] hover:bg-[#f7ca00] text-[#111318] border border-[#fcd200] hover:border-[#f7ca00] rounded-lg py-2.5 font-bold text-sm shadow-sm transition-all active:scale-[0.98] mb-2">
+                                        Proceed to checkout
+                                    </button>
+<button class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-[#111318] dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg py-2 font-medium text-sm transition-colors">
+                                        View Cart
+                                    </button>
+</div>
+</div>
+</details>
+</div>
+</div>
+</header>
+<main class="flex-1 flex flex-col items-center py-6 px-4 md:px-8">
+<div class="w-full max-w-[1280px] flex flex-col gap-8">
+<section class="rounded-xl bg-white dark:bg-[#1a202c] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col md:flex-row h-auto md:h-[360px]">
+<div class="w-full md:w-2/3 h-64 md:h-full bg-gray-200 relative">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Abstract shopping bags with percentage signs on colorful background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDP8qGtunwzHtf3kPHkSbqexpbLjJwVTILq_qv-L5k9TXAv2wo6xjQpTb1eB-1wjhEjzMtGVbgBGpIR5E3pQDmIjsp5aKPk_T_M8KERRhqBhQN8OXjqKdrw3MVRtbMn4T1ekjVV71mj0ie6b_XwMfJieM8GtS6P8MLj-88larNO-7Y6zUSuC_y3bQ70Umvh3FbvuIm4PTP16EdNEia6esNrK4mSJCfNpZ8OBff5iBA9yKigzNFMHWIsTGl1o3MejT3jFIIB0Nu_OvsM");'></div>
+<div class="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex items-center p-8 md:p-12">
+<div class="max-w-lg text-white">
+<span class="bg-deal-red text-white text-xs font-bold px-2 py-1 rounded mb-4 inline-block uppercase tracking-wider">Deal of the Day</span>
+<h1 class="text-3xl md:text-5xl font-bold mb-4 leading-tight">Summer Tech Festival</h1>
+<p class="text-lg md:text-xl text-gray-200 mb-8">Up to 50% off on top-rated headphones, laptops, and smart home devices.</p>
+<button class="bg-white text-[#111318] hover:bg-gray-100 px-8 py-3 rounded-lg font-bold text-base transition-transform active:scale-95 shadow-lg">
+                                    Shop All Deals
+                                </button>
+</div>
+</div>
+</div>
+<div class="w-full md:w-1/3 p-6 flex flex-col justify-center border-l border-gray-100 dark:border-gray-700">
+<div class="flex items-start gap-4 mb-6">
+<div class="w-24 h-24 bg-gray-100 rounded-lg bg-cover bg-center shrink-0" data-alt="Close up of modern wireless headphones" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDCb4GbdLBciScS704Nipn9UD_suOdhD1Yc2nd3xdTHIrKdDw-QfPo1rAmXr9LiORoyp9LTW0AVWwFQ29MbQ2jiT2mzSUi-2qsLlhdLkulLMt0fM7RZHPm650yFTbBb8TiO17iCNJc4epc4hRzlrPOQg7Yrjhn260BxOQ0CM8LLVWY0qRT9dN3fGNA42umyMcWJ1b6ONC_JmUFtMAnFZmkfltzboHB3dmxcXTkW7lsImxVMlrBzJQHbDbXimg9TZ895rnnbOgBVdwmw");'></div>
+<div>
+<h3 class="font-bold text-lg leading-tight mb-1 dark:text-white">Premium Wireless Headphones</h3>
+<div class="flex items-baseline gap-2 mb-1">
+<span class="text-deal-red text-xl font-bold">-40%</span>
+<span class="text-2xl font-bold dark:text-white">$179.99</span>
+</div>
+<span class="text-gray-500 text-sm line-through decoration-1">$299.99</span>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-24 h-24 bg-gray-100 rounded-lg bg-cover bg-center shrink-0" data-alt="Modern laptop on a dark desk" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB4yvRglAYdeQtACQy6cqcCYJ2YyzXJgpGeu2wI9LzqmhvqhUz4DQTPdS78SVZYcRjC1m1tNxyF0FKeZwSA5UBnwIhsd0kvE_qYDwNx5HMDwUIKmGmW9LHt8MHHq3bMaSLZM99209KShI5P-9DD2R1Idk_ESGhUV8DYZwIllicuAHWCKLi49IkWeToisR7XjtszqY_G4DAZDGXkFfPPKn4CJXqHz55y9nof_fmhu66rCoje0SxTovG37dGd8IepNs0q5E0GCpsYzRAo");'></div>
+<div>
+<h3 class="font-bold text-lg leading-tight mb-1 dark:text-white">Pro Ultra Laptop 15"</h3>
+<div class="flex items-baseline gap-2 mb-1">
+<span class="text-deal-red text-xl font-bold">-25%</span>
+<span class="text-2xl font-bold dark:text-white">$899.99</span>
+</div>
+<span class="text-gray-500 text-sm line-through decoration-1">$1199.99</span>
+</div>
+</div>
+</div>
+</section>
+<div class="sticky top-[73px] z-40 bg-background-light dark:bg-background-dark py-2 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-gray-200 dark:border-gray-700 md:border-none backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+<div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-[#111318] text-white pl-4 pr-4 transition-all">
+<span class="text-sm font-medium">All Deals</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-gray-700 hover:border-primary text-[#111318] dark:text-gray-200 pl-4 pr-4 transition-all hover:shadow-md">
+<span class="text-sm font-medium">Lightning Deals</span>
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-gray-700 hover:border-primary text-[#111318] dark:text-gray-200 pl-4 pr-4 transition-all hover:shadow-md">
+<span class="text-sm font-medium">Buy More Save More</span>
+<span class="material-symbols-outlined text-[16px]">savings</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-gray-700 hover:border-primary text-[#111318] dark:text-gray-200 pl-4 pr-4 transition-all hover:shadow-md">
+<span class="text-sm font-medium">Bundle Offers</span>
+<span class="material-symbols-outlined text-[16px]">inventory_2</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-gray-700 hover:border-primary text-[#111318] dark:text-gray-200 pl-4 pr-4 transition-all hover:shadow-md">
+<span class="text-sm font-medium">Prime Exclusives</span>
+<span class="material-symbols-outlined text-[16px]">workspace_premium</span>
+</button>
+</div>
+</div>
+<section>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<h3 class="text-[#111318] dark:text-white text-xl md:text-2xl font-bold leading-tight">Lightning Deals</h3>
+<span class="text-gray-500 dark:text-gray-400 text-sm font-normal hidden sm:inline-block">Ending soon</span>
+</div>
+<div class="flex items-center gap-2 text-deal-red font-medium bg-red-50 dark:bg-red-900/20 px-3 py-1 rounded text-sm">
+<span class="material-symbols-outlined text-[18px]">timer</span>
+<span>Ends in 04:23:11</span>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+<div class="group flex flex-col bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+<div class="relative w-full aspect-[4/3] bg-gray-100 overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Red athletic sneaker on white background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC8m2UCM0NGib5qTODkIDQ2VGNvWF3cHK3Lt1rk909FcpAEs52Aja6USOVFKXCCf2bNkoIgQWIdNVRBFbGFvy9MnfktVCTwP7MVlgJnVlxVOjixyvg0KHboJe_u6zP5OmR1PhCL0otnmoMMMKiKnyQUJWk8pIJGcVmvMKQz6mEW3aak8g1eA9y8jquOD9pQHpu5c8so3rM12UvS7Wg6HTXoFLPxiPVOhh3KETfWjwEq7lrr5cxiLHI4fAK5Oxa2jG02dXAigbXiGjry");'></div>
+<div class="absolute top-2 left-2 bg-deal-red text-white text-xs font-bold px-2 py-1 rounded">-35%</div>
+</div>
+<div class="p-4 flex flex-col gap-2 flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 min-h-[40px]">SpeedForce Running Shoes - Men's Lightweight Performance</h4>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-lg font-bold text-deal-red">$64.99</span>
+<span class="text-xs text-gray-500 line-through">$99.99</span>
+</div>
+<div class="mt-auto">
+<div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+<span>78% claimed</span>
+</div>
+<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-3">
+<div class="bg-deal-red h-1.5 rounded-full" style="width: 78%"></div>
+</div>
+<button class="w-full bg-white border border-primary text-primary hover:bg-primary/5 rounded-lg py-1.5 text-sm font-bold transition-colors">
+                                        Add to Cart
+                                    </button>
+</div>
+</div>
+</div>
+<div class="group flex flex-col bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+<div class="relative w-full aspect-[4/3] bg-gray-100 overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Instant film camera on pink background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBZr9a5Hh_knoljvhcNJkNI-ZWRzdzptXMDw2XxVMiutckUURGYNBxzNmyxU5nFaZPmgebefS08nJvIlj08mD8yRBhpQLMPRUkuIzdYyojFZHRw_k3tUp2lgngvMmILAbqIqNCncmxUGWOzbM9Gkr9UYGRnO6QNynlOSCpKYJqGGkz78TGtMFbwQMwhZ5go0rK_e1oBpzeqMceTyXESQsB4tDJj7DFDjYOHv4xcgzz5c1iEtHU28EbWtvwMMys9gsiT2og6m7MQyGnq");'></div>
+<div class="absolute top-2 left-2 bg-deal-red text-white text-xs font-bold px-2 py-1 rounded">-20%</div>
+</div>
+<div class="p-4 flex flex-col gap-2 flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 min-h-[40px]">Retro Instant Camera with 20 Pack Film Bundle</h4>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-lg font-bold text-deal-red">$79.99</span>
+<span class="text-xs text-gray-500 line-through">$99.99</span>
+</div>
+<div class="mt-auto">
+<div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+<span>45% claimed</span>
+</div>
+<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-3">
+<div class="bg-deal-red h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+<button class="w-full bg-white border border-primary text-primary hover:bg-primary/5 rounded-lg py-1.5 text-sm font-bold transition-colors">
+                                        Add to Cart
+                                    </button>
+</div>
+</div>
+</div>
+<div class="group flex flex-col bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+<div class="relative w-full aspect-[4/3] bg-gray-100 overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Smart home cleaning robot on wooden floor" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDs6hfSD0l8aNr3RPzr8c1c45aykl-NKerRNkfpsYiPejqTiLMUzIiSG-HnmKlYSYeJWLyhgDBz0J5SuNOuTavfaAiWDOo9R_Z20WhEq5sp7DOCBhf3L5t1kvcmCJcWqfUx-pjjme-wEstT__olb7nMfmtunjQ54gJ7PyPwULddtpDUPF2D9_CyRa8XPNWXBHWCuXxdVM5ZbSVAhbGQxyzktk7dKtxCPvPpiixrrlRHSN3QfKEY4Epg2ZFMrYeM8xSB9xE6Zud4zqx_");'></div>
+<div class="absolute top-2 left-2 bg-deal-red text-white text-xs font-bold px-2 py-1 rounded">-45%</div>
+</div>
+<div class="p-4 flex flex-col gap-2 flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 min-h-[40px]">Smart Robot Vacuum Cleaner - Wi-Fi Connected</h4>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-lg font-bold text-deal-red">$159.00</span>
+<span class="text-xs text-gray-500 line-through">$289.00</span>
+</div>
+<div class="mt-auto">
+<div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+<span>92% claimed</span>
+</div>
+<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-3">
+<div class="bg-deal-red h-1.5 rounded-full" style="width: 92%"></div>
+</div>
+<button class="w-full bg-white border border-primary text-primary hover:bg-primary/5 rounded-lg py-1.5 text-sm font-bold transition-colors">
+                                        Add to Cart
+                                    </button>
+</div>
+</div>
+</div>
+<div class="group flex flex-col bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+<div class="relative w-full aspect-[4/3] bg-gray-100 overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Ceramic coffee mug set on table" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCppqrMaZ9BUXkVDy1IKcHVAs_nRS4e1xhEWPOqNKA71WxeVAPzfzAv8vRjRA46sBg0wo_G8ZYE2_iJ2uOxKGq6i05xo77olX503wLegqJEuflUCwDIKDWS8KaF4dg8ysDaaGGGu3y_llTgX4Rz0mSbaz0gz2WkRawObeAsNEaaaZ31vvLyT8tmsUIYpsMQerJP8oyxuO5QLkdTNboe-Vwwgv8FmRk6D5fyatYrrbM--6yRH3tuUg9ykKiNlVCLIQct72RjkqXZlsPs");'></div>
+<div class="absolute top-2 left-2 bg-deal-red text-white text-xs font-bold px-2 py-1 rounded">-15%</div>
+</div>
+<div class="p-4 flex flex-col gap-2 flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-medium text-[#111318] dark:text-white line-clamp-2 min-h-[40px]">Artisan Ceramic Coffee Mug Set - Pack of 4</h4>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-lg font-bold text-deal-red">$32.99</span>
+<span class="text-xs text-gray-500 line-through">$39.99</span>
+</div>
+<div class="mt-auto">
+<div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+<span>15% claimed</span>
+</div>
+<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-3">
+<div class="bg-deal-red h-1.5 rounded-full" style="width: 15%"></div>
+</div>
+<button class="w-full bg-white border border-primary text-primary hover:bg-primary/5 rounded-lg py-1.5 text-sm font-bold transition-colors">
+                                        Add to Cart
+                                    </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<div class="w-full bg-[#111318] rounded-xl p-8 flex flex-col md:flex-row items-center justify-between text-white my-4 bg-cover bg-center relative overflow-hidden" data-alt="Dark abstract geometric background pattern" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD6c2jMrmlUefwFB3JoyqU6GK4NOewwunQDdbaaiRd9lc5EaWq9P1tJ9oNoHQ6ylsB1rLjIl4hwnRoLiDwbIRdyDXOzexlpkyN1LTMkpV3RXxT_bmAmIBJbEQJuvd8ziTOvrqKuteDUai_LrjOGdf7QiaImK6_WxP-YMztDBJqIyTWneLJ8gaqvCjhKe2FFmTqhF-qNBz0Sou8vvYvi9Dp4v7xvFiTUfrjVbHGD_NmtGrRAHH-ogmcFknZ9xDEX9X53HlZpjgs7Km1y");'>
+<div class="absolute inset-0 bg-black/60"></div>
+<div class="relative z-10 flex flex-col md:flex-row gap-6 items-center w-full">
+<div class="bg-white/10 p-4 rounded-lg backdrop-blur-md hidden md:block">
+<span class="material-symbols-outlined text-[48px]">local_shipping</span>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h3 class="text-2xl font-bold mb-2">Free Shipping on Orders Over $50</h3>
+<p class="text-gray-300">Join our loyalty program for exclusive access to free 2-day shipping.</p>
+</div>
+<button class="bg-white text-black px-6 py-3 rounded-lg font-bold text-sm whitespace-nowrap hover:bg-gray-100 transition-colors">
+                             Learn More
+                         </button>
+</div>
+</div>
+<section>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<h3 class="text-[#111318] dark:text-white text-xl md:text-2xl font-bold leading-tight">Bundle &amp; Save</h3>
+<span class="text-gray-500 dark:text-gray-400 text-sm font-normal hidden sm:inline-block">Buy together to unlock discount</span>
+</div>
+<a class="text-primary text-sm font-medium hover:underline" href="#">See all bundles</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+<div class="flex flex-col sm:flex-row bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm p-4 gap-4">
+<div class="flex gap-2 items-center flex-1">
+<div class="w-24 h-24 bg-gray-100 rounded-md bg-cover bg-center" data-alt="Pair of running shoes" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC5XjMmjqSkuBfTLjWLFxpQosPTOHQg7bURbMdzxMQpCW_Cd-knaqDeobgutwdRp_zb0PZnLW1Mv17bNYD4_2le_6bHtCeEdfLlDNCMVR8TYe0kJR0qjgXS5po_TxnED0V6M5f3Mo_c1YnLesLiHjJqtJnuq_PL-Dup3q22CwNGf0YodqDi-zMTVMp1tpVAOHTbXuItNwNenp3SNkfw1hNmzU167PT3iWbbV-a7Ld2apy6YeSk5-GGAT9Q8qnxiNh1DHa18bJ1bL7Np");'></div>
+<span class="material-symbols-outlined text-gray-400">add</span>
+<div class="w-24 h-24 bg-gray-100 rounded-md bg-cover bg-center" data-alt="Athletic sweatshirt folded" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQHmA0hZIV4KG6dwqe3knz--g4tM1LK_AEYfq9I6bWs98GWrETsSU3_CT-O18ZJdb0vA88NYg6UclKtjdwJYNvgJUfl8Br4dwWC29s7KjXTaEhMGTJr5GzGMnpJ79fmenI9u7DKZjZ7l1PCSP7erchImVk19ysoCL7qeKEZiYItNlWHMONpaJMPuX_qdKKYfAZSeG1180dlFwKsd0DDEu2V5QcV4RGa9c_LMxe93gp_BV96-IVN4YJrrA8Hk_3CQCb4Aa3PcKPwhx2");'></div>
+</div>
+<div class="flex flex-col justify-center gap-2 min-w-[180px]">
+<h4 class="text-sm font-bold text-[#111318] dark:text-white">Runner's Starter Kit</h4>
+<p class="text-xs text-gray-500">Shoes + Sweatshirt</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold px-2 py-0.5 rounded">Save $30</span>
+</div>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-xl font-bold text-[#111318] dark:text-white">$120.00</span>
+<span class="text-xs text-gray-500 line-through">$150.00</span>
+</div>
+<button class="bg-primary text-white hover:bg-blue-700 rounded-lg py-2 text-sm font-bold w-full transition-colors mt-1">
+                                    Bundle It
+                                </button>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row bg-white dark:bg-[#1a202c] rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm p-4 gap-4">
+<div class="flex gap-2 items-center flex-1">
+<div class="w-24 h-24 bg-gray-100 rounded-md bg-cover bg-center" data-alt="Professional camera on tripod" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBqsBLB_De9sFKbfnW50ffguKWNMtOEu21hdey_VSQxPag2hPb0YVCSTuR9sR3ENUft1I2o9i0cV4rmidCP-3Vnwlktw8dWSWzmLQBJlE-FVKhNf8gT0KqQCW5npbXcg6gEzZGH-Ere7jMXp5eElTv4ZWaI4ejicpyLu2I85C5IZgabVHyAmdEqI9BuURZRN_aVbG9lbzxCg7yxFdLpougFNn0I8XaoqfpqdvSnrM12ovDTU9wlfcN7bCVc2V7FyHJBbUwV04DJdpiY");'></div>
+<span class="material-symbols-outlined text-gray-400">add</span>
+<div class="w-24 h-24 bg-gray-100 rounded-md bg-cover bg-center" data-alt="Camera lens isolated" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBtrUSmLNsC_yNPMxrI0mVBNY97ZdU9K3b7heCM5OrCaEYY58ysIAGxnae_2MaM5oSIWzDj7hdMVcOjUBq09_Ud2iL3ORXPIYu1rLgwtZJkWOSmT0UOQhX6CmqHUBU_piO6yQ29SK21JaU2YZivBBf81pf_yL_yGioEhjBky5-zAIGjLAbO1UiO6A0_qrolQxLzwAEWkXib8jNlcPwXrqIxQ4_rdibqFLw5FRjLsxox0jyU2U6CE_QLVCTlCC_OP-50JB5v1fN-UugR");'></div>
+</div>
+<div class="flex flex-col justify-center gap-2 min-w-[180px]">
+<h4 class="text-sm font-bold text-[#111318] dark:text-white">Photography Pro Set</h4>
+<p class="text-xs text-gray-500">Camera + Wide Angle Lens</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold px-2 py-0.5 rounded">Save $150</span>
+</div>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-xl font-bold text-[#111318] dark:text-white">$1499.00</span>
+<span class="text-xs text-gray-500 line-through">$1649.00</span>
+</div>
+<button class="bg-primary text-white hover:bg-blue-700 rounded-lg py-2 text-sm font-bold w-full transition-colors mt-1">
+                                    Bundle It
+                                </button>
+</div>
+</div>
+</div>
+</section>
+<section class="pb-8">
+<h3 class="text-[#111318] dark:text-white text-xl md:text-2xl font-bold leading-tight mb-4">Explore by Category</h3>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="Laptop icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAz-iCeHdzSE3ZGnlBAc8Fx4JIxjRnwlWbkTfbmtnZZvRHa0W6qJpc7U-CvvYh9C6COO3_j1AJ0Gq-E2F836vXOGJFLWIqjy4i1DJrOBIRoxTwoesBtgkhzki0Pa9LHaZOFcWnegmN3sjkmxqKH4SupJskgnuSfoMzfy9KDuWkJXhDEg5GEfUqnYQOOL-cCwymf3nLXOiixAlev2RaFzvuOYQpM3A4xLXWizfbh9D1rDANAx6PcjAayT_vmp49zCKRoV-KeDLQLiiTP");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Computers</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="T-shirt icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDXfmQP4rL3yhRvVbpsC9KUrPM64VV5aiV7pKlMq09tmjLV-V9K1du5y0pq_6Hc6IZr-4HOu-NjA1w3mW_sZA4VLzVArGi0_hxgpkq-GYu7U6urVhGRwG9I4qY9JqzhYHxHezvf6UL6t2zqQ2SiNmY8rbu6Yn4YH_7VgHoTJxPvI0Uw4eOvjJVB5Yl1qxpo04HY3Q5KTxotqbIVGanduDynoYBBq98q31SYbYiWzTjSuQczKW67idjylb2l5KHGwkKq78JBLcC6zN0G");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Fashion</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="Sofa icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBxJlufAMObqV0ztNq_4z35fwMAT_zqTZTfwv_AuWFdYDkOamZE4QMPCT3-_L0dEn2NcAdG1TrwQ68q0XBR1MbS7CQsdfZ0HKTGdFp1BIaVFNMldx_tBuhE-8s4IdVvzJrzSgwHSR_QkiRzh4gSp5KFZnwxdlCLIYhIIESyj1ocImyZnkjJ9i8bznRgVW0u6z-YEICrE_wQ146K9zZ3rWGj5OxcwntR20OgXA8L13pmqes0fvExpWglPq9HTz0Y9Za471r-1VSmWfDt");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Home</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="Lipstick icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCAjM9qdc7PHmSkK1Nu3LQ9a6tUloS-19u0uGA8x3vfucNqgpL_kWxGFWUGFnKLgQglVF37ds4EJ8bSnpoB1no5dpb9Gdfdm0M7Sr5jBeKTaXXH6cNraS0UfMNh6otngSCKPNFrV5prYFGhmmJnxGkrFFJMkKy46bzLtVmePTvBa5C5uFqL8gXpqC99uCBrhzkAvyFWcvTy-qatoDLM5WeeUkariWxnYzykG02RKDHuz_ulQMS0KQEhnK_ZATaMUDHyOSZiL7oKv--b");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Beauty</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="Football icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAlFVzs1FMLXmD9NhgwClDJ0iCIXa0d8m80PqQyRKpCAV6e1AWy_BTHyZjhtwpjmc7AaxFbpJ1zYZjsvlbfMQKhSnGvba4br8j3mmj5hTOSQRM_65K2cskEpJHRA5-ub4Gf-fhPliTW3T_TPNMNgHQDuFlXpMVKuCo_hTgyxouBk2DIZtOngQERfzok-VyrggLyNhXZ4V0FSIAq6DcDuXMti8uSjkMXanoEsgG9ML1SILcy7omYlhrJVtD9_Jfrc4Dm4Ay26LX1DGaW");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Sports</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-full aspect-square bg-white dark:bg-[#1a202c] rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary transition-all">
+<div class="w-1/2 h-1/2 bg-contain bg-no-repeat bg-center opacity-70 group-hover:opacity-100 transition-opacity" data-alt="Toy block icon" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB5fbAWa2CtKhCC-NWuDCbLi8WelkcK4uUJ8utHhGgTgWEaRAs5T81Dn82ZzEmJLgTBVDzRgkX5kVYWpWraoQL9i2Klo_d36I4Ey-ibnQ8iqfeXE7Qai50lAgG9Mf_xVHdLRBlzKATuvFgLzv_PHgG435b2hPYh529bClj2mhTfqnmtXibG3Fo0l6N_PxwcGQA-5BEvRMQBh1teDcoHLDM1jZ6ho5aNJi3Tu_GTD2fBgwAviXBzPsYh7_g4kcpeZKTg2QcGdCvvuKyx");'></div>
+</div>
+<span class="text-sm font-medium group-hover:text-primary">Toys</span>
+</div>
+</div>
+</section>
+</div>
+</main>
+<footer class="bg-white dark:bg-[#1a202c] border-t border-gray-200 dark:border-gray-800 pt-10 pb-6 px-4 md:px-10">
+<div class="max-w-[1280px] mx-auto">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-[#111318] dark:text-white mb-2">Get to Know Us</h4>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Careers</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Blog</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">About ShopMall</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Investor Relations</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-[#111318] dark:text-white mb-2">Make Money with Us</h4>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Sell products on ShopMall</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Sell on ShopMall Business</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Become an Affiliate</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-[#111318] dark:text-white mb-2">Payment Products</h4>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Business Card</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Shop with Points</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Reload Your Balance</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-[#111318] dark:text-white mb-2">Let Us Help You</h4>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Your Account</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Your Orders</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Shipping Rates &amp; Policies</a>
+<a class="text-sm text-gray-600 dark:text-gray-400 hover:underline" href="#">Returns &amp; Replacements</a>
+</div>
+</div>
+<div class="border-t border-gray-200 dark:border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="flex items-center gap-4 text-[#111318] dark:text-white">
+<div class="size-6 flex items-center justify-center bg-primary text-white rounded-sm text-xs">SM</div>
+<span class="font-bold">ShopMall</span>
+</div>
+<div class="text-xs text-gray-500 dark:text-gray-400 text-center md:text-right">
+                        " 2024 ShopMall, Inc. or its affiliates. All rights reserved.
+                    </div>
+</div>
+</div>
+</footer>
+</div>
+</body></html>
