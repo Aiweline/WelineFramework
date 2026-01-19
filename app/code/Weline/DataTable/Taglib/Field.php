@@ -124,15 +124,6 @@ class Field implements TaglibInterface
                 }
 
                 if (empty($tableContext)) {
-                    // 调试信息
-                    $debugInfo = [
-                        'field_name' => $name,
-                        'belong' => $belong,
-                        'render_stack' => TableContext::getRenderStack(),
-                        'all_contexts' => TableContext::getAllTableContexts()
-                    ];
-                    error_log('DataTable Field Debug: ' . json_encode($debugInfo, JSON_UNESCAPED_UNICODE));
-
                     // 在没有上下文的情况下，返回一个占位符，而不是抛出异常
                     // 这样可以避免标签解析顺序导致的问题
                     return "<!-- Field '{$name}' waiting for context -->";
