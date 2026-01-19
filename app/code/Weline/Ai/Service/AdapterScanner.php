@@ -90,7 +90,7 @@ class AdapterScanner
                 try {
                     $adapter = $this->loadAdapter($adapterFile);
                     if ($adapter) {
-                        $this->registerAdapter($adapter);
+                        $this->registerAdapter($adapter, $adapterFile);
                         $scannedAdapters[] = $adapter;
                     }
                 } catch (\Exception $e) {
@@ -101,9 +101,11 @@ class AdapterScanner
         
         // 2. 扫描其他模块的 extends/Weline_Ai/Adapter 目录
         $otherModulesAdapters = $this->scanOtherModulesAdapters();
-        foreach ($otherModulesAdapters as $adapter) {
+        foreach ($otherModulesAdapters as $adapterInfo) {
             try {
-                $this->registerAdapter($adapter);
+                $adapter = $adapterInfo['adapter'];
+                $adapterFile = $adapterInfo['file'];
+                $this->registerAdapter($adapter, $adapterFile);
                 $scannedAdapters[] = $adapter;
             } catch (\Exception $e) {
                 error_log("注册其他模块适配器失败: " . $e->getMessage());
@@ -115,7 +117,7 @@ class AdapterScanner
     
     /**
      * 扫描其他模块的适配器
-     * 使用 ExtendsData 读取 Weline_Ai 模块的 Adapter 扩展点文件
+     * 从 ExtendsData 获取所有扩展了 Weline_Ai 的模块，然后扫描这些模块的 extends/module/Weline_Ai/Adapter 目录
      * 
      * @return array
      */
@@ -124,50 +126,55 @@ class AdapterScanner
         $adapters = [];
         
         try {
-            // 从 ExtendsData 获取 Weline_Ai 模块的扩展信息
+            // 从 ExtendsData 获取扩展了 Weline_Ai 的模块列表
             $extendedBy = ExtendsData::getExtendedBy('Weline_Ai');
             
             if (empty($extendedBy)) {
                 return $adapters;
             }
             
-            // 遍历所有扩展该模块的源模块
+            // 获取模块列表以获取模块路径
+            $env = Env::getInstance();
+            $moduleList = $env->getModuleList();
+            
+            // 遍历所有扩展了 Weline_Ai 的源模块
             foreach ($extendedBy as $sourceModule => $extensions) {
-                foreach ($extensions as $extension) {
-                    // 检查是否是 Adapter 扩展点的文件
-                    // Adapter 扩展点的 path 是 'extends/module/Weline_Ai/Adapter'
-                    // relative_path 应该是 'extends/module/Weline_Ai/Adapter/...'
-                    // file_path 是相对于扩展点路径的部分，例如 'SomeAdapter.php' 或 'SubDir/SomeAdapter.php'
-                    $filePath = $extension['file_path'] ?? '';
-                    $relativePath = $extension['relative_path'] ?? '';
-                    
-                    // 检查路径是否匹配 Adapter 扩展点
-                    // 方式1: 检查 relative_path 是否以 Adapter 扩展点路径开头
-                    // 方式2: 检查 file_path 是 PHP 文件（因为 Adapter 扩展点下都是 PHP 文件）
-                    $isAdapterFile = str_starts_with($relativePath, 'extends/module/Weline_Ai/Adapter/')
-                        || (str_contains($relativePath, '/Adapter/') && str_ends_with($filePath ?? '', '.php'));
-                    
-                    if ($isAdapterFile) {
-                        
-                        // 获取源文件路径
-                        $sourceFile = $extension['source_file'] ?? '';
-                        if (empty($sourceFile) || !file_exists($sourceFile)) {
-                            continue;
+                // 获取源模块的路径
+                if (!isset($moduleList[$sourceModule])) {
+                    continue;
+                }
+                
+                $moduleBasePath = $moduleList[$sourceModule]['base_path'] ?? '';
+                if (empty($moduleBasePath)) {
+                    continue;
+                }
+                
+                // 构建适配器目录路径：extends/module/Weline_Ai/Adapter
+                $adapterDir = rtrim($moduleBasePath, '/\\') . DIRECTORY_SEPARATOR 
+                    . 'extends' . DIRECTORY_SEPARATOR 
+                    . 'module' . DIRECTORY_SEPARATOR 
+                    . 'Weline_Ai' . DIRECTORY_SEPARATOR 
+                    . 'Adapter';
+                
+                // 检查目录是否存在
+                if (!is_dir($adapterDir)) {
+                    continue;
+                }
+                
+                // 扫描该目录下的所有适配器文件
+                $adapterFiles = $this->fileScanner->globFile($adapterDir . DIRECTORY_SEPARATOR . '*' . self::ADAPTER_SUFFIX);
+                
+                foreach ($adapterFiles as $adapterFile) {
+                    try {
+                        $adapter = $this->loadAdapter($adapterFile, $sourceModule);
+                        if ($adapter) {
+                            $adapters[] = [
+                                'adapter' => $adapter,
+                                'file' => $adapterFile
+                            ];
                         }
-                        
-                        // 只处理 PHP 文件
-                        if (!str_ends_with($sourceFile, '.php')) {
-                            continue;
-                        }
-                        
-                        try {
-                            $adapter = $this->loadAdapter($sourceFile, $sourceModule);
-                            if ($adapter) {
-                                $adapters[] = $adapter;
-                            }
-                        } catch (\Exception $e) {
-                            error_log("加载其他模块适配器失败: {$sourceFile}, 错误: " . $e->getMessage());
-                        }
+                    } catch (\Exception $e) {
+                        error_log("加载其他模块适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
                     }
                 }
             }
@@ -267,11 +274,15 @@ class AdapterScanner
      * 注册适配器
      * 
      * @param ScenarioAdapterInterface $adapter
+     * @param string $adapterFile 适配器文件的绝对路径
      * @return bool
      */
-    private function registerAdapter(ScenarioAdapterInterface $adapter): bool
+    private function registerAdapter(ScenarioAdapterInterface $adapter, string $adapterFile): bool
     {
         $code = $adapter->getCode();
+        
+        // 将绝对路径转换为相对根目录的路径
+        $relativePath = $this->getRelativePath($adapterFile);
         
         // 检查是否已存在
         $existingAdapter = $this->scenarioAdapter->reset()
@@ -281,20 +292,43 @@ class AdapterScanner
 
         if ($existingAdapter->getId()) {
             // 更新现有适配器
-            return $this->updateExistingAdapter($existingAdapter, $adapter);
+            return $this->updateExistingAdapter($existingAdapter, $adapter, $relativePath);
         } else {
             // 创建新适配器
-            return $this->createNewAdapter($adapter);
+            return $this->createNewAdapter($adapter, $relativePath);
         }
+    }
+
+    /**
+     * 将绝对路径转换为相对根目录的路径
+     * 
+     * @param string $absolutePath 绝对路径
+     * @return string 相对根目录的路径
+     */
+    private function getRelativePath(string $absolutePath): string
+    {
+        $basePath = BP;
+        $absolutePath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $absolutePath);
+        $basePath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $basePath);
+        
+        // 如果路径以根目录开头，则提取相对路径
+        if (str_starts_with($absolutePath, $basePath)) {
+            $relativePath = substr($absolutePath, strlen($basePath));
+            return ltrim($relativePath, DIRECTORY_SEPARATOR);
+        }
+        
+        // 如果无法转换，返回原路径（可能是相对路径）
+        return $absolutePath;
     }
 
     /**
      * 创建新适配器
      * 
      * @param ScenarioAdapterInterface $adapter
+     * @param string $relativePath 相对根目录的文件路径
      * @return bool
      */
-    private function createNewAdapter(ScenarioAdapterInterface $adapter): bool
+    private function createNewAdapter(ScenarioAdapterInterface $adapter, string $relativePath): bool
     {
         $data = [
             AiScenarioAdapter::fields_CODE => $adapter->getCode(),
@@ -302,6 +336,7 @@ class AdapterScanner
             AiScenarioAdapter::fields_DESCRIPTION => $adapter->getDescription(),
             AiScenarioAdapter::fields_VERSION => $adapter->getVersion(),
             AiScenarioAdapter::fields_CLASS_NAME => get_class($adapter),
+            AiScenarioAdapter::fields_FILE_PATH => $relativePath,
             AiScenarioAdapter::fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
             AiScenarioAdapter::fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
             AiScenarioAdapter::fields_EXAMPLES => json_encode($adapter->getExamples()),
@@ -321,9 +356,10 @@ class AdapterScanner
      * 
      * @param AiScenarioAdapter $existingAdapter
      * @param ScenarioAdapterInterface $adapter
+     * @param string $relativePath 相对根目录的文件路径
      * @return bool
      */
-    private function updateExistingAdapter(AiScenarioAdapter $existingAdapter, ScenarioAdapterInterface $adapter): bool
+    private function updateExistingAdapter(AiScenarioAdapter $existingAdapter, ScenarioAdapterInterface $adapter, string $relativePath): bool
     {
         // 只更新允许更新的字段
         $updateData = [
@@ -332,6 +368,7 @@ class AdapterScanner
             AiScenarioAdapter::fields_DESCRIPTION => $adapter->getDescription(),
             AiScenarioAdapter::fields_VERSION => $adapter->getVersion(),
             AiScenarioAdapter::fields_CLASS_NAME => get_class($adapter),
+            AiScenarioAdapter::fields_FILE_PATH => $relativePath,
             AiScenarioAdapter::fields_SUPPORTED_MODELS => json_encode($adapter->getSupportedModelTypes()),
             AiScenarioAdapter::fields_PARAM_TEMPLATE => json_encode($adapter->getParamTemplate()),
             AiScenarioAdapter::fields_EXAMPLES => json_encode($adapter->getExamples()),
@@ -367,19 +404,62 @@ class AdapterScanner
             ->find()
             ->fetch();
 
-        if (!$adapterRecord) {
-            return null;
+        // 检查是否找到记录（通过 getId() 判断，参考 DefaultModelManager 的实现）
+        if (!$adapterRecord || !$adapterRecord->getId()) {
+            // 如果数据库中没有找到，尝试直接从代码中加载（备用方案）
+            return $this->loadAdapterFromCode($code);
         }
 
         $className = $adapterRecord->getData(AiScenarioAdapter::fields_CLASS_NAME);
+        if (empty($className)) {
+            // 类名为空，尝试从代码中加载
+            return $this->loadAdapterFromCode($code);
+        }
         
-        if (!class_exists($className)) {
+        // 优先使用保存的文件路径
+        $relativePath = $adapterRecord->getData(AiScenarioAdapter::fields_FILE_PATH);
+        $adapterFile = null;
+        
+        if (!empty($relativePath)) {
+            // 将相对路径转换为绝对路径
+            $adapterFile = BP . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+            if (file_exists($adapterFile)) {
+                require_once $adapterFile;
+            } else {
+                error_log("适配器文件不存在: {$adapterFile}，尝试从代码中加载适配器: {$code}");
+                return $this->loadAdapterFromCode($code);
+            }
+        } else {
+            // 如果没有保存文件路径，则根据类名查找（向后兼容）
+            $adapterFile = $this->getAdapterFileFromClassName($className);
+            if ($adapterFile && file_exists($adapterFile)) {
+                require_once $adapterFile;
+            }
+        }
+        
+        // 检查类是否存在（先不使用 autoload，因为可能文件已加载但类名格式不对）
+        if (!class_exists($className, false)) {
+            // 如果文件已加载但类不存在，可能是类名格式问题，尝试从代码中加载
+            error_log("适配器类不存在: {$className}，尝试从代码中加载适配器: {$code}");
+            return $this->loadAdapterFromCode($code);
+        }
+
+        try {
+            $adapter = new $className();
+        } catch (\Exception $e) {
+            error_log("实例化适配器失败: {$className}，错误: " . $e->getMessage());
+            // 实例化失败，尝试从代码中加载
+            return $this->loadAdapterFromCode($code);
+        }
+        
+        if (!$adapter instanceof ScenarioAdapterInterface) {
+            error_log("适配器类 {$className} 未实现 ScenarioAdapterInterface 接口");
             return null;
         }
 
-        $adapter = new $className();
-        
-        if (!$adapter instanceof ScenarioAdapterInterface) {
+        // 验证适配器代码是否匹配
+        if ($adapter->getCode() !== $code) {
+            error_log("适配器代码不匹配: 期望 {$code}，实际 {$adapter->getCode()}");
             return null;
         }
 
@@ -387,6 +467,144 @@ class AdapterScanner
         $this->registeredAdapters[$code] = $adapter;
         
         return $adapter;
+    }
+
+    /**
+     * 根据类名获取适配器文件路径
+     * 
+     * @param string $className 完整的类名（包含命名空间）
+     * @return string|null 文件路径，如果找不到则返回 null
+     */
+    private function getAdapterFileFromClassName(string $className): ?string
+    {
+        // 移除前导反斜杠
+        $className = ltrim($className, '\\');
+        
+        // 1. 检查是否是 Weline_Ai 模块的适配器
+        if (str_starts_with($className, 'Weline\\Ai\\Adapter\\')) {
+            $shortClassName = str_replace('Weline\\Ai\\Adapter\\', '', $className);
+            $adapterFile = BP . DIRECTORY_SEPARATOR . self::ADAPTER_DIR . $shortClassName . '.php';
+            if (file_exists($adapterFile)) {
+                return $adapterFile;
+            }
+        }
+        
+        // 2. 检查是否是其他模块的 extends 适配器
+        // 命名空间格式：GuoLaiRen\PageBuilder\Extends\Weline_Ai\Adapter\ContentGenerationAdapter
+        $env = Env::getInstance();
+        $moduleList = $env->getModuleList();
+        
+        if (!empty($moduleList)) {
+            foreach ($moduleList as $moduleName => $module) {
+                $moduleBasePath = $module['base_path'] ?? '';
+                if (empty($moduleBasePath)) {
+                    continue;
+                }
+                
+                // 尝试匹配命名空间模式：{ModuleNamespace}\Extends\Weline_Ai\Adapter\{ClassName}
+                // 例如：GuoLaiRen\PageBuilder\Extends\Weline_Ai\Adapter\ContentGenerationAdapter
+                $namespaceParts = explode('\\', $className);
+                $adapterDir = rtrim($moduleBasePath, '/\\') . DIRECTORY_SEPARATOR 
+                    . 'extends' . DIRECTORY_SEPARATOR 
+                    . 'module' . DIRECTORY_SEPARATOR 
+                    . 'Weline_Ai' . DIRECTORY_SEPARATOR 
+                    . 'Adapter';
+                
+                if (is_dir($adapterDir)) {
+                    // 获取类名（最后一部分）
+                    $shortClassName = end($namespaceParts);
+                    $adapterFile = $adapterDir . DIRECTORY_SEPARATOR . $shortClassName . '.php';
+                    
+                    if (file_exists($adapterFile)) {
+                        // 验证文件中的命名空间是否匹配
+                        $content = file_get_contents($adapterFile);
+                        if ($content && preg_match('/namespace\s+([^;]+);/', $content, $matches)) {
+                            $fileNamespace = trim($matches[1]);
+                            $expectedNamespace = substr($className, 0, strrpos($className, '\\'));
+                            if ($fileNamespace === $expectedNamespace) {
+                                return $adapterFile;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * 根据适配器代码直接从代码中加载适配器（备用方案）
+     * 当数据库中没有找到适配器或类不存在时，尝试扫描并加载
+     * 
+     * @param string $code 适配器代码
+     * @return ScenarioAdapterInterface|null
+     */
+    private function loadAdapterFromCode(string $code): ?ScenarioAdapterInterface
+    {
+        try {
+            // 1. 首先扫描 Weline_Ai 模块的适配器
+            $adapterDir = BP . DIRECTORY_SEPARATOR . self::ADAPTER_DIR;
+            if (is_dir($adapterDir)) {
+                $adapterFiles = $this->fileScanner->globFile($adapterDir . '/*' . self::ADAPTER_SUFFIX);
+                foreach ($adapterFiles as $adapterFile) {
+                    try {
+                        $adapter = $this->loadAdapter($adapterFile);
+                        if ($adapter && $adapter->getCode() === $code) {
+                            // 找到匹配的适配器，注册到数据库并返回
+                            $this->registerAdapter($adapter, $adapterFile);
+                            $this->registeredAdapters[$code] = $adapter;
+                            return $adapter;
+                        }
+                    } catch (\Exception $e) {
+                        // 继续查找
+                    }
+                }
+            }
+            
+            // 2. 扫描其他模块的 extends/Weline_Ai/Adapter 目录
+            $env = Env::getInstance();
+            $moduleList = $env->getModuleList();
+            
+            if (!empty($moduleList)) {
+                foreach ($moduleList as $moduleName => $module) {
+                    $moduleBasePath = $module['base_path'] ?? '';
+                    if (empty($moduleBasePath)) {
+                        continue;
+                    }
+                    
+                    $adapterDir = rtrim($moduleBasePath, '/\\') . DIRECTORY_SEPARATOR 
+                        . 'extends' . DIRECTORY_SEPARATOR 
+                        . 'module' . DIRECTORY_SEPARATOR 
+                        . 'Weline_Ai' . DIRECTORY_SEPARATOR 
+                        . 'Adapter';
+                    
+                    if (!is_dir($adapterDir)) {
+                        continue;
+                    }
+                    
+                    $adapterFiles = $this->fileScanner->globFile($adapterDir . DIRECTORY_SEPARATOR . '*' . self::ADAPTER_SUFFIX);
+                    
+                    foreach ($adapterFiles as $adapterFile) {
+                        try {
+                            $adapter = $this->loadAdapter($adapterFile, $moduleName);
+                            if ($adapter && $adapter->getCode() === $code) {
+                                // 找到匹配的适配器，注册到数据库并返回
+                                $this->registerAdapter($adapter, $adapterFile);
+                                $this->registeredAdapters[$code] = $adapter;
+                                return $adapter;
+                            }
+                        } catch (\Exception $e) {
+                            // 继续查找
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            error_log("从代码加载适配器失败: {$code}, 错误: " . $e->getMessage());
+        }
+        
+        return null;
     }
 
     /**

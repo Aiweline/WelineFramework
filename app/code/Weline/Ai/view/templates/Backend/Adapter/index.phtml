@@ -165,17 +165,58 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function scanAdapters() {
-    if (confirm('<?= __('确定要扫描场景适配器吗？') ?>')) {
-        showLoading();
-        // 使用GET请求，让Message消息能正常显示
-        window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('确认扫描') ?>',
+            text: '<?= __('确定要扫描场景适配器吗？') ?>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定扫描") ?>',
+            cancelButtonText: '<?= __("取消") ?>'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                showLoading();
+                // 使用GET请求，让Message消息能正常显示
+                window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
+            }
+        });
+    } else {
+        if (confirm('<?= __('确定要扫描场景适配器吗？') ?>')) {
+            showLoading();
+            // 使用GET请求，让Message消息能正常显示
+            window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
+        }
     }
 }
 
 function toggleStatus(adapterId) {
-    if (confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('确认切换状态') ?>',
+            text: '<?= __('确定要切换适配器状态吗？') ?>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定切换") ?>',
+            cancelButtonText: '<?= __("取消") ?>'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performToggleStatus(adapterId);
+            }
+        });
+    } else {
+        if (confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+            performToggleStatus(adapterId);
+        }
+    }
+}
+
+function performToggleStatus(adapterId) {
         showLoading();
         fetch('<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
             method: 'POST',
@@ -192,12 +233,30 @@ function toggleStatus(adapterId) {
                 // 刷新页面以显示更新后的状态
                 location.reload();
             } else {
-                alert('<?= __('状态切换失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('状态切换失败') ?>',
+                        text: data.message || '<?= __('未知错误') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('状态切换失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+                }
             }
         })
         .catch(error => {
             hideLoading();
-            alert('<?= __('请求失败：') ?>' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
+            }
         });
     }
 }

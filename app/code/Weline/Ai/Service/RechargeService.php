@@ -7,19 +7,20 @@ namespace Weline\Ai\Service;
 use Weline\Ai\Model\AiUserRecharge;
 use Weline\Frontend\Model\FrontendUser;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\DbManager;
 
 /**
  * 充值服务
  */
 class RechargeService
 {
-    private ConnectionFactory $connectionFactory;
-    
-    public function __construct(
-        ConnectionFactory $connectionFactory
-    ) {
-        $this->connectionFactory = $connectionFactory;
+    /**
+     * 获取数据库连接
+     */
+    private function getConnection()
+    {
+        $dbManager = ObjectManager::getInstance(DbManager::class . 'Factory');
+        return $dbManager->create()->getConnector();
     }
     
     /**
@@ -90,7 +91,7 @@ class RechargeService
             throw new \Exception(__('充值记录状态异常'));
         }
         
-        $conn = $this->connectionFactory->getConnection();
+        $conn = $this->getConnection();
         $conn->beginTransaction();
         
         try {

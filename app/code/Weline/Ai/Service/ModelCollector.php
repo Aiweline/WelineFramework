@@ -412,25 +412,103 @@ class ModelCollector
     {
         // 更新时不改动激活状态，保持现状（避免收集动作把模型激活）
 
-        // 只更新允许更新的字段
-        $updateData = [
-            'name' => $modelData['name'],
-            'supplier' => $modelData['vendor'],
-            'version' => $modelData['model_version'] ?? '1.0',
-            'config' => json_encode($modelData['config'] ?? []),
-            'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
-            'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
-            'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
-            // 不修改 status/is_active
-            'capabilities' => json_encode($modelData['capabilities'] ?? []),
-            'max_tokens' => $modelData['max_tokens'] ?? null,
-        ];
-
-        // 注意：不更新 is_default 字段，避免覆盖用户设置
-
-        foreach ($updateData as $field => $value) {
-            $existingModel->setData($field, $value);
+        // 只更新允许更新的字段，且只覆盖没有配置的项
+        // 1. 基本字段：只更新空值或未设置的字段
+        if (empty($existingModel->getData('name')) && !empty($modelData['name'])) {
+            $existingModel->setData('name', $modelData['name']);
         }
+        
+        if (empty($existingModel->getData('supplier')) && !empty($modelData['vendor'])) {
+            $existingModel->setData('supplier', $modelData['vendor']);
+        }
+        
+        if (empty($existingModel->getData('version')) && !empty($modelData['model_version'])) {
+            $existingModel->setData('version', $modelData['model_version'] ?? '1.0');
+        }
+
+        // 2. 配置字段：合并配置，只添加不存在的项
+        $existingConfig = [];
+        $existingConfigJson = $existingModel->getData('config');
+        if (!empty($existingConfigJson)) {
+            if (is_string($existingConfigJson)) {
+                $decoded = json_decode($existingConfigJson, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $existingConfig = $decoded;
+                }
+            } elseif (is_array($existingConfigJson)) {
+                $existingConfig = $existingConfigJson;
+            }
+        }
+        
+        $newConfig = $modelData['config'] ?? [];
+        // 合并配置：新配置只填充现有配置中不存在的键
+        $mergedConfig = $existingConfig;
+        foreach ($newConfig as $key => $value) {
+            if (!isset($mergedConfig[$key]) || empty($mergedConfig[$key])) {
+                $mergedConfig[$key] = $value;
+            }
+        }
+        $existingModel->setData('config', json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        // 3. 价格字段：只更新空值或0值
+        $existingCostPerToken = $existingModel->getData('cost_per_token');
+        if (empty($existingCostPerToken) || $existingCostPerToken == '0' || $existingCostPerToken == '0.000000') {
+            $newCostPerToken = (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000);
+            if ($newCostPerToken != '0' && $newCostPerToken != '0.000000') {
+                $existingModel->setData('cost_per_token', $newCostPerToken);
+            }
+        }
+        
+        $existingTokenPriceInput = $existingModel->getData('token_price_input');
+        if (empty($existingTokenPriceInput) || $existingTokenPriceInput == 0) {
+            $newTokenPriceInput = (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000);
+            if ($newTokenPriceInput > 0) {
+                $existingModel->setData('token_price_input', $newTokenPriceInput);
+            }
+        }
+        
+        $existingTokenPriceOutput = $existingModel->getData('token_price_output');
+        if (empty($existingTokenPriceOutput) || $existingTokenPriceOutput == 0) {
+            $newTokenPriceOutput = (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000);
+            if ($newTokenPriceOutput > 0) {
+                $existingModel->setData('token_price_output', $newTokenPriceOutput);
+            }
+        }
+
+        // 4. capabilities 字段：合并配置
+        $existingCapabilities = [];
+        $existingCapabilitiesJson = $existingModel->getData('capabilities');
+        if (!empty($existingCapabilitiesJson)) {
+            if (is_string($existingCapabilitiesJson)) {
+                $decoded = json_decode($existingCapabilitiesJson, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $existingCapabilities = $decoded;
+                }
+            } elseif (is_array($existingCapabilitiesJson)) {
+                $existingCapabilities = $existingCapabilitiesJson;
+            }
+        }
+        
+        $newCapabilities = $modelData['capabilities'] ?? [];
+        // 合并 capabilities：新配置只填充现有配置中不存在的键
+        $mergedCapabilities = $existingCapabilities;
+        foreach ($newCapabilities as $key => $value) {
+            if (!isset($mergedCapabilities[$key]) || empty($mergedCapabilities[$key])) {
+                $mergedCapabilities[$key] = $value;
+            }
+        }
+        $existingModel->setData('capabilities', json_encode($mergedCapabilities, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        // 5. max_tokens：只更新空值或0值
+        $existingMaxTokens = $existingModel->getData('max_tokens');
+        if (empty($existingMaxTokens) || $existingMaxTokens == 0) {
+            $newMaxTokens = $modelData['max_tokens'] ?? null;
+            if (!empty($newMaxTokens) && $newMaxTokens > 0) {
+                $existingModel->setData('max_tokens', $newMaxTokens);
+            }
+        }
+
+        // 注意：不更新 is_default、status、is_active 字段，避免覆盖用户设置
 
         $existingModel->save();
         

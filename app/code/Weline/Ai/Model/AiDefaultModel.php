@@ -36,6 +36,7 @@ class AiDefaultModel extends Model
     public const fields_MODEL_CODE = 'model_code';
     public const fields_SERVICE_TYPE = 'service_type';
     public const fields_IS_DEFAULT = 'is_default';
+    public const fields_IS_ACTIVE = 'is_active';
     public const fields_PRIORITY = 'priority';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
@@ -98,6 +99,13 @@ class AiDefaultModel extends Model
                 '优先级（数字越大优先级越高）'
             )
             ->addColumn(
+                self::fields_IS_ACTIVE,
+                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
+                1,
+                'not null default 1',
+                '是否激活'
+            )
+            ->addColumn(
                 self::fields_CREATED_AT,
                 \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP,
                 0,
@@ -139,7 +147,24 @@ class AiDefaultModel extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // Future upgrades will be added here
+        // 添加 is_active 字段（如果不存在）
+        if ($setup->tableExist()) {
+            try {
+                // 直接尝试添加列，如果已存在会抛出异常，捕获并忽略
+                $setup->alterTable()
+                    ->addColumn(
+                        self::fields_IS_ACTIVE,
+                        self::fields_PRIORITY, // after priority column
+                        \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
+                        1,
+                        'not null default 1',
+                        '是否激活'
+                    )
+                    ->alter();
+            } catch (\Exception $e) {
+                // 列可能已存在，忽略错误
+            }
+        }
     }
 
     /**
@@ -180,5 +205,15 @@ class AiDefaultModel extends Model
     public function isDefault(): bool
     {
         return (bool)$this->getData(self::fields_IS_DEFAULT);
+    }
+
+    /**
+     * Check if this is active
+     * 
+     * @return bool
+     */
+    public function isActive(): bool
+    {
+        return (bool)$this->getData(self::fields_IS_ACTIVE);
     }
 }

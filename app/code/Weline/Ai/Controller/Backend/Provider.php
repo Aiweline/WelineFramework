@@ -342,14 +342,22 @@ class Provider extends BaseController
 
             $result = $this->accountService->testConnection($account);
             
+            // 测试完成后，重新加载账户以获取最新状态
+            $account->reset()->load($id);
+            
             // 如果测试失败且账户是激活状态，取消激活
             if (!$result['success'] && $account->getData(Account::fields_IS_ACTIVE)) {
                 $account->setData(Account::fields_IS_ACTIVE, 0);
-                $account->setData(Account::fields_CONNECTION_STATUS, 'failed');
+                $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_FAILED);
                 $account->setData(Account::fields_CONNECTION_TEST_MESSAGE, $result['message']);
                 $account->setData(Account::fields_CONNECTION_TEST_TIME, time());
                 $account->save();
             }
+            
+            // 在返回结果中包含更新后的连接状态
+            $result['connection_status'] = $account->getData(Account::fields_CONNECTION_STATUS);
+            $result['connection_test_time'] = $account->getData(Account::fields_CONNECTION_TEST_TIME);
+            $result['connection_test_message'] = $account->getData(Account::fields_CONNECTION_TEST_MESSAGE);
             
             return $this->fetchJson($result);
         } catch (\Exception $e) {
