@@ -1,0 +1,307 @@
+{
+  "time": 1734556800000,
+  "blocks": [
+    {
+      "id": "header1",
+      "type": "header",
+      "data": {
+        "text": ""Secret Money Calendar" Reveals 3 Stocks to Explode in the Coming Weeks",
+        "level": 1
+      }
+    },
+    {
+      "id": "para1",
+      "type": "paragraph",
+      "data": {
+        "text": "There's a <b>secret trading calendar…</b>"
+      }
+    },
+    {
+      "id": "para2",
+      "type": "paragraph",
+      "data": {
+        "text": "That's provided traders with the <b>chance to make 100%+ potential gains…</b>"
+      }
+    },
+    {
+      "id": "para3",
+      "type": "paragraph",
+      "data": {
+        "text": "This Calendar reveals the EXACT dates that — if everything goes right — anyone can target cash payouts of $125, $415, and even $1,665."
+      }
+    },
+    {
+      "id": "para4",
+      "type": "paragraph",
+      "data": {
+        "text": "Every single month… for the last four years."
+      }
+    },
+    {
+      "id": "para5",
+      "type": "paragraph",
+      "data": {
+        "text": "It's based on a powerful phenomenon we discovered on Wall Street…"
+      }
+    },
+    {
+      "id": "para6",
+      "type": "paragraph",
+      "data": {
+        "text": "That's used by elite funds like <b>BlackRock, Goldman Sachs, and Bridgewater…</b>"
+      }
+    },
+    {
+      "id": "para7",
+      "type": "paragraph",
+      "data": {
+        "text": "And this month…"
+      }
+    },
+    {
+      "id": "para8",
+      "type": "paragraph",
+      "data": {
+        "text": "The Calendar is targeting 3 stocks and the exact dates they'll explode."
+      }
+    },
+    {
+      "id": "para9",
+      "type": "paragraph",
+      "data": {
+        "text": "Sign up below to receive a full report on this month's Money Calendar and get access to an exclusive live training happening today."
+      }
+    },
+    {
+      "id": "delimiter1",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header2",
+      "type": "header",
+      "data": {
+        "text": "Key Benefits",
+        "level": 2
+      }
+    },
+    {
+      "id": "list1",
+      "type": "list",
+      "data": {
+        "style": "unordered",
+        "items": [
+          "Discover the <b>secret trading calendar</b> used by Wall Street elites",
+          "Learn the <b>exact dates</b> when stocks are predicted to explode",
+          "Access potential gains of <b>100%+</b> returns",
+          "Target monthly cash payouts ranging from <b>$125 to $1,665</b>",
+          "Get insights from <b>4 years</b> of proven trading patterns",
+          "Receive <b>exclusive live training</b> sessions"
+        ]
+      }
+    },
+    {
+      "id": "delimiter2",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header3",
+      "type": "header",
+      "data": {
+        "text": "How It Works",
+        "level": 2
+      }
+    },
+    {
+      "id": "list2",
+      "type": "list",
+      "data": {
+        "style": "ordered",
+        "items": [
+          "<b>Sign Up:</b> Enter your email and phone number to get instant access",
+          "<b>Receive Report:</b> Get this month's Money Calendar with 3 targeted stocks",
+          "<b>Join Training:</b> Attend exclusive live training session",
+          "<b>Take Action:</b> Follow the calendar's predictions on the exact dates",
+          "<b>Track Results:</b> Monitor your potential 100%+ gains"
+        ]
+      }
+    },
+    {
+      "id": "delimiter3",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header4",
+      "type": "header",
+      "data": {
+        "text": "Elite Institutions Using This Strategy",
+        "level": 2
+      }
+    },
+    {
+      "id": "table1",
+      "type": "table",
+      "data": {
+        "withHeadings": true,
+        "content": [
+          ["Institution", "Assets Under Management", "Strategy Type"],
+          ["BlackRock", "$9+ Trillion", "Calendar-Based Trading"],
+          ["Goldman Sachs", "$2.5+ Trillion", "Pattern Recognition"],
+          ["Bridgewater", "$150+ Billion", "Systematic Investing"]
+        ]
+      }
+    },
+    {
+      "id": "delimiter4",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "warning1",
+      "type": "warning",
+      "data": {
+        "title": "Important Disclaimer",
+        "message": "Trading involves risk. Past performance does not guarantee future results. Please consult with a financial advisor before making any investment decisions."
+      }
+    },
+    {
+      "id": "delimiter5",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header5",
+      "type": "header",
+      "data": {
+        "text": "Success Stories",
+        "level": 2
+      }
+    },
+    {
+      "id": "quote1",
+      "type": "quote",
+      "data": {
+        "text": "I followed the Money Calendar for 6 months and saw consistent returns. The exact date predictions were surprisingly accurate!",
+        "caption": "John D., California"
+      }
+    },
+    {
+      "id": "quote2",
+      "type": "quote",
+      "data": {
+        "text": "This system changed my trading approach. Instead of guessing, I now have specific dates to watch and act on.",
+        "caption": "Sarah M., New York"
+      }
+    },
+    {
+      "id": "delimiter6",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header6",
+      "type": "header",
+      "data": {
+        "text": "What You'll Get",
+        "level": 2
+      }
+    },
+    {
+      "id": "checklist1",
+      "type": "checklist",
+      "data": {
+        "items": [
+          {
+            "text": "Monthly Money Calendar with 3 targeted stocks",
+            "checked": true
+          },
+          {
+            "text": "Exact dates for predicted stock movements",
+            "checked": true
+          },
+          {
+            "text": "Live training sessions and Q&A",
+            "checked": true
+          },
+          {
+            "text": "Email and SMS alerts for upcoming dates",
+            "checked": true
+          },
+          {
+            "text": "Access to historical calendar data",
+            "checked": true
+          },
+          {
+            "text": "Community forum with other traders",
+            "checked": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "delimiter7",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header7",
+      "type": "header",
+      "data": {
+        "text": "Frequently Asked Questions",
+        "level": 2
+      }
+    },
+    {
+      "id": "para10",
+      "type": "paragraph",
+      "data": {
+        "text": "<b>Q: Is this suitable for beginners?</b><br>A: Yes! Our training sessions walk you through everything step-by-step."
+      }
+    },
+    {
+      "id": "para11",
+      "type": "paragraph",
+      "data": {
+        "text": "<b>Q: How much money do I need to start?</b><br>A: You can start with as little as $500, though more capital allows for better diversification."
+      }
+    },
+    {
+      "id": "para12",
+      "type": "paragraph",
+      "data": {
+        "text": "<b>Q: What's the success rate?</b><br>A: While past performance varies, our calendar has shown consistent patterns over 4 years."
+      }
+    },
+    {
+      "id": "delimiter8",
+      "type": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "header8",
+      "type": "header",
+      "data": {
+        "text": "Don't Miss Out",
+        "level": 2
+      }
+    },
+    {
+      "id": "para13",
+      "type": "paragraph",
+      "data": {
+        "text": "Sign up now to receive your free Money Calendar report and join thousands of traders who are already using this powerful system."
+      }
+    },
+    {
+      "id": "para14",
+      "type": "paragraph",
+      "data": {
+        "text": "<i>By entering your information, you agree to receive marketing communications. Standard rates apply. You can opt-out at any time.</i>"
+      }
+    }
+  ],
+  "version": "2.28.2"
+}
+
