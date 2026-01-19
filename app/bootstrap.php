@@ -25,8 +25,7 @@ if (!defined('VENDOR_PATH')) {
 if (!defined('APP_CODE_PATH')) {
     define('APP_CODE_PATH', BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
 }
-
-// 注册 app/code 优先的自动加载器（在 Composer 之前）
+// 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前）
 // 只在类未加载时检查，性能影响最小
 // 使用静态变量记录已加载的文件，防止重复加载
 spl_autoload_register(function ($class) {
@@ -39,9 +38,21 @@ spl_autoload_register(function ($class) {
     
     // 规范化路径，确保路径一致性
     $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
-    $fullPath = APP_CODE_PATH . $relativePath;
     
-    // 规范化路径（处理 Windows 路径分隔符）
+    // 首先检查 generated/code 目录（拦截器类）
+    $generatedPath = BP . 'generated' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . $relativePath;
+    $normalizedGeneratedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $generatedPath);
+    
+    if (!isset($loadedFiles[$normalizedGeneratedPath]) && file_exists($normalizedGeneratedPath)) {
+        $loadedFiles[$normalizedGeneratedPath] = true;
+        require_once $normalizedGeneratedPath;
+        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
+            return true;
+        }
+    }
+    
+    // 然后检查 app/code 目录
+    $fullPath = APP_CODE_PATH . $relativePath;
     $normalizedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $fullPath);
     
     // 如果文件已被加载过，直接返回
@@ -71,6 +82,25 @@ spl_autoload_register(function ($class) {
 try {
     $autoloader = VENDOR_PATH . 'autoload.php';
     if (is_file($autoloader)) {
+        // 如果是 Web 请求（非 CLI），阻止加载 Pest 测试框架的函数文件
+        // 请求生命周期中不允许运行测试框架
+        if (PHP_SAPI !== 'cli') {
+            // 在加载 Composer 自动加载器之前，定义 Pest 函数为已存在（阻止加载）
+            // 这样可以防止 Composer 的 autoload_files.php 加载 Pest 的函数文件
+            if (!function_exists('beforeEach')) {
+                function beforeEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+            }
+            if (!function_exists('test')) {
+                function test() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+            }
+            if (!function_exists('it')) {
+                function it() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+            }
+            if (!function_exists('afterEach')) {
+                function afterEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+            }
+        }
+        
         $composerLoader = require $autoloader;
         
         // 获取所有 PSR-4 映射并修改，确保 app/code 路径优先

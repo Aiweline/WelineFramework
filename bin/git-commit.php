@@ -38,36 +38,32 @@ if ($projectRoot === false) {
 
 chdir($projectRoot);
 
-// Build the git commit command safely
-$escapedMessage = escapeshellarg($message);
-$command = "git commit -m {$escapedMessage}";
-
-$descriptorSpec = [
-    0 => ['pipe', 'r'],
-    1 => ['pipe', 'w'],
-    2 => ['pipe', 'w'],
-];
-
-$process = proc_open($command, $descriptorSpec, $pipes);
-
-if (!is_resource($process)) {
-    fwrite(STDERR, "Error: failed to start git commit process.\n");
+// Use temporary file to avoid shell encoding issues
+$tempFile = tempnam(sys_get_temp_dir(), 'git_commit_msg_');
+if ($tempFile === false) {
+    fwrite(STDERR, "Error: failed to create temporary file.\n");
     exit(1);
 }
 
-fclose($pipes[0]);
-$stdout = stream_get_contents($pipes[1]);
-$stderr = stream_get_contents($pipes[2]);
-fclose($pipes[1]);
-fclose($pipes[2]);
+// Write message to temp file with UTF-8 encoding
+file_put_contents($tempFile, $message, LOCK_EX);
 
-$exitCode = proc_close($process);
+// Build the git commit command using -F option to read from file
+$escapedFile = escapeshellarg($tempFile);
+$command = "git commit -F {$escapedFile} 2>&1";
+
+// Execute command
+$output = [];
+$exitCode = 0;
+exec($command, $output, $exitCode);
+
+// Clean up temp file
+unlink($tempFile);
+
+$stdout = implode("\n", $output);
 
 if ($stdout !== '') {
-    echo $stdout;
-}
-if ($stderr !== '') {
-    fwrite(STDERR, $stderr);
+    echo $stdout . "\n";
 }
 
 exit($exitCode);
