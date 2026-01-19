@@ -1,0 +1,19 @@
+{
+  "name": "weline-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for WelineFramework (theme override verification)",
+  "scripts": {
+    "start": "node start.js",
+    "test": "playwright test",
+    "test:collect": "node collect-tests.js",
+    "test:module": "playwright test --module",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "playwright": "^1.48.0"
+  }
+}
+

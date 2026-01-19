@@ -1,0 +1,21 @@
+{
+  "name": "weline-unit-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Vitest unit tests for WelineFramework frontend code",
+  "type": "module",
+  "scripts": {
+    "start": "vitest --watch",
+    "test": "vitest run",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:module": "vitest --module"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "happy-dom": "^15.0.0",
+    "@vitest/ui": "^1.6.0"
+  }
+}
