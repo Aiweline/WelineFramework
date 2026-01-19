@@ -1,0 +1,302 @@
+<?php
+/**
+ * Teen Patti Master 模板 - Footer
+ * TPMST Template - Footer
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:style => 样式配置
+ * style.background_color => 背景颜色:color:#0a0a1a
+ * style.text_color => 文字颜色:color:#cccccc
+ * style.link_color => 链接颜色:color:#ff6b35
+ * style.link_hover_color => 链接悬停颜色:color:#ffd700
+ * style.border_top => 显示顶部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#333333
+ * 
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1200
+ * layout.padding_horizontal => 左右内边距:responsive:20/40|px[MD]
+ * layout.padding_vertical => 上下内边距:responsive:30/50|px[MD]
+ * 
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home|#home,Blog|#blog,FAQ|#faqs,About|#about
+ * content.copyright_text => 版权信息:text:© 2025 Teen Patti Master | All rights reserved
+ * content.disclaimer_text => 免责声明:textarea:Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.
+ * 
+ * group:typography => 排版设置
+ * typography.font_size => 字体大小:responsive:12/14|px[MD]
+ * typography.line_height => 行高:number:1.6
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'tpmst';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'tpmst';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色辅助函数
+if (!function_exists('tpmst_color')) {
+    function tpmst_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('tpmst_getConfig')) {
+    function tpmst_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+if (!function_exists('tpmst_parseResponsive')) {
+    function tpmst_parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    if (count($parts) === 2) {
+        $result['mobile'] = trim($parts[0]);
+        $result['desktop'] = trim($parts[1]);
+    } else {
+        $result['mobile'] = $result['desktop'] = trim($parts[0] ?? '');
+    }
+    return $result;
+    }
+}
+
+if (!function_exists('tpmst_genResponsiveCSS')) {
+    function tpmst_genResponsiveCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+// 样式配置（优先使用颜色配置）
+$bgColor = tpmst_color($colors, 'footer_bg', tpmst_getConfig($styleSettings, 'style.background_color', '#0a0a1a'));
+$textColor = tpmst_color($colors, 'footer_text', tpmst_getConfig($styleSettings, 'style.text_color', '#8b8b8b'));
+$linkColor = tpmst_color($colors, 'footer_link', tpmst_getConfig($styleSettings, 'style.link_color', '#bebebe'));
+$linkHoverColor = tpmst_color($colors, 'footer_link_hover', tpmst_getConfig($styleSettings, 'style.link_hover_color', '#ffd700'));
+$copyrightColor = tpmst_color($colors, 'footer_copyright', '#8b8b8b');
+$borderTop = tpmst_getConfig($styleSettings, 'style.border_top', 'yes');
+$borderColor = tpmst_getConfig($styleSettings, 'style.border_color', '#333333');
+
+// 布局配置
+$maxWidth = tpmst_getConfig($styleSettings, 'layout.max_width', '1200');
+$paddingHorizontalValue = tpmst_getConfig($styleSettings, 'layout.padding_horizontal', '20/40');
+$paddingVerticalValue = tpmst_getConfig($styleSettings, 'layout.padding_vertical', '30/50');
+
+$paddingHorizontal = tpmst_parseResponsive($paddingHorizontalValue . 'px');
+$paddingHorizontalResponsive = tpmst_genResponsiveCSS($paddingHorizontal);
+$paddingVertical = tpmst_parseResponsive($paddingVerticalValue . 'px');
+$paddingVerticalResponsive = tpmst_genResponsiveCSS($paddingVertical);
+
+// 内容配置
+// 页脚文本配置（优先使用文本配置）
+$footerHomeText = tpmst_getConfig($styleSettings, 'texts.footer_home', 'Home');
+$footerFaqText = tpmst_getConfig($styleSettings, 'texts.footer_faq', 'FAQ');
+$footerBlogText = tpmst_getConfig($styleSettings, 'texts.footer_blog', 'Blog');
+$footerAboutText = tpmst_getConfig($styleSettings, 'texts.footer_about', 'About');
+$footerPrivacyText = tpmst_getConfig($styleSettings, 'texts.footer_privacy', 'Privacy Policy');
+$footerTermsText = tpmst_getConfig($styleSettings, 'texts.footer_terms', 'Terms & Conditions');
+$copyrightText = tpmst_getConfig($styleSettings, 'content.copyright_text', '© 2025 Teen Patti Master | All rights reserved');
+$disclaimerText = tpmst_getConfig($styleSettings, 'content.disclaimer_text', 'Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.');
+
+// 解析页脚链接
+$footerLinks = [];
+if (!empty($footerLinksText)) {
+    $links = explode(',', $footerLinksText);
+    foreach ($links as $link) {
+        $parts = explode('|', trim($link));
+        if (count($parts) === 2) {
+            $footerLinks[] = [
+                'text' => trim($parts[0]),
+                'url' => trim($parts[1])
+            ];
+        }
+    }
+}
+
+// 排版配置
+$fontSizeValue = tpmst_getConfig($styleSettings, 'typography.font_size', '12/14');
+$lineHeight = tpmst_getConfig($styleSettings, 'typography.line_height', '1.6');
+
+$fontSize = tpmst_parseResponsive($fontSizeValue . 'px');
+$fontSizeResponsive = tpmst_genResponsiveCSS($fontSize);
+?>
+
+    <style>
+        .tpmst-footer {
+            background: <?= htmlspecialchars($bgColor) ?>;
+            <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor) . ';' : '' ?>
+            padding: <?= $paddingVerticalResponsive ?> <?= $paddingHorizontalResponsive ?>;
+            margin-top: 60px;
+        }
+        
+        .tpmst-footer-container {
+            max-width: <?= intval($maxWidth) ?>px;
+            margin: 0 auto;
+        }
+        
+        .tpmst-footer-content {
+            text-align: center;
+            color: <?= htmlspecialchars($textColor) ?>;
+            font-size: <?= $fontSizeResponsive ?>;
+            line-height: <?= floatval($lineHeight) ?>;
+        }
+        
+        .tpmst-footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            list-style: none;
+        }
+        
+        .tpmst-footer-links a {
+            color: <?= htmlspecialchars($linkColor) ?>;
+            text-decoration: none;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+        
+        .tpmst-footer-links a:hover {
+            color: <?= htmlspecialchars($linkHoverColor) ?>;
+            text-decoration: underline;
+        }
+        
+        .tpmst-footer-disclaimer {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            font-size: <?= $fontSizeResponsive ?>;
+            line-height: <?= floatval($lineHeight) ?>;
+            color: <?= htmlspecialchars($textColor) ?>;
+        }
+        
+        .tpmst-footer-copyright {
+            margin: 20px 0 0;
+            font-size: <?= $fontSizeResponsive ?>;
+            color: <?= htmlspecialchars($textColor) ?>;
+        }
+        
+        .tpmst-footer-dmca {
+            margin-top: 15px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        @media (max-width: 767px) {
+            .tpmst-footer-links {
+                gap: 20px;
+                flex-direction: column;
+            }
+            
+            .tpmst-footer-disclaimer {
+                padding: 15px;
+                font-size: clamp(11px, 3vw, 12px);
+            }
+            
+            .tpmst-footer-copyright {
+                font-size: clamp(11px, 3vw, 12px);
+            }
+        }
+    </style>
+    
+    <footer class="tpmst-footer">
+        <div class="tpmst-footer-container">
+            <div class="tpmst-footer-content">
+                <!-- 页脚链接 -->
+                <p class="tpmst-footer-links d-none d-lg-block">
+                    <a href="/"><?= htmlspecialchars($footerHomeText) ?></a>
+                    <span class="tpmst-footer-separator">|</span>
+                    <a href="/teen-patti-master-faq/"><?= htmlspecialchars($footerFaqText) ?></a>
+                    <span class="tpmst-footer-separator">|</span>
+                    <a href="/blog/"><?= htmlspecialchars($footerBlogText) ?></a>
+                    <span class="tpmst-footer-separator">|</span>
+                    <a href="/teen-patti-master-about/"><?= htmlspecialchars($footerAboutText) ?></a>
+                    <span class="tpmst-footer-separator">|</span>
+                    <a href="/privacy-policy/"><?= htmlspecialchars($footerPrivacyText) ?></a>
+                    <span class="tpmst-footer-separator">|</span>
+                    <a href="/terms-conditions/"><?= htmlspecialchars($footerTermsText) ?></a>
+                </p>
+                
+                <!-- 版权信息和DMCA -->
+                <p class="tpmst-footer-copyright">
+                    <?= htmlspecialchars($copyrightText) ?>
+                    <a href="https://www.dmca.com/Protection/Status.aspx?ID=35422651-914f-4bed-ac3f-48ded810ffc8&refurl=https://www.tpmst.com/" 
+                       title="DMCA.com Protection Status" 
+                       class="tpmst-dmca-badge">
+                        <?php 
+                        // 尝试获取本地图片，如果不存在则使用外部URL
+                        $dmcaImageLocal = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/dmca_protected_sml_120n.png');
+                        $dmcaImageUrl = 'https://images.dmca.com/Badges/dmca_protected_sml_120n.png?ID=35422651-914f-4bed-ac3f-48ded810ffc8';
+                        
+                        // 检查本地文件是否存在（通过URL路径推断文件路径）
+                        $localFilePath = null;
+                        // 如果返回的是本地路径（包含 /app/code/ 或 /GuoLaiRen/PageBuilder/）
+                        if (strpos($dmcaImageLocal, '/app/code/') !== false || strpos($dmcaImageLocal, '/GuoLaiRen/PageBuilder/') !== false) {
+                            // 尝试从URL路径转换为文件系统路径
+                            if (preg_match('#/(GuoLaiRen)/(PageBuilder)/view/templates/style/tpmst/asset/img/dmca_protected_sml_120n\.png#', $dmcaImageLocal, $matches)) {
+                                $localFilePath = BP . 'app' . DS . 'code' . DS . $matches[1] . DS . $matches[2] . DS . 'view' . DS . 'templates' . DS . 'style' . DS . 'tpmst' . DS . 'asset' . DS . 'img' . DS . 'dmca_protected_sml_120n.png';
+                            } elseif (preg_match('#/app/code/([^/]+)/([^/]+)/view/templates/style/tpmst/asset/img/dmca_protected_sml_120n\.png#', $dmcaImageLocal, $matches)) {
+                                $localFilePath = BP . 'app' . DS . 'code' . DS . $matches[1] . DS . $matches[2] . DS . 'view' . DS . 'templates' . DS . 'style' . DS . 'tpmst' . DS . 'asset' . DS . 'img' . DS . 'dmca_protected_sml_120n.png';
+                            }
+                        }
+                        
+                        // 如果本地文件存在，使用本地路径；否则使用外部URL
+                        $dmcaImage = ($localFilePath && file_exists($localFilePath)) ? $dmcaImageLocal : $dmcaImageUrl;
+                        ?>
+                        <img src="<?= htmlspecialchars($dmcaImage) ?>" 
+                             alt="DMCA.com Protection Status" 
+                             width="100" 
+                             height="20">
+                    </a>
+                </p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- 本地JS资源 -->
+    <?php 
+    $localZeptoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/js/zepto.min.js');
+    $localCommonJsUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/js/common.js');
+    ?>
+    <script src="<?= htmlspecialchars($localZeptoUrl) ?>" defer></script>
+    <script src="<?= htmlspecialchars($localCommonJsUrl) ?>" defer></script>
+</body>
+</html>

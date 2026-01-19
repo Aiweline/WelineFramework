@@ -1,0 +1,1647 @@
+<?php
+/**
+ * Teen Patti Master 模板 - Content
+ * TPMST Template - Content Area
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:slider => 轮播区域设置（第一个块）
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.items => 轮播项配置:json:[]|JSON格式，支持配置多个轮播项
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 自动播放间隔:number:5000|毫秒
+ * slider.bg_color => 背景颜色:color:#0c0060
+ * slider.banner_image_mobile => 默认移动端Banner图片:textarea:|默认使用本地banner-2.jpg
+ * slider.banner_image_desktop => 默认PC端Banner图片:textarea:|默认使用本地banner-03.webp
+ * slider.download_btn_image => 默认下载按钮图片:textarea:|默认使用本地download-btn-m.webp
+ * 
+ * group:advantages => 优势区域设置
+ * advantages.title => 优势区域标题:text:Our Advantages
+ * advantages.display => 显示优势区域:select:yes|yes,no
+ * advantages.bg_color => 背景颜色:color:#1a1a2e
+ * advantages.icon_1 => 优势1-图标:textarea:|默认使用本地our-advantages/icon01.webp
+ * advantages.icon_2 => 优势2-图标:textarea:|默认使用本地our-advantages/icon02.webp
+ * advantages.icon_3 => 优势3-图标:textarea:|默认使用本地our-advantages/icon03.webp
+ * 
+ * group:games => 游戏介绍设置
+ * games.title => 游戏区域标题:text:Multiples Game
+ * games.display => 显示游戏区域:select:yes|yes,no
+ * games.bg_color => 背景颜色:color:#0f0f1e
+ * games.image_1_desktop => 游戏1-桌面端图片:textarea:|默认使用本地game/game-i1.webp
+ * games.image_1_mobile => 游戏1-移动端图片:textarea:|默认使用本地game/game-i1-m.webp
+ * games.image_2 => 游戏2-图片:textarea:|默认使用本地game/game-i2.webp
+ * games.image_3 => 游戏3-图片:textarea:|默认使用本地game/game-i3.webp
+ * 
+ * group:app_info => 应用信息设置
+ * app_info.display => 显示应用信息:select:yes|yes,no
+ * app_info.app_name => 应用名称:text:Teen Patti Master
+ * app_info.app_size => 应用大小:text:80.4 MB
+ * app_info.app_version => 版本号:text:V5.1
+ * app_info.app_updated => 更新日期:text:20-08-2025
+ * app_info.app_requires => 系统要求:text:Android 5.0 and up
+ * 
+ * group:testimonials => 用户评价设置
+ * testimonials.title => 评价区域标题:text:Testimonials
+ * testimonials.display => 显示评价区域:select:yes|yes,no
+ * testimonials.bg_color => 背景颜色:color:#1a1a2e
+ * testimonials.avatar_1 => 评价1-头像:textarea:|默认使用本地user/Rajesh-Kumar-1.avif
+ * testimonials.avatar_2 => 评价2-头像:textarea:|默认使用本地user/Priya-Sharma-2.avif
+ * testimonials.avatar_3 => 评价3-头像:textarea:|默认使用本地user/Amit-Patel-3.avif
+ * 
+ * group:faq => FAQ设置
+ * faq.title => FAQ标题:text:FAQs
+ * faq.display => 显示FAQ:select:yes|yes,no
+ * faq.bg_color => 背景颜色:color:#0f0f1e
+ * 
+ * group:styles => 样式设置
+ * styles.section_padding => 区块上下内边距:responsive:60/100|px[MD]
+ * styles.text_color => 文字颜色:color:#ffffff
+ * styles.heading_color => 标题颜色:color:#ffd700
+ * styles.link_color => 链接颜色:color:#ff6b35
+ * 
+ * group:texts => 文本内容设置（支持多语言）
+ * texts.advantages_title => 优势区域标题:text:Our Advantages
+ * texts.games_title => 游戏区域标题:text:Multiples Game
+ * texts.testimonials_title => 评价区域标题:text:Testimonials
+ * texts.faq_title => FAQ标题:text:FAQs
+ * texts.app_name => 应用名称:text:Teen Patti Master
+ * texts.app_size => 应用大小:text:80.4 MB
+ * texts.app_version => 版本号:text:V5.1
+ * texts.app_updated => 更新日期:text:20-08-2025
+ * texts.app_requires => 系统要求:text:Android 5.0 and up
+ * texts.game_teen_patti_speed => 游戏-快速三张牌:text:Teen Patti Speed
+ * texts.game_teen_patti_speed_desc => 游戏-快速三张牌描述:textarea:Teen Patti Master is a thrilling Teen Patti Speed is a fast-paced variant where players bet quickly, aiming for the best three-card hand in thrilling, rapid rounds.
+ * texts.game_rummy_master => 游戏-拉米大师:text:Rummy Master
+ * texts.game_rummy_master_desc => 游戏-拉米大师描述:textarea:Rummy Master challenges players to skillfully meld cards into sets and sequences in a race to be the first to go out and declare victory.
+ * texts.game_slots_meta => 游戏-老虎机元:text:Slots Meta
+ * texts.game_slots_meta_desc => 游戏-老虎机元描述:textarea:Slots Meta offers a dazzling array of themed slots where players spin for matching symbols and bonuses in a quest for jackpot wins.
+ * texts.game_teen_patti => 游戏-三张牌:text:Teen Patti master
+ * texts.game_teen_patti_desc => 游戏-三张牌描述:textarea:Teen Patti Master is a thrilling card game that combines strategy and luck. Players aim to create the best three-card hand, betting against each other in a battle of wits and nerve.
+ * texts.game_rummy => 游戏-拉米:text:Rummy
+ * texts.game_rummy_desc => 游戏-拉米描述:textarea:Rummy is a card game where players match cards into sets or runs, aiming to be the first to play all their cards through drawing and discarding. It emphasizes strategic melding and keen observation.
+ * texts.game_slots => 游戏-老虎机:text:Slots
+ * texts.game_slots_desc => 游戏-老虎机描述:textarea:Slots are games of chance where players spin reels with symbols, aiming to match combinations according to the paytable for potential wins. No skill required—just luck and a taste for fun.
+ * texts.mobile_nav_home => 移动端导航-首页:text:Home
+ * texts.mobile_nav_blog => 移动端导航-博客:text:Blog
+ * texts.mobile_nav_faq => 移动端导航-常见问题:text:FAQ
+ * texts.mobile_nav_about => 移动端导航-关于:text:About
+ * texts.disclaimer => 免责声明:textarea:Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.
+ * texts.blog_title => 博客标题:text:Teen Patti Master
+ * texts.blog_intro => 博客介绍段落:textarea:Teen Patti, a game synonymous with festivity and strategy in India, has made a grand entrance into the digital realm with Teen Patti Master. This online avatar has garnered widespread attention, capturing the essence of the beloved card game while offering a convenient and engaging platform for enthusiasts worldwide. This blog post explores the intricacies of Teen Patti Master, an online card game available as an easy-to-install APK and provides tips for those looking to claim victory at its vibrant tables.
+ * texts.blog_subtitle_1 => 博客副标题1:text:Teen Patti Master: Conquer the Tables of India's Most Beloved Card Game
+ * texts.blog_subtitle_2 => 博客副标题2:text:Strategies for Winning at Teen Patti Master
+ * texts.blog_subtitle_3 => 博客副标题3:text:The Social Side of Teen Patti Master
+ * texts.blog_subtitle_4 => 博客副标题4:text:Ensuring Fair Play and Security
+ * texts.blog_subtitle_5 => 博客副标题5:text:Final Thoughts on Mastering Teen Patti
+ * texts.blog_why_choose => 博客-为什么选择:text:Why 5 Million+ Players Choose Teen Patti Master:
+ * texts.blog_instant_withdrawals => 博客-即时提现:text:Instant Withdrawals - Cash out winnings in 5 minutes to UPI/Paytm
+ * texts.blog_welcome_bonus => 博客-欢迎奖金:text:₹3,000 Welcome Bonus - New players start with bonus chips
+ * texts.blog_rng_certified => 博客-RNG认证:text:RNG Certified - Verified fair play by Gaming Labs International
+ * texts.blog_game_variations => 博客-游戏变体:text:10+ Game Variations - Classic, AK47, Muflis, and more
+ * texts.blog_live_tables => 博客-实时桌台:text:24/7 Live Tables - Play with real players anytime
+ * texts.blog_tournaments => 博客-锦标赛:text:Join tournaments with prize pools up to ₹10 Lakhs!
+ * texts.blog_strategy_intro => 博客-策略-介绍:textarea:Success in Teen Patti Master doesn't just rely on luck; it's about understanding the psychology of your opponents and making strategic bets. Here are some tips to up your game:
+ * texts.blog_strategy_start_small => 博客-策略-小额开始:textarea:Start Small: As you familiarize yourself with the gameplay, it's wise to begin with smaller bets. This approach allows you to gauge the competition and minimize potential losses.
+ * texts.blog_strategy_observe => 博客-策略-观察对手:textarea:Observe Your Opponents: Pay close attention to the betting patterns and behavior of other players. This insight can be crucial when deciding your next move.
+ * texts.blog_strategy_fold => 博客-策略-适时弃牌:textarea:Know When to Fold: One of the key strategies in Teen Patti is knowing when to exit the game. If the odds are against you, it's better to fold early and conserve your chips for future rounds and increase your chances of winning real cash.
+ * texts.blog_social => 博客-社交功能:textarea:Teen Patti Master isn't just about the thrill of the game; it's also a social platform. The game allows you to connect with friends and family, making it an engaging way to stay in touch and enjoy some friendly competition.
+ * texts.blog_security => 博客-安全说明:textarea:The developers of Teen Patti Master have gone to great lengths to ensure that the game is fair and secure. With random number generators and encryption protocols, your gaming experience is both fair and your personal information is secure.
+ * texts.blog_final_thoughts => 博客-最终想法:textarea:Whether you're looking to understand the basics of the game or seeking advanced strategies to dominate the tables, Teen Patti Master offers an immersive experience that's both challenging and rewarding. Remember, while the game is accessible to players of varying skill levels, the key to success lies in responsible gaming. Set yourself limits, and enjoy the game for the entertainment it provides. Ready to test your skills and join the ranks of Teen Patti champions? Download the Teen Patti Master APK today to enjoy the best online 3 Patti experience, and may your cards be ever in your favor!
+ * texts.hindi_title => 印地语标题:text:पत्ती मास्टर, ऑनलाइन तीन पत्ती, तीन पत्ती गेम
+ * texts.hindi_content => 印地语内容:textarea:तीन पत्ती मास्टर भारत का सबसे पसंदीदा ऑनलाइन तीन पत्ती गेम है, जो रणनीति और भाग्य का रोमांचक मिश्रण प्रदान करता है। तीन पत्ती गेम में लाखों खिलाड़ियों के साथ जुड़ें, असली नकद जीतें और अपने कौशल का प्रदर्शन करें। अभी डाउनलोड करें और मज़ा शुरू करें!
+ * texts.faq_question_1 => FAQ问题1:text:What is Teen Patti Master?
+ * texts.faq_answer_1 => FAQ答案1:textarea:Teen Patti Master is India's best online card game, also known as तीन पत्ती मास्टर or teen patti master, which combines strategy and luck for real cash prizes. It's a multiplayer teen patti game featuring AK47 and Muflis variations that supports online play on Android and iOS. Join millions to bet, bluff, and earn up to ₹10,000 per day.
+ * texts.faq_question_2 => FAQ问题2:text:How to Download Teen Patti Master APK?
+ * texts.faq_answer_2 => FAQ答案2:textarea:To get adolescent patti master apk, go to a reliable website and select the download option for the most recent version (for example, the 2025 update). It's free, safe, and mobile-friendly. Install by activating "unknown sources" in your settings, and then sign up for a bonus. Avoid phony websites; an approved APK guarantees safe online adolescent patti games.
+ * texts.faq_question_3 => FAQ问题3:text:Is Teen Patti Master Safe to Play?
+ * texts.faq_answer_3 => FAQ答案3:textarea:Yes, Teen Patti Master is designed to be secure, with features like as SSL encryption to protect data. As a reputable adolescent patti game, it seeks to discourage cheating and promote responsible gaming. UPI/Paytm allows you to safely withdraw actual cash. To avoid dangers, download ऑनलाइन तीन पत्ती from official sources only.
+ * texts.faq_question_4 => FAQ问题4:text:How to Win Real Cash in Teen Patti Master?
+ * texts.faq_answer_4 => FAQ答案4:textarea:Win real money in Teen Patti Master by mastering methods like bluffing with strong hands (e.g., Trail or Pure Sequence). Begin with minimal wagers with adolescent patti game modes, then employ bonuses and play varieties such as Dragon vs. Tiger. Withdraw your earnings promptly. Practice in free mode to increase your chances of winning in online adolescent patti events.
+ * texts.faq_question_5 => FAQ问题5:text:What are the Game Variants in Teen Patti Master?
+ * texts.faq_answer_5 => FAQ答案5:textarea:Teen Patti Master includes interesting variants such as AK47 (where A, K, 4, and 7 are wild cards), Muflis (where the lowest-ranking hand wins), and Joker for varied teen patti action. Rummy, Slots, and Ludo are some more real-money options. These improve ऑनलाइन तीन पत्ती strategy; apply them to maximize bonuses and victories.
+ * texts.testimonial_1_name => 评价1-姓名:text:Rajesh Kumar (Mumbai)
+ * texts.testimonial_1_rating => 评价1-评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1-内容:textarea:Best Teen Patti app I've used! I've been playing for 6 months and won ₹45,000 so far. Withdrawals are super fast - money hits my Paytm in 10 minutes. The AK47 variant is my favorite!
+ * texts.testimonial_1_footer => 评价1-底部信息:text:Verified Purchase | Playing Since: Aug 2023 | Total Winnings: ₹45,230
+ * texts.testimonial_2_name => 评价2-姓名:text:Priya Sharma (Delhi)
+ * texts.testimonial_2_rating => 评价2-评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2-内容:textarea:Fair game, genuine payments. I was skeptical at first, but after winning ₹8,000 in my first month, I'm hooked! Customer support is responsive. Only suggestion: add more tournament timings.
+ * texts.testimonial_2_footer => 评价2-底部信息:text:Verified Purchase | Playing Since: Nov 2023 | Total Winnings: ₹23,500
+ * texts.testimonial_3_name => 评价3-姓名:text:Amit Patel (Ahmedabad)
+ * texts.testimonial_3_rating => 评价3-评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_3_content => 评价3-内容:textarea:Love the game variety. Won ₹12K last week in a tournament. Sometimes laggy during peak hours (8-10 PM), but overall solid experience.
+ * texts.testimonial_3_footer => 评价3-底部信息:text:Verified Purchase | Playing Since: Sept 2023 | Total Winnings: ₹31,800
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'tpmst';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'tpmst';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色辅助函数
+if (!function_exists('tpmst_color')) {
+    function tpmst_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('tpmst_getConfig')) {
+    function tpmst_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        // 如果值为空字符串且提供了默认值，则使用默认值
+        // 这样可以确保空字符串配置不会覆盖默认值
+        if ($value === '' && $default !== '') {
+            return $default;
+        }
+        return $value;
+    }
+}
+
+if (!function_exists('tpmst_parseResponsive')) {
+    function tpmst_parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    if (count($parts) === 2) {
+        $result['mobile'] = trim($parts[0]);
+        $result['desktop'] = trim($parts[1]);
+    } else {
+        $result['mobile'] = $result['desktop'] = trim($parts[0] ?? '');
+    }
+    return $result;
+    }
+}
+
+if (!function_exists('tpmst_genResponsiveCSS')) {
+    function tpmst_genResponsiveCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+// 优势区域配置
+$advantagesTitle = tpmst_getConfig($styleSettings, 'advantages.title', 'Our Advantages');
+$advantagesDisplay = tpmst_getConfig($styleSettings, 'advantages.display', 'yes');
+$advantagesBgColor = tpmst_color($colors, 'advantages_bg', tpmst_getConfig($styleSettings, 'advantages.bg_color', '#1a1a2e'));
+$advantagesSectionClasses = tpmst_getConfig($styleSettings, 'advantages.section_classes', 'full-bg1 full-our pt-90 pb-92 md-pt-30 md-pb-30');
+$advantagesDownloadBtnClasses = tpmst_getConfig($styleSettings, 'advantages.download_btn_classes', 'common-dwn download-btn pl-60 pr-60 pb-11 pt-11 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-6 fw-bolder');
+
+// 优势区域图标（可配置，默认使用本地资源）
+$defaultAdvantageIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon01.webp');
+$defaultAdvantageIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon02.webp');
+$defaultAdvantageIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon03.webp');
+$advantageIcon1 = tpmst_getConfig($styleSettings, 'advantages.icon_1', '') ?: $defaultAdvantageIcon1;
+$advantageIcon2 = tpmst_getConfig($styleSettings, 'advantages.icon_2', '') ?: $defaultAdvantageIcon2;
+$advantageIcon3 = tpmst_getConfig($styleSettings, 'advantages.icon_3', '') ?: $defaultAdvantageIcon3;
+
+// 游戏区域配置
+$gamesTitle = tpmst_getConfig($styleSettings, 'games.title', 'Multiples Game');
+$gamesDisplay = tpmst_getConfig($styleSettings, 'games.display', 'yes');
+$gamesBgColor = tpmst_color($colors, 'games_bg', tpmst_getConfig($styleSettings, 'games.bg_color', '#0f0f1e'));
+
+// 游戏区域图片（可配置，默认使用本地资源）
+$defaultGameImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1.webp');
+$defaultGameImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1-m.webp');
+$defaultGameImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i2.webp');
+$defaultGameImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i3.webp');
+$gameImage1Desktop = tpmst_getConfig($styleSettings, 'games.image_1_desktop', '') ?: $defaultGameImage1Desktop;
+$gameImage1Mobile = tpmst_getConfig($styleSettings, 'games.image_1_mobile', '') ?: $defaultGameImage1Mobile;
+$gameImage2 = tpmst_getConfig($styleSettings, 'games.image_2', '') ?: $defaultGameImage2;
+$gameImage3 = tpmst_getConfig($styleSettings, 'games.image_3', '') ?: $defaultGameImage3;
+
+// 应用信息配置
+$appInfoDisplay = tpmst_getConfig($styleSettings, 'app_info.display', 'yes');
+$appName = tpmst_getConfig($styleSettings, 'app_info.app_name', 'Teen Patti Master');
+$appSize = tpmst_getConfig($styleSettings, 'app_info.app_size', '80.4 MB');
+$appVersion = tpmst_getConfig($styleSettings, 'app_info.app_version', 'V5.1');
+$appUpdated = tpmst_getConfig($styleSettings, 'app_info.app_updated', '20-08-2025');
+$appRequires = tpmst_getConfig($styleSettings, 'app_info.app_requires', 'Android 5.0 and up');
+
+// 评价区域配置
+$testimonialsTitle = tpmst_getConfig($styleSettings, 'testimonials.title', 'Testimonials');
+$testimonialsDisplay = tpmst_getConfig($styleSettings, 'testimonials.display', 'yes');
+$testimonialsBgColor = tpmst_color($colors, 'testimonials_bg', tpmst_getConfig($styleSettings, 'testimonials.bg_color', '#1a1a2e'));
+
+// FAQ配置
+$faqTitle = tpmst_getConfig($styleSettings, 'faq.title', 'FAQs');
+$faqDisplay = tpmst_getConfig($styleSettings, 'faq.display', 'yes');
+$faqBgColor = tpmst_color($colors, 'faq_bg', tpmst_getConfig($styleSettings, 'faq.bg_color', '#0f0f1e'));
+
+// 游戏文本配置
+$gameTeenPattiSpeed = tpmst_getConfig($styleSettings, 'texts.game_teen_patti_speed', 'Teen Patti Speed');
+$gameTeenPattiSpeedDesc = tpmst_getConfig($styleSettings, 'texts.game_teen_patti_speed_desc', 'Teen Patti Master is a thrilling Teen Patti Speed is a fast-paced variant where players bet quickly, aiming for the best three-card hand in thrilling, rapid rounds.');
+$gameRummyMaster = tpmst_getConfig($styleSettings, 'texts.game_rummy_master', 'Rummy Master');
+$gameRummyMasterDesc = tpmst_getConfig($styleSettings, 'texts.game_rummy_master_desc', 'Rummy Master challenges players to skillfully meld cards into sets and sequences in a race to be the first to go out and declare victory.');
+$gameSlotsMeta = tpmst_getConfig($styleSettings, 'texts.game_slots_meta', 'Slots Meta');
+$gameSlotsMetaDesc = tpmst_getConfig($styleSettings, 'texts.game_slots_meta_desc', 'Slots Meta offers a dazzling array of themed slots where players spin for matching symbols and bonuses in a quest for jackpot wins.');
+$gameTeenPatti = tpmst_getConfig($styleSettings, 'texts.game_teen_patti', 'Teen Patti master');
+$gameTeenPattiDesc = tpmst_getConfig($styleSettings, 'texts.game_teen_patti_desc', 'Teen Patti Master is a thrilling card game that combines strategy and luck. Players aim to create the best three-card hand, betting against each other in a battle of wits and nerve.');
+$gameRummy = tpmst_getConfig($styleSettings, 'texts.game_rummy', 'Rummy');
+$gameRummyDesc = tpmst_getConfig($styleSettings, 'texts.game_rummy_desc', 'Rummy is a card game where players match cards into sets or runs, aiming to be the first to play all their cards through drawing and discarding. It emphasizes strategic melding and keen observation.');
+$gameSlots = tpmst_getConfig($styleSettings, 'texts.game_slots', 'Slots');
+$gameSlotsDesc = tpmst_getConfig($styleSettings, 'texts.game_slots_desc', 'Slots are games of chance where players spin reels with symbols, aiming to match combinations according to the paytable for potential wins. No skill required—just luck and a taste for fun.');
+
+// 移动端导航文本
+$mobileNavHome = tpmst_getConfig($styleSettings, 'texts.mobile_nav_home', 'Home');
+$mobileNavBlog = tpmst_getConfig($styleSettings, 'texts.mobile_nav_blog', 'Blog');
+$mobileNavFaq = tpmst_getConfig($styleSettings, 'texts.mobile_nav_faq', 'FAQ');
+$mobileNavAbout = tpmst_getConfig($styleSettings, 'texts.mobile_nav_about', 'About');
+
+// 免责声明文本
+$disclaimerText = tpmst_getConfig($styleSettings, 'texts.disclaimer', 'Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.');
+
+// 博客内容文本
+$blogTitle = tpmst_getConfig($styleSettings, 'texts.blog_title', 'Teen Patti Master');
+$blogIntro = tpmst_getConfig($styleSettings, 'texts.blog_intro', 'Teen Patti, a game synonymous with festivity and strategy in India, has made a grand entrance into the digital realm with Teen Patti Master. This online avatar has garnered widespread attention, capturing the essence of the beloved card game while offering a convenient and engaging platform for enthusiasts worldwide. This blog post explores the intricacies of Teen Patti Master, an online card game available as an easy-to-install APK and provides tips for those looking to claim victory at its vibrant tables.');
+$blogSubtitle1 = tpmst_getConfig($styleSettings, 'texts.blog_subtitle_1', 'Teen Patti Master: Conquer the Tables of India\'s Most Beloved Card Game');
+$blogSubtitle2 = tpmst_getConfig($styleSettings, 'texts.blog_subtitle_2', 'Strategies for Winning at Teen Patti Master');
+$blogSubtitle3 = tpmst_getConfig($styleSettings, 'texts.blog_subtitle_3', 'The Social Side of Teen Patti Master');
+$blogSubtitle4 = tpmst_getConfig($styleSettings, 'texts.blog_subtitle_4', 'Ensuring Fair Play and Security');
+$blogSubtitle5 = tpmst_getConfig($styleSettings, 'texts.blog_subtitle_5', 'Final Thoughts on Mastering Teen Patti');
+$blogWhyChoose = tpmst_getConfig($styleSettings, 'texts.blog_why_choose', 'Why 5 Million+ Players Choose Teen Patti Master:');
+$blogInstantWithdrawals = tpmst_getConfig($styleSettings, 'texts.blog_instant_withdrawals', 'Instant Withdrawals - Cash out winnings in 5 minutes to UPI/Paytm');
+$blogWelcomeBonus = tpmst_getConfig($styleSettings, 'texts.blog_welcome_bonus', '₹3,000 Welcome Bonus - New players start with bonus chips');
+$blogRngCertified = tpmst_getConfig($styleSettings, 'texts.blog_rng_certified', 'RNG Certified - Verified fair play by Gaming Labs International');
+$blogGameVariations = tpmst_getConfig($styleSettings, 'texts.blog_game_variations', '10+ Game Variations - Classic, AK47, Muflis, and more');
+$blogLiveTables = tpmst_getConfig($styleSettings, 'texts.blog_live_tables', '24/7 Live Tables - Play with real players anytime');
+$blogTournaments = tpmst_getConfig($styleSettings, 'texts.blog_tournaments', 'Join tournaments with prize pools up to ₹10 Lakhs!');
+$blogStrategyIntro = tpmst_getConfig($styleSettings, 'texts.blog_strategy_intro', 'Success in Teen Patti Master doesn\'t just rely on luck; it\'s about understanding the psychology of your opponents and making strategic bets. Here are some tips to up your game:');
+$blogStrategyStartSmall = tpmst_getConfig($styleSettings, 'texts.blog_strategy_start_small', 'Start Small: As you familiarize yourself with the gameplay, it\'s wise to begin with smaller bets. This approach allows you to gauge the competition and minimize potential losses.');
+$blogStrategyObserve = tpmst_getConfig($styleSettings, 'texts.blog_strategy_observe', 'Observe Your Opponents: Pay close attention to the betting patterns and behavior of other players. This insight can be crucial when deciding your next move.');
+$blogStrategyFold = tpmst_getConfig($styleSettings, 'texts.blog_strategy_fold', 'Know When to Fold: One of the key strategies in Teen Patti is knowing when to exit the game. If the odds are against you, it\'s better to fold early and conserve your chips for future rounds and increase your chances of winning real cash.');
+$blogSocial = tpmst_getConfig($styleSettings, 'texts.blog_social', 'Teen Patti Master isn\'t just about the thrill of the game; it\'s also a social platform. The game allows you to connect with friends and family, making it an engaging way to stay in touch and enjoy some friendly competition.');
+$blogSecurity = tpmst_getConfig($styleSettings, 'texts.blog_security', 'The developers of Teen Patti Master have gone to great lengths to ensure that the game is fair and secure. With random number generators and encryption protocols, your gaming experience is both fair and your personal information is secure.');
+$blogFinalThoughts = tpmst_getConfig($styleSettings, 'texts.blog_final_thoughts', 'Whether you\'re looking to understand the basics of the game or seeking advanced strategies to dominate the tables, Teen Patti Master offers an immersive experience that\'s both challenging and rewarding. Remember, while the game is accessible to players of varying skill levels, the key to success lies in responsible gaming. Set yourself limits, and enjoy the game for the entertainment it provides. Ready to test your skills and join the ranks of Teen Patti champions? Download the Teen Patti Master APK today to enjoy the best online 3 Patti experience, and may your cards be ever in your favor!');
+
+// 印地语内容
+$hindiTitle = tpmst_getConfig($styleSettings, 'texts.hindi_title', 'पत्ती मास्टर, ऑनलाइन तीन पत्ती, तीन पत्ती गेम');
+$hindiContent = tpmst_getConfig($styleSettings, 'texts.hindi_content', 'तीन पत्ती मास्टर भारत का सबसे पसंदीदा ऑनलाइन तीन पत्ती गेम है, जो रणनीति और भाग्य का रोमांचक मिश्रण प्रदान करता है। तीन पत्ती गेम में लाखों खिलाड़ियों के साथ जुड़ें, असली नकद जीतें और अपने कौशल का प्रदर्शन करें। अभी डाउनलोड करें और मज़ा शुरू करें!');
+
+// FAQ文本
+$faqQuestion1 = tpmst_getConfig($styleSettings, 'texts.faq_question_1', 'What is Teen Patti Master?');
+$faqAnswer1 = tpmst_getConfig($styleSettings, 'texts.faq_answer_1', 'Teen Patti Master is India\'s best online card game, also known as तीन पत्ती मास्टर or teen patti master, which combines strategy and luck for real cash prizes. It\'s a multiplayer teen patti game featuring AK47 and Muflis variations that supports online play on Android and iOS. Join millions to bet, bluff, and earn up to ₹10,000 per day.');
+$faqQuestion2 = tpmst_getConfig($styleSettings, 'texts.faq_question_2', 'How to Download Teen Patti Master APK?');
+$faqAnswer2 = tpmst_getConfig($styleSettings, 'texts.faq_answer_2', 'To get adolescent patti master apk, go to a reliable website and select the download option for the most recent version (for example, the 2025 update). It\'s free, safe, and mobile-friendly. Install by activating "unknown sources" in your settings, and then sign up for a bonus. Avoid phony websites; an approved APK guarantees safe online adolescent patti games.');
+$faqQuestion3 = tpmst_getConfig($styleSettings, 'texts.faq_question_3', 'Is Teen Patti Master Safe to Play?');
+$faqAnswer3 = tpmst_getConfig($styleSettings, 'texts.faq_answer_3', 'Yes, Teen Patti Master is designed to be secure, with features like as SSL encryption to protect data. As a reputable adolescent patti game, it seeks to discourage cheating and promote responsible gaming. UPI/Paytm allows you to safely withdraw actual cash. To avoid dangers, download ऑनलाइन तीन पत्ती from official sources only.');
+$faqQuestion4 = tpmst_getConfig($styleSettings, 'texts.faq_question_4', 'How to Win Real Cash in Teen Patti Master?');
+$faqAnswer4 = tpmst_getConfig($styleSettings, 'texts.faq_answer_4', 'Win real money in Teen Patti Master by mastering methods like bluffing with strong hands (e.g., Trail or Pure Sequence). Begin with minimal wagers with adolescent patti game modes, then employ bonuses and play varieties such as Dragon vs. Tiger. Withdraw your earnings promptly. Practice in free mode to increase your chances of winning in online adolescent patti events.');
+$faqQuestion5 = tpmst_getConfig($styleSettings, 'texts.faq_question_5', 'What are the Game Variants in Teen Patti Master?');
+$faqAnswer5 = tpmst_getConfig($styleSettings, 'texts.faq_answer_5', 'Teen Patti Master includes interesting variants such as AK47 (where A, K, 4, and 7 are wild cards), Muflis (where the lowest-ranking hand wins), and Joker for varied teen patti action. Rummy, Slots, and Ludo are some more real-money options. These improve ऑनलाइन तीन पत्ती strategy; apply them to maximize bonuses and victories.');
+
+// 用户评价文本
+$testimonial1Name = tpmst_getConfig($styleSettings, 'texts.testimonial_1_name', 'Rajesh Kumar (Mumbai)');
+$testimonial1Rating = tpmst_getConfig($styleSettings, 'texts.testimonial_1_rating', '⭐⭐⭐⭐⭐');
+$testimonial1Content = tpmst_getConfig($styleSettings, 'texts.testimonial_1_content', 'Best Teen Patti app I\'ve used! I\'ve been playing for 6 months and won ₹45,000 so far. Withdrawals are super fast - money hits my Paytm in 10 minutes. The AK47 variant is my favorite!');
+$testimonial1Footer = tpmst_getConfig($styleSettings, 'texts.testimonial_1_footer', 'Verified Purchase | Playing Since: Aug 2023 | Total Winnings: ₹45,230');
+$testimonial2Name = tpmst_getConfig($styleSettings, 'texts.testimonial_2_name', 'Priya Sharma (Delhi)');
+$testimonial2Rating = tpmst_getConfig($styleSettings, 'texts.testimonial_2_rating', '⭐⭐⭐⭐⭐');
+$testimonial2Content = tpmst_getConfig($styleSettings, 'texts.testimonial_2_content', 'Fair game, genuine payments. I was skeptical at first, but after winning ₹8,000 in my first month, I\'m hooked! Customer support is responsive. Only suggestion: add more tournament timings.');
+$testimonial2Footer = tpmst_getConfig($styleSettings, 'texts.testimonial_2_footer', 'Verified Purchase | Playing Since: Nov 2023 | Total Winnings: ₹23,500');
+$testimonial3Name = tpmst_getConfig($styleSettings, 'texts.testimonial_3_name', 'Amit Patel (Ahmedabad)');
+$testimonial3Rating = tpmst_getConfig($styleSettings, 'texts.testimonial_3_rating', '⭐⭐⭐⭐☆');
+$testimonial3Content = tpmst_getConfig($styleSettings, 'texts.testimonial_3_content', 'Love the game variety. Won ₹12K last week in a tournament. Sometimes laggy during peak hours (8-10 PM), but overall solid experience.');
+$testimonial3Footer = tpmst_getConfig($styleSettings, 'texts.testimonial_3_footer', 'Verified Purchase | Playing Since: Sept 2023 | Total Winnings: ₹31,800');
+
+// 用户评价头像（可配置，默认使用本地资源）
+$defaultTestimonialAvatar1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Rajesh-Kumar-1.avif');
+$defaultTestimonialAvatar2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Priya-Sharma-2.avif');
+$defaultTestimonialAvatar3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Amit-Patel-3.avif');
+$testimonialAvatar1 = tpmst_getConfig($styleSettings, 'testimonials.avatar_1', '') ?: $defaultTestimonialAvatar1;
+$testimonialAvatar2 = tpmst_getConfig($styleSettings, 'testimonials.avatar_2', '') ?: $defaultTestimonialAvatar2;
+$testimonialAvatar3 = tpmst_getConfig($styleSettings, 'testimonials.avatar_3', '') ?: $defaultTestimonialAvatar3;
+
+// 样式配置
+$sectionPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'styles.section_padding', '60/100') . 'px'));
+$textColor = tpmst_getConfig($styleSettings, 'styles.text_color', '#ffffff');
+$headingColor = tpmst_getConfig($styleSettings, 'styles.heading_color', '#ffd700');
+$linkColor = tpmst_getConfig($styleSettings, 'styles.link_color', '#ff6b35');
+
+// 轮播区域配置（第一个块）
+$sliderDisplayRaw = tpmst_getConfig($styleSettings, 'slider.display', 'yes');
+// 处理显示配置：支持 yes/no 或 0/1
+// 注意：根据配置定义 slider.display => 显示轮播:select:yes|yes,no
+// 所以 "yes" 表示显示，"no" 表示不显示
+// 但前端可能提交 "1" 表示显示，"0" 表示不显示（需要确认实际行为）
+if ($sliderDisplayRaw === 'yes' || $sliderDisplayRaw === true || $sliderDisplayRaw === 'true' || $sliderDisplayRaw === 1 || $sliderDisplayRaw === '1') {
+    $sliderDisplay = true; // yes 或 1 = 显示
+} elseif ($sliderDisplayRaw === 'no' || $sliderDisplayRaw === false || $sliderDisplayRaw === 'false' || $sliderDisplayRaw === 0 || $sliderDisplayRaw === '0') {
+    $sliderDisplay = false; // no 或 0 = 不显示
+} else {
+    $sliderDisplay = true; // 默认显示
+}
+
+$sliderItemsJson = tpmst_getConfig($styleSettings, 'slider.items', '[]');
+$sliderItems = json_decode($sliderItemsJson, true) ?: [];
+
+$sliderAutoplayRaw = tpmst_getConfig($styleSettings, 'slider.autoplay', 'yes');
+// 处理自动播放配置
+if ($sliderAutoplayRaw === 0 || $sliderAutoplayRaw === '0') {
+    $sliderAutoplay = true; // 0 = yes = 自动播放
+} elseif ($sliderAutoplayRaw === 1 || $sliderAutoplayRaw === '1') {
+    $sliderAutoplay = false; // 1 = no = 不自动播放
+} elseif ($sliderAutoplayRaw === 'yes' || $sliderAutoplayRaw === true || $sliderAutoplayRaw === 'true') {
+    $sliderAutoplay = true; // yes = 自动播放
+} elseif ($sliderAutoplayRaw === 'no' || $sliderAutoplayRaw === false || $sliderAutoplayRaw === 'false') {
+    $sliderAutoplay = false; // no = 不自动播放
+} else {
+    $sliderAutoplay = true; // 默认自动播放
+}
+
+$sliderAutoplayInterval = (int)tpmst_getConfig($styleSettings, 'slider.autoplay_interval', '5000');
+$sliderBgColor = tpmst_color($colors, 'slider_bg', tpmst_getConfig($styleSettings, 'slider.bg_color', '#0c0060'));
+$sliderBgGradientEnd = tpmst_color($colors, 'slider_bg_gradient_end', '#1d1850');
+
+// 默认轮播图片（如果未配置或配置为空，使用默认图片）
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/download-btn-m.webp');
+
+// 读取轮播图片配置：如果未配置或配置为空字符串，使用默认图片
+// 统一使用点号分隔的键名格式（如 slider.banner_image_mobile）
+$getSliderImage = function($key) use ($styleSettings) {
+    // 只使用点号分隔的键名格式，确保配置项唯一
+    if (array_key_exists($key, $styleSettings)) {
+        $value = $styleSettings[$key];
+        // 转换为字符串并去除空白
+        $value = trim((string)$value);
+        // 如果值不为空，返回该值
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    // 如果键不存在或值为空字符串，返回null（表示使用默认值）
+    return null;
+};
+
+$defaultSliderBannerMobile = $getSliderImage('slider.banner_image_mobile');
+$defaultSliderBannerDesktop = $getSliderImage('slider.banner_image_desktop');
+$defaultSliderDownloadBtn = $getSliderImage('slider.download_btn_image');
+
+// 如果没有配置轮播项，使用默认的单个轮播项
+if (empty($sliderItems)) {
+    // 如果配置值为空（null或空字符串），使用默认图片
+    // 确保总是有值：如果配置值为null或空字符串，使用默认值
+    $bannerMobileCheck = !empty($defaultSliderBannerMobile) && trim((string)$defaultSliderBannerMobile) !== '';
+    $bannerDesktopCheck = !empty($defaultSliderBannerDesktop) && trim((string)$defaultSliderBannerDesktop) !== '';
+    $downloadBtnCheck = !empty($defaultSliderDownloadBtn) && trim((string)$defaultSliderDownloadBtn) !== '';
+    $sliderItems = [[
+        'banner_mobile' => $bannerMobileCheck 
+            ? trim((string)$defaultSliderBannerMobile) 
+            : $defaultBannerMobile,
+        'banner_desktop' => $bannerDesktopCheck 
+            ? trim((string)$defaultSliderBannerDesktop) 
+            : $defaultBannerDesktop,
+        'download_btn' => $downloadBtnCheck 
+            ? trim((string)$defaultSliderDownloadBtn) 
+            : $defaultDownloadBtn,
+        'banner_alt' => '100000 earn on teenpatti master',
+        'download_btn_alt' => 'DOWNLOAD APP'
+    ]];
+}
+
+// 处理轮播项，确保所有字段都有值
+foreach ($sliderItems as &$item) {
+    // 如果配置值为空，使用默认图片
+    // 确保总是有值：如果为空或空字符串，使用默认值
+    if (empty($item['banner_mobile'])) {
+        $item['banner_mobile'] = (!empty($defaultSliderBannerMobile) && trim((string)$defaultSliderBannerMobile) !== '') 
+            ? trim((string)$defaultSliderBannerMobile) 
+            : $defaultBannerMobile;
+    }
+    if (empty($item['banner_desktop'])) {
+        $item['banner_desktop'] = (!empty($defaultSliderBannerDesktop) && trim((string)$defaultSliderBannerDesktop) !== '') 
+            ? trim((string)$defaultSliderBannerDesktop) 
+            : $defaultBannerDesktop;
+    }
+    if (empty($item['download_btn'])) {
+        $item['download_btn'] = (!empty($defaultSliderDownloadBtn) && trim((string)$defaultSliderDownloadBtn) !== '') 
+            ? trim((string)$defaultSliderDownloadBtn) 
+            : $defaultDownloadBtn;
+    }
+    if (empty($item['banner_alt'])) {
+        $item['banner_alt'] = '100000 earn on teenpatti master';
+    }
+    if (empty($item['download_btn_alt'])) {
+        $item['download_btn_alt'] = 'DOWNLOAD APP';
+    }
+}
+unset($item);
+?>
+
+<main class="tpmst-content">
+    <!-- 轮播区域（第一个块） -->
+    <?php if ($sliderDisplay): ?>
+    <div class="rs-slider slider-style2 md-mt--75" id="tpmst-content-slider">
+        <div class="slider slider-slide-1">
+            <?php foreach ($sliderItems as $index => $sliderItem): ?>
+            <div class="slider-item<?= $index === 0 ? ' active' : '' ?>" data-slide-index="<?= $index ?>">
+                <div class="container">
+                    <div class="slider-inner ml--12 mr--12 justify-content-center">
+                        <div class="slide-bg-layer text-center">
+                            <picture>
+                                <?php 
+                                // 确保图片路径不为空，如果为空则使用默认值
+                                $bannerMobileFinal = !empty($sliderItem['banner_mobile']) ? $sliderItem['banner_mobile'] : $defaultBannerMobile;
+                                $bannerDesktopFinal = !empty($sliderItem['banner_desktop']) ? $sliderItem['banner_desktop'] : $defaultBannerDesktop;
+                                ?>
+                                <?php 
+                                // 确保路径不为空，如果为空则使用默认值（双重保险）
+                                if (empty($bannerMobileFinal) || trim($bannerMobileFinal) === '') {
+                                    $bannerMobileFinal = $defaultBannerMobile;
+                                }
+                                if (empty($bannerDesktopFinal) || trim($bannerDesktopFinal) === '') {
+                                    $bannerDesktopFinal = $defaultBannerDesktop;
+                                }
+                                // 确保最终使用的路径不为空（使用三元运算符确保总是有值）
+                                $finalImgSrc = !empty($bannerMobileFinal) && trim($bannerMobileFinal) !== '' 
+                                    ? $bannerMobileFinal 
+                                    : (!empty($bannerDesktopFinal) && trim($bannerDesktopFinal) !== '' 
+                                        ? $bannerDesktopFinal 
+                                        : $defaultBannerMobile);
+                                // 最终安全检查：如果仍然为空，使用默认值
+                                if (empty($finalImgSrc) || trim($finalImgSrc) === '') {
+                                    $finalImgSrc = $defaultBannerMobile;
+                                }
+                                ?>
+                                <?php if (!empty($bannerMobileFinal) && trim($bannerMobileFinal) !== ''): ?>
+                                <source media="(max-width: 768px)" type="image/jpg" class="lazy-loading2" srcset="<?= htmlspecialchars($bannerMobileFinal) ?>" data-srcset="<?= htmlspecialchars($bannerMobileFinal) ?>">
+                                <?php endif; ?>
+                                <?php if (!empty($bannerDesktopFinal) && trim($bannerDesktopFinal) !== ''): ?>
+                                <source media="(min-width: 769px)" type="image/webp" srcset="<?= htmlspecialchars($bannerDesktopFinal) ?>">
+                                <?php endif; ?>
+                                <img class="slide-img mt--90 md-mt-0" 
+                                     width="375" 
+                                     height="500" 
+                                     src="<?= htmlspecialchars($finalImgSrc) ?>" 
+                                     alt="<?= htmlspecialchars($sliderItem['banner_alt']) ?>" 
+                                     fetchpriority="high" 
+                                     decoding="async">
+                            </picture>
+                        </div>
+                        <?php if (!empty($sliderItem['download_btn'])): ?>
+                        <p class="download-btn">
+                            <picture>
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
+                                <img class="download-icon animation-scale lazy-loading" 
+                                     src="<?= htmlspecialchars($sliderItem['download_btn']) ?>" 
+                                     fetchpriority="high" 
+                                     decoding="async" 
+                                     width="210" 
+                                     height="54" 
+                                     alt="<?= htmlspecialchars($sliderItem['download_btn_alt']) ?>">
+                            </picture>
+                        </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <?php if (count($sliderItems) > 1): ?>
+        <!-- 轮播导航箭头 -->
+        <button class="rs-slider-arrow prev" onclick="tpmstSliderPrev()">‹</button>
+        <button class="rs-slider-arrow next" onclick="tpmstSliderNext()">›</button>
+        
+        <!-- 轮播导航点 -->
+        <div class="rs-slider-nav">
+            <?php foreach ($sliderItems as $index => $sliderItem): ?>
+            <span class="rs-slider-nav-dot<?= $index === 0 ? ' active' : '' ?>" 
+                  onclick="tpmstSliderGoTo(<?= $index ?>)"></span>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+    
+    <style>
+        .tpmst-content {
+            width: 100%;
+        }
+        
+        /* 轮播区域样式 */
+        .rs-slider {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, <?= htmlspecialchars($sliderBgColor) ?> 0%, <?= htmlspecialchars($sliderBgGradientEnd) ?> 100%);
+        }
+        
+        .rs-slider .slider {
+            position: relative;
+        }
+        
+        .rs-slider .slider-item {
+            display: none;
+            position: relative;
+        }
+        
+        .rs-slider .slider-item.active {
+            display: block;
+        }
+        
+        .rs-slider .slider-inner {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            position: relative;
+            /* 移除最大高度限制，让高度由图片决定 */
+            max-height: none !important;
+            height: auto !important;
+            margin-left: -12px;
+            margin-right: -12px;
+        }
+        
+        .rs-slider .slide-bg-layer {
+            text-align: center;
+            width: 100%;
+        }
+        
+        .rs-slider .slide-img {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin-top: -90px;
+        }
+        
+        .rs-slider .download-btn {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: pointer;
+            margin: 0;
+            z-index: 10;
+        }
+        
+        .rs-slider .download-icon {
+            animation: zoomBtn 2s infinite;
+        }
+        
+        @keyframes zoomBtn {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 轮播导航点 */
+        .rs-slider-nav {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+        
+        .rs-slider-nav-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .rs-slider-nav-dot.active {
+            background: #ffd700;
+            width: 30px;
+            border-radius: 6px;
+        }
+        
+        /* 轮播箭头 */
+        .rs-slider-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .rs-slider-arrow:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        
+        .rs-slider-arrow.prev {
+            left: 20px;
+        }
+        
+        .rs-slider-arrow.next {
+            right: 20px;
+        }
+        
+        @media (max-width: 991px) {
+            .rs-slider {
+                margin-top: -75px;
+            }
+            
+            .rs-slider .slide-img {
+                margin-top: 0;
+                min-width: 100vw !important;
+            }
+            
+            .rs-slider-arrow {
+                display: none;
+            }
+        }
+        
+        /* 优势区域样式 - 确保 full-bg1 full-our 等类名生效 */
+        .full-bg1 {
+            width: 100%;
+            display: block;
+        }
+        
+        .full-our {
+            width: 100%;
+            display: block;
+        }
+        
+        .our-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
+        .game-ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .game-intro {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .our-img-icon {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .tpmst-section {
+            padding: <?= $sectionPadding ?> 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .tpmst-section-title {
+            font-size: clamp(28px, 6vw, 42px);
+            font-weight: 700;
+            color: <?= htmlspecialchars($headingColor) ?>;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .tpmst-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        
+        .tpmst-card-icon {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-card-icon img {
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .tpmst-game-card {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tpmst-game-image {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-game-image img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        
+        .tpmst-game-content {
+            padding: 15px;
+        }
+        
+        .tpmst-card {
+            background: <?= htmlspecialchars($cardBg) ?>;
+            border-radius: 12px;
+            padding: 30px;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: 1px solid <?= htmlspecialchars($cardBorder) ?>;
+        }
+        
+        .tpmst-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px <?= htmlspecialchars($cardShadow) ?>;
+        }
+        
+        .tpmst-card-title {
+            font-size: clamp(20px, 4vw, 24px);
+            color: <?= htmlspecialchars($headingColor) ?>;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .tpmst-card-text {
+            color: <?= htmlspecialchars($textColor) ?>;
+            line-height: 1.8;
+            font-size: clamp(14px, 3vw, 16px);
+        }
+        
+        .tpmst-app-info {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 600px;
+            margin: 40px auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tpmst-app-info table {
+            width: 100%;
+            color: <?= htmlspecialchars($textColor) ?>;
+        }
+        
+        .tpmst-app-info td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tpmst-app-info td:first-child {
+            font-weight: 600;
+            color: <?= htmlspecialchars($headingColor) ?>;
+        }
+        
+        .tpmst-card-icon {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-card-icon img {
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .tpmst-game-card {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tpmst-game-image {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-game-image img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        
+        .tpmst-game-content {
+            padding: 15px;
+        }
+        
+        .tpmst-testimonial {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border-left: 4px solid <?= htmlspecialchars($linkColor) ?>;
+        }
+        
+        .tpmst-testimonial-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-testimonial-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        
+        .tpmst-testimonial-author {
+            font-weight: 600;
+            color: <?= htmlspecialchars($headingColor) ?>;
+            margin-bottom: 10px;
+        }
+        
+        .tpmst-testimonial-rating {
+            color: <?= htmlspecialchars($headingColor) ?>;
+            margin-bottom: 15px;
+        }
+        
+        .tpmst-faq-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tpmst-faq-question {
+            padding: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: <?= htmlspecialchars($headingColor) ?>;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .tpmst-faq-answer {
+            padding: 0 20px 20px;
+            color: <?= htmlspecialchars($textColor) ?>;
+            display: none;
+            line-height: 1.8;
+        }
+        
+        .tpmst-faq-item.active .tpmst-faq-answer {
+            display: block;
+        }
+        
+        /* 移动端导航 */
+        .tpmst-mobile-nav {
+            display: none;
+            background: #3038ac;
+        }
+        
+        .tpmst-secondary-nav {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 13px 0;
+        }
+        
+        .tpmst-secondary-nav li {
+            margin: 0 20px;
+        }
+        
+        .tpmst-secondary-nav a {
+            color: <?= htmlspecialchars($baseMainColor) ?>;
+            text-decoration: none;
+            font-weight: 700;
+            padding: 9px 24px;
+            display: block;
+        }
+        
+        /* 移动端导航背景 */
+        .tpmst-mobile-nav {
+            background: <?= htmlspecialchars($mobileNavBg) ?>;
+        }
+        
+        /* 博客内容区域 */
+        .tpmst-blog-section {
+            padding: 90px 0;
+            background: <?= htmlspecialchars($blogBg) ?>;
+        }
+        
+        .tpmst-content-blog {
+            font-size: 16px;
+            font-weight: 400;
+            line-height: 18px;
+            letter-spacing: 0;
+            color: #fff;
+        }
+        
+        .tpmst-content-blog p {
+            margin-top: 30px;
+        }
+        
+        .tpmst-section-title-text {
+            text-align: center;
+            font-weight: 400;
+            font-size: 26px;
+            line-height: 26px;
+            color: <?= htmlspecialchars($baseMainColor) ?>;
+            margin-bottom: 30px;
+        }
+        
+        .tpmst-sub-title-text {
+            font-size: 26px;
+            text-align: center;
+            padding-top: 60px;
+            font-weight: 400;
+            color: <?= htmlspecialchars($baseMainColor) ?>;
+        }
+        
+        .tpmst-content-blog b {
+            font-weight: 700;
+            color: <?= htmlspecialchars($baseMainColor) ?>;
+        }
+        
+        .tpmst-blog-ul-list {
+            padding-left: 20px;
+            margin-top: 30px;
+        }
+        
+        .tpmst-blog-ul-list li {
+            margin-top: 20px;
+        }
+        
+        .tpmst-app-info-table {
+            width: 100%;
+            color: #fff;
+            margin-top: 1rem;
+            border-collapse: collapse;
+        }
+        
+        .tpmst-app-info-table td {
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+        }
+        
+        .tpmst-app-info-table thead td {
+            background-color: #f8f9fa;
+            color: #000;
+        }
+        
+        /* 免责声明 */
+        .tpmst-disclaimer-section {
+            padding: 19px 0 15px;
+            background: <?= htmlspecialchars($disclaimerBg) ?>;
+        }
+        
+        .tpmst-disclaimer-text {
+            font-size: 12px;
+            line-height: 19px;
+            color: <?= htmlspecialchars($baseMainColor) ?>;
+            margin: 0;
+            padding: 0 5px;
+        }
+        
+        /* 浮动下载按钮 */
+        .tpmst-fd {
+            right: 80px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            flex-direction: column;
+            border-radius: 16px;
+        }
+        
+        .tpmst-fd-icon {
+            width: 200px;
+            height: 327px;
+        }
+        
+        /* 移动端下载按钮 */
+        .tpmst-download-btn-mobile {
+            position: fixed;
+            z-index: 100;
+            bottom: 0;
+            width: 100%;
+            cursor: pointer;
+            display: none;
+        }
+        
+        .tpmst-mobile-download-content {
+            padding: 0 54px;
+            text-align: center;
+            margin: 0;
+        }
+        
+        .tpmst-download-icon {
+            max-height: 65px;
+        }
+        
+        @media (max-width: 991px) {
+            .tpmst-mobile-nav {
+                display: block;
+            }
+            
+            .tpmst-fd {
+                right: 3px;
+                top: 60% !important;
+            }
+            
+            .tpmst-fd-icon {
+                width: 105px;
+                height: 170px;
+            }
+            
+            .tpmst-blog-section {
+                padding: 45px 0 30px;
+            }
+            
+            .tpmst-sub-title-text {
+                padding-top: 30px;
+                font-size: 17px;
+            }
+            
+            .tpmst-content-blog {
+                font-size: 12px;
+                line-height: 16px;
+            }
+            
+            .tpmst-section-title-text {
+                font-size: 17px;
+                line-height: 22px;
+            }
+            
+            .tpmst-disclaimer-text {
+                font-size: 10px;
+                padding: 5px;
+            }
+            
+            #tpmst-mobile-download-btn {
+                display: block;
+            }
+        }
+        
+        @media (max-width: 767px) {
+            .tpmst-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .tpmst-app-info {
+                padding: 20px;
+            }
+            
+            .tpmst-secondary-nav li {
+                margin: 0 5px;
+            }
+            
+            .tpmst-secondary-nav a {
+                padding: 9px 24px;
+            }
+        }
+    </style>
+    
+    <!-- 优势区域 -->
+    <?php if ($advantagesDisplay === 'yes'): ?>
+    <section class="<?= htmlspecialchars(trim($advantagesSectionClasses)) ?>" style="background: <?= htmlspecialchars($advantagesBgColor) ?>;">
+        <div class="container our-container">
+            <h2 class="category-title text-center pb-39 d-none d-lg-block"><?= htmlspecialchars($advantagesTitle) ?></h2>
+            <ul class="game-ul row align-items-stretch p-0 mb-0 text-center">
+                <li class="col">
+                    <div class="game-intro pb-22 pt-17 pr-15 pl-15 md-pb-0 md-pt-0 md-pl-0 md-pr-0">
+                        <p class="mb-10">
+                            <img class="our-img-icon lazy-loading s85x85 r-wh" width="85" height="85"
+                                src="<?= htmlspecialchars($advantageIcon1) ?>"
+                                alt="<?= htmlspecialchars($gameTeenPattiSpeed) ?>">
+                        </p>
+                        <h3 class="fs-6 color-4e fw-bolder md-mb-15"><?= htmlspecialchars($gameTeenPattiSpeed) ?></h3>
+                        <p class="pl-10 text-light fs-6 line19 d-none d-lg-block"><?= htmlspecialchars($gameTeenPattiSpeedDesc) ?></p>
+                        <p class="m-0 pt-20 md-pt-0">
+                            <span class="label <?= htmlspecialchars(trim($advantagesDownloadBtnClasses)) ?>">Download</span>
+                        </p>
+                    </div>
+                </li>
+                <li class="col">
+                    <div class="game-intro pb-22 pt-17 pr-15 pl-15 md-pb-0 md-pt-0 md-pl-0 md-pr-0">
+                        <p class="mb-10">
+                            <img class="our-img-icon lazy-loading s85x85 r-wh" width="85" height="85"
+                                src="<?= htmlspecialchars($advantageIcon2) ?>"
+                                alt="<?= htmlspecialchars($gameRummyMaster) ?>">
+                        </p>
+                        <h3 class="fs-6 color-4e fw-bolder md-mb-15"><?= htmlspecialchars($gameRummyMaster) ?></h3>
+                        <p class="pl-10 text-light fs-6 line19 sm-pl-0 d-none d-lg-block"><?= htmlspecialchars($gameRummyMasterDesc) ?></p>
+                        <p class="m-0 pt-20 md-pt-0">
+                            <span class="<?= htmlspecialchars(trim($advantagesDownloadBtnClasses)) ?>">Download</span>
+                        </p>
+                    </div>
+                </li>
+                <li class="col">
+                    <div class="game-intro pb-22 pt-17 pr-15 pl-15 md-pb-0 md-pt-0 md-pl-0 md-pr-0">
+                        <p class="mb-10">
+                            <img class="our-img-icon lazy-loading s85x85 r-wh" width="85" height="85"
+                                src="<?= htmlspecialchars($advantageIcon3) ?>"
+                                alt="<?= htmlspecialchars($gameSlotsMeta) ?>">
+                        </p>
+                        <h3 class="fs-6 color-4e fw-bolder md-mb-15"><?= htmlspecialchars($gameSlotsMeta) ?></h3>
+                        <p class="pl-10 text-light fs-6 line19 sm-pl-0 d-none d-lg-block"><?= htmlspecialchars($gameSlotsMetaDesc) ?></p>
+                        <p class="m-0 pt-20 md-pt-0">
+                            <span class="<?= htmlspecialchars(trim($advantagesDownloadBtnClasses)) ?>">Download</span>
+                        </p>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </section>
+    <?php endif; ?>
+    
+    <!-- 游戏介绍区域 -->
+    <?php if ($gamesDisplay === 'yes'): ?>
+    <section class="tpmst-section" style="background: <?= htmlspecialchars($gamesBgColor) ?>;">
+        <h2 class="tpmst-section-title"><?= htmlspecialchars($gamesTitle) ?></h2>
+        <div class="tpmst-grid">
+            <div class="tpmst-card tpmst-game-card">
+                <div class="tpmst-game-image">
+                    <picture>
+                        <source media="(max-width: 768px)" type="image/webp" srcset="<?= htmlspecialchars($gameImage1Mobile) ?>">
+                        <source media="(min-width: 769px)" type="image/webp" srcset="<?= htmlspecialchars($gameImage1Desktop) ?>">
+                        <img src="<?= htmlspecialchars($gameImage1Mobile) ?>" alt="<?= htmlspecialchars($gameTeenPatti) ?>" width="357" height="209">
+                    </picture>
+                </div>
+                <div class="tpmst-game-content">
+                    <h3 class="tpmst-card-title"><?= htmlspecialchars($gameTeenPatti) ?></h3>
+                    <p class="tpmst-card-text"><?= htmlspecialchars($gameTeenPattiDesc) ?></p>
+                </div>
+            </div>
+            <div class="tpmst-card tpmst-game-card">
+                <div class="tpmst-game-image">
+                    <img src="<?= htmlspecialchars($gameImage2) ?>" alt="<?= htmlspecialchars($gameRummy) ?>" width="357" height="209">
+                </div>
+                <div class="tpmst-game-content">
+                    <h3 class="tpmst-card-title"><?= htmlspecialchars($gameRummy) ?></h3>
+                    <p class="tpmst-card-text"><?= htmlspecialchars($gameRummyDesc) ?></p>
+                </div>
+            </div>
+            <div class="tpmst-card tpmst-game-card">
+                <div class="tpmst-game-image">
+                    <img src="<?= htmlspecialchars($gameImage3) ?>" alt="<?= htmlspecialchars($gameSlots) ?>" width="357" height="209">
+                </div>
+                <div class="tpmst-game-content">
+                    <h3 class="tpmst-card-title"><?= htmlspecialchars($gameSlots) ?></h3>
+                    <p class="tpmst-card-text"><?= htmlspecialchars($gameSlotsDesc) ?></p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+    
+    <!-- 应用信息区域 -->
+    <?php if ($appInfoDisplay === 'yes'): ?>
+    <section class="tpmst-section" style="background: <?= htmlspecialchars($gamesBgColor) ?>;">
+        <div class="tpmst-app-info">
+            <h2 class="tpmst-section-title" style="margin-bottom: 30px;"><?= htmlspecialchars($appName) ?></h2>
+            <table>
+                <tr>
+                    <td><strong>App Name:</strong></td>
+                    <td><?= htmlspecialchars($appName) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Size:</strong></td>
+                    <td><?= htmlspecialchars($appSize) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Version:</strong></td>
+                    <td><?= htmlspecialchars($appVersion) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Updated:</strong></td>
+                    <td><?= htmlspecialchars($appUpdated) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Requires:</strong></td>
+                    <td><?= htmlspecialchars($appRequires) ?></td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="tpmst-card" style="max-width: 800px; margin: 40px auto;">
+            <h3 class="tpmst-card-title"><?= htmlspecialchars($blogWhyChoose) ?></h3>
+            <ul class="tpmst-card-text" style="list-style: none; padding-left: 0;">
+                <li style="margin-bottom: 15px;">✓ <strong><?= htmlspecialchars($blogInstantWithdrawals) ?></strong></li>
+                <li style="margin-bottom: 15px;">✓ <strong><?= htmlspecialchars($blogWelcomeBonus) ?></strong></li>
+                <li style="margin-bottom: 15px;">✓ <strong><?= htmlspecialchars($blogRngCertified) ?></strong></li>
+                <li style="margin-bottom: 15px;">✓ <strong><?= htmlspecialchars($blogGameVariations) ?></strong></li>
+                <li style="margin-bottom: 15px;">✓ <strong><?= htmlspecialchars($blogLiveTables) ?></strong></li>
+            </ul>
+            <p class="tpmst-card-text" style="margin-top: 20px; font-weight: 600; color: <?= htmlspecialchars($headingColor) ?>;">
+                <?= htmlspecialchars($blogTournaments) ?>
+            </p>
+        </div>
+    </section>
+    <?php endif; ?>
+    
+    <!-- 策略区域 -->
+    <section class="tpmst-section" style="background: <?= htmlspecialchars($advantagesBgColor) ?>;">
+        <h2 class="tpmst-section-title"><?= htmlspecialchars($blogSubtitle2) ?></h2>
+        <div class="tpmst-card" style="max-width: 800px; margin: 0 auto;">
+            <p class="tpmst-card-text" style="margin-bottom: 20px;">
+                <?= nl2br(htmlspecialchars(str_replace('Teen Patti Master', $appName, $blogStrategyIntro))) ?>
+            </p>
+            <div style="margin-top: 30px;">
+                <?= nl2br(htmlspecialchars($blogStrategyStartSmall)) ?>
+            </div>
+            <div style="margin-top: 30px;">
+                <?= nl2br(htmlspecialchars($blogStrategyObserve)) ?>
+            </div>
+            <div style="margin-top: 30px;">
+                <?= nl2br(htmlspecialchars($blogStrategyFold)) ?>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 用户评价区域 -->
+    <?php if ($testimonialsDisplay === 'yes'): ?>
+    <section class="tpmst-section" style="background: <?= htmlspecialchars($testimonialsBgColor) ?>;">
+        <h2 class="tpmst-section-title"><?= htmlspecialchars($testimonialsTitle) ?></h2>
+        <div style="max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+            <div class="tpmst-testimonial">
+                <div class="tpmst-testimonial-header">
+                    <img src="<?= htmlspecialchars($testimonialAvatar1) ?>" alt="<?= htmlspecialchars($testimonial1Name) ?>" class="tpmst-testimonial-avatar">
+                    <div>
+                        <div class="tpmst-testimonial-author"><?= htmlspecialchars($testimonial1Name) ?></div>
+                        <div class="tpmst-testimonial-rating"><?= htmlspecialchars($testimonial1Rating) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-card-text"><?= htmlspecialchars($testimonial1Content) ?></p>
+                <p class="tpmst-card-text" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 10px;">
+                    <?= htmlspecialchars($testimonial1Footer) ?>
+                </p>
+            </div>
+            <div class="tpmst-testimonial">
+                <div class="tpmst-testimonial-header">
+                    <img src="<?= htmlspecialchars($testimonialAvatar2) ?>" alt="<?= htmlspecialchars($testimonial2Name) ?>" class="tpmst-testimonial-avatar">
+                    <div>
+                        <div class="tpmst-testimonial-author"><?= htmlspecialchars($testimonial2Name) ?></div>
+                        <div class="tpmst-testimonial-rating"><?= htmlspecialchars($testimonial2Rating) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-card-text"><?= htmlspecialchars($testimonial2Content) ?></p>
+                <p class="tpmst-card-text" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 10px;">
+                    <?= htmlspecialchars($testimonial2Footer) ?>
+                </p>
+            </div>
+            <div class="tpmst-testimonial">
+                <div class="tpmst-testimonial-header">
+                    <img src="<?= htmlspecialchars($testimonialAvatar3) ?>" alt="<?= htmlspecialchars($testimonial3Name) ?>" class="tpmst-testimonial-avatar">
+                    <div>
+                        <div class="tpmst-testimonial-author"><?= htmlspecialchars($testimonial3Name) ?></div>
+                        <div class="tpmst-testimonial-rating"><?= htmlspecialchars($testimonial3Rating) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-card-text"><?= htmlspecialchars($testimonial3Content) ?></p>
+                <p class="tpmst-card-text" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 10px;">
+                    <?= htmlspecialchars($testimonial3Footer) ?>
+                </p>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+    
+    <!-- FAQ区域 -->
+    <?php if ($faqDisplay === 'yes'): ?>
+    <section class="tpmst-section" id="faqs" style="background: <?= htmlspecialchars($faqBgColor) ?>;">
+        <h2 class="tpmst-section-title"><?= htmlspecialchars($faqTitle) ?></h2>
+        <div style="max-width: 900px; margin: 0 auto;">
+            <div class="tpmst-faq-item">
+                <div class="tpmst-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span><?= htmlspecialchars($faqQuestion1) ?></span>
+                    <span>+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($faqAnswer1)) ?>
+                </div>
+            </div>
+            <div class="tpmst-faq-item">
+                <div class="tpmst-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span><?= htmlspecialchars($faqQuestion2) ?></span>
+                    <span>+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($faqAnswer2)) ?>
+                </div>
+            </div>
+            <div class="tpmst-faq-item">
+                <div class="tpmst-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span><?= htmlspecialchars($faqQuestion3) ?></span>
+                    <span>+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($faqAnswer3)) ?>
+                </div>
+            </div>
+            <div class="tpmst-faq-item">
+                <div class="tpmst-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span><?= htmlspecialchars($faqQuestion4) ?></span>
+                    <span>+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($faqAnswer4)) ?>
+                </div>
+            </div>
+            <div class="tpmst-faq-item">
+                <div class="tpmst-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span><?= htmlspecialchars($faqQuestion5) ?></span>
+                    <span>+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($faqAnswer5)) ?>
+                </div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+    
+    <!-- 移动端导航（仅移动端显示） -->
+    <section class="tpmst-mobile-nav">
+        <div class="container">
+            <ul class="tpmst-secondary-nav">
+                <li><a href="#home"><?= htmlspecialchars($mobileNavHome) ?></a></li>
+                <li><a href="#blog"><?= htmlspecialchars($mobileNavBlog) ?></a></li>
+                <li><a href="#faqs"><?= htmlspecialchars($mobileNavFaq) ?></a></li>
+                <li><a href="#about"><?= htmlspecialchars($mobileNavAbout) ?></a></li>
+            </ul>
+        </div>
+    </section>
+    
+    <!-- 博客详细内容区域 -->
+    <section class="tpmst-blog-section" style="background: linear-gradient(180deg, #0d0e13 0%, #1d1850 100%);">
+        <div class="container tpmst-blog-container">
+            <article class="tpmst-content-blog">
+                <div class="tpmst-section-title-wrapper">
+                    <h1 class="tpmst-section-title-text">Teen Patti Master</h1>
+                </div>
+                
+                <div class="tpmst-blog-detail">
+                    <!-- 应用信息表格 -->
+                    <section class="tpmst-app-info-section">
+                        <table class="tpmst-app-info-table">
+                            <thead>
+                                <tr>
+                                    <td style="text-align:right"><strong>App Name:</strong></td>
+                                    <td><strong><?= htmlspecialchars($appName) ?></strong></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="text-align:right"><strong>Size:</strong></td>
+                                    <td><?= htmlspecialchars($appSize) ?></td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:right"><strong>Version:</strong></td>
+                                    <td><?= htmlspecialchars($appVersion) ?></td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:right"><strong>Updated:</strong></td>
+                                    <td><?= htmlspecialchars($appUpdated) ?></td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:right"><strong>Requires:</strong></td>
+                                    <td><?= htmlspecialchars($appRequires) ?></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </section>
+                    
+                    <!-- 详细内容 -->
+                    <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($blogSubtitle1) ?></h2>
+                    <p><?= nl2br(htmlspecialchars(str_replace('Teen Patti Master', $appName, $blogIntro))) ?></p>
+                    
+                    <p><?= htmlspecialchars($blogWhyChoose) ?></p>
+                    <ul class="tpmst-blog-ul-list">
+                        <li><strong><?= htmlspecialchars($blogInstantWithdrawals) ?></strong></li>
+                        <li><strong><?= htmlspecialchars($blogWelcomeBonus) ?></strong></li>
+                        <li><strong><?= htmlspecialchars($blogRngCertified) ?></strong></li>
+                        <li><strong><?= htmlspecialchars($blogGameVariations) ?></strong></li>
+                        <li><strong><?= htmlspecialchars($blogLiveTables) ?></strong></li>
+                    </ul>
+                    <p><?= htmlspecialchars($blogTournaments) ?></p>
+                    
+                    <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($blogSubtitle2) ?></h2>
+                    <p>Success in <?= htmlspecialchars($appName) ?> doesn't just rely on luck; it's about understanding the psychology of your opponents and making strategic bets. Here are some tips to up your game:</p>
+                    <p><?= nl2br(htmlspecialchars($blogStrategyStartSmall)) ?></p>
+                    <p><?= nl2br(htmlspecialchars($blogStrategyObserve)) ?></p>
+                    <p><?= nl2br(htmlspecialchars($blogStrategyFold)) ?></p>
+                    
+                    <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($blogSubtitle3) ?></h2>
+                    <p><?= nl2br(htmlspecialchars($blogSocial)) ?></p>
+                    
+                    <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($blogSubtitle4) ?></h2>
+                    <p><?= nl2br(htmlspecialchars($blogSecurity)) ?></p>
+                    
+                    <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($blogSubtitle5) ?></h2>
+                    <p><?= nl2br(htmlspecialchars($blogFinalThoughts)) ?></p>
+                </div>
+            </article>
+        </div>
+    </section>
+    
+    <!-- 印地语内容区域 -->
+    <section class="tpmst-hindi-section">
+        <div class="container tpmst-blog-container">
+            <article class="tpmst-content-blog">
+                <h2 class="tpmst-sub-title-text"><?= htmlspecialchars($hindiTitle) ?></h2>
+                <p><?= nl2br(htmlspecialchars($hindiContent)) ?></p>
+            </article>
+        </div>
+    </section>
+    
+    <!-- 免责声明区域 -->
+    <section class="tpmst-disclaimer-section">
+        <div class="container">
+            <p class="tpmst-disclaimer-text"><?= nl2br(htmlspecialchars($disclaimerText)) ?></p>
+        </div>
+    </section>
+    
+    <!-- 浮动下载按钮（桌面端） -->
+    <div class="tpmst-fd position-fixed">
+        <span class="tpmst-download-btn">
+            <?php 
+            $levitateImage = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/levitate-download.avif');
+            ?>
+            <img class="tpmst-fd-icon" 
+                 src="<?= htmlspecialchars($levitateImage) ?>" 
+                 alt="Teen Patti Master DOWNLOAD APP" 
+                 width="200" 
+                 height="327">
+        </span>
+    </div>
+    
+    <!-- 移动端下载按钮（底部固定） -->
+    <div id="tpmst-mobile-download-btn" class="tpmst-download-btn-mobile" style="display: none;">
+        <p class="tpmst-mobile-download-content">
+            <?php 
+            $mobileDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/download-btn-m.webp');
+            ?>
+            <img class="tpmst-download-icon" 
+                 src="<?= htmlspecialchars($mobileDownloadBtn) ?>" 
+                 alt="DOWNLOAD APP" 
+                 width="252" 
+                 height="65">
+        </p>
+    </div>
+    
+    <!-- 页面内容 -->
+    <?php 
+    $pageContent = $page ? $page->getData('content') : '';
+    if ($pageContent): 
+    ?>
+    <section class="tpmst-section" style="background: <?= htmlspecialchars($advantagesBgColor) ?>;">
+        <div class="tpmst-card" style="max-width: 900px; margin: 0 auto;">
+            <div class="tpmst-card-text" style="white-space: pre-wrap;">
+                <?= nl2br(htmlspecialchars($pageContent)) ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+</main>
+
+<script>
+// 轮播功能
+(function() {
+    const slider = document.getElementById('tpmst-content-slider');
+    if (!slider) return;
+    
+    const items = slider.querySelectorAll('.slider-item');
+    const dots = slider.querySelectorAll('.rs-slider-nav-dot');
+    let currentIndex = 0;
+    let autoplayTimer = null;
+    
+    const autoplayEnabled = <?= $sliderAutoplay ? 'true' : 'false' ?>;
+    const autoplayInterval = <?= $sliderAutoplayInterval ?>;
+    
+    function showSlide(index) {
+        // 隐藏所有slide
+        items.forEach((item, i) => {
+            if (i === index) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+        
+        // 更新导航点
+        dots.forEach((dot, i) => {
+            if (i === index) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        });
+        
+        currentIndex = index;
+    }
+    
+    function nextSlide() {
+        const nextIndex = (currentIndex + 1) % items.length;
+        showSlide(nextIndex);
+    }
+    
+    function prevSlide() {
+        const prevIndex = (currentIndex - 1 + items.length) % items.length;
+        showSlide(prevIndex);
+    }
+    
+    function goToSlide(index) {
+        if (index >= 0 && index < items.length) {
+            showSlide(index);
+        }
+    }
+    
+    // 自动播放
+    function startAutoplay() {
+        if (autoplayEnabled && items.length > 1) {
+            stopAutoplay();
+            autoplayTimer = setInterval(nextSlide, autoplayInterval);
+        }
+    }
+    
+    function stopAutoplay() {
+        if (autoplayTimer) {
+            clearInterval(autoplayTimer);
+            autoplayTimer = null;
+        }
+    }
+    
+    // 鼠标悬停时暂停自动播放
+    slider.addEventListener('mouseenter', stopAutoplay);
+    slider.addEventListener('mouseleave', startAutoplay);
+    
+    // 全局函数（供按钮调用）
+    window.tpmstSliderNext = nextSlide;
+    window.tpmstSliderPrev = prevSlide;
+    window.tpmstSliderGoTo = goToSlide;
+    
+    // 启动自动播放
+    startAutoplay();
+})();
+
+// FAQ 交互
+document.addEventListener('DOMContentLoaded', function() {
+    const faqItems = document.querySelectorAll('.tpmst-faq-item');
+    faqItems.forEach(item => {
+        const question = item.querySelector('.tpmst-faq-question');
+        question.addEventListener('click', function() {
+            const isActive = item.classList.contains('active');
+            // 关闭其他FAQ项
+            faqItems.forEach(otherItem => {
+                if (otherItem !== item) {
+                    otherItem.classList.remove('active');
+                    otherItem.querySelector('.tpmst-faq-question span:last-child').textContent = '+';
+                }
+            });
+            // 切换当前FAQ项
+            item.classList.toggle('active');
+            const icon = question.querySelector('span:last-child');
+            icon.textContent = item.classList.contains('active') ? '−' : '+';
+        });
+    });
+});
+</script>

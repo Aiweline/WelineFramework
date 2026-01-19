@@ -1,0 +1,761 @@
+<?php
+/**
+ * Teen Patti Master 模板 - Header
+ * TPMST Template - Header
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:header => 头部区域设置（Header）
+ * header.logo.display => 显示Logo:select:yes|yes,no
+ * header.logo.url => Logo地址:textarea:|默认使用本地logo-icon-128.avif
+ * header.logo.width => Logo宽度:responsive:70/70|px[移动端和PC端默认70px，如果未配置height则自动使用width值]
+ * header.logo.height => Logo高度:responsive:|px[可选，默认使用width值保持正方形]
+ * header.navigation.display => 显示导航:select:yes|yes,no
+ * header.navigation.bg_color => 导航背景色:color:#1a1a2e
+ * header.navigation.text_color => 导航文字颜色:color:#ffffff
+ * header.navigation.link_color => 链接颜色:color:#ffffff
+ * header.navigation.link_hover_color => 链接悬停颜色:color:#ffd700
+ * header.navigation.items => 导航项配置:textarea:Home=>\r\nAbout=>\r\nBlog=>\r\nFAQs=>|配置格式：名字=>url，一行一个。示例：Home=>#home\nAbout=>#about\n联系我们=>/contact\n外部链接=>https://example.com。注意：1) 每行一个导航项；2) 使用=>分隔名字和URL；3) URL为空时自动使用#作为链接；4) 支持锚点链接(#开头)、相对路径(/开头)和完整URL(http/https开头)
+ * header.download_button.text => 下载按钮文本:text:DOWNLOAD APP
+ * header.download_button.display => 显示下载按钮:select:yes|yes,no
+ * header.download_button.bg_color => 按钮背景颜色:color:#ff6b35
+ * header.download_button.hover_bg_color => 按钮悬停背景色:color:#ff5722
+ * header.download_button.text_color => 按钮文字颜色:color:#ffffff
+ * header.download_button.size => 按钮字体大小:responsive:14/18|px[MD]
+ * header.download_button.padding => 按钮内边距:responsive:12/16|px[MD]
+ * header.download_button.border_radius => 按钮圆角:number:8|px
+ * header.download_button.extra_classes => 按钮额外CSS类:textarea:common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder|可配置额外的CSS类名，多个类名用空格分隔
+ * 
+ * group:banner => Banner横幅区域设置（Hero/Banner）
+ * banner.display => 显示Banner区域:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地banner-2.jpg
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地banner-03.webp
+ * banner.alt => Banner图片描述:text:100000 earn on teenpatti master
+ * banner.download_btn_image => Banner中下载按钮图片:textarea:|默认使用本地download-btn-m.webp
+ * banner.download_btn_alt => Banner中下载按钮描述:text:DOWNLOAD APP
+ * banner.bg_color => Banner背景颜色:color:#0c0060
+ * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]
+ * banner.slider_classes => Banner轮播区域CSS类:textarea:rs-slider slider-style2 md-mt--75|可配置轮播区域的CSS类名，多个类名用空格分隔
+ * 
+ * group:color_scheme => 全局色系设置
+ * color_scheme.scheme => 选择色系:select:default|default,blue,purple,green,red
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'tpmst';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'tpmst';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色辅助函数：从颜色配置获取颜色，如果不存在则使用默认值
+if (!function_exists('tpmst_color')) {
+    function tpmst_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+// Helper functions
+if (!function_exists('tpmst_getConfig')) {
+    function tpmst_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        // 如果值为空字符串且提供了默认值，则使用默认值
+        // 这样可以确保空字符串配置不会覆盖默认值
+        if ($value === '' && $default !== '') {
+            return $default;
+        }
+        return $value;
+    }
+}
+
+if (!function_exists('tpmst_parseResponsive')) {
+    function tpmst_parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    if (count($parts) === 2) {
+        $result['mobile'] = trim($parts[0]);
+        $result['desktop'] = trim($parts[1]);
+    } else {
+        $result['mobile'] = $result['desktop'] = trim($parts[0] ?? '');
+    }
+    return $result;
+    }
+}
+
+if (!function_exists('tpmst_genResponsiveCSS')) {
+    function tpmst_genResponsiveCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+// Logo配置 - 优先使用页面logo，其次配置，最后使用默认本地logo
+$pageLogo = ($page && $page->getData('logo')) ? trim((string)$page->getData('logo')) : '';
+$configLogo = trim(tpmst_getConfig($styleSettings, 'header.logo.url', ''));
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/logo-icon-128.avif');
+
+// 确定最终使用的logo URL：如果页面logo或配置logo为空，使用默认logo
+// 确保 $logoUrl 始终有值（至少是默认logo）
+if (!empty($pageLogo)) {
+    $logoUrl = $pageLogo;
+} elseif (!empty($configLogo)) {
+    $logoUrl = $configLogo;
+} else {
+    // 如果页面logo和配置logo都为空，使用默认logo
+    $logoUrl = $defaultLogoUrl;
+}
+
+// 最终安全检查：如果logoUrl仍然为空（理论上不应该发生），使用默认logo
+if (empty($logoUrl)) {
+    $logoUrl = $defaultLogoUrl;
+}
+// Logo显示配置 - 数据库存储：0=yes(显示), 1=no(不显示)
+// 注意：这里的逻辑是反的，0表示显示，1表示不显示
+$logoDisplayRaw = tpmst_getConfig($styleSettings, 'header.logo.display', 'yes');
+// 处理数据库存储的0/1值：0=显示, 1=不显示
+if ($logoDisplayRaw === 0 || $logoDisplayRaw === '0') {
+    $logoDisplay = true; // 0 = yes = 显示
+} elseif ($logoDisplayRaw === 1 || $logoDisplayRaw === '1') {
+    $logoDisplay = false; // 1 = no = 不显示
+} elseif ($logoDisplayRaw === 'yes' || $logoDisplayRaw === true || $logoDisplayRaw === 'true') {
+    $logoDisplay = true; // yes = 显示
+} elseif ($logoDisplayRaw === 'no' || $logoDisplayRaw === false || $logoDisplayRaw === 'false') {
+    $logoDisplay = false; // no = 不显示
+} else {
+    // 默认显示（兼容空值或其他值，默认yes）
+    $logoDisplay = true;
+}
+$logoWidth = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.logo.width', '70/70') . 'px'));
+// 如果未配置height，自动使用width值保持正方形
+$logoHeightConfig = tpmst_getConfig($styleSettings, 'header.logo.height', '');
+if (empty($logoHeightConfig)) {
+    // 未配置height，使用width值
+    $logoHeight = $logoWidth;
+} else {
+    $logoHeight = tpmst_genResponsiveCSS(tpmst_parseResponsive($logoHeightConfig . 'px'));
+}
+
+// 导航配置（优先使用颜色配置，否则使用样式设置）
+$navDisplay = tpmst_getConfig($styleSettings, 'header.navigation.display', 'yes');
+$navBgColor = tpmst_color($colors, 'nav_bg', tpmst_getConfig($styleSettings, 'header.navigation.bg_color', '#0a0a0f'));
+$navBgScrolled = tpmst_color($colors, 'nav_bg_scrolled', 'rgba(10, 10, 15, 0.98)');
+$navTextColor = tpmst_color($colors, 'nav_text', tpmst_getConfig($styleSettings, 'header.navigation.text_color', '#ffffff'));
+$navLinkColor = tpmst_color($colors, 'nav_link', tpmst_getConfig($styleSettings, 'header.navigation.link_color', '#ffffff'));
+$navLinkHoverColor = tpmst_color($colors, 'nav_link_hover', tpmst_getConfig($styleSettings, 'header.navigation.link_hover_color', '#ffd700'));
+$navLinkActiveColor = tpmst_color($colors, 'nav_link_active', '#ffd700');
+
+// 创建半透明的hover背景色（降低透明度）
+if (!function_exists('tpmst_makeTransparent')) {
+    function tpmst_makeTransparent($color, $opacity = 0.7) {
+        // 如果是rgba格式，提取RGB值并应用新的透明度
+        if (preg_match('/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/', $color, $matches)) {
+            $r = intval($matches[1]);
+            $g = intval($matches[2]);
+            $b = intval($matches[3]);
+            return "rgba($r, $g, $b, $opacity)";
+        }
+        // 如果是hex格式，转换为rgba
+        if (preg_match('/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/', $color)) {
+            $hex = str_replace('#', '', $color);
+            if (strlen($hex) === 3) {
+                $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+            }
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+            return "rgba($r, $g, $b, $opacity)";
+        }
+        // 默认返回半透明黑色
+        return "rgba(10, 10, 15, $opacity)";
+    }
+}
+$navBgHover = tpmst_makeTransparent($navBgColor, 0.7);
+
+// 获取导航项配置（支持textarea格式：名字=>url，一行一个）
+$defaultNavItems = "Home=>
+About=>
+Blog=>
+FAQs=>";
+$navItemsConfig = tpmst_getConfig($styleSettings, 'header.navigation.items', $defaultNavItems);
+
+// 如果配置值中包含 \n 转义符，转换为实际换行符
+if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+    $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+}
+
+$navItems = [];
+
+if (!empty($navItemsConfig)) {
+    // 尝试解析为JSON格式（向后兼容）
+    $jsonItems = json_decode($navItemsConfig, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($jsonItems) && !empty($jsonItems)) {
+        // JSON格式
+        $navItems = $jsonItems;
+    } else {
+        // Textarea格式：名字=>url，一行一个
+        // 支持 \n 和 \r\n 换行符
+        $lines = preg_split('/\r?\n/', $navItemsConfig);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) {
+                continue;
+            }
+            
+            // 解析 "名字=>url" 格式
+            if (strpos($line, '=>') !== false) {
+                $parts = explode('=>', $line, 2);
+                $text = trim($parts[0]);
+                $href = trim($parts[1] ?? '');
+                
+                if (!empty($text)) {
+                    // 如果 URL 为空，使用 # 作为默认链接
+                    $navItems[] = [
+                        'text' => $text,
+                        'href' => !empty($href) ? $href : '#'
+                    ];
+                }
+            } else {
+                // 如果没有 =>，尝试作为纯文本，使用 # 作为链接
+                if (!empty($line)) {
+                    $navItems[] = [
+                        'text' => $line,
+                        'href' => '#'
+                    ];
+                }
+            }
+        }
+    }
+}
+
+// 如果没有配置导航项，使用默认导航
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '#home'],
+        ['text' => 'About', 'href' => '#about'],
+        ['text' => 'Blog', 'href' => '#blog'],
+        ['text' => 'FAQs', 'href' => '#faqs'],
+    ];
+}
+
+// 处理导航项，确保所有字段都有值
+foreach ($navItems as &$item) {
+    // 确保有text和href字段
+    if (!isset($item['text']) || empty($item['text'])) {
+        $item['text'] = '';
+    }
+    if (!isset($item['href']) || empty($item['href'])) {
+        $item['href'] = '#';
+    }
+    
+    // 如果是相对路径且不是以#开头，添加#前缀（用于锚点链接）
+    if (!empty($item['href']) && 
+        !preg_match('/^(https?:\/\/|#|\/)/', $item['href'])) {
+        $item['href'] = '#' . ltrim($item['href'], '#');
+    }
+}
+unset($item);
+
+// Banner配置（优先使用颜色配置）
+$bannerDisplayRaw = tpmst_getConfig($styleSettings, 'banner.display', 'yes');
+// 处理显示配置：支持 yes/no 或兼容旧的 0/1 值
+// 统一转换为 yes/no 格式
+if ($bannerDisplayRaw === 'yes' || $bannerDisplayRaw === true || $bannerDisplayRaw === 'true' || $bannerDisplayRaw === 1 || $bannerDisplayRaw === '1') {
+    $bannerDisplay = 'yes'; // yes 或 1 = 显示
+} elseif ($bannerDisplayRaw === 'no' || $bannerDisplayRaw === false || $bannerDisplayRaw === 'false' || $bannerDisplayRaw === 0 || $bannerDisplayRaw === '0') {
+    $bannerDisplay = 'no'; // no 或 0 = 不显示
+} else {
+    $bannerDisplay = 'yes'; // 默认显示
+}
+$bannerAlt = tpmst_getConfig($styleSettings, 'banner.alt', '100000 earn on teenpatti master');
+$bannerDownloadBtnAlt = tpmst_getConfig($styleSettings, 'banner.download_btn_alt', 'DOWNLOAD APP');
+$bannerBgColor = tpmst_color($colors, 'hero_bg', tpmst_getConfig($styleSettings, 'banner.bg_color', '#0c0060'));
+$bannerBgGradientEnd = tpmst_color($colors, 'hero_bg_gradient_end', '#1d1850');
+$bannerSliderClasses = tpmst_getConfig($styleSettings, 'banner.slider_classes', 'rs-slider slider-style2 md-mt--75');
+
+// 默认Banner图片（如果未配置或配置为空，使用默认图片）
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/download-btn-m.webp');
+
+// 读取图片配置：如果未配置或配置为空字符串，使用默认图片
+// 统一使用点号分隔的键名格式（如 banner.image_mobile）
+$getBannerImage = function($key) use ($styleSettings) {
+    // 只使用点号分隔的键名格式，确保配置项唯一
+    if (array_key_exists($key, $styleSettings)) {
+        $value = $styleSettings[$key];
+        // 转换为字符串并去除空白
+        $value = trim((string)$value);
+        // 如果值不为空，返回该值
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    // 如果键不存在或值为空字符串，返回null（表示使用默认值）
+    return null;
+};
+
+$bannerImageMobile = $getBannerImage('banner.image_mobile');
+$bannerImageDesktop = $getBannerImage('banner.image_desktop');
+$bannerDownloadBtnImage = $getBannerImage('banner.download_btn_image');
+
+// 判断：如果配置值为空（包括空字符串、null、未设置），使用默认图片
+// 确保总是有值：如果配置值为null或空字符串，使用默认值
+$finalBannerMobile = (!empty($bannerImageMobile) && trim((string)$bannerImageMobile) !== '') 
+    ? trim((string)$bannerImageMobile) 
+    : $defaultBannerMobile;
+$finalBannerDesktop = (!empty($bannerImageDesktop) && trim((string)$bannerImageDesktop) !== '') 
+    ? trim((string)$bannerImageDesktop) 
+    : $defaultBannerDesktop;
+$finalDownloadBtn = (!empty($bannerDownloadBtnImage) && trim((string)$bannerDownloadBtnImage) !== '') 
+    ? trim((string)$bannerDownloadBtnImage) 
+    : $defaultDownloadBtn;
+
+// 下载按钮配置（优先使用颜色配置）
+$downloadBtnText = tpmst_getConfig($styleSettings, 'header.download_button.text', 'DOWNLOAD APP');
+
+$downloadBtnDisplay = tpmst_getConfig($styleSettings, 'header.download_button.display', 'yes');
+$downloadBtnExtraClasses = tpmst_getConfig($styleSettings, 'header.download_button.extra_classes', 'common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder');
+$downloadBtnBgColor = tpmst_color($colors, 'button_primary_bg', tpmst_getConfig($styleSettings, 'header.download_button.bg_color', 'linear-gradient(90deg, #ffd700 0%, #ffa500 100%)'));
+$downloadBtnHoverBg = tpmst_color($colors, 'button_primary_bg_hover', tpmst_getConfig($styleSettings, 'header.download_button.hover_bg_color', 'linear-gradient(90deg, #ffed4e 0%, #ff8c00 100%)'));
+$downloadBtnTextColor = tpmst_color($colors, 'button_primary_text', tpmst_getConfig($styleSettings, 'header.download_button.text_color', '#8b4513'));
+$downloadBtnShadow = tpmst_color($colors, 'button_primary_shadow', 'rgba(255, 215, 0, 0.3)');
+$downloadBtnShadowHover = tpmst_color($colors, 'button_primary_shadow_hover', 'rgba(255, 215, 0, 0.5)');
+$downloadBtnSize = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.size', '14/18') . 'px'));
+$downloadBtnPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.padding', '12/16') . 'px'));
+$downloadBtnRadius = tpmst_getConfig($styleSettings, 'header.download_button.border_radius', '8');
+
+// SEO信息
+$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : 'Teen Patti Master');
+$metaDescription = $page ? $page->getData('meta_description') : 'India\'s Best Real Cash Card Game - Play Teen Patti, Rummy, and Slots';
+$metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, slots, card game, real cash';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?></title>
+    
+    <!-- Favicon -->
+    <?php $pageIcon = $page ? ($page->getData('icon') ?: '') : ''; ?>
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <?php endif; ?>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
+    <?php endif; ?>
+    
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+    
+    <!-- 本地CSS资源 -->
+    <?php 
+    $localCssUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/css/home.css');
+    ?>
+    <link rel="stylesheet" type="text/css" href="<?= htmlspecialchars($localCssUrl) ?>">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", sans-serif;
+            background: <?= htmlspecialchars(tpmst_color($colors, 'body_bg', $bannerBgColor)) ?>;
+            color: <?= htmlspecialchars(tpmst_color($colors, 'text_primary', '#ffffff')) ?>;
+            line-height: 1.6;
+        }
+        
+        /* CSS变量定义（用于兼容原始CSS） */
+        :root {
+            --base-main-color: <?= htmlspecialchars(tpmst_color($colors, 'base_main_color', '#ffed4e')) ?>;
+        }
+        
+        /* 导航栏 - 始终显示，半透明背景 */
+        .tpmst-nav {
+            display: block !important;
+            background: <?= htmlspecialchars($navBgHover) ?> !important;
+            padding: 12px 24px;
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            z-index: 9999;
+            box-shadow: 0 2px 10px <?= htmlspecialchars(tpmst_color($colors, 'shadow_nav', 'rgba(0,0,0,0.5)')) ?>;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            min-height: 70px;
+            margin: 0;
+        }
+        
+        /* 滚动时的导航栏样式 */
+        .tpmst-nav.scrolled {
+            background: <?= htmlspecialchars($navBgScrolled) ?> !important;
+            box-shadow: 0 4px 20px <?= htmlspecialchars(tpmst_color($colors, 'shadow_nav_scrolled', 'rgba(0,0,0,0.7)')) ?>;
+            padding: 10px 24px;
+        }
+        
+        .tpmst-nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+        }
+        
+        .tpmst-nav-logo {
+            display: <?= $logoDisplay ? 'flex' : 'none' ?>;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .tpmst-nav-logo img {
+            width: <?= $logoWidth ?>;
+            height: <?= $logoHeight ?>;
+            display: block;
+            object-fit: contain;
+        }
+        
+        .tpmst-nav-links {
+            display: flex;
+            gap: 40px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            align-items: center;
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .tpmst-nav-links li {
+            margin: 0;
+            padding: 0;
+        }
+        
+        .tpmst-nav-links a {
+            color: <?= htmlspecialchars($navLinkColor) ?>;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 16px;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        /* Home链接高亮 */
+        .tpmst-nav-links a[href="#home"],
+        .tpmst-nav-links a[href="/home"],
+        .tpmst-nav-links a.active {
+            color: <?= htmlspecialchars($navLinkActiveColor) ?> !important;
+        }
+        
+        .tpmst-nav-links a:hover {
+            color: <?= htmlspecialchars($navLinkHoverColor) ?>;
+        }
+        
+        /* 下载按钮样式 */
+        .tpmst-nav-download-btn {
+            display: <?= $downloadBtnDisplay === 'yes' ? 'inline-block' : 'none' ?>;
+            background: <?= htmlspecialchars($downloadBtnBgColor) ?>;
+            color: <?= htmlspecialchars($downloadBtnTextColor) ?>;
+            padding: <?= $downloadBtnPadding ?>;
+            font-size: <?= $downloadBtnSize ?>;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: <?= $downloadBtnRadius ?>px;
+            transition: all 0.3s ease;
+            text-transform: none;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px <?= htmlspecialchars($downloadBtnShadow) ?>;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        
+        .tpmst-nav-download-btn:hover {
+            background: <?= htmlspecialchars($downloadBtnHoverBg) ?>;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px <?= htmlspecialchars($downloadBtnShadowHover) ?>;
+        }
+        
+        /* Hero/Banner Slider区域 - 使用源代码的类名 */
+        .rs-slider {
+            display: <?= $bannerDisplay === 'yes' ? 'block' : 'none' ?>;
+            background: linear-gradient(180deg, <?= htmlspecialchars($bannerBgColor) ?> 0%, <?= htmlspecialchars($bannerBgGradientEnd) ?> 100%);
+            position: relative;
+            overflow: hidden;
+            /* 高度由图片决定 */
+            height: auto !important;
+            max-height: none !important;
+        }
+        
+        .slider {
+            position: relative;
+            /* 让容器自适应内容高度 */
+            height: auto !important;
+            max-height: none !important;
+        }
+        
+        .slider-item {
+            position: relative;
+            /* 高度由内容决定 */
+            height: auto !important;
+            max-height: none !important;
+        }
+        
+        .slider-inner {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            position: relative;
+            /* 高度由图片决定，不设置固定高度 */
+            max-height: none !important;
+            height: auto !important;
+        }
+        
+        .slide-bg-layer {
+            text-align: center;
+            width: 100%;
+            /* 让背景层自适应图片 */
+        }
+        
+        .slide-img {
+            width: 100%;
+            height: auto;
+            display: block;
+            /* 图片高度自适应，决定容器高度 */
+            object-fit: contain;
+        }
+        
+        .slider-inner .download-btn {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        .slider-inner .download-btn img {
+            animation: zoomBtn 2s infinite;
+        }
+        
+        @keyframes zoomBtn {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        
+        @media (max-width: 991px) {
+            .rs-slider.md-mt--75 {
+                margin-top: -75px;
+            }
+            
+            .slide-img.md-mt-0 {
+                margin-top: 0;
+                min-width: 100vw !important;
+                /* 移动端也保持高度自适应 */
+                height: auto;
+            }
+        }
+        
+        /* 移动端优化 */
+        @media (max-width: 767px) {
+            .tpmst-nav {
+                padding: 10px 15px;
+            }
+            
+            .tpmst-nav.scrolled {
+                padding: 8px 15px;
+            }
+            
+            .tpmst-nav-container {
+                gap: 15px;
+            }
+            
+            .tpmst-nav-logo img {
+                width: 100px !important;
+            }
+            
+            .tpmst-nav-links {
+                gap: 20px;
+                font-size: 14px;
+            }
+            
+            .tpmst-nav-download-btn {
+                padding: 10px 18px;
+                font-size: 14px;
+            }
+            
+            .tpmst-hero {
+                padding: 40px 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .tpmst-nav-links {
+                gap: 15px;
+                font-size: 13px;
+            }
+            
+            .tpmst-nav-download-btn {
+                padding: 8px 15px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- 导航栏 -->
+    <nav class="tpmst-nav" id="tpmst-nav">
+        <div class="tpmst-nav-container">
+            <?php if ($logoDisplay && $logoUrl): ?>
+            <div class="tpmst-nav-logo">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Teen Patti Master" loading="lazy">
+            </div>
+            <?php endif; ?>
+            
+            <ul class="tpmst-nav-links">
+                <?php foreach ($navItems as $navItem): ?>
+                    <?php 
+                    $navHref = $navItem['href'] ?? '#';
+                    $navText = $navItem['text'] ?? '';
+                    $isActive = isset($navItem['active']) && $navItem['active'] === true;
+                    $navClass = $isActive ? 'active' : '';
+                    ?>
+                    <li><a href="<?= htmlspecialchars($navHref) ?>" class="<?= htmlspecialchars($navClass) ?>"><?= htmlspecialchars($navText) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($downloadBtnDisplay === 'yes'): ?>
+            <a href="#download" class="tpmst-nav-download-btn <?= htmlspecialchars(trim($downloadBtnExtraClasses)) ?>"><?= htmlspecialchars($downloadBtnText) ?></a>
+            <?php endif; ?>
+        </div>
+    </nav>
+    
+    <!-- Hero/Banner Slider区域 -->
+    <?php if ($bannerDisplay === 'yes'): ?>
+    <div class="<?= htmlspecialchars(trim($bannerSliderClasses)) ?>">
+        <div class="slider slider-slide-1">
+            <div class="slider-item">
+                <div class="container">
+                    <div class="slider-inner ml--12 mr--12 justify-content-center">
+                        <div class="slide-bg-layer text-center">
+                            <picture>
+                                <?php if ($finalBannerMobile): ?>
+                                <source media="(max-width: 768px)" type="image/jpg" class="lazy-loading2"
+                                    srcset="<?= htmlspecialchars($finalBannerMobile) ?>" data-srcset="<?= htmlspecialchars($finalBannerMobile) ?>" />
+                                <?php endif; ?>
+                                <?php if ($finalBannerDesktop): ?>
+                                <source media="(min-width: 769px)" type="image/webp"
+                                    srcset="<?= htmlspecialchars($finalBannerDesktop) ?>" />
+                                <?php endif; ?>
+                                <img class="slide-img mt--90 md-mt-0" 
+                                     width="375" 
+                                     height="500" 
+                                     src="<?= htmlspecialchars($finalBannerMobile ?: $finalBannerDesktop) ?>" 
+                                     alt="<?= htmlspecialchars($bannerAlt) ?>" 
+                                     fetchpriority="high" 
+                                     decoding="async">
+                            </picture>
+                        </div>
+                        <?php if ($finalDownloadBtn): ?>
+                        <p class="download-btn">
+                            <img class="download-icon animation-scale lazy-loading" 
+                                 src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
+                                 data-src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
+                                 fetchpriority="high" 
+                                 decoding="async" 
+                                 width="210" 
+                                 height="54" 
+                                 alt="<?= htmlspecialchars($bannerDownloadBtnAlt) ?>">
+                        </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+<script>
+// 导航栏滚动效果
+(function() {
+    const nav = document.getElementById('tpmst-nav');
+    if (!nav) return;
+    
+    const scrollThreshold = 50; // 滚动多少像素后触发样式变化
+    
+    function handleScroll() {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > scrollThreshold) {
+            nav.classList.add('scrolled');
+        } else {
+            nav.classList.remove('scrolled');
+        }
+    }
+    
+    // 使用节流优化滚动性能
+    let ticking = false;
+    window.addEventListener('scroll', function() {
+        if (!ticking) {
+            window.requestAnimationFrame(function() {
+                handleScroll();
+                ticking = false;
+            });
+            ticking = true;
+        }
+    });
+    
+    // 初始检查
+    handleScroll();
+})();
+</script>

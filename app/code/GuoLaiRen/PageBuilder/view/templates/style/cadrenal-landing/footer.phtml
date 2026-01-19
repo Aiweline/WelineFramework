@@ -1,0 +1,288 @@
+<?php
+/**
+ * Cadrenal Therapeutics Landing Page - Footer
+ * 生物制药公司落地页模板 - 页脚
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:footer_content => 页脚内容
+ * footer.company_name => 公司名称:text:Cadrenal Therapeutics
+ * footer.address => 公司地址:textarea:1234 Innovation Drive, Suite 100, San Francisco, CA 94107
+ * footer.phone => 联系电话:text:+1 (555) 123-4567
+ * footer.email => 联系邮箱:text:info@cadrenal.com
+ * footer.website => 公司网站:text:www.cadrenal.com
+ * 
+ * group:footer_links => 页脚链接
+ * footer.links_enabled => 显示链接:select:yes|yes,no
+ * footer.link1_text => 链接1文字:text:About Us
+ * footer.link1_url => 链接1地址:text:#
+ * footer.link2_text => 链接2文字:text:Products
+ * footer.link2_url => 链接2地址:text:#
+ * footer.link3_text => 链接3文字:text:Investor Relations
+ * footer.link3_url => 链接3地址:text:#
+ * footer.link4_text => 链接4文字:text:News & Media
+ * footer.link4_url => 链接4地址:text:#
+ * footer.link5_text => 链接5文字:text:Contact
+ * footer.link5_url => 链接5地址:text:#
+ * 
+ * group:legal => 法律声明
+ * legal.disclaimer => 免责声明:textarea:This website contains forward-looking statements regarding Cadrenal Therapeutics' business and prospects. Actual results may differ materially from those indicated by such statements.
+ * legal.disclaimer_color => 声明颜色:color:#666666
+ * legal.disclaimer_size => 声明大小:responsive:11/12|px
+ * legal.disclaimer_margin => 声明上边距:responsive:20/30|px
+ * 
+ * group:copyright => 版权信息
+ * copyright.text => 版权文字:text:© 2025 Cadrenal Therapeutics, Inc. All Rights Reserved.
+ * copyright.color => 版权颜色:color:#999999
+ * copyright.size => 版权大小:responsive:11/12|px
+ * 
+ * group:footer_style => 页脚样式
+ * footer.bg_color => 背景颜色:color:#2c3e50
+ * footer.text_color => 文字颜色:color:#ffffff
+ * footer.link_color => 链接颜色:color:#64b5f6
+ * footer.link_hover => 链接悬停:color:#90caf9
+ * footer.padding_v => 上下内边距:responsive:40/60|px
+ * footer.padding_h => 左右内边距:responsive:20/40|px
+ * footer.border_top => 顶部边框:select:yes|yes,no
+ * footer.border_color => 边框颜色:color:#1a2332
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getCadrenalFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseCadrenalFooterResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genCadrenalFooterCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 页脚内容配置
+$companyName = getCadrenalFooterConfig($styleSettings, 'footer.company_name', 'Cadrenal Therapeutics');
+$companyAddress = getCadrenalFooterConfig($styleSettings, 'footer.address', '1234 Innovation Drive, Suite 100, San Francisco, CA 94107');
+$companyPhone = getCadrenalFooterConfig($styleSettings, 'footer.phone', '+1 (555) 123-4567');
+$companyEmail = getCadrenalFooterConfig($styleSettings, 'footer.email', 'info@cadrenal.com');
+$companyWebsite = getCadrenalFooterConfig($styleSettings, 'footer.website', 'www.cadrenal.com');
+
+// 页脚链接配置
+$linksEnabled = getCadrenalFooterConfig($styleSettings, 'footer.links_enabled', 'yes');
+$footerLinks = [];
+for ($i = 1; $i <= 5; $i++) {
+    $text = getCadrenalFooterConfig($styleSettings, "footer.link{$i}_text", '');
+    $url = getCadrenalFooterConfig($styleSettings, "footer.link{$i}_url", '#');
+    if ($text) {
+        $footerLinks[] = ['text' => $text, 'url' => $url];
+    }
+}
+
+// 如果没有配置链接，使用默认链接
+if (empty($footerLinks)) {
+    $footerLinks = [
+        ['text' => 'About Us', 'url' => '#'],
+        ['text' => 'Products', 'url' => '#'],
+        ['text' => 'Investor Relations', 'url' => '#'],
+        ['text' => 'News & Media', 'url' => '#'],
+        ['text' => 'Contact', 'url' => '#'],
+    ];
+}
+
+// 法律声明配置
+$disclaimer = getCadrenalFooterConfig($styleSettings, 'legal.disclaimer', 'This website contains forward-looking statements regarding Cadrenal Therapeutics\' business and prospects. Actual results may differ materially from those indicated by such statements.');
+$disclaimerColor = getCadrenalFooterConfig($styleSettings, 'legal.disclaimer_color', '#666666');
+$disclaimerSize = genCadrenalFooterCSS(parseCadrenalFooterResponsive(getCadrenalFooterConfig($styleSettings, 'legal.disclaimer_size', '11/12') . 'px'));
+$disclaimerMargin = genCadrenalFooterCSS(parseCadrenalFooterResponsive(getCadrenalFooterConfig($styleSettings, 'legal.disclaimer_margin', '20/30') . 'px'));
+
+// 版权配置
+$copyrightText = getCadrenalFooterConfig($styleSettings, 'copyright.text', '© 2025 Cadrenal Therapeutics, Inc. All Rights Reserved.');
+$copyrightColor = getCadrenalFooterConfig($styleSettings, 'copyright.color', '#999999');
+$copyrightSize = genCadrenalFooterCSS(parseCadrenalFooterResponsive(getCadrenalFooterConfig($styleSettings, 'copyright.size', '11/12') . 'px'));
+
+// 页脚样式配置
+$footerBg = getCadrenalFooterConfig($styleSettings, 'footer.bg_color', '#2c3e50');
+$footerTextColor = getCadrenalFooterConfig($styleSettings, 'footer.text_color', '#ffffff');
+$footerLinkColor = getCadrenalFooterConfig($styleSettings, 'footer.link_color', '#64b5f6');
+$footerLinkHover = getCadrenalFooterConfig($styleSettings, 'footer.link_hover', '#90caf9');
+$footerPaddingV = genCadrenalFooterCSS(parseCadrenalFooterResponsive(getCadrenalFooterConfig($styleSettings, 'footer.padding_v', '40/60') . 'px'));
+$footerPaddingH = genCadrenalFooterCSS(parseCadrenalFooterResponsive(getCadrenalFooterConfig($styleSettings, 'footer.padding_h', '20/40') . 'px'));
+$footerBorderTop = getCadrenalFooterConfig($styleSettings, 'footer.border_top', 'yes');
+$footerBorderColor = getCadrenalFooterConfig($styleSettings, 'footer.border_color', '#1a2332');
+?>
+
+<style>
+.cadrenal-footer {
+    background-color: <?= htmlspecialchars($footerBg ?? '') ?>;
+    color: <?= htmlspecialchars($footerTextColor ?? '') ?>;
+    padding: <?= $footerPaddingV ?> <?= $footerPaddingH ?>;
+    <?php if ($footerBorderTop === 'yes'): ?>
+    border-top: 2px solid <?= htmlspecialchars($footerBorderColor ?? '') ?>;
+    <?php endif; ?>
+}
+
+.cadrenal-footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.cadrenal-footer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.cadrenal-footer-section h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: <?= htmlspecialchars($footerTextColor ?? '') ?>;
+}
+
+.cadrenal-footer-section p {
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+    color: <?= htmlspecialchars($footerTextColor ?? '') ?>;
+}
+
+.cadrenal-footer-section a {
+    color: <?= htmlspecialchars($footerLinkColor ?? '') ?>;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.cadrenal-footer-section a:hover {
+    color: <?= htmlspecialchars($footerLinkHover ?? '') ?>;
+    text-decoration: underline;
+}
+
+.cadrenal-footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.cadrenal-footer-links li {
+    margin: 0;
+}
+
+.cadrenal-footer-links a {
+    color: <?= htmlspecialchars($footerLinkColor ?? '') ?>;
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.3s ease;
+}
+
+.cadrenal-footer-links a:hover {
+    color: <?= htmlspecialchars($footerLinkHover ?? '') ?>;
+}
+
+.cadrenal-footer-disclaimer {
+    color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
+    font-size: <?= $disclaimerSize ?>;
+    line-height: 1.6;
+    margin-top: <?= $disclaimerMargin ?>;
+    margin-bottom: 16px;
+    text-align: center;
+    font-style: italic;
+}
+
+.cadrenal-footer-copyright {
+    color: <?= htmlspecialchars($copyrightColor ?? '') ?>;
+    font-size: <?= $copyrightSize ?>;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 768px) {
+    .cadrenal-footer-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+    
+    .cadrenal-footer-links {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+</style>
+
+    <footer class="cadrenal-footer">
+        <div class="cadrenal-footer-container">
+            <div class="cadrenal-footer-grid">
+                <!-- 公司信息 -->
+                <div class="cadrenal-footer-section">
+                    <h3><?= htmlspecialchars($companyName ?? '') ?></h3>
+                    <?php if ($companyAddress): ?>
+                    <p><?= htmlspecialchars($companyAddress ?? '') ?></p>
+                    <?php endif; ?>
+                    <?php if ($companyPhone): ?>
+                    <p><a href="tel:<?= htmlspecialchars($companyPhone ?? '') ?>"><?= htmlspecialchars($companyPhone ?? '') ?></a></p>
+                    <?php endif; ?>
+                    <?php if ($companyEmail): ?>
+                    <p><a href="mailto:<?= htmlspecialchars($companyEmail ?? '') ?>"><?= htmlspecialchars($companyEmail ?? '') ?></a></p>
+                    <?php endif; ?>
+                    <?php if ($companyWebsite): ?>
+                    <p><a href="https://<?= htmlspecialchars($companyWebsite ?? '') ?>" target="_blank"><?= htmlspecialchars($companyWebsite ?? '') ?></a></p>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- 导航链接 -->
+                <?php if ($linksEnabled === 'yes' && !empty($footerLinks)): ?>
+                <div class="cadrenal-footer-section">
+                    <h3>Quick Links</h3>
+                    <ul class="cadrenal-footer-links">
+                        <?php foreach ($footerLinks as $link): ?>
+                        <li><a href="<?= htmlspecialchars($link['url'] ?? '') ?>"><?= htmlspecialchars($link['text'] ?? '') ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 免责声明 -->
+            <?php if ($disclaimer): ?>
+            <div class="cadrenal-footer-disclaimer">
+                <?= nl2br(htmlspecialchars($disclaimer ?? '')) ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- 版权信息 -->
+            <div class="cadrenal-footer-copyright">
+                <?= htmlspecialchars($copyrightText ?? '') ?>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+
