@@ -24,19 +24,13 @@ use Weline\Queue\QueueInterface;
 
 class QueueCollect implements \Weline\Framework\Event\ObserverInterface
 {
-    private Helper $helper;
-
-    function __construct(Helper $helper)
-    {
-        $this->helper = $helper;
-    }
-
     /**
      * @inheritDoc
      * @throws \Exception
      */
     public function execute(Event &$event): void
     {
-        $this->helper::collect();
+        // Helper 是静态类，直接使用静态方法，无需通过依赖注入
+        Helper::collect();
     }
 }
