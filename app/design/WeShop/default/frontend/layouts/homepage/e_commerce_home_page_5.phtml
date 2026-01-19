@@ -1,0 +1,614 @@
+<?php
+/**
+ * 布局：首页 - E-commerce Home Page Variant 5
+ *
+ * 首页布局变体5，完全按照UI设计实现
+ * @meta.name {default="首页布局变体5",name="首页布局变体5",description="首页布局变体5，完全按照UI设计实现"}
+ * @meta.description {default="首页布局变体5，包含header、banner、产品推荐、分类等",name="首页布局变体5",description="首页布局变体5，包含header、banner、产品推荐、分类等"}
+ * @param title {default="首页",name="页面标题",description="页面标题"}
+ * @param banner {default="",name="Banner内容",description="Banner内容（HTML字符串）"}
+ * @param deals {default="",name="今日特价产品",description="今日特价产品列表（HTML字符串）"}
+ * @param categories {default="",name="分类列表",description="分类列表（HTML字符串）"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ */
+$meta = $this->getData('meta') ?? [];
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
+    
+    <!-- WeShop Theme CSS Variables -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_colors.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_spacing.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_typography.css') ?>">
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/variables/_borders.css') ?>">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+    
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* WeShop Homepage Layout 1 Styles */
+        .weshop-homepage-1 {
+            font-family: var(--weshop-font-display);
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-container {
+            max-width: var(--weshop-container-max-width);
+            margin: 0 auto;
+            padding: 0 var(--weshop-container-padding);
+        }
+        
+        /* Header Styles */
+        .weshop-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            width: 100%;
+            background-color: var(--weshop-surface);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .weshop-header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.75rem var(--weshop-container-padding);
+        }
+        
+        .weshop-logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .weshop-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-logo-icon {
+            color: var(--weshop-primary);
+            font-size: 1.875rem;
+        }
+        
+        .weshop-logo-text {
+            font-size: 1.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.025em;
+        }
+        
+        .weshop-nav {
+            display: none;
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-nav {
+                display: flex;
+                align-items: center;
+                gap: 1.5rem;
+            }
+        }
+        
+        .weshop-nav-link {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .weshop-nav-link:hover {
+            color: var(--weshop-primary);
+        }
+        
+        .weshop-search-section {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 2rem;
+        }
+        
+        .weshop-search-wrapper {
+            width: 100%;
+            max-width: 32rem;
+        }
+        
+        .weshop-search-form {
+            display: flex;
+            width: 100%;
+            height: 2.75rem;
+            border: 1px solid var(--weshop-border);
+            border-radius: var(--weshop-border-radius-lg);
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        
+        .weshop-search-form:focus-within {
+            box-shadow: 0 0 0 2px var(--weshop-primary);
+        }
+        
+        .weshop-search-input {
+            flex: 1;
+            padding: 0 1rem;
+            border: none;
+            background-color: var(--weshop-background);
+            color: var(--weshop-text-primary);
+            font-size: var(--weshop-font-size-sm);
+            outline: none;
+        }
+        
+        .weshop-search-input::placeholder {
+            color: var(--weshop-text-secondary);
+        }
+        
+        .weshop-search-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+            background-color: var(--weshop-primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-search-button:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        .weshop-user-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .weshop-action-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0 0.75rem;
+            height: 2.5rem;
+            border-radius: var(--weshop-border-radius-lg);
+            background-color: transparent;
+            color: var(--weshop-text-primary);
+            text-decoration: none;
+            transition: background-color 0.2s;
+            position: relative;
+        }
+        
+        .weshop-action-button:hover {
+            background-color: rgba(var(--weshop-primary-rgb), 0.1);
+        }
+        
+        .weshop-cart-badge {
+            position: absolute;
+            top: 0.25rem;
+            right: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1rem;
+            height: 1rem;
+            border-radius: var(--weshop-border-radius-full);
+            background-color: var(--weshop-secondary);
+            color: white;
+            font-size: 0.625rem;
+            font-weight: var(--weshop-font-weight-bold);
+        }
+        
+        /* Banner Styles */
+        .weshop-banner {
+            width: 100%;
+            border-radius: var(--weshop-border-radius-xl);
+            overflow: hidden;
+            margin-bottom: 3rem;
+        }
+        
+        .weshop-banner-content {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            padding: 3rem;
+        }
+        
+        .weshop-banner-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        
+        .weshop-banner-text {
+            position: relative;
+            z-index: 10;
+            max-width: 28rem;
+            color: white;
+        }
+        
+        .weshop-banner-title {
+            font-size: 2.25rem;
+            font-weight: var(--weshop-font-weight-bold);
+            margin-bottom: 1rem;
+        }
+        
+        .weshop-banner-description {
+            font-size: var(--weshop-font-size-lg);
+            margin-bottom: 1.5rem;
+        }
+        
+        .weshop-banner-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 84px;
+            height: 3rem;
+            padding: 0 1.5rem;
+            background-color: var(--weshop-primary);
+            color: white;
+            border: none;
+            border-radius: var(--weshop-border-radius-lg);
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: 0.015em;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .weshop-banner-button:hover {
+            background-color: var(--weshop-primary-hover);
+        }
+        
+        /* Deals Section */
+        .weshop-deals-section {
+            margin-bottom: 3rem;
+        }
+        
+        .weshop-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .weshop-section-title {
+            font-size: 1.5rem;
+            font-weight: var(--weshop-font-weight-bold);
+            letter-spacing: -0.025em;
+            color: var(--weshop-text-primary);
+        }
+        
+        .weshop-section-link {
+            font-size: var(--weshop-font-size-sm);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-primary);
+            text-decoration: none;
+        }
+        
+        .weshop-section-link:hover {
+            text-decoration: underline;
+        }
+        
+        .weshop-products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-products-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .weshop-products-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+        
+        .weshop-product-card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: var(--weshop-border-radius-lg);
+            background-color: var(--weshop-surface);
+            border: 1px solid var(--weshop-border);
+            transition: box-shadow 0.2s;
+        }
+        
+        .weshop-product-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .weshop-product-image {
+            width: 100%;
+            aspect-ratio: 1;
+            background-size: cover;
+            background-position: center;
+            border-radius: var(--weshop-border-radius-lg);
+            overflow: hidden;
+        }
+        
+        .weshop-product-name {
+            font-size: var(--weshop-font-size-base);
+            font-weight: var(--weshop-font-weight-medium);
+            color: var(--weshop-text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .weshop-product-price {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .weshop-product-price-original {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            color: var(--weshop-text-secondary);
+            text-decoration: line-through;
+        }
+        
+        .weshop-product-price-sale {
+            font-size: var(--weshop-font-size-lg);
+            font-weight: var(--weshop-font-weight-bold);
+            color: #dc3545;
+        }
+        
+        .weshop-product-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background-color: var(--weshop-secondary);
+            color: white;
+            border-radius: var(--weshop-border-radius-full);
+            font-size: var(--weshop-font-size-xs);
+            font-weight: var(--weshop-font-weight-bold);
+        }
+        
+        /* Categories Section */
+        .weshop-categories-section {
+            margin-bottom: 3rem;
+        }
+        
+        .weshop-categories-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 768px) {
+            .weshop-categories-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        .weshop-category-card {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-size: cover;
+            background-position: center;
+            border-radius: var(--weshop-border-radius-xl);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 1rem;
+            color: white;
+            font-weight: var(--weshop-font-weight-bold);
+            font-size: var(--weshop-font-size-lg);
+            text-decoration: none;
+            transition: transform 0.2s;
+            background-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+        }
+        
+        .weshop-category-card:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="weshop-homepage-1">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
+    
+    <div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            
+            <!-- Header -->
+            <if condition="meta.showHeader">
+                <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
+                <header class="weshop-header">
+                    <div class="weshop-container">
+                        <div class="weshop-header-content">
+                            <!-- Logo and Navigation -->
+                            <div class="weshop-logo-section">
+                                <a href="<?= $this->getUrl('') ?>" class="weshop-logo">
+                                    <span class="material-symbols-outlined weshop-logo-icon">local_mall</span>
+                                    <h2 class="weshop-logo-text"><?= $this->getStoreName() ?></h2>
+                                </a>
+                                <nav class="weshop-nav">
+                                    <a href="<?= $this->getUrl('catalog/category') ?>" class="weshop-nav-link"><?= __('Shop by Category') ?></a>
+                                    <a href="<?= $this->getUrl('promotion/deals') ?>" class="weshop-nav-link"><?= __("Today's Deals") ?></a>
+                                    <a href="<?= $this->getUrl('catalog/bestsellers') ?>" class="weshop-nav-link"><?= __('Best Sellers') ?></a>
+                                    <a href="<?= $this->getUrl('catalog/new-arrivals') ?>" class="weshop-nav-link"><?= __('New Arrivals') ?></a>
+                                </nav>
+                            </div>
+                            
+                            <!-- Search Bar -->
+                            <div class="weshop-search-section">
+                                <div class="weshop-search-wrapper">
+                                    <form action="<?= $this->getUrl('search') ?>" method="get" class="weshop-search-form">
+                                        <input 
+                                            type="text" 
+                                            name="q" 
+                                            class="weshop-search-input" 
+                                            placeholder="<?= __('Search for products, brands, and more...') ?>" 
+                                            value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
+                                        />
+                                        <button type="submit" class="weshop-search-button">
+                                            <span class="material-symbols-outlined">search</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            
+                            <!-- User Actions -->
+                            <div class="weshop-user-actions">
+                                <a href="<?= $this->getUrl('customer/account') ?>" class="weshop-action-button">
+                                    <span class="material-symbols-outlined">person_outline</span>
+                                    <span class="hidden md:inline"><?= __('Account') ?></span>
+                                </a>
+                                <a href="<?= $this->getUrl('cart') ?>" class="weshop-action-button">
+                                    <span class="material-symbols-outlined">shopping_cart</span>
+                                    <span class="hidden md:inline"><?= __('Cart') ?></span>
+                                    <?php $cartCount = $this->getData('cart_count') ?? 0; ?>
+                                    <?php if ($cartCount > 0): ?>
+                                        <span class="weshop-cart-badge"><?= $cartCount ?></span>
+                                    <?php endif; ?>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+            </if>
+            
+            <!-- Main Content -->
+            <main class="flex-1">
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
+                
+                <div class="weshop-container" style="padding-top: 2rem; padding-bottom: 2rem;">
+                    
+                    <!-- Banner -->
+                    <if condition="meta.banner">
+                        <div class="weshop-banner">
+                            {{meta.banner}}
+                        </div>
+                    <else/>
+                        <div class="weshop-banner">
+                            <div class="weshop-banner-content" style="background-image: url('<?= $this->getStaticUrl('assets/images/hero-banner.jpg') ?>');">
+                                <div class="weshop-banner-overlay"></div>
+                                <div class="weshop-banner-text">
+                                    <h1 class="weshop-banner-title"><?= __('Summer Sale: Up to 50% Off') ?></h1>
+                                    <p class="weshop-banner-description"><?= __('Find the best deals on your favorite summer items and refresh your space.') ?></p>
+                                    <a href="<?= $this->getUrl('promotion/sale') ?>" class="weshop-banner-button">
+                                        <?= __('Shop Now') ?>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </if>
+                    
+                    <!-- Deals of the Day -->
+                    <w:hook>WeShop_Promotion::homepage::deals_before</w:hook>
+                    <section class="weshop-deals-section">
+                        <div class="weshop-section-header">
+                            <h2 class="weshop-section-title"><?= __("Deals of the Day") ?></h2>
+                            <a href="<?= $this->getUrl('promotion/deals') ?>" class="weshop-section-link"><?= __('View All') ?></a>
+                        </div>
+                        <if condition="meta.deals">
+                            {{meta.deals}}
+                        <else/>
+                            <w:hook>WeShop_Promotion::homepage::deals_content</w:hook>
+                            <div class="weshop-products-grid">
+                                <?php $deals = $this->getData('deals') ?? []; ?>
+                                <?php foreach ($deals as $product): ?>
+                                    <div class="weshop-product-card">
+                                        <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-image" style="background-image: url('<?= $product['image'] ?? '' ?>');"></a>
+                                        <div>
+                                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-name"><?= htmlspecialchars($product['name'] ?? '') ?></a>
+                                            <div class="weshop-product-price">
+                                                <?php if ($product['special_price'] ?? null): ?>
+                                                    <span class="weshop-product-price-original"><?= $this->formatPrice($product['price']) ?></span>
+                                                    <span class="weshop-product-price-sale"><?= $this->formatPrice($product['special_price']) ?></span>
+                                                <?php else: ?>
+                                                    <span class="weshop-product-price-sale"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php if ($product['discount_percent'] ?? null): ?>
+                                                <span class="weshop-product-badge"><?= $product['discount_percent'] ?>% <?= __('OFF') ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </if>
+                    </section>
+                    <w:hook>WeShop_Promotion::homepage::deals_after</w:hook>
+                    
+                    <!-- Shop by Category -->
+                    <w:hook>WeShop_Catalog::homepage::categories_before</w:hook>
+                    <section class="weshop-categories-section">
+                        <h2 class="weshop-section-title" style="margin-bottom: 1rem;"><?= __('Shop by Category') ?></h2>
+                        <if condition="meta.categories">
+                            {{meta.categories}}
+                        <else/>
+                            <w:hook>WeShop_Catalog::homepage::categories_content</w:hook>
+                            <div class="weshop-categories-grid">
+                                <?php $categories = $this->getData('categories') ?? []; ?>
+                                <?php foreach ($categories as $category): ?>
+                                    <a href="<?= $this->getUrl('catalog/category/view', ['id' => $category['category_id']]) ?>" class="weshop-category-card" style="background-image: linear-gradient(to top, rgba(0,0,0,0.7), transparent), url('<?= $category['image'] ?? '' ?>');">
+                                        <?= htmlspecialchars($category['name'] ?? '') ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </if>
+                    </section>
+                    <w:hook>WeShop_Catalog::homepage::categories_after</w:hook>
+                    
+                    <!-- Content Template -->
+                    <if condition="contentTemplate">
+                        <?= $this->fetch($this->getData('contentTemplate')) ?>
+                    </if>
+                    
+                </div>
+                
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+            </main>
+            
+            <!-- Footer -->
+            <if condition="meta.showFooter">
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+            </if>
+            
+        </div>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>

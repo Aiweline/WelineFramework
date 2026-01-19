@@ -1,0 +1,312 @@
+<?php
+/**
+ * WeShop Default Theme - Shopping Cart Page
+ * 购物车页模板 - 根据UI设计创建
+ */
+$cartItems = $this->getData('cart_items') ?? [];
+$cartSummary = $this->getData('cart_summary') ?? [];
+$relatedProducts = $this->getData('related_products') ?? [];
+?>
+<main class="max-w-[1440px] mx-auto px-4 lg:px-8 py-8">
+    <w:hook name="WeShop_Cart::page::before"/>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <!-- Cart Items -->
+        <div class="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
+            <!-- Page Heading -->
+            <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-sm border border-border-light dark:border-border-dark">
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border-light dark:border-border-dark pb-4 mb-4">
+                    <div>
+                        <h1 class="text-3xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark mb-1"><?= __('Shopping Cart') ?></h1>
+                        <?php if (!empty($cartItems)): ?>
+                            <a class="text-sm text-primary hover:underline" href="<?= $this->getUrl('cart/clear') ?>"><?= __('Deselect all items') ?></a>
+                        <?php endif; ?>
+                    </div>
+                    <div class="text-right hidden sm:block">
+                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Price') ?></span>
+                    </div>
+                </div>
+                
+                <!-- Cart Items List -->
+                <?php if (empty($cartItems)): ?>
+                    <div class="py-12 text-center">
+                        <span class="material-symbols-outlined text-6xl text-text-secondary-light dark:text-text-secondary-dark mb-4">shopping_cart</span>
+                        <p class="text-xl text-text-secondary-light dark:text-text-secondary-dark mb-4"><?= __('Your cart is empty') ?></p>
+                        <a href="<?= $this->getUrl('catalog') ?>" class="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors">
+                            <span class="material-symbols-outlined">shopping_bag</span>
+                            <?= __('Continue Shopping') ?>
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="flex flex-col gap-6">
+                        <?php foreach ($cartItems as $index => $item): ?>
+                            <div class="cart-item flex flex-col sm:flex-row gap-4 py-2" data-item-id="<?= $item['item_id'] ?>">
+                                <!-- Image -->
+                                <div class="shrink-0">
+                                    <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id']]) ?>">
+                                        <div class="h-32 w-32 sm:h-40 sm:w-40 rounded-lg bg-background-light dark:bg-background-dark flex items-center justify-center overflow-hidden border border-border-light dark:border-border-dark">
+                                            <img alt="<?= htmlspecialchars($item['name']) ?>" class="object-cover h-full w-full" src="<?= $item['image'] ?? '' ?>">
+                                        </div>
+                                    </a>
+                                </div>
+                                
+                                <!-- Details -->
+                                <div class="flex flex-1 flex-col">
+                                    <div class="flex justify-between items-start gap-4">
+                                        <div>
+                                            <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id']]) ?>">
+                                                <h3 class="text-lg font-medium text-text-primary-light dark:text-text-primary-dark leading-snug hover:text-primary"><?= htmlspecialchars($item['name']) ?></h3>
+                                            </a>
+                                            <div class="mt-1 space-y-0.5">
+                                                <?php if ($item['in_stock']): ?>
+                                                    <p class="text-sm font-medium text-green-600 dark:text-green-500"><?= __('In Stock') ?></p>
+                                                <?php else: ?>
+                                                    <p class="text-sm font-medium text-orange-700 dark:text-orange-500"><?= __('Low Stock') ?></p>
+                                                <?php endif; ?>
+                                                <?php foreach ($item['options'] ?? [] as $option): ?>
+                                                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($option['label']) ?>: <span class="text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($option['value']) ?></span></p>
+                                                <?php endforeach; ?>
+                                                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Eligible for FREE Shipping') ?></p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($item['row_total']) ?></p>
+                                            <?php if ($item['original_price'] > $item['price']): ?>
+                                                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($item['original_price'] * $item['qty']) ?></p>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Actions -->
+                                    <div class="mt-4 flex flex-wrap items-center gap-4">
+                                        <!-- Quantity Stepper -->
+                                        <div class="flex items-center rounded-md border border-border-light dark:border-border-dark shadow-sm bg-white dark:bg-surface-dark">
+                                            <button type="button" class="qty-decrease px-2 py-1 text-text-secondary-light dark:text-text-secondary-dark hover:bg-background-light dark:hover:bg-background-dark rounded-l-md" data-item-id="<?= $item['item_id'] ?>">
+                                                <span class="material-symbols-outlined text-[18px]">remove</span>
+                                            </button>
+                                            <input type="number" class="qty-input w-12 text-center text-sm font-medium border-0 bg-transparent focus:ring-0" value="<?= $item['qty'] ?>" min="1" data-item-id="<?= $item['item_id'] ?>">
+                                            <button type="button" class="qty-increase px-2 py-1 text-text-secondary-light dark:text-text-secondary-dark hover:bg-background-light dark:hover:bg-background-dark rounded-r-md" data-item-id="<?= $item['item_id'] ?>">
+                                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                            </button>
+                                        </div>
+                                        <div class="h-4 w-px bg-border-light dark:bg-border-dark"></div>
+                                        <button type="button" class="delete-item text-sm text-text-secondary-light dark:text-text-secondary-dark hover:text-red-500 hover:underline" data-item-id="<?= $item['item_id'] ?>"><?= __('Delete') ?></button>
+                                        <div class="h-4 w-px bg-border-light dark:bg-border-dark hidden sm:block"></div>
+                                        <button type="button" class="save-for-later text-sm text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:underline hidden sm:block" data-item-id="<?= $item['item_id'] ?>"><?= __('Save for later') ?></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php if ($index < count($cartItems) - 1): ?>
+                                <hr class="border-border-light dark:border-border-dark"/>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <w:hook name="WeShop_Cart::page::items_after"/>
+        </div>
+        
+        <!-- Order Summary -->
+        <?php if (!empty($cartItems)): ?>
+            <div class="lg:col-span-4 xl:col-span-3">
+                <div class="sticky top-24 flex flex-col gap-4">
+                    <!-- Summary Card -->
+                    <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-sm border border-border-light dark:border-border-dark">
+                        <w:hook name="WeShop_Cart::summary::before"/>
+                        <h2 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Order Summary') ?></h2>
+                        <div class="space-y-3 pb-4 border-b border-border-light dark:border-border-dark">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Items (%1):', count($cartItems)) ?></span>
+                                <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['subtotal'] ?? 0) ?></span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Shipping & handling:') ?></span>
+                                <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['shipping'] ?? 0) ?></span>
+                            </div>
+                            <?php if (($cartSummary['discount'] ?? 0) > 0): ?>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-green-600 dark:text-green-500"><?= __('Discount:') ?></span>
+                                    <span class="text-green-600 dark:text-green-500 font-medium">-<?= $this->formatPrice($cartSummary['discount']) ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Estimated tax:') ?></span>
+                                <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['tax'] ?? 0) ?></span>
+                            </div>
+                        </div>
+                        <div class="py-4 flex justify-between items-center text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                            <span><?= __('Order Total:') ?></span>
+                            <span class="text-primary"><?= $this->formatPrice($cartSummary['grand_total'] ?? 0) ?></span>
+                        </div>
+                        
+                        <!-- Promo Code -->
+                        <w:hook name="WeShop_Promotion::cart::coupon"/>
+                        <div class="mb-4">
+                            <label for="promo-code" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Have a promo code?') ?></label>
+                            <div class="flex gap-2">
+                                <input type="text" id="promo-code" class="flex-1 px-3 py-2 text-sm border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark rounded-lg focus:ring-primary focus:border-primary" placeholder="<?= __('Enter code') ?>">
+                                <button type="button" id="apply-promo" class="px-4 py-2 bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark text-sm font-medium rounded-lg hover:bg-primary/20 transition-colors"><?= __('Apply') ?></button>
+                            </div>
+                        </div>
+                        
+                        <a href="<?= $this->getUrl('checkout') ?>" class="w-full block text-center bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-colors">
+                            <?= __('Proceed to Checkout') ?>
+                        </a>
+                        <w:hook name="WeShop_Cart::summary::after"/>
+                    </div>
+                    
+                    <!-- Continue Shopping -->
+                    <a href="<?= $this->getUrl('catalog') ?>" class="flex items-center justify-center gap-2 text-sm text-primary hover:underline">
+                        <span class="material-symbols-outlined !text-lg">arrow_back</span>
+                        <?= __('Continue Shopping') ?>
+                    </a>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <!-- Related Products -->
+    <?php if (!empty($relatedProducts)): ?>
+        <div class="mt-12">
+            <w:hook name="WeShop_Cart::page::related_before"/>
+            <h2 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark mb-6"><?= __('You May Also Like') ?></h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                <?php foreach ($relatedProducts as $product): ?>
+                    <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group flex flex-col gap-2">
+                        <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-lg overflow-hidden border border-border-light dark:border-border-dark" style='background-image: url("<?= $product['image'] ?? '' ?>");'></div>
+                        <div class="flex flex-col">
+                            <h3 class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark group-hover:text-primary line-clamp-2 transition-colors"><?= htmlspecialchars($product['name']) ?></h3>
+                            <p class="text-sm font-bold text-primary"><?= $this->formatPrice($product['price']) ?></p>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <w:hook name="WeShop_Cart::page::related_after"/>
+        </div>
+    <?php endif; ?>
+    
+    <w:hook name="WeShop_Cart::page::after"/>
+</main>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quantity controls
+    document.querySelectorAll('.qty-decrease').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var itemId = this.dataset.itemId;
+            var input = document.querySelector('.qty-input[data-item-id="' + itemId + '"]');
+            var currentVal = parseInt(input.value) || 1;
+            if (currentVal > 1) {
+                updateCartItem(itemId, currentVal - 1);
+            }
+        });
+    });
+    
+    document.querySelectorAll('.qty-increase').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var itemId = this.dataset.itemId;
+            var input = document.querySelector('.qty-input[data-item-id="' + itemId + '"]');
+            var currentVal = parseInt(input.value) || 1;
+            updateCartItem(itemId, currentVal + 1);
+        });
+    });
+    
+    document.querySelectorAll('.qty-input').forEach(function(input) {
+        input.addEventListener('change', function() {
+            var itemId = this.dataset.itemId;
+            var qty = parseInt(this.value) || 1;
+            if (qty < 1) qty = 1;
+            updateCartItem(itemId, qty);
+        });
+    });
+    
+    // Delete item
+    document.querySelectorAll('.delete-item').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var itemId = this.dataset.itemId;
+            if (confirm('<?= __('Are you sure you want to remove this item?') ?>')) {
+                deleteCartItem(itemId);
+            }
+        });
+    });
+    
+    // Save for later
+    document.querySelectorAll('.save-for-later').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var itemId = this.dataset.itemId;
+            saveForLater(itemId);
+        });
+    });
+    
+    // Apply promo code
+    document.getElementById('apply-promo')?.addEventListener('click', function() {
+        var code = document.getElementById('promo-code').value;
+        if (code) {
+            applyPromoCode(code);
+        }
+    });
+});
+
+function updateCartItem(itemId, qty) {
+    fetch('<?= $this->getUrl('cart/update') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId, qty: qty})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || '<?= __('Error updating cart') ?>');
+        }
+    });
+}
+
+function deleteCartItem(itemId) {
+    fetch('<?= $this->getUrl('cart/delete') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || '<?= __('Error removing item') ?>');
+        }
+    });
+}
+
+function saveForLater(itemId) {
+    fetch('<?= $this->getUrl('wishlist/add-from-cart') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: itemId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        }
+    });
+}
+
+function applyPromoCode(code) {
+    fetch('<?= $this->getUrl('cart/apply-coupon') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: code})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || '<?= __('Invalid promo code') ?>');
+        }
+    });
+}
+</script>
