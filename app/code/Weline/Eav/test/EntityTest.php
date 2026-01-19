@@ -17,10 +17,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 class EntityTest extends \Weline\Framework\UnitTest\TestCore
 {
-    function setName(string $name = '测试实体操作'): void
-    {
-        parent::setName($name);
-    }
+    // 注意：PHPUnit 10.x 中 setName() 是 final 方法，不能覆盖
+    // 如果需要设置测试名称，请使用 @test 注释或测试方法的名称
 
     private EavEntity $eavEntity;
 

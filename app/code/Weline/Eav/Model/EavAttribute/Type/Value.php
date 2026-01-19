@@ -63,9 +63,8 @@ class Value extends \Weline\Framework\Database\Model
         /**@var \Weline\Eav\Model\EavEntity $entity */
         $entity = ObjectManager::getInstance(\Weline\Eav\Model\EavEntity::class);
 
+        // 使用传入的 setup 实例，不要重新创建（传入的 setup 已经初始化了 Model）
         // 创建对应实体类型值表
-        /**@var \Weline\Framework\Setup\Db\ModelSetup $setup */
-        $setup = ObjectManager::getInstance(\Weline\Framework\Setup\Db\ModelSetup::class);
         /**@var \Weline\Eav\Model\EavAttribute\Type $type */
         $type = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Type::class);
 
@@ -202,6 +201,10 @@ class Value extends \Weline\Framework\Database\Model
         }
         if (!$this->attribute) {
             throw new Exception(__('属性不存在！'));
+        }
+        // 如果已经计算过表名，直接返回
+        if (!empty($this->origin_table_name)) {
+            return $this->origin_table_name;
         }
         $table = 'eav_' . $this->attribute->current_getEntity()->getEntityCode() . '_' . $this->attribute->getTypeModel()->getCode();
         $this->origin_table_name = parent::getTable($table);
