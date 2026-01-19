@@ -11,8 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 
 /**
@@ -33,8 +35,42 @@ class DevToolPanelObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        // 只在开发模式下显示
-        if (!DEV) {
+        // 检查是否启用开发工具面板
+        // 1. 开发模式下默认启用
+        // 2. 生产模式下可通过配置 dev_tool.enable_in_prod 启用
+        // 3. 通过URL参数和Cookie控制（优先级最高）
+        $enableInProd = Env::get('dev_tool.enable_in_prod', false);
+        $devToolKey = Env::get('dev_tool.key', 'dev_tool'); // URL参数名，默认 dev_tool
+        $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool'); // Cookie名，默认 w_dev_tool
+        $devToolSecret = Env::get('dev_tool.secret', ''); // 密钥，用于验证URL参数
+        
+        // 检查URL参数
+        $urlParam = $this->request->getGet($devToolKey);
+        if (!empty($urlParam)) {
+            // 如果配置了密钥，需要验证
+            if (!empty($devToolSecret)) {
+                if ($urlParam === $devToolSecret) {
+                    // 验证通过，设置Cookie（30天有效期）
+                    Cookie::set($devToolCookieName, '1', 3600 * 24 * 30, ['path' => '/']);
+                } else {
+                    // 密钥不匹配，不启用
+                    return;
+                }
+            } else {
+                // 未配置密钥，直接设置Cookie
+                Cookie::set($devToolCookieName, '1', 3600 * 24 * 30, ['path' => '/']);
+            }
+        }
+        
+        // 检查Cookie
+        $cookieValue = Cookie::get($devToolCookieName);
+        $hasCookie = !empty($cookieValue) && $cookieValue === '1';
+        
+        // 判断是否显示面板
+        // 1. 开发模式：默认显示
+        // 2. 生产模式 + 配置启用：显示
+        // 3. 有Cookie：显示
+        if (!DEV && !$enableInProd && !$hasCookie) {
             return;
         }
 
@@ -121,12 +157,18 @@ class DevToolPanelObserver implements ObserverInterface
             // 检测是否是后端请求（使用Request对象的isBackend方法）
             $isBackend = $this->request->isBackend();
             
+            // 检查是否通过Cookie启用（用于在模板中显示关闭按钮）
+            $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool');
+            $hasCookie = !empty(Cookie::get($devToolCookieName)) && Cookie::get($devToolCookieName) === '1';
+            
             // 调试：输出检测信息（生产环境可删除）
             // $this->logToConsole('info', 'DevToolPanel Detection: URI=' . $uri . ', isBackend=' . ($isBackend ? 'TRUE' : 'FALSE'));
             
             // 使用输出缓冲捕获模板输出
             ob_start();
             $panelType = $isBackend ? 'backend' : 'frontend';
+            $showCloseButton = $hasCookie; // 只有通过Cookie启用时才显示关闭按钮
+            $devToolCookieNameJs = $devToolCookieName; // 传递给模板，供JavaScript使用
             include $templatePath;
             $html = ob_get_clean();
             
