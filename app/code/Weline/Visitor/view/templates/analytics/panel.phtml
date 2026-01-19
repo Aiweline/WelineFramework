@@ -513,6 +513,10 @@
         </div>
     </div>
 
+    <!-- SweetAlert2 CSS -->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- SweetAlert2 JS -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         // 全局变量
         let charts = {};
@@ -623,10 +627,28 @@
                     updateBusinessCharts(data);
                     updateBusinessTable(data);
                 } else {
-                    alert('加载失败: ' + result.msg);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('加载失败') ?>',
+                            text: result.msg,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('加载失败: ' + result.msg);
+                    }
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
@@ -709,7 +731,16 @@
                     updateDashboardCharts(data);
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
@@ -785,7 +816,16 @@
                     updateComparisonChart(result.data);
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
@@ -855,7 +895,16 @@
                     updateAbTestTable(result.data.tests);
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
@@ -904,7 +953,16 @@
             const websiteId = document.getElementById('abtest-websiteId').value;
 
             if (!testId) {
-                alert('请先选择测试');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请先选择测试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请先选择测试');
+                }
                 return;
             }
 
@@ -919,7 +977,16 @@
                     displayAbTestData(result.data);
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
@@ -1029,7 +1096,16 @@
             const name = document.getElementById('create-name').value;
             
             if (!testId || !name) {
-                alert('请填写测试ID和测试名称');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('请填写测试ID和测试名称') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('请填写测试ID和测试名称');
+                }
                 return;
             }
 
@@ -1039,7 +1115,16 @@
                 variantA = JSON.parse(document.getElementById('create-variantA').value || '{}');
                 variantB = JSON.parse(document.getElementById('create-variantB').value || '{}');
             } catch (e) {
-                alert('变体配置JSON格式错误: ' + e.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('格式错误') ?>',
+                        text: '<?= __('变体配置JSON格式错误') ?>: ' + e.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('变体配置JSON格式错误: ' + e.message);
+                }
                 return;
             }
 
@@ -1074,14 +1159,42 @@
                 const result = await response.json();
 
                 if (result.code === 200) {
-                    alert('创建成功！');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: '<?= __('创建成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        console.log('创建成功！');
+                    }
                     document.querySelector('div[style*="position:fixed"]').remove();
                     loadAbTestList();
                 } else {
-                    alert('创建失败: ' + result.msg);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('创建失败') ?>',
+                            text: result.msg,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('创建失败: ' + result.msg);
+                    }
                 }
             } catch (error) {
-                alert('创建失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('创建失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('创建失败: ' + error.message);
+                }
             }
         }
 
@@ -1123,7 +1236,16 @@
                     updateReportCharts(data);
                 }
             } catch (error) {
-                alert('加载失败: ' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载失败: ' + error.message);
+                }
             }
         }
 
