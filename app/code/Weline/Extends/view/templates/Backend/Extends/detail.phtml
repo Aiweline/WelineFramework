@@ -117,7 +117,7 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                     <div class="def-doc">
                         <?php if (!empty($moduleExtends['documentation'])): ?>
                             <strong>文档：</strong>
-                            <a href="#" onclick="alert('文档路径：<?= htmlspecialchars($moduleExtends['documentation']) ?>')">
+                            <a href="#" onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('文档路径') ?>',text:'<?= htmlspecialchars(addslashes($moduleExtends['documentation'])) ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('文档路径：<?= htmlspecialchars(addslashes($moduleExtends['documentation'])) ?>');}">
                                 <?= htmlspecialchars($moduleExtends['documentation']) ?>
                             </a>
                         <?php endif; ?>
