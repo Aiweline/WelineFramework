@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Amazonia Blog</title>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;700;900&amp;family=Noto+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#111318] dark:text-white font-display">
+<header class="bg-white dark:bg-[#1e232e] border-b border-solid border-[#f0f2f4] dark:border-[#2a313d] px-4 md:px-10 py-3 sticky top-0 z-50">
+<div class="flex items-center justify-between whitespace-nowrap gap-4">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-2 text-[#111318] dark:text-white">
+<div class="size-8 text-primary">
+<svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z"></path>
+</svg>
+</div>
+<h2 class="text-xl font-bold leading-tight tracking-[-0.015em] hidden md:block">Amazonia</h2>
+</div>
+<div class="hidden md:flex flex-1 items-center gap-6">
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">All</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Today's Deals</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Customer Service</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Registry</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Gift Cards</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Sell</a>
+</div>
+</div>
+<div class="flex flex-1 max-w-xl mx-4">
+<label class="flex w-full items-stretch rounded-lg h-10 border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<div class="flex items-center justify-center pl-3 bg-white dark:bg-[#1e232e] text-[#636f88]">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="w-full min-w-0 flex-1 border-none bg-white dark:bg-[#1e232e] dark:text-white px-3 text-sm focus:ring-0 placeholder:text-[#636f88]" placeholder="Search Amazonia" value=""/>
+<button class="bg-[#f0f2f4] dark:bg-[#2a313d] px-4 hover:bg-[#e0e2e5] dark:hover:bg-[#363e4d] transition-colors">
+<span class="material-symbols-outlined text-[20px] text-[#111318] dark:text-white">arrow_forward</span>
+</button>
+</label>
+</div>
+<div class="flex gap-4 items-center">
+<button class="flex items-center gap-2 text-sm font-bold text-[#111318] dark:text-white hover:text-primary">
+<span class="truncate">Sign in</span>
+<span class="material-symbols-outlined text-[20px]">person</span>
+</button>
+<button class="flex items-center gap-2 text-sm font-bold text-[#111318] dark:text-white hover:text-primary relative">
+<span class="truncate">Cart</span>
+<span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+<span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-white">0</span>
+</button>
+</div>
+</div>
+</header>
+<div class="flex flex-col flex-1 max-w-[1440px] mx-auto w-full px-4 md:px-8 py-6">
+<nav class="flex flex-wrap gap-2 py-4 mb-4 text-sm">
+<a class="text-[#636f88] hover:text-primary transition-colors font-medium" href="#">Home</a>
+<span class="text-[#636f88] font-medium">/</span>
+<a class="text-[#111318] dark:text-white hover:text-primary transition-colors font-medium" href="#">News &amp; Updates</a>
+</nav>
+<div class="flex flex-col gap-2 mb-8">
+<h1 class="text-[#111318] dark:text-white text-3xl md:text-4xl font-black leading-tight tracking-[-0.033em]">News &amp; Updates</h1>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-base font-normal">The latest news, reviews, and guides from our team.</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<main class="lg:col-span-9 flex flex-col gap-10">
+<article class="group cursor-pointer rounded-xl bg-white dark:bg-[#1e232e] border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="grid md:grid-cols-2 gap-0">
+<div class="relative h-64 md:h-auto w-full bg-gray-200 overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="Close up of modern electronic gadgets on a desk" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAEQhQ5e0ruei7LHjSm02d_6OrP1FfJhEfN3G9P10dT9IO0UsFzlaS6LMw_MAnL0siL4FHaHqUWiCJ91Yoyll8CWIcr0f3lCcQ2merrkl3fnSXYsABgE-KwNYiElg7ztbzvHVVG3O8o_vrK9PbFIzAP9-ZRODExoADwegNGwofbpcrvW3MMtUIWtgmL5EgG9a371A_EKdRDrKK-EHv2HNGmAYXgynQnT0kz7aByamyZJ7tanTwbKvU1FDSC8KdLP-p2AfCRBenXvNkQ");'></div>
+<div class="absolute top-4 left-4 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Featured</div>
+</div>
+<div class="flex flex-col justify-center p-6 md:p-8 lg:p-10 gap-4">
+<div class="flex items-center gap-2 text-xs font-medium text-[#636f88] dark:text-[#9ca3af]">
+<span>Oct 24, 2023</span>
+<span>•</span>
+<span>Technology</span>
+</div>
+<h2 class="text-[#111318] dark:text-white text-2xl md:text-3xl font-bold leading-tight group-hover:text-primary transition-colors">
+                                Summer Sale Preview: Top 10 Tech Gadgets to Watch
+                            </h2>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-base leading-relaxed line-clamp-3">
+                                Get ready for the biggest savings of the season. We break down the must-have electronics coming to our store this July, featuring exclusive early-bird discounts.
+                            </p>
+<div class="flex items-center gap-2 text-primary font-bold text-sm mt-2">
+                                Read Full Story 
+                                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</div>
+</div>
+</div>
+</article>
+<section>
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-[#111318] dark:text-white text-2xl font-bold">Latest Articles</h3>
+<div class="flex gap-2">
+<button class="h-8 w-8 flex items-center justify-center rounded-full bg-white dark:bg-[#1e232e] border border-[#dcdfe5] dark:border-[#3e4654] hover:border-primary text-[#111318] dark:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">grid_view</span>
+</button>
+<button class="h-8 w-8 flex items-center justify-center rounded-full bg-transparent hover:bg-white dark:hover:bg-[#1e232e] text-[#636f88] transition-colors">
+<span class="material-symbols-outlined text-[18px]">list</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<article class="flex flex-col bg-white dark:bg-[#1e232e] rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden group hover:shadow-md transition-all h-full">
+<div class="h-48 w-full bg-gray-200 relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="Cardboard boxes stacked in a warehouse ready for shipping" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC7R5TDsQwl_el0P50-y5N6UUTAW1FKieHr6jJBQNsQSZVUi75zNxIaHUIkrOmOuiEabg4UuXjtHSLJNc3pi0wBYC0xoaPWIe0CCnPHvDAVmsfX98tyBNQkICm7MJ9rHbHA6yrNOhA7XMsGVMss0dVlxpVE8zLu6xcGcozlhpZbjldHVP5v4LhTLw9RQ8T2A7Q0IZBG0RW1QffbNm2SLRfSrLpZiElZ0vhM5tM2Qh2ZA9K94OxK7d9NWZNFa8O3GEdlYy774R69ow_6");'></div>
+</div>
+<div class="p-5 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">local_shipping</span>
+                                    Logistics
+                                </div>
+<h3 class="text-[#111318] dark:text-white text-lg font-bold leading-tight group-hover:text-primary transition-colors">
+                                    New Shipping Policy Update
+                                </h3>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-sm leading-relaxed mb-auto line-clamp-3">
+                                    We are updating our international shipping rates starting next month. Read more to see how this affects your orders and delivery times.
+                                </p>
+<div class="pt-4 border-t border-[#f0f2f4] dark:border-[#2a313d] flex justify-between items-center mt-2">
+<span class="text-xs text-[#636f88]">2 days ago</span>
+<span class="text-sm font-bold text-primary cursor-pointer hover:underline">Read more</span>
+</div>
+</div>
+</article>
+<article class="flex flex-col bg-white dark:bg-[#1e232e] rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden group hover:shadow-md transition-all h-full">
+<div class="h-48 w-full bg-gray-200 relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="Modern noise cancelling headphones on yellow background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBXt4wF5fCd9qNy1-IGzir3o0WyGEHrP1i5AVeFVSVEsgylGP8IuEEd9kYhba6XLpHWgtqagddWiXeDg77zF0hcL3oTGx4CPfrhJGIYSg9ohhJnCVS0EUWZzMONSoTS3V0RdfAZi0Ah1gEr8Qx8ikmfXF0et0nMY2YUb3pLx6GdybNu3hPMcVW0zdr2l0cAuvT-Cbwep_LMoFaKLELMiR2Bo-mj6YNljRnMpeBQHGg5x5igXvd2KKXhyOEGPXgiJnmKO4AMZIOCSk8W");'></div>
+</div>
+<div class="p-5 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">headphones</span>
+                                    Reviews
+                                </div>
+<h3 class="text-[#111318] dark:text-white text-lg font-bold leading-tight group-hover:text-primary transition-colors">
+                                    Review: The Best Noise-Cancelling Headphones
+                                </h3>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-sm leading-relaxed mb-auto line-clamp-3">
+                                    Our editors tested the top 5 models on the market. Find out which one reigns supreme for travel and work environments.
+                                </p>
+<div class="pt-4 border-t border-[#f0f2f4] dark:border-[#2a313d] flex justify-between items-center mt-2">
+<span class="text-xs text-[#636f88]">4 days ago</span>
+<span class="text-sm font-bold text-primary cursor-pointer hover:underline">Read more</span>
+</div>
+</div>
+</article>
+<article class="flex flex-col bg-white dark:bg-[#1e232e] rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden group hover:shadow-md transition-all h-full">
+<div class="h-48 w-full bg-gray-200 relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="Diverse group of people in a meeting discussing work" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB6c7SrzVmdXhIzlRrZi5iJ85eD9sB6znPJ_bhvhEH7m-ZRMvgpcVBmeHWZv5EFvJq42J494i48GmyvSlIMoG4Pzr-Z9igyOUaG91jynmSDzjDjrnkRAKASCPozvpKGDmodLHu53Pu3RV-L5v1YgpjWyjTUIroqbElhy--UiT1SO1fosJ4hosWpa4Ka0kih7-kmTY7NtMJ6T9hNpaJzc6QOQxEZu1nGbZYK1vf-1npRQWfZB75Wt6qwVWA1pVr_Kw61LAgZqGa5xE1n");'></div>
+</div>
+<div class="p-5 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">person</span>
+                                    Community
+                                </div>
+<h3 class="text-[#111318] dark:text-white text-lg font-bold leading-tight group-hover:text-primary transition-colors">
+                                    Community Spotlight: Meet our top reviewers
+                                </h3>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-sm leading-relaxed mb-auto line-clamp-3">
+                                    Each month we highlight members of our community who go above and beyond. Meet Sarah, a top reviewer in Home &amp; Garden.
+                                </p>
+<div class="pt-4 border-t border-[#f0f2f4] dark:border-[#2a313d] flex justify-between items-center mt-2">
+<span class="text-xs text-[#636f88]">1 week ago</span>
+<span class="text-sm font-bold text-primary cursor-pointer hover:underline">Read more</span>
+</div>
+</div>
+</article>
+<article class="flex flex-col bg-white dark:bg-[#1e232e] rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden group hover:shadow-md transition-all h-full">
+<div class="h-48 w-full bg-gray-200 relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" data-alt="Hands holding various gift cards" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB5qhrIgIH7Z54VRblUjlc2d50HdxvUbXH2-P6u18Ip-LcIlrfqUrZEpmOl_-mKHSxvodVu36J7gMHOh1aBG8e_bnVdbYj2YR5tHsivLvT4XQT0uQxgFgiKZGqRNlz2Dqxz3V5FhbvUbhVp304DmUpkDHZIWwoTAath-nie6bzfneCtyqlh4SZdeABpG0OA902tBfiUwT7SHOEqmrJEQx0mc-MkouOMc8VvNvwAdOYnv7xTRj27bRkrEdVWSJJvHHOV6eIf-lXnugzZ");'></div>
+</div>
+<div class="p-5 flex flex-col flex-1 gap-3">
+<div class="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+<span class="material-symbols-outlined text-[14px]">card_giftcard</span>
+                                    Gift Guides
+                                </div>
+<h3 class="text-[#111318] dark:text-white text-lg font-bold leading-tight group-hover:text-primary transition-colors">
+                                    The Ultimate Holiday Gift Guide 2023
+                                </h3>
+<p class="text-[#636f88] dark:text-[#9ca3af] text-sm leading-relaxed mb-auto line-clamp-3">
+                                    Struggling to find the perfect gift? We've curated a list of the best products for everyone on your list, from tech lovers to home chefs.
+                                </p>
+<div class="pt-4 border-t border-[#f0f2f4] dark:border-[#2a313d] flex justify-between items-center mt-2">
+<span class="text-xs text-[#636f88]">1 week ago</span>
+<span class="text-sm font-bold text-primary cursor-pointer hover:underline">Read more</span>
+</div>
+</div>
+</article>
+</div>
+<div class="mt-10 flex justify-center">
+<nav class="flex items-center gap-2">
+<button class="flex items-center justify-center w-10 h-10 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] bg-white dark:bg-[#1e232e] text-[#111318] dark:text-white hover:bg-[#f0f2f4] dark:hover:bg-[#363e4d] disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-white font-bold">1</button>
+<button class="flex items-center justify-center w-10 h-10 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] bg-white dark:bg-[#1e232e] text-[#111318] dark:text-white hover:bg-[#f0f2f4] dark:hover:bg-[#363e4d] font-medium">2</button>
+<button class="flex items-center justify-center w-10 h-10 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] bg-white dark:bg-[#1e232e] text-[#111318] dark:text-white hover:bg-[#f0f2f4] dark:hover:bg-[#363e4d] font-medium">3</button>
+<span class="flex items-center justify-center w-10 h-10 text-[#636f88]">...</span>
+<button class="flex items-center justify-center w-10 h-10 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] bg-white dark:bg-[#1e232e] text-[#111318] dark:text-white hover:bg-[#f0f2f4] dark:hover:bg-[#363e4d]">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</nav>
+</div>
+</section>
+</main>
+<aside class="lg:col-span-3 flex flex-col gap-8 sticky top-24">
+<div class="bg-white dark:bg-[#1e232e] p-6 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654]">
+<h4 class="text-sm font-bold uppercase tracking-wider text-[#636f88] mb-4">Search Blog</h4>
+<label class="flex w-full items-stretch rounded-lg h-10 border border-[#dcdfe5] dark:border-[#3e4654] overflow-hidden focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+<input class="w-full min-w-0 flex-1 border-none bg-transparent dark:text-white px-3 text-sm focus:ring-0 placeholder:text-[#9ca3af]" placeholder="Keywords..."/>
+<button class="bg-primary px-3 text-white hover:bg-primary/90 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">search</span>
+</button>
+</label>
+</div>
+<div class="bg-white dark:bg-[#1e232e] p-6 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654]">
+<h4 class="text-sm font-bold uppercase tracking-wider text-[#636f88] mb-4">Categories</h4>
+<div class="flex flex-col gap-2">
+<a class="flex items-center justify-between py-2 text-[#111318] dark:text-white hover:text-primary transition-colors group" href="#">
+<span class="text-sm font-medium">Technology &amp; Electronics</span>
+<span class="text-xs bg-[#f0f2f4] dark:bg-[#363e4d] px-2 py-0.5 rounded-full text-[#636f88] group-hover:bg-primary/10 group-hover:text-primary">12</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[#111318] dark:text-white hover:text-primary transition-colors group" href="#">
+<span class="text-sm font-medium">Home &amp; Garden</span>
+<span class="text-xs bg-[#f0f2f4] dark:bg-[#363e4d] px-2 py-0.5 rounded-full text-[#636f88] group-hover:bg-primary/10 group-hover:text-primary">8</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[#111318] dark:text-white hover:text-primary transition-colors group" href="#">
+<span class="text-sm font-medium">Fashion Trends</span>
+<span class="text-xs bg-[#f0f2f4] dark:bg-[#363e4d] px-2 py-0.5 rounded-full text-[#636f88] group-hover:bg-primary/10 group-hover:text-primary">5</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[#111318] dark:text-white hover:text-primary transition-colors group" href="#">
+<span class="text-sm font-medium">Seller Updates</span>
+<span class="text-xs bg-[#f0f2f4] dark:bg-[#363e4d] px-2 py-0.5 rounded-full text-[#636f88] group-hover:bg-primary/10 group-hover:text-primary">3</span>
+</a>
+<a class="flex items-center justify-between py-2 text-[#111318] dark:text-white hover:text-primary transition-colors group" href="#">
+<span class="text-sm font-medium">Company News</span>
+<span class="text-xs bg-[#f0f2f4] dark:bg-[#363e4d] px-2 py-0.5 rounded-full text-[#636f88] group-hover:bg-primary/10 group-hover:text-primary">15</span>
+</a>
+</div>
+</div>
+<div class="bg-gradient-to-br from-[#111621] to-[#1e232e] p-6 rounded-lg text-white relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-[120px]">shopping_bag</span>
+</div>
+<div class="relative z-10 flex flex-col gap-4">
+<span class="text-xs font-bold uppercase tracking-wider bg-primary/20 text-primary w-fit px-2 py-1 rounded">Editor's Pick</span>
+<h3 class="text-xl font-bold leading-tight">Echo Smart Speaker (4th Gen)</h3>
+<p class="text-sm text-gray-300">Premium sound, smart home hub, and Alexa.</p>
+<div class="flex items-baseline gap-2">
+<span class="text-lg font-bold text-white">$59.99</span>
+<span class="text-sm text-gray-400 line-through">$99.99</span>
+</div>
+<button class="bg-primary hover:bg-blue-600 text-white text-sm font-bold py-2.5 px-4 rounded-lg mt-2 transition-colors w-full">
+                            Shop Now
+                        </button>
+</div>
+</div>
+<div class="bg-white dark:bg-[#1e232e] p-6 rounded-lg border border-[#dcdfe5] dark:border-[#3e4654]">
+<h4 class="text-sm font-bold uppercase tracking-wider text-[#636f88] mb-4">Trending Now</h4>
+<div class="flex flex-col gap-4">
+<article class="flex gap-3 group cursor-pointer">
+<div class="text-[#cdd1d8] font-black text-3xl leading-none w-6">1</div>
+<div class="flex flex-col gap-1">
+<h5 class="text-sm font-bold text-[#111318] dark:text-white leading-snug group-hover:text-primary transition-colors">How to return an item hassle-free</h5>
+<span class="text-xs text-[#636f88]">5 mins read</span>
+</div>
+</article>
+<article class="flex gap-3 group cursor-pointer">
+<div class="text-[#cdd1d8] font-black text-3xl leading-none w-6">2</div>
+<div class="flex flex-col gap-1">
+<h5 class="text-sm font-bold text-[#111318] dark:text-white leading-snug group-hover:text-primary transition-colors">Best gifts for Dad this Father's Day</h5>
+<span class="text-xs text-[#636f88]">3 mins read</span>
+</div>
+</article>
+<article class="flex gap-3 group cursor-pointer">
+<div class="text-[#cdd1d8] font-black text-3xl leading-none w-6">3</div>
+<div class="flex flex-col gap-1">
+<h5 class="text-sm font-bold text-[#111318] dark:text-white leading-snug group-hover:text-primary transition-colors">Setting up your new Smart TV</h5>
+<span class="text-xs text-[#636f88]">8 mins read</span>
+</div>
+</article>
+</div>
+</div>
+<div class="bg-[#f0f2f4] dark:bg-[#2a313d] p-6 rounded-lg">
+<div class="flex flex-col gap-3 text-center">
+<span class="material-symbols-outlined text-[32px] text-primary mx-auto">mail</span>
+<h4 class="text-base font-bold text-[#111318] dark:text-white">Subscribe to our newsletter</h4>
+<p class="text-xs text-[#636f88] dark:text-[#9ca3af] mb-2">Get the latest updates and deals delivered to your inbox.</p>
+<input class="w-full rounded-lg border border-[#dcdfe5] dark:border-[#3e4654] px-3 py-2 text-sm" placeholder="Your email address"/>
+<button class="w-full bg-[#111318] dark:bg-white text-white dark:text-[#111318] font-bold py-2 rounded-lg text-sm hover:opacity-90 transition-opacity">Subscribe</button>
+</div>
+</div>
+</aside>
+</div>
+</div>
+<footer class="bg-[#232f3e] text-white mt-12">
+<a class="block bg-[#37475a] hover:bg-[#485769] py-4 text-center text-sm font-medium transition-colors text-white" href="#">
+        Back to top
+    </a>
+<div class="max-w-[1000px] mx-auto px-4 md:px-8 py-12">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+<div class="flex flex-col gap-3">
+<h3 class="font-bold text-base mb-2 text-white">Get to Know Us</h3>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">About Amazonia</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Careers</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Press Releases</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Amazonia Science</a>
+</div>
+<div class="flex flex-col gap-3">
+<h3 class="font-bold text-base mb-2 text-white">Customer Service</h3>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Help Center</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Returns &amp; Replacements</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Shipping Rates</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Contact Us</a>
+</div>
+<div class="flex flex-col gap-3">
+<h3 class="font-bold text-base mb-2 text-white">Legal &amp; Privacy</h3>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Privacy Policy</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Terms &amp; Conditions</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Cookie Preferences</a>
+<a class="text-sm text-[#dddddd] hover:text-white hover:underline" href="#">Accessibility</a>
+</div>
+<div class="flex flex-col gap-3">
+<h3 class="font-bold text-base mb-2 text-white">Connect with Us</h3>
+<div class="flex gap-4">
+<a class="text-[#dddddd] hover:text-white transition-colors" href="#">
+<span class="sr-only">Facebook</span>
+<svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"></path></svg>
+</a>
+<a class="text-[#dddddd] hover:text-white transition-colors" href="#">
+<span class="sr-only">Twitter</span>
+<svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path></svg>
+</a>
+<a class="text-[#dddddd] hover:text-white transition-colors" href="#">
+<span class="sr-only">Instagram</span>
+<svg class="h-6 w-6" clip-rule="evenodd" fill="currentColor" viewBox="0 0 24 24"><path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772 4.902 4.902 0 011.772-1.153c.636-.247 1.363-.416 2.427-.465.957-.043 1.31-.05 3.68-.05zm3.506 2.112c-1.014-.046-1.314-.055-3.821-.055-2.507 0-2.807.01-3.821.055-.99.045-1.528.208-1.885.347-.474.183-.812.401-1.169.757-.356.357-.574.695-.757 1.169-.138.357-.301.896-.347 1.885-.046 1.014-.055 1.314-.055 3.821 0 2.507.01 2.807.055 3.821.045.99.208 1.528.347 1.885.183.474.401.812.757 1.169.357.356.695.574 1.169.757.357.138.896.301 1.885.347 1.014.046 1.314.055 3.821.055 2.507 0 2.807-.01 3.821-.055.99-.045 1.528-.208 1.885-.347.474-.183.812-.401 1.169-.757.356-.357.574-.695.757-1.169.138-.357.301-.896.347-1.885.046-1.014.055-1.314.055-3.821 0-2.507-.01-2.807-.055-3.821-.045-.99-.208-1.528-.347-1.885-.183-.474-.401-.812-.757-1.169-.357-.356-.695-.574-1.169-.757-.357-.138-.896-.301-1.885-.347zm-3.506 4.096a5.001 5.001 0 110 10.002 5.001 5.001 0 010-10.002zm0 2.21a2.791 2.791 0 100 5.582 2.791 2.791 0 000-5.582zm5.727-5.91a1.318 1.318 0 11-2.636 0 1.318 1.318 0 012.636 0z"></path></svg>
+</a>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-[#131a22] border-t border-[#3a4553] py-8">
+<div class="max-w-[1000px] mx-auto px-4 flex flex-col items-center gap-4">
+<div class="flex items-center gap-2">
+<div class="size-6 text-white">
+<svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z"></path>
+</svg>
+</div>
+<span class="text-white text-lg font-bold">Amazonia</span>
+</div>
+<p class="text-xs text-[#dddddd]">" 2023 Amazonia, Inc. or its affiliates</p>
+</div>
+</div>
+</footer>
+</body></html>

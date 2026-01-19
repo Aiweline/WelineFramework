@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- CMS页面管理菜单 -->
+    <add source="WeShop_Cms::cms_page_management" 
+         name="cms_page_management" 
+         title="CMS页面管理" 
+         action="cms/backend/page/index"
+         parent="" 
+         icon="mdi mdi-file-document-multiple" 
+         order="40"/>
+    
+</menus>

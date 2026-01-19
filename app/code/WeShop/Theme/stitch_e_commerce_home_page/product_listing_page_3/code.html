@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Product Listing Page</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#f49d25",
+              "background-light": "#f8f7f5",
+              "background-dark": "#181511",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-800 dark:text-slate-200">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-10 flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-4 sm:px-6 lg:px-8 py-3 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-4 text-slate-900 dark:text-slate-100">
+<div class="size-6 text-primary">
+<span class="material-symbols-outlined !text-3xl">deployed_code</span>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-[-0.015em]">ShopSphere</h2>
+</div>
+<div class="hidden md:flex items-center gap-9">
+<a class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Deals</a>
+<a class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">New Arrivals</a>
+<a class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Best Sellers</a>
+</div>
+</div>
+<div class="flex flex-1 justify-end items-center gap-4">
+<label class="hidden lg:flex flex-col min-w-40 !h-10 max-w-sm w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-slate-500 dark:text-slate-400 flex bg-slate-100 dark:bg-slate-800 items-center justify-center pl-3 rounded-l-lg border-r-0">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-slate-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-slate-100 dark:bg-slate-800 h-full placeholder:text-slate-500 dark:placeholder:text-slate-400 px-4 rounded-l-none border-l-0 pl-2 text-sm font-normal leading-normal" placeholder="Search products..." value=""/>
+</div>
+</label>
+<div class="flex gap-2">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5 transition-colors">
+<span class="material-symbols-outlined">person</span>
+</button>
+<button class="relative flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5 transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+<div class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">3</div>
+</button>
+</div>
+</div>
+</header>
+<main class="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="flex flex-col lg:flex-row gap-8">
+<!-- Left Sidebar: Filters -->
+<aside class="w-full lg:w-64 xl:w-72 flex-shrink-0">
+<div class="sticky top-28">
+<h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-slate-100">Filters</h3>
+<div class="flex flex-col space-y-4">
+<!-- Category Filter -->
+<details class="flex flex-col border-b border-b-slate-200 dark:border-b-slate-800 pb-2 group" open="">
+<summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-2">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-medium leading-normal">Category</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 group-open:rotate-180 transition-transform">expand_more</span>
+</summary>
+<div class="space-y-2 pt-2">
+<a class="block text-sm text-primary font-semibold" href="#">Laptops &amp; Computers</a>
+<a class="block text-sm text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary pl-2 transition-colors" href="#">Laptops</a>
+<a class="block text-sm text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary pl-2 transition-colors" href="#">Desktops</a>
+<a class="block text-sm text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary pl-2 transition-colors" href="#">Monitors</a>
+<a class="block text-sm text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary pl-2 transition-colors" href="#">Accessories</a>
+</div>
+</details>
+<!-- Brand Filter -->
+<details class="flex flex-col border-b border-b-slate-200 dark:border-b-slate-800 pb-2 group" open="">
+<summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-2">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-medium leading-normal">Brand</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 group-open:rotate-180 transition-transform">expand_more</span>
+</summary>
+<div class="space-y-2 pt-2">
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input checked="" class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" type="checkbox"/>
+<span>Apple</span>
+</label>
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" type="checkbox"/>
+<span>Dell</span>
+</label>
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input checked="" class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" type="checkbox"/>
+<span>HP</span>
+</label>
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" type="checkbox"/>
+<span>Lenovo</span>
+</label>
+</div>
+</details>
+<!-- Price Range Filter -->
+<details class="flex flex-col border-b border-b-slate-200 dark:border-b-slate-800 pb-2 group">
+<summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-2">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-medium leading-normal">Price Range</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 group-open:rotate-180 transition-transform">expand_more</span>
+</summary>
+<div class="pt-4 px-1">
+<input class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary" max="2000" min="0" type="range" value="750"/>
+<div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
+<span>$0</span>
+<span>$2000+</span>
+</div>
+</div>
+</details>
+<!-- Rating Filter -->
+<details class="flex flex-col border-b border-b-slate-200 dark:border-b-slate-800 pb-2 group">
+<summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-2">
+<p class="text-slate-900 dark:text-slate-100 text-sm font-medium leading-normal">Customer Rating</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 group-open:rotate-180 transition-transform">expand_more</span>
+</summary>
+<div class="space-y-2 pt-2">
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input class="form-radio h-4 w-4 text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" name="rating" type="radio"/>
+<span class="flex items-center gap-1 text-amber-500">
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span>
+<span class="text-slate-500 dark:text-slate-400">&amp; up</span>
+</span>
+</label>
+<label class="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+<input class="form-radio h-4 w-4 text-primary focus:ring-primary/50 border-slate-300 dark:border-slate-700 dark:bg-slate-800" name="rating" type="radio"/>
+<span class="flex items-center gap-1 text-amber-500">
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base">star</span>
+<span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span>
+<span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span>
+<span class="text-slate-500 dark:text-slate-400">&amp; up</span>
+</span>
+</label>
+</div>
+</details>
+<button class="w-full text-center text-sm font-medium text-primary hover:underline mt-4">Clear All Filters</button>
+</div>
+</div>
+</aside>
+<!-- Right Content: Products -->
+<div class="flex-1">
+<!-- Breadcrumbs -->
+<div class="flex flex-wrap gap-2 mb-4">
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Home</a>
+<span class="text-slate-400 dark:text-slate-500 text-sm font-medium leading-normal">/</span>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Electronics</a>
+<span class="text-slate-400 dark:text-slate-500 text-sm font-medium leading-normal">/</span>
+<span class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal">Laptops &amp; Computers</span>
+</div>
+<!-- Page Heading -->
+<div class="flex flex-wrap justify-between items-baseline gap-3 mb-4">
+<div class="flex flex-col gap-1">
+<h1 class="text-slate-900 dark:text-slate-100 text-4xl font-black leading-tight tracking-tighter">Laptops &amp; Computers</h1>
+<p class="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal">Showing 1-12 of 150 results</p>
+</div>
+</div>
+<!-- Sorting Chips -->
+<div class="flex gap-2 p-1 overflow-x-auto mb-6 border-b border-slate-200 dark:border-slate-800 pb-4">
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4">
+<p class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal">Sort by: Price</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 !text-xl">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-primary/20 dark:bg-primary/20 px-4">
+<p class="text-primary dark:text-primary text-sm font-medium leading-normal">Sort by: Popularity</p>
+<span class="material-symbols-outlined text-primary !text-xl">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4">
+<p class="text-slate-800 dark:text-slate-200 text-sm font-medium leading-normal">View: Grid</p>
+<span class="material-symbols-outlined text-slate-700 dark:text-slate-300 !text-xl">arrow_drop_down</span>
+</button>
+</div>
+<!-- Product Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Product Card 1 -->
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4">
+<div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="Modern silver laptop, open and displaying a colorful abstract wallpaper." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuChd7yNd_flEua_mVzWUmaSkNAwQL73_t3gZesFN4sVULr0dKQznkhAuBQ1KhMs_fy4mgTjUzzzIGweXDWe_zC_gapGHP7GjBWzbwSj0pBYEkhBalzFOBJct9jzAx2b1Nup3VstkKQjcWC6bXI6ZshsddZfoNkucyWqpMBOXEijVpqNbafHWCUSCHq1n5Aaz3gSa9owgE-9Xy5xf4UYlvNLlxzX8FoM13TmH81eQuIBU2YVMUE_ZtT4VlS544FDzdtstGtz3Zmt3Lei");'></div>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">ProBook Ultra Thin 14"</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-amber-400">
+<span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span>
+</div>
+<p class="text-xs text-slate-500 dark:text-slate-400">(1,204 reviews)</p>
+</div>
+<p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$1,299.00</p>
+<button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4">
+<div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="A sleek, dark gray professional laptop shown from the side on a minimalist background." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCldg5Du-kGLhBUKIHmJTh5nbNG53JeZ6w50wt84bljAZgRWbVyVzlImz0ubd5g_ZKYcfHd4PJam9ZdDkI0VRkopgZExKbUHSAuC93_jk1WpHqfrEwe9IxV2XHOiAgILKShZE0rgzfHtssVSpU2dq-a3RlBsiRkHroy_yXGBc8aHPpbyNBO8kpWLcQP4Cexk3tem6Nu6Al6-qNdi_8yzdAna4Aoe4C7RoTS6mqeXigsdtkJW4XMY6pO9MhTzCBLY7owmzbTOUxbM1Jx");'></div>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">Zenith Laptop 15.6"</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-amber-400">
+<span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star_half</span>
+</div>
+<p class="text-xs text-slate-500 dark:text-slate-400">(987 reviews)</p>
+</div>
+<p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$999.99</p>
+<button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4">
+<div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="Close-up of a laptop keyboard with colorful backlighting." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBX_7FhPbRnKURGUwWH3GIYDluuwAtlbnaUuYzJ2PnP3FLeL-vuJHG-0h6vn5riU3vuVtZmaLFrr6xnhKGgX1zOcAvottW6CfkKXSXYcmPJLImUqOiV2WzPOnx3cLzSELgQ2Dgi3ijUC3JMUYbnSishVbp5XVuiizyCQ_4WHjvEg9_yURrmdBGYIolDglA8Jnh7cGtkAgIe3mheiCmHhTt9S0JXU9HHSneQ7zZjpdNB7D-kwaq3muYYwWrCDnjDujWqrjP1s86qI7YM");'></div>
+</div>
+<div class="p-4 flex flex-col flex-grow">
+<h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">Gamer's Edge Pro 17"</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-amber-400">
+<span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span>
+</div>
+<p class="text-xs text-slate-500 dark:text-slate-400">(2,310 reviews)</p>
+</div>
+<p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$1,749.00</p>
+<button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button>
+</div>
+</div>
+<!-- Product Card 4-6 (duplicates for layout) -->
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4"><div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="A lightweight silver laptop with a minimalist design on a clean white surface." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAacYQ09g7kiM0c7D62QLW88AnLhLf5Kp4WMuUMUJejN7mUxS_I3_g7-FOOBUe6OLAWU3zM8da1oDblWi_H04rprGQb13x8EPoO-fwqsZIpxuFPwm4hhA8ODmWJC9wpkeJUhVIQqQPMiZCfMwVbmSXy81KmcSAaA4ZhoE-MkKLdF-4Pixk3s_O311RQXSE2lnhw6yt5Bm0jdoc5WCT-jzv9YWhvyW1DA8OgVDNBhMvslyUJBjHfTPTPLywuu0E--nfE3ms82Hbjpb5i");'></div></div>
+<div class="p-4 flex flex-col flex-grow"><h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">AirBook Lite 13"</h3><div class="flex items-center gap-2 mb-2"><div class="flex text-amber-400"><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span></div><p class="text-xs text-slate-500 dark:text-slate-400">(850 reviews)</p></div><p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$1,099.00</p><button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button></div>
+</div>
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4"><div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="A black 2-in-1 convertible laptop folded into a tablet-like stand mode." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAGyRLiYEgdhp2GUuErgUY_HV8LwY2tVby43AhHjmEad6WUK2AdsnjyFgNbwbgZo3-d7dQf_yBSDzx3iiaqFL9InYUdgEjR1UzecO0OQkVAm4KL5qUSM3URK7p4iVx-BnobSXA7NWvtX7FbvJRXWsJ9RXpfZKUfG3rxtZyf58QiYab_JsjmESuL_csUSmzAhze5f6arK0aEErNcsIsf3A8Iq-869W3dVg9tDBsMhpt8n4CiFXRVku0C_Iyn_-JYdGWuf8h_U87-PmtQ");'></div></div>
+<div class="p-4 flex flex-col flex-grow"><h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">FlexiNote 2-in-1</h3><div class="flex items-center gap-2 mb-2"><div class="flex text-amber-400"><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star_half</span></div><p class="text-xs text-slate-500 dark:text-slate-400">(432 reviews)</p></div><p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$849.50</p><button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button></div>
+</div>
+<div class="flex flex-col bg-white dark:bg-slate-800/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 group transition-all hover:shadow-lg hover:-translate-y-1">
+<div class="bg-slate-100 dark:bg-slate-900 p-4"><div class="bg-center bg-no-repeat aspect-square bg-contain rounded-md" data-alt="A sturdy business laptop open on an office desk, with charts visible on the screen." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAApYMamlJ2X8whrTsYWGLx6uQFubcGAxlXZA7mw4lFy2PtKQjLJE0WAmVUk6_C5CiAfHg_t3bqZ116N4S_3gFq0_0vHtxONaT6RKfhXwY-WuG3pvcqBB29PF1hQrgUfwVTOgVtmZngq6KodtonRG_N7fE2GsMTyRWwty77W6ybTsMFSJP8HPFmP8_6I3Mvl5h4ksfexu1ug7ZWAWkHHVYdJw5osELzzBUGTQ3cpllntJ1O0KKwrZ9E1afdneO1vfKAkKdfVahAXB9-");'></div></div>
+<div class="p-4 flex flex-col flex-grow"><h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 leading-snug">CorpWorkstation 15"</h3><div class="flex items-center gap-2 mb-2"><div class="flex text-amber-400"><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base">star</span><span class="material-symbols-outlined !text-base text-slate-300 dark:text-slate-600">star</span></div><p class="text-xs text-slate-500 dark:text-slate-400">(677 reviews)</p></div><p class="text-xl font-black text-slate-900 dark:text-slate-100 mt-auto">$1,450.00</p><button class="w-full mt-4 flex items-center justify-center rounded-md h-10 px-4 bg-primary text-sm font-bold text-white hover:bg-primary/90 transition-colors">Add to Cart</button></div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="flex justify-center items-center mt-12">
+<nav class="flex items-center gap-2">
+<a class="flex items-center justify-center size-9 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined !text-xl">chevron_left</span>
+</a>
+<a class="flex items-center justify-center size-9 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm font-medium" href="#">1</a>
+<a class="flex items-center justify-center size-9 rounded-md bg-primary/20 text-primary dark:bg-primary/20 dark:text-primary transition-colors text-sm font-bold" href="#">2</a>
+<a class="flex items-center justify-center size-9 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm font-medium" href="#">3</a>
+<span class="text-slate-400 dark:text-slate-500">...</span>
+<a class="flex items-center justify-center size-9 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm font-medium" href="#">13</a>
+<a class="flex items-center justify-center size-9 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined !text-xl">chevron_right</span>
+</a>
+</nav>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
