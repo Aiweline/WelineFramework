@@ -56,7 +56,10 @@ Feed类型,"Feed Type"
 配置（JSON）,"Config (JSON)"
 保存,Save
 取消,Cancel
+成功,Success
 保存失败,"Save Failed"
+确定,确定
+请重试,请重试
 Feed管理,"Feed Management"
 ID,ID
 数据源,数据源
@@ -78,13 +81,13 @@ ID,ID
 最后测试,"Last Test"
 激活,Active
 未激活,Inactive
-成功,Success
 失败,Failed
 待测试,"Pending Test"
 测试连接,"Test Connection"
 API密钥,"API Key"
 API密钥（可选）,"API Secret (Optional)"
 设为默认账户,"Set as Default Account"
+测试成功,测试成功
 测试失败,测试失败
 编辑账户,编辑账户
 首页,首页
@@ -113,10 +116,12 @@ Feed格式,"Feed Format"
 条目数,"Items Count"
 推送时间,"Push Time"
 待处理,Pending
+错误信息,错误信息
 查看错误,"View Error"
 选择Feed,"Select Feed"
 选择平台,"Select Platform"
 开始推送,"Start Push"
+提示,提示
 请选择Feed和至少一个平台,"Please select feed and at least one platform"
 推送失败,推送失败
 生成式搜索引擎优化,"Generative Engine Optimization"
