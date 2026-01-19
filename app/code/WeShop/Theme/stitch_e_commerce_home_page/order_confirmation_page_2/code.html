@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Order Confirmation - ShopOnline</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f49d25",
+                        "primary-hover": "#d68b20",
+                        "background-light": "#f8f7f5",
+                        "background-dark": "#221a10",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#2d2418",
+                        "text-main": "#181511",
+                        "text-muted": "#8a7960",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-main dark:text-gray-100 flex flex-col min-h-screen font-display">
+<header class="sticky top-0 z-50 bg-surface-light dark:bg-surface-dark border-b border-[#f5f3f0] dark:border-gray-800 px-4 lg:px-10 py-3 shadow-sm">
+<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-2 cursor-pointer group">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<h2 class="text-text-main dark:text-white text-xl font-bold tracking-tight group-hover:text-primary transition-colors">ShopOnline</h2>
+</div>
+<div class="hidden md:flex flex-1 max-w-xl px-8">
+<div class="flex w-full items-center rounded-lg bg-[#f5f3f0] dark:bg-gray-800 border-2 border-transparent focus-within:border-primary transition-all overflow-hidden h-10">
+<div class="pl-3 text-text-muted flex items-center">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="w-full bg-transparent border-none text-text-main dark:text-white placeholder-text-muted focus:ring-0 text-sm px-3" placeholder="Search products, brands and more..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4 lg:gap-8">
+<nav class="hidden lg:flex items-center gap-6">
+<a class="text-text-main dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Deals</a>
+<a class="text-text-main dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Support</a>
+<a class="text-text-main dark:text-gray-200 text-sm font-medium hover:text-primary transition-colors" href="#">Sell</a>
+</nav>
+<div class="flex gap-3">
+<button class="flex items-center justify-center size-10 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative">
+<span class="material-symbols-outlined text-text-main dark:text-white">shopping_cart</span>
+<span class="absolute top-1 right-1 size-2 bg-primary rounded-full"></span>
+</button>
+<button class="flex items-center justify-center size-10 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined text-text-main dark:text-white">account_circle</span>
+</button>
+</div>
+</div>
+</div>
+<div class="md:hidden w-full mt-3">
+<div class="flex w-full items-center rounded-lg bg-[#f5f3f0] dark:bg-gray-800 border border-transparent focus-within:border-primary overflow-hidden h-10">
+<div class="pl-3 text-text-muted flex items-center">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="w-full bg-transparent border-none text-text-main dark:text-white placeholder-text-muted focus:ring-0 text-sm px-3" placeholder="Search..." type="text"/>
+</div>
+</div>
+</header>
+<main class="flex-grow w-full max-w-6xl mx-auto px-4 py-8 lg:py-12">
+<div class="mb-8">
+<div class="flex items-start gap-4">
+<div class="mt-1 text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
+<span class="material-symbols-outlined text-3xl">check_circle</span>
+</div>
+<div>
+<h1 class="text-text-main dark:text-white text-3xl font-bold leading-tight">Order placed, thanks!</h1>
+<p class="text-text-main dark:text-gray-300 text-base mt-2">
+                        Confirmation will be sent to your email address. 
+                        <span class="font-medium">Order #112-3456789-1234567</span>
+</p>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<div class="lg:col-span-2 space-y-6">
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 dark:border-gray-700 pb-4 mb-4">
+<div>
+<p class="text-primary font-bold text-lg">Arriving Thursday, Oct 24</p>
+<p class="text-text-muted text-sm">Two-Day Shipping</p>
+</div>
+<a class="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline mt-2 sm:mt-0" href="#">Track Package</a>
+</div>
+<div class="flex flex-col sm:flex-row gap-6">
+<div class="w-32 h-32 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded-lg p-2 flex items-center justify-center">
+<img alt="Modern wireless noise-canceling headphones in black" class="object-contain h-full w-full mix-blend-multiply dark:mix-blend-normal" data-alt="Modern wireless noise-canceling headphones in black" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-vjWt_sgznzTQAgnG7PHM7PnQBSMFEQWomJ2AwkTFA8Qzzv279BS2yRDCaXcypk_hhubaL2v_D_VsTA0cmhdfR6H2lALqiDFomFR7zMIW_Opm3rxm4H0Aon_G_x9VhJgDLuNQl5f5w4q4_0ICI1OmIzMkf0xwe1Dr-YnEaMtAGtcf5XW4XqY1zDGgFCwRxEdDXguJGCBl1crJl4nsNd1tvl-OXIxuB2LBuh1Wt0Zx87ZHvf9VDdTWadj0jbpaGwBY_0Otwwhkvc6Y"/>
+</div>
+<div class="flex-1">
+<h3 class="text-text-main dark:text-white font-bold text-lg leading-snug">Sony WH-1000XM5 Wireless Noise Canceling Headphones</h3>
+<p class="text-text-muted text-sm mt-1">Color: Black</p>
+<p class="text-text-muted text-sm">Sold by: Electronics World Inc.</p>
+<div class="mt-3 flex items-center gap-2">
+<span class="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded">Best Seller</span>
+<span class="text-text-main dark:text-gray-200 font-bold">$348.00</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6">
+<h3 class="text-text-main dark:text-white font-bold text-lg mb-4">Customers who bought this also bought</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="group cursor-pointer">
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg aspect-square mb-2 overflow-hidden relative">
+<img alt="Smart Watch with black band" class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="Smart Watch with black band" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5OIvM0UjdEDwqa4__PukVycP8RY0dF41yAq3lExD2_LoCO8HmXbFiXSp2kqeFK7sL08KbURhB3PVebIFUOKwGa4UQf0ZdPEvkT4Bjj5FHnkbqPltVxlvK15s6cWJYVwYAnhGLtvB8xyn_l9s2tLOgUFs4ncd1EIuWz5r248KaS8H0PlYLDvHP1lPBrZIxk6JaXcjY6FJSKHulaEhwvA2m3LhU_B1wzpRTNA77hwk5d9_sJ8jncud1_jrUO_eTSV-IJa3JsVjbTxJT"/>
+</div>
+<p class="text-sm font-medium text-text-main dark:text-white truncate">Smart Watch Series 7</p>
+<p class="text-xs text-primary font-bold">$399.00</p>
+</div>
+<div class="group cursor-pointer">
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg aspect-square mb-2 overflow-hidden relative">
+<img alt="Portable bluetooth speaker on table" class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="Portable bluetooth speaker on table" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1piHg4xLJJ4vql96-4rOwgGwnwomCYh5q7ll82OS7cKy9lFvtxRZI6OJofRciAUE1RtihAtDAm7JNRAZ1sI_5Mr8Yh8pNPNNp9qPhpbYDlEZhE-dyx67_aMhQXDOC6jgMT4R2J85Nu9Rjw4jBLTClB2NA2ROJSNVGCqtIaH4rDtR3w8kM74dvB4vsZoeUptNMH3I_Z-QKtoqNHRoTpIg2D2EUb26wQaGB1F6cYqqfR5PNTYYDnkEGn3X6tswG2D-vqhiRDFSnjF6d"/>
+</div>
+<p class="text-sm font-medium text-text-main dark:text-white truncate">Portable Speaker</p>
+<p class="text-xs text-primary font-bold">$129.00</p>
+</div>
+<div class="group cursor-pointer">
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg aspect-square mb-2 overflow-hidden relative">
+<img alt="Wireless charging pad white" class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="Wireless charging pad white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfiyOgVcceCkCFRmdzQwl84daKU8zJmItz303gAh625SdZ6XYSlV84doSPcdQqhaFqh4gG82B0QPZ4UiVzeZ0w2-37_8zJ-N_LWRNT2Wq4VndWmxTDQpCgKMbFdetABeqb5kl5QgkhRgc82E_1ArvErxn1DXTscpgvNFKrsPbuVmGkk80OboCttMpAX-iWHIncxrpEX8Z-rD6hwJRxzJJQ9w6fJJG8TK3cwJmq5KxaPjUPKsnQb22xG6NfIw9LIYRMFvuAPhMIvjLr"/>
+</div>
+<p class="text-sm font-medium text-text-main dark:text-white truncate">Fast Wireless Charger</p>
+<p class="text-xs text-primary font-bold">$49.00</p>
+</div>
+<div class="group cursor-pointer">
+<div class="bg-gray-50 dark:bg-gray-800 rounded-lg aspect-square mb-2 overflow-hidden relative">
+<img alt="Over ear headphone stand wood" class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="Over ear headphone stand wood" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTc5YG0w9yCk1aXyXHqYsCEtN_6qktr4jv1eWnqFMk6qs4xVE2ebkhA1LmujhC15A_HWFErIH6M-5Jlqtis2SP7PAJO6-kUy2RfC1jnxzflZQtQjEEboINL-NtDv7VCOLXeZ0-55j1KR6Kp5s9a1WMF4bpEdZ_y13N9k93OFcVLfnjDwe-P7E5E3B1rZuf5Fo4-P67Ga1PWpeMD4RtWzgToH4i8NQFBPL-H0wawk59X2pjTxs5w4SPZMz474HMn4hpJ84ej9wSUDLF"/>
+</div>
+<p class="text-sm font-medium text-text-main dark:text-white truncate">Headphone Stand</p>
+<p class="text-xs text-primary font-bold">$35.00</p>
+</div>
+</div>
+</div>
+<div class="flex flex-wrap gap-4 pt-2">
+<button class="flex-1 min-w-[200px] h-12 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">shopping_bag</span>
+                        Continue Shopping
+                    </button>
+<button class="flex-1 min-w-[200px] h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-main dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">receipt_long</span>
+                        View Order Details
+                    </button>
+</div>
+</div>
+<div class="lg:col-span-1">
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 sticky top-24">
+<h3 class="text-text-main dark:text-white font-bold text-lg mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">Order Summary</h3>
+<div class="space-y-2 mb-6 text-sm">
+<div class="flex justify-between">
+<span class="text-text-muted">Item(s) Subtotal:</span>
+<span class="text-text-main dark:text-gray-200">$348.00</span>
+</div>
+<div class="flex justify-between">
+<span class="text-text-muted">Shipping &amp; Handling:</span>
+<span class="text-text-main dark:text-gray-200">$0.00</span>
+</div>
+<div class="flex justify-between">
+<span class="text-text-muted">Total before tax:</span>
+<span class="text-text-main dark:text-gray-200">$348.00</span>
+</div>
+<div class="flex justify-between">
+<span class="text-text-muted">Estimated tax to be collected:</span>
+<span class="text-text-main dark:text-gray-200">$27.84</span>
+</div>
+<div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-3 mt-2">
+<span class="text-lg font-bold text-text-main dark:text-white">Grand Total:</span>
+<span class="text-lg font-bold text-primary">$375.84</span>
+</div>
+</div>
+<div class="mb-6">
+<h4 class="text-text-main dark:text-white font-semibold text-sm mb-2">Shipping Address</h4>
+<div class="text-sm text-text-muted bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+<p class="font-medium text-text-main dark:text-gray-200">Jane Doe</p>
+<p>1234 Market Street</p>
+<p>San Francisco, CA 94103</p>
+<a class="text-blue-600 dark:text-blue-400 text-xs mt-2 inline-block hover:underline" href="#">Change details</a>
+</div>
+</div>
+<div>
+<h4 class="text-text-main dark:text-white font-semibold text-sm mb-2">Payment Method</h4>
+<div class="flex items-center gap-3 text-sm text-text-muted bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+<span class="material-symbols-outlined text-gray-400">credit_card</span>
+<div>
+<p class="text-text-main dark:text-gray-200"><span class="font-medium">Visa</span> ending in 1234</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<footer class="mt-auto font-display">
+<button class="w-full bg-[#37475a] hover:bg-[#485769] transition-colors text-white py-4 text-sm font-medium" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+        Back to top
+    </button>
+<div class="bg-[#232f3e] text-white py-12 border-b border-[#3a4553]">
+<div class="max-w-7xl mx-auto px-4 lg:px-10">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+<div class="flex flex-col gap-4">
+<h3 class="font-bold text-base text-white">Get to Know Us</h3>
+<nav class="flex flex-col gap-2 text-sm text-gray-300">
+<a class="hover:text-white hover:underline transition-colors" href="#">About Us</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Careers</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Press Releases</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">ShopOnline Science</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h3 class="font-bold text-base text-white">Customer Service</h3>
+<nav class="flex flex-col gap-2 text-sm text-gray-300">
+<a class="hover:text-white hover:underline transition-colors" href="#">Help Center</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Returns &amp; Replacements</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Manage Your Content</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Accessibility</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h3 class="font-bold text-base text-white">Policies</h3>
+<nav class="flex flex-col gap-2 text-sm text-gray-300">
+<a class="hover:text-white hover:underline transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Terms &amp; Conditions</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Cookie Preferences</a>
+<a class="hover:text-white hover:underline transition-colors" href="#">Your Ads Privacy Choices</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h3 class="font-bold text-base text-white">Connect with Us</h3>
+<nav class="flex flex-col gap-2 text-sm text-gray-300">
+<a class="hover:text-white hover:underline transition-colors flex items-center gap-2" href="#">
+                             Facebook
+                        </a>
+<a class="hover:text-white hover:underline transition-colors flex items-center gap-2" href="#">
+                             Twitter
+                        </a>
+<a class="hover:text-white hover:underline transition-colors flex items-center gap-2" href="#">
+                             Instagram
+                        </a>
+<a class="hover:text-white hover:underline transition-colors flex items-center gap-2" href="#">
+                            YouTube
+                       </a>
+</nav>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-[#131a22] py-8">
+<div class="max-w-7xl mx-auto px-4 lg:px-10 flex flex-col items-center gap-4">
+<div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-gray-300">
+<a class="hover:underline hover:text-white" href="#">Conditions of Use</a>
+<a class="hover:underline hover:text-white" href="#">Privacy Notice</a>
+<a class="hover:underline hover:text-white" href="#">Consumer Health Data Privacy Disclosure</a>
+</div>
+<p class="text-xs text-gray-400">" 1996-2024, ShopOnline.com, Inc. or its affiliates</p>
+</div>
+</div>
+</footer>
+</body></html>

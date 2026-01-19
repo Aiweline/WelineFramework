@@ -1,0 +1,86 @@
+<?php
+/**
+ * Header Right Menu Hook
+ * 在header-nav-right位置渲染右侧菜单分类
+ * Hook名称：header-nav-right
+ * 
+ * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use WeShop\Catalog\Service\CategoryService;
+
+// 获取分类服务
+/** @var CategoryService $categoryService */
+$categoryService = ObjectManager::getInstance(CategoryService::class);
+
+// 获取右侧菜单分类树（只获取标记为右侧菜单的分类）
+$rightMenuCategories = $categoryService->getRightMenuCategoryTree(0);
+
+// 如果分类为空，不输出任何内容
+if (empty($rightMenuCategories)) {
+    return;
+}
+
+// 获取前端URL
+$frontendUrl = $this->getUrl('');
+
+// 递归函数：将分类数据转换为菜单项格式
+$convertCategoryToMenuItem = function($category) use (&$convertCategoryToMenuItem, $frontendUrl) {
+    // 只处理启用的分类
+    if (empty($category['is_active']) || $category['is_active'] != 1) {
+        return null;
+    }
+    
+    $menuItem = [
+        'text' => $category['name'] ?? '',
+        'url' => $frontendUrl . 'catalog/category/view?url_key=' . urlencode($category['url_key'] ?? ''),
+    ];
+    
+    // 如果有子分类，递归处理
+    if (!empty($category['children']) && is_array($category['children'])) {
+        $menuItem['children'] = [];
+        foreach ($category['children'] as $child) {
+            $childMenuItem = $convertCategoryToMenuItem($child);
+            if ($childMenuItem !== null) {
+                $menuItem['children'][] = $childMenuItem;
+            }
+        }
+        // 如果所有子分类都被过滤掉了，移除children数组
+        if (empty($menuItem['children'])) {
+            unset($menuItem['children']);
+        }
+    }
+    
+    return $menuItem;
+};
+
+// 转换分类数据为菜单项（只包含启用的分类）
+$rightMenuItems = [];
+foreach ($rightMenuCategories as $category) {
+    $menuItem = $convertCategoryToMenuItem($category);
+    if ($menuItem !== null) {
+        $rightMenuItems[] = $menuItem;
+    }
+}
+
+// 如果菜单项为空，不输出任何内容
+if (empty($rightMenuItems)) {
+    return;
+}
+
+// 输出右侧菜单HTML
+?>
+<nav class="header-nav-right-menu">
+    <ul class="header-nav-right-list">
+        <?php foreach ($rightMenuItems as $item): ?>
+            <li class="header-nav-right-item">
+                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="header-nav-right-link">
+                    <?= htmlspecialchars($item['text'] ?? '') ?>
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</nav>
