@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Product Questions &amp; Answers</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display flex flex-col min-h-screen overflow-x-hidden">
+<!-- Top Navigation -->
+<header class="bg-white dark:bg-[#1a202c] border-b border-[#f0f2f4] dark:border-gray-800 sticky top-0 z-50">
+<div class="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex items-center justify-between h-16">
+<!-- Logo -->
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3 text-[#111318] dark:text-white group" href="#">
+<div class="size-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<h2 class="text-xl font-bold tracking-tight">Amazonia</h2>
+</a>
+<!-- Search (Desktop) -->
+<div class="hidden md:flex max-w-md w-full">
+<div class="relative w-full">
+<input class="w-[300px] lg:w-[400px] h-10 pl-10 pr-4 rounded-lg bg-[#f0f2f4] dark:bg-gray-800 border-none text-sm text-[#111318] dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Search Amazonia" type="text"/>
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Nav -->
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-sm font-medium text-[#111318] dark:text-gray-200 hover:text-primary transition-colors" href="#">Deals</a>
+<a class="text-sm font-medium text-[#111318] dark:text-gray-200 hover:text-primary transition-colors" href="#">Orders</a>
+<a class="text-sm font-medium text-[#111318] dark:text-gray-200 hover:text-primary transition-colors" href="#">Saved</a>
+</nav>
+<button class="relative p-2 text-[#111318] dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="absolute top-1 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">2</span>
+</button>
+<div class="size-9 rounded-full bg-gray-200 dark:bg-gray-700 bg-cover bg-center border border-gray-200 dark:border-gray-600" data-alt="User profile avatar" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCwSTaEH6_hGeZFO8ZV6zaGNCYYFomuNAC5meVXuqklfAJXBg9Oh5VLcokNRQRwmaZeOVwRs_m_6X0GOMp_cqsIfsT7DJudnVJsJbLi9iVerMFJ9tctevyXvtmYV9LMYD62_oayLh7mjxuV3krmqdPheDo_UpwwKqxQmMi_VGtnzXpmM_TZZiO31zf41lm77vl-zvf8pFAQTtxciRCinbIBVM-6s9533BAWWpuz2wxvmENBQ4Op-eqDf8QlOwqJxdLK8By3fDeciyu-");'></div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Layout -->
+<main class="flex-1 max-w-[1280px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<!-- Breadcrumbs -->
+<div class="flex items-center gap-2 text-sm text-[#636f88] dark:text-gray-400 mb-6 overflow-x-auto whitespace-nowrap">
+<a class="hover:text-primary hover:underline" href="#">Electronics</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<a class="hover:text-primary hover:underline" href="#">Audio</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<a class="hover:text-primary hover:underline" href="#">Headphones</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-[#111318] dark:text-gray-200 font-medium truncate">Wireless Noise Cancelling Headphones Pro X</span>
+</div>
+<div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+<!-- Left Sidebar: Product Info -->
+<aside class="w-full lg:w-1/4 lg:shrink-0">
+<div class="sticky top-24 bg-white dark:bg-[#1a202c] p-6 rounded-xl border border-[#f0f2f4] dark:border-gray-800 shadow-sm">
+<div class="aspect-square w-full bg-gray-100 dark:bg-gray-800 rounded-lg mb-4 bg-center bg-contain bg-no-repeat" data-alt="Wireless Noise Cancelling Headphones product shot" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA-GRMxT7FMGh7wSVNm9T6iGEJjc9kLTHpyS-gbiqW2EBFyPu4YZbSaGjSujt5vIkF9b-DL1S-LGuGag9GG4IEeX1ff_VfcbObbfwaQzTFAEm0d1T1CAB7ohiTHgYciE79IapFmSF58SbjIPdHQCKfBLQR906rUWsZssbYaNF6bfWq_Rwk-rwP-XknWWZ3lFoc55hKcFNSL3JlnQEVfZraiGCq557Tx5Qd37pH4htzEvIPq87Bgf1ur6Ukc9Lb6_RdTvwKaeUdOiSzl");'></div>
+<a class="block text-lg font-bold text-[#111318] dark:text-white leading-snug hover:text-primary hover:underline mb-2" href="#">
+                        Wireless Noise Cancelling Headphones Pro X - Matte Black
+                    </a>
+<div class="flex items-center gap-2 mb-3">
+<div class="flex text-yellow-400">
+<span class="material-symbols-outlined text-[18px] fill-current">star</span>
+<span class="material-symbols-outlined text-[18px] fill-current">star</span>
+<span class="material-symbols-outlined text-[18px] fill-current">star</span>
+<span class="material-symbols-outlined text-[18px] fill-current">star</span>
+<span class="material-symbols-outlined text-[18px] fill-current">star_half</span>
+</div>
+<span class="text-sm font-medium text-primary hover:underline cursor-pointer">4.5 (12,403)</span>
+</div>
+<div class="text-2xl font-bold text-[#111318] dark:text-white mb-4">$299.00</div>
+<button class="w-full bg-[#f0f2f4] dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-[#111318] dark:text-white font-medium py-2.5 px-4 rounded-lg transition-colors text-sm mb-4">
+                        Add to Cart
+                    </button>
+<div class="border-t border-[#f0f2f4] dark:border-gray-700 pt-4">
+<a class="flex items-center gap-2 text-sm text-primary font-medium hover:underline" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Back to product page
+                        </a>
+</div>
+</div>
+</aside>
+<!-- Main Content: Q&A -->
+<div class="w-full lg:w-3/4">
+<!-- Page Heading -->
+<div class="mb-8">
+<h1 class="text-3xl font-bold text-[#111318] dark:text-white mb-2">Customer questions &amp; answers</h1>
+<p class="text-[#636f88] dark:text-gray-400">Find answers in product info, Q&amp;As, reviews</p>
+</div>
+<!-- Search Bar -->
+<div class="relative mb-10">
+<div class="flex w-full items-stretch rounded-lg h-12 shadow-sm border border-gray-200 dark:border-gray-700 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary overflow-hidden transition-all">
+<div class="flex items-center justify-center pl-4 bg-white dark:bg-[#1a202c] text-[#636f88] dark:text-gray-400">
+<span class="material-symbols-outlined text-[24px]">search</span>
+</div>
+<input class="w-full h-full bg-white dark:bg-[#1a202c] border-none text-[#111318] dark:text-white placeholder-[#636f88] dark:placeholder-gray-500 focus:ring-0 px-4 text-base" placeholder="Have a question? Search for answers" value=""/>
+</div>
+</div>
+<!-- Ask Question CTA (Small) -->
+<div class="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-lg mb-8">
+<div class="text-sm text-[#111318] dark:text-white font-medium">Don't see what you're looking for?</div>
+<button class="text-sm bg-white dark:bg-gray-800 text-primary border border-primary/20 hover:bg-primary hover:text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">
+                        Ask the Community
+                    </button>
+</div>
+<!-- Filters / Tabs -->
+<div class="flex items-center gap-6 border-b border-[#f0f2f4] dark:border-gray-800 mb-6">
+<button class="pb-3 text-primary border-b-2 border-primary font-semibold text-sm">Most Helpful</button>
+<button class="pb-3 text-[#636f88] dark:text-gray-400 hover:text-[#111318] dark:hover:text-white font-medium text-sm transition-colors">Most Recent</button>
+</div>
+<!-- Q&A List -->
+<div class="flex flex-col gap-8">
+<!-- Q&A Item 1 -->
+<div class="group/item">
+<div class="flex gap-3 mb-2">
+<span class="flex-shrink-0 font-bold text-[#111318] dark:text-white w-6">Q:</span>
+<a class="font-bold text-lg text-[#111318] dark:text-white hover:text-primary hover:underline leading-snug" href="#">
+                                Does this work with multiple devices simultaneously?
+                            </a>
+</div>
+<div class="flex gap-3 pl-0 md:pl-0">
+<span class="flex-shrink-0 font-bold text-[#636f88] dark:text-gray-400 w-6">A:</span>
+<div class="flex-1">
+<p class="text-[#111318] dark:text-gray-200 text-base leading-relaxed mb-2">
+                                    Yes, it supports multipoint connection. You can connect to your laptop and phone at the same time. It switches audio automatically depending on which device is playing.
+                                </p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#636f88] dark:text-gray-400">
+<span>By <span class="text-[#111318] dark:text-gray-300 font-medium">TechStore Support</span> on October 24, 2023</span>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="flex items-center gap-1.5 hover:text-[#111318] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">thumb_up</span>
+                                        Helpful (42)
+                                    </button>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="hover:text-red-500 transition-colors">Report</button>
+</div>
+</div>
+</div>
+</div>
+<div class="border-b border-[#f0f2f4] dark:border-gray-800"></div>
+<!-- Q&A Item 2 -->
+<div class="group/item">
+<div class="flex gap-3 mb-2">
+<span class="flex-shrink-0 font-bold text-[#111318] dark:text-white w-6">Q:</span>
+<a class="font-bold text-lg text-[#111318] dark:text-white hover:text-primary hover:underline leading-snug" href="#">
+                                How long is the battery life with ANC turned on?
+                            </a>
+</div>
+<div class="flex gap-3 pl-0 md:pl-0">
+<span class="flex-shrink-0 font-bold text-[#636f88] dark:text-gray-400 w-6">A:</span>
+<div class="flex-1">
+<p class="text-[#111318] dark:text-gray-200 text-base leading-relaxed mb-2">
+                                    I get about 30 hours consistently with noise cancelling on high. It charges pretty fast too, about 10 mins of charge gives me 3-4 hours of play.
+                                </p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#636f88] dark:text-gray-400">
+<span>By <span class="text-[#111318] dark:text-gray-300 font-medium">Sarah M.</span> <span class="text-green-600 dark:text-green-400 font-medium text-xs border border-green-600 dark:border-green-400 rounded px-1 ml-1">Verified Purchase</span> on November 12, 2023</span>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="flex items-center gap-1.5 hover:text-[#111318] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">thumb_up</span>
+                                        Helpful (15)
+                                    </button>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="hover:text-red-500 transition-colors">Report</button>
+</div>
+</div>
+</div>
+</div>
+<div class="border-b border-[#f0f2f4] dark:border-gray-800"></div>
+<!-- Q&A Item 3 -->
+<div class="group/item">
+<div class="flex gap-3 mb-2">
+<span class="flex-shrink-0 font-bold text-[#111318] dark:text-white w-6">Q:</span>
+<a class="font-bold text-lg text-[#111318] dark:text-white hover:text-primary hover:underline leading-snug" href="#">
+                                Can I replace the ear pads?
+                            </a>
+</div>
+<div class="flex gap-3 pl-0 md:pl-0">
+<span class="flex-shrink-0 font-bold text-[#636f88] dark:text-gray-400 w-6">A:</span>
+<div class="flex-1">
+<p class="text-[#111318] dark:text-gray-200 text-base leading-relaxed mb-2">
+                                    Yes, the ear pads are replaceable. You can find official replacement kits on the manufacturer's website or third-party compatible ones here on Amazonia.
+                                </p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#636f88] dark:text-gray-400">
+<span>By <span class="text-[#111318] dark:text-gray-300 font-medium">AudioPhile_99</span> on December 01, 2023</span>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="flex items-center gap-1.5 hover:text-[#111318] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">thumb_up</span>
+                                        Helpful (8)
+                                    </button>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="hover:text-red-500 transition-colors">Report</button>
+</div>
+</div>
+</div>
+</div>
+<div class="border-b border-[#f0f2f4] dark:border-gray-800"></div>
+<!-- Q&A Item 4 -->
+<div class="group/item">
+<div class="flex gap-3 mb-2">
+<span class="flex-shrink-0 font-bold text-[#111318] dark:text-white w-6">Q:</span>
+<a class="font-bold text-lg text-[#111318] dark:text-white hover:text-primary hover:underline leading-snug" href="#">
+                                Does it come with a hard carrying case?
+                            </a>
+</div>
+<div class="flex gap-3 pl-0 md:pl-0">
+<span class="flex-shrink-0 font-bold text-[#636f88] dark:text-gray-400 w-6">A:</span>
+<div class="flex-1">
+<p class="text-[#111318] dark:text-gray-200 text-base leading-relaxed mb-2">
+                                    Yes, a very sturdy hard case is included.
+                                </p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#636f88] dark:text-gray-400">
+<span>By <span class="text-[#111318] dark:text-gray-300 font-medium">Mike R.</span> <span class="text-green-600 dark:text-green-400 font-medium text-xs border border-green-600 dark:border-green-400 rounded px-1 ml-1">Verified Purchase</span> on January 15, 2024</span>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="flex items-center gap-1.5 hover:text-[#111318] dark:hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[18px]">thumb_up</span>
+                                        Helpful (3)
+                                    </button>
+<span class="hidden sm:inline text-gray-300 dark:text-gray-700">|</span>
+<button class="hover:text-red-500 transition-colors">Report</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="mt-12 flex justify-center">
+<nav class="flex items-center gap-1">
+<button class="size-10 flex items-center justify-center rounded-lg text-[#636f88] dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="size-10 flex items-center justify-center rounded-lg bg-primary text-white font-semibold">1</button>
+<button class="size-10 flex items-center justify-center rounded-lg text-[#111318] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium transition-colors">2</button>
+<button class="size-10 flex items-center justify-center rounded-lg text-[#111318] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium transition-colors">3</button>
+<span class="px-2 text-gray-400">...</span>
+<button class="size-10 flex items-center justify-center rounded-lg text-[#111318] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium transition-colors">12</button>
+<button class="size-10 flex items-center justify-center rounded-lg text-[#111318] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</nav>
+</div>
+<!-- Post Question Area -->
+<div class="mt-16 bg-white dark:bg-[#1a202c] border border-[#f0f2f4] dark:border-gray-800 rounded-xl p-6 sm:p-8">
+<h3 class="text-xl font-bold text-[#111318] dark:text-white mb-4">Ask a question</h3>
+<p class="text-sm text-[#636f88] dark:text-gray-400 mb-6">Your question might be answered by sellers, manufacturers, or customers who bought this product.</p>
+<label class="block mb-4">
+<textarea class="w-full rounded-lg bg-[#f0f2f4] dark:bg-gray-800 border-none p-4 text-[#111318] dark:text-white placeholder-[#636f88] dark:placeholder-gray-500 focus:ring-2 focus:ring-primary/50 resize-y" placeholder="Type your question here..." rows="4"></textarea>
+</label>
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+<div class="flex items-center gap-2 text-xs text-[#636f88] dark:text-gray-500">
+<span class="material-symbols-outlined text-[16px]">info</span>
+<span>Please make sure that you are posting in the form of a question.</span>
+</div>
+<button class="bg-primary hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors w-full sm:w-auto">
+                            Post Question
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-white dark:bg-[#1a202c] border-t border-[#f0f2f4] dark:border-gray-800 mt-auto py-12">
+<div class="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+<div class="flex items-center gap-2 mb-6">
+<div class="size-6 bg-primary/10 rounded flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">shopping_bag</span>
+</div>
+<span class="text-lg font-bold text-[#111318] dark:text-white">Amazonia</span>
+</div>
+<div class="flex flex-wrap justify-center gap-8 mb-8">
+<a class="text-sm text-[#636f88] dark:text-gray-400 hover:text-primary" href="#">Conditions of Use</a>
+<a class="text-sm text-[#636f88] dark:text-gray-400 hover:text-primary" href="#">Privacy Notice</a>
+<a class="text-sm text-[#636f88] dark:text-gray-400 hover:text-primary" href="#">Consumer Health Data Privacy Disclosure</a>
+<a class="text-sm text-[#636f88] dark:text-gray-400 hover:text-primary" href="#">Ads Privacy Choices</a>
+</div>
+<p class="text-xs text-[#636f88] dark:text-gray-500">" 1996-2024, Amazonia.com, Inc. or its affiliates</p>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign In - E-Commerce</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: "Work Sans", "Noto Sans", sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col items-center justify-between py-6 sm:py-10 text-[#111318] dark:text-white transition-colors duration-200">
+<header class="w-full flex justify-center mb-6">
+<div class="flex items-center gap-2 cursor-pointer">
+<div class="size-8 text-primary">
+<svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z"></path>
+</svg>
+</div>
+<h1 class="text-2xl font-bold tracking-tight text-[#111318] dark:text-white">Brand Store</h1>
+</div>
+</header>
+<main class="w-full flex-1 flex flex-col items-center px-4">
+<div class="w-full max-w-[400px] bg-white dark:bg-[#1A202C] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-8 space-y-6">
+<div>
+<h2 class="text-3xl font-bold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">Sign in</h2>
+</div>
+<form class="space-y-4" onsubmit="event.preventDefault();">
+<div class="flex flex-col gap-1">
+<label class="text-sm font-medium leading-normal text-[#111318] dark:text-gray-200" for="email">Email or mobile phone number</label>
+<input class="form-input w-full rounded-lg border border-[#dcdfe5] dark:border-gray-600 bg-white dark:bg-gray-800 h-12 px-4 text-base text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all" id="email" placeholder="Enter your email" type="text"/>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex justify-between items-baseline">
+<label class="text-sm font-medium leading-normal text-[#111318] dark:text-gray-200" for="password">Password</label>
+<a class="text-sm font-medium text-primary hover:underline" href="#">Forgot your password?</a>
+</div>
+<div class="relative flex w-full items-center">
+<input class="form-input w-full rounded-lg border border-[#dcdfe5] dark:border-gray-600 bg-white dark:bg-gray-800 h-12 px-4 pr-12 text-base text-[#111318] dark:text-white placeholder:text-[#636f88] focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all" id="password" type="password"/>
+<button class="absolute right-0 h-full px-3 text-[#636f88] hover:text-[#111318] dark:hover:text-white transition-colors flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<button class="w-full bg-primary hover:bg-blue-700 text-white font-medium rounded-lg h-12 shadow-sm transition-colors text-base mt-2">
+                    Sign in
+                </button>
+<div class="flex items-center gap-2 pt-1">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="h-4 w-4 rounded border-[#dcdfe5] dark:border-gray-500 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-offset-0 focus:ring-0 focus:outline-none cursor-pointer" type="checkbox"/>
+<span class="text-sm font-normal text-[#111318] dark:text-gray-300 group-hover:text-primary transition-colors">Keep me signed in</span>
+</label>
+<span class="text-gray-400 dark:text-gray-600 select-none">|</span>
+<a class="text-sm text-primary hover:underline flex items-center gap-1 group" href="#">
+                        Details
+                        <span class="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_right</span>
+</a>
+</div>
+<div class="mt-4 flex gap-2 items-start text-sm bg-gray-50 dark:bg-gray-800/50 p-3 rounded border border-gray-100 dark:border-gray-700">
+<span class="material-symbols-outlined text-[20px] text-primary shrink-0 mt-0.5">phonelink_lock</span>
+<p class="text-gray-600 dark:text-gray-400 leading-snug">
+                        Secure your account with 2FA. <a class="text-primary hover:underline font-medium" href="#">Enable or manage Two-Factor Authentication settings</a>.
+                    </p>
+</div>
+<p class="text-xs text-gray-500 dark:text-gray-400 mt-4 leading-relaxed">
+                    By continuing, you agree to Brand Store's <a class="text-primary hover:underline" href="#">Conditions of Use</a> and <a class="text-primary hover:underline" href="#">Privacy Notice</a>.
+                </p>
+</form>
+<div class="relative py-2">
+<div aria-hidden="true" class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-gray-200 dark:border-gray-700"></div>
+</div>
+<div class="relative flex justify-center text-sm">
+<span class="bg-white dark:bg-[#1A202C] px-2 text-gray-500 dark:text-gray-400">New to Brand Store?</span>
+</div>
+</div>
+<button class="w-full bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50 text-[#111318] dark:text-white border border-gray-300 dark:border-gray-600 font-medium rounded-lg h-11 shadow-sm transition-colors text-sm">
+                Create your account
+            </button>
+</div>
+</main>
+<footer class="w-full mt-10 pb-6 px-4">
+<div class="max-w-[960px] mx-auto flex flex-col items-center gap-4">
+<div class="flex flex-wrap justify-center gap-6 md:gap-8 text-xs text-primary">
+<a class="hover:underline hover:text-blue-700" href="#">Conditions of Use</a>
+<a class="hover:underline hover:text-blue-700" href="#">Privacy Notice</a>
+<a class="hover:underline hover:text-blue-700" href="#">Help</a>
+</div>
+<p class="text-xs text-gray-500 dark:text-gray-400">" 1996-2023, BrandName.com, Inc. or its affiliates</p>
+</div>
+</footer>
+
+</body></html>

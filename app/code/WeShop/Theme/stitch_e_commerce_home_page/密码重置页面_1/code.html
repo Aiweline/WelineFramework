@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Password Assistance</title>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col font-display text-[#111318] dark:text-white">
+<!-- Header: Simple Logo Centered -->
+<header class="flex items-center justify-center py-6 px-4">
+<div class="flex items-center gap-2 cursor-pointer text-[#111318] dark:text-white">
+<div class="size-8">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M24 18.4228L42 11.475V34.3663C42 34.7796 41.7457 35.1504 41.3601 35.2992L24 42V18.4228Z" fill="currentColor" fill-rule="evenodd"></path>
+<path clip-rule="evenodd" d="M24 8.18819L33.4123 11.574L24 15.2071L14.5877 11.574L24 8.18819ZM9 15.8487L21 20.4805V37.6263L9 32.9945V15.8487ZM27 37.6263V20.4805L39 15.8487V32.9945L27 37.6263ZM25.354 2.29885C24.4788 1.98402 23.5212 1.98402 22.646 2.29885L4.98454 8.65208C3.7939 9.08038 3 10.2097 3 11.475V34.3663C3 36.0196 4.01719 37.5026 5.55962 38.098L22.9197 44.7987C23.6149 45.0671 24.3851 45.0671 25.0803 44.7987L42.4404 38.098C43.9828 37.5026 45 36.0196 45 34.3663V11.475C45 10.2097 44.2061 9.08038 43.0155 8.65208L25.354 2.29885Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+<span class="text-xl font-bold tracking-tight">Amazon-style Store</span>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex justify-center px-4 sm:px-6">
+<div class="w-full max-w-[400px] flex flex-col gap-6">
+<!-- Card Container -->
+<div class="bg-white dark:bg-[#1a212e] rounded-lg border border-[#dcdfe5] dark:border-[#2d3646] p-6 shadow-sm">
+<!-- Page Heading -->
+<h1 class="text-3xl font-normal leading-tight tracking-tight mb-4 text-[#111318] dark:text-white">
+                    Password assistance
+                </h1>
+<!-- Body Text -->
+<p class="text-sm text-[#111318] dark:text-[#9ca3af] mb-6 leading-normal">
+                    Enter the email address or mobile phone number associated with your account.
+                </p>
+<!-- Text Field -->
+<div class="flex flex-col gap-2 mb-6">
+<label class="text-sm font-bold text-[#111318] dark:text-white" for="email">
+                        Email or mobile phone number
+                    </label>
+<input class="form-input w-full rounded-md border border-[#dcdfe5] dark:border-[#374151] bg-white dark:bg-[#111621] px-3 py-2 text-base text-[#111318] dark:text-white focus:border-primary focus:ring-1 focus:ring-primary shadow-sm outline-none transition-colors" id="email" type="text" value=""/>
+</div>
+<!-- Single Button -->
+<button class="w-full flex items-center justify-center rounded-lg bg-primary hover:bg-primary/90 text-white text-sm font-medium h-10 px-4 transition-colors shadow-sm mb-4">
+                    Continue
+                </button>
+<!-- Secondary Link Section (Amazon Style) -->
+<div class="mt-4">
+<h3 class="text-sm font-bold text-[#111318] dark:text-white mb-1">Has your email changed?</h3>
+<p class="text-sm text-[#111318] dark:text-[#9ca3af] leading-normal">
+                        If you no longer use the e-mail address associated with your account, you may contact 
+                        <a class="text-primary hover:underline hover:text-primary/80" href="#">Customer Service</a> for help restoring access to your account.
+                    </p>
+</div>
+</div>
+<!-- Footer-like Links below card -->
+<div class="text-center space-y-4 pb-10">
+<div class="flex flex-col gap-2">
+<p class="text-xs text-[#636f88] dark:text-[#6b7280]">
+                        New to our store? 
+                        <a class="text-primary hover:underline font-medium" href="#">Create your account</a>
+</p>
+<p class="text-xs text-[#636f88] dark:text-[#6b7280]">
+                        Already have an account? 
+                        <a class="text-primary hover:underline font-medium" href="#">Sign in</a>
+</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="py-8 border-t border-[#e5e7eb] dark:border-[#1f2937] mt-auto bg-gradient-to-b from-white to-[#f6f6f8] dark:from-[#111621] dark:to-[#0b0e14]">
+<div class="flex flex-col items-center gap-4 text-xs text-[#636f88] dark:text-[#6b7280]">
+<div class="flex gap-8">
+<a class="hover:underline hover:text-primary" href="#">Conditions of Use</a>
+<a class="hover:underline hover:text-primary" href="#">Privacy Notice</a>
+<a class="hover:underline hover:text-primary" href="#">Help</a>
+</div>
+<p>" 1996-2024, Amazon-style Store, Inc. or its affiliates</p>
+</div>
+</footer>
+</body></html>

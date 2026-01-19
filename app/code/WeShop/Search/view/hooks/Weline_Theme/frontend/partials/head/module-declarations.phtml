@@ -1,0 +1,18 @@
+<?php
+/**
+ * WeShop Search 模块 - Head 模块声明 Hook
+ * 在 head 中声明搜索模块，允许搜索功能在页面加载时自动初始化
+ * Hook名称：Weline_Theme::frontend::partials::head::module-declarations
+ * 
+ * @hook-priority 150      Hook优先级：150（composer位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+?>
+<script data-no-extract="true">
+    // ========== 声明搜索模块 ==========
+    // 在 head 中声明搜索模块，立即加载
+    if (window.Weline && window.Weline.declare) {
+        Weline.declare('search', true, 'WeShop_Search::js/search.js');
+    }
+</script>

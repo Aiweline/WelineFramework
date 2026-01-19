@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create Review</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#000000",
+                        secondary: "#f4f4f5",
+                    },
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        xl: "0.75rem",
+                        "2xl": "1rem",
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer utilities {
+            .input-field {
+                @apply w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-sm placeholder:text-gray-400 focus:border-black focus:ring-black focus:bg-white transition-all outline-none;
+            }
+            .material-symbols-outlined {
+                font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            }
+            .material-symbols-outlined.fill-current {
+                font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            }
+        }
+    </style>
+</head>
+<body class="font-sans bg-[#f9fafb] text-slate-900 flex flex-col min-h-screen">
+<header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined text-[28px]">eco</span>
+<span class="text-lg font-bold tracking-tight">Weline</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center justify-center size-9 rounded-full hover:bg-gray-100 transition-colors">
+<span class="material-symbols-outlined text-[22px] text-gray-600">search</span>
+</button>
+<button class="flex items-center justify-center size-9 rounded-full hover:bg-gray-100 transition-colors relative">
+<span class="material-symbols-outlined text-[22px] text-gray-600">shopping_bag</span>
+<span class="absolute top-2 right-2 size-1.5 bg-red-500 rounded-full"></span>
+</button>
+<div class="size-8 rounded-full bg-gray-100 ml-1 overflow-hidden border border-gray-200">
+<span class="material-symbols-outlined text-gray-400 w-full h-full flex items-center justify-center text-[20px]">person</span>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-grow w-full max-w-2xl mx-auto px-4 py-8 sm:py-12">
+<div class="mb-8 text-center sm:text-left">
+<h1 class="text-2xl font-bold tracking-tight">Create Review</h1>
+<p class="text-gray-500 text-sm mt-1">Share your experience with the community</p>
+</div>
+<div class="bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden">
+<div class="p-6 border-b border-gray-50 flex gap-4 items-start">
+<div class="w-20 h-20 bg-[#f8f9fa] rounded-xl flex items-center justify-center p-2 border border-gray-100 flex-shrink-0">
+<img alt="Product Image" class="w-full h-full object-contain mix-blend-multiply" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAGYp6AVMf9YL_tGqgOfSWmGuZ2WE7Hrkam7k2PVA6NHSzNFKXteED6f3KVRoXaBuLZbJN9VYDWs5oZg_Bt1QFwbK3lAOwjS9VEP5rHqxcEK30HaFFcAvhDyxXWC1_fWFjEkZ8Kg3VCO5jYM_88iuenJR5Heelt2XGxfRODR5-CjnpYXTxxwDVIm1FuusyZLcKwFXquzt2RuIiJthIYTIgG1UKUpOD2NEZPCkhgR0umB81jBdKVg6W41FHog1mi_7BoS6Ol-v_LrqJ"/>
+</div>
+<div>
+<h3 class="font-semibold text-sm sm:text-base leading-snug mb-1">Weline Wireless Noise Canceling Headphones</h3>
+<p class="text-xs text-gray-400">Black " Electronics</p>
+</div>
+</div>
+<form action="#" class="p-6 sm:p-8 flex flex-col gap-8" onsubmit="event.preventDefault();">
+<div class="flex flex-col gap-3">
+<label class="text-sm font-semibold text-gray-900">Overall Rating</label>
+<div class="flex items-center gap-2">
+<div class="flex text-gray-200 hover:text-yellow-400 transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-[32px] fill-current hover:text-yellow-400 transition-colors">star</span>
+<span class="material-symbols-outlined text-[32px] fill-current hover:text-yellow-400 transition-colors">star</span>
+<span class="material-symbols-outlined text-[32px] fill-current hover:text-yellow-400 transition-colors">star</span>
+<span class="material-symbols-outlined text-[32px] fill-current hover:text-yellow-400 transition-colors">star</span>
+<span class="material-symbols-outlined text-[32px] fill-current hover:text-yellow-400 transition-colors">star</span>
+</div>
+<span class="text-sm text-gray-400 font-medium ml-2">Select stars</span>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex justify-between items-center">
+<label class="text-sm font-semibold text-gray-900">Photos &amp; Video</label>
+<span class="text-xs text-gray-400">Optional</span>
+</div>
+<div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+<button class="flex-shrink-0 size-20 sm:size-24 rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:bg-white hover:border-black transition-all flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-black group" type="button">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">add_photo_alternate</span>
+<span class="text-[10px] font-medium">Add</span>
+</button>
+<div class="flex-shrink-0 size-20 sm:size-24 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+<span class="material-symbols-outlined text-gray-300">image</span>
+</div>
+<div class="flex-shrink-0 size-20 sm:size-24 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
+<span class="material-symbols-outlined text-gray-300">image</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-5">
+<div class="space-y-1.5">
+<label class="text-sm font-semibold text-gray-900" for="headline">Headline</label>
+<input class="input-field" id="headline" placeholder="What's most important to know?" type="text"/>
+</div>
+<div class="space-y-1.5">
+<label class="text-sm font-semibold text-gray-900" for="review">Written Review</label>
+<textarea class="input-field resize-none" id="review" placeholder="What did you like or dislike? What did you use this product for?" rows="5"></textarea>
+<p class="text-right text-xs text-gray-400 mt-1">Min. 50 characters</p>
+</div>
+</div>
+<div class="pt-2">
+<button class="w-full bg-black hover:bg-gray-800 text-white font-medium py-3.5 px-6 rounded-xl shadow-md hover:shadow-lg transform active:scale-[0.99] transition-all duration-200" type="submit">
+                        Submit Review
+                    </button>
+</div>
+</form>
+</div>
+</main>
+<footer class="mt-auto py-8 border-t border-gray-100">
+<div class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-400">
+<p>" 2023 Weline Inc. All rights reserved.</p>
+<div class="flex gap-6">
+<a class="hover:text-black transition-colors" href="#">Privacy</a>
+<a class="hover:text-black transition-colors" href="#">Terms</a>
+<a class="hover:text-black transition-colors" href="#">Help</a>
+</div>
+</div>
+</footer>
+
+</body></html>

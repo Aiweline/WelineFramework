@@ -1,0 +1,7 @@
+DHL,DHL
+DHL标准配送,DHL标准配送
+DHL运单创建失败,DHL运单创建失败
+FedEx,FedEx
+获取FedEx访问令牌失败,获取FedEx访问令牌失败
+FedEx标准配送,FedEx标准配送
+"不支持的物流方式: %{1}","不支持的物流方式: %{1}"
