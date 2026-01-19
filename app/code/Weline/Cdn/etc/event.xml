@@ -19,5 +19,23 @@
                   shared="true" 
                   sort="0"/>
     </event>
+    
+    <!-- CDN规则推送事件 -->
+    <event name="Weline_Cdn::push_rules">
+        <observer name="Weline_Cdn::push_rules_cloudflare" 
+                  instance="Weline\Cdn\Observer\PushRules" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
+    
+    <!-- 系统升级后自动收集规则 -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Cdn::collect_rules_after_upgrade" 
+                  instance="Weline\Cdn\Observer\CollectRules" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="100"/>
+    </event>
 </config>
 
