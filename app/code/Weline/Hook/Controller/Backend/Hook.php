@@ -319,7 +319,7 @@ class Hook extends BaseController
                 'hooks' => $filteredHooks,
                 'stats' => $stats,
                 'total_count' => count($filteredHooks),
-                'html' => $this->fetch('Backend/Hook/list_table')
+                'html' => $this->fetch('Weline_Hook::templates/Backend/Hook/list_table')
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
             header('Content-Type: application/json');

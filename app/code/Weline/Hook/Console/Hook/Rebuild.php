@@ -33,13 +33,25 @@ class Rebuild extends CommandAbstract
             /** @var HookRegistry $registry */
             $registry = ObjectManager::getInstance(HookRegistry::class);
 
-            $ok = $registry->refresh();
+            // 允许 solo 冲突，以便能够完成重建（冲突会在开发环境下显示警告）
+            $ok = $registry->refresh(true);
             if ($ok) {
                 $this->printer->success(__('✓ 钩子注册表已重建完成。'));
                 $this->printer->note(__('位置：generated/hooks.php'));
                 
                 // 显示统计信息
                 $hooks = $registry->getHooks();
+                
+                // 统计实现文件信息
+                $totalImplementations = 0;
+                $hooksWithImplementations = 0;
+                foreach ($hooks as $hookName => $hookInfo) {
+                    $implCount = count($hookInfo['implementations'] ?? []);
+                    if ($implCount > 0) {
+                        $hooksWithImplementations++;
+                        $totalImplementations += $implCount;
+                    }
+                }
                 
                 $totalHooks = count($hooks);
                 $hooksWithSpec = 0;
@@ -58,6 +70,8 @@ class Rebuild extends CommandAbstract
                 $this->printer->note(__('  总钩子数：%{1}', [$totalHooks]));
                 $this->printer->note(__('  有规约的钩子：%{1}', [$hooksWithSpec]));
                 $this->printer->note(__('  有文档的钩子：%{1}', [$hooksWithDoc]));
+                $this->printer->note(__('  有实现文件的钩子：%{1}', [$hooksWithImplementations]));
+                $this->printer->note(__('  总实现文件数：%{1}', [$totalImplementations]));
                 
                 // 检查是否有钩子缺少文档
                 $hooksWithoutDoc = [];
