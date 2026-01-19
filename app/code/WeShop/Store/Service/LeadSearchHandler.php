@@ -7,6 +7,7 @@ namespace WeShop\Store\Service;
 use Weline\AutoLeadAgent\Model\LeadCandidate;
 use Weline\AutoLeadAgent\Service\SourceTypeHandlerInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Website;
 use WeShop\Store\Model\Store;
 
 /**
@@ -61,6 +62,58 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
             return [];
         }
 
+        // 获取语言和货币信息（从关联的Website获取）
+        $language = null;
+        $currency = null;
+        $languages = [];
+        
+        $websiteId = $store->getWebsiteId();
+        if ($websiteId) {
+            try {
+                /** @var Website $websiteModel */
+                $websiteModel = ObjectManager::getInstance(Website::class);
+                $website = $websiteModel->load($websiteId);
+                
+                if ($website->getId()) {
+                    // 获取默认语言和货币
+                    $language = $website->getDefaultLanguage();
+                    $currency = $website->getDefaultCurrency();
+                    
+                    // 获取支持的语言列表
+                    $languages = $website->getLanguageCodes();
+                    if (empty($languages) && $language) {
+                        // 如果没有关联语言列表，至少包含默认语言
+                        $languages = [$language];
+                    }
+                }
+            } catch (\Throwable $e) {
+                // 静默失败，使用默认值
+                error_log('LeadSearchHandler: Failed to get website language/currency: ' . $e->getMessage());
+            }
+        }
+        
+        // 如果从Website获取失败，尝试从框架State获取
+        if (empty($language)) {
+            try {
+                $language = \Weline\Framework\App\State::getLang();
+            } catch (\Throwable $e) {
+                $language = 'zh';
+            }
+        }
+        
+        if (empty($currency)) {
+            try {
+                $currency = \Weline\Framework\App\State::getCurrency();
+            } catch (\Throwable $e) {
+                $currency = 'CNY';
+            }
+        }
+        
+        // 如果languages为空，至少包含默认语言
+        if (empty($languages)) {
+            $languages = [$language ?: 'zh'];
+        }
+
         return [
             'id'          => (int)$store->getId(),
             'name'        => $store->getData(Store::fields_NAME),
@@ -69,6 +122,9 @@ class LeadSearchHandler implements SourceTypeHandlerInterface
             'meta_description' => $store->getData(Store::fields_META_DESCRIPTION),
             'meta_keywords'    => $store->getData(Store::fields_META_KEYWORDS),
             'address'     => $store->getData(Store::fields_ADDRESS),
+            'language'    => $language,  // 添加语言字段
+            'currency'   => $currency,   // 添加货币字段
+            'languages'  => $languages,  // 添加支持的语言列表
         ];
     }
 
