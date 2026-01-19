@@ -39,6 +39,15 @@
          icon="mdi mdi-file-document-edit" 
          order="30"/>
     
+    <!-- API规则管理子菜单 -->
+    <add source="Weline_Cdn::cdn_api_rules_manager" 
+         name="cdn_api_rules_manager" 
+         title="API规则管理" 
+         action="*/backend/api-rules/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-code-tags" 
+         order="35"/>
+    
     <!-- 预热管理子菜单 -->
     <add source="Weline_Cdn::cdn_warmup_manager" 
          name="cdn_warmup_manager" 

@@ -103,6 +103,10 @@ $selectedDomainId = $this->getData('domain_id') ?: '';
 </div>
 
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 let currentDomainId = '<?= $selectedDomainId ?>';
 
@@ -121,11 +125,29 @@ function loadRules() {
                 const rules = data.data || {};
                 document.getElementById('rulesTextarea').value = JSON.stringify(rules, null, 2);
             } else {
-                alert('<?= __('加载失败：') ?>' + data.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('加载失败：') ?>' + data.message);
+                }
             }
         })
         .catch(error => {
-            alert('<?= __('请求失败：') ?>' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请求失败：') ?>' + error.message);
+            }
         });
 }
 
@@ -136,7 +158,16 @@ function saveRules() {
     try {
         rules = JSON.parse(rulesText);
     } catch (e) {
-        alert('<?= __('JSON格式错误：') ?>' + e.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('JSON格式错误') ?>',
+                text: e.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('JSON格式错误：') ?>' + e.message);
+        }
         return;
     }
     
@@ -157,26 +188,82 @@ function saveRules() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log(data.message);
+            }
         } else {
-            alert('<?= __('保存失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('保存失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('请求失败') ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请求失败：') ?>' + error.message);
+        }
     });
 }
 
 function importRules() {
     if (!currentDomainId) {
-        alert('<?= __('请先选择域名') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择域名') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请先选择域名') ?>');
+        }
         return;
     }
     
-    if (!confirm('<?= __('确定要从CDN导入规则吗？这将覆盖当前规则。') ?>')) {
-        return;
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('确认导入') ?>',
+            text: '<?= __('确定要从CDN导入规则吗？这将覆盖当前规则。') ?>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定导入") ?>',
+            cancelButtonText: '<?= __("取消") ?>',
+            confirmButtonColor: '#ff9800'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performImport();
+            }
+        });
+    } else {
+        if (!confirm('<?= __('确定要从CDN导入规则吗？这将覆盖当前规则。') ?>')) {
+            return;
+        }
+        performImport();
     }
-    
+}
+
+function performImport() {
     fetch('<?= $this->getBackendUrl('*/backend/rules/import') ?>?domain_id=' + currentDomainId, {
         method: 'POST'
     })
@@ -184,13 +271,41 @@ function importRules() {
     .then(data => {
         if (data.success) {
             document.getElementById('rulesTextarea').value = JSON.stringify(data.data || {}, null, 2);
-            alert(data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log(data.message);
+            }
         } else {
-            alert('<?= __('导入失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('导入失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('导入失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('请求失败') ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请求失败：') ?>' + error.message);
+        }
     });
 }
 

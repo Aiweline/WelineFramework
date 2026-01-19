@@ -259,26 +259,77 @@ $statistics = $this->getData('statistics') ?: [];
 </div>
 
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function executeWarmup() {
-    if (!confirm('<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>')) {
-        return;
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('确认执行预热') ?>',
+            text: '<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<?= __("确定执行") ?>',
+            cancelButtonText: '<?= __("取消") ?>',
+            confirmButtonColor: '#28a745'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                performExecute();
+            }
+        });
+    } else {
+        if (!confirm('<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>')) {
+            return;
+        }
+        performExecute();
     }
-    
+}
+
+function performExecute() {
     fetch('<?= $this->getBackendUrl('*/backend/warmup/execute') ?>', {
         method: 'POST'
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('执行失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('执行失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('执行失败：') ?>' + data.message);
+            }
         }
     })
     .catch(error => {
-        alert('<?= __('请求失败：') ?>' + error.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('请求失败') ?>',
+                text: error.message,
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请求失败：') ?>' + error.message);
+        }
     });
 }
 
@@ -293,10 +344,29 @@ function toggleEnable(id, enabled) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
@@ -316,10 +386,29 @@ function deleteUrl(id) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('删除失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('删除失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('删除失败：') ?>' + data.message);
+            }
         }
     });
 }
