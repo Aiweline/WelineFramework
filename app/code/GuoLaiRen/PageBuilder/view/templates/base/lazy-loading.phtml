@@ -1,0 +1,58 @@
+<script>
+(function(){
+    // 全局对象，支持多次引入时继续扫描新图片
+    var NS = window.__PB_LAZY_LOADING__ = window.__PB_LAZY_LOADING__ || {
+        initialized: false,
+        observer: null,
+        boundFallback: false
+    };
+
+    function loadImg(img){
+        if (!img || img.dataset.loaded) return;
+        var src = img.getAttribute('data-src');
+        if (src){
+            img.src = src;
+            img.dataset.loaded = '1';
+        }
+    }
+
+    function initOrRescan(){
+        // 选择尚未被观察/处理的懒加载图片
+        var candidates = [].slice.call(document.querySelectorAll('img[loading="lazy"][data-src]'));
+        if (!candidates.length) return;
+
+        if ('IntersectionObserver' in window){
+            if (!NS.observer){
+                NS.observer = new IntersectionObserver(function(entries){
+                    entries.forEach(function(entry){
+                        if (entry.isIntersecting){
+                            loadImg(entry.target);
+                            NS.observer.unobserve(entry.target);
+                        }
+                    });
+                }, { rootMargin: '200px 0px' });
+            }
+            candidates.forEach(function(img){
+                if (!img.dataset.llObserved && !img.dataset.loaded){
+                    NS.observer.observe(img);
+                    img.dataset.llObserved = '1';
+                }
+            });
+        } else {
+            // 降级处理：滚动/缩放时触发尝试加载（只绑定一次）
+            function onScroll(){ candidates.forEach(loadImg); }
+            if (!NS.boundFallback){
+                window.addEventListener('scroll', onScroll, { passive: true });
+                window.addEventListener('resize', onScroll);
+                NS.boundFallback = true;
+            }
+            onScroll();
+        }
+    }
+
+    // 初次与后续（若再次被引入）都调用一次扫描
+    initOrRescan();
+    NS.initialized = true;
+})();
+</script>
+

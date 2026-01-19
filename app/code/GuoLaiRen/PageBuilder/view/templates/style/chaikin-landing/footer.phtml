@@ -1,0 +1,251 @@
+<?php
+/**
+ * Chaikin Analytics Landing Page - Footer
+ * 金融营销落地页模板 - 页脚
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:legal => 法律声明
+ * legal.notice_text => 法律声明文字:textarea:Legal Notices\: Here is our Disclosures and Details page. DISCLOSURES ABOUT OUR BUSINESS contains critical information that will help you use our work appropriately and give you a far better understanding of how our business works - both the benefits it might offer you and the inevitable limitations of our products. Although this is not a part of our "Disclosures and Details" page\, you can view our company's privacy policy here.
+ * legal.notice_color => 声明文字颜色:color:#666666
+ * legal.notice_size => 声明文字大小:responsive:11/12|px
+ * legal.notice_line_height => 声明行高:number:1.6
+ * legal.notice_margin => 声明下边距:responsive:20/30|px
+ * 
+ * legal.disclosure_link_text => 披露链接文字:text:Disclosures and Details
+ * legal.disclosure_link_url => 披露链接地址:text:#
+ * legal.privacy_link_text => 隐私链接文字:text:here
+ * legal.privacy_link_url => 隐私链接地址:text:#
+ * legal.link_color => 链接颜色:color:#0066cc
+ * legal.link_hover_color => 链接悬停颜色:color:#0052a3
+ * 
+ * group:copyright => 版权信息
+ * copyright.text => 版权文字:text:© 2025 Chaikin Analytics. All rights reserved.
+ * copyright.color => 版权文字颜色:color:#999999
+ * copyright.size => 版权文字大小:responsive:11/12|px
+ * copyright.margin => 版权上边距:responsive:20/30|px
+ * 
+ * group:footer_links => 页脚链接
+ * links.display => 显示链接:select:yes|yes,no
+ * links.color => 链接颜色:color:#666666
+ * links.hover_color => 链接悬停颜色:color:#333333
+ * links.size => 链接文字大小:responsive:11/12|px
+ * links.separator => 分隔符:text:|
+ * links.margin => 链接区域上边距:responsive:15/20|px
+ * 
+ * links.item1_text => 链接1文字:text:Full Disclaimer
+ * links.item1_url => 链接1地址:text:#
+ * links.item2_text => 链接2文字:text:Privacy
+ * links.item2_url => 链接2地址:text:#
+ * links.item3_text => 链接3文字:text:Terms & Conditions
+ * links.item3_url => 链接3地址:text:#
+ * links.item4_text => 链接4文字:text:Ad Choices
+ * links.item4_url => 链接4地址:text:#
+ * links.item5_text => 链接5文字:text:Do Not Sell My Personal Information
+ * links.item5_url => 链接5地址:text:#
+ * links.item6_text => 链接6文字:text:Cookie Preferences
+ * links.item6_url => 链接6地址:text:#
+ * 
+ * group:footer_style => 页脚样式
+ * footer.background => 背景颜色:color:#ffffff
+ * footer.padding_v => 上下内边距:responsive:30/40|px
+ * footer.border_top => 顶部边框:select:yes|yes,no
+ * footer.border_color => 边框颜色:color:#e5e5e5
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseFooterResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genFooterCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 法律声明配置
+$noticeText = getFooterConfig($styleSettings, 'legal.notice_text', 'Legal Notices: Here is our Disclosures and Details page. DISCLOSURES ABOUT OUR BUSINESS contains critical information that will help you use our work appropriately and give you a far better understanding of how our business works - both the benefits it might offer you and the inevitable limitations of our products. Although this is not a part of our "Disclosures and Details" page, you can view our company\'s privacy policy here.');
+$noticeColor = getFooterConfig($styleSettings, 'legal.notice_color', '#666666');
+$noticeSize = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'legal.notice_size', '11/12') . 'px'));
+$noticeLineHeight = getFooterConfig($styleSettings, 'legal.notice_line_height', '1.6');
+$noticeMargin = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'legal.notice_margin', '20/30') . 'px'));
+
+$disclosureText = getFooterConfig($styleSettings, 'legal.disclosure_link_text', 'Disclosures and Details');
+$disclosureUrl = getFooterConfig($styleSettings, 'legal.disclosure_link_url', '#');
+$privacyText = getFooterConfig($styleSettings, 'legal.privacy_link_text', 'here');
+$privacyUrl = getFooterConfig($styleSettings, 'legal.privacy_link_url', '#');
+$linkColor = getFooterConfig($styleSettings, 'legal.link_color', '#0066cc');
+$linkHoverColor = getFooterConfig($styleSettings, 'legal.link_hover_color', '#0052a3');
+
+// 版权配置
+$copyrightText = getFooterConfig($styleSettings, 'copyright.text', '© 2025 Chaikin Analytics. All rights reserved.');
+$copyrightColor = getFooterConfig($styleSettings, 'copyright.color', '#999999');
+$copyrightSize = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'copyright.size', '11/12') . 'px'));
+$copyrightMargin = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'copyright.margin', '20/30') . 'px'));
+
+// 页脚链接配置
+$linksDisplay = getFooterConfig($styleSettings, 'links.display', 'yes');
+$linksColor = getFooterConfig($styleSettings, 'links.color', '#666666');
+$linksHoverColor = getFooterConfig($styleSettings, 'links.hover_color', '#333333');
+$linksSize = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'links.size', '11/12') . 'px'));
+$linksSeparator = getFooterConfig($styleSettings, 'links.separator', '|');
+$linksMargin = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'links.margin', '15/20') . 'px'));
+
+$footerLinks = [];
+for ($i = 1; $i <= 6; $i++) {
+    $text = getFooterConfig($styleSettings, "links.item{$i}_text", '');
+    $url = getFooterConfig($styleSettings, "links.item{$i}_url", '#');
+    if ($text) {
+        $footerLinks[] = ['text' => $text, 'url' => $url];
+    }
+}
+
+// 如果没有配置任何链接，使用默认链接
+if (empty($footerLinks)) {
+    $footerLinks = [
+        ['text' => 'Full Disclaimer', 'url' => '#'],
+        ['text' => 'Privacy', 'url' => '#'],
+        ['text' => 'Terms & Conditions', 'url' => '#'],
+        ['text' => 'Ad Choices', 'url' => '#'],
+        ['text' => 'Do Not Sell My Personal Information', 'url' => '#'],
+        ['text' => 'Cookie Preferences', 'url' => '#'],
+    ];
+}
+
+// 页脚样式
+$footerBg = getFooterConfig($styleSettings, 'footer.background', '#ffffff');
+$footerPaddingV = genFooterCSS(parseFooterResponsive(getFooterConfig($styleSettings, 'footer.padding_v', '30/40') . 'px'));
+$footerBorderTop = getFooterConfig($styleSettings, 'footer.border_top', 'yes');
+$footerBorderColor = getFooterConfig($styleSettings, 'footer.border_color', '#e5e5e5');
+
+// 处理法律声明中的链接占位符
+$noticeProcessed = str_replace('Disclosures and Details', '<a href="' . htmlspecialchars($disclosureUrl ?? '') . '" style="color: ' . htmlspecialchars($linkColor ?? '') . '; text-decoration: underline;">' . htmlspecialchars($disclosureText ?? '') . '</a>', $noticeText);
+$noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUrl ?? '') . '" style="color: ' . htmlspecialchars($linkColor ?? '') . '; text-decoration: underline;">' . htmlspecialchars($privacyText ?? '') . '</a>', $noticeProcessed);
+?>
+
+<style>
+.chaikin-footer {
+    background-color: <?= htmlspecialchars($footerBg ?? '') ?>;
+    padding: <?= $footerPaddingV ?> 0;
+    <?php if ($footerBorderTop === 'yes'): ?>
+    border-top: 1px solid <?= htmlspecialchars($footerBorderColor ?? '') ?>;
+    <?php endif; ?>
+}
+
+.chaikin-footer-content {
+    text-align: center;
+}
+
+.chaikin-legal-notice {
+    color: <?= htmlspecialchars($noticeColor ?? '') ?>;
+    font-size: <?= $noticeSize ?>;
+    line-height: <?= $noticeLineHeight ?>;
+    margin-bottom: <?= $noticeMargin ?>;
+}
+
+.chaikin-legal-notice a:hover {
+    color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
+}
+
+.chaikin-footer-links {
+    font-size: <?= $linksSize ?>;
+    margin-top: <?= $linksMargin ?>;
+    margin-bottom: <?= $linksMargin ?>;
+}
+
+.chaikin-footer-links a {
+    color: <?= htmlspecialchars($linksColor ?? '') ?>;
+    text-decoration: none;
+    margin: 0 8px;
+    transition: color 0.3s ease;
+}
+
+.chaikin-footer-links a:hover {
+    color: <?= htmlspecialchars($linksHoverColor ?? '') ?>;
+    text-decoration: underline;
+}
+
+.chaikin-footer-links .separator {
+    color: <?= htmlspecialchars($linksColor ?? '') ?>;
+    margin: 0 4px;
+}
+
+.chaikin-copyright {
+    color: <?= htmlspecialchars($copyrightColor ?? '') ?>;
+    font-size: <?= $copyrightSize ?>;
+    margin-top: <?= $copyrightMargin ?>;
+}
+
+@media (max-width: 767px) {
+    .chaikin-footer-links {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .chaikin-footer-links .separator {
+        display: none;
+    }
+}
+</style>
+
+    </div> <!-- 关闭 .chaikin-container -->
+
+    <!-- 页脚 -->
+    <footer class="chaikin-footer">
+        <div class="chaikin-footer-content">
+            <!-- 法律声明 -->
+            <div class="chaikin-legal-notice">
+                <?= $noticeProcessed ?>
+            </div>
+            
+            <!-- 页脚链接 -->
+            <?php if ($linksDisplay === 'yes' && !empty($footerLinks)): ?>
+            <div class="chaikin-footer-links">
+                <?php foreach ($footerLinks as $index => $link): ?>
+                    <?php if ($index > 0): ?>
+                        <span class="separator"><?= htmlspecialchars($linksSeparator ?? '') ?></span>
+                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars($link['url'] ?? '') ?>">
+                        <?= htmlspecialchars($link['text'] ?? '') ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- 版权信息 -->
+            <div class="chaikin-copyright">
+                <?= htmlspecialchars($copyrightText ?? '') ?>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+
