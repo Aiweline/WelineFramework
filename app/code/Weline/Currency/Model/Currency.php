@@ -94,6 +94,48 @@ class Currency extends Model
                     '基准货币代码'
                 );
         }
+        
+        // 确保CNY货币存在且为默认货币
+        $cnyCurrency = clone $this;
+        $cnyCurrency->clear()
+            ->where(self::fields_CODE, 'CNY')
+            ->find()
+            ->fetch();
+        
+        if (!$cnyCurrency->getId()) {
+            // 如果CNY不存在，创建它
+            $this->clear()
+                ->setCode('CNY')
+                ->setName('人民币')
+                ->setRate(1)
+                ->setSymbol('￥')
+                ->setPosition('left')
+                ->setFormat('1,0')
+                ->setStatus(true)
+                ->setIcon('￥')
+                ->setThousandSeparator(',')
+                ->setDecimalSeparator('.')
+                ->setBaseCurrency('CNY')
+                ->save();
+        } else {
+            // 如果CNY已存在，确保它是基准货币且汇率为1
+            $cnyCurrency->setBaseCurrency('CNY')
+                ->setRate(1)
+                ->setStatus(true)
+                ->save();
+        }
+        
+        // 确保配置中的基准货币为CNY
+        try {
+            /** @var \Weline\Currency\Model\Config $config */
+            $config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Config::class);
+            $currentBaseCurrency = $config->getBaseCurrency();
+            if ($currentBaseCurrency !== 'CNY') {
+                $config->setBaseCurrency('CNY');
+            }
+        } catch (\Throwable $e) {
+            // 如果Config不可用，忽略错误
+        }
     }
 
     /**
@@ -197,31 +239,70 @@ class Currency extends Model
             )
             ->create();
 
-        # 设置默认货币
-        $this->setCode('CNY')
-            ->setName('人民币')
-            ->setRate(1)
-            ->setSymbol('￥')
-            ->setPosition('left')
-            ->setFormat('1,0')
-            ->setStatus(true)
-            ->setIcon('￥')
-            ->setThousandSeparator(',')
-            ->setDecimalSeparator('.')
-            ->setBaseCurrency('CNY')
-            ->save();
-        $this->setCode('USD')
-            ->setName('美刀')
-            ->setRate(8)
-            ->setSymbol('$')
-            ->setPosition('left')
-            ->setFormat('1,0')
-            ->setStatus(true)
-            ->setIcon('$')
-            ->setThousandSeparator(',')
-            ->setDecimalSeparator('.')
-            ->setBaseCurrency('CNY')
-            ->save();
+        # 设置默认货币（CNY - 人民币）
+        // 先检查CNY是否已存在，如果不存在则创建
+        $cnyCurrency = clone $this;
+        $cnyCurrency->clear()
+            ->where(self::fields_CODE, 'CNY')
+            ->find()
+            ->fetch();
+        
+        if (!$cnyCurrency->getId()) {
+            $this->clear()
+                ->setCode('CNY')
+                ->setName('人民币')
+                ->setRate(1)
+                ->setSymbol('￥')
+                ->setPosition('left')
+                ->setFormat('1,0')
+                ->setStatus(true)
+                ->setIcon('￥')
+                ->setThousandSeparator(',')
+                ->setDecimalSeparator('.')
+                ->setBaseCurrency('CNY')
+                ->save();
+        } else {
+            // 如果CNY已存在，确保它是基准货币
+            $cnyCurrency->setBaseCurrency('CNY')
+                ->setRate(1)
+                ->setStatus(true)
+                ->save();
+        }
+        
+        # 设置USD货币（可选）
+        $usdCurrency = clone $this;
+        $usdCurrency->clear()
+            ->where(self::fields_CODE, 'USD')
+            ->find()
+            ->fetch();
+        
+        if (!$usdCurrency->getId()) {
+            $this->clear()
+                ->setCode('USD')
+                ->setName('美刀')
+                ->setRate(8)
+                ->setSymbol('$')
+                ->setPosition('left')
+                ->setFormat('1,0')
+                ->setStatus(true)
+                ->setIcon('$')
+                ->setThousandSeparator(',')
+                ->setDecimalSeparator('.')
+                ->setBaseCurrency('CNY')
+                ->save();
+        }
+        
+        # 确保配置中的基准货币为CNY
+        try {
+            /** @var \Weline\Currency\Model\Config $config */
+            $config = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Model\Config::class);
+            $currentBaseCurrency = $config->getBaseCurrency();
+            if ($currentBaseCurrency !== 'CNY') {
+                $config->setBaseCurrency('CNY');
+            }
+        } catch (\Throwable $e) {
+            // 如果Config不可用，忽略错误（可能在安装阶段）
+        }
     }
 
     public function getCode(): string
@@ -449,5 +530,21 @@ class Currency extends Model
     {
         $this->validate();
         return parent::beforeSave();
+    }
+
+    /**
+     * 保存后清除货币缓存
+     * 当货币数据更新时，清除缓存的货币列表，确保下次请求时重新加载最新数据
+     */
+    public function save_after()
+    {
+        parent::save_after();
+        // 清除货币缓存
+        try {
+            $currencyCache = new \Weline\Currency\Cache\CurrencyCache();
+            $currencyCache->clear();
+        } catch (\Throwable $e) {
+            // 缓存清除失败，静默处理
+        }
     }
 }
