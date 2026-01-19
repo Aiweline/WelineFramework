@@ -62,6 +62,10 @@ $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $them
 $getUrl = $this->getUrl('theme/backend/config/layout/getVariableFileData');
 $modalUrl = $this->getUrl('theme/backend/config/layout/getVariableFileModal');
 ?>
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     const themeId = <?= json_encode($themeId) ?>;
@@ -72,7 +76,16 @@ $modalUrl = $this->getUrl('theme/backend/config/layout/getVariableFileModal');
     
     window.openVariableFileConfigModal = function(fileName) {
         if (!themeId) {
-            alert('<?= __('请先选择主题') ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('提示') ?>',
+                    text: '<?= __('请先选择主题') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('请先选择主题') ?>');
+            }
             return;
         }
         

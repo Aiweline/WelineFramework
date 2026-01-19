@@ -1346,7 +1346,90 @@
             setVariable: function (varName, value) {
                 document.documentElement.style.setProperty(varName, value);
             }
-        }
+        },
+
+        /**
+         * 通用中间件注册机制
+         * 
+         * 设计原则：
+         * - Theme 只提供「机制」，不关心具体业务模块
+         * - 中间件通过命名空间前缀区分归属，如：
+         *   - 'WeShop_Product::price::shipping'
+         *   - 'Weline_Checkout::totals::tax'
+         * - 具体模块在自己加载时，按前缀从这里取出自己的中间件
+         */
+        Middleware: (function () {
+            const _entries = [];
+
+            return {
+                /**
+                 * 注册中间件
+                 * 
+                 * @param {string} name - 唯一名称（建议带命名空间前缀）
+                 * @param {Function|Object} handler - 中间件实现（函数或描述对象，如WASM接口）
+                 * @param {Object} options - 附加信息：{ priority, source, name, meta }
+                 */
+                register: function (name, handler, options = {}) {
+                    if (typeof name !== 'string' || !name) {
+                        console.error('[Weline.Middleware] name 必须是非空字符串');
+                        return;
+                    }
+                    if (typeof handler !== 'function' && (typeof handler !== 'object' || handler === null)) {
+                        console.error('[Weline.Middleware] handler 必须是函数或对象', { received: typeof handler });
+                        return;
+                    }
+
+                    const entry = {
+                        name: name,
+                        handler: handler,
+                        priority: options.priority ?? 100,
+                        source: options.source || null,
+                        displayName: options.name || name,
+                        meta: options.meta || {},
+                    };
+
+                    _entries.push(entry);
+
+                    if (window.DEV) {
+                        console.log('[Weline.Middleware] 注册中间件:', entry);
+                    }
+                },
+
+                /**
+                 * 取消注册
+                 */
+                unregister: function (name, filter) {
+                    for (let i = _entries.length - 1; i >= 0; i--) {
+                        const e = _entries[i];
+                        const matchByName = !name || e.name === name;
+                        const matchByFilter = typeof filter === 'function' ? filter(e) : true;
+                        if (matchByName && matchByFilter) {
+                            _entries.splice(i, 1);
+                            if (window.DEV) {
+                                console.log('[Weline.Middleware] 移除中间件:', e);
+                            }
+                        }
+                    }
+                },
+
+                /**
+                 * 获取全部中间件
+                 */
+                getAll: function () {
+                    return _entries.slice();
+                },
+
+                /**
+                 * 按前缀筛选中间件
+                 * 
+                 * @param {string} prefix - 如 'WeShop_Product::price::'
+                 */
+                getByPrefix: function (prefix) {
+                    if (!prefix) return this.getAll();
+                    return _entries.filter(e => typeof e.name === 'string' && e.name.indexOf(prefix) === 0);
+                }
+            };
+        })()
     };
 
     // 挂载到全局
@@ -1354,6 +1437,7 @@
         if (!runtimeConfig.account) {
             return;
         }
+        // 前端主题只解析前台和前端API的URL，后端APIURL由后端theme.js负责
         const mappings = [
             { key: 'frontendLoginUrl', type: 'frontend' },
             { key: 'frontendLogoutUrl', type: 'frontend' },
@@ -1362,10 +1446,6 @@
             { key: 'apiLogoutUrl', type: 'frontendApi' },
             { key: 'apiCheckLoginUrl', type: 'frontendApi' },
             { key: 'apiRefreshUrl', type: 'frontendApi' },
-            { key: 'backendApiLoginUrl', type: 'backendApi' },
-            { key: 'backendApiLogoutUrl', type: 'backendApi' },
-            { key: 'backendApiCheckLoginUrl', type: 'backendApi' },
-            { key: 'backendApiRefreshUrl', type: 'backendApi' },
         ];
         mappings.forEach(({ key, type }) => {
             const value = runtimeConfig.account[key];
@@ -1926,10 +2006,390 @@
         }
     })();
 
-    // ========== 声明搜索模块 ==========
-    // 在 head 中声明搜索模块，立即加载
-    if (window.Weline && window.Weline.declare) {
-        Weline.declare('search', true, 'Weline_Theme::js/search.js');
-    }
+    // ========== 声明并加载 URL 模块 ==========
+    // 根据 area 自动选择前端或后端 URL 模块
+    // 前端使用 url-frontend，后端使用 url-backend
+    (function loadUrlModule() {
+        const config = window.__WelineThemeConfig || {};
+        const area = config.theme?.area || config.area || 'frontend';
+        const isBackend = area === 'backend' || area === 'admin';
+        const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
+        const urlModulePath = isBackend
+            ? 'Weline_Framework::js/url-backend.js'
+            : 'Weline_Framework::js/url-frontend.js';
+
+        if (window.Weline && window.Weline.declare) {
+            Weline.declare(urlModuleName, true, urlModulePath);
+        } else if (window.Weline && window.Weline.load) {
+            // 如果 declare 不可用，直接加载
+            window.Weline.load(urlModuleName, urlModulePath);
+        }
+    })();
+
+    // ========== 初始化语言切换器 ==========
+    // 使用框架语言配置生成语言切换链接
+    (function initLanguageSwitcher() {
+        /**
+         * 获取当前语言代码
+         */
+        function getCurrentLang() {
+            // 从 Cookie 获取
+            if (typeof window.getCookie === 'function') {
+                const cookieLang = window.getCookie('WELINE_USER_LANG');
+                if (cookieLang) {
+                    return cookieLang;
+                }
+            }
+
+            // 从 URL 参数获取
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            if (urlLang) {
+                return urlLang;
+            }
+
+            // 从 URL 路径获取（如 /zh_Hans_CN/...）
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            for (const part of pathParts) {
+                if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
+                    return part;
+                }
+            }
+
+            // 从配置获取
+            const config = window.__WelineThemeConfig || {};
+            return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
+        }
+
+        /**
+         * 将语言代码转换为显示标识
+         * zh_Hans_CN -> ZH, en_US -> EN, zh_Hant_TW -> TW
+         */
+        function getLangDisplay(langCode) {
+            if (!langCode) {
+                return 'ZH';
+            }
+
+            // 提取语言代码的主要部分
+            const parts = langCode.split('_');
+            if (parts.length >= 2) {
+                // 取前两个部分，如 zh_Hans -> ZH, en_US -> EN
+                const lang = parts[0].toUpperCase();
+                const region = parts[1].toUpperCase();
+
+                // 如果是中文，显示 ZH
+                if (lang === 'ZH') {
+                    if (region === 'HANT') {
+                        return 'TW'; // 繁体中文显示 TW
+                    }
+                    return 'ZH';
+                }
+
+                // 其他语言显示前两个字母
+                return lang.substring(0, 2);
+            }
+
+            // 如果格式不对，返回前两个大写字母
+            return langCode.substring(0, 2).toUpperCase();
+        }
+
+        /**
+         * 更新当前语言显示
+         */
+        function updateCurrentLanguageDisplay() {
+            const currentLang = getCurrentLang();
+            const langDisplay = getLangDisplay(currentLang);
+
+            // 更新 current-language 元素
+            const currentLangElements = document.querySelectorAll('.current-language');
+            currentLangElements.forEach(el => {
+                el.textContent = langDisplay;
+            });
+
+            // 更新 active 状态
+            const languageSwitcher = document.querySelector('.header-language-switcher, .language-switcher');
+            if (languageSwitcher) {
+                const languageOptions = languageSwitcher.querySelectorAll('.language-option, a[data-lang]');
+                languageOptions.forEach(option => {
+                    const langCode = option.getAttribute('data-lang') || option.dataset.lang;
+                    if (langCode === currentLang) {
+                        option.classList.add('active');
+                    } else {
+                        option.classList.remove('active');
+                    }
+                });
+            }
+        }
+
+        function updateLanguageSwitcherLinks() {
+            const languageSwitcher = document.querySelector('.header-language-switcher, .language-switcher');
+            if (!languageSwitcher) {
+                return;
+            }
+
+            const languageOptions = languageSwitcher.querySelectorAll('.language-option, a[data-lang]');
+            if (languageOptions.length === 0) {
+                return;
+            }
+
+            // 获取当前 URL 和语言配置
+            const currentPath = window.location.pathname + window.location.search;
+            const config = window.__WelineThemeConfig || {};
+            const availableLangs = config.i18n?.availableLangs || config.availableLangs || [
+                { code: 'zh_Hans_CN', name: '简体中文' },
+                { code: 'en_US', name: 'English' },
+                { code: 'zh_Hant_TW', name: '繁體中文' }
+            ];
+
+            languageOptions.forEach(option => {
+                const langCode = option.getAttribute('data-lang') || option.dataset.lang;
+                if (!langCode) {
+                    return;
+                }
+
+                // 使用 window.urlWithLang 生成带语言的 URL
+                if (typeof window.urlWithLang === 'function') {
+                    const langUrl = window.urlWithLang(currentPath, langCode);
+                    option.setAttribute('href', langUrl);
+                } else if (typeof window.url === 'function') {
+                    // 降级方案：使用 window.url 并手动添加 lang 参数
+                    const url = new URL(currentPath, window.location.origin);
+                    url.searchParams.set('lang', langCode);
+                    option.setAttribute('href', url.pathname + url.search);
+                } else {
+                    // 最后的降级方案：直接使用查询参数
+                    const url = new URL(currentPath, window.location.origin);
+                    url.searchParams.set('lang', langCode);
+                    option.setAttribute('href', url.pathname + url.search);
+                }
+            });
+
+            // 更新当前语言显示
+            updateCurrentLanguageDisplay();
+        }
+
+        // 等待 DOM 和 URL 模块加载
+        function waitForUrlModule() {
+            if (typeof window.urlWithLang === 'function' || typeof window.url === 'function') {
+                updateLanguageSwitcherLinks();
+            } else if (window.Weline && window.Weline.load) {
+                // 如果 URL 模块未加载，尝试加载
+                const config = window.__WelineThemeConfig || {};
+                const area = config.theme?.area || config.area || 'frontend';
+                const isBackend = area === 'backend' || area === 'admin';
+                const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
+                const urlModulePath = isBackend
+                    ? 'Weline_Framework::js/url-backend.js'
+                    : 'Weline_Framework::js/url-frontend.js';
+
+                window.Weline.load(urlModuleName, urlModulePath).then(() => {
+                    setTimeout(updateLanguageSwitcherLinks, 100);
+                }).catch(() => {
+                    // 加载失败，使用降级方案
+                    setTimeout(updateLanguageSwitcherLinks, 100);
+                });
+            } else {
+                // 延迟重试
+                setTimeout(waitForUrlModule, 100);
+            }
+        }
+
+        // 等待 DOM 加载
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitForUrlModule);
+        } else {
+            setTimeout(waitForUrlModule, 0);
+        }
+
+        // 监听语言切换事件，更新显示
+        document.addEventListener('click', function (e) {
+            const langOption = e.target.closest('.language-option, a[data-lang]');
+            if (langOption) {
+                const langCode = langOption.getAttribute('data-lang') || langOption.dataset.lang;
+                if (langCode) {
+                    // 立即更新显示（不等待页面跳转）
+                    setTimeout(() => {
+                        updateCurrentLanguageDisplay();
+                    }, 50);
+                }
+            }
+        });
+
+        // 监听 URL 变化（用于浏览器前进/后退）
+        let lastUrl = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== lastUrl) {
+                lastUrl = window.location.href;
+                updateCurrentLanguageDisplay();
+            }
+        }, 500);
+    })();
+
+    // ========== 初始化货币切换器 ==========
+    // 使用框架货币配置生成货币切换链接
+    (function initCurrencySwitcher() {
+        /**
+         * 获取当前货币代码
+         */
+        function getCurrentCurrency() {
+            // 从 Cookie 获取
+            if (typeof window.getCookie === 'function') {
+                const cookieCurrency = window.getCookie('WELINE_USER_CURRENCY');
+                if (cookieCurrency) {
+                    return cookieCurrency.toUpperCase();
+                }
+            }
+
+            // 从 URL 参数获取
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlCurrency = urlParams.get('currency');
+            if (urlCurrency) {
+                return urlCurrency.toUpperCase();
+            }
+
+            // 从 URL 路径获取（如 /CNY/...）
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            for (const part of pathParts) {
+                if (/^[A-Z]{3}$/.test(part)) {
+                    return part.toUpperCase();
+                }
+            }
+
+            // 从配置获取
+            const config = window.__WelineThemeConfig || {};
+            return (config.currentCurrency || (window.site && window.site.currency) || 'CNY').toUpperCase();
+        }
+
+        /**
+         * 更新当前货币显示
+         */
+        function updateCurrentCurrencyDisplay() {
+            const currentCurrency = getCurrentCurrency();
+
+            // 更新 current-currency 元素
+            const currentCurrencyElements = document.querySelectorAll('.current-currency');
+            currentCurrencyElements.forEach(el => {
+                el.textContent = currentCurrency;
+            });
+
+            // 更新 active 状态
+            const currencySwitcher = document.querySelector('.header-currency-switcher, .currency-switcher');
+            if (currencySwitcher) {
+                const currencyOptions = currencySwitcher.querySelectorAll('.currency-option, a[data-currency]');
+                currencyOptions.forEach(option => {
+                    const currencyCode = (option.getAttribute('data-currency') || option.dataset.currency || '').toUpperCase();
+                    if (currencyCode === currentCurrency) {
+                        option.classList.add('active');
+                    } else {
+                        option.classList.remove('active');
+                    }
+                });
+            }
+        }
+
+        function updateCurrencySwitcherLinks() {
+            const currencySwitcher = document.querySelector('.header-currency-switcher, .currency-switcher');
+            if (!currencySwitcher) {
+                return;
+            }
+
+            const currencyOptions = currencySwitcher.querySelectorAll('.currency-option, a[data-currency]');
+            if (currencyOptions.length === 0) {
+                return;
+            }
+
+            // 获取当前 URL 和货币配置
+            const currentPath = window.location.pathname + window.location.search;
+            const config = window.__WelineThemeConfig || {};
+            const availableCurrencies = config.availableCurrencies || [
+                { code: 'CNY', name: 'CNY (¥)' },
+                { code: 'USD', name: 'USD ($)' },
+                { code: 'EUR', name: 'EUR (€)' },
+                { code: 'GBP', name: 'GBP (£)' }
+            ];
+
+            currencyOptions.forEach(option => {
+                const currencyCode = (option.getAttribute('data-currency') || option.dataset.currency || '').toUpperCase();
+                if (!currencyCode) {
+                    return;
+                }
+
+                // 使用 window.urlWithCurrency 生成带货币的 URL
+                if (typeof window.urlWithCurrency === 'function') {
+                    const currencyUrl = window.urlWithCurrency(currentPath, currencyCode);
+                    option.setAttribute('href', currencyUrl);
+                } else if (typeof window.url === 'function') {
+                    // 降级方案：使用 window.url 并手动添加 currency 参数
+                    const url = new URL(currentPath, window.location.origin);
+                    url.searchParams.set('currency', currencyCode);
+                    option.setAttribute('href', url.pathname + url.search);
+                } else {
+                    // 最后的降级方案：直接使用查询参数
+                    const url = new URL(currentPath, window.location.origin);
+                    url.searchParams.set('currency', currencyCode);
+                    option.setAttribute('href', url.pathname + url.search);
+                }
+            });
+
+            // 更新当前货币显示
+            updateCurrentCurrencyDisplay();
+        }
+
+        // 等待 DOM 和 URL 模块加载
+        function waitForUrlModule() {
+            if (typeof window.urlWithCurrency === 'function' || typeof window.url === 'function') {
+                updateCurrencySwitcherLinks();
+            } else if (window.Weline && window.Weline.load) {
+                // 如果 URL 模块未加载，尝试加载
+                const config = window.__WelineThemeConfig || {};
+                const area = config.theme?.area || config.area || 'frontend';
+                const isBackend = area === 'backend' || area === 'admin';
+                const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
+                const urlModulePath = isBackend
+                    ? 'Weline_Framework::js/url-backend.js'
+                    : 'Weline_Framework::js/url-frontend.js';
+
+                window.Weline.load(urlModuleName, urlModulePath).then(() => {
+                    setTimeout(updateCurrencySwitcherLinks, 100);
+                }).catch(() => {
+                    // 加载失败，使用降级方案
+                    setTimeout(updateCurrencySwitcherLinks, 100);
+                });
+            } else {
+                // 延迟重试
+                setTimeout(waitForUrlModule, 100);
+            }
+        }
+
+        // 等待 DOM 加载
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitForUrlModule);
+        } else {
+            setTimeout(waitForUrlModule, 0);
+        }
+
+        // 监听货币切换事件，更新显示
+        document.addEventListener('click', function (e) {
+            const currencyOption = e.target.closest('.currency-option, a[data-currency]');
+            if (currencyOption) {
+                const currencyCode = (currencyOption.getAttribute('data-currency') || currencyOption.dataset.currency || '').toUpperCase();
+                if (currencyCode) {
+                    // 立即更新显示（不等待页面跳转）
+                    setTimeout(() => {
+                        updateCurrentCurrencyDisplay();
+                    }, 50);
+                }
+            }
+        });
+
+        // 监听 URL 变化（用于浏览器前进/后退）
+        let lastUrl = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== lastUrl) {
+                lastUrl = window.location.href;
+                updateCurrentCurrencyDisplay();
+            }
+        }, 500);
+    })();
 
 })(window, document);

@@ -9,24 +9,49 @@
 
 namespace Weline\Theme\Helper;
 
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\Interface\AssetMergerInterface;
+use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
+use Weline\Theme\Helper\Interface\AssetScannerInterface;
 use Weline\Theme\Model\WelineTheme;
 
 /**
  * 主题资源合并助手类
  * 
- * 支持CSS/JS资源的追加合并，按继承链顺序收集资源
+ * 职责：合并主题资源，实现同名文件以激活主题为准的机制
+ * 遵循：单一职责原则 (SRP)、依赖倒置原则 (DIP)
  */
-class AssetMerger
+class AssetMerger implements AssetMergerInterface
 {
     /**
      * @var WelineTheme
      */
     private WelineTheme $welineTheme;
+    
+    /**
+     * @var ThemeChainResolverInterface
+     */
+    private ThemeChainResolverInterface $themeChainResolver;
+    
+    /**
+     * @var AssetScannerInterface
+     */
+    private AssetScannerInterface $assetScanner;
 
-    public function __construct(WelineTheme $welineTheme)
-    {
+    /**
+     * 依赖注入：遵循依赖倒置原则 (DIP)
+     * 
+     * @param WelineTheme $welineTheme
+     * @param ThemeChainResolverInterface $themeChainResolver
+     * @param AssetScannerInterface $assetScanner
+     */
+    public function __construct(
+        WelineTheme $welineTheme,
+        ThemeChainResolverInterface $themeChainResolver,
+        AssetScannerInterface $assetScanner
+    ) {
         $this->welineTheme = $welineTheme;
+        $this->themeChainResolver = $themeChainResolver;
+        $this->assetScanner = $assetScanner;
     }
 
     /**
@@ -43,139 +68,48 @@ class AssetMerger
             $theme = $this->welineTheme->getActiveTheme();
         }
 
-        $assets = [];
+        // 1. 获取主题继承链（从基础到当前：父主题在前，激活主题在后）
+        $themeChain = $this->themeChainResolver->getThemeChain($theme);
 
-        // 1. 基础资源（Weline_Theme模块）
+        // 2. 按继承链顺序收集资源，实现同名文件以激活主题为准的机制
+        // 使用文件名作为键，确保同名文件只保留激活主题的版本
+        $assetsByFileName = [];
+        
+        // 从激活主题开始收集（主题链中最后一个是最新的激活主题）
+        // 这样如果激活主题有同名文件，会覆盖父主题的同名文件
+        foreach (array_reverse($themeChain) as $chainTheme) {
+            $themeAssetsPath = $chainTheme->getPath() . 'view' . DS . 'theme' . DS . $area . DS . 'assets' . DS . $assetType;
+            if (is_dir($themeAssetsPath)) {
+                $themeAssets = $this->assetScanner->scanDirectory($themeAssetsPath);
+                // 遍历当前主题的资源文件
+                foreach ($themeAssets as $assetPath) {
+                    $fileName = basename($assetPath);
+                    // 如果激活主题存在同名文件，直接使用，跳过父主题的同名文件
+                    // 这里从激活主题开始遍历，所以先遍历到的（激活主题的）文件会保留
+                    if (!isset($assetsByFileName[$fileName])) {
+                        $assetsByFileName[$fileName] = $assetPath;
+                    }
+                }
+            }
+        }
+        
+        // 3. 将收集到的主题资源转换为数组
+        $assets = array_values($assetsByFileName);
+        
+        // 4. 添加基础资源（Weline_Theme模块）中未被覆盖的文件
         $baseAssetsPath = APP_CODE_PATH . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . $area . DS . 'assets' . DS . $assetType;
         if (is_dir($baseAssetsPath)) {
-            $baseAssets = $this->scanAssetDirectory($baseAssetsPath);
-            $assets = array_merge($assets, $baseAssets);
-        }
-
-        // 2. 获取主题继承链（从基础到当前）
-        $themeChain = $this->getThemeChain($theme);
-
-        // 3. 按继承链顺序收集资源（父主题在前，子主题在后）
-        foreach ($themeChain as $chainTheme) {
-            $themeAssetsPath = $chainTheme->getPath() . 'Weline_Theme' . DS . 'view' . DS . 'theme' . DS . $area . DS . 'assets' . DS . $assetType;
-            if (is_dir($themeAssetsPath)) {
-                $themeAssets = $this->scanAssetDirectory($themeAssetsPath);
-                // 追加到数组末尾（子主题资源覆盖父主题同名资源）
-                $assets = array_merge($assets, $themeAssets);
-            }
-        }
-
-        // 4. 去重（保留最后一个出现的文件）
-        $assets = $this->deduplicateAssets($assets);
-
-        return $assets;
-    }
-
-    /**
-     * 获取主题继承链（从基础到当前）
-     * 
-     * @param WelineTheme $theme 当前主题
-     * @return WelineTheme[] 主题继承链数组
-     */
-    private function getThemeChain(WelineTheme $theme): array
-    {
-        $chain = [];
-        $visited = [];
-        $currentTheme = $theme;
-
-        // 递归收集父主题
-        while ($currentTheme && $currentTheme->getId()) {
-            $themeId = $currentTheme->getId();
-            
-            // 防止循环引用
-            if (in_array($themeId, $visited)) {
-                break;
-            }
-            $visited[] = $themeId;
-
-            // 将父主题添加到链的前面（保证顺序：基础 → 父 → 子）
-            array_unshift($chain, $currentTheme);
-
-            // 获取父主题
-            $parentId = $currentTheme->getParentId();
-            if ($parentId) {
-                try {
-                    /** @var WelineTheme $parentTheme */
-                    $parentTheme = ObjectManager::getInstance(WelineTheme::class);
-                    $parentTheme->load($parentId);
-                    if ($parentTheme->getId()) {
-                        $currentTheme = $parentTheme;
-                    } else {
-                        break;
-                    }
-                } catch (\Exception $e) {
-                    break;
+            $baseAssets = $this->assetScanner->scanDirectory($baseAssetsPath);
+            foreach ($baseAssets as $baseAsset) {
+                $fileName = basename($baseAsset);
+                // 如果主题资源中没有同名文件，添加基础资源
+                if (!isset($assetsByFileName[$fileName])) {
+                    $assets[] = $baseAsset;
                 }
-            } else {
-                break;
             }
         }
-
-        return $chain;
-    }
-
-    /**
-     * 扫描资源目录，返回所有资源文件路径
-     * 
-     * @param string $directory 目录路径
-     * @return array 文件路径数组
-     */
-    private function scanAssetDirectory(string $directory): array
-    {
-        $assets = [];
-        
-        if (!is_dir($directory)) {
-            return $assets;
-        }
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
-
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $assets[] = $file->getPathname();
-            }
-        }
-
-        // 按文件名排序，确保加载顺序一致
-        sort($assets);
 
         return $assets;
-    }
-
-    /**
-     * 去重资源文件（保留最后一个出现的文件）
-     * 
-     * 如果多个主题中有同名文件，只保留最后一个（子主题的）
-     * 
-     * @param array $assets 资源文件路径数组
-     * @return array 去重后的资源文件路径数组
-     */
-    private function deduplicateAssets(array $assets): array
-    {
-        $uniqueAssets = [];
-        $seenFiles = [];
-
-        // 从后往前遍历，保留最后一个出现的文件
-        foreach (array_reverse($assets) as $assetPath) {
-            $fileName = basename($assetPath);
-            
-            // 如果还没见过这个文件名，添加到结果中
-            if (!isset($seenFiles[$fileName])) {
-                $uniqueAssets[] = $assetPath;
-                $seenFiles[$fileName] = true;
-            }
-        }
-
-        // 反转回来，保持正确的加载顺序
-        return array_reverse($uniqueAssets);
     }
 }
 
