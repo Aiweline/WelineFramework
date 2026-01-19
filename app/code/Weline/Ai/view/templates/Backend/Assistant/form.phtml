@@ -601,6 +601,10 @@ $isEdit = $this->getData('isEdit');
     </div>
 </form>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     // 获取所有需要的DOM元素
@@ -856,7 +860,16 @@ $isEdit = $this->getData('isEdit');
     function showAdapterHelp() {
         const adapterCode = adapterSelect.value;
         if (!adapterCode) {
-            alert('<?= __("请先选择一个适配器") ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __("提示") ?>',
+                    text: '<?= __("请先选择一个适配器") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("请先选择一个适配器") ?>');
+            }
             return;
         }
         
@@ -877,9 +890,28 @@ $isEdit = $this->getData('isEdit');
                         });
                     }
                     
-                    alert(helpText);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '<?= __("适配器帮助") ?>',
+                            html: helpText.replace(/\n/g, '<br>'),
+                            confirmButtonText: '<?= __('确定') ?>',
+                            width: '600px'
+                        });
+                    } else {
+                        console.log(helpText);
+                    }
                 } else {
-                    alert('<?= __("无法获取适配器帮助信息") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("错误") ?>',
+                            text: '<?= __("无法获取适配器帮助信息") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("无法获取适配器帮助信息") ?>');
+                    }
                 }
             });
     }
@@ -1079,7 +1111,16 @@ $isEdit = $this->getData('isEdit');
             const selectedModelCode = modelSelect.value;
             
             if (!selectedModelCode) {
-                alert('<?= __("请先选择一个AI模型") ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __("提示") ?>',
+                        text: '<?= __("请先选择一个AI模型") ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __("请先选择一个AI模型") ?>');
+                }
                 return;
             }
             
@@ -1101,11 +1142,29 @@ $isEdit = $this->getData('isEdit');
                             modelConfigField.style.borderColor = '';
                         }, 2000);
                     } else {
-                        alert('<?= __("加载失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __("加载失败") ?>',
+                                text: data.message || '<?= __("未知错误") ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        } else {
+                            console.error('<?= __("加载失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                        }
                     }
                 })
                 .catch(error => {
-                    alert('<?= __("请求失败：") ?>' + error.message);
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("请求失败") ?>',
+                            text: error.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("请求失败：") ?>' + error.message);
+                    }
                 })
                 .finally(() => {
                     // 恢复按钮状态
@@ -1125,7 +1184,16 @@ $isEdit = $this->getData('isEdit');
                     this.style.borderColor = '#28a745';
                 } catch (e) {
                     this.style.borderColor = '#dc3545';
-                    alert('<?= __("模型配置格式错误，请输入有效的JSON格式") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("格式错误") ?>',
+                            text: '<?= __("模型配置格式错误，请输入有效的JSON格式") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("模型配置格式错误，请输入有效的JSON格式") ?>');
+                    }
                 }
             } else {
                 this.style.borderColor = '';
@@ -1144,7 +1212,16 @@ $isEdit = $this->getData('isEdit');
                     this.style.borderColor = '#28a745';
                 } catch (e) {
                     this.style.borderColor = '#dc3545';
-                    alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("格式错误") ?>',
+                            text: '<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    }
                 }
             } else {
                 this.style.borderColor = '';
@@ -1163,7 +1240,16 @@ $isEdit = $this->getData('isEdit');
                     this.style.borderColor = '#28a745';
                 } catch (e) {
                     this.style.borderColor = '#dc3545';
-                    alert('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("格式错误") ?>',
+                            text: '<?= __("代理配置格式错误，请输入有效的JSON格式") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
+                    }
                 }
             } else {
                 this.style.borderColor = '';
@@ -1207,7 +1293,16 @@ $isEdit = $this->getData('isEdit');
             const prompt = document.getElementById('prompt').value.trim();
 
             if (!name || !adapterCode || !modelCode || !prompt) {
-                alert('<?= __("请填写所有必填字段") ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __("提示") ?>',
+                        text: '<?= __("请填写所有必填字段") ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __("请填写所有必填字段") ?>');
+                }
                 return false;
             }
             
@@ -1240,7 +1335,16 @@ $isEdit = $this->getData('isEdit');
                 try {
                     JSON.parse(mcpConfig);
                 } catch (error) {
-                    alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("格式错误") ?>',
+                            text: '<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    }
                     return false;
                 }
             }
@@ -1251,7 +1355,16 @@ $isEdit = $this->getData('isEdit');
                 try {
                     JSON.parse(proxyConfig);
                 } catch (error) {
-                    alert('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __("格式错误") ?>',
+                            text: '<?= __("代理配置格式错误，请输入有效的JSON格式") ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
+                    }
                     return false;
                 }
             }
@@ -1316,14 +1429,32 @@ $isEdit = $this->getData('isEdit');
                             }
                         }
                     } else {
-                        alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '<?= __("保存失败") ?>',
+                                text: data.message || '<?= __("未知错误") ?>',
+                                confirmButtonText: '<?= __('确定') ?>'
+                            });
+                        } else {
+                            console.error('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                        }
                     }
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                 }
             })
             .catch(error => {
-                alert('<?= __("请求失败：") ?>' + error.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __("请求失败") ?>',
+                        text: error.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __("请求失败：") ?>' + error.message);
+                }
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             });

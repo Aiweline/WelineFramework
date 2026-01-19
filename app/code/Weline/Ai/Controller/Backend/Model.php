@@ -16,12 +16,14 @@ namespace Weline\Ai\Controller\Backend;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Model\Provider\Account;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Env;
 
 /**
  * AI模型管理后台控制器
@@ -533,34 +535,74 @@ class Model extends BackendController
             }
 
             // 再测供应商账户
-            // 检查是否有可用的供应商账户
-            $account = $accountService->getAvailableAccount($providerCode);
-            if ($account) {
+            // 检查是否有可用的供应商账户（不限制连接状态，以便测试所有账户）
+            /** @var Account $accountModel */
+            $accountModel = ObjectManager::getInstance(Account::class);
+            $accounts = $accountModel->clear()
+                ->where(Account::fields_PROVIDER_CODE, $providerCode)
+                ->where(Account::fields_IS_ACTIVE, 1)
+                ->order(Account::fields_IS_DEFAULT, 'DESC')
+                ->order(Account::fields_BALANCE, 'DESC')
+                ->select()
+                ->fetchArray();
+            
+            if (!empty($accounts) && is_array($accounts)) {
                 $results['provider_account']['tested'] = true;
-                $prompt = 'Hello, this is a connection test. Please respond with "OK".';
-                $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
-                try {
-                    $startTime = microtime(true);
-                    $response = $aiService->generate($prompt, $modelCode, null, null, ['test_mode' => true], null, true);
-                    $duration = round((microtime(true) - $startTime) * 1000, 2);
-
-                    $results['provider_account']['success'] = true;
-                    $results['provider_account']['message'] = __('供应商账户测试成功');
-                    $results['provider_account']['response'] = $response;
-                    $results['provider_account']['duration'] = $duration;
-                    $results['provider_account']['account_name'] = $account->getData('account_name');
-
-                    // 保存供应商测试成功状态
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::fields_PROVIDER_TEST_STATUS => 'success',
-                            AiModel::fields_PROVIDER_TEST_TIME => time()
-                        ])->fetch();
-                } catch (\Exception $e) {
+                $testedAccount = null;
+                $testSuccess = false;
+                
+                // 遍历所有激活的账户进行测试
+                foreach ($accounts as $accountData) {
+                    // 重新加载账户对象以确保数据完整性
+                    $testAccount = ObjectManager::getInstance(Account::class);
+                    $testAccount->load($accountData['id']);
+                    
+                    if (!$testAccount->getId()) {
+                        continue;
+                    }
+                    
+                    try {
+                        // 调用账户服务测试连接（这会更新账户的连接状态）
+                        $startTime = microtime(true);
+                        $testResult = $accountService->testConnection($testAccount);
+                        $duration = round((microtime(true) - $startTime) * 1000, 2);
+                        
+                        if ($testResult['success']) {
+                            $testSuccess = true;
+                            $testedAccount = $testAccount;
+                            $results['provider_account']['success'] = true;
+                            $results['provider_account']['message'] = __('供应商账户测试成功');
+                            $results['provider_account']['response'] = $testResult['message'] ?? __('连接成功');
+                            $results['provider_account']['duration'] = $duration;
+                            $results['provider_account']['account_name'] = $testAccount->getData('account_name');
+                            $results['provider_account']['account_id'] = $testAccount->getId();
+                            $results['provider_account']['connection_status'] = $testAccount->getData(Account::fields_CONNECTION_STATUS);
+                            
+                            // 保存供应商测试成功状态
+                            $this->getAiModel()->reset()
+                                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                                ->update([
+                                    AiModel::fields_PROVIDER_TEST_STATUS => 'success',
+                                    AiModel::fields_PROVIDER_TEST_TIME => time()
+                                ])->fetch();
+                            
+                            // 找到可用的账户后，跳出循环
+                            break;
+                        }
+                    } catch (\Exception $e) {
+                        // 继续测试下一个账户
+                        Env::log('ai_model.log', sprintf('[testConnection] account_id=%s test_failed: %s', 
+                            $testAccount->getId(), $e->getMessage()
+                        ));
+                        continue;
+                    }
+                }
+                
+                // 如果所有账户测试都失败
+                if (!$testSuccess) {
                     $results['provider_account']['success'] = false;
-                    $results['provider_account']['message'] = $e->getMessage();
-
+                    $results['provider_account']['message'] = __('所有供应商账户测试均失败');
+                    
                     // 保存供应商测试失败状态
                     $this->getAiModel()->reset()
                         ->where(AiModel::fields_MODEL_CODE, $modelCode)
@@ -780,7 +822,7 @@ class Model extends BackendController
      * 
      * @return string
      */
-    #[Acl('Weline_Ai::ai_model_edit', '编辑AI模型', 'mdi-pencil', '编辑AI模型')]
+    #[Acl('Weline_Ai::ai_model_edit_offcanvas', '编辑AI模型（侧边栏）', 'mdi-pencil', '编辑AI模型（侧边栏）')]
     public function editOffcanvas(): string
     {
         $id = (int)$this->request->getGet('id');
@@ -810,7 +852,7 @@ class Model extends BackendController
      * @return string
      */
     #[Acl('Weline_Ai::ai_model_save', '保存AI模型', 'mdi-content-save', '保存AI模型')]
-    public function save(): string
+    public function postSave(): string
     {
         $id = (int)$this->request->getPost('id');
         $data = $this->request->getPost();

@@ -11,6 +11,7 @@ use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\Provider\ProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
+use Weline\Ai\Service\Provider\OpenAiProvider;
 use Weline\Framework\App\Env;
 
 /**
@@ -154,7 +155,27 @@ class AccountService
                 $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
                 $account->setData(Account::fields_CONNECTION_TEST_TIME, time());
                 $account->setData(Account::fields_CONNECTION_TEST_MESSAGE, __('连接成功'));
-                $account->save();
+                $account->setData(Account::fields_UPDATED_AT, time());
+                
+                // 保存并记录日志
+                $saveResult = $account->save();
+                Env::log('ai_provider_test.log', sprintf('[testConnection][success] account_id=%s provider=%s status=%s save_result=%s', 
+                    (string)$account->getId(), 
+                    $providerCode, 
+                    Account::STATUS_SUCCESS,
+                    $saveResult ? 'true' : 'false'
+                ));
+                
+                // 验证保存是否成功
+                $account->reset()->load($account->getId());
+                $actualStatus = $account->getData(Account::fields_CONNECTION_STATUS);
+                if ($actualStatus !== Account::STATUS_SUCCESS) {
+                    Env::log('ai_provider_test.log', sprintf('[testConnection][warning] account_id=%s status_not_saved expected=%s actual=%s', 
+                        (string)$account->getId(), 
+                        Account::STATUS_SUCCESS,
+                        $actualStatus
+                    ));
+                }
                 
                 return [
                     'success' => true,
@@ -163,7 +184,10 @@ class AccountService
                     'account_id' => $account->getId(),
                     'provider' => $providerCode,
                     'base_url' => $baseUrl,
-                    'api_key_tail' => $apiKeyTail
+                    'api_key_tail' => $apiKeyTail,
+                    'connection_status' => Account::STATUS_SUCCESS,
+                    'connection_test_time' => time(),
+                    'connection_test_message' => __('连接成功')
                 ];
             } else {
                 throw new Exception(__('API响应为空'));
@@ -252,8 +276,25 @@ class AccountService
         // 目前所有供应商都使用OpenAI兼容的API
         // 后续可以根据providerCode返回不同的实现
         try {
-            return $this->objectManager->make(OpenAiProvider::class);
+            $provider = $this->objectManager->make(OpenAiProvider::class);
+            if (!$provider instanceof ProviderInterface) {
+                Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=返回的对象不是ProviderInterface实例', $providerCode));
+                return null;
+            }
+            return $provider;
         } catch (\Exception $e) {
+            Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=%s trace=%s', 
+                $providerCode, 
+                $e->getMessage(), 
+                $e->getTraceAsString()
+            ));
+            return null;
+        } catch (\Throwable $e) {
+            Env::log('ai_provider_test.log', sprintf('[getProviderInstance][fatal] provider=%s error=%s trace=%s', 
+                $providerCode, 
+                $e->getMessage(), 
+                $e->getTraceAsString()
+            ));
             return null;
         }
     }
