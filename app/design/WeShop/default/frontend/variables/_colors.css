@@ -1,0 +1,55 @@
+/**
+ * WeShop Default Theme - 颜色变量
+ * 从UI设计中提取的颜色变量
+ */
+
+:root {
+    /* 主色调 */
+    --weshop-primary: #007BFF;
+    --weshop-primary-hover: #0056b3;
+    --weshop-secondary: #FFA500;
+    --weshop-secondary-hover: #e68900;
+    
+    /* 背景色 */
+    --weshop-background-light: #F8F9FA;
+    --weshop-background-dark: #121212;
+    
+    /* 表面色 */
+    --weshop-surface-light: #FFFFFF;
+    --weshop-surface-dark: #1E1E1E;
+    
+    /* 文本色 */
+    --weshop-text-primary-light: #212529;
+    --weshop-text-primary-dark: #EAEAEA;
+    --weshop-text-secondary-light: #6C757D;
+    --weshop-text-secondary-dark: #9E9E9E;
+    
+    /* 边框色 */
+    --weshop-border-light: #E0E0E0;
+    --weshop-border-dark: #424242;
+    
+    /* 其他颜色 */
+    --weshop-success: #28a745;
+    --weshop-danger: #dc3545;
+    --weshop-warning: #ffc107;
+    --weshop-info: #17a2b8;
+}
+
+/* 暗色主题变量 */
+[data-theme="dark"] {
+    --weshop-background: var(--weshop-background-dark);
+    --weshop-surface: var(--weshop-surface-dark);
+    --weshop-text-primary: var(--weshop-text-primary-dark);
+    --weshop-text-secondary: var(--weshop-text-secondary-dark);
+    --weshop-border: var(--weshop-border-dark);
+}
+
+/* 亮色主题变量 */
+[data-theme="light"],
+:root {
+    --weshop-background: var(--weshop-background-light);
+    --weshop-surface: var(--weshop-surface-light);
+    --weshop-text-primary: var(--weshop-text-primary-light);
+    --weshop-text-secondary: var(--weshop-text-secondary-light);
+    --weshop-border: var(--weshop-border-light);
+}

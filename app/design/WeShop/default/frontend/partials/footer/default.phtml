@@ -1,0 +1,94 @@
+<?php
+/**
+ * WeShop Default Theme - Footer Partial
+ * 底部模板 - 包含链接、社交媒体、版权信息等
+ */
+?>
+<footer class="font-display">
+    <!-- Back to Top -->
+    <a href="#top" class="block w-full bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-center py-4 text-sm font-medium transition-colors">
+        <?= __('Back to Top') ?>
+    </a>
+    
+    <!-- Footer Content -->
+    <div class="bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark pt-16 pb-8">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+                <!-- Browse -->
+                <div>
+                    <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base"><?= __('Browse') ?></h3>
+                    <ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('') ?>"><?= __('Home') ?></a></li>
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('catalog') ?>"><?= __('Products') ?></a></li>
+                    </ul>
+                </div>
+                
+                <!-- Company -->
+                <div>
+                    <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base"><?= __('Company') ?></h3>
+                    <ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/about-us') ?>"><?= __('About Us') ?></a></li>
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/contact-us') ?>"><?= __('Contact Us') ?></a></li>
+                    </ul>
+                </div>
+                
+                <!-- Help -->
+                <div>
+                    <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base"><?= __('Help') ?></h3>
+                    <ul class="space-y-3 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/faq') ?>"><?= __('FAQ') ?></a></li>
+                        <li><a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/privacy-policy') ?>"><?= __('Privacy Policy') ?></a></li>
+                    </ul>
+                </div>
+                
+                <!-- Follow Us -->
+                <div>
+                    <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark mb-4 text-base"><?= __('Follow Us') ?></h3>
+                    <w:hook name="WeShop_Social::footer::social_links"/>
+                    <div class="flex space-x-4 text-text-secondary-light dark:text-text-secondary-dark mb-6">
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="Facebook">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path clip-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" fill-rule="evenodd"></path>
+                            </svg>
+                        </a>
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="Twitter">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.71v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
+                            </svg>
+                        </a>
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="Instagram">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.416 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.345 4.22c.636-.247 1.363-.416 2.427-.465C9.793 2.013 10.147 2 12.315 2zm-1.002 11.833a4.833 4.833 0 100-9.666 4.833 4.833 0 000 9.666zM12 8.417a3.583 3.583 0 110 7.166 3.583 3.583 0 010-7.166zM16.516 8.243a1.229 1.229 0 01-2.458 0 1.229 1.229 0 012.458 0z" fill-rule="evenodd"></path>
+                            </svg>
+                        </a>
+                    </div>
+                    
+                    <!-- Download App -->
+                    <div class="space-y-2">
+                        <h3 class="font-bold text-text-primary-light dark:text-text-primary-dark text-base"><?= __('Download App') ?></h3>
+                        <div class="flex gap-2">
+                            <a href="#" class="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800"><?= __('App Store') ?></a>
+                            <a href="#" class="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800"><?= __('Google Play') ?></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Copyright -->
+            <div class="border-t border-border-light dark:border-border-dark pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+                    <div class="flex items-center gap-2 text-text-primary-light dark:text-text-primary-dark">
+                        <span class="material-symbols-outlined text-primary text-2xl">local_mall</span>
+                        <h2 class="text-lg font-bold tracking-tight"><?= $this->getStoreName() ?></h2>
+                    </div>
+                    <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <span>© <?= date('Y') ?> <?= $this->getStoreName() ?>, Inc.</span>
+                        <a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/privacy-policy') ?>"><?= __('Privacy Policy') ?></a>
+                        <a class="hover:text-primary hover:underline" href="<?= $this->getUrl('cms/page/terms') ?>"><?= __('Terms & Conditions') ?></a>
+                        <a class="hover:text-primary hover:underline" href="<?= $this->getUrl('sitemap') ?>"><?= __('Sitemap') ?></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
