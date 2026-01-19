@@ -37,6 +37,10 @@ class UpgradeDefaultAttribute implements ObserverInterface
             if (!$eavEntityReflectionInstance->isInstantiable()) {
                 continue;
             }
+            // 跳过静态类
+            if (ObjectManager::isStaticClass($eav)) {
+                continue;
+            }
             /**@var \Weline\Eav\EavInterface $eavEntity */
             $eavEntity = ObjectManager::getInstance($eav);
             if ($eavEntity instanceof EavInterface) {
