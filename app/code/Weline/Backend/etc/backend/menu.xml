@@ -27,6 +27,8 @@
     <!--系统设置分组菜单-->
     <add source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/backend/settings/basic"
          parent="Weline_Backend::system_settings" icon="mdi mdi-settings" order="10"/>
+    <add source="Weline_Backend::backend_config" name="backend_config" title="后台配置" action="*/backend/config"
+         parent="Weline_Backend::system_settings" icon="mdi mdi-cog" order="15"/>
     <add source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/backend/settings/email"
          parent="Weline_Backend::system_settings" icon="mdi mdi-email" order="20"/>
     <add source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage"
