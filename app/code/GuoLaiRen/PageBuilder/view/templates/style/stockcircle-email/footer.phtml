@@ -1,0 +1,255 @@
+<?php
+/**
+ * StockCircle Email Template - Footer
+ * 邮件模板 - 页脚（社区指南和版权信息）
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:theme => 全局主题设置[继承]:💡主题模式说明:此配置继承自Header的主题设置，三个文件共享同一主题配置\n• 如需修改主题，请在Header配置中修改\n• 保持三个文件的主题模式一致，确保整体风格统一
+ * theme.mode => 主题模式（继承Header）:select:dark|dark,light
+ * 
+ * group:footer_style => 页脚样式设置
+ * footer_style.background_color_dark => 背景颜色(暗色主题):color:#212a37
+ * footer_style.background_color_light => 背景颜色(亮色主题):color:#ffffff
+ * footer_style.padding_v => 上下内边距:responsive:30/40|px[移动端30px，PC端40px]
+ * footer_style.padding_h => 左右内边距:responsive:30/30|px[移动端30px，PC端30px]
+ * 
+ * group:footer_container => 容器设置
+ * footer_container.max_width => 最大宽度:responsive:100/600|%/px[移动端100%，PC端600px]
+ * 
+ * group:guidelines => 社区指南设置
+ * guidelines.title => 指南标题:text:COMMUNITY GUIDELINES
+ * guidelines.title_color_dark => 标题颜色(暗色主题):color:#d6d6d6
+ * guidelines.title_color_light => 标题颜色(亮色主题):color:#666666
+ * guidelines.title_size => 标题字号:responsive:11/11|px[移动端11px，PC端11px]
+ * guidelines.title_weight => 标题字重:select:bold|400,500,600,700,bold
+ * guidelines.title_margin_bottom => 标题下边距:responsive:10/10|px[移动端10px，PC端10px]
+ * guidelines.text1 => 指南文本1:textarea:StockCircle is a learning and idea-sharing community where members exchange market perspectives for educational purposes.
+ * guidelines.text2 => 指南文本2:textarea:All views expressed are personal opinions, not professional recommendations.
+ * guidelines.text3 => 指南文本3:textarea:Please verify any information independently and seek professional advice when needed.
+ * guidelines.text4 => 指南文本4:textarea:You received this message because you showed interest in joining our community.
+ * guidelines.text_color_dark => 文字颜色(暗色主题):color:#999999
+ * guidelines.text_color_light => 文字颜色(亮色主题):color:#999999
+ * guidelines.text_size => 文字字号:responsive:9/9|px[移动端9px，PC端9px]
+ * guidelines.line_height => 行高:number:1.6
+ * guidelines.margin_bottom => 段落间距:responsive:5/5|px[移动端5px，PC端5px]
+ * 
+ * group:copyright => 版权设置
+ * copyright.text => 版权文本:text:© 2025 StockCircle | stockcircle.to | unsubscribe
+ * copyright.text_color_dark => 文字颜色(暗色主题):color:#999999
+ * copyright.text_color_light => 文字颜色(亮色主题):color:#999999
+ * copyright.text_size => 文字字号:responsive:9/9|px[移动端9px，PC端9px]
+ * copyright.link_color_dark => 链接颜色(暗色主题):color:#03d453
+ * copyright.link_color_light => 链接颜色(亮色主题):color:#999999
+ * copyright.website_url => 网站链接地址:text:
+ * copyright.unsubscribe_url => 退订链接地址:text:
+ * copyright.margin_top => 上边距:responsive:15/15|px[移动端15px，PC端15px]
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// Helper function
+function getEmailFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+if (!function_exists('parseResponsive')) {
+function parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+}
+
+if (!function_exists('genResponsiveCSS')) {
+function genResponsiveCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+}
+
+// 主题配置 - 全局共享，与 Header 和 Content 使用同一个配置
+// 如果需要修改主题，请在 Header 配置中修改 theme.mode，三个文件会自动同步
+$themeMode = getEmailFooterConfig($styleSettings, 'theme.mode', 'dark');
+
+// 页脚样式配置
+$bgColorDark = getEmailFooterConfig($styleSettings, 'footer_style.background_color_dark', '#212a37');
+$bgColorLight = getEmailFooterConfig($styleSettings, 'footer_style.background_color_light', '#ffffff');
+$bgColor = ($themeMode === 'dark') ? $bgColorDark : $bgColorLight;
+$paddingV = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'footer_style.padding_v', '30/40') . 'px'));
+$paddingH = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'footer_style.padding_h', '30/30') . 'px'));
+
+// 容器配置
+$containerMaxWidth = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'footer_container.max_width', '100/600')));
+
+// 社区指南配置
+$guidelinesTitle = getEmailFooterConfig($styleSettings, 'guidelines.title', 'COMMUNITY GUIDELINES');
+$guidelinesTitleColorDark = getEmailFooterConfig($styleSettings, 'guidelines.title_color_dark', '#d6d6d6');
+$guidelinesTitleColorLight = getEmailFooterConfig($styleSettings, 'guidelines.title_color_light', '#666666');
+$guidelinesTitleColor = ($themeMode === 'dark') ? $guidelinesTitleColorDark : $guidelinesTitleColorLight;
+$guidelinesTitleSize = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'guidelines.title_size', '11/11') . 'px'));
+$guidelinesTitleWeight = getEmailFooterConfig($styleSettings, 'guidelines.title_weight', 'bold');
+$guidelinesTitleMarginBottom = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'guidelines.title_margin_bottom', '10/10') . 'px'));
+
+$guidelinesTexts = [
+    getEmailFooterConfig($styleSettings, 'guidelines.text1', 'StockCircle is a learning and idea-sharing community where members exchange market perspectives for educational purposes.'),
+    getEmailFooterConfig($styleSettings, 'guidelines.text2', 'All views expressed are personal opinions, not professional recommendations.'),
+    getEmailFooterConfig($styleSettings, 'guidelines.text3', 'Please verify any information independently and seek professional advice when needed.'),
+    getEmailFooterConfig($styleSettings, 'guidelines.text4', 'You received this message because you showed interest in joining our community.'),
+];
+$guidelinesTextColorDark = getEmailFooterConfig($styleSettings, 'guidelines.text_color_dark', '#999999');
+$guidelinesTextColorLight = getEmailFooterConfig($styleSettings, 'guidelines.text_color_light', '#999999');
+$guidelinesTextColor = ($themeMode === 'dark') ? $guidelinesTextColorDark : $guidelinesTextColorLight;
+$guidelinesTextSize = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'guidelines.text_size', '9/9') . 'px'));
+$guidelinesLineHeight = getEmailFooterConfig($styleSettings, 'guidelines.line_height', '1.6');
+$guidelinesMarginBottom = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'guidelines.margin_bottom', '5/5') . 'px'));
+
+// 版权配置
+$copyrightText = getEmailFooterConfig($styleSettings, 'copyright.text', '© 2025 StockCircle | stockcircle.to | unsubscribe');
+$copyrightTextColorDark = getEmailFooterConfig($styleSettings, 'copyright.text_color_dark', '#999999');
+$copyrightTextColorLight = getEmailFooterConfig($styleSettings, 'copyright.text_color_light', '#999999');
+$copyrightTextColor = ($themeMode === 'dark') ? $copyrightTextColorDark : $copyrightTextColorLight;
+$copyrightTextSize = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'copyright.text_size', '9/9') . 'px'));
+$copyrightLinkColorDark = getEmailFooterConfig($styleSettings, 'copyright.link_color_dark', '#03d453');
+$copyrightLinkColorLight = getEmailFooterConfig($styleSettings, 'copyright.link_color_light', '#999999');
+$copyrightLinkColor = ($themeMode === 'dark') ? $copyrightLinkColorDark : $copyrightLinkColorLight;
+$copyrightWebsiteUrl = getEmailFooterConfig($styleSettings, 'copyright.website_url', '');
+$copyrightUnsubscribeUrl = getEmailFooterConfig($styleSettings, 'copyright.unsubscribe_url', '');
+$copyrightMarginTop = genResponsiveCSS(parseResponsive(getEmailFooterConfig($styleSettings, 'copyright.margin_top', '15/15') . 'px'));
+
+// 页面数据
+$websiteUrl = $page ? $page->getData('website_url') : '';
+if (empty($copyrightWebsiteUrl) && !empty($websiteUrl)) {
+    $copyrightWebsiteUrl = $websiteUrl;
+}
+?>
+
+<style>
+    .email-footer {
+        width: 100%;
+        background-color: <?= htmlspecialchars($bgColor ?? '') ?>;
+        padding: <?= $paddingV ?> <?= $paddingH ?>;
+        text-align: center;
+    }
+    
+    .email-footer-container {
+        max-width: <?= $containerMaxWidth ?>;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .email-footer-title {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $guidelinesTitleSize ?>;
+        color: <?= htmlspecialchars($guidelinesTitleColor ?? '') ?>;
+        font-weight: <?= htmlspecialchars($guidelinesTitleWeight ?? '') ?>;
+        margin: 0 0 <?= $guidelinesTitleMarginBottom ?> 0;
+    }
+    
+    .email-footer-text {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $guidelinesTextSize ?>;
+        color: <?= htmlspecialchars($guidelinesTextColor ?? '') ?>;
+        line-height: <?= htmlspecialchars($guidelinesLineHeight ?? '') ?>;
+        margin: <?= $guidelinesMarginBottom ?> 0;
+    }
+    
+    .email-footer-text:last-child {
+        margin-bottom: 0;
+    }
+    
+    .email-footer-copyright {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $copyrightTextSize ?>;
+        color: <?= htmlspecialchars($copyrightTextColor ?? '') ?>;
+        line-height: <?= htmlspecialchars($guidelinesLineHeight ?? '') ?>;
+        margin: <?= $copyrightMarginTop ?> 0 0 0;
+    }
+    
+    .email-footer-link {
+        color: <?= htmlspecialchars($copyrightLinkColor ?? '') ?> !important;
+        text-decoration: underline !important;
+    }
+    
+    .email-footer-link:hover {
+        opacity: 0.8;
+    }
+    
+    /* 移动端优化 */
+    @media (max-width: 600px) {
+        .email-footer {
+            padding: 20px 15px 30px !important;
+        }
+        
+        .email-footer-container {
+            max-width: 100% !important;
+        }
+    }
+</style>
+
+<footer class="email-footer">
+    <div class="email-footer-container">
+        <?php if ($guidelinesTitle): ?>
+        <p class="email-footer-title"><?= htmlspecialchars($guidelinesTitle ?? '') ?></p>
+        <?php endif; ?>
+        
+        <?php foreach ($guidelinesTexts as $text): ?>
+            <?php if (!empty($text)): ?>
+            <p class="email-footer-text"><?= htmlspecialchars($text ?? '') ?></p>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        
+        <?php if ($copyrightText): ?>
+        <p class="email-footer-copyright">
+            <?php
+            // 处理版权文本中的链接
+            $copyrightOutput = htmlspecialchars($copyrightText ?? '');
+            
+            // 替换 website_url
+            if (!empty($copyrightWebsiteUrl)) {
+                $copyrightOutput = str_replace(
+                    'stockcircle.to',
+                    '<a href="' . htmlspecialchars($copyrightWebsiteUrl ?? '') . '" class="email-footer-link">stockcircle.to</a>',
+                    $copyrightOutput
+                );
+            }
+            
+            // 替换 unsubscribe_url
+            if (!empty($copyrightUnsubscribeUrl)) {
+                $copyrightOutput = str_replace(
+                    'unsubscribe',
+                    '<a href="' . htmlspecialchars($copyrightUnsubscribeUrl ?? '') . '" class="email-footer-link">unsubscribe</a>',
+                    $copyrightOutput
+                );
+            }
+            
+            echo $copyrightOutput;
+            ?>
+        </p>
+        <?php endif; ?>
+    </div>
+</footer>
+</body>
+</html>
+
+

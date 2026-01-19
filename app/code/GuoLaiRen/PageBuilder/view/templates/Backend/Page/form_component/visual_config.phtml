@@ -1,0 +1,3580 @@
+<?php
+/**
+ * 可视化配置界面（左配置右预览）
+ * 支持通过 handle 或 page_id 初始化
+ * 
+ * 使用方式：
+ * 1. 通过 handle 初始化（推荐）：
+ *    GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml
+ *    需要确保页面中有 <input id="handle"> 元素，或者通过 JS 设置 window.visualConfigHandle
+ * 
+ * 2. 通过 page_id 初始化：
+ *    $this->assign('visual_config_page_id', $pageId);
+ *    GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+// 尝试从多种方式获取 page_id 和 handle
+$page = $this->getData('page');
+$pageId = $this->getData('visual_config_page_id') ?: ($page && $page->getId() ? $page->getId() : 0);
+$handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('handle') : '');
+$styleSettings = $page ? $page->getStyleSettings() : [];
+$isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
+
+// 获取后端主题配置
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$themeModel = $themeConfig->getThemeModel();
+$themeMode = $themeModel ?: 'light'; // 默认为light
+?>
+
+<style>
+/* 可视化配置容器 - 使用CSS变量支持主题 */
+.visual-config-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    background: var(--visual-config-bg, #fff);
+    color: var(--visual-config-text, #212529);
+    display: none;
+}
+
+/* 亮色主题（默认） */
+.visual-config-wrapper[data-theme="light"],
+.visual-config-wrapper:not([data-theme]) {
+    --visual-config-bg: #fff;
+    --visual-config-text: #212529;
+    --visual-config-bg-secondary: #f8f9fa;
+    --visual-config-bg-tertiary: #e9ecef;
+    --visual-config-border: #dee2e6;
+    --visual-config-text-secondary: #6c757d;
+    --visual-config-text-muted: #adb5bd;
+    --visual-config-toolbar-bg: #2c3e50;
+    --visual-config-toolbar-text: #fff;
+    --visual-config-panel-bg: #f8f9fa;
+    --visual-config-panel-header-bg: #fff;
+    --visual-config-section-bg: #fff;
+    --visual-config-input-bg: #fff;
+    --visual-config-input-border: #dee2e6;
+    --visual-config-input-text: #212529;
+    --visual-config-hover-bg: #f8f9fa;
+    --visual-config-scrollbar-thumb: #cbd5e1;
+    --visual-config-scrollbar-thumb-hover: #94a3b8;
+}
+
+/* 暗色主题 */
+.visual-config-wrapper[data-theme="dark"] {
+    --visual-config-bg: #1a1a1a;
+    --visual-config-text: #e9ecef;
+    --visual-config-bg-secondary: #2d2d2d;
+    --visual-config-bg-tertiary: #3a3a3a;
+    --visual-config-border: #495057;
+    --visual-config-text-secondary: #adb5bd;
+    --visual-config-text-muted: #6c757d;
+    --visual-config-toolbar-bg: #1e293b;
+    --visual-config-toolbar-text: #f8f9fa;
+    --visual-config-panel-bg: #2d2d2d;
+    --visual-config-panel-header-bg: #3a3a3a;
+    --visual-config-section-bg: #2d2d2d;
+    --visual-config-input-bg: #3a3a3a;
+    --visual-config-input-border: #495057;
+    --visual-config-input-text: #e9ecef;
+    --visual-config-hover-bg: #3a3a3a;
+    --visual-config-scrollbar-thumb: #495057;
+    --visual-config-scrollbar-thumb-hover: #6c757d;
+}
+
+.visual-config-wrapper.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 顶部工具栏 */
+.visual-toolbar {
+    height: 60px;
+    background: var(--visual-config-toolbar-bg, #2c3e50);
+    color: var(--visual-config-toolbar-text, #fff);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.visual-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.visual-toolbar-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.visual-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 设备切换按钮 */
+.device-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.device-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.device-btn.active {
+    background: #3498db;
+}
+
+/* 自动保存状态 */
+.save-status {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.1);
+}
+
+.save-status.saving {
+    background: #f39c12;
+}
+
+.save-status.saved {
+    background: #27ae60;
+}
+
+.save-status.error {
+    background: #e74c3c;
+}
+
+/* 主内容区域 */
+.visual-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 左侧配置面板 */
+.config-panel {
+    width: 400px;
+    background: var(--visual-config-panel-bg, #f8f9fa);
+    border-right: 1px solid var(--visual-config-border, #dee2e6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+    position: relative;
+    z-index: 10;
+    pointer-events: auto;
+}
+
+.config-panel-header {
+    padding: 15px 20px;
+    background: var(--visual-config-panel-header-bg, #fff);
+    border-bottom: 1px solid var(--visual-config-border, #dee2e6);
+    font-weight: 600;
+    color: var(--visual-config-text, #212529);
+}
+
+/* 配置搜索框 */
+.config-search-box {
+    margin-top: 10px;
+    position: relative;
+}
+
+.config-search-box input {
+    width: 100%;
+    padding: 8px 35px 8px 12px;
+    border: 1px solid var(--visual-config-input-border, #dee2e6);
+    border-radius: 4px;
+    font-size: 14px;
+    background: var(--visual-config-input-bg, #fff);
+    color: var(--visual-config-input-text, #212529);
+}
+
+.config-search-box .search-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--visual-config-text-muted, #6c757d);
+    pointer-events: none;
+}
+
+.config-search-box.has-value .search-icon {
+    display: none;
+}
+
+.config-search-box .clear-search {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    cursor: pointer;
+    display: none;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.config-search-box .clear-search:hover {
+    color: #dc3545;
+}
+
+.config-search-box.has-value .clear-search {
+    display: block;
+}
+
+/* 搜索高亮 */
+.config-search-highlight {
+    background-color: var(--visual-config-highlight-bg, #fff3cd);
+    padding: 0 2px;
+}
+
+/* 暗色主题下的搜索高亮 */
+.visual-config-wrapper[data-theme="dark"] .config-search-highlight {
+    background-color: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+}
+
+/* 通用表单控件样式 - 适配主题 */
+.visual-config-wrapper .form-control,
+.visual-config-wrapper .form-select,
+.visual-config-wrapper input[type="text"],
+.visual-config-wrapper input[type="number"],
+.visual-config-wrapper input[type="color"],
+.visual-config-wrapper textarea {
+    background: var(--visual-config-input-bg, #fff);
+    border: 1px solid var(--visual-config-input-border, #dee2e6);
+    color: var(--visual-config-input-text, #212529);
+}
+
+.visual-config-wrapper .form-control:focus,
+.visual-config-wrapper .form-select:focus,
+.visual-config-wrapper input[type="text"]:focus,
+.visual-config-wrapper input[type="number"]:focus,
+.visual-config-wrapper textarea:focus {
+    background: var(--visual-config-input-bg, #fff);
+    border-color: #3498db;
+    color: var(--visual-config-input-text, #212529);
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+.visual-config-wrapper .form-label {
+    color: var(--visual-config-text, #212529);
+}
+
+.visual-config-wrapper .form-text,
+.visual-config-wrapper small {
+    color: var(--visual-config-text-secondary, #6c757d);
+}
+
+/* 配置字段项 */
+.visual-config-wrapper .config-field-item {
+    background: var(--visual-config-section-bg, #fff);
+    color: var(--visual-config-text, #212529);
+}
+
+/* 预览面板背景 */
+.visual-config-wrapper .preview-panel {
+    background: var(--visual-config-bg-secondary, #ecf0f1);
+}
+
+.visual-config-wrapper .preview-container {
+    background: var(--visual-config-bg, #fff);
+}
+
+.visual-config-wrapper .preview-loading {
+    background: var(--visual-config-bg, rgba(255,255,255,0.95));
+    color: var(--visual-config-text, #212529);
+}
+
+/* 暗色主题下的预览加载 */
+.visual-config-wrapper[data-theme="dark"] .preview-loading {
+    background: rgba(26, 26, 26, 0.95);
+    color: #e9ecef;
+}
+
+/* 暗色主题下的链接和按钮 */
+.visual-config-wrapper[data-theme="dark"] .link-warning,
+.visual-config-wrapper[data-theme="dark"] a {
+    color: #4fc3f7;
+}
+
+.visual-config-wrapper[data-theme="dark"] .link-warning:hover,
+.visual-config-wrapper[data-theme="dark"] a:hover {
+    color: #81d4fa;
+}
+
+/* 暗色主题下的色系选择器 */
+.visual-config-wrapper[data-theme="dark"] .color-scheme-item {
+    background: var(--visual-config-section-bg, #2d2d2d);
+    border-color: var(--visual-config-border, #495057);
+}
+
+.visual-config-wrapper[data-theme="dark"] .color-scheme-info {
+    background: var(--visual-config-section-bg, #2d2d2d);
+}
+
+.visual-config-wrapper[data-theme="dark"] .color-scheme-name {
+    color: var(--visual-config-text, #e9ecef);
+}
+
+.visual-config-wrapper[data-theme="dark"] .color-scheme-desc {
+    color: var(--visual-config-text-secondary, #adb5bd);
+}
+
+/* 搜索结果隐藏 */
+.config-field-hidden {
+    display: none !important;
+}
+
+.config-section-empty {
+    display: none !important;
+}
+
+.config-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* 滚动条样式 - 跟随主题 */
+.config-panel-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.config-panel-body::-webkit-scrollbar-track {
+    background: var(--visual-config-bg-secondary, #f8f9fa);
+}
+
+.config-panel-body::-webkit-scrollbar-thumb {
+    background: var(--visual-config-scrollbar-thumb, #cbd5e1);
+    border-radius: 4px;
+}
+
+.config-panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--visual-config-scrollbar-thumb-hover, #94a3b8);
+}
+
+/* Firefox 滚动条样式 */
+.config-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, #cbd5e1) var(--visual-config-bg-secondary, #f8f9fa);
+}
+
+/* 配置区域折叠面板 */
+.config-section {
+    border-bottom: 1px solid var(--visual-config-border, #dee2e6);
+}
+
+.config-section-header {
+    padding: 15px 20px;
+    background: var(--visual-config-section-bg, #fff);
+    color: var(--visual-config-text, #212529);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.config-section-header:hover {
+    background: var(--visual-config-hover-bg, #f8f9fa);
+}
+
+.config-section-header i {
+    transition: transform 0.3s;
+}
+
+.config-section.collapsed .config-section-header i {
+    transform: rotate(-90deg);
+}
+
+.config-section-body {
+    padding: 20px;
+    background: var(--visual-config-section-bg, #fff);
+    color: var(--visual-config-text, #212529);
+    display: block;
+}
+
+.config-section.collapsed .config-section-body {
+    display: none;
+}
+
+/* 配色方案分组始终展开，不可折叠 */
+.config-section.color-scheme-section {
+    border-top: 2px solid #3498db;
+    background: var(--visual-config-bg-secondary, #f8f9fa);
+}
+
+.config-section.color-scheme-section .config-section-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    font-weight: 700;
+}
+
+.config-section.color-scheme-section .config-section-header:hover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.config-section.color-scheme-section .config-section-body {
+    display: block !important;
+    padding: 20px;
+    background: var(--visual-config-section-bg, #fff);
+    color: var(--visual-config-text, #212529);
+}
+
+/* 恢复默认值按钮样式（让按钮更显眼） */
+.visual-config-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    text-decoration: none;
+}
+.visual-config-reset-btn .mdi {
+    font-size: 14px;
+}
+
+/* 色系选择器样式 */
+.color-scheme-selector {
+    margin-top: 10px;
+}
+
+.color-scheme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.color-scheme-item {
+    position: relative;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #fff;
+}
+
+.color-scheme-item:hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+    transform: translateY(-2px);
+}
+
+.color-scheme-item.selected {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.color-scheme-preview {
+    width: 100%;
+    height: 100px;
+    overflow: hidden;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.color-scheme-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.color-scheme-preview.no-image {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+
+.color-scheme-preview.no-image i {
+    font-size: 32px;
+    opacity: 0.7;
+}
+
+.color-scheme-preview.gradient-preview {
+    background-size: cover;
+    background-position: center;
+    color: #fff;
+    position: relative;
+}
+
+.color-scheme-preview.gradient-preview::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.1);
+    z-index: 1;
+}
+
+.color-scheme-preview.gradient-preview i {
+    font-size: 32px;
+    opacity: 0.9;
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.color-scheme-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.color-scheme-item.selected .color-scheme-check,
+.color-scheme-check.active {
+    opacity: 1;
+    background: #3498db;
+    color: #fff;
+}
+
+.color-scheme-check i {
+    font-size: 16px;
+}
+
+.color-scheme-info {
+    padding: 10px;
+    background: #fff;
+}
+
+.color-scheme-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.color-scheme-item.selected .color-scheme-name {
+    color: #3498db;
+}
+
+.color-scheme-desc {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* 右侧预览面板 */
+.preview-panel {
+    flex: 1;
+    background: #ecf0f1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+}
+
+.preview-container {
+    background: #fff;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    height: 100%;
+    width: 100%;
+    transition: all 0.3s;
+    position: relative;
+}
+
+/* 设备视图 */
+.preview-container.device-mobile {
+    max-width: 375px;
+    height: 667px;
+}
+
+.preview-container.device-tablet {
+    max-width: 768px;
+    height: 1024px;
+}
+
+.preview-container.device-desktop {
+    width: 100%;
+    height: 100%;
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* 加载状态 */
+.preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.95);
+    padding: 20px 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.preview-loading.active {
+    display: block;
+}
+
+/* 语言切换器 */
+.language-switcher-visual {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+    padding-left: 20px;
+    border-left: 1px solid rgba(255,255,255,0.2);
+}
+
+.language-switcher-visual i {
+    color: #fff;
+    font-size: 18px;
+}
+
+.language-switcher-visual .form-select {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    font-size: 13px;
+    padding: 5px 30px 5px 10px;
+    min-width: 120px;
+}
+
+.language-switcher-visual .form-select:focus {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.3);
+    color: #fff;
+    box-shadow: none;
+}
+
+.language-switcher-visual .form-select option {
+    background: #2c3e50;
+    color: #fff;
+}
+
+/* 全屏模式 */
+.visual-config-wrapper.fullscreen-mode {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 99999 !important;
+    transform: none !important;
+}
+
+/* 全屏模式下的配置面板变为悬浮 */
+.visual-config-wrapper.fullscreen-mode .config-panel {
+    position: absolute;
+    left: 0;
+    top: 60px;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    pointer-events: auto;
+}
+
+/* 全屏模式下配置面板收起状态 */
+.visual-config-wrapper.fullscreen-mode .config-panel.collapsed {
+    transform: translateX(-400px);
+}
+
+/* 全屏模式下显示收起按钮 */
+.visual-config-wrapper.fullscreen-mode .config-panel-toggle {
+    display: inline-block !important;
+}
+
+/* 全屏模式下的预览面板占满空间 */
+.visual-config-wrapper.fullscreen-mode .preview-panel {
+    width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+/* 全屏按钮样式 */
+.fullscreen-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-left: 10px;
+}
+
+.fullscreen-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.fullscreen-btn.active {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.fullscreen-btn i {
+    font-size: 18px;
+}
+
+/* 悬浮展开按钮 */
+.floating-expand-btn {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border: none;
+    width: 40px;
+    height: 60px;
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+    z-index: 99;
+    transition: all 0.3s;
+}
+
+.floating-expand-btn:hover {
+    transform: translateY(-50%) translateX(5px);
+    box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+}
+
+.floating-expand-btn i {
+    font-size: 20px;
+}
+
+/* AI回填字段蓝色边框标记 */
+.visual-config-wrapper .ai-filled-field {
+    border-color: #0d6efd !important;
+    border-width: 2px !important;
+    border-style: solid !important;
+    transition: border-color 0.3s ease;
+}
+
+/* AI回填预览面板样式 */
+.ai-fill-preview {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.ai-fill-preview table {
+    font-size: 0.9rem;
+}
+
+.ai-fill-preview code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.ai-fill-preview-modal .swal2-html-container {
+    padding: 0;
+}
+
+.ai-fill-preview-modal .swal2-html-container > p {
+    margin-top: 1rem;
+}
+
+/* SweetAlert2 弹窗层级调整：确保在可视化窗口之上 */
+.swal2-container {
+    z-index: 12000 !important;
+}
+</style>
+
+<!-- 可视化配置容器 -->
+<div class="visual-config-wrapper" id="visualConfigWrapper" data-theme="<?= htmlspecialchars($themeMode) ?>">
+    <!-- 顶部工具栏 -->
+    <div class="visual-toolbar">
+        <div class="visual-toolbar-left">
+            <button type="button" class="btn btn-sm btn-light" onclick="closeVisualConfig()">
+                <i class="mdi mdi-close"></i> <?= __('退出') ?>
+            </button>
+            <h5 class="mb-0 text-white"><?= __('可视化配置') ?></h5>
+            <span id="templateInfoBadge" class="ms-2 small text-light" style="opacity:.85; display:none;"></span>
+            <?php if (isset($this) && $this->getData('is_template_config_mode')): ?>
+            <span class="system-test-badge" style="background: #f39c12; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                <i class="mdi mdi-test-tube"></i> <?= __('系统测试页面') ?>
+            </span>
+            <?php endif; ?>
+        </div>
+        
+        <div class="visual-toolbar-center">
+            <!-- 设备切换 -->
+            <button type="button" class="device-btn active" data-device="desktop" onclick="switchDevice('desktop')">
+                <i class="mdi mdi-monitor"></i> <?= __('桌面') ?>
+            </button>
+            <button type="button" class="device-btn" data-device="tablet" onclick="switchDevice('tablet')">
+                <i class="mdi mdi-tablet"></i> <?= __('平板') ?>
+            </button>
+            <button type="button" class="device-btn" data-device="mobile" onclick="switchDevice('mobile')">
+                <i class="mdi mdi-cellphone"></i> <?= __('手机') ?>
+            </button>
+            
+            <!-- 全屏切换 -->
+            <button type="button" class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="<?= __('全屏模式') ?>">
+                <i class="mdi mdi-fullscreen"></i>
+            </button>
+            
+            <!-- 语言切换 -->
+            <?php
+            // 获取页面语言信息（模板配置模式下使用测试页面）
+            $pageForLanguage = $page;
+            if (isset($this) && $this->getData('is_template_config_mode')) {
+                // 模板配置模式下，如果有测试页面，使用测试页面的语言
+                $testPage = $this->getData('page');
+                if ($testPage && $testPage->getId()) {
+                    $pageForLanguage = $testPage;
+                }
+            }
+            
+            $pageDefaultLocale = '';
+            $pageLocales = [];
+            if ($pageForLanguage && $pageForLanguage->getId()) {
+                $pageDefaultLocale = $pageForLanguage->getData('default_locale') ?: '';
+                $localesData = $pageForLanguage->getData('locales');
+                if ($localesData && is_string($localesData)) {
+                    $pageLocales = json_decode($localesData, true) ?: [];
+                } elseif (is_array($localesData)) {
+                    $pageLocales = $localesData;
+                }
+            }
+            ?>
+            <?php if (!empty($pageDefaultLocale) || !empty($pageLocales)): ?>
+            <div class="language-switcher-visual">
+                <i class="mdi mdi-translate"></i>
+                <select id="visualLanguageSelect" class="form-select form-select-sm" onchange="switchVisualLanguage(this.value)">
+                    <?php 
+                    // 如果页面有默认语言，显示默认语言
+                    if ($pageDefaultLocale) {
+                        $i18nInstance = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
+                        $defaultLocaleName = $i18nInstance->getLocaleName($pageDefaultLocale);
+                        echo '<option value="' . htmlspecialchars($pageDefaultLocale ?? '') . '" selected>' . htmlspecialchars($defaultLocaleName ?? '') . '</option>';
+                    }
+                    
+                    // 显示其他语言
+                    foreach ($pageLocales as $locale) {
+                        if ($locale === $pageDefaultLocale) continue; // 跳过默认语言
+                        $i18nInstance = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
+                        $localeName = $i18nInstance->getLocaleName($locale);
+                        echo '<option value="' . htmlspecialchars($locale ?? '') . '">' . htmlspecialchars($localeName ?? '') . '</option>';
+                    }
+                    ?>
+                </select>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <div class="visual-toolbar-right">
+            <!-- AI一键生成模板配置 -->
+            <button type="button" 
+                    class="btn btn-sm btn-gradient-primary" 
+                    onclick="generateTemplateConfig()"
+                    id="aiGenerateTemplateConfigBtn"
+                    title="<?= __('AI一键生成模板所需的所有配置信息') ?>">
+                <i class="mdi mdi-robot"></i> <?= __('AI生成配置') ?>
+            </button>
+            
+            <!-- PageSpeed Insights（手机端，基于当前预览URL） -->
+            <?php
+            $isPagePublished = $page && $page->getData('status') == \GuoLaiRen\PageBuilder\Model\Page::STATUS_PUBLISHED;
+            $psiBtnDisabled = !$isPagePublished;
+            $psiBtnClass = $psiBtnDisabled ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-success';
+            $psiBtnTitle = $psiBtnDisabled 
+                ? __('PageSpeed 测试（手机） - 页面未发布，无法进行测试。请先发布页面后再进行 PageSpeed 测试。') 
+                : __('PageSpeed 测试（手机）');
+            ?>
+            <button type="button"
+                    id="psiMobileBtn"
+                    class="<?= $psiBtnClass ?>"
+                    data-base-url="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>"
+                    data-is-published="<?= $isPagePublished ? '1' : '0' ?>"
+                    <?= $psiBtnDisabled ? 'disabled' : '' ?>
+                    onclick="openPageSpeedMobile()"
+                    title="<?= $psiBtnTitle ?>">
+                <i class="mdi mdi-speedometer"></i> <?= __('PageSpeed（手机）') ?>
+            </button>
+
+            <!-- 文件管理器 -->
+            <button type="button" class="btn btn-sm btn-secondary" onclick="openAssetManager()" title="<?= __('文件管理器') ?>">
+                <i class="mdi mdi-folder"></i> <?= __('文件管理') ?>
+            </button>
+            
+            <!-- 配置导入导出 -->
+            <button type="button" 
+                    class="btn btn-sm btn-info" 
+                    onclick="exportPageConfig()"
+                    id="exportConfigBtn"
+                    title="<?= __('导出配置') ?>">
+                <i class="mdi mdi-download"></i> <?= __('导出配置') ?>
+            </button>
+            <button type="button" 
+                    class="btn btn-sm btn-warning" 
+                    onclick="importPageConfig()"
+                    id="importConfigBtn"
+                    title="<?= __('导入配置') ?>">
+                <i class="mdi mdi-upload"></i> <?= __('导入配置') ?>
+            </button>
+            
+            <!-- 保存状态 -->
+            <div class="save-status" id="saveStatus">
+                <i class="mdi mdi-check-circle"></i> <span id="saveStatusText"><?= __('已保存') ?></span>
+            </div>
+            
+            <!-- 刷新配置按钮（仅在模板配置模式显示） -->
+            <?php if (isset($this) && $this->getData('is_template_config_mode')): ?>
+            <button type="button" class="btn btn-sm btn-warning" onclick="refreshTemplateConfig(event)" title="<?= __('重新加载配置字段') ?>">
+                <i class="mdi mdi-refresh"></i> <?= __('刷新配置') ?>
+            </button>
+            <?php endif; ?>
+            
+            <!-- 刷新预览 -->
+            <button type="button" class="btn btn-sm btn-info" onclick="refreshPreview()">
+                <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 主内容区域 -->
+    <div class="visual-content">
+        <!-- 悬浮展开按钮（仅全屏收起时显示） -->
+        <button type="button" 
+                class="floating-expand-btn" 
+                id="floatingExpandBtn"
+                onclick="toggleConfigPanel()" 
+                title="<?= __('展开配置面板') ?>">
+            <i class="mdi mdi-chevron-right"></i>
+        </button>
+        
+        <!-- 左侧配置面板 -->
+        <div class="config-panel" id="configPanel">
+            <div class="config-panel-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="mdi mdi-cog"></i> <?= __('样式配置') ?></span>
+                    <div class="d-flex gap-2">
+                        <button type="button" 
+                                class="btn btn-sm btn-warning" 
+                                onclick="resetAllVisualConfig()"
+                                title="<?= __('恢复所有配置项为默认值') ?>">
+                            <i class="mdi mdi-restore"></i> <?= __('全部恢复默认') ?>
+                        </button>
+                        <button type="button" 
+                                class="btn btn-sm btn-light" 
+                                onclick="<?= (isset($this) && $this->getData('is_template_config_mode')) ? 'refreshTemplateConfig(event)' : 'refreshVisualStyleConfig()' ?>" 
+                                title="<?= __('刷新配置') ?>">
+                            <i class="mdi mdi-refresh"></i>
+                        </button>
+                        <button type="button" 
+                                class="btn btn-sm btn-light config-panel-toggle" 
+                                id="configPanelToggle"
+                                onclick="toggleConfigPanel()" 
+                                title="<?= __('收起面板') ?>"
+                                style="display: none;">
+                            <i class="mdi mdi-chevron-left"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- 快速搜索 -->
+                <div class="config-search-box">
+                    <input type="text" 
+                           id="configSearchInput" 
+                           class="form-control" 
+                           placeholder="<?= __('搜索配置项（支持key、名称、备注）') ?>"
+                           oninput="searchConfigFields(this.value)">
+                    <i class="mdi mdi-magnify search-icon"></i>
+                    <i class="mdi mdi-close clear-search" onclick="clearConfigSearch()"></i>
+                </div>
+            </div>
+            <div class="config-panel-body">
+                <!-- 头部配置 -->
+                <div class="config-section" id="headerConfig">
+                    <div class="config-section-header" onclick="toggleSection('headerConfig')">
+                        <span><i class="mdi mdi-page-layout-header"></i> <?= __('头部配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 头部Logo -->
+                        <div class="mb-3 config-field-item" data-config-key="header.logo" data-config-label="<?= __('Logo地址') ?>" data-config-description="">
+                            <label class="form-label"><?= __('Logo地址') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.logo"
+                                   value="<?= htmlspecialchars($styleSettings['header.logo'] ?? '') ?>"
+                                   placeholder="<?= __('输入Logo图片URL') ?>">
+                        </div>
+                        
+                        <!-- 网站名称 -->
+                        <div class="mb-3 config-field-item" data-config-key="header.site_name" data-config-label="<?= __('网站名称') ?>" data-config-description="">
+                            <label class="form-label"><?= __('网站名称') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.site_name"
+                                   value="<?= htmlspecialchars($styleSettings['header.site_name'] ?? '') ?>"
+                                   placeholder="<?= __('输入网站名称') ?>">
+                        </div>
+                        
+                        <!-- Logo高度 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('Logo高度 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.logo_height"
+                                   value="<?= htmlspecialchars($styleSettings['header.logo_height'] ?? '50') ?>"
+                                   min="20" max="200">
+                        </div>
+                        
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.bg_color"
+                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.text_color"
+                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.link_color"
+                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.font_size"
+                                   value="<?= $styleSettings['header.font_size'] ?? '16' ?>"
+                                   min="12" max="24">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 内容配置 -->
+                <div class="config-section" id="contentConfig">
+                    <div class="config-section-header" onclick="toggleSection('contentConfig')">
+                        <span><i class="mdi mdi-text-box"></i> <?= __('内容配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.bg_color"
+                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.text_color"
+                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>">
+                        </div>
+                        
+                        <!-- 标题颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.heading_color"
+                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>">
+                        </div>
+                        
+                        <!-- H1大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('H1 标题大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.h1_size"
+                                   value="<?= $styleSettings['content.h1_size'] ?? '36' ?>"
+                                   min="24" max="72">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('正文字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.font_size"
+                                   value="<?= $styleSettings['content.font_size'] ?? '16' ?>"
+                                   min="12" max="24">
+                        </div>
+                        
+                        <!-- 行高 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('行高') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.line_height"
+                                   value="<?= $styleSettings['content.line_height'] ?? '1.6' ?>"
+                                   min="1" max="3" step="0.1">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.link_color"
+                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>">
+                        </div>
+                        
+                        <!-- 字体家族 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体家族') ?></label>
+                            <select class="form-select auto-save-field" data-config-key="content.font_family">
+                                <option value="Arial, sans-serif" <?= ($styleSettings['content.font_family'] ?? '') == 'Arial, sans-serif' ? 'selected' : '' ?>>Arial</option>
+                                <option value="'Times New Roman', serif" <?= ($styleSettings['content.font_family'] ?? '') == "'Times New Roman', serif" ? 'selected' : '' ?>>Times New Roman</option>
+                                <option value="'Microsoft YaHei', sans-serif" <?= ($styleSettings['content.font_family'] ?? '') == "'Microsoft YaHei', sans-serif" ? 'selected' : '' ?>>微软雅黑</option>
+                                <option value="'Courier New', monospace" <?= ($styleSettings['content.font_family'] ?? '') == "'Courier New', monospace" ? 'selected' : '' ?>>Courier New</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 页脚配置 -->
+                <div class="config-section" id="footerConfig">
+                    <div class="config-section-header" onclick="toggleSection('footerConfig')">
+                        <span><i class="mdi mdi-page-layout-footer"></i> <?= __('页脚配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.bg_color"
+                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.text_color"
+                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 标题颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.heading_color"
+                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 标题大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.heading_size"
+                                   value="<?= $styleSettings['footer.heading_size'] ?? '18' ?>"
+                                   min="14" max="32">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.link_color"
+                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>">
+                        </div>
+                        
+                        <!-- 链接悬停颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接悬停颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.link_hover_color"
+                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.font_size"
+                                   value="<?= $styleSettings['footer.font_size'] ?? '14' ?>"
+                                   min="12" max="20">
+                        </div>
+                        
+                        <!-- 关于文本 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('关于我们文本') ?></label>
+                            <textarea class="form-control auto-save-field" 
+                                      data-config-key="footer.about_text" 
+                                      rows="3"><?= htmlspecialchars($styleSettings['footer.about_text'] ?? '') ?></textarea>
+                        </div>
+                        
+                        <!-- 联系邮箱 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系邮箱') ?></label>
+                            <input type="email" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_email"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_email'] ?? '') ?>"
+                                   placeholder="info@example.com">
+                        </div>
+                        
+                        <!-- 联系电话 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系电话') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_phone"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_phone'] ?? '') ?>"
+                                   placeholder="+86 123 4567 8900">
+                        </div>
+                        
+                        <!-- 联系地址 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系地址') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_address"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_address'] ?? '') ?>"
+                                   placeholder="<?= __('公司地址') ?>">
+                        </div>
+                        
+                        <!-- 版权文本 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('版权文本') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.copyright_text"
+                                   value="<?= htmlspecialchars($styleSettings['footer.copyright_text'] ?? '') ?>"
+                                   placeholder="<?= __('版权所有') ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧预览面板 -->
+        <div class="preview-panel">
+            <div class="preview-container device-desktop" id="previewContainer">
+                <iframe id="previewIframe" 
+                        class="preview-iframe" 
+                        src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId]) ?>"></iframe>
+                
+                <div class="preview-loading" id="previewLoading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                    <div class="mt-2"><?= __('刷新预览中...') ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
+<script>
+if (typeof window.openVisualConfig === 'undefined') {
+    window.openVisualConfig = function(passedHandle) {
+        try {
+            if (passedHandle && typeof passedHandle === 'string') {
+                window.visualConfigHandle = passedHandle.trim();
+            }
+            var wrapper = document.getElementById('visualConfigWrapper');
+            if (wrapper) {
+                wrapper.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            if (typeof window.visualConfigLazyInit === 'function') {
+                window.visualConfigLazyInit();
+            } else if (typeof window.openVisualConfigCore === 'function') {
+                // 兼容：如果核心函数已定义
+                window.openVisualConfigCore(passedHandle);
+            } else {
+                console.warn('[VisualConfig] 组件未完全就绪，稍后将继续初始化');
+                setTimeout(function(){
+                    if (typeof window.visualConfigLazyInit === 'function') {
+                        window.visualConfigLazyInit();
+                    }
+                }, 100);
+            }
+        } catch (e) {
+            console.error('[VisualConfig] 打开入口出错:', e);
+        }
+    };
+}
+</script>
+
+<script>
+// ========== 组件初始化：支持通过 handle 或 page_id 初始化 ==========
+// 使用唯一的初始化标识，避免在 iframe 环境中重复初始化导致内存耗尽
+(function() {
+    try { console.log('[VisualConfig] 组件脚本运行'); } catch (_){ }
+    // 检查是否已经在当前 window 中初始化过（防止重复执行）
+    const initKey = 'visualConfigInit_' + (window.location.href || 'default');
+    if (window[initKey]) {
+        console.log('⚠️ 可视化配置组件已初始化，跳过重复初始化');
+        return;
+    }
+    window[initKey] = true;
+    
+    // 初始化全局变量（只在未定义时设置，避免覆盖已有值）
+    window.visualConfigInitialized = window.visualConfigInitialized || false;
+    window.visualPageId = window.visualPageId || null;
+    window.visualConfigHandle = window.visualConfigHandle || null;
+    window.currentVisualLanguage = window.currentVisualLanguage || '';
+    window.defaultLanguage = window.defaultLanguage || '';
+    
+    // 延迟初始化，等待 DOM 完全加载后再执行（避免在 iframe 中立即执行导致内存问题）
+    const initVisualConfig = function() {
+        // 如果已经初始化过，直接返回
+        if (window.visualConfigInitialized) {
+            return;
+        }
+        
+        // 只有在可视化配置容器存在时才初始化
+        if (!document.getElementById('visualConfigWrapper')) {
+            // 容器不存在，可能是在 iframe 中动态加载，延迟重试
+            setTimeout(initVisualConfig, 100);
+            return;
+        }
+        
+        // 尝试从多个来源获取 handle 和 page_id（优先使用外部传入的全局值）
+        let handle = (typeof window.visualConfigHandle !== 'undefined' && window.visualConfigHandle) ? window.visualConfigHandle : '<?= htmlspecialchars($handle ?? '') ?>';
+        let pageId = <?= $pageId ?: 'null' ?>;
+        
+        // 如果 handle 为空，尝试从 DOM 获取
+        if (!handle) {
+            const handleInput = document.getElementById('handle');
+            if (handleInput) {
+                handle = handleInput.value.trim();
+            }
+        }
+        
+        // 如果 pageId 为空，尝试从全局变量获取
+        if (!pageId && typeof window.visualPageId !== 'undefined' && window.visualPageId) {
+            pageId = window.visualPageId;
+        }
+        
+        // 如果只有 handle 没有 pageId，需要通过 API 获取
+        if (handle && !pageId) {
+            console.log('📡 通过 handle 获取页面信息:', handle);
+            fetch('<?= $this->getBackendUrl('pagebuilder/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success && result.data) {
+                        pageId = result.data.page_id || null;
+                        window.visualPageId = pageId;
+                        window.visualConfigHandle = handle;
+                        if (result.data.default_locale) {
+                            window.defaultLanguage = result.data.default_locale;
+                            window.currentVisualLanguage = result.data.default_locale;
+                        }
+                        console.log('✅ 页面信息获取成功:', { pageId, handle, defaultLocale: window.defaultLanguage });
+                        window.visualConfigInitialized = true;
+                    } else {
+                        console.error('❌ 获取页面信息失败:', result.message || '未知错误');
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ API 调用失败:', error);
+                    if (typeof pageId !== 'undefined' && pageId) {
+                        window.visualPageId = pageId;
+                        window.visualConfigInitialized = true;
+                    }
+                });
+        } else {
+            window.visualPageId = pageId;
+            window.visualConfigHandle = handle;
+            window.visualConfigInitialized = true;
+        }
+        
+        if (!window.defaultLanguage && <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>) {
+            window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>;
+            window.currentVisualLanguage = window.defaultLanguage;
+        }
+        
+        console.log('✅ 可视化配置组件初始化完成', {
+            pageId: window.visualPageId,
+            handle: window.visualConfigHandle,
+            defaultLanguage: window.defaultLanguage
+        });
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initVisualConfig);
+    } else {
+        setTimeout(initVisualConfig, 50);
+    }
+    
+    // 提供延迟初始化函数（供外部调用）
+    window.visualConfigLazyInit = initVisualConfig;
+    // 在外部渲染完成后，组件内部也能重新初始化
+    window.addEventListener('VisualEditor:rendered', function(){
+        try { console.log('[VisualConfig] 组件捕获 VisualEditor:rendered，重新初始化'); } catch(_){ }
+        setTimeout(initVisualConfig, 0);
+    });
+})();
+
+// 页面ID（兼容性：如果全局未定义，使用组件内部的值）
+// 取消在全局公开 pageId，避免与外部冲突（统一由组件内部管理）
+
+// 自动保存防抖定时器
+let autoSaveTimer = null;
+
+// 提前定义 autoSaveVisualConfig 占位符（避免在函数定义前调用导致错误）
+// 这个占位符会在 autoSaveConfig 定义后被替换
+if (typeof window.autoSaveVisualConfig === 'undefined') {
+    window.autoSaveVisualConfig = function() {
+        // 如果 autoSaveConfig 已定义，则调用它；否则等待
+        if (typeof window.autoSaveConfig === 'function') {
+            return window.autoSaveConfig.apply(window, arguments);
+        } else {
+            console.warn('⚠️ autoSaveConfig 尚未定义，请稍后重试');
+            return Promise.reject(new Error('autoSaveConfig not yet defined'));
+        }
+    };
+}
+const AUTO_SAVE_DELAY = 1000; // 1秒
+
+// 打开可视化配置
+function openVisualConfig(passedHandle) {
+    document.getElementById('visualConfigWrapper').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    // 如果外部传入了 handle，则以它为准，由组件自行通过接口解析 pageId
+    if (typeof passedHandle === 'string' && passedHandle.trim()) {
+        window.visualConfigHandle = passedHandle.trim();
+        // 重置，以便触发通过 handle 获取 page 信息
+        window.visualPageId = null;
+        window.visualConfigInitialized = false;
+        if (typeof window.visualConfigLazyInit === 'function') {
+            window.visualConfigLazyInit();
+        }
+    }
+    
+    // 检测是否为模板配置模式，如果是则加载模板配置
+    const isTemplateMode = window.isTemplateConfigMode || false;
+    if (isTemplateMode) {
+        const styleCode = window.currentTemplateStyleCode || '';
+        const templatePageId = window.currentTemplatePageId || 0;
+        
+        if (styleCode) {
+            // 清空静态配置内容，准备加载动态配置
+            const configPanel = document.querySelector('.config-panel-body');
+            if (configPanel) {
+                configPanel.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2"><?= __('正在加载配置...') ?></div></div>';
+            }
+            
+            // 加载模板配置
+            loadTemplateStyleConfig();
+            
+            // 加载预览
+            refreshTemplatePreview();
+        }
+    }
+    // 非模板模式：根据外部样式选择加载配置并刷新预览
+    if (!isTemplateMode) {
+        if (typeof loadVisualStyleConfig === 'function') {
+            loadVisualStyleConfig().then(() => {
+                if (typeof window.refreshPreview === 'function') {
+                    window.refreshPreview();
+                }
+            });
+        }
+    }
+}
+
+// AI生成状态标志，用于禁止在生成时关闭可视化配置
+window.isAiGenerating = false;
+
+// 关闭可视化配置
+function closeVisualConfig() {
+    // 如果正在AI生成，禁止关闭
+    if (window.isAiGenerating) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('AI正在生成配置，请等待生成完成') ?>',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            console.log('<?= __('AI正在生成配置，请等待生成完成') ?>');
+        }
+        return;
+    }
+    document.getElementById('visualConfigWrapper').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// 向外部抛出全局函数供表单调用
+try {
+    if (!window.openVisualConfig) {
+        window.openVisualConfig = openVisualConfig;
+        console.log('[VisualConfig] 已挂载 window.openVisualConfig(handle)');
+    }
+    if (!window.closeVisualConfig) {
+        window.closeVisualConfig = closeVisualConfig;
+    }
+} catch (_) {}
+
+// 获取分组展开状态的 localStorage key
+function getVisualConfigStateKey() {
+    const pageId = document.querySelector('[data-page-id]')?.getAttribute('data-page-id') || 
+                   window.location.pathname.match(/\/page\/(\d+)/)?.[1] || 
+                   'default';
+    return `visual_config_sections_${pageId}`;
+}
+
+// 保存分组展开状态到 localStorage
+function saveSectionState(sectionId, isExpanded) {
+    try {
+        const stateKey = getVisualConfigStateKey();
+        const states = JSON.parse(localStorage.getItem(stateKey) || '{}');
+        states[sectionId] = isExpanded;
+        localStorage.setItem(stateKey, JSON.stringify(states));
+    } catch (e) {
+        console.warn('保存分组状态失败:', e);
+    }
+}
+
+// 从 localStorage 恢复分组展开状态
+function restoreSectionState(sectionId) {
+    try {
+        const stateKey = getVisualConfigStateKey();
+        const states = JSON.parse(localStorage.getItem(stateKey) || '{}');
+        return states[sectionId] !== false; // 默认展开（true），除非明确设置为 false
+    } catch (e) {
+        console.warn('恢复分组状态失败:', e);
+        return true; // 默认展开
+    }
+}
+
+// 切换配置区域
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    
+    const isCollapsed = section.classList.contains('collapsed');
+    section.classList.toggle('collapsed');
+    const isExpanded = !section.classList.contains('collapsed');
+    
+    // 保存状态到 localStorage
+    saveSectionState(sectionId, isExpanded);
+}
+
+// 切换设备视图
+function switchDevice(device) {
+    // 更新按钮状态
+    document.querySelectorAll('.device-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-device') === device);
+    });
+    
+    // 更新预览容器
+    const container = document.getElementById('previewContainer');
+    container.className = 'preview-container device-' + device;
+}
+
+// 更新保存状态（全局函数）
+window.updateSaveStatus = function(status, text) {
+    const statusEl = document.getElementById('saveStatus');
+    const textEl = document.getElementById('saveStatusText');
+    
+    if (statusEl) {
+        statusEl.className = 'save-status ' + status;
+    }
+    if (textEl) {
+        textEl.textContent = text;
+    }
+}
+
+ // 自动保存配置（全局函数，确保可以被 selectColorScheme 调用）
+ window.autoSaveConfig = function(immediate = false) {
+    // 清除之前的定时器
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+    }
+    
+    // 保存函数
+    const saveFunction = async () => {
+        if (typeof window.updateSaveStatus === 'function') {
+            window.updateSaveStatus('saving', '<?= __('保存中...') ?>');
+        }
+        
+        try {
+            // 收集所有配置
+            const config = {};
+            document.querySelectorAll('.auto-save-field').forEach(field => {
+                const key = field.getAttribute('data-config-key');
+                // 处理 radio 类型
+                if (field.type === 'radio') {
+                    if (field.checked) {
+                        config[key] = field.value;
+                    }
+                } else {
+                    config[key] = field.value;
+                }
+            });
+            
+            // 检测是否为模板配置模式
+            const isTemplateMode = window.isTemplateConfigMode || false;
+            const styleCode = window.currentTemplateStyleCode || '';
+            const templatePageId = window.currentTemplatePageId || 0;
+            
+            // 构建请求体（使用全局 pageId 或从 window 获取）
+            const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
+            // 尝试从外部下拉框读取当前样式代码
+            let currentStyleCode = '';
+            const externalStyleSelect = document.getElementById('style');
+            if (externalStyleSelect && externalStyleSelect.value) {
+                currentStyleCode = externalStyleSelect.value;
+            } else if (typeof window.currentStyle !== 'undefined' && window.currentStyle) {
+                currentStyleCode = window.currentStyle;
+            }
+
+            let requestBody = {
+                page_id: currentPageId,
+                style_config: config
+            };
+            
+            // 如果是模板配置模式，使用模板接口
+            let saveUrl = '<?= $this->getBackendUrl('*/backend/preview/autoSave') ?>';
+            if (isTemplateMode && styleCode) {
+                saveUrl = '<?= $this->getBackendUrl('*/backend/template/autoSave') ?>';
+                requestBody.page_id = templatePageId || pageId;
+                requestBody.style_code = styleCode;
+            } else {
+                // 普通页面配置模式：附带样式代码，支持语言（如有）
+                if (currentStyleCode) {
+                    requestBody.style_code = currentStyleCode;
+                }
+                if (window.currentVisualLanguage) {
+                    requestBody.locale = window.currentVisualLanguage;
+                }
+            }
+            
+            // 发送保存请求
+            const response = await fetch(saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestBody)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('saved', '<?= __('已保存') ?>');
+                }
+                
+                // 如果不是立即保存模式，自动刷新预览（立即保存模式下由调用者决定是否刷新）
+                if (!immediate) {
+                    if (typeof window.refreshPreview === 'function') {
+                        window.refreshPreview();
+                    }
+                }
+                
+                return Promise.resolve();
+            } else {
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+                }
+                console.error('保存失败:', result.message);
+                return Promise.reject(new Error(result.message || '保存失败'));
+            }
+        } catch (error) {
+            if (typeof window.updateSaveStatus === 'function') {
+                window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+            }
+            console.error('保存异常:', error);
+            return Promise.reject(error);
+        }
+    };
+    
+    if (immediate) {
+        // 立即保存，返回 Promise
+        return saveFunction();
+    } else {
+        // 延迟保存，返回 Promise
+        return new Promise((resolve, reject) => {
+            autoSaveTimer = setTimeout(async () => {
+                try {
+                    await saveFunction();
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            }, AUTO_SAVE_DELAY);
+        });
+    }
+}
+
+// 更新 autoSaveVisualConfig 为完整实现（替换之前的占位符，确保直接调用 autoSaveConfig）
+window.autoSaveVisualConfig = function() {
+    return window.autoSaveConfig.apply(window, arguments);
+};
+
+// 刷新预览（全局函数，确保可以被 selectColorScheme 调用）
+window.refreshPreview = function() {
+    const loading = document.getElementById('previewLoading');
+    const iframe = document.getElementById('previewIframe');
+    
+    if (!loading || !iframe) return;
+    
+    loading.classList.add('active');
+    
+    // 检测是否为模板配置模式
+    const isTemplateMode = window.isTemplateConfigMode || false;
+    const styleCode = window.currentTemplateStyleCode || '';
+    const templatePageId = window.currentTemplatePageId || 0;
+    
+    // 构建预览 URL（使用全局 pageId 或从 window 获取）
+    const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
+    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId;
+    
+    if (isTemplateMode && styleCode) {
+        previewUrl += '&style_code=' + encodeURIComponent(styleCode);
+        if (templatePageId) {
+            previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode);
+        }
+    } else {
+        // 普通页面配置模式：如果有外部样式选择，带上样式代码
+        const externalStyleSelect = document.getElementById('style');
+        const externalStyleCode = externalStyleSelect ? externalStyleSelect.value : (typeof window.currentStyle !== 'undefined' ? window.currentStyle : '');
+        if (externalStyleCode) {
+            previewUrl += '&style_code=' + encodeURIComponent(externalStyleCode);
+        }
+        if (window.currentVisualLanguage) {
+            previewUrl += '&locale=' + encodeURIComponent(window.currentVisualLanguage);
+        }
+    }
+    
+    previewUrl += '&t=' + Date.now();
+    
+    // 重新加载iframe
+    iframe.src = previewUrl;
+    
+    // 监听加载完成
+    iframe.onload = function() {
+        loading.classList.remove('active');
+    };
+}
+
+// 色系选择函数（全局函数）
+window.selectColorScheme = function(fieldId, schemeKey) {
+    const hiddenInput = document.getElementById(fieldId);
+    if (!hiddenInput) return;
+    
+    // 更新隐藏输入框的值
+    hiddenInput.value = schemeKey;
+    
+    // 更新UI：移除所有选中状态
+    const container = document.getElementById(fieldId + '_container');
+    if (container) {
+        container.querySelectorAll('.color-scheme-item').forEach(item => {
+            item.classList.remove('selected');
+            const check = item.querySelector('.color-scheme-check');
+            if (check) {
+                check.classList.remove('active');
+            }
+        });
+        
+        // 添加新的选中状态
+        const selectedItem = container.querySelector(`[data-scheme-key="${schemeKey}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('selected');
+            const check = selectedItem.querySelector('.color-scheme-check');
+            if (check) {
+                check.classList.add('active');
+            }
+        }
+    }
+    
+    // 触发自动保存
+    if (typeof window.updateSaveStatus === 'function') {
+        window.updateSaveStatus('', '<?= __('未保存') ?>');
+    }
+    
+    // 检测是否为模板配置模式
+    const isTemplateMode = window.isTemplateConfigMode || false;
+    
+    // 立即触发保存（不延迟，色系切换需要立即生效）
+    if (isTemplateMode) {
+        // 模板配置模式：立即保存并刷新预览
+        if (typeof window.autoSaveConfig === 'function') {
+            window.autoSaveConfig(true).then(() => {
+                // 保存成功后刷新预览
+                console.log('✅ 色系配置已保存，刷新预览...');
+                if (typeof refreshTemplatePreview === 'function') {
+                    refreshTemplatePreview();
+                } else if (typeof window.refreshPreview === 'function') {
+                    window.refreshPreview();
+                }
+            }).catch(error => {
+                console.error('❌ 保存失败:', error);
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+                }
+            });
+        } else {
+            console.error('❌ autoSaveConfig 函数未定义');
+        }
+    } else {
+        // 正常模式：立即保存并刷新预览
+        if (typeof window.autoSaveConfig === 'function') {
+            window.autoSaveConfig(true).then(() => {
+                // 保存成功后刷新预览
+                if (typeof window.refreshPreview === 'function') {
+                    window.refreshPreview();
+                }
+            }).catch(error => {
+                console.error('❌ 保存失败:', error);
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+                }
+            });
+        } else {
+            console.error('❌ autoSaveConfig 函数未定义');
+        }
+    }
+}
+
+// 监听所有自动保存字段
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.auto-save-field').forEach(field => {
+        field.addEventListener('input', function() {
+            updateSaveStatus('', '<?= __('未保存') ?>');
+            autoSaveConfig();
+        });
+        
+        field.addEventListener('change', function() {
+            updateSaveStatus('', '<?= __('未保存') ?>');
+            autoSaveConfig();
+        });
+    });
+    // 全局事件委托：保证动态渲染的字段也能触发自动保存
+    const delegatedAutoSaveHandler = function(e) {
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('auto-save-field')) {
+            if (typeof updateSaveStatus === 'function') {
+                updateSaveStatus('', '<?= __('未保存') ?>');
+            }
+            if (typeof autoSaveConfig === 'function') {
+                autoSaveConfig();
+            }
+        }
+    };
+    document.addEventListener('input', delegatedAutoSaveHandler, true);
+    document.addEventListener('change', delegatedAutoSaveHandler, true);
+    // 监听外部样式选择器变化，联动加载配置和预览
+    const externalStyleSelect = document.getElementById('style');
+    if (externalStyleSelect) {
+        externalStyleSelect.addEventListener('change', function() {
+            // 普通页面模式下，根据选中样式动态加载配置
+            if (!window.isTemplateConfigMode && typeof loadVisualStyleConfig === 'function') {
+                loadVisualStyleConfig().then(() => {
+                    if (typeof window.refreshPreview === 'function') {
+                        window.refreshPreview();
+                    }
+                });
+            }
+        });
+    }
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // ESC 退出全屏（如果不在AI生成中）
+    if (e.key === 'Escape') {
+        closeVisualConfig();
+    }
+    
+    // Ctrl+S 保存
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        autoSaveConfig();
+    }
+});
+
+// ========== 模板配置模式专用函数 ==========
+
+// 模板配置模式：加载模板样式配置
+async function loadTemplateStyleConfig(forceScan = false) {
+    const styleCode = window.currentTemplateStyleCode || '';
+    const templatePageId = window.currentTemplatePageId || 0;
+    
+    if (!styleCode) {
+        console.error('模板代码不能为空');
+        return;
+    }
+    
+    try {
+        let url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
+            '?style_code=' + encodeURIComponent(styleCode) +
+            '&page_id=' + templatePageId;
+        
+        if (forceScan) {
+            url += '&force_scan=1&t=' + Date.now();
+        }
+        
+        const response = await fetch(url);
+        const result = await response.json();
+        try { console.log('[VisualConfig] 页面模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
+        try { console.log('[VisualConfig] 模板模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
+        
+        if (result.success && result.data) {
+            // 显示模板信息（名称 + 代码）
+            if (result.style_info) {
+                const badge = document.getElementById('templateInfoBadge');
+                if (badge) {
+                    const name = result.style_info.name || '';
+                    const code = result.style_info.code || '';
+                    if (name || code) {
+                        badge.textContent = name && code ? (name + ' (' + code + ')') : (name || code);
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+            renderTemplateConfig(result.data);
+        } else {
+            const configFields = document.querySelector('.config-panel-body');
+            if (configFields) {
+                configFields.innerHTML = '<div class="alert alert-danger m-3">' + (result.message || '<?= __('加载配置失败') ?>') + '</div>';
+            }
+        }
+    } catch (error) {
+        console.error('加载配置失败:', error);
+        const configFields = document.querySelector('.config-panel-body');
+        if (configFields) {
+            configFields.innerHTML = '<div class="alert alert-danger m-3"><?= __('加载配置失败') ?></div>';
+        }
+    }
+}
+
+// 模板配置模式：渲染模板配置
+function renderTemplateConfig(configGroups) {
+    try { console.log('[VisualConfig] 渲染配置分组'); console.log('分组keys:', Object.keys(configGroups || {})); } catch (_) {}
+    // 辅助函数：渲染单个配置字段
+    function renderConfigField(configKey, config) {
+        const rawValue = config.value !== undefined ? config.value : (config.default || '');
+        const fieldId = 'config_' + configKey.replace(/\./g, '_');
+        try { console.log('[VisualConfig] 渲染字段:', { configKey, type: config.type || 'text', default: config.default || '', value: rawValue }); } catch (_) {}
+        
+        let fieldHtml = `<div class="mb-3 config-field-item" data-config-key="${escapeHtmlForTemplate(configKey)}" data-config-label="${escapeHtmlForTemplate(config.label || '')}" data-config-description="${escapeHtmlForTemplate(config.description || config.note || '')}">`;
+        // 添加恢复默认值按钮到标签中
+        const escapedDefault = escapeHtmlForTemplate(config.default || '');
+        fieldHtml += `<label for="${fieldId}" class="form-label">`;
+        fieldHtml += `${escapeHtmlForTemplate(config.label)}`;
+        fieldHtml += ` <a href="javascript:void(0)" 
+                         class="link-warning ms-1 visual-config-reset-btn" 
+                         data-field-id="${fieldId}"
+                         data-config-key="${escapeHtmlForTemplate(configKey)}"
+                         data-config-type="${config.type || 'text'}"
+                         data-default-value="${escapedDefault}"
+                         onclick="resetVisualConfigField(this)"
+                         title="<?= __('恢复默认值') ?>">
+                        <i class="mdi mdi-restore"></i> <span class="reset-text"><?= __('恢复') ?></span>
+                     </a>`;
+        fieldHtml += `</label>`;
+        
+        // 显示描述信息（如果有）
+        if (config.description && config.description.trim()) {
+            // 将 \n 转换为 <br>，同时转义其他HTML字符
+            let descriptionHtml = String(config.description || '')
+                .replace(/\\n/g, '\n')  // 先转换字面量 \n 为实际换行
+                .replace(/\r\n/g, '\n')  // 统一处理 \r\n
+                .replace(/\n/g, '<br>'); // 将换行符转换为 <br>
+            descriptionHtml = escapeHtmlForTemplate(descriptionHtml.replace(/<br>/g, '__BR__'))
+                .replace(/__BR__/g, '<br>'); // 保留 <br> 标签
+            
+            fieldHtml += `<div class="form-text text-muted mb-2" style="font-size: 0.875rem; line-height: 1.4;">`;
+            fieldHtml += `<i class="mdi mdi-information-outline me-1" style="font-size: 14px;"></i>`;
+            fieldHtml += descriptionHtml;
+            fieldHtml += `</div>`;
+        }
+        
+        // 特殊处理：色系选择（带预览图）
+        if (config.type === 'color_scheme' && config.color_schemes) {
+            fieldHtml += `<div class="color-scheme-selector" id="${fieldId}_container">`;
+            fieldHtml += `<input type="hidden" id="${fieldId}" class="auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
+            
+            const colorSchemes = config.color_schemes;
+            fieldHtml += `<div class="color-scheme-grid">`;
+            
+            for (const schemeKey in colorSchemes) {
+                const scheme = colorSchemes[schemeKey];
+                const isSelected = rawValue == schemeKey;
+                // 预览图片路径：使用后端静态资源接口
+                let previewUrl = '';
+                if (scheme.preview_image) {
+                    const pv = String(scheme.preview_image || '');
+                    if (/^(https?:)?\/\//.test(pv) || pv.startsWith('/')) {
+                        // 已是绝对URL或以/开头
+                        previewUrl = pv;
+                    } else {
+                        // 相对路径，拼接模板静态基准URL
+                        previewUrl = '<?= $this->fetchTemplateStatic("GuoLaiRen_PageBuilder::") ?>' + pv.replace(/^style\//, 'templates/style/');
+                    }
+                }
+                
+                fieldHtml += `<div class="color-scheme-item ${isSelected ? 'selected' : ''}" 
+                        data-scheme-key="${escapeHtmlForTemplate(schemeKey)}" 
+                        onclick="selectColorScheme('${fieldId}', '${escapeHtmlForTemplate(schemeKey)}')">`;
+                
+                // 预览图或渐变色背景
+                if (previewUrl) {
+                    fieldHtml += `<div class="color-scheme-preview">`;
+                    fieldHtml += `<img src="${previewUrl}" alt="${escapeHtmlForTemplate(scheme.display_name)}" 
+                            onerror="this.style.display='none'">`;
+                    fieldHtml += `</div>`;
+                } else if (scheme.gradient_colors && scheme.gradient_colors.length >= 2) {
+                    // 使用渐变色作为背景
+                    const gradientColors = scheme.gradient_colors;
+                    const gradientStr = gradientColors.join(', ');
+                    fieldHtml += `<div class="color-scheme-preview gradient-preview" 
+                            style="background: linear-gradient(135deg, ${gradientStr});">`;
+                    fieldHtml += `<i class="mdi mdi-palette"></i>`;
+                    fieldHtml += `</div>`;
+                } else {
+                    // 无预览图也无渐变色时显示默认占位符
+                    fieldHtml += `<div class="color-scheme-preview no-image">`;
+                    fieldHtml += `<i class="mdi mdi-palette"></i>`;
+                    fieldHtml += `</div>`;
+                }
+                
+                // 选中标记
+                fieldHtml += `<div class="color-scheme-check ${isSelected ? 'active' : ''}">`;
+                fieldHtml += `<i class="mdi mdi-check-circle"></i>`;
+                fieldHtml += `</div>`;
+                
+                // 名称和描述
+                fieldHtml += `<div class="color-scheme-info">`;
+                fieldHtml += `<div class="color-scheme-name">${escapeHtmlForTemplate(scheme.display_name)}</div>`;
+                if (scheme.description) {
+                    fieldHtml += `<div class="color-scheme-desc">${escapeHtmlForTemplate(scheme.description)}</div>`;
+                }
+                fieldHtml += `</div>`;
+                
+                fieldHtml += `</div>`;
+            }
+            
+            fieldHtml += `</div>`;
+            fieldHtml += `</div>`;
+        } else if (config.type === 'color') {
+            fieldHtml += `<input type="color" id="${fieldId}" class="form-control form-control-color auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
+        } else if (config.type === 'textarea') {
+            // 处理 textarea 的值：将字面量 \n 和 \r\n 转换为实际换行符
+            // 注意：textarea 内容中的换行符不需要 HTML 转义，但需要转义其他 HTML 特殊字符
+            let textareaValue = String(rawValue || '');
+            // 将字符串字面量 \n 转换为实际换行符（处理从 JSON 传递过来的转义字符）
+            textareaValue = textareaValue
+                .replace(/\\r\\n/g, '\n')  // 先处理 \r\n
+                .replace(/\\n/g, '\n')     // 再处理 \n
+                .replace(/\\r/g, '\n');    // 最后处理单独的 \r
+            
+            // 转义 HTML 特殊字符，但保留换行符（textarea 中换行符是有效的）
+            // 将换行符临时替换，转义后再恢复
+            const escaped = textareaValue
+                .replace(/\n/g, '__NEWLINE__')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/__NEWLINE__/g, '\n');
+            
+            fieldHtml += `<textarea id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" rows="3">${escaped}</textarea>`;
+        } else if (config.type === 'select' && config.options) {
+            fieldHtml += `<select id="${fieldId}" class="form-select auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}">`;
+            for (const optValue in config.options) {
+                fieldHtml += `<option value="${escapeHtmlForTemplate(optValue)}" ${rawValue == optValue ? 'selected' : ''}>${escapeHtmlForTemplate(config.options[optValue])}</option>`;
+            }
+            fieldHtml += `</select>`;
+        } else if (config.type === 'radio' && config.options) {
+            // Radio 类型
+            for (const optValue in config.options) {
+                const optLabel = config.options[optValue];
+                fieldHtml += `<div class="form-check">`;
+                fieldHtml += `<input type="radio" id="${fieldId}_${optValue}" class="form-check-input auto-save-field" 
+                        name="${fieldId}" data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(optValue)}" ${rawValue == optValue ? 'checked' : ''}>`;
+                fieldHtml += `<label class="form-check-label" for="${fieldId}_${optValue}">${escapeHtmlForTemplate(optLabel)}</label>`;
+                fieldHtml += `</div>`;
+            }
+        } else {
+            fieldHtml += `<input type="${config.type || 'text'}" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}" 
+                    placeholder="${escapeHtmlForTemplate(config.placeholder || '')}">`;
+        }
+        
+        fieldHtml += `</div>`;
+        return fieldHtml;
+    }
+    
+    // 辅助函数：渲染单个配置分组
+    function renderConfigGroup(fileKey, groupKey, group, isColorScheme = false) {
+        const sectionId = 'config_' + fileKey + '_' + groupKey;
+        let groupHtml = `<div class="config-section ${isColorScheme ? 'color-scheme-section' : ''}" id="${sectionId}">`;
+        try { console.log('[VisualConfig] 渲染分组:', { fileKey, groupKey, isColorScheme, configsCount: group && group.configs ? Object.keys(group.configs).length : 0 }); } catch (_) {}
+        
+        // 配色方案分组：不可折叠，不显示折叠图标
+        if (isColorScheme) {
+            groupHtml += `<div class="config-section-header" style="cursor: default;">`;
+            groupHtml += `<span><i class="mdi mdi-${group.icon || 'palette'}"></i> ${escapeHtmlForTemplate(group.label || groupKey)}</span>`;
+            groupHtml += `</div>`;
+        } else {
+            groupHtml += `<div class="config-section-header" onclick="toggleSection('${sectionId}')">`;
+            groupHtml += `<span><i class="mdi mdi-${group.icon || 'cog'}"></i> ${escapeHtmlForTemplate(group.label || groupKey)}</span>`;
+            groupHtml += `<i class="mdi mdi-chevron-down"></i>`;
+            groupHtml += `</div>`;
+        }
+        
+        groupHtml += `<div class="config-section-body" ${isColorScheme ? 'style="display: block !important;"' : ''}>`;
+        
+        if (group.configs && typeof group.configs === 'object') {
+            for (const configKey in group.configs) {
+                const config = group.configs[configKey];
+                groupHtml += renderConfigField(configKey, config);
+            }
+        }
+        
+        groupHtml += `</div></div>`;
+        return groupHtml;
+    }
+    
+    // 收集所有配置分组，确保色系配置（fileKey === 'color_scheme'）渲染在最顶部
+    let html = '';
+    const orderedFileKeys = Object.keys(configGroups || {});
+    // 将 color_scheme 提前
+    const idx = orderedFileKeys.indexOf('color_scheme');
+    if (idx > 0) {
+        orderedFileKeys.splice(idx, 1);
+        orderedFileKeys.unshift('color_scheme');
+    }
+    
+    for (const fileKey of orderedFileKeys) {
+        const fileGroup = configGroups[fileKey];
+        if (!fileGroup) continue;
+        const isColorSchemeFile = fileKey === 'color_scheme';
+        if (fileGroup.groups && typeof fileGroup.groups === 'object' && Object.keys(fileGroup.groups).length > 0) {
+            for (const groupKey in fileGroup.groups) {
+                const group = fileGroup.groups[groupKey];
+                html += renderConfigGroup(fileKey, groupKey, group, isColorSchemeFile);
+            }
+        }
+    }
+    
+    const configFields = document.querySelector('.config-panel-body');
+    if (configFields) {
+        configFields.innerHTML = html || '<div class="alert alert-info m-3"><?= __('暂无配置项') ?></div>';
+        
+        // 恢复分组展开状态并默认展开第一个组
+        const allSections = Array.from(document.querySelectorAll('.config-section:not(.color-scheme-section)'));
+        let firstSectionFound = false;
+        
+        // 获取所有保存的状态
+        let savedStates = {};
+        try {
+            const stateKey = getVisualConfigStateKey();
+            savedStates = JSON.parse(localStorage.getItem(stateKey) || '{}');
+        } catch (e) {
+            console.warn('读取分组状态失败:', e);
+        }
+        
+        // 检查是否有任何保存的状态（用于判断是否是首次加载）
+        const hasAnySavedState = Object.keys(savedStates).length > 0;
+        
+        allSections.forEach((section, index) => {
+            const sectionId = section.id;
+            if (!sectionId) return;
+            
+            // 检查是否有保存的状态
+            const hasSavedState = sectionId in savedStates;
+            
+            if (hasSavedState) {
+                // 有保存的状态，恢复它
+                const isExpanded = savedStates[sectionId] !== false;
+                if (!isExpanded) {
+                    section.classList.add('collapsed');
+                } else {
+                    section.classList.remove('collapsed');
+                }
+            } else {
+                // 没有保存的状态
+                if (!hasAnySavedState && !firstSectionFound && index === 0) {
+                    // 首次加载且是第一个组，默认展开
+                    firstSectionFound = true;
+                    section.classList.remove('collapsed');
+                    saveSectionState(sectionId, true);
+                } else {
+                    // 其他情况默认折叠
+                    section.classList.add('collapsed');
+                    saveSectionState(sectionId, false);
+                }
+            }
+        });
+        
+        // 绑定自动保存事件（就地绑定，确保动态渲染后立即生效）
+        document.querySelectorAll('.auto-save-field').forEach(field => {
+            const handler = function() {
+                if (typeof updateSaveStatus === 'function') {
+                    updateSaveStatus('', '<?= __('未保存') ?>');
+                }
+                if (typeof autoSaveConfig === 'function') {
+                    autoSaveConfig();
+                }
+            };
+            field.removeEventListener('input', handler);
+            field.removeEventListener('change', handler);
+            field.addEventListener('input', handler, { passive: true });
+            field.addEventListener('change', handler, { passive: true });
+        });
+        
+        // 为每个配置分组添加恢复默认值按钮（在分组标题旁边）
+        document.querySelectorAll('.config-section').forEach(section => {
+            const header = section.querySelector('.config-section-header span');
+            const resetButtons = section.querySelectorAll('.visual-config-reset-btn');
+            
+            if (header && resetButtons.length > 0) {
+                // 检查是否已经有批量恢复按钮
+                if (!section.querySelector('.reset-all-fields-btn')) {
+                    const resetAllBtn = document.createElement('a');
+                    resetAllBtn.href = 'javascript:void(0)';
+                    resetAllBtn.className = 'link-danger ms-2 reset-all-fields-btn';
+                    resetAllBtn.innerHTML = '<i class="mdi mdi-restore"></i> <?= __('恢复全部') ?>';
+                    resetAllBtn.title = '<?= __('恢复此分组所有字段为默认值') ?>';
+                    resetAllBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        resetVisualConfigGroup(section);
+                    };
+                    header.appendChild(resetAllBtn);
+                }
+            }
+        });
+    }
+}
+
+// 模板配置模式：刷新模板预览（别名，保持兼容）
+function refreshTemplatePreview() {
+    refreshPreview();
+}
+
+// 模板配置模式：刷新配置（重新扫描模板字段）
+function refreshTemplateConfig(event) {
+    const btn = event ? event.target.closest('button') : document.querySelector('button[onclick*="refreshTemplateConfig"]');
+    if (!btn) return;
+    
+    const icon = btn.querySelector('i');
+    const originalClass = icon.className;
+    
+    btn.disabled = true;
+    icon.className = 'mdi mdi-loading mdi-spin';
+    
+    const configPanel = document.querySelector('.config-panel-body');
+    if (configPanel) {
+        configPanel.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2"><?= __('正在刷新配置...') ?></div></div>';
+    }
+    
+    loadTemplateStyleConfig(true)
+        .then(() => {
+            console.log('✅ 配置刷新成功');
+            refreshTemplatePreview();
+        })
+        .catch(error => {
+            console.error('❌ 刷新失败:', error);
+            if (configPanel) {
+                configPanel.innerHTML = '<div class="alert alert-danger m-3"><?= __('刷新配置失败') ?></div>';
+            }
+        })
+        .finally(() => {
+            btn.disabled = false;
+            icon.className = originalClass;
+        });
+}
+
+// HTML转义辅助函数（模板配置模式使用）
+function escapeHtmlForTemplate(text) {
+    if (typeof text === 'undefined' || text === null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// ========== 普通页面模式：加载指定样式的配置 ==========
+async function loadVisualStyleConfig() {
+    try {
+        const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
+        const externalStyleSelect = document.getElementById('style');
+        const styleCode = externalStyleSelect ? externalStyleSelect.value : (typeof window.currentStyle !== 'undefined' ? window.currentStyle : '');
+        const locale = window.currentVisualLanguage || '';
+
+        if (!styleCode) {
+            const configFields = document.querySelector('.config-panel-body');
+            if (configFields) {
+                configFields.innerHTML = '<div class="alert alert-info m-3"><?= __('请先选择样式模板（方案）') ?></div>';
+            }
+            return;
+        }
+
+        // 显示加载中
+        const configPanel = document.querySelector('.config-panel-body');
+        if (configPanel) {
+            configPanel.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2"><?= __('正在加载配置...') ?></div></div>';
+        }
+
+        // 复用模板配置的获取接口
+        let url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
+            '?style_code=' + encodeURIComponent(styleCode) +
+            '&page_id=' + encodeURIComponent(currentPageId);
+        if (locale) {
+            url += '&locale=' + encodeURIComponent(locale);
+        }
+
+        const response = await fetch(url);
+        const result = await response.json();
+        if (result.success && result.data) {
+            // 显示模板信息（名称 + 代码）
+            if (result.style_info) {
+                const badge = document.getElementById('templateInfoBadge');
+                if (badge) {
+                    const name = result.style_info.name || '';
+                    const code = result.style_info.code || '';
+                    if (name || code) {
+                        badge.textContent = name && code ? (name + ' (' + code + ')') : (name || code);
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+            // 直接复用渲染逻辑
+            renderTemplateConfig(result.data);
+        } else {
+            if (configPanel) {
+                configPanel.innerHTML = '<div class="alert alert-danger m-3">' + (result.message || '<?= __('加载配置失败') ?>') + '</div>';
+            }
+        }
+    } catch (error) {
+        console.error('加载配置失败:', error);
+        const configPanel = document.querySelector('.config-panel-body');
+        if (configPanel) {
+            configPanel.innerHTML = '<div class="alert alert-danger m-3"><?= __('加载配置失败') ?></div>';
+        }
+    }
+}
+
+// ========== 刷新样式配置按钮（普通页面模式） ==========
+window.refreshVisualStyleConfig = async function(event) {
+    try {
+        // 处理按钮 loading 状态（可选）
+        const btn = event ? (event.target.closest('button') || event.target) : document.querySelector('button[onclick*="refreshVisualStyleConfig"]');
+        const icon = btn ? btn.querySelector('i') : null;
+        if (btn) {
+            btn.disabled = true;
+            if (icon) { icon.className = 'mdi mdi-loading mdi-spin'; }
+        }
+
+        // 重新加载样式配置
+        await loadVisualStyleConfig();
+
+        // 刷新预览（如果对应函数存在则调用）
+        if (typeof refreshVisualPreview === 'function') {
+            refreshVisualPreview();
+        } else if (typeof refreshPreview === 'function') {
+            refreshPreview();
+        }
+    } catch (error) {
+        console.error('刷新样式配置失败:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('刷新失败') ?>',
+                text: error && error.message ? error.message : 'Unknown error',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('刷新失败：', error && error.message ? error.message : 'Unknown error');
+        }
+    } finally {
+        const btn = event ? (event.target.closest('button') || event.target) : document.querySelector('button[onclick*="refreshVisualStyleConfig"]');
+        const icon = btn ? btn.querySelector('i') : null;
+        if (btn) {
+            btn.disabled = false;
+            if (icon) { icon.className = 'mdi mdi-refresh'; }
+        }
+    }
+};
+
+// ========== 全屏模式功能 ==========
+window.toggleFullscreen = function() {
+    const wrapper = document.getElementById('visualConfigWrapper');
+    const btn = document.getElementById('fullscreenBtn');
+    const icon = btn ? btn.querySelector('i') : null;
+    const panel = document.getElementById('configPanel');
+    const floatingBtn = document.getElementById('floatingExpandBtn');
+    
+    if (!wrapper || !btn) return;
+    
+    wrapper.classList.toggle('fullscreen-mode');
+    btn.classList.toggle('active');
+    
+    // 切换图标
+    if (icon) {
+        if (wrapper.classList.contains('fullscreen-mode')) {
+            icon.className = 'mdi mdi-fullscreen-exit';
+            btn.title = '<?= __('退出全屏') ?>';
+            // 进入全屏时立即收起配置面板
+            if (panel) panel.classList.add('collapsed');
+            // 显示悬浮展开按钮
+            if (floatingBtn) floatingBtn.style.display = 'block';
+        } else {
+            icon.className = 'mdi mdi-fullscreen';
+            btn.title = '<?= __('全屏模式') ?>';
+            // 退出全屏时展开配置面板
+            if (panel) panel.classList.remove('collapsed');
+            // 隐藏悬浮展开按钮
+            if (floatingBtn) floatingBtn.style.display = 'none';
+        }
+    }
+};
+
+// ========== 配置面板收起/展开功能 ==========
+window.toggleConfigPanel = function() {
+    const panel = document.getElementById('configPanel');
+    const btn = document.getElementById('configPanelToggle');
+    const floatingBtn = document.getElementById('floatingExpandBtn');
+    const wrapper = document.getElementById('visualConfigWrapper');
+    
+    if (!panel) return;
+    
+    panel.classList.toggle('collapsed');
+    
+    // 更新面板内的收起按钮图标
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (icon) {
+            if (panel.classList.contains('collapsed')) {
+                icon.className = 'mdi mdi-chevron-right';
+                btn.title = '<?= __('展开面板') ?>';
+            } else {
+                icon.className = 'mdi mdi-chevron-left';
+                btn.title = '<?= __('收起面板') ?>';
+            }
+        }
+    }
+    
+    // 控制悬浮展开按钮的显示（仅全屏模式下）
+    if (wrapper && wrapper.classList.contains('fullscreen-mode') && floatingBtn) {
+        if (panel.classList.contains('collapsed')) {
+            floatingBtn.style.display = 'block';
+        } else {
+            floatingBtn.style.display = 'none';
+        }
+    }
+};
+
+// ========== 语言切换功能 ==========
+window.switchVisualLanguage = function(language) {
+    console.log('🌐 切换语言:', language);
+    
+    // 更新当前语言（如果是在模板配置模式，需要特殊处理）
+    if (window.isTemplateConfigMode) {
+        // 模板配置模式下的语言切换逻辑
+        window.currentVisualLanguage = language;
+        
+        // 显示加载提示
+        const configFields = document.querySelector('.config-panel-body');
+        if (configFields) {
+            configFields.innerHTML = '<div class="alert alert-info m-3"><i class="mdi mdi-loading mdi-spin"></i> 正在加载 ' + language + ' 语言配置...</div>';
+        }
+        
+        // 重新加载配置（模板配置模式）
+        if (typeof loadTemplateStyleConfig === 'function') {
+            loadTemplateStyleConfig().then(() => {
+                refreshPreview();
+            });
+        }
+    } else {
+        // 正常页面配置模式下的语言切换逻辑
+        window.currentVisualLanguage = language;
+        
+        // 显示加载提示
+        const configFields = document.querySelector('.config-panel-body');
+        if (configFields) {
+            configFields.innerHTML = '<div class="alert alert-info m-3"><i class="mdi mdi-loading mdi-spin"></i> 正在加载 ' + language + ' 语言配置...</div>';
+        }
+        
+        // 重新加载配置（页面配置模式）
+        if (typeof loadVisualStyleConfig === 'function') {
+            loadVisualStyleConfig().then(() => {
+                if (typeof refreshVisualPreview === 'function') {
+                    refreshVisualPreview();
+                } else {
+                    refreshPreview();
+                }
+            });
+        }
+    }
+};
+
+// ========== PageSpeed Insights 功能 ==========
+window.openPageSpeedMobile = function(){
+    // 检查页面是否已发布
+    const btn = document.getElementById('psiMobileBtn');
+    if (btn) {
+        const isPublished = btn.getAttribute('data-is-published') === '1';
+        if (!isPublished) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('无法测试') ?>',
+                    html: '<?= __('页面未发布，无法进行 PageSpeed 测试。') ?><br><br><?= __('原因：PageSpeed Insights 需要访问已发布的公开页面才能进行分析。') ?><br><br><?= __('解决方法：请先在页面编辑表单中将页面状态设置为"已发布"，然后再进行测试。') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('页面未发布，无法进行 PageSpeed 测试。原因：PageSpeed Insights 需要访问已发布的公开页面才能进行分析。解决方法：请先在页面编辑表单中将页面状态设置为"已发布"，然后再进行测试。') ?>');
+            }
+            return;
+        }
+    }
+    
+    // 获取页面句柄
+    let handle = '';
+    if (window.isTemplateConfigMode) {
+        // 模板配置模式：使用测试页面句柄
+        const page = <?= ($page && $page->getId()) ? json_encode($page->getData('handle')) : 'null' ?>;
+        handle = page || '';
+    } else {
+        // 正常模式：从表单获取
+        const handleInput = document.getElementById('handle');
+        handle = handleInput ? handleInput.value.trim() : '';
+    }
+    
+    if (!handle){
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('页面句柄不能为空，无法测试 PageSpeed') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('页面句柄不能为空，无法测试 PageSpeed') ?>');
+        }
+        return;
+    }
+    
+    const baseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+    // 本地环境不启用
+    try {
+        const u = new URL(baseUrl);
+        const h = u.hostname || '';
+        const isPrivate = (
+            h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+            /\.local$/i.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(h)
+        );
+        if (isPrivate) {
+            const btn = document.getElementById('psiMobileBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+                btn.title = '<?= __('本地或内网地址无法使用 PageSpeed，请部署到公网或提供可访问 URL') ?>';
+            }
+            return;
+        }
+    } catch(_) {}
+    
+    const previewUrl = baseUrl + '/' + handle + '?preview=1';
+    // 使用官方 analysis 接口并传入 url 参数，默认手机端
+    const psiUrl = 'https://pagespeed.web.dev/analysis?url=' + encodeURIComponent(previewUrl) + '&form_factor=mobile';
+    window.open(psiUrl, '_blank', 'noopener');
+};
+
+// 初始化时根据 base-url 和发布状态禁用按钮（避免首次点击才反馈）
+(function(){
+    const btn = document.getElementById('psiMobileBtn');
+    if (!btn) return;
+    
+    // 检查页面是否已发布
+    const isPublished = btn.getAttribute('data-is-published') === '1';
+    if (!isPublished) {
+        btn.disabled = true;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-secondary');
+        btn.title = '<?= __('PageSpeed 测试（手机） - 页面未发布，无法进行测试。请先发布页面后再进行 PageSpeed 测试。') ?>';
+    }
+    
+    // 检查是否为本地或内网地址
+    const baseUrl = btn.getAttribute('data-base-url') || '';
+    try {
+        const u = new URL(baseUrl);
+        const h = u.hostname || '';
+        const isPrivate = (
+            h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+            /\.local$/i.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(h)
+        );
+        if (isPrivate) {
+            btn.disabled = true;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-secondary');
+            // 如果页面也未发布，合并提示信息
+            if (!isPublished) {
+                btn.title = '<?= __('PageSpeed 测试（手机） - 页面未发布且当前为本地/内网地址，无法进行测试。\n\n原因：\n1. 页面未发布\n2. 本地或内网地址无法使用 PageSpeed\n\n解决方法：\n1. 请先在页面编辑表单中将页面状态设置为"已发布"\n2. 请部署到公网或提供可访问 URL') ?>';
+            } else {
+                btn.title = '<?= __('本地或内网地址无法使用 PageSpeed，请部署到公网或提供可访问 URL') ?>';
+            }
+        }
+    } catch(_) {}
+})();
+
+// ========== 配置导入导出功能 ==========
+window.exportPageConfig = async function() {
+    try {
+        let pageId = window.pageId || 0;
+        let styleCode = '';
+        
+        if (window.isTemplateConfigMode) {
+            // 模板配置模式
+            pageId = window.currentTemplatePageId || 0;
+            styleCode = window.currentTemplateStyleCode || '';
+        } else {
+            // 正常页面配置模式
+            pageId = window.visualPageId || pageId;
+            const styleSelect = document.getElementById('style');
+            styleCode = styleSelect ? styleSelect.value : '';
+            if (!styleCode && typeof currentStyle !== 'undefined' && currentStyle) {
+                styleCode = currentStyle;
+            }
+        }
+        
+        if (!pageId || !styleCode) {
+            if (typeof showToast === 'function') {
+                showToast('error', '<?= __("导出失败") ?>', '<?= __("请先选择样式模板") ?>');
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("导出失败") ?>',
+                    text: '<?= __("请先选择样式模板") ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __("导出失败：请先选择样式模板") ?>');
+            }
+            return;
+        }
+        
+        // 显示加载状态
+        const exportBtn = document.getElementById('exportConfigBtn');
+        const originalHtml = exportBtn ? exportBtn.innerHTML : '';
+        if (exportBtn) {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("导出中...") ?>';
+        }
+        
+        // 调用导出接口
+        let url = '';
+        if (window.isTemplateConfigMode) {
+            url = '<?= $this->getBackendUrl("*/backend/template/exportConfig") ?>' + 
+                '?style_code=' + encodeURIComponent(styleCode) + 
+                '&page_id=' + encodeURIComponent(pageId);
+        } else {
+            url = '<?= $this->getBackendUrl("pagebuilder/backend/page/exportConfig") ?>' + 
+                '?page_id=' + encodeURIComponent(pageId) + 
+                '&style_code=' + encodeURIComponent(styleCode);
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        
+        // 获取文件名
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'config-' + pageId + '-' + styleCode + '.xlsx';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+                filename = filenameMatch[1].replace(/['"]/g, '');
+            }
+        }
+        
+        // 下载文件
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        
+        if (typeof showToast === 'function') {
+            showToast('success', '<?= __("导出成功") ?>', '<?= __("配置已导出到Excel文件") ?>');
+        }
+        
+        // 恢复按钮状态
+        if (exportBtn) {
+            exportBtn.innerHTML = originalHtml;
+            exportBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('导出配置失败:', error);
+        if (typeof showToast === 'function') {
+            showToast('error', '<?= __("导出失败") ?>', error.message || '<?= __("未知错误") ?>');
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("导出失败") ?>',
+                text: error.message || '<?= __("未知错误") ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("导出失败") ?>: ', error.message || '<?= __("未知错误") ?>');
+        }
+        
+        // 恢复按钮状态
+        const exportBtn = document.getElementById('exportConfigBtn');
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = '<i class="mdi mdi-download"></i> <?= __("导出配置") ?>';
+        }
+    }
+};
+
+window.importPageConfig = function() {
+    // 创建隐藏的文件输入元素
+    let fileInput = document.getElementById('configImportFileInput');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'configImportFileInput';
+        fileInput.accept = '.xlsx,.xls';
+        fileInput.style.display = 'none';
+        fileInput.onchange = handleConfigImport;
+        document.body.appendChild(fileInput);
+    }
+    fileInput.click();
+};
+
+async function handleConfigImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const formData = new FormData();
+        formData.append('config_file', file);
+        
+        let pageId = window.pageId || 0;
+        let styleCode = '';
+        let url = '';
+        
+        if (window.isTemplateConfigMode) {
+            pageId = window.currentTemplatePageId || 0;
+            styleCode = window.currentTemplateStyleCode || '';
+            url = '<?= $this->getBackendUrl("*/backend/template/importConfig") ?>';
+            formData.append('style_code', styleCode);
+            formData.append('page_id', pageId);
+        } else {
+            pageId = window.visualPageId || pageId;
+            const styleSelect = document.getElementById('style');
+            styleCode = styleSelect ? styleSelect.value : '';
+            url = '<?= $this->getBackendUrl("pagebuilder/backend/page/importConfig") ?>';
+            formData.append('page_id', pageId);
+            formData.append('style_code', styleCode);
+        }
+        
+        // 显示加载状态
+        const importBtn = document.getElementById('importConfigBtn');
+        const originalHtml = importBtn ? importBtn.innerHTML : '';
+        if (importBtn) {
+            importBtn.disabled = true;
+            importBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("导入中...") ?>';
+        }
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (typeof showToast === 'function') {
+                showToast('success', '<?= __("导入成功") ?>', result.message || '<?= __("配置已导入") ?>');
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __("导入成功") ?>',
+                    text: result.message || '<?= __("配置已导入") ?>',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                console.log('<?= __("导入成功") ?>: ', result.message || '<?= __("配置已导入") ?>');
+            }
+            
+            // 重新加载配置
+            if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
+                loadTemplateStyleConfig().then(() => {
+                    refreshPreview();
+                });
+            } else if (typeof loadVisualStyleConfig === 'function') {
+                loadVisualStyleConfig().then(() => {
+                    if (typeof refreshVisualPreview === 'function') {
+                        refreshVisualPreview();
+                    } else {
+                        refreshPreview();
+                    }
+                });
+            }
+        } else {
+            throw new Error(result.message || '<?= __("导入失败") ?>');
+        }
+        
+        // 恢复按钮状态
+        if (importBtn) {
+            importBtn.innerHTML = originalHtml;
+            importBtn.disabled = false;
+        }
+        
+        // 清空文件输入
+        event.target.value = '';
+    } catch (error) {
+        console.error('导入配置失败:', error);
+        if (typeof showToast === 'function') {
+            showToast('error', '<?= __("导入失败") ?>', error.message || '<?= __("未知错误") ?>');
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("导入失败") ?>',
+                text: error.message || '<?= __("未知错误") ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __("导入失败") ?>: ', error.message || '<?= __("未知错误") ?>');
+        }
+        
+        // 恢复按钮状态
+        const importBtn = document.getElementById('importConfigBtn');
+        if (importBtn) {
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="mdi mdi-upload"></i> <?= __("导入配置") ?>';
+        }
+        
+        // 清空文件输入
+        event.target.value = '';
+    }
+}
+
+// ========== 恢复默认值功能 ==========
+/**
+ * 恢复单个配置字段为默认值
+ */
+window.resetVisualConfigField = function(button) {
+    const fieldId = button.getAttribute('data-field-id');
+    const fieldType = button.getAttribute('data-config-type');
+    const defaultValue = button.getAttribute('data-default-value');
+    const configKey = button.getAttribute('data-config-key');
+    
+    console.log('🔄 恢复默认值:', { fieldId, fieldType, defaultValue, configKey });
+    
+    const field = document.getElementById(fieldId);
+    if (!field) {
+        console.error('❌ 找不到字段:', fieldId);
+        return;
+    }
+    
+    // 根据字段类型进行不同的处理
+    switch (fieldType) {
+        case 'text':
+        case 'number':
+        case 'responsive':
+        case 'textarea':
+            // 文本类型：设置为默认值（如果为空则清空）
+            field.value = defaultValue || '';
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+            
+        case 'select':
+            // 下拉框：设置为默认值或第一个选项
+            if (defaultValue) {
+                // 尝试找到并选择默认值
+                for (let i = 0; i < field.options.length; i++) {
+                    if (field.options[i].value === defaultValue) {
+                        field.selectedIndex = i;
+                        break;
+                    }
+                }
+            } else {
+                field.selectedIndex = 0;
+            }
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+            
+        case 'radio':
+            // Radio 类型：选择默认值对应的 radio
+            if (defaultValue) {
+                const radioField = document.querySelector(`input[name="${fieldId}"][value="${defaultValue}"]`);
+                if (radioField) {
+                    radioField.checked = true;
+                    radioField.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            } else {
+                // 如果没有默认值，选择第一个
+                const firstRadio = document.querySelector(`input[name="${fieldId}"]`);
+                if (firstRadio) {
+                    firstRadio.checked = true;
+                    firstRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+            break;
+            
+        case 'color':
+            // 颜色选择器：直接设置值
+            field.value = defaultValue || '#ffffff';
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+        
+        case 'color_scheme':
+            // 色系选择：调用选择函数以更新隐藏输入与UI
+            if (typeof window.selectColorScheme === 'function') {
+                const schemeKey = defaultValue || 'default';
+                window.selectColorScheme(fieldId, schemeKey);
+            } else {
+                // 后备：直接写值并触发保存
+                field.value = defaultValue || 'default';
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+                if (typeof window.autoSaveConfig === 'function') {
+                    window.autoSaveConfig(true);
+                }
+            }
+            break;
+            
+        default:
+            // 其他类型：设置为默认值
+            field.value = defaultValue || '';
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    
+    // 显示提示信息
+    if (typeof showToast === 'function') {
+        showToast('success', '<?= __('成功') ?>', '<?= __('已恢复为默认值') ?>');
+    } else {
+        console.log('✅ 字段已恢复默认值');
+    }
+};
+
+/**
+ * 显示恢复默认值确认模态框
+ */
+function showResetConfigConfirmModal(title, message, details, onConfirm) {
+    // 检查 bootstrap 是否可用
+    if (typeof bootstrap === 'undefined') {
+        console.error('❌ Bootstrap 未加载！');
+        if (confirm(message)) {
+            onConfirm();
+        }
+        return;
+    }
+    
+    const modalElement = document.getElementById('resetConfigConfirmModal');
+    if (!modalElement) {
+        console.error('❌ 找不到确认模态框');
+        if (confirm(message)) {
+            onConfirm();
+        }
+        return;
+    }
+    
+    // 设置模态框内容
+    document.getElementById('resetConfigMessage').textContent = message;
+    const detailsEl = document.getElementById('resetConfigDetails');
+    if (details) {
+        detailsEl.innerHTML = details;
+        detailsEl.style.display = 'block';
+    } else {
+        detailsEl.style.display = 'none';
+    }
+    
+    // 移除旧的确认按钮事件监听器
+    const confirmBtn = document.getElementById('confirmResetConfigBtn');
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    
+    // 绑定新的确认事件
+    newConfirmBtn.onclick = function() {
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        onConfirm();
+    };
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+/**
+ * 恢复所有配置项为默认值
+ */
+window.resetAllVisualConfig = function() {
+    // 收集所有恢复按钮
+    const allResetButtons = document.querySelectorAll('.visual-config-reset-btn');
+    if (allResetButtons.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('info', '<?= __('提示') ?>', '<?= __('没有可恢复的配置项') ?>');
+        }
+        return;
+    }
+    
+    // 显示确认模态框
+    showResetConfigConfirmModal(
+        '<?= __('确认恢复全部配置') ?>',
+        '<?= __('确定要恢复所有配置项为默认值吗？') ?>',
+        `<i class="mdi mdi-alert"></i> <?= __('这将影响') ?> <strong>${allResetButtons.length}</strong> <?= __('个配置项！修改将自动保存。') ?>`,
+        async function() {
+            try {
+                // 收集所有需要重置的字段的 configKey
+                const configKeys = [];
+                
+                allResetButtons.forEach(button => {
+                    const configKey = button.getAttribute('data-config-key');
+                    if (configKey) {
+                        configKeys.push(configKey);
+                    }
+                });
+                
+                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
+                
+                // 更新保存状态
+                updateSaveStatus('saving', '<?= __('重置中...') ?>');
+                
+                let url = '';
+                let requestData = {};
+                
+                if (window.isTemplateConfigMode) {
+                    // 模板配置模式
+                    url = '<?= $this->getBackendUrl('*/backend/template/resetFieldsToDefault') ?>';
+                    requestData = {
+                        style_code: window.currentTemplateStyleCode || '',
+                        page_id: window.currentTemplatePageId || 0,
+                        config_keys: configKeys
+                    };
+                } else {
+                    // 正常页面配置模式
+                    url = '<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>';
+                    const styleSelect = document.getElementById('style');
+                    let styleCode = styleSelect ? styleSelect.value : '';
+                    requestData = {
+                        page_id: window.visualPageId || window.pageId || 0,
+                        style_code: styleCode,
+                        config_keys: configKeys,
+                        locale: window.currentVisualLanguage || ''
+                    };
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ 全部重置成功，重新加载配置...');
+                    
+                    // 重新加载配置
+                    if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
+                        await loadTemplateStyleConfig();
+                    } else if (typeof loadVisualStyleConfig === 'function') {
+                        await loadVisualStyleConfig();
+                    }
+                    
+                    // 刷新预览
+                    refreshPreview();
+                    
+                    updateSaveStatus('saved', '<?= __('已重置') ?>');
+                    if (typeof showToast === 'function') {
+                        showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${result.reset_count || configKeys.length} <?= __('个配置项为默认值') ?>`);
+                    }
+                } else {
+                    updateSaveStatus('error', '<?= __('重置失败') ?>: ' + (result.message || ''));
+                    console.error('❌ 重置失败:', result);
+                    if (typeof showToast === 'function') {
+                        showToast('error', '<?= __('失败') ?>', result.message || '<?= __('重置失败') ?>');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ 重置失败:', error);
+                updateSaveStatus('error', '<?= __('重置失败') ?>: ' + error.message);
+                if (typeof showToast === 'function') {
+                    showToast('error', '<?= __('错误') ?>', error.message || '<?= __('重置失败') ?>');
+                }
+            }
+        }
+    );
+};
+
+/**
+ * 恢复整个配置分组的所有字段为默认值
+ */
+window.resetVisualConfigGroup = function(section) {
+    if (!section) return;
+    
+    const resetButtons = section.querySelectorAll('.visual-config-reset-btn');
+    if (resetButtons.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('info', '<?= __('提示') ?>', '<?= __('此分组没有可恢复的字段') ?>');
+        }
+        return;
+    }
+    
+    const header = section.querySelector('.config-section-header span');
+    const groupLabel = header ? header.textContent.replace(/恢复全部.*/g, '').trim() : '此分组';
+    
+    // 显示确认模态框
+    showResetConfigConfirmModal(
+        '<?= __('确认恢复分组') ?>',
+        `<?= __('确定要恢复') ?> "${groupLabel}" <?= __('下所有字段为默认值吗？') ?>`,
+        `<i class="mdi mdi-alert"></i> <?= __('这将影响') ?> <strong>${resetButtons.length}</strong> <?= __('个字段！修改将自动保存。') ?>`,
+        async function() {
+            try {
+                // 收集需要重置的字段的 configKey
+                const configKeys = [];
+                
+                resetButtons.forEach(button => {
+                    const configKey = button.getAttribute('data-config-key');
+                    if (configKey) {
+                        configKeys.push(configKey);
+                    }
+                });
+                
+                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
+                
+                // 更新保存状态
+                updateSaveStatus('saving', '<?= __('重置中...') ?>');
+                
+                let url = '';
+                let requestData = {};
+                
+                if (window.isTemplateConfigMode) {
+                    // 模板配置模式
+                    url = '<?= $this->getBackendUrl('*/backend/template/resetFieldsToDefault') ?>';
+                    requestData = {
+                        style_code: window.currentTemplateStyleCode || '',
+                        page_id: window.currentTemplatePageId || 0,
+                        config_keys: configKeys
+                    };
+                } else {
+                    // 正常页面配置模式
+                    url = '<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>';
+                    const styleSelect = document.getElementById('style');
+                    let styleCode = styleSelect ? styleSelect.value : '';
+                    requestData = {
+                        page_id: window.visualPageId || window.pageId || 0,
+                        style_code: styleCode,
+                        config_keys: configKeys,
+                        locale: window.currentVisualLanguage || ''
+                    };
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ 重置成功，重新加载配置...');
+                    
+                    // 重新加载配置
+                    if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
+                        await loadTemplateStyleConfig();
+                    } else if (typeof loadVisualStyleConfig === 'function') {
+                        await loadVisualStyleConfig();
+                    }
+                    
+                    // 刷新预览
+                    refreshPreview();
+                    
+                    updateSaveStatus('saved', '<?= __('已重置') ?>');
+                    if (typeof showToast === 'function') {
+                        showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${result.reset_count || configKeys.length} <?= __('个字段为默认值') ?>`);
+                    }
+                } else {
+                    updateSaveStatus('error', '<?= __('重置失败') ?>: ' + (result.message || ''));
+                    console.error('❌ 重置失败:', result);
+                    if (typeof showToast === 'function') {
+                        showToast('error', '<?= __('失败') ?>', result.message || '<?= __('重置失败') ?>');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ 重置失败:', error);
+                updateSaveStatus('error', '<?= __('重置失败') ?>');
+                if (typeof showToast === 'function') {
+                    showToast('error', '<?= __('失败') ?>', error.message || '<?= __('重置失败') ?>');
+                }
+            }
+        }
+    );
+};
+
+// ========== 配置项搜索功能 ==========
+/**
+ * 搜索配置字段
+ * @param {string} searchTerm - 搜索关键词
+ */
+window.searchConfigFields = function(searchTerm) {
+    const searchBox = document.querySelector('.config-search-box');
+    const searchInput = document.getElementById('configSearchInput');
+    
+    if (!searchTerm || searchTerm.trim() === '') {
+        // 清空搜索
+        clearConfigSearch();
+        return;
+    }
+    
+    // 更新搜索框状态
+    if (searchBox) {
+        searchBox.classList.add('has-value');
+    }
+    
+    const term = searchTerm.trim().toLowerCase();
+    const allFields = document.querySelectorAll('.config-field-item');
+    const allSections = document.querySelectorAll('.config-section');
+    const sectionVisibility = new Map(); // 记录每个section是否有可见字段
+    
+    // 遍历所有配置字段
+    allFields.forEach(function(field) {
+        const configKey = (field.getAttribute('data-config-key') || '').toLowerCase();
+        const configLabel = (field.getAttribute('data-config-label') || '').toLowerCase();
+        const configDescription = (field.getAttribute('data-config-description') || '').toLowerCase();
+        
+        // 模糊匹配：检查 key、label 或 description 是否包含搜索词
+        const matches = configKey.includes(term) || 
+                       configLabel.includes(term) || 
+                       configDescription.includes(term);
+        
+        if (matches) {
+            // 显示字段
+            field.classList.remove('config-field-hidden');
+            
+            // 高亮匹配的文本（在 label 中）
+            const label = field.querySelector('label');
+            if (label) {
+                // 保存原始 HTML（如果还没有保存）
+                if (!label.hasAttribute('data-original-html')) {
+                    label.setAttribute('data-original-html', label.innerHTML);
+                }
+                
+                // 先移除之前的高亮
+                let labelHTML = label.getAttribute('data-original-html') || label.innerHTML || '';
+                labelHTML = labelHTML.replace(/<span class="config-search-highlight">(.*?)<\/span>/gi, '$1');
+                
+                // 提取文本部分（不包括恢复按钮）
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = labelHTML;
+                const restoreBtn = tempDiv.querySelector('.visual-config-reset-btn');
+                const restoreBtnHTML = restoreBtn ? restoreBtn.outerHTML : '';
+                tempDiv.querySelectorAll('.visual-config-reset-btn').forEach(btn => btn.remove());
+                const textOnly = tempDiv.textContent || '';
+                
+                // 高亮文本
+                const highlightedText = highlightSearchTerm(textOnly, term);
+                if (highlightedText !== textOnly) {
+                    label.innerHTML = highlightedText + (restoreBtnHTML ? ' ' + restoreBtnHTML : '');
+                } else {
+                    label.innerHTML = labelHTML; // 恢复原始 HTML
+                }
+            }
+            
+            // 记录该字段所属的 section 有可见字段
+            const section = field.closest('.config-section');
+            if (section) {
+                const sectionId = section.id;
+                sectionVisibility.set(sectionId, true);
+            }
+        } else {
+            // 隐藏字段
+            field.classList.add('config-field-hidden');
+        }
+    });
+    
+    // 更新 section 的可见性
+    allSections.forEach(function(section) {
+        const sectionId = section.id;
+        const hasVisibleFields = sectionVisibility.get(sectionId) || false;
+        
+        if (hasVisibleFields) {
+            section.classList.remove('config-section-empty');
+            // 自动展开匹配的 section
+            const sectionBody = section.querySelector('.config-section-body');
+            if (sectionBody && sectionBody.style.display === 'none') {
+                sectionBody.style.display = '';
+                const chevron = section.querySelector('.config-section-header i.mdi-chevron-down, .config-section-header i.mdi-chevron-right');
+                if (chevron) {
+                    chevron.classList.remove('mdi-chevron-right');
+                    chevron.classList.add('mdi-chevron-down');
+                }
+            }
+        } else {
+            section.classList.add('config-section-empty');
+        }
+    });
+};
+
+/**
+ * 高亮搜索关键词
+ * @param {string} text - 原始文本
+ * @param {string} term - 搜索关键词
+ * @returns {string} 高亮后的文本
+ */
+function highlightSearchTerm(text, term) {
+    if (!term || !text) return text;
+    
+    // 移除已有的高亮
+    text = text.replace(/<span class="config-search-highlight">(.*?)<\/span>/gi, '$1');
+    
+    // 创建正则表达式进行不区分大小写的匹配
+    const regex = new RegExp('(' + escapeRegExp(term) + ')', 'gi');
+    return text.replace(regex, '<span class="config-search-highlight">$1</span>');
+}
+
+/**
+ * 转义正则表达式特殊字符
+ * @param {string} str - 要转义的字符串
+ * @returns {string} 转义后的字符串
+ */
+function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * HTML转义辅助函数
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * 执行配置回填并添加蓝色边框标记
+ */
+window.performConfigFill = function(configItems, filledInputs) {
+    let filledCount = 0;
+    
+    // 执行回填
+    configItems.forEach(function(item) {
+        const input = item.input;
+        if (input) {
+            input.value = item.value;
+            // 触发change和input事件，确保自动保存和UI更新
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // 添加蓝色边框标记（永久保留）
+            input.classList.add('ai-filled-field');
+            input.style.borderColor = '#0d6efd';
+            input.style.borderWidth = '2px';
+            input.style.borderStyle = 'solid';
+            
+            filledCount++;
+        }
+    });
+    
+    // 显示成功消息
+    if (typeof showToast === 'function') {
+        showToast('success', '<?= __('生成成功') ?>', `<?= __('已生成并填充') ?> ${filledCount} <?= __('个配置项') ?>`);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: '<?= __('生成成功') ?>',
+            text: `<?= __('已生成并填充') ?> ${filledCount} <?= __('个配置项') ?>`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } else {
+        console.log(`<?= __('生成成功，已填充') ?> ${filledCount} <?= __('个配置项') ?>`);
+    }
+    
+    // 自动保存
+    if (typeof window.autoSaveConfig === 'function') {
+        window.autoSaveConfig(true); // 立即保存
+    }
+}
+
+// 这里移除了 generateTemplateConfig 的实现，改由 form.phtml 中的全局脚本提供
+
+/**
+ * 清空搜索
+ */
+window.clearConfigSearch = function() {
+    const searchInput = document.getElementById('configSearchInput');
+    const searchBox = document.querySelector('.config-search-box');
+    
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    if (searchBox) {
+        searchBox.classList.remove('has-value');
+    }
+    
+    // 显示所有字段
+    const allFields = document.querySelectorAll('.config-field-item');
+    allFields.forEach(function(field) {
+        field.classList.remove('config-field-hidden');
+        
+        // 恢复原始 HTML（移除高亮）
+        const label = field.querySelector('label');
+        if (label) {
+            // 如果有保存的原始 HTML，使用它；否则移除高亮标签
+            const originalHTML = label.getAttribute('data-original-html');
+            if (originalHTML) {
+                label.innerHTML = originalHTML;
+                label.removeAttribute('data-original-html');
+            } else {
+                // 移除高亮标签，保留其他 HTML
+                let labelHTML = label.innerHTML || '';
+                labelHTML = labelHTML.replace(/<span class="config-search-highlight">(.*?)<\/span>/gi, '$1');
+                label.innerHTML = labelHTML;
+            }
+        }
+    });
+    
+    // 恢复所有 section 的可见性
+    const allSections = document.querySelectorAll('.config-section');
+    allSections.forEach(function(section) {
+        section.classList.remove('config-section-empty');
+    });
+};
+</script>
+
+<!-- 恢复默认值确认模态框 -->
+<div class="modal fade" id="resetConfigConfirmModal" tabindex="-1" aria-labelledby="resetConfigConfirmModalLabel" aria-hidden="true" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered" style="z-index: 10000;">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="resetConfigConfirmModalLabel">
+                    <i class="mdi mdi-alert-circle-outline"></i> <?= __('确认恢复默认值') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning" role="alert">
+                    <i class="mdi mdi-information-outline"></i> 
+                    <strong><?= __('此操作不可撤销！') ?></strong>
+                </div>
+                <p id="resetConfigMessage" class="mb-3"></p>
+                <div id="resetConfigDetails" class="text-muted small">
+                    <!-- 详细信息将通过JS动态填充 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-warning" id="confirmResetConfigBtn">
+                    <i class="mdi mdi-restore"></i> <?= __('确认恢复') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 文件管理器组件 -->
+<w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/asset_manager.phtml</w:template>
+
