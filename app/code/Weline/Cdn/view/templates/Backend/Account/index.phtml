@@ -21,6 +21,253 @@ $adapters = $this->getData('adapters') ?: [];
 <head>
     @template(Weline_Admin::common/head.phtml)
     <title><?= __('CDN账户管理') ?></title>
+    <style>
+        /* 页面布局优化 */
+        .cdn-account-page {
+            padding: 20px;
+        }
+        
+        /* 页面标题区域 */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .page-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+        }
+        
+        .page-title i {
+            font-size: 24px;
+            color: #0bb197;
+        }
+        
+        .page-title h4 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #212529;
+        }
+        
+        /* 操作栏 */
+        .action-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .action-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .action-toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            justify-content: flex-end;
+        }
+        
+        /* 搜索表单 */
+        .search-form {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .search-form .form-control,
+        .search-form .form-select {
+            min-width: 150px;
+        }
+        
+        /* 卡片样式 */
+        .account-card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .account-card .card-body {
+            padding: 0;
+        }
+        
+        /* 表格样式 */
+        .account-table {
+            margin: 0;
+        }
+        
+        .account-table thead th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            padding: 12px 16px;
+            border-bottom: 2px solid #dee2e6;
+            white-space: nowrap;
+        }
+        
+        .account-table tbody td {
+            padding: 12px 16px;
+            vertical-align: middle;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .account-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 操作按钮组 */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        
+        .action-buttons .btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 64px;
+            color: #dee2e6;
+            margin-bottom: 16px;
+            display: block;
+        }
+        
+        .empty-state h5 {
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        
+        /* 分页样式 */
+        .pagination-wrapper {
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .pagination-info {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .cdn-account-page {
+                padding: 15px;
+            }
+            
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+            
+            .action-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .action-toolbar-right {
+                justify-content: stretch;
+            }
+            
+            .search-form {
+                width: 100%;
+            }
+            
+            .search-form .form-control,
+            .search-form .form-select {
+                flex: 1;
+                min-width: 0;
+            }
+            
+            .account-table {
+                font-size: 13px;
+            }
+            
+            .account-table thead th,
+            .account-table tbody td {
+                padding: 8px 12px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .action-buttons .btn {
+                width: 100%;
+            }
+            
+            .pagination-wrapper {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+        
+        /* 暗色主题支持 */
+        [data-theme-mode="dark"] .account-card {
+            background: #252b3b;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        
+        [data-theme-mode="dark"] .page-header {
+            border-bottom-color: #2d3448;
+        }
+        
+        [data-theme-mode="dark"] .page-title h4 {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .account-table thead th {
+            background-color: #1e2125;
+            color: #e9ecef;
+            border-bottom-color: #2d3448;
+        }
+        
+        [data-theme-mode="dark"] .account-table tbody td {
+            border-bottom-color: #2d3448;
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .account-table tbody tr:hover {
+            background-color: #1e2125;
+        }
+        
+        [data-theme-mode="dark"] .pagination-wrapper {
+            border-top-color: #2d3448;
+        }
+        
+        [data-theme-mode="dark"] .pagination-info {
+            color: #8590a5;
+        }
+    </style>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
@@ -34,188 +281,218 @@ $adapters = $this->getData('adapters') ?: [];
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
-                <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-account-circle text-primary"></i> <?= __('CDN账户管理') ?>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
-                                    <li class="breadcrumb-item active"><?= __('账户管理') ?></li>
-                                </ol>
-                            </div>
+                <div class="cdn-account-page">
+                    <!-- 页面标题 -->
+                    <div class="page-header">
+                        <div class="page-title">
+                            <i class="mdi mdi-account-circle"></i>
+                            <h4><?= __('CDN账户管理') ?></h4>
+                        </div>
+                        <div class="page-title-right">
+                            <ol class="breadcrumb m-0">
+                                <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('首页') ?></a></li>
+                                <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
+                                <li class="breadcrumb-item active"><?= __('账户管理') ?></li>
+                            </ol>
                         </div>
                     </div>
-                </div>
 
-                <!-- 消息提示 -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div>
+                    <!-- 消息提示 -->
+                    <div class='row mb-3'>
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
 
-                <!-- 操作栏 -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <a href="<?= $this->getBackendUrl('*/backend/account/form') ?>" class="btn btn-primary">
-                                    <i class="mdi mdi-plus"></i> <?= __('添加账户') ?>
+                    <!-- 操作栏 -->
+                    <div class="action-toolbar">
+                        <div class="action-toolbar-left">
+                            <block class='Weline\Component\Block\OffCanvas'
+                                   template='Weline_Component::off-canvas.phtml'
+                                   title='<?= __('添加账户') ?>'
+                                   cache='0'
+                                   id='cdn_account_add_offcanvas'
+                                   action='*/backend/account/form'
+                                   target-tag='button'
+                                   icon='mdi mdi-plus'
+                                   submit-button-text='<?= __('保存') ?>'
+                                   submit-button-class='btn btn-primary'
+                                   target-button-text='<?= __('添加账户') ?>'
+                                   target-button-class='btn btn-primary'
+                                   flush-button-text='<?= __('刷新') ?>'
+                                   flush-button-class='btn btn-default'
+                                   flush='1'
+                                   save='1'
+                                   save-form='#accountForm'
+                                   close-button-show='1'
+                                   close-button-text='<?= __('关闭') ?>'
+                                   direction='right'
+                                   class-names='w-75'
+                                   off-canvas-body-style=''
+                            />
+                        </div>
+                        <div class="action-toolbar-right">
+                            <form method="get" class="search-form">
+                                <input type="text" 
+                                       name="search" 
+                                       class="form-control form-control-sm" 
+                                       placeholder="<?= __('搜索账户名称或描述') ?>" 
+                                       value="<?= htmlspecialchars($search) ?>">
+                                <select name="adapter" class="form-select form-select-sm">
+                                    <option value=""><?= __('所有适配器') ?></option>
+                                    <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                                        <option value="<?= $adapterCode ?>" <?= $adapter === $adapterCode ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($adapterInstance->getAdapterName()) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                </button>
+                                <a href="@backend-url('*/backend/account/index')" class="btn btn-sm btn-secondary">
+                                    <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
                                 </a>
-                            </div>
-                            <div>
-                                <form method="get" class="d-inline-flex gap-2">
-                                    <input type="text" name="search" class="form-control form-control-sm" 
-                                           placeholder="<?= __('搜索账户名称或描述') ?>" 
-                                           value="<?= htmlspecialchars($search) ?>">
-                                    <select name="adapter" class="form-select form-select-sm">
-                                        <option value=""><?= __('所有适配器') ?></option>
-                                        <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
-                                            <option value="<?= $adapterCode ?>" <?= $adapter === $adapterCode ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars($adapterInstance->getAdapterName()) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
-                                    </button>
-                                    <a href="<?= $this->getBackendUrl('*/backend/account/index') ?>" class="btn btn-sm btn-secondary">
-                                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
-                                    </a>
-                                </form>
-                            </div>
+                            </form>
                         </div>
                     </div>
-                </div>
 
-                <!-- 账户列表 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
+                    <!-- 账户列表卡片 -->
+                    <div class="account-card card">
+                        <div class="card-body">
+                            <?php if (empty($accounts)): ?>
+                                <div class="empty-state">
+                                    <i class="mdi mdi-account-circle-outline"></i>
+                                    <h5><?= __('暂无账户数据') ?></h5>
+                                    <p><?= __('点击"添加账户"按钮创建第一个CDN账户') ?></p>
+                                </div>
+                            <?php else: ?>
                                 <div class="table-responsive">
-                                    <table class="table table-striped table-bordered">
+                                    <table class="table account-table">
                                         <thead>
                                             <tr>
-                                                <th><?= __('ID') ?></th>
+                                                <th style="width: 80px;"><?= __('ID') ?></th>
                                                 <th><?= __('账户名称') ?></th>
-                                                <th><?= __('适配器') ?></th>
+                                                <th style="width: 120px;"><?= __('适配器') ?></th>
                                                 <th><?= __('描述') ?></th>
-                                                <th><?= __('状态') ?></th>
-                                                <th><?= __('默认账户') ?></th>
-                                                <th><?= __('创建时间') ?></th>
-                                                <th><?= __('操作') ?></th>
+                                                <th style="width: 100px;"><?= __('状态') ?></th>
+                                                <th style="width: 100px;"><?= __('默认账户') ?></th>
+                                                <th style="width: 160px;"><?= __('创建时间') ?></th>
+                                                <th style="width: 280px;"><?= __('操作') ?></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php if (empty($accounts)): ?>
+                                            <?php foreach ($accounts as $account): ?>
                                                 <tr>
-                                                    <td colspan="8" class="text-center"><?= __('暂无数据') ?></td>
-                                                </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($accounts as $account): ?>
-                                                    <tr>
-                                                        <td><?= $account->getData('account_id') ?></td>
-                                                        <td><?= htmlspecialchars($account->getData('name')) ?></td>
-                                                        <td>
-                                                            <?php 
-                                                            $adapterCode = $account->getData('adapter');
-                                                            $adapterName = isset($adapters[$adapterCode]) 
-                                                                ? $adapters[$adapterCode]->getAdapterName() 
-                                                                : $adapterCode;
-                                                            ?>
-                                                            <span class="badge bg-info"><?= htmlspecialchars($adapterName) ?></span>
-                                                        </td>
-                                                        <td><?= htmlspecialchars($account->getData('description') ?: '-') ?></td>
-                                                        <td>
-                                                            <?php if ($account->getData('status') === 'active'): ?>
-                                                                <span class="badge bg-success"><?= __('激活') ?></span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-secondary"><?= __('未激活') ?></span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td>
-                                                            <?php if ($account->getData('is_default')): ?>
-                                                                <span class="badge bg-primary"><i class="mdi mdi-star"></i> <?= __('是') ?></span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-light text-dark"><?= __('否') ?></span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                        <td><?= date('Y-m-d H:i:s', $account->getData('created_at')) ?></td>
-                                                        <td>
-                                                            <div class="btn-group btn-group-sm">
-                                                                <a href="<?= $this->getBackendUrl('*/backend/account/form', ['id' => $account->getData('account_id')]) ?>" 
-                                                                   class="btn btn-primary">
-                                                                    <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
-                                                                </a>
-                                                                <?php if (!$account->getData('is_default')): ?>
-                                                                    <button type="button" class="btn btn-info" 
-                                                                            onclick="setDefault(<?= $account->getData('account_id') ?>)">
-                                                                        <i class="mdi mdi-star"></i> <?= __('设默认') ?>
-                                                                    </button>
-                                                                <?php endif; ?>
-                                                                <a href="<?= $this->getBackendUrl('*/backend/account/domains', ['id' => $account->getData('account_id')]) ?>" 
-                                                                   class="btn btn-secondary">
-                                                                    <i class="mdi mdi-web"></i> <?= __('关联域名') ?>
-                                                                </a>
+                                                    <td><?= $account->getData('account_id') ?></td>
+                                                    <td>
+                                                        <strong><?= htmlspecialchars($account->getData('name')) ?></strong>
+                                                    </td>
+                                                    <td>
+                                                        <?php 
+                                                        $adapterCode = $account->getData('adapter');
+                                                        $adapterName = isset($adapters[$adapterCode]) 
+                                                            ? $adapters[$adapterCode]->getAdapterName() 
+                                                            : $adapterCode;
+                                                        ?>
+                                                        <span class="badge bg-info"><?= htmlspecialchars($adapterName) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-muted">
+                                                            <?= htmlspecialchars($account->getData('description') ?: '-') ?>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ($account->getData('status') === 'active'): ?>
+                                                            <span class="badge bg-success"><?= __('激活') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary"><?= __('未激活') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ($account->getData('is_default')): ?>
+                                                            <span class="badge bg-primary">
+                                                                <i class="mdi mdi-star"></i> <?= __('是') ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-light text-dark"><?= __('否') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <small class="text-muted">
+                                                            <?= date('Y-m-d H:i', $account->getData('created_at')) ?>
+                                                        </small>
+                                                    </td>
+                                                    <td>
+                                                        <div class="action-buttons">
+                                                            <a href="@backend-url('*/backend/account/form')?id=<?= $account->getData('account_id') ?>" 
+                                                               class="btn btn-sm btn-primary"
+                                                               title="<?= __('编辑账户') ?>">
+                                                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                                                            </a>
+                                                            <?php if (!$account->getData('is_default')): ?>
                                                                 <button type="button" 
-                                                                        class="btn btn-danger" 
-                                                                        w-delete="true"
-                                                                        w-url="<?= $this->getBackendUrl('*/backend/account/delete') ?>"
-                                                                        w-method="POST"
-                                                                        w-var-id="<?= $account->getData('account_id') ?>"
-                                                                        w-msg="<?= __('确定要删除账户 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($account->getData('name'))) ?>">
-                                                                    <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                                                        class="btn btn-sm btn-info" 
+                                                                        onclick="setDefault(<?= $account->getData('account_id') ?>)"
+                                                                        title="<?= __('设为默认账户') ?>">
+                                                                    <i class="mdi mdi-star"></i> <?= __('设默认') ?>
                                                                 </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
+                                                            <?php endif; ?>
+                                                            <a href="@backend-url('*/backend/account/domains')?id=<?= $account->getData('account_id') ?>" 
+                                                               class="btn btn-sm btn-secondary"
+                                                               title="<?= __('管理关联域名') ?>">
+                                                                <i class="mdi mdi-web"></i> <?= __('域名') ?>
+                                                            </a>
+                                                            <button type="button" 
+                                                                    class="btn btn-sm btn-danger" 
+                                                                    w-delete="true"
+                                                                    w-url="@backend-url('*/backend/account/delete')"
+                                                                    w-method="POST"
+                                                                    w-var-id="<?= $account->getData('account_id') ?>"
+                                                                    w-msg="<?= __('确定要删除账户 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($account->getData('name'))) ?>"
+                                                                    title="<?= __('删除账户') ?>">
+                                                                <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
                                         </tbody>
                                     </table>
                                 </div>
-
-                                <!-- 分页 -->
-                                <?php if ($totalPages > 1): ?>
-                                    <div class="row mt-3">
-                                        <div class="col-12">
-                                            <nav>
-                                                <ul class="pagination justify-content-center">
-                                                    <?php if ($page > 1): ?>
-                                                        <li class="page-item">
-                                                            <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                                                <?= __('上一页') ?>
-                                                            </a>
-                                                        </li>
-                                                    <?php endif; ?>
-                                                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                                                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                                                <?= $i ?>
-                                                            </a>
-                                                        </li>
-                                                    <?php endfor; ?>
-                                                    <?php if ($page < $totalPages): ?>
-                                                        <li class="page-item">
-                                                            <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                                                <?= __('下一页') ?>
-                                                            </a>
-                                                        </li>
-                                                    <?php endif; ?>
-                                                </ul>
-                                            </nav>
-                                            <div class="text-center text-muted">
-                                                <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
+                            <?php endif; ?>
                         </div>
+                        
+                        <!-- 分页 -->
+                        <?php if ($totalPages > 1): ?>
+                            <div class="pagination-wrapper">
+                                <div class="pagination-info">
+                                    <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+                                </div>
+                                <nav>
+                                    <ul class="pagination justify-content-center mb-0">
+                                        <?php if ($page > 1): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                                    <i class="mdi mdi-chevron-left"></i> <?= __('上一页') ?>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+                                        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                            <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                                    <?= $i ?>
+                                                </a>
+                                            </li>
+                                        <?php endfor; ?>
+                                        <?php if ($page < $totalPages): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                                    <?= __('下一页') ?> <i class="mdi mdi-chevron-right"></i>
+                                                </a>
+                                            </li>
+                                        <?php endif; ?>
+                                    </ul>
+                                </nav>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -224,13 +501,17 @@ $adapters = $this->getData('adapters') ?: [];
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function setDefault(id) {
     if (!confirm('<?= __('确定要设置此账户为默认账户吗？') ?>')) {
         return;
     }
     
-    fetch('<?= $this->getBackendUrl('*/backend/account/setDefault') ?>', {
+    fetch('<?php echo $this->getBackendUrl('*/backend/account/setDefault'); ?>', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -240,18 +521,35 @@ function setDefault(id) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            location.reload();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('成功') ?>',
+                    text: data.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                console.log(data.message);
+                location.reload();
+            }
         } else {
-            alert('<?= __('操作失败：') ?>' + data.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('操作失败') ?>',
+                    text: data.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('操作失败：') ?>' + data.message);
+            }
         }
     });
 }
-
 </script>
 
 <js:part name="w-delete"/>
 
 </body>
 </html>
-

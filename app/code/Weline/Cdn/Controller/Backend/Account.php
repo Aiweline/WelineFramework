@@ -172,34 +172,62 @@ class Account extends BackendController
                 $account->load($id);
                 
                 if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+                    $errorMsg = __('账户不存在');
+                    if ($this->request->isIframe()) {
+                        return $this->redirect('/component/offcanvas/error', [
+                            'msg' => $errorMsg,
+                            'reload' => 0
+                        ]);
+                    }
                     return $this->jsonResponse([
                         'success' => false,
-                        'message' => __('账户不存在')
+                        'message' => $errorMsg
                     ]);
                 }
             }
 
             // 验证必填字段
             if (empty($data['name'])) {
+                $errorMsg = __('账户名称不能为空');
+                if ($this->request->isIframe()) {
+                    return $this->redirect('/component/offcanvas/error', [
+                        'msg' => $errorMsg,
+                        'reload' => 0
+                    ]);
+                }
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => __('账户名称不能为空')
+                    'message' => $errorMsg
                 ]);
             }
 
             if (empty($data['adapter'])) {
+                $errorMsg = __('适配器不能为空');
+                if ($this->request->isIframe()) {
+                    return $this->redirect('/component/offcanvas/error', [
+                        'msg' => $errorMsg,
+                        'reload' => 0
+                    ]);
+                }
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => __('适配器不能为空')
+                    'message' => $errorMsg
                 ]);
             }
 
             // 验证适配器是否存在
             $adapters = $this->getAdapterResolver()->getAllAdapters();
             if (!isset($adapters[$data['adapter']])) {
+                $errorMsg = __('无效的适配器');
+                if ($this->request->isIframe()) {
+                    return $this->redirect('/component/offcanvas/error', [
+                        'msg' => $errorMsg,
+                        'reload' => 0
+                    ]);
+                }
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => __('无效的适配器')
+                    'message' => $errorMsg
                 ]);
             }
 
@@ -240,12 +268,28 @@ class Account extends BackendController
 
             Message::success(__('账户保存成功'));
 
+            // 如果是 iframe 模式（OffCanvas），重定向到成功页面
+            if ($this->request->isIframe()) {
+                return $this->redirect('/component/offcanvas/success', [
+                    'msg' => __('账户保存成功'),
+                    'reload' => 1
+                ]);
+            }
+
             return $this->jsonResponse([
                 'success' => true,
                 'message' => __('账户保存成功'),
                 'redirect' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/account/index')
             ]);
         } catch (\Exception $e) {
+            // 如果是 iframe 模式（OffCanvas），重定向到错误页面
+            if ($this->request->isIframe()) {
+                return $this->redirect('/component/offcanvas/error', [
+                    'msg' => __('保存失败：%{1}', $e->getMessage()),
+                    'reload' => 0
+                ]);
+            }
+
             return $this->jsonResponse([
                 'success' => false,
                 'message' => __('保存失败：%{1}', $e->getMessage())
