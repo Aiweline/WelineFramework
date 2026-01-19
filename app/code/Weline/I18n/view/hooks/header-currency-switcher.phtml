@@ -1,0 +1,133 @@
+<?php
+/**
+ * 
+ * @hook-priority 50   Hook优先级：50（默认值）
+ * @hook-sort-order 0  Hook排序顺序：0（默认值）
+ * @hook-solo false    Hook独享：false（不独占）
+ */
+
+use Weline\Framework\App\State;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+
+/** @var \Weline\Framework\View\Template $this */
+
+// 获取当前货币
+$currentCurrency = State::getCurrency();
+
+// 构建货币数据
+$i18nCurrencies = [];
+
+// 尝试从 Currency 模块获取货币列表
+// 使用 try-catch 避免数据库错误影响页面渲染
+if (class_exists(\Weline\Currency\Data\CurrencyData::class)) {
+    try {
+        $currencies = \Weline\Currency\Data\CurrencyData::getCurrencies();
+        if (is_array($currencies) && !empty($currencies)) {
+            foreach ($currencies as $currency) {
+                // 确保 currency 是数组格式
+                if (is_array($currency)) {
+                    $i18nCurrencies[] = [
+                        'code' => $currency['code'] ?? '',
+                        'name' => $currency['name'] ?? $currency['code'] ?? '',
+                        'symbol' => $currency['symbol'] ?? '',
+                        'format' => $currency['format'] ?? '',
+                    ];
+                } elseif (is_object($currency)) {
+                    // 如果是对象，尝试获取属性
+                    $i18nCurrencies[] = [
+                        'code' => $currency->getCode() ?? $currency->getData('code') ?? '',
+                        'name' => $currency->getName() ?? $currency->getData('name') ?? $currency->getCode() ?? '',
+                        'symbol' => $currency->getSymbol() ?? $currency->getData('symbol') ?? '',
+                        'format' => $currency->getFormat() ?? $currency->getData('format') ?? '',
+                    ];
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        // Currency 模块不可用或查询失败，使用默认列表
+        // 静默处理错误，不影响页面渲染
+    }
+}
+
+// 如果没有可用货币，使用默认列表
+if (empty($i18nCurrencies)) {
+    $i18nCurrencies = [
+        ['code' => 'CNY', 'name' => 'CNY (¥)', 'symbol' => '¥', 'format' => ''],
+        ['code' => 'USD', 'name' => 'USD ($)', 'symbol' => '$', 'format' => ''],
+        ['code' => 'EUR', 'name' => 'EUR (€)', 'symbol' => '€', 'format' => ''],
+        ['code' => 'GBP', 'name' => 'GBP (£)', 'symbol' => '£', 'format' => ''],
+    ];
+}
+
+// 准备 event 数据
+$eventData = [
+    'currentCurrency' => $currentCurrency,
+    'currencies' => $i18nCurrencies, // I18n 模块的数据
+    'template' => $this,
+    'request' => $this->request,
+];
+
+// 触发 event: Weline_I18n::header-currency-switcher-data
+/** @var EventsManager $eventsManager */
+$eventsManager = ObjectManager::getInstance(EventsManager::class);
+$eventsManager->dispatch('Weline_I18n::header-currency-switcher-data', $eventData);
+
+// 获取 event 对象（如果 event 被监听，数据可能已被修改）
+$event = $eventsManager->getEventData('Weline_I18n::header-currency-switcher-data');
+
+// 检查 event 是否被监听并修改了数据
+// Event 对象通过 getData() 方法获取数据，如果 event 被监听并修改，数据会更新
+if ($event) {
+    $eventDataResult = $event->getData('data');
+    if (is_array($eventDataResult)) {
+        $eventCurrencies = $eventDataResult['currencies'] ?? null;
+        $eventCurrentCurrency = $eventDataResult['currentCurrency'] ?? null;
+    } else {
+        $eventCurrencies = null;
+        $eventCurrentCurrency = null;
+    }
+} else {
+    $eventCurrencies = null;
+    $eventCurrentCurrency = null;
+}
+
+// 如果 event 返回了数据，使用 event 的数据，否则使用 I18n 的数据
+$currencies = $eventCurrencies ?? $i18nCurrencies;
+$displayCurrentCurrency = $eventCurrentCurrency ?? $currentCurrency;
+
+// 生成货币切换链接
+$baseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+$urlBuilder = $this->request->getUrlBuilder();
+
+// 渲染货币切换器
+?>
+<div class="currency-switcher" role="button" tabindex="0" aria-label="<?= __('切换货币') ?>">
+    <span class="action-line-1"><?= __('货币') ?></span>
+    <span class="action-line-2">
+        <i class="fas fa-dollar-sign" aria-hidden="true"></i>
+        <span class="current-currency"><?= htmlspecialchars($displayCurrentCurrency) ?></span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    </span>
+    <div class="currency-options" role="menu" aria-label="<?= __('货币选项') ?>">
+        <?php foreach ($currencies as $currency): ?>
+            <?php
+            $currencyCode = $currency['code'] ?? '';
+            $currencyName = $currency['name'] ?? $currencyCode;
+            $currencySymbol = $currency['symbol'] ?? '';
+            $isCurrent = (strtoupper($currencyCode) === strtoupper($displayCurrentCurrency));
+            
+            // 生成货币切换 URL
+            $currencyUrl = $urlBuilder->getFrontendUrl('', ['currency' => $currencyCode], false);
+            ?>
+            <a href="<?= htmlspecialchars($currencyUrl) ?>" 
+               class="currency-option <?= $isCurrent ? 'active' : '' ?>" 
+               data-currency="<?= htmlspecialchars($currencyCode) ?>" 
+               role="menuitem">
+                <span><?= htmlspecialchars($currencyName) ?></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>

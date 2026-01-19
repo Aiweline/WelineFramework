@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<config>
+    <menu>
+        <item id="Weline_Captcha::config" 
+              title="验证码配置" 
+              module="Weline_Captcha"
+              parent="Weline_Backend::system_security"
+              action="weline/captcha/backend/config"
+              sort="100"/>
+    </menu>
+</config>

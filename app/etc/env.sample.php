@@ -107,6 +107,18 @@ return [
             'prefix' => 'm_',           // 表前缀
             'charset' => 'utf8mb4',     // 字符集
             'collate' => 'utf8mb4_general_ci',  // 排序规则
+            'persistent' => true,       // 是否启用PDO持久连接（默认true，除非主动销毁否则保持连接）
+            'pool_size' => 10,          // 连接池大小（默认10个连接）
+            // PDO 性能优化选项（可选，使用默认值即可）
+            'emulate_prepares' => false,  // MySQL: 是否模拟预处理语句（默认false，使用原生预处理提高性能）
+            'use_buffered_query' => true, // MySQL: 是否使用缓冲查询（默认true，提高查询性能）
+            'compress' => false,         // MySQL: 是否启用压缩（默认false，网络较慢时可启用）
+            'timeout' => 30,              // 连接超时（秒，默认30秒）
+            // 自定义 PDO 选项（高级用法，覆盖默认选项）
+            // 'options' => [
+            //     PDO::ATTR_TIMEOUT => 30,
+            //     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            // ],
         ],
         // 从数据库配置（读写分离）
         'slaves' => [
@@ -188,6 +200,27 @@ return [
     // 调试配置（可选）
     'debug' => false,           // 是否启用调试模式
     'debug_key' => null,        // 调试密钥（用于URL调试）
+    
+    // 开发工具面板配置（DeveloperWorkspace模块）
+    'dev_tool' => [
+        // 是否在生产模式下默认启用开发工具面板（false=不启用，true=启用）
+        // 注意：即使设置为false，仍可通过URL参数和Cookie启用
+        'enable_in_prod' => false,
+        
+        // URL参数名，用于通过URL启用开发工具面板
+        // 例如：访问 http://your-domain.com/page?dev_tool=1 可启用面板
+        'key' => 'dev_tool',
+        
+        // Cookie名称，用于持久化开发工具面板的启用状态
+        // 启用后会在浏览器中设置此Cookie，有效期30天
+        'cookie_name' => 'w_dev_tool',
+        
+        // 密钥（可选），用于验证URL参数，增强安全性
+        // 如果设置了密钥，URL参数值必须与密钥匹配才能启用面板
+        // 例如：设置 'secret' => 'my_secret_key'，则需访问 ?dev_tool=my_secret_key
+        // 留空则不验证，任何值都可以启用（不推荐生产环境使用）
+        'secret' => '',
+    ],
     
     // 翻译配置
     'translation' => [
