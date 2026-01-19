@@ -128,6 +128,10 @@
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 查询支付状态
@@ -145,15 +149,43 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(data.message || '<?= __('查询成功') ?>');
-                    location.reload();
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('查询成功') ?>',
+                            text: data.message || '<?= __('查询成功') ?>',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        console.log(data.message || '<?= __('查询成功') ?>');
+                        location.reload();
+                    }
                 } else {
-                    alert(data.message || '<?= __('查询失败') ?>');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('查询失败') ?>',
+                            text: data.message || '<?= __('查询失败') ?>',
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else {
+                        console.error(data.message || '<?= __('查询失败') ?>');
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('<?= __('查询失败') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('查询失败') ?>',
+                        text: '<?= __('请重试') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('查询失败') ?>');
+                }
             });
         });
     });
