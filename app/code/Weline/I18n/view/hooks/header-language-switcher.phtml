@@ -1,0 +1,146 @@
+<?php
+/**
+ * 
+ * @hook-priority 50   Hook优先级：50（默认值）
+ * @hook-sort-order 0  Hook排序顺序：0（默认值）
+ * @hook-solo false    Hook独享：false（不独占）
+ */
+
+use Weline\Framework\App\State;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
+
+/** @var \Weline\Framework\View\Template $this */
+
+// 获取当前语言
+$currentLang = State::getLang();
+$currentLangLocal = State::getLangLocal();
+
+// 获取 I18n 模型
+/** @var I18n $i18n */
+$i18n = ObjectManager::getInstance(I18n::class);
+
+// 获取可用语言列表
+// 使用 try-catch 避免数据库错误影响页面渲染
+try {
+    // 获取已安装的语言包路径
+    $installPacks = [];
+    $installPacksPath = glob(\Weline\Framework\App\Env::path_LANGUAGE_PACK . '*' . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+    foreach ($installPacksPath as $path) {
+        $pathArr = explode(DIRECTORY_SEPARATOR, $path);
+        $installPacks[] = array_pop($pathArr);
+    }
+    
+    // 获取语言本地化名称
+    $langLocals = $i18n->getLocals($currentLangLocal);
+    
+    // 构建语言数据（只包含已安装的语言包）
+    $i18nLanguages = [];
+    foreach ($langLocals as $localeCode => $localeName) {
+        // 只包含已安装的语言包
+        if (!empty($installPacks) && !in_array($localeCode, $installPacks)) {
+            continue;
+        }
+        
+        $i18nLanguages[] = [
+            'code' => $localeCode,
+            'name' => $localeName,
+            'native' => $localeName,
+            'flag' => '',
+        ];
+    }
+} catch (\Exception $e) {
+    // 如果获取失败，使用默认列表
+    $i18nLanguages = [];
+}
+
+// 如果没有可用语言，使用默认列表
+if (empty($i18nLanguages)) {
+    $i18nLanguages = [
+        ['code' => 'zh_Hans_CN', 'name' => '简体中文', 'native' => '简体中文', 'flag' => ''],
+        ['code' => 'en_US', 'name' => 'English', 'native' => 'English', 'flag' => ''],
+        ['code' => 'zh_Hant_TW', 'name' => '繁體中文', 'native' => '繁體中文', 'flag' => ''],
+    ];
+}
+
+// 准备 event 数据
+$eventData = [
+    'currentLang' => $currentLang,
+    'currentLangLocal' => $currentLangLocal,
+    'languages' => $i18nLanguages, // I18n 模块的数据
+    'template' => $this,
+    'request' => $this->request,
+];
+
+// 触发 event: Weline_I18n::header-language-switcher-data
+/** @var EventsManager $eventsManager */
+$eventsManager = ObjectManager::getInstance(EventsManager::class);
+$eventsManager->dispatch('Weline_I18n::header-language-switcher-data', $eventData);
+
+// 获取 event 对象（如果 event 被监听，数据可能已被修改）
+$event = $eventsManager->getEventData('Weline_I18n::header-language-switcher-data');
+
+// 检查 event 是否被监听并修改了数据
+// Event 对象通过 getData() 方法获取数据，如果 event 被监听并修改，数据会更新
+if ($event) {
+    $eventDataResult = $event->getData('data');
+    if (is_array($eventDataResult)) {
+        $eventLanguages = $eventDataResult['languages'] ?? null;
+        $eventCurrentLang = $eventDataResult['currentLang'] ?? null;
+    } else {
+        $eventLanguages = null;
+        $eventCurrentLang = null;
+    }
+} else {
+    $eventLanguages = null;
+    $eventCurrentLang = null;
+}
+
+// 如果 event 返回了数据，使用 event 的数据，否则使用 I18n 的数据
+$languages = $eventLanguages ?? $i18nLanguages;
+$displayCurrentLang = $eventCurrentLang ?? $currentLang;
+
+// 生成语言切换链接
+$baseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+$urlBuilder = $this->request->getUrlBuilder();
+
+// 渲染语言切换器
+?>
+<div class="language-switcher" role="button" tabindex="0" aria-label="<?= __('切换语言') ?>">
+    <span class="action-line-1"><?= __('语言') ?></span>
+    <span class="action-line-2">
+        <i class="fas fa-globe" aria-hidden="true"></i>
+        <span class="current-language">
+            <?php
+            // 显示当前语言的简短标识
+            $langParts = explode('_', $displayCurrentLang);
+            $langDisplay = strtoupper($langParts[0] ?? 'ZH');
+            if ($langDisplay === 'ZH' && isset($langParts[1]) && $langParts[1] === 'HANT') {
+                $langDisplay = 'TW';
+            }
+            echo $langDisplay;
+            ?>
+        </span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    </span>
+    <div class="language-options" role="menu" aria-label="<?= __('语言选项') ?>">
+        <?php foreach ($languages as $lang): ?>
+            <?php
+            $langCode = $lang['code'] ?? '';
+            $langName = $lang['native'] ?? $lang['name'] ?? $langCode;
+            $isCurrent = ($langCode === $displayCurrentLang);
+            
+            // 生成语言切换 URL
+            $langUrl = $urlBuilder->getFrontendUrl('', ['lang' => $langCode], false);
+            ?>
+            <a href="<?= htmlspecialchars($langUrl) ?>" 
+               class="language-option <?= $isCurrent ? 'active' : '' ?>" 
+               data-lang="<?= htmlspecialchars($langCode) ?>" 
+               role="menuitem">
+                <span><?= htmlspecialchars($langName) ?></span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>

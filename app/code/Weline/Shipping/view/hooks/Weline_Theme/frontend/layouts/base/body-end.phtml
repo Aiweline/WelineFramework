@@ -1,0 +1,20 @@
+<?php
+/**
+ * Shipping模块 - 布局Body结束Hook
+ * 
+ * 在body结束前加载Shipping配送地址管理、IndexedDB存储和价格计算器JavaScript
+ * Hook名称：Weline_Theme::frontend::layouts::base::body-end
+ * 
+ * @hook-priority 100      Hook优先级：100（framework位置默认优先级）
+ * @hook-sort-order 1      Hook排序顺序：1（在Geo模块之后）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+$storageJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-storage.js');
+$locationJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-location.js');
+$priceCalculatorJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-price-calculator.js');
+?>
+<script src="<?= htmlspecialchars($storageJsUrl) ?>"></script>
+<script src="<?= htmlspecialchars($locationJsUrl) ?>"></script>
+<script src="<?= htmlspecialchars($priceCalculatorJsUrl) ?>"></script>
