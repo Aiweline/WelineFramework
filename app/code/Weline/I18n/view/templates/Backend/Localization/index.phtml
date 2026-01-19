@@ -288,6 +288,9 @@ $search = $this->getData('search') ?? '';
                                                 </div>
                                             </th>
                                             <th width="120" class="fw-semibold">区域代码</th>
+                                            <th width="60" class="text-center fw-semibold">简码</th>
+                                            <th width="50" class="text-center fw-semibold">ISO2</th>
+                                            <th width="50" class="text-center fw-semibold">ISO3</th>
                                             <th width="50" class="text-center fw-semibold">国旗</th>
                                             <th width="80" class="fw-semibold">国家</th>
                                             <th class="fw-semibold">区域名称</th>
@@ -309,6 +312,39 @@ $search = $this->getData('search') ?? '';
                                                         <span class="badge bg-primary bg-opacity-10 fw-medium px-2 py-1 rounded-pill">
                                                             <?= $locale['code'] ?>
                                                         </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?php if (!empty($locale['short_code'])): ?>
+                                                            <span class="badge bg-info bg-opacity-10 text-info fw-medium px-2 py-1 rounded-pill">
+                                                                <?= htmlspecialchars($locale['short_code']) ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                                -
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?php if (!empty($locale['iso2'])): ?>
+                                                            <span class="badge bg-success bg-opacity-10 text-success fw-medium px-2 py-1 rounded-pill" title="ISO 639-1">
+                                                                <?= htmlspecialchars($locale['iso2']) ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                                -
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?php if (!empty($locale['iso3'])): ?>
+                                                            <span class="badge bg-warning bg-opacity-10 text-warning fw-medium px-2 py-1 rounded-pill" title="ISO 639-2">
+                                                                <?= htmlspecialchars($locale['iso3']) ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                                -
+                                                            </span>
+                                                        <?php endif; ?>
                                                     </td>
                                                     <td class="text-center">
                                                         <?php 
@@ -483,6 +519,10 @@ $search = $this->getData('search') ?? '';
 </div>
 <!-- 结束 页面 -->
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
@@ -498,7 +538,16 @@ function batchAction(action) {
     const countryCodes = Array.from(checkboxes).map(cb => cb.value);
     
     if (countryCodes.length === 0) {
-        alert('请选择要操作的区域');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择要操作的区域') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('请选择要操作的区域');
+        }
         return;
     }
     
