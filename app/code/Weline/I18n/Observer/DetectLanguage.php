@@ -2,16 +2,31 @@
 
 namespace Weline\I18n\Observer;
 
-use Weline\Framework\App\Cache\AppCache;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Cache\LanguageCache;
 use Weline\I18n\Model\Locals;
 
 class DetectLanguage implements ObserverInterface
 {
+    /**
+     * @var LanguageCache 语言缓存实例
+     */
+    private ?LanguageCache $cache = null;
+
+    /**
+     * 获取缓存实例
+     */
+    private function getCache(): LanguageCache
+    {
+        if ($this->cache === null) {
+            $this->cache = new LanguageCache();
+        }
+        return $this->cache;
+    }
+
     /**
      * @inheritDoc
      */
@@ -20,10 +35,22 @@ class DetectLanguage implements ObserverInterface
         $data = $event->getData();
         /**@var DataObject $data */
         $code = $data->getData('code');
-        /**@var CacheInterface $cache */
-        $cache = ObjectManager::getInstance(AppCache::class . 'Factory');
-        $locals = $cache->get('locals');
-        if (!$locals) {
+        $codeLower = strtolower($code);
+        
+        // 优化：使用缓存类，避免重复数据库查询
+        $cache = $this->getCache();
+        
+        // 先检查单个语言代码的缓存
+        $checkResult = $cache->checkLanguage($codeLower);
+        if ($checkResult !== null) {
+            $data->setData('result', $checkResult);
+            return;
+        }
+        
+        // 缓存未命中，检查所有语言列表缓存
+        $languages = $cache->getAllLanguages();
+        if ($languages === null) {
+            // 查询数据库
             /**@var Locals $local */
             $local = ObjectManager::getInstance(Locals::class);
             $locals = $local
@@ -31,11 +58,22 @@ class DetectLanguage implements ObserverInterface
                 ->where(Locals::fields_IS_ACTIVE, 1)
                 ->select()
                 ->fetchArray();
-            foreach ($locals as &$local) {
-                $local = strtolower($local['code']);
+            
+            $languages = [];
+            foreach ($locals as $localData) {
+                $languages[] = strtolower($localData['code']);
             }
-            $cache->set('locals', $locals, 3600 * 24 * 30);
+            
+            // 保存到缓存
+            $cache->setAllLanguages($languages);
         }
-        $data->setData('result', in_array(strtolower($code), $locals));
+        
+        // 检查语言代码是否存在
+        $exists = in_array($codeLower, $languages);
+        
+        // 保存单个语言代码的检查结果
+        $cache->setLanguageCheck($codeLower, $exists);
+        
+        $data->setData('result', $exists);
     }
 }

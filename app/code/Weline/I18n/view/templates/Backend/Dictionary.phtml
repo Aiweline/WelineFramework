@@ -745,6 +745,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
 <!-- Table Editable plugin -->
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
 <script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
 <script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
@@ -837,12 +841,30 @@ function loadQuickTranslationData(page = 1) {
                 updatePageNavigationButtons();
             } else {
                 console.error('加载数据失败:', data.message);
-                alert('加载数据失败: ' + data.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载数据失败: ' + data.message);
+                }
             }
         })
         .catch(error => {
             console.error('请求失败:', error);
-            alert('请求失败，请检查网络连接: ' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: '<?= __('请检查网络连接') ?>: ' + error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请求失败，请检查网络连接: ' + error.message);
+            }
         })
         .finally(() => {
             isLoading = false;
@@ -898,12 +920,30 @@ function loadQuickTranslationDataWithTarget(targetMd5) {
                 updatePageNavigationButtons();
             } else {
                 console.error('加载数据失败:', data.message);
-                alert('加载数据失败: ' + data.message);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('加载失败') ?>',
+                        text: data.message,
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('加载数据失败: ' + data.message);
+                }
             }
         })
         .catch(error => {
             console.error('请求失败:', error);
-            alert('请求失败，请检查网络连接: ' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('请求失败') ?>',
+                    text: '<?= __('请检查网络连接') ?>: ' + error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('请求失败，请检查网络连接: ' + error.message);
+            }
         })
         .finally(() => {
             isLoading = false;
@@ -1117,7 +1157,16 @@ function exportCsv() {
     const localeCode = document.getElementById('locale-select').value;
     
     if (!localeCode) {
-        alert('请先选择要导出的语言');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请先选择要导出的语言') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('请先选择要导出的语言');
+        }
         return;
     }
     
@@ -1145,20 +1194,47 @@ function importCsv() {
     const file = fileInput.files[0];
     
     if (!file) {
-        alert('请选择要导入的CSV文件');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择要导入的CSV文件') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('请选择要导入的CSV文件');
+        }
         return;
     }
     
     // 验证文件扩展名
     if (!file.name.toLowerCase().endsWith('.csv')) {
-        alert('请选择CSV格式的文件');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择CSV格式的文件') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('请选择CSV格式的文件');
+        }
         return;
     }
     
     // 验证文件名是否为locale_code
     const fileName = file.name.replace('.csv', '');
     if (!isValidLocaleCode(fileName)) {
-        alert('文件名必须是有效的locale_code，如：zh_Hans_CN、en_US等');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('文件名必须是有效的locale_code，如：zh_Hans_CN、en_US等') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('文件名必须是有效的locale_code，如：zh_Hans_CN、en_US等');
+        }
         return;
     }
     
