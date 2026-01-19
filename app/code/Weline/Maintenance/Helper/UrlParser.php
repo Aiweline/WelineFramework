@@ -95,27 +95,30 @@ class UrlParser
         }
 
         // 检测区域（area）- 参照 Url::parser() 的逻辑
+        // 注意：area 前缀可能包含大小写混合的字符串（如：U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8），
+        // 所以需要保持原始大小写进行比较，不能转换为小写
         $firstSegment = $segments[0] ?? '';
-        $apiAreaLower = strtolower($server['WELINE_API_AREA']);
-        $apiAdminAreaLower = strtolower($server['WELINE_API_ADMIN_AREA'] ?: '');
-        $adminAreaLower = strtolower($server['WELINE_BACKEND_AREA']);
+        $apiArea = $server['WELINE_API_AREA'];
+        $apiAdminArea = $server['WELINE_API_ADMIN_AREA'] ?: '';
+        $adminArea = $server['WELINE_BACKEND_AREA'];
 
         $hasArea = false;
-        if ($firstSegment === $apiAreaLower) {
+        // 使用不区分大小写的比较，因为配置值可能是小写，但 URL 中可能是原始大小写
+        if (strcasecmp($firstSegment, $apiArea) === 0) {
             $result['area'] = 'api';
             $server['WELINE_AREA'] = 'api';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_API_AREA_PREFIX'] ?? '/api/rest/';
             $result['area_route'] = $server['WELINE_AREA_ROUTE'];
             array_shift($segments);
             $hasArea = true;
-        } elseif ($firstSegment === $apiAdminAreaLower && !empty($apiAdminAreaLower)) {
+        } elseif (!empty($apiAdminArea) && strcasecmp($firstSegment, $apiAdminArea) === 0) {
             $result['area'] = 'api_admin';
             $server['WELINE_AREA'] = 'api_admin';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_API_ADMIN_AREA'];
             $result['area_route'] = $server['WELINE_AREA_ROUTE'];
             array_shift($segments);
             $hasArea = true;
-        } elseif ($firstSegment === $adminAreaLower) {
+        } elseif (strcasecmp($firstSegment, $adminArea) === 0) {
             $result['area'] = 'admin';
             $server['WELINE_AREA'] = 'admin';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_BACKEND_AREA'];
