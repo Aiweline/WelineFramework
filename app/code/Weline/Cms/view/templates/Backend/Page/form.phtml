@@ -1014,11 +1014,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             
                             <!-- 自定义下拉列表 -->
                             <div id="localeDropdown" 
-<<<<<<< HEAD
                                  class="border rounded bg-white shadow-sm position-absolute w-100 mt-1" 
-=======
-                                 class="border rounded shadow-sm position-absolute w-100 mt-1" 
->>>>>>> dev-new
                                  style="max-height: 300px; overflow-y: auto; display: none; z-index: 1050;">
                                 <?php foreach ($this->getData('active_locales') as $locale): ?>
                                 <div class="dropdown-item locale-option" 
@@ -1274,6 +1270,11 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
 
 <!-- html2canvas for screenshot功能 -->
 <script src="@static(Weline_Cms::libs/html2canvas/html2canvas.min.js)"></script>
+
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 
 <!-- 检查库是否加载成功 -->
 <script>
@@ -1961,7 +1962,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
                 event.preventDefault();
                 event.stopPropagation();
-                alert('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '<?= __('提示') ?>',
+                        text: '<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
+                }
                 handleInput.focus();
                 handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
@@ -2001,7 +2011,16 @@ window.publishPage = function() {
     
     if (!statusSelect || !form) {
         console.error('❌ 找不到状态选择器或表单');
-        alert('<?= __('系统错误，请刷新页面重试') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('系统错误') ?>',
+                text: '<?= __('请刷新页面重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('系统错误，请刷新页面重试') ?>');
+        }
         return;
     }
     
@@ -2022,7 +2041,16 @@ window.publishPage = function() {
         form.submit();
     } catch (error) {
         console.error('❌ 发布失败:', error);
-        alert('<?= __('发布失败，请重试') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('发布失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('发布失败，请重试') ?>');
+        }
         
         // 恢复按钮状态
         publishBtn.disabled = false;
@@ -2612,7 +2640,16 @@ function removeLocaleTag(localeCode) {
     // 检查是否是默认语言，默认语言不能删除
     const defaultLocale = document.getElementById('default_locale').value;
     if (localeCode === defaultLocale) {
-        alert('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        }
         return false;
     }
     
@@ -3581,7 +3618,16 @@ if (refreshStyleBtn) {
             
         } catch (error) {
             console.error('❌ 刷新失败:', error);
-            alert('刷新样式配置失败：' + error.message);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('刷新失败') ?>',
+                    text: '刷新样式配置失败：' + error.message,
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('刷新样式配置失败：' + error.message);
+            }
         } finally {
             // 恢复按钮状态
             this.disabled = false;
@@ -3826,7 +3872,16 @@ document.addEventListener('click', function(e) {
  */
 function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     if (!pageIdForm || pageIdForm === 'null') {
-        alert('<?= __('只有在编辑模式下才能翻译配置项') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('只有在编辑模式下才能翻译配置项') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('只有在编辑模式下才能翻译配置项') ?>');
+        }
         return;
     }
     
@@ -4166,7 +4221,16 @@ function showToast(type, title, message) {
                 setTimeout(() => document.body.removeChild(toast), 300);
             }, 3000);
         } else {
-            alert(title + '\n' + (message || ''));
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'info',
+                    title: title,
+                    text: message || '',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.log(title + '\n' + (message || ''));
+            }
         }
     }
 }

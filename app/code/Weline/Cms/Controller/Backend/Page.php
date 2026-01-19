@@ -20,6 +20,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -92,13 +93,41 @@ class Page extends BackendController
         $this->assign('breadcrumb_current', __('新建页面'));
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/page/create'));
         
-        // 获取所有已激活的语言（从 i18n_locals 表读取，已有 name 字段）
+        // 获取所有已激活的语言（从 i18n_locals 表读取，按 code 去重，使用当前语言的显示名称）
+        $currentLang = State::getLang() ?: 'zh_Hans_CN';
         $localsQuery = clone $this->localsModel;
-        $activeLocales = $localsQuery->clear()
+        $allLocales = $localsQuery->clear()
             ->where(Locals::fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
+        
+        // 按 code 去重，并使用当前语言的显示名称
+        $activeLocales = [];
+        $seenCodes = [];
+        foreach ($allLocales as $locale) {
+            $code = $locale->getData('code');
+            // 如果已经处理过这个 code，跳过
+            if (isset($seenCodes[$code])) {
+                continue;
+            }
+            // 优先使用 target_code 等于当前语言的记录
+            if ($locale->getData('target_code') === $currentLang) {
+                $seenCodes[$code] = true;
+                $activeLocales[] = $locale;
+            }
+        }
+        // 如果还有未处理的 code，使用其他 target_code 的记录
+        foreach ($allLocales as $locale) {
+            $code = $locale->getData('code');
+            if (!isset($seenCodes[$code])) {
+                $seenCodes[$code] = true;
+                // 使用 getLocaleName 方法获取当前语言的显示名称
+                $localeName = $this->i18nModel->getLocaleName($code, $currentLang);
+                $locale->setData('name', $localeName);
+                $activeLocales[] = $locale;
+            }
+        }
         
         $this->assign('active_locales', $activeLocales);
         
@@ -162,7 +191,7 @@ class Page extends BackendController
             
             // 如果没有设置默认语言，使用框架当前语言
             if (empty($defaultLocale)) {
-                $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
+                $defaultLocale = State::getLang();
             }
             
             // 确保默认语言在支持的语言列表中
@@ -287,13 +316,41 @@ class Page extends BackendController
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/page/edit', ['id' => $pageId]));
         $this->assign('page', $page);
         
-        // 获取所有已激活的语言（从 i18n_locals 表读取，已有 name 字段）
+        // 获取所有已激活的语言（从 i18n_locals 表读取，按 code 去重，使用当前语言的显示名称）
+        $currentLang = State::getLang() ?: 'zh_Hans_CN';
         $localsQuery = clone $this->localsModel;
-        $activeLocales = $localsQuery->clear()
+        $allLocales = $localsQuery->clear()
             ->where(Locals::fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
+        
+        // 按 code 去重，并使用当前语言的显示名称
+        $activeLocales = [];
+        $seenCodes = [];
+        foreach ($allLocales as $locale) {
+            $code = $locale->getData('code');
+            // 如果已经处理过这个 code，跳过
+            if (isset($seenCodes[$code])) {
+                continue;
+            }
+            // 优先使用 target_code 等于当前语言的记录
+            if ($locale->getData('target_code') === $currentLang) {
+                $seenCodes[$code] = true;
+                $activeLocales[] = $locale;
+            }
+        }
+        // 如果还有未处理的 code，使用其他 target_code 的记录
+        foreach ($allLocales as $locale) {
+            $code = $locale->getData('code');
+            if (!isset($seenCodes[$code])) {
+                $seenCodes[$code] = true;
+                // 使用 getLocaleName 方法获取当前语言的显示名称
+                $localeName = $this->i18nModel->getLocaleName($code, $currentLang);
+                $locale->setData('name', $localeName);
+                $activeLocales[] = $locale;
+            }
+        }
         
         $this->assign('active_locales', $activeLocales);
         
@@ -470,7 +527,7 @@ class Page extends BackendController
                 // 非子页面，正常处理语言设置
                 // 如果没有设置默认语言，使用框架当前语言
                 if (empty($defaultLocale)) {
-                    $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
+                    $defaultLocale = State::getLang();
                 }
                 
                 // 确保默认语言在支持的语言列表中
@@ -879,7 +936,23 @@ class Page extends BackendController
                                 foreach ($group['configs'] as $configKey => &$config) {
                                     // 如果页面有该配置的值，设置value字段
                                     if (isset($pageSettings[$configKey])) {
-                                        $config['value'] = $pageSettings[$configKey];
+                                        $savedValue = $pageSettings[$configKey];
+                                        
+                                        // 对于 select 类型，验证值是否在选项列表中
+                                        // 如果值不在选项中，使用默认值（修复元数据解析问题）
+                                        if ($config['type'] === 'select' && !empty($config['options'])) {
+                                            // 检查保存的值是否在选项列表中
+                                            if (!isset($config['options'][$savedValue])) {
+                                                // 值不在选项中，使用默认值
+                                                $config['value'] = $config['default'] ?? '';
+                                            } else {
+                                                // 值在选项中，使用保存的值
+                                                $config['value'] = $savedValue;
+                                            }
+                                        } else {
+                                            // 非 select 类型，直接使用保存的值
+                                            $config['value'] = $savedValue;
+                                        }
                                     }
                                 }
                             }
@@ -1050,7 +1123,7 @@ class Page extends BackendController
     public function preview()
     {
         $pageId = $this->request->getGet('id');
-        $locale = $this->request->getGet('locale', \Weline\Framework\Http\Cookie::getLang());
+        $locale = $this->request->getGet('locale', State::getLang());
         
         if (!$pageId) {
             $this->getMessageManager()->addError(__('页面ID不能为空！'));
