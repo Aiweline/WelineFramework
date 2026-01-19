@@ -14,7 +14,7 @@ class TagDependencyTest extends TestCore
 {
     private TagParser $tagParser;
 
-    protected function setUp(): void
+    public function setUp(): void
     {
         parent::setUp();
         $this->tagParser = new TagParser();

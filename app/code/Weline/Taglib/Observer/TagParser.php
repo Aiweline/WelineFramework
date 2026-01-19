@@ -13,107 +13,43 @@ declare(strict_types=1);
 
 namespace Weline\Taglib\Observer;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Taglib\Cache\TaglibCacheFactory;
+use Weline\Taglib\TaglibRegistry;
 
 class TagParser implements \Weline\Framework\Event\ObserverInterface
 {
-    /**
-     * @var CacheInterface
-     */
-    private CacheInterface $cache;
-
-    public function __construct()
-    {
-        $this->cache = ObjectManager::getInstance(TaglibCacheFactory::class);
-    }
-
     /**
      * @inheritDoc
      */
     public function execute(Event &$event): void
     {
         $frameworkTags = $event->getData('data')->getData('tags');
-        # 查找所有标签
-        $cache_key = 'Weline_Taglib_module_tags';
-        $modules_tags = $this->cache->get($cache_key);
-        if (empty($modules_tags)) {
-            $modules_tags = [];
-            $modules = Env::getInstance()->getActiveModules();
-            foreach ($modules as $module) {
-                $tags = glob($module['base_path'] . 'Taglib' . DS . '*.php');
-                foreach ($tags as $tag) {
-                    $tagF = rtrim($tag, '.php');
-                    $tagClass = str_replace(DS, '\\', str_replace($module['base_path'], $module['namespace_path'] . '\\', $tagF));
-                    $modules_tags[$module['name']][] = $tagClass;
-                }
-            }
-            $this->cache->set($cache_key, $modules_tags);
+        
+        // 从 generated/taglibs.php 直接读取标签配置（不扫描文件系统）
+        /** @var TaglibRegistry $registry */
+        $registry = ObjectManager::getInstance(TaglibRegistry::class);
+        $tags = $registry->getTags();
+        
+        if (empty($tags)) {
+            // 如果 generated/taglibs.php 为空，说明还没有运行 setup:upgrade
+            // 不再在请求生命周期中收集标签
+            return;
         }
         
-        // 收集所有标签数据
-        $module_tags = [];
-        foreach ($modules_tags as $module_name => $module_tag) {
-            foreach ($module_tag as $item) {
-                /**@var \Weline\Taglib\TaglibInterface $tagObject */
-                $tagObject = ObjectManager::getInstance($item);
-                if (!($tagObject instanceof \Weline\Taglib\TaglibInterface)) {
-                    throw new \Exception(__('标签类{ %{1} }必须继承自：\Weline\Taglib\TaglibInterface 接口, 标签文件：%{2}', [$tagObject::class, $item]));
-                }
-                
-                $tag_data = [];
-                if ($tagObject::tag()) {
-                    $tag_data['tag'] = $tagObject::tag();
-                }
-                if ($tagObject::attr()) {
-                    $tag_data['attr'] = $tagObject::attr();
-                }
-                if ($tagObject::tag_start()) {
-                    $tag_data['tag-start'] = $tagObject::tag_start();
-                }
-                if ($tagObject::tag_end()) {
-                    $tag_data['tag-end'] = $tagObject::tag_end();
-                }
-                if ($tagObject::callback()) {
-                    $tag_data['callback'] = $tagObject::callback();
-                }
-                if ($tagObject::tag_self_close()) {
-                    $tag_data['tag-self-close'] = $tagObject::tag_self_close();
-                }
-                if ($tagObject::tag_self_close_with_attrs()) {
-                    $tag_data['tag-self-close-with-attrs'] = $tagObject::tag_self_close_with_attrs();
-                }
-                
-                if ($tag_data) {
-                    $tag_data['is_custom'] = true;
-                    $tag_data['module_name'] = $module_name;
-                    $tag_data['doc'] = $tagObject::document();
-                    $tag_data['class'] = $tagObject::class;
-                    
-                    // 检查是否有parent()方法
-                    if (method_exists($tagObject, 'parent')) {
-                        $parentTag = $tagObject::parent();
-                        if ($parentTag) {
-                            // 支持多个父标签，用逗号分隔
-                            if (strpos($parentTag, ',') !== false) {
-                                $parentTags = array_map('trim', explode(',', $parentTag));
-                                $tag_data['parent'] = $parentTags;
-                            } else {
-                                $tag_data['parent'] = $parentTag;
-                            }
-                        }
-                    }
-                    
-                    $module_tags[$tagObject::name()] = $tag_data;
+        // 动态获取 callback（因为 Closure 无法序列化到文件中）
+        foreach ($tags as $tagName => &$tagData) {
+            if (isset($tagData['class']) && !isset($tagData['callback'])) {
+                $tagClass = $tagData['class'];
+                if (class_exists($tagClass) && method_exists($tagClass, 'callback')) {
+                    $tagData['callback'] = $tagClass::callback();
                 }
             }
         }
+        unset($tagData); // 解除引用
         
         // 对标签进行依赖排序
-        $sortedTags = $this->sortTagsByDependencies($module_tags);
+        $sortedTags = $this->sortTagsByDependencies($tags);
         
         if ($sortedTags) {
             $event->getData('data')->setData('tags', array_merge($frameworkTags, $sortedTags));

@@ -120,58 +120,141 @@ class Collect implements CommandInterface
         foreach ($modules_tags as $module_name => $module_tag) {
             foreach ($module_tag as $item) {
                 try {
-                    /**@var TaglibInterface $tagObject */
-                    $tagObject = ObjectManager::getInstance($item);
-                    if (!($tagObject instanceof TaglibInterface)) {
-                        $this->printing->warning(__('标签类 %{1} 必须实现 TaglibInterface 接口', [$item]));
+                    // 检查类是否存在并实现 TaglibInterface
+                    if (!class_exists($item)) {
                         continue;
                     }
                     
-                    $tag_data = [];
-                    if ($tagObject::tag()) {
-                        $tag_data['tag'] = $tagObject::tag();
-                    }
-                    if ($tagObject::attr()) {
-                        $tag_data['attr'] = $tagObject::attr();
-                    }
-                    if ($tagObject::tag_start()) {
-                        $tag_data['tag-start'] = $tagObject::tag_start();
-                    }
-                    if ($tagObject::tag_end()) {
-                        $tag_data['tag-end'] = $tagObject::tag_end();
-                    }
-                    if ($tagObject::callback()) {
-                        $tag_data['callback'] = $tagObject::callback();
-                    }
-                    if ($tagObject::tag_self_close()) {
-                        $tag_data['tag-self-close'] = $tagObject::tag_self_close();
-                    }
-                    if ($tagObject::tag_self_close_with_attrs()) {
-                        $tag_data['tag-self-close-with-attrs'] = $tagObject::tag_self_close_with_attrs();
+                    $refClass = new \ReflectionClass($item);
+                    if (!$refClass->implementsInterface(TaglibInterface::class)) {
+                        continue; // 跳过不符合接口的类
                     }
                     
-                    if ($tag_data) {
-                        $tag_data['is_custom'] = true;
-                        $tag_data['module_name'] = $module_name;
-                        $tag_data['doc'] = $tagObject::document();
-                        $tag_data['class'] = $tagObject::class;
-                        
-                        // 检查是否有parent()方法
-                        if (method_exists($tagObject, 'parent')) {
-                            $parentTag = $tagObject::parent();
-                            if ($parentTag) {
-                                // 支持多个父标签，用逗号分隔
-                                if (strpos($parentTag, ',') !== false) {
-                                    $parentTags = array_map('trim', explode(',', $parentTag));
-                                    $tag_data['parent'] = $parentTags;
-                                } else {
-                                    $tag_data['parent'] = $parentTag;
-                                }
+                    // 检查是否为静态类
+                    $isStaticClass = false;
+                    $constructor = $refClass->getConstructor();
+                    if (!$constructor || !$constructor->isPublic()) {
+                        // 检查所有公共方法是否都是静态的
+                        $methods = $refClass->getMethods(\ReflectionMethod::IS_PUBLIC);
+                        $allStatic = true;
+                        foreach ($methods as $method) {
+                            if (in_array($method->getName(), ['__construct', '__destruct', '__clone', '__wakeup', '__sleep'])) {
+                                continue;
+                            }
+                            if (!$method->isStatic()) {
+                                $allStatic = false;
+                                break;
                             }
                         }
+                        if ($allStatic && !empty($methods)) {
+                            $isStaticClass = true;
+                        }
+                    }
+                    
+                    // 对于静态类，直接使用类名调用静态方法；对于非静态类，尝试实例化
+                    if ($isStaticClass) {
+                        // 静态类：直接使用类名调用静态方法
+                        $tag_data = [];
+                        if ($item::tag()) {
+                            $tag_data['tag'] = $item::tag();
+                        }
+                        if ($item::attr()) {
+                            $tag_data['attr'] = $item::attr();
+                        }
+                        if ($item::tag_start()) {
+                            $tag_data['tag-start'] = $item::tag_start();
+                        }
+                        if ($item::tag_end()) {
+                            $tag_data['tag-end'] = $item::tag_end();
+                        }
+                        if ($item::callback()) {
+                            $tag_data['callback'] = $item::callback();
+                        }
+                        if ($item::tag_self_close()) {
+                            $tag_data['tag-self-close'] = $item::tag_self_close();
+                        }
+                        if ($item::tag_self_close_with_attrs()) {
+                            $tag_data['tag-self-close-with-attrs'] = $item::tag_self_close_with_attrs();
+                        }
                         
-                        $module_tags[$tagObject::name()] = $tag_data;
-                        $totalTags++;
+                        if ($tag_data) {
+                            $tag_data['is_custom'] = true;
+                            $tag_data['module_name'] = $module_name;
+                            $tag_data['doc'] = $item::document();
+                            $tag_data['class'] = $item;
+                            
+                            // 检查是否有parent()方法
+                            if (method_exists($item, 'parent')) {
+                                $parentTag = $item::parent();
+                                if ($parentTag) {
+                                    // 支持多个父标签，用逗号分隔
+                                    if (strpos($parentTag, ',') !== false) {
+                                        $parentTags = array_map('trim', explode(',', $parentTag));
+                                        $tag_data['parent'] = $parentTags;
+                                    } else {
+                                        $tag_data['parent'] = $parentTag;
+                                    }
+                                }
+                            }
+                            
+                            $module_tags[$item::name()] = $tag_data;
+                            $totalTags++;
+                        }
+                    } else {
+                        // 非静态类：尝试实例化
+                        /**@var TaglibInterface $tagObject */
+                        $tagObject = ObjectManager::getInstance($item);
+                        if (!($tagObject instanceof TaglibInterface)) {
+                            $this->printing->warning(__('标签类 %{1} 必须实现 TaglibInterface 接口', [$item]));
+                            continue;
+                        }
+                        
+                        $tag_data = [];
+                        if ($tagObject::tag()) {
+                            $tag_data['tag'] = $tagObject::tag();
+                        }
+                        if ($tagObject::attr()) {
+                            $tag_data['attr'] = $tagObject::attr();
+                        }
+                        if ($tagObject::tag_start()) {
+                            $tag_data['tag-start'] = $tagObject::tag_start();
+                        }
+                        if ($tagObject::tag_end()) {
+                            $tag_data['tag-end'] = $tagObject::tag_end();
+                        }
+                        if ($tagObject::callback()) {
+                            $tag_data['callback'] = $tagObject::callback();
+                        }
+                        if ($tagObject::tag_self_close()) {
+                            $tag_data['tag-self-close'] = $tagObject::tag_self_close();
+                        }
+                        if ($tagObject::tag_self_close_with_attrs()) {
+                            $tag_data['tag-self-close-with-attrs'] = $tagObject::tag_self_close_with_attrs();
+                        }
+                        
+                        if ($tag_data) {
+                            $tag_data['is_custom'] = true;
+                            $tag_data['module_name'] = $module_name;
+                            $tag_data['doc'] = $tagObject::document();
+                            $tag_data['class'] = $tagObject::class;
+                            
+                            // 检查是否有parent()方法
+                            if (method_exists($tagObject, 'parent')) {
+                                $parentTag = $tagObject::parent();
+                                if ($parentTag) {
+                                    // 支持多个父标签，用逗号分隔
+                                    if (strpos($parentTag, ',') !== false) {
+                                        $parentTags = array_map('trim', explode(',', $parentTag));
+                                        $tag_data['parent'] = $parentTags;
+                                    } else {
+                                        $tag_data['parent'] = $parentTag;
+                                    }
+                                }
+                            }
+                            
+                            $module_tags[$tagObject::name()] = $tag_data;
+                            $totalTags++;
+                        }
                     }
                 } catch (\Exception $e) {
                     $this->printing->warning(__('加载标签类 %{1} 失败：%{2}', [$item, $e->getMessage()]));
@@ -182,7 +265,51 @@ class Collect implements CommandInterface
         // 保存到缓存
         $this->cache->set($cache_key, $modules_tags);
         
+        // 生成 generated/taglibs.php 文件
+        $this->generateTaglibsFile($module_tags);
+        
         $this->printing->success(__('共收集到 %{1} 个标签', [$totalTags]));
+    }
+
+    /**
+     * 生成 generated/taglibs.php 文件
+     * @param array $module_tags 标签数据
+     * @return void
+     */
+    private function generateTaglibsFile(array $module_tags): void
+    {
+        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'taglibs.php';
+        $generatedDir = dirname($registryFile);
+        
+        // 确保 generated 目录存在
+        if (!is_dir($generatedDir)) {
+            mkdir($generatedDir, 0755, true);
+        }
+        
+        // 处理标签数据：移除 callback 闭包（无法序列化），在运行时动态获取
+        $serializableTags = [];
+        foreach ($module_tags as $tagName => $tagData) {
+            $serializableTagData = $tagData;
+            // 移除 callback 闭包，保留 class 信息以便运行时获取
+            if (isset($serializableTagData['callback'])) {
+                unset($serializableTagData['callback']);
+            }
+            $serializableTags[$tagName] = $serializableTagData;
+        }
+        
+        // 生成文件内容
+        $content = "<?php\n\n";
+        $content .= "declare(strict_types=1);\n\n";
+        $content .= "/*\n";
+        $content .= " * 本文件由标签库收集器自动生成，请勿手动修改\n";
+        $content .= " * 生成时间: " . date('Y-m-d H:i:s') . "\n";
+        $content .= " */\n\n";
+        $content .= "return [\n";
+        $content .= "    'tags' => " . var_export($serializableTags, true) . ",\n";
+        $content .= "];\n";
+        
+        // 写入文件
+        file_put_contents($registryFile, $content);
     }
 
     /**
@@ -228,20 +355,162 @@ class Collect implements CommandInterface
             $this->printing->printing(__('找到 %{1} 个标签', [count($tags)]));
         }
         
-        // 验证标签
+        // 验证和收集标签数据
         $validTags = 0;
+        $module_tags = [];
         foreach ($modules_tags[$moduleName] as $item) {
             try {
-                /**@var TaglibInterface $tagObject */
-                $tagObject = ObjectManager::getInstance($item);
-                if (!($tagObject instanceof TaglibInterface)) {
-                    $this->printing->warning(__('标签类 %{1} 必须实现 TaglibInterface 接口', [$item]));
+                // 检查类是否存在并实现 TaglibInterface
+                if (!class_exists($item)) {
                     continue;
                 }
-                $validTags++;
+                
+                $refClass = new \ReflectionClass($item);
+                if (!$refClass->implementsInterface(TaglibInterface::class)) {
+                    continue; // 跳过不符合接口的类
+                }
+                
+                // 检查是否为静态类
+                $isStaticClass = false;
+                $constructor = $refClass->getConstructor();
+                if (!$constructor || !$constructor->isPublic()) {
+                    // 检查所有公共方法是否都是静态的
+                    $methods = $refClass->getMethods(\ReflectionMethod::IS_PUBLIC);
+                    $allStatic = true;
+                    foreach ($methods as $method) {
+                        if (in_array($method->getName(), ['__construct', '__destruct', '__clone', '__wakeup', '__sleep'])) {
+                            continue;
+                        }
+                        if (!$method->isStatic()) {
+                            $allStatic = false;
+                            break;
+                        }
+                    }
+                    if ($allStatic && !empty($methods)) {
+                        $isStaticClass = true;
+                    }
+                }
+                
+                // 对于静态类，直接使用类名调用静态方法；对于非静态类，尝试实例化
+                if ($isStaticClass) {
+                    // 静态类：直接使用类名调用静态方法
+                    $tag_data = [];
+                    if ($item::tag()) {
+                        $tag_data['tag'] = $item::tag();
+                    }
+                    if ($item::attr()) {
+                        $tag_data['attr'] = $item::attr();
+                    }
+                    if ($item::tag_start()) {
+                        $tag_data['tag-start'] = $item::tag_start();
+                    }
+                    if ($item::tag_end()) {
+                        $tag_data['tag-end'] = $item::tag_end();
+                    }
+                    if ($item::callback()) {
+                        $tag_data['callback'] = $item::callback();
+                    }
+                    if ($item::tag_self_close()) {
+                        $tag_data['tag-self-close'] = $item::tag_self_close();
+                    }
+                    if ($item::tag_self_close_with_attrs()) {
+                        $tag_data['tag-self-close-with-attrs'] = $item::tag_self_close_with_attrs();
+                    }
+                    
+                    if ($tag_data) {
+                        $tag_data['is_custom'] = true;
+                        $tag_data['module_name'] = $moduleName;
+                        $tag_data['doc'] = $item::document();
+                        $tag_data['class'] = $item;
+                        
+                        // 检查是否有parent()方法
+                        if (method_exists($item, 'parent')) {
+                            $parentTag = $item::parent();
+                            if ($parentTag) {
+                                // 支持多个父标签，用逗号分隔
+                                if (strpos($parentTag, ',') !== false) {
+                                    $parentTags = array_map('trim', explode(',', $parentTag));
+                                    $tag_data['parent'] = $parentTags;
+                                } else {
+                                    $tag_data['parent'] = $parentTag;
+                                }
+                            }
+                        }
+                        
+                        $module_tags[$item::name()] = $tag_data;
+                        $validTags++;
+                    }
+                } else {
+                    // 非静态类：尝试实例化
+                    /**@var TaglibInterface $tagObject */
+                    $tagObject = ObjectManager::getInstance($item);
+                    if (!($tagObject instanceof TaglibInterface)) {
+                        $this->printing->warning(__('标签类 %{1} 必须实现 TaglibInterface 接口', [$item]));
+                        continue;
+                    }
+                    
+                    $tag_data = [];
+                    if ($tagObject::tag()) {
+                        $tag_data['tag'] = $tagObject::tag();
+                    }
+                    if ($tagObject::attr()) {
+                        $tag_data['attr'] = $tagObject::attr();
+                    }
+                    if ($tagObject::tag_start()) {
+                        $tag_data['tag-start'] = $tagObject::tag_start();
+                    }
+                    if ($tagObject::tag_end()) {
+                        $tag_data['tag-end'] = $tagObject::tag_end();
+                    }
+                    if ($tagObject::callback()) {
+                        $tag_data['callback'] = $tagObject::callback();
+                    }
+                    if ($tagObject::tag_self_close()) {
+                        $tag_data['tag-self-close'] = $tagObject::tag_self_close();
+                    }
+                    if ($tagObject::tag_self_close_with_attrs()) {
+                        $tag_data['tag-self-close-with-attrs'] = $tagObject::tag_self_close_with_attrs();
+                    }
+                    
+                    if ($tag_data) {
+                        $tag_data['is_custom'] = true;
+                        $tag_data['module_name'] = $moduleName;
+                        $tag_data['doc'] = $tagObject::document();
+                        $tag_data['class'] = $tagObject::class;
+                        
+                        // 检查是否有parent()方法
+                        if (method_exists($tagObject, 'parent')) {
+                            $parentTag = $tagObject::parent();
+                            if ($parentTag) {
+                                // 支持多个父标签，用逗号分隔
+                                if (strpos($parentTag, ',') !== false) {
+                                    $parentTags = array_map('trim', explode(',', $parentTag));
+                                    $tag_data['parent'] = $parentTags;
+                                } else {
+                                    $tag_data['parent'] = $parentTag;
+                                }
+                            }
+                        }
+                        
+                        $module_tags[$tagObject::name()] = $tag_data;
+                        $validTags++;
+                    }
+                }
             } catch (\Exception $e) {
                 $this->printing->warning(__('加载标签类 %{1} 失败：%{2}', [$item, $e->getMessage()]));
             }
+        }
+        
+        // 更新缓存中的标签数据
+        if (!empty($module_tags)) {
+            $modules_tags[$moduleName] = array_keys($module_tags);
+            $this->cache->set($cache_key, $modules_tags);
+            
+            // 同时保存标签详细数据到另一个缓存键
+            $tags_detail_key = 'Weline_Taglib_tags_detail';
+            $tags_detail = $this->cache->get($tags_detail_key) ?? [];
+            $tags_detail = array_merge($tags_detail, $module_tags);
+            $this->cache->set($tags_detail_key, $tags_detail);
         }
         
         // 保存到缓存
