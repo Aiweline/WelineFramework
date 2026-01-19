@@ -1,0 +1,226 @@
+<?php
+/**
+ * 后台配置页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $configs
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$configs = $configs ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>后台配置</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><lang>后台配置</lang></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 配置表单 -->
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>后台配置</lang></h4>
+                                
+                                <form id="configForm" onsubmit="saveConfig(event)">
+                                    <!-- Logo配置 -->
+                                    <div class="mb-4">
+                                        <h5 class="mb-3"><lang>Logo配置</lang></h5>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label"><lang>深色Logo（大图）</lang></label>
+                                                    <input type="hidden" class="form-control" id="logo_dark" name="config[logo_dark]" 
+                                                           value="<?= htmlspecialchars($configs['logo_dark'] ?? '') ?>">
+                                                    <file-manager target='#logo_dark'
+                                                                  title='<?= __('选择深色Logo') ?>'
+                                                                  vars='config'
+                                                                  preview="1"
+                                                                  path='backend/logo/'
+                                                                  value='<?= htmlspecialchars($configs['logo_dark'] ?? '') ?>'
+                                                                  multi='0'
+                                                                  ext="jpg,jpeg,png,gif,webp,svg"
+                                                                  size="2048000"
+                                                                  w='70'
+                                                                  h='70'/>
+                                                    <small class="form-text text-muted">
+                                                        <lang>用于深色主题的大尺寸Logo，建议高度70px</lang>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label"><lang>浅色Logo（大图）</lang></label>
+                                                    <input type="hidden" class="form-control" id="logo_light" name="config[logo_light]" 
+                                                           value="<?= htmlspecialchars($configs['logo_light'] ?? '') ?>">
+                                                    <file-manager target='#logo_light'
+                                                                  title='<?= __('选择浅色Logo') ?>'
+                                                                  vars='config'
+                                                                  preview="1"
+                                                                  path='backend/logo/'
+                                                                  value='<?= htmlspecialchars($configs['logo_light'] ?? '') ?>'
+                                                                  multi='0'
+                                                                  ext="jpg,jpeg,png,gif,webp,svg"
+                                                                  size="2048000"
+                                                                  w='70'
+                                                                  h='70'/>
+                                                    <small class="form-text text-muted">
+                                                        <lang>用于浅色主题的大尺寸Logo，建议高度70px</lang>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label"><lang>小Logo</lang></label>
+                                                    <input type="hidden" class="form-control" id="logo_sm" name="config[logo_sm]" 
+                                                           value="<?= htmlspecialchars($configs['logo_sm'] ?? '') ?>">
+                                                    <file-manager target='#logo_sm'
+                                                                  title='<?= __('选择小Logo') ?>'
+                                                                  vars='config'
+                                                                  preview="1"
+                                                                  path='backend/logo/'
+                                                                  value='<?= htmlspecialchars($configs['logo_sm'] ?? '') ?>'
+                                                                  multi='0'
+                                                                  ext="jpg,jpeg,png,gif,webp,svg"
+                                                                  size="2048000"
+                                                                  w='50'
+                                                                  h='50'/>
+                                                    <small class="form-text text-muted">
+                                                        <lang>用于侧边栏折叠时的小尺寸Logo，建议高度50px</lang>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <!-- 站点信息配置 -->
+                                    <div class="mb-4">
+                                        <h5 class="mb-3"><lang>站点信息</lang></h5>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label"><lang>站点名称</lang></label>
+                                                    <input type="text" class="form-control" name="config[site_name]" 
+                                                           value="<?= htmlspecialchars($configs['site_name'] ?? '') ?>">
+                                                    <small class="form-text text-muted">
+                                                        <lang>后台管理系统的名称</lang>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label class="form-label"><lang>站点描述</lang></label>
+                                                    <input type="text" class="form-control" name="config[site_description]" 
+                                                           value="<?= htmlspecialchars($configs['site_description'] ?? '') ?>">
+                                                    <small class="form-text text-muted">
+                                                        <lang>后台管理系统的描述信息</lang>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="mdi mdi-content-save me-2"></i><lang>保存配置</lang>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary ms-2" onclick="resetForm()">
+                                            <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+<script>
+function saveConfig(event) {
+    event.preventDefault();
+    const form = document.getElementById('configForm');
+    const formData = new FormData(form);
+    const data = {};
+    
+    // 将FormData转换为对象
+    for (let [key, value] of formData.entries()) {
+        if (key.startsWith('config[')) {
+            const configKey = key.match(/config\[(.*?)\]/)[1];
+            data['config[' + configKey + ']'] = value;
+        } else {
+            data[key] = value;
+        }
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/config/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showPageMessage('success', data.message);
+            // 延迟刷新页面以显示更新后的配置
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showPageMessage('error', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showPageMessage('error', '<?= __('保存失败') ?>');
+    });
+}
+
+function resetForm() {
+    if (confirm('<?= __('确定要重置表单吗？') ?>')) {
+        document.getElementById('configForm').reset();
+    }
+}
+</script>
+
+</body>
+</html>
