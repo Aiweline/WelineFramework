@@ -51,7 +51,11 @@ class ReindexCollector implements \Weline\Framework\Event\ObserverInterface
                 if (class_exists($model)) {
                     // 抽象类不能被实例化，这里跳过
                     $reflection = new \ReflectionClass($model);
-                    if ($reflection->isAbstract()) {
+                    if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                        continue;
+                    }
+                    // 检查是否为静态类
+                    if (ObjectManager::isStaticClass($model)) {
                         continue;
                     }
                     $model = ObjectManager::getInstance($model);
