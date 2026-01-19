@@ -150,6 +150,10 @@ $isNew = !$status || !$status->getId();
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('status-form');
@@ -165,15 +169,45 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || '<?= __('保存成功') ?>');
-                location.href = '<?= $this->getBackendUrl("order/backend/status/index") ?>';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('成功') ?>',
+                        text: data.message || '<?= __('保存成功') ?>',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.href = '<?= $this->getBackendUrl("order/backend/status/index") ?>';
+                    });
+                } else {
+                    console.log(data.message || '<?= __('保存成功') ?>');
+                    location.href = '<?= $this->getBackendUrl("order/backend/status/index") ?>';
+                }
             } else {
-                alert(data.message || '<?= __('保存失败') ?>');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('保存失败') ?>',
+                        text: data.message || '<?= __('保存失败') ?>',
+                        confirmButtonText: '<?= __('确定') ?>'
+                    });
+                } else {
+                    console.error(data.message || '<?= __('保存失败') ?>');
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __('保存失败') ?>');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('保存失败') ?>',
+                    text: '<?= __('请重试') ?>',
+                    confirmButtonText: '<?= __('确定') ?>'
+                });
+            } else {
+                console.error('<?= __('保存失败') ?>');
+            }
         });
     });
 });
