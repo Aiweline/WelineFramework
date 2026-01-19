@@ -288,6 +288,10 @@ $filters = $this->getData('filters') ?? [];
     </div>
 </div>
 
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function toggleSelectAll() {
     const selectAll = document.getElementById('select-all');
@@ -300,7 +304,16 @@ function toggleSelectAll() {
 function batchDelete() {
     const checked = document.querySelectorAll('.record-checkbox:checked');
     if (checked.length === 0) {
-        alert('<?= __('请选择要删除的记录') ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择要删除的记录') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请选择要删除的记录') ?>');
+        }
         return;
     }
     
