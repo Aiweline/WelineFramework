@@ -70,7 +70,6 @@ class Edit extends BackendController
                     }
                 }
             }
-//            dd($setAttributes);
             $this->assign('setAttributes', $setAttributes);
             # 如果是可配置产品
             // 产品分类

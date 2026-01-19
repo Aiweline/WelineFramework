@@ -279,19 +279,32 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     </div>
                                 </div>
                             </div>
+                            <!-- EAV 属性设置 -->
+                            <div class='row'>
+                                <div class='col-12'>
+                                    <h5 class='mb-3'><lang>分类属性设置</lang></h5>
+                                </div>
+                                <div class='col-md-6'>
+                                    <div class='mb-4'>
+                                        <div class='form-check form-switch'>
+                                            <input class='form-check-input' type='checkbox' name='is_right_menu' id='validationIsRightMenu' 
+                                                   value='1' <if condition="category.is_right_menu == 1">checked</if>>
+                                            <label class='form-check-label' for='validationIsRightMenu'>
+                                                <lang>标记为右侧菜单分类</lang>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted"><lang>勾选后，此分类将显示在页面右侧菜单中</lang></small>
+                                    </div>
+                                </div>
+                            </div>
                             <button class='btn btn-primary' type='submit'>
                                 <empty
                                     name='category'>
                                     <lang>添加</lang>
                                     <else/>
-                                    <lang>编辑</lang>
+                                    <lang>保存</lang>
                                 </empty>
                             </button>
-                            <notempty name='category'>
-                                <a class='btn btn-info' href="@backend-url('*/backend/category/add')">
-                                    <lang>继续新增</lang>
-                                </a>
-                            </notempty>
                         </form>
                     </div>
                 </div>
