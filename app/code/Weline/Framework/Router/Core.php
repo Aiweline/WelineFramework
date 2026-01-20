@@ -516,7 +516,6 @@ class Core
             $this->header_cache($fileModificationTime, $filename);
 
             $filename_arr = explode('.', $filename);
-            dd($filename_arr);
             $file_ext = end($filename_arr);
             if ($file_ext === 'css') {
                 $mime_type = 'text/css';

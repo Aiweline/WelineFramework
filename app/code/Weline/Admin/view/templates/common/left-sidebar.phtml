@@ -85,8 +85,8 @@ if ($dataLayout !== 'horizontal'):
 
                     <!-- Tab内容区域（正常状态下显示） -->
                     <div class="menu-tabs-content">
-                        <!-- 搜索结果区域（搜索时显示） -->
-                        <div class="search-results-container" id="search-results-container" style="display: none;">
+                         搜索结果区域（搜索时显示）
+                         <div class="search-results-container" id="search-results-container" style="display: none;">
                             <!-- 搜索结果提示 -->
                             <div class="search-results-header px-3 py-2" id="search-results-header">
                                 <h6 class="mb-0 text-muted fw-semibold">
@@ -97,105 +97,109 @@ if ($dataLayout !== 'horizontal'):
                             <!-- 搜索结果列表 -->
                             <div class="search-results-list" id="search-results-list"></div>
                         </div>
+                        <!-- 常用菜单Tab内容（默认收起） -->
+
 
                         <!-- 常用菜单Tab内容（默认收起） -->
                         <div class="menu-tab-pane" id="frequent-tab-pane" style="display: none;">
-                <?php
-                if ($hasFrequentMenus):
-                ?>
-                            <div class="frequent-menus-section" id="frequent-menus-section">
-                                <?php if (!empty($recentMenus)): ?>
-                                <!-- 最近访问分组 -->
-                                <div class="frequent-menu-group">
-                                    <div class="frequent-menu-group-header px-3 py-2">
-                                        <h6 class="mb-0 fw-semibold">
-                                            <i class="mdi mdi-clock-outline me-2"></i>
-                                            <?php echo __('最近访问'); ?>
-                                        </h6>
-                                    </div>
-                                    <div class="frequent-menus-list" style="max-height: 200px; overflow-y: auto;">
-                                        <ul class="list-unstyled mb-0">
-                                            <?php foreach ($recentMenus as $recentMenu):
-                                                $aclData = $recentMenu['acl_data'];
-                                                $url_prefix = ($aclData['is_backend'] ?? true) ? $backend_url_prefix : '/';
-                                                $url_prefix = rtrim($url_prefix, '/');
-                                                $menuUrl = $url_prefix . '/' . ($aclData['route'] ?? '');
-                                                $menuName = __($aclData['source_name'] ?? '');
-                                                $menuIcon = $aclData['icon'] ?? 'mdi mdi-circle';
-                                            ?>
-                                                <li class="frequent-menu-item">
-                                                    <a href="<?php echo htmlspecialchars($menuUrl); ?>" 
-                                                       data-source="<?php echo htmlspecialchars($recentMenu['source_id']); ?>" 
-                                                       class="d-flex align-items-center px-3 py-2 waves-effect">
-                                                        <i class="<?php echo htmlspecialchars($menuIcon); ?> me-2"></i>
-                                                        <span><?php echo htmlspecialchars($menuName); ?></span>
-                                                    </a>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
+                        <?php
+                            if ($hasFrequentMenus):
+                        ?>
+                                <div class="frequent-menus-section" id="frequent-menus-section">
+                                        <?php if (!empty($recentMenus)): ?>
+                                        <!-- 最近访问分组 -->
+                                        <div class="frequent-menu-group">
+                                            <div class="frequent-menu-group-header px-3 py-2">
+                                                <h6 class="mb-0 fw-semibold">
+                                                    <i class="mdi mdi-clock-outline me-2"></i>
+                                                    <?php echo __('最近访问'); ?>
+                                                </h6>
+                                            </div>
+                                            <div class="frequent-menus-list" style="max-height: 200px; overflow-y: auto;">
+                                                <ul class="list-unstyled mb-0">
+                                                    <?php foreach ($recentMenus as $recentMenu):
+                                                        $aclData = $recentMenu['acl_data'];
+                                                        $url_prefix = ($aclData['is_backend'] ?? true) ? $backend_url_prefix : '/';
+                                                        $url_prefix = rtrim($url_prefix, '/');
+                                                        $menuUrl = $url_prefix . '/' . ($aclData['route'] ?? '');
+                                                        $menuName = __($aclData['source_name'] ?? '');
+                                                        $menuIcon = $aclData['icon'] ?? 'mdi mdi-circle';
+                                                    ?>
+                                                        <li class="frequent-menu-item">
+                                                            <a href="<?php echo htmlspecialchars($menuUrl); ?>" 
+                                                            data-source="<?php echo htmlspecialchars($recentMenu['source_id']); ?>" 
+                                                            class="d-flex align-items-center px-3 py-2 waves-effect">
+                                                                <i class="<?php echo htmlspecialchars($menuIcon); ?> me-2"></i>
+                                                                <span><?php echo htmlspecialchars($menuName); ?></span>
+                                                            </a>
+                                                        </li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($frequentMenus)): ?>
+                                        <!-- 访问次数最多分组 -->
+                                        <div class="frequent-menu-group">
+                                            <div class="frequent-menu-group-header px-3 py-2">
+                                                <h6 class="mb-0 fw-semibold">
+                                                    <i class="mdi mdi-fire me-2"></i>
+                                                    <?php echo __('访问最多'); ?>
+                                                </h6>
+                                            </div>
+                                            <div class="frequent-menus-list" style="max-height: 200px; overflow-y: auto;">
+                                                <ul class="list-unstyled mb-0">
+                                                    <?php foreach ($frequentMenus as $frequentMenu):
+                                                        $aclData = $frequentMenu['acl_data'];
+                                                        $url_prefix = ($aclData['is_backend'] ?? true) ? $backend_url_prefix : '/';
+                                                        $url_prefix = rtrim($url_prefix, '/');
+                                                        $menuUrl = $url_prefix . '/' . ($aclData['route'] ?? '');
+                                                        $menuName = __($aclData['source_name'] ?? '');
+                                                        $menuIcon = $aclData['icon'] ?? 'mdi mdi-circle';
+                                                        $accessCount = $frequentMenu['access_count'] ?? 0;
+                                                        
+                                                        // 格式化访问次数显示
+                                                        $formattedCount = '';
+                                                        if ($accessCount >= 1000000) {
+                                                            $formattedCount = number_format($accessCount / 1000000, 1, '.', '') . 'M';
+                                                        } elseif ($accessCount >= 1000) {
+                                                            $formattedCount = number_format($accessCount / 1000, 1, '.', '') . 'K';
+                                                        } else {
+                                                            $formattedCount = (string)$accessCount;
+                                                        }
+                                                    ?>
+                                                        <li class="frequent-menu-item">
+                                                            <a href="<?php echo htmlspecialchars($menuUrl); ?>" 
+                                                            data-source="<?php echo htmlspecialchars($frequentMenu['source_id']); ?>" 
+                                                            class="d-flex align-items-center justify-content-between px-3 py-2 waves-effect">
+                                                                <span class="d-flex align-items-center flex-grow-1">
+                                                                    <i class="<?php echo htmlspecialchars($menuIcon); ?> me-2"></i>
+                                                                    <span><?php echo htmlspecialchars($menuName); ?></span>
+                                                                </span>
+                                                                <span class="frequent-menu-count ms-2" title="<?php echo __('访问次数: ' . number_format($accessCount)); ?>">
+                                                                    <?php echo htmlspecialchars($formattedCount); ?>
+                                                                </span>
+                                                            </a>
+                                                        </li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($frequentMenus)): ?>
-                                <!-- 访问次数最多分组 -->
-                                <div class="frequent-menu-group">
-                                    <div class="frequent-menu-group-header px-3 py-2">
-                                        <h6 class="mb-0 fw-semibold">
-                                            <i class="mdi mdi-fire me-2"></i>
-                                            <?php echo __('访问最多'); ?>
-                                        </h6>
-                                    </div>
-                                    <div class="frequent-menus-list" style="max-height: 200px; overflow-y: auto;">
-                                        <ul class="list-unstyled mb-0">
-                                            <?php foreach ($frequentMenus as $frequentMenu):
-                                                $aclData = $frequentMenu['acl_data'];
-                                                $url_prefix = ($aclData['is_backend'] ?? true) ? $backend_url_prefix : '/';
-                                                $url_prefix = rtrim($url_prefix, '/');
-                                                $menuUrl = $url_prefix . '/' . ($aclData['route'] ?? '');
-                                                $menuName = __($aclData['source_name'] ?? '');
-                                                $menuIcon = $aclData['icon'] ?? 'mdi mdi-circle';
-                                                $accessCount = $frequentMenu['access_count'] ?? 0;
-                                                
-                                                // 格式化访问次数显示
-                                                $formattedCount = '';
-                                                if ($accessCount >= 1000000) {
-                                                    $formattedCount = number_format($accessCount / 1000000, 1, '.', '') . 'M';
-                                                } elseif ($accessCount >= 1000) {
-                                                    $formattedCount = number_format($accessCount / 1000, 1, '.', '') . 'K';
-                                                } else {
-                                                    $formattedCount = (string)$accessCount;
-                                                }
-                                            ?>
-                                                <li class="frequent-menu-item">
-                                                    <a href="<?php echo htmlspecialchars($menuUrl); ?>" 
-                                                       data-source="<?php echo htmlspecialchars($frequentMenu['source_id']); ?>" 
-                                                       class="d-flex align-items-center justify-content-between px-3 py-2 waves-effect">
-                                                        <span class="d-flex align-items-center flex-grow-1">
-                                                            <i class="<?php echo htmlspecialchars($menuIcon); ?> me-2"></i>
-                                                            <span><?php echo htmlspecialchars($menuName); ?></span>
-                                                        </span>
-                                                        <span class="frequent-menu-count ms-2" title="<?php echo __('访问次数: ' . number_format($accessCount)); ?>">
-                                                            <?php echo htmlspecialchars($formattedCount); ?>
-                                                        </span>
-                                                    </a>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <?php endif; ?>
-                            </div>
+                        <?php 
+                            endif;
+                        ?>
                         </div>
-                <?php 
-                    endif;
-                ?>
+
                     </div>
                 </div>
                 <!-- 悬浮区域结束 -->
 
                 <!-- Left Menu Start -->
-                <ul class="metismenu list-unstyled" id="sidebar-menu">
+                <ul class="metismenu list-unstyled" id="side-menu">
                     <!-- 搜索菜单项（以菜单形式实现，折叠状态下hover展开） -->
                     <li class="menu-search-item" id="menu-search-item" data-source="menu-search">
                         <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-search-link">

@@ -45,6 +45,26 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public string $group_by = '';
     public string $having = '';
 
+    /**
+     * 小型 AST，用来描述当前 Query 的结构，方便方言化编译。
+     * 结构类似：
+     * [
+     *   'action' => 'select'|'insert'|'update'|'delete',
+     *   'from'   => ['table' => 'm_demo', 'alias' => 'main_table'],
+     *   'select' => ['fields' => 'main_table.*'],
+     *   'joins'  => [...],
+     *   'where'  => [...],
+     *   'group'  => '...',
+     *   'having' => '...',
+     *   'order'  => [...],
+     *   'limit'  => ' LIMIT ... OFFSET ...',
+     *   'extra'  => $this->additional_sql,
+     *   'insert' => $this->insert,
+     *   'update' => ['single' => $this->single_updates, 'batch' => $this->updates],
+     * ]
+     */
+    protected array $ast = [];
+
     public ?\PDOStatement $PDOStatement = null;
     public string $sql = '';
     public string $additional_sql = '';
@@ -527,8 +547,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
 
     /**
-     * 🔧 重写：完全按照 PostgreSQL 语法构建 SQL
-     * 不使用父类的 dialectAdapter，直接构建 PostgreSQL 兼容的 SQL
+     * 🔧 重写：完全按照 PostgreSQL 语法构建 SQL（方言逻辑集中在本类）
+     * 先构建一个简单 AST，再按 PgSQL 规则编译成 SQL。
      * 使用 private 确保覆盖 trait 中的 private prepareSql 方法
      */
     private function prepareSql(string $action): void
@@ -540,42 +560,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // 重新排序 where 条件（按索引优化）
         $this->reorderWhereByIndexes();
 
-        // 格式化表名（使用 PostgreSQL 双引号）
-        $table = $this->formatTableNameForPgsql($this->table);
-        $alias = $this->table_alias ? 'AS "' . $this->table_alias . '"' : '';
+        // 1. 构建小 AST（结构化描述当前查询）
+        $this->buildAst($action);
 
-        // 构建各个 SQL 部分
-        $joins = $this->buildJoinsForPgsql();
-        $wheres = $this->buildWheresForPgsql();
-        $order = $this->buildOrderForPgsql();
-        $groupBy = $this->group_by ? 'GROUP BY ' . $this->normalizeSql($this->group_by) : '';
-        $having = $this->having ? 'HAVING ' . $this->normalizeSql($this->having) : '';
+        // 2. 基于 AST 按 PostgreSQL 方言编译 SQL
+        $this->sql = $this->compileAstToPgsqlSql();
 
-        // 根据操作类型构建 SQL
-        switch ($action) {
-            case 'insert':
-                $this->sql = $this->buildInsertForPgsql($table);
-                break;
-            case 'delete':
-                // 🔧 修复：additional_sql 已经在 additional() 方法中标准化了
-                $this->sql = "DELETE FROM {$table} {$wheres} {$this->additional_sql}";
-                break;
-            case 'update':
-                $this->sql = $this->buildUpdateForPgsql($table, $wheres);
-                break;
-            case 'find':
-            case 'select':
-            default:
-                // 格式化字段列表
-                $fields = $this->formatFieldsForPgsql($this->fields);
-                $this->sql = "SELECT {$fields} FROM {$table} {$alias} {$joins} {$wheres} {$groupBy} {$having} {$this->additional_sql} {$order} {$this->limit}";
-                break;
-        }
-
-        // 规范化 SQL（转换反引号、MySQL 函数等）
+        // 3. 规范化 SQL（转换反引号、MySQL 函数等）
         $this->sql = $this->normalizeSql($this->sql);
         
-        // 🔧 修复：在执行前验证并修复 WHERE 子句中的语法错误
+        // 4. 在执行前验证并修复 WHERE 子句中的语法错误
         // 移除末尾的 " AND)" 或 " OR)" 这种语法错误
         $this->sql = preg_replace('/\s+(AND|OR)\s*\)\s*(LIMIT|ORDER|GROUP|HAVING|$)/i', ') $2', $this->sql);
         // 移除末尾的 " AND" 或 " OR"（不在括号内的情况）
@@ -584,11 +578,78 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->sql = preg_replace('/\s+/', ' ', $this->sql);
         $this->sql = trim($this->sql);
 
-        // 如果 SQL 不为空，准备语句
+        // 5. 如果 SQL 不为空，准备语句
         if (!empty($this->sql)) {
             $this->PDOStatement = $this->preparePgsql($this->sql);
         } else {
             $this->PDOStatement = null;
+        }
+    }
+
+    /**
+     * 构建当前查询的小型 AST 结构，尽量保持与属性一一对应。
+     */
+    protected function buildAst(string $action): void
+    {
+        $this->ast = [
+            'action' => $action,
+            'from'   => [
+                'table' => $this->table,
+                'alias' => $this->table_alias,
+            ],
+            'select' => [
+                'fields' => $this->fields,
+            ],
+            'joins'  => $this->joins,
+            'where'  => $this->wheres,
+            'group'  => $this->group_by,
+            'having' => $this->having,
+            'order'  => $this->order,
+            'limit'  => $this->limit,
+            'extra'  => $this->additional_sql,
+            'insert' => $this->insert,
+            'update' => [
+                'single' => $this->single_updates,
+                'batch'  => $this->updates,
+            ],
+        ];
+    }
+
+    /**
+     * 将 AST 编译成 PostgreSQL SQL。
+     * 目前内部仍然复用原有的 build*ForPgsql 方法，只是多了一层结构化描述，方便以后按 Doctrine 风格继续演进。
+     */
+    protected function compileAstToPgsqlSql(): string
+    {
+        $action = $this->ast['action'] ?? 'select';
+
+        // 格式化表名（使用 PostgreSQL 双引号）
+        $table = $this->formatTableNameForPgsql($this->ast['from']['table'] ?? $this->table);
+        $aliasName = $this->ast['from']['alias'] ?? $this->table_alias;
+        $alias = $aliasName ? 'AS "' . $aliasName . '"' : '';
+
+        // 构建各个 SQL 部分
+        $joins   = $this->buildJoinsForPgsql();
+        $wheres  = $this->buildWheresForPgsql();
+        $order   = $this->buildOrderForPgsql();
+        $groupBy = $this->ast['group'] ? 'GROUP BY ' . $this->normalizeSql($this->ast['group']) : '';
+        $having  = $this->ast['having'] ? 'HAVING ' . $this->normalizeSql($this->ast['having']) : '';
+        $extra   = $this->ast['extra'] ?? $this->additional_sql;
+
+        switch ($action) {
+            case 'insert':
+                return $this->buildInsertForPgsql($table);
+            case 'delete':
+                // 🔧 修复：additional_sql 已经在 additional() 方法中标准化了
+                return "DELETE FROM {$table} {$wheres} {$extra}";
+            case 'update':
+                return $this->buildUpdateForPgsql($table, $wheres);
+            case 'find':
+            case 'select':
+            default:
+                // 格式化字段列表
+                $fields = $this->formatFieldsForPgsql($this->ast['select']['fields'] ?? $this->fields);
+                return "SELECT {$fields} FROM {$table} {$alias} {$joins} {$wheres} {$groupBy} {$having} {$extra} {$order} {$this->limit}";
         }
     }
 
@@ -1515,7 +1576,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public function getPrepareSql(bool $format = false): string
     {
         $sql = $this->sql;
-        
         // 处理 SHOW FULL COLUMNS FROM 语法（MySQL 特有，需要转换为 PostgreSQL 兼容的查询）
         $sql = self::convertShowColumnsToInformationSchema($sql);
         
@@ -1539,6 +1599,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if ($format) {
             return \SqlFormatter::format($sql);
         }
+        
         return $sql;
     }
     
@@ -1807,114 +1868,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $convertedParams;
     }
     
-    /**
-     * 包装 PDOStatement，添加 nextRowset() 支持
-     * PostgreSQL 不支持多结果集，所以 nextRowset() 总是返回 false
-     * 
-     * @param \PDOStatement $stmt 原始 PDOStatement
-     * @param string $originalQuery 原始 SQL 查询
-     * @return \PDOStatement 包装后的 PDOStatement
-     */
-    protected function wrapPDOStatement(\PDOStatement $stmt, string $originalQuery = ''): \PDOStatement
-    {
-        $pdo = $this->getLink(); // 使用闭包捕获 PDO
-        return new class($stmt, $originalQuery, $pdo) extends \PDOStatement {
-            private \PDOStatement $stmt;
-            private string $originalQuery;
-            private ?\PDO $pdo;
-            
-            public function __construct(\PDOStatement $stmt, string $originalQuery = '', ?\PDO $pdo = null) {
-                $this->stmt = $stmt;
-                $this->originalQuery = $originalQuery;
-                $this->pdo = $pdo;
-            }
-            
-            /**
-             * PostgreSQL 不支持多结果集，所以 nextRowset() 总是返回 false
-             */
-            public function nextRowset(): bool {
-                return false;
-            }
-            
-            // 代理所有其他 PDOStatement 方法
-            public function __call(string $name, array $arguments) {
-                return $this->stmt->$name(...$arguments);
-            }
-            
-            // 实现 PDOStatement 接口的必要方法
-            public function execute(?array $params = null): bool {
-                return $this->stmt->execute($params);
-            }
-            
-            public function fetch(int $mode = \PDO::FETCH_DEFAULT, int $cursorOrientation = \PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed {
-                return $this->stmt->fetch($mode, $cursorOrientation, $cursorOffset);
-            }
-            
-            public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array {
-                return $this->stmt->fetchAll($mode, ...$args);
-            }
-            
-            public function fetchColumn(int $column = 0): mixed {
-                return $this->stmt->fetchColumn($column);
-            }
-            
-            public function bindParam(string|int $param, mixed &$var, int $type = \PDO::PARAM_STR, int $maxLength = 0, mixed $driverOptions = null): bool {
-                return $this->stmt->bindParam($param, $var, $type, $maxLength, $driverOptions);
-            }
-            
-            public function bindValue(string|int $param, mixed $value, int $type = \PDO::PARAM_STR): bool {
-                return $this->stmt->bindValue($param, $value, $type);
-            }
-            
-            public function bindColumn(string|int $column, mixed &$var, int $type = \PDO::PARAM_STR, int $maxLength = 0, mixed $driverOptions = null): bool {
-                return $this->stmt->bindColumn($column, $var, $type, $maxLength, $driverOptions);
-            }
-            
-            public function rowCount(): int {
-                return $this->stmt->rowCount();
-            }
-            
-            public function errorCode(): ?string {
-                return $this->stmt->errorCode();
-            }
-            
-            public function errorInfo(): array {
-                return $this->stmt->errorInfo();
-            }
-            
-            public function setAttribute(int $attribute, mixed $value): bool {
-                return $this->stmt->setAttribute($attribute, $value);
-            }
-            
-            public function getAttribute(int $name): mixed {
-                return $this->stmt->getAttribute($name);
-            }
-            
-            public function columnCount(): int {
-                return $this->stmt->columnCount();
-            }
-            
-            public function getColumnMeta(int $column): array|false {
-                return $this->stmt->getColumnMeta($column);
-            }
-            
-            public function setFetchMode(int $mode, mixed ...$args): true {
-                return $this->stmt->setFetchMode($mode, ...$args);
-            }
-            
-            public function fetchObject(?string $class = "stdClass", array $constructorArgs = []): object|false {
-                return $this->stmt->fetchObject($class, $constructorArgs);
-            }
-            
-            public function closeCursor(): bool {
-                return $this->stmt->closeCursor();
-            }
-            
-            public function debugDumpParams(): ?bool {
-                return $this->stmt->debugDumpParams();
-            }
-        };
-    }
     
     /**
      * PostgreSQL 适配的 prepare 方法
@@ -1981,8 +1934,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return false;
         }
         
-        // 🔧 修复：返回包装的 PDOStatement，实现 nextRowset() 方法
-        return $this->wrapPDOStatement($stmt, $sql);
+        // 直接返回原始 PDOStatement
+        return $stmt;
     }
     
     /**
@@ -2020,8 +1973,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return false;
         }
         
-        // 🔧 修复：返回包装的 PDOStatement，实现 nextRowset() 方法
-        return $this->wrapPDOStatement($stmt, $sql);
+        // 直接返回原始 PDOStatement
+        return $stmt;
     }
     
     /**
@@ -2566,6 +2519,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 // 单个命令，正常执行
                 try {
+                    Env::log_info('pgsql_query', $this->sql);
                     $this->PDOStatement = $this->preparePgsql($this->sql);
                     $this->PDOStatement->execute($this->bound_values);
                 } catch (\PDOException $e) {
