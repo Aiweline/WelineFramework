@@ -101,23 +101,60 @@ $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
     </div>
 </div>
 
-<script src="@static(Weline_CustomerService::js/customer-service.js)"></script>
+<?php
+$customerServiceJsUrl = $this->getStaticUrl('Weline_CustomerService::js/customer-service.js') ?? '';
+?>
+<?php if ($customerServiceJsUrl): ?>
+<script src="<?= htmlspecialchars($customerServiceJsUrl) ?>" onload="initCustomerServiceWidget()"></script>
 <script>
-// 初始化客服组件
-document.addEventListener('DOMContentLoaded', function() {
-    CustomerServiceWidget.init({
-        chatUrl: '<?= $chatUrl ?>',
-        bindUrl: '<?= $bindUrl ?>',
-        customerId: <?= $customerId ? $customerId : 'null' ?>,
-        isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>
-    });
+// 初始化客服组件的配置
+var customerServiceConfig = {
+    chatUrl: '<?= htmlspecialchars($chatUrl) ?>',
+    bindUrl: '<?= htmlspecialchars($bindUrl) ?>',
+    customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
+    isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>
+};
+
+// 初始化客服组件（等待脚本加载完成）
+function initCustomerServiceWidget() {
+    // 确保 CustomerServiceWidget 已加载
+    if (typeof CustomerServiceWidget === 'undefined') {
+        // 如果未加载，延迟重试
+        setTimeout(initCustomerServiceWidget, 100);
+        return;
+    }
     
-    // 检查是否需要显示绑定提示
-    <?php if (!$isLoggedIn): ?>
-    setTimeout(function() {
-        CustomerServiceWidget.showBindPrompt();
-    }, 5000); // 5秒后提示
-    <?php endif; ?>
-});
+    // 初始化
+    try {
+        CustomerServiceWidget.init(customerServiceConfig);
+        
+        // 检查是否需要显示绑定提示
+        <?php if (!$isLoggedIn): ?>
+        setTimeout(function() {
+            if (typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.showBindPrompt === 'function') {
+                CustomerServiceWidget.showBindPrompt();
+            }
+        }, 5000); // 5秒后提示
+        <?php endif; ?>
+    } catch (error) {
+        console.error('[CustomerService] 初始化失败:', error);
+    }
+}
+
+// 如果脚本已经加载（DOMContentLoaded 时），立即初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        // 如果脚本已经加载，立即初始化
+        if (typeof CustomerServiceWidget !== 'undefined') {
+            initCustomerServiceWidget();
+        }
+    });
+} else {
+    // DOM 已加载，检查脚本是否已加载
+    if (typeof CustomerServiceWidget !== 'undefined') {
+        initCustomerServiceWidget();
+    }
+}
 </script>
+<?php endif; ?>
 

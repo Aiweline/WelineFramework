@@ -38,7 +38,8 @@ geojs.io返回空数据,"geojs.io returned empty data"
 Geo模块未加载,Geo模块未加载
 获取地址信息失败,获取地址信息失败
 定位失败，请稍后重试,定位失败，请稍后重试
-手动选择功能开发中...,手动选择功能开发中...
+请输入配送地址（格式：省/市/区）,请输入配送地址（格式：省/市/区）
+中国,中国
 "浏览器不支持Geolocation API","Browser does not support Geolocation API"
 用户拒绝了定位权限,"User denied geolocation permission"
 位置信息不可用,"Position information unavailable"
@@ -46,6 +47,7 @@ Geo模块未加载,Geo模块未加载
 IP定位服务响应错误,"IP location service response error"
 IP定位失败,"IP location failed"
 "IP定位服务不可用: %{1}","IP location service unavailable: %{1}"
+手动选择功能开发中...,手动选择功能开发中...
 Geo定位模块,"Geo Location Module"
 浏览器定位,"Browser Location"
 IP定位,"IP Location"

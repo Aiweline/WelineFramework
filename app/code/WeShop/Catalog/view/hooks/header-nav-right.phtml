@@ -36,7 +36,7 @@ $convertCategoryToMenuItem = function($category) use (&$convertCategoryToMenuIte
     
     $menuItem = [
         'text' => $category['name'] ?? '',
-        'url' => $frontendUrl . 'catalog/category/view?url_key=' . urlencode($category['url_key'] ?? ''),
+        'url' => $frontendUrl . 'catalog/category/' . urlencode($category['handle'] ?? ''),
     ];
     
     // 如果有子分类，递归处理

@@ -25,6 +25,7 @@ API配置JSON格式错误,"API configuration JSON format error"
 同步成功,同步成功
 自动定位地址,自动定位地址
 国家代码不能为空,"Country code cannot be empty"
+获取配送信息成功,获取配送信息成功
 配送服务ID不能为空,"Shipping service ID cannot be empty"
 物流单号不能为空,"Tracking number cannot be empty"
 快递公司ID不能为空,"Carrier ID cannot be empty"
