@@ -59,4 +59,9 @@
     --color-link: #0066c0;
     --color-link-hover: #c45500;
     --color-link-visited: #551a8b;
+
+    /* ========== 滚动条色系（默认，可被具体主题覆盖） ========== */
+    --scrollbar-thumb: #a2adb7;
+    --scrollbar-thumb-hover: #8590a5;
+    --scrollbar-track: transparent;
 }

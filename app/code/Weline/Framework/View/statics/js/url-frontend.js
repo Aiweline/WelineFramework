@@ -74,9 +74,13 @@
 
     /**
      * 获取配置
+     * 优先使用新的 Theme 配置方式：
+     * - window.Weline.config（推荐）
+     * - window.__WelineThemeConfig（旧的注入方式）
+     * 已弃用：window.WelineConfig（不再从这里读取，避免与 Theme.js 的别名产生递归）
      */
     function getConfig() {
-        const config = window.__WelineThemeConfig || window.WelineConfig || {};
+        const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
         const site = window.site || {};
         return {
             baseUrl: config.baseUrl || site.host || window.location.origin,
@@ -97,22 +101,22 @@
         if (!path) {
             return '';
         }
-        
+
         // 替换 * 为 baseRouter
         if (baseRouter && path.includes('*')) {
             path = path.replace(/\*/g, baseRouter);
         }
-        
+
         // 移除开头的双斜杠
         if (path.indexOf('//') === 0) {
             path = path.slice(2);
         }
-        
+
         // 移除开头的单斜杠（如果需要）
         if (path.indexOf('/') === 0) {
             path = path.slice(1);
         }
-        
+
         return path;
     }
 
@@ -128,32 +132,32 @@
         if (!window.site.computePath) {
             window.site.computePath = {};
         }
-        
+
         if (window.site.computePath[originPath]) {
             return window.site.computePath[originPath];
         }
-        
+
         // 提取类似 http://localhost:8080/ 的 host
         if (path.indexOf('://') > 0) {
             const hosts = path.split('://');
             const host0 = hosts[0] + '://';
             let host1 = hosts[1];
-            
+
             if (host1.indexOf('/') > 0) {
                 const host1s = host1.split('/');
                 const hostName = host1s.shift();
                 const host0Full = host0 + hostName;
                 let host1s1 = host1s[0];
-                
+
                 if (host1s1) {
                     // 移除 website_code
                     if (getCookie('WELINE_WEBSITE_CODE') && host1s1.startsWith(getCookie('WELINE_WEBSITE_CODE'))) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-                    
+
                     const config = getConfig();
-                    
+
                     // 移除 area
                     if (config.area && config.area === host1s1) {
                         host1s.shift();
@@ -170,25 +174,25 @@
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-                    
+
                     // 移除 currency
                     if (getCookie('WELINE_USER_CURRENCY') === host1s1) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-                    
+
                     // 移除 lang
                     if (getCookie('WELINE_USER_LANG') === host1s1) {
                         host1s.shift();
                     }
                 }
-                
+
                 path = host0Full + '/' + host1s.join('/');
             } else {
                 path = host1;
             }
         }
-        
+
         window.site.computePath[originPath] = path;
         return window.site.computePath[originPath];
     }
@@ -202,36 +206,36 @@
         if (!path) {
             throw new Error('inject_path函数path路径不允许为空！');
         }
-        
+
         if (!path.startsWith('/')) {
             path = '/' + path;
         }
-        
+
         let prePath = getCookie('WELINE_WEBSITE_URL') || '';
         const config = getConfig();
         const currentLang = getCookie('WELINE_USER_LANG') || config.currentLang || '';
         const currentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
-        
+
         // 网站
         if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL') || '')) {
             path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL') || '', '');
         } else {
             path = WelineString.replaceStartsWith(path, config.baseRouter, '');
         }
-        
+
         if (WelineString.startsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''))) {
             path = WelineString.replaceStartsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''), '/');
         }
-        
+
         if ('website' === type && code) {
             prePath = code;
         }
-        
+
         prePath = decodeURIComponent(prePath);
         if (prePath.endsWith('/')) {
             prePath = prePath.slice(0, -1);
         }
-        
+
         // 区域
         if (config.area && WelineString.startsWith(path, '/' + config.area)) {
             if ('area' === type && code) {
@@ -248,7 +252,7 @@
                 prePath += '/' + config.area;
             }
         }
-        
+
         // 币种
         if (currentCurrency && WelineString.startsWith(path, '/' + currentCurrency)) {
             if ('currency' === type && code) {
@@ -265,7 +269,7 @@
                 prePath += '/' + currentCurrency;
             }
         }
-        
+
         // 语言
         if (currentLang && WelineString.startsWith(path, '/' + currentLang)) {
             if ('lang' === type && code) {
@@ -282,7 +286,7 @@
                 prePath += '/' + currentLang;
             }
         }
-        
+
         return prePath + path;
     }
 
@@ -292,7 +296,7 @@
     function buildUrlWithParams(baseUrl, path, params = {}) {
         const normalizedPath = normalizePath(path);
         let url = baseUrl.replace(/\/+$/, '') + '/' + normalizedPath.replace(/^\/+/, '');
-        
+
         // 添加查询参数
         const queryParams = [];
         for (const key in params) {
@@ -300,11 +304,11 @@
                 queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
             }
         }
-        
+
         if (queryParams.length > 0) {
             url += (url.includes('?') ? '&' : '?') + queryParams.join('&');
         }
-        
+
         return url;
     }
 
@@ -337,12 +341,12 @@
         if (!path) {
             return '';
         }
-        
+
         // 如果已经是完整 URL，直接返回
         if (/^https?:\/\//i.test(path)) {
             return path;
         }
-        
+
         const normalizedPath = normalizePath(path, config.baseRouter);
         return buildUrlWithParams(config.host, normalizedPath, params);
     };

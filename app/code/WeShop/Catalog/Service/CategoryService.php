@@ -32,6 +32,30 @@ class CategoryService
     }
     
     /**
+     * 通过handle获取分类
+     * 
+     * @param string $handle Handle标识
+     * @return Category|null
+     */
+    public function getCategoryByHandle(string $handle): ?Category
+    {
+        /** @var Category $category */
+        $category = ObjectManager::getInstance(Category::class);
+        
+        $category->clear()
+            ->where(Category::fields_HANDLE, $handle)
+            ->where(Category::fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        
+        if ($category->getId()) {
+            return $category;
+        }
+        
+        return null;
+    }
+    
+    /**
      * 获取子分类
      * 
      * @param int $parentId 父分类ID

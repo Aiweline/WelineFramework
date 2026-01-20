@@ -97,13 +97,11 @@ if ($event) {
 $currencies = $eventCurrencies ?? $i18nCurrencies;
 $displayCurrentCurrency = $eventCurrentCurrency ?? $currentCurrency;
 
-// 生成货币切换链接
-$baseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
-$urlBuilder = $this->request->getUrlBuilder();
-
 // 渲染货币切换器
+// 注意：URL 链接由前端 currency.js 模块动态生成（通过 updateCurrencySwitcherLinks()）
+// 使用 data-currency-switcher 属性标记，供 JavaScript 识别和初始化
 ?>
-<div class="currency-switcher" role="button" tabindex="0" aria-label="<?= __('切换货币') ?>">
+<div class="currency-switcher" data-currency-switcher="true" role="button" tabindex="0" aria-label="<?= __('切换货币') ?>">
     <span class="action-line-1"><?= __('货币') ?></span>
     <span class="action-line-2">
         <i class="fas fa-dollar-sign" aria-hidden="true"></i>
@@ -113,16 +111,17 @@ $urlBuilder = $this->request->getUrlBuilder();
     <div class="currency-options" role="menu" aria-label="<?= __('货币选项') ?>">
         <?php foreach ($currencies as $currency): ?>
             <?php
-            $currencyCode = $currency['code'] ?? '';
+            $currencyCode = strtoupper($currency['code'] ?? '');
             $currencyName = $currency['name'] ?? $currencyCode;
             $currencySymbol = $currency['symbol'] ?? '';
-            $isCurrent = (strtoupper($currencyCode) === strtoupper($displayCurrentCurrency));
+            $isCurrent = ($currencyCode === strtoupper($displayCurrentCurrency));
             
-            // 生成货币切换 URL
-            $currencyUrl = $urlBuilder->getFrontendUrl('', ['currency' => $currencyCode], false);
+            // URL 由前端 currency.js 模块动态生成（使用框架推荐的路径格式）
+            // 这里只生成基本的链接结构，href 会在前端通过 updateCurrencySwitcherLinks() 更新
             ?>
-            <a href="<?= htmlspecialchars($currencyUrl) ?>" 
+            <a href="#" 
                class="currency-option <?= $isCurrent ? 'active' : '' ?>" 
+               data-currency-option="true"
                data-currency="<?= htmlspecialchars($currencyCode) ?>" 
                role="menuitem">
                 <span><?= htmlspecialchars($currencyName) ?></span>

@@ -26,6 +26,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "Vue",
         description: "Vue.js框架"
     },
+    bootstrap: {
+        paths: [
+            "Weline_Frontend::libs/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js"
+        ],
+        globalVar: "bootstrap",
+        description: "Bootstrap JS"
+    },
     weline: {
         paths: [
             "Weline_Frontend::js/weline.js"
