@@ -551,9 +551,9 @@ abstract class AbstractModel extends DataObject
         $eventData = ['model' => $this, 'field_or_pk_value' => $field_or_pk_value, 'value' => $value];
         $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_before', $eventData);
         if (is_null($value)) {
-            $data = $this->getQuery()->where($this->getQuery()->table_alias . '.' . $this->_primary_key, $field_or_pk_value)->find()->fetch();
+            $data = $this->getQuery()->clearQuery()->where($this->getQuery()->table_alias . '.' . $this->_primary_key, $field_or_pk_value)->find()->fetch();
         } else {
-            $data = $this->getQuery()->where($field_or_pk_value, $value)->find()->fetch();
+            $data = $this->getQuery()->clearQuery()->where($field_or_pk_value, $value)->find()->fetch();
         }
 
         if (is_array($data)) {

@@ -720,6 +720,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // PostgreSQL 支持 alias.* 或 "alias".*，但不支持 "alias"."*"
         if (preg_match('/^([^.]*?)\.\*$/', $field, $matches)) {
             $alias = trim($matches[1], '`"');
+
+            // 🔧 兼容框架占位别名 main_table：如果实际主表别名不是 main_table，则将其替换为真实别名
+            if ($alias === 'main_table' && !empty($this->table_alias) && $this->table_alias !== 'main_table') {
+                $alias = $this->table_alias;
+            }
             // 如果别名不为空，格式化别名并保留 .*
             if (!empty($alias)) {
                 // 检查别名是否包含点号（可能是 schema.table 格式）
@@ -743,6 +748,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             // 然后再按点拆分并用 PostgreSQL 风格的双引号包裹
             $field = str_replace(['`', '"'], '', $field);
             $parts = explode('.', $field);
+
+            // 🔧 同样处理 main_table.xxx 这种占位别名，替换为真实主表别名
+            if (!empty($this->table_alias) && $this->table_alias !== 'main_table' && isset($parts[0]) && $parts[0] === 'main_table') {
+                $parts[0] = $this->table_alias;
+            }
             // 处理数据库名 -> schema 转换
             $dbName = $this->db_name ?? 'public';
             if (count($parts) >= 2 && $parts[0] === $dbName) {

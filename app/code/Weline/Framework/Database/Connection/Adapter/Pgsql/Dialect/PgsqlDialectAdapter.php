@@ -99,12 +99,12 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
             
             // 替换 SELECT 子句中的 main_table.* 或 main_table.field
             $converted = preg_replace_callback(
-                '/(SELECT\s+)([^F]+?)(\s+FROM)/i',
+                '/(SELECT\s+)(.*?)(\s+FROM)/is',
                 function ($matches) use ($quotedActualAlias) {
                     $selectPart = $matches[2];
-                    // 替换 main_table.* 为 actualAlias.*
+                    // 替换 main_table.* 为实际主表别名（如 "a".*）
                     $selectPart = preg_replace('/([`"]?)main_table\1\.\*/i', $quotedActualAlias . '.*', $selectPart);
-                    // 替换 "main_table".field 或 `main_table`.field 或 main_table.field
+                    // 替换 "main_table".field 或 `main_table`.field 或 main_table.field 为实际主表别名
                     $selectPart = preg_replace('/([`"]?)main_table\1(\.)/i', $quotedActualAlias . '$2', $selectPart);
                     return $matches[1] . $selectPart . $matches[3];
                 },
