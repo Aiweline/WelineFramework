@@ -426,13 +426,60 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 但 ACL 权限应该只保存一次，所以需要去重
         $deduplicatedAcls = [];
         $seenSourceIds = [];
-        foreach ($this->pending_class_level_acls[$module] as $acl) {
+        $duplicateInfo = []; // 记录重复的详细信息（开发环境用）
+        
+        foreach ($this->pending_class_level_acls[$module] as $index => $acl) {
             $sourceId = $acl['source_id'] ?? '';
             if (!empty($sourceId)) {
-                // 如果已经见过这个 source_id，跳过（保留第一个）
-                // 或者如果需要保留最新的，可以改为：$seenSourceIds[$sourceId] = $acl;
-                if (!isset($seenSourceIds[$sourceId])) {
-                    $seenSourceIds[$sourceId] = true;
+                // 如果已经见过这个 source_id
+                if (isset($seenSourceIds[$sourceId])) {
+                    // 开发环境：记录重复信息
+                    if (DEV) {
+                        // 只有在真正有重复时才记录
+                        if (!isset($duplicateInfo[$sourceId])) {
+                            // 第一次发现重复，记录首次出现的信息
+                            $firstAcl = $seenSourceIds[$sourceId]; // 保存的是第一个 ACL 的引用
+                            $duplicateInfo[$sourceId] = [
+                                'first' => [
+                                    'index' => $firstAcl['index'] ?? 'unknown',
+                                    'class' => $firstAcl['class'] ?? '',
+                                    'method' => $firstAcl['method'] ?? '',
+                                    'route' => $firstAcl['route'] ?? '',
+                                    'router' => $firstAcl['router'] ?? '',
+                                ],
+                                'duplicates' => []
+                            ];
+                        }
+                        // 记录重复出现的信息
+                        $duplicateInfo[$sourceId]['duplicates'][] = [
+                            'index' => $index,
+                            'class' => $acl['class'] ?? '',
+                            'method' => $acl['method'] ?? '',
+                            'route' => $acl['route'] ?? '',
+                            'router' => $acl['router'] ?? '',
+                        ];
+                    }
+                    // 找到已存在的记录并替换
+                    foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
+                        if (($existingAcl['source_id'] ?? '') === $sourceId) {
+                            $deduplicatedAcls[$existingIndex] = $acl;
+                            break;
+                        }
+                    }
+                } else {
+                    // 第一次遇到这个 source_id
+                    // 开发环境：保存第一个 ACL 的引用，以便后续发现重复时使用
+                    if (DEV) {
+                        $seenSourceIds[$sourceId] = [
+                            'index' => $index,
+                            'class' => $acl['class'] ?? '',
+                            'method' => $acl['method'] ?? '',
+                            'route' => $acl['route'] ?? '',
+                            'router' => $acl['router'] ?? '',
+                        ];
+                    } else {
+                        $seenSourceIds[$sourceId] = true;
+                    }
                     $deduplicatedAcls[] = $acl;
                 }
             } else {
@@ -441,10 +488,41 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
         }
         
+        // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
+        if (DEV && !empty($duplicateInfo)) {
+            $errorMessages = [];
+            $errorMessages[] = __('【ACL 重复检测】模块: %{1}', [$module]);
+            $errorMessages[] = __('发现以下重复的 source_id：');
+            foreach ($duplicateInfo as $sourceId => $info) {
+                $errorMessages[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
+                $errorMessages[] = __('  首次出现:');
+                $first = $info['first'] ?? [];
+                $errorMessages[] = __('    - 类: %{1}', [$first['class'] ?? '']);
+                $errorMessages[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
+                $errorMessages[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
+                $errorMessages[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
+                $duplicates = $info['duplicates'] ?? [];
+                $errorMessages[] = __('  重复出现 (%{1} 次):', [count($duplicates)]);
+                foreach ($duplicates as $dup) {
+                    $errorMessages[] = __('    - 索引 #%{1}:', [$dup['index']]);
+                    $errorMessages[] = __('      类: %{1}', [$dup['class']]);
+                    $errorMessages[] = __('      方法: %{1}', [$dup['method']]);
+                    $errorMessages[] = __('      路由: %{1}', [$dup['route']]);
+                    $errorMessages[] = __('      路由器: %{1}', [$dup['router']]);
+                }
+            }
+            $errorMessages[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
+            // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
+            pp(implode("\n", $errorMessages));
+        }
+        
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            $this->acl->insert($deduplicatedAcls, 'source_id')->fetch();
+            // 🔧 修复：使用 insertOrUpdate 语法，如果 source_id 已存在则更新，否则插入
+            // 第二个参数指定冲突检测字段（数组格式），第三个参数指定要更新的字段（空字符串表示更新所有字段）
+            // 这样可以避免唯一约束违反错误
+            $this->acl->insert($deduplicatedAcls, 'source_id', '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
             $this->acl->rollBack();
@@ -475,13 +553,60 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 但 ACL 权限应该只保存一次，所以需要去重
         $deduplicatedAcls = [];
         $seenSourceIds = [];
-        foreach ($this->pending_method_level_acls[$module] as $acl) {
+        $duplicateInfo = []; // 记录重复的详细信息（开发环境用）
+        
+        foreach ($this->pending_method_level_acls[$module] as $index => $acl) {
             $sourceId = $acl['source_id'] ?? '';
             if (!empty($sourceId)) {
-                // 如果已经见过这个 source_id，跳过（保留第一个）
-                // 或者如果需要保留最新的，可以改为：$seenSourceIds[$sourceId] = $acl;
-                if (!isset($seenSourceIds[$sourceId])) {
-                    $seenSourceIds[$sourceId] = true;
+                // 如果已经见过这个 source_id
+                if (isset($seenSourceIds[$sourceId])) {
+                    // 开发环境：记录重复信息
+                    if (DEV) {
+                        // 只有在真正有重复时才记录
+                        if (!isset($duplicateInfo[$sourceId])) {
+                            // 第一次发现重复，记录首次出现的信息
+                            $firstAcl = $seenSourceIds[$sourceId]; // 保存的是第一个 ACL 的引用
+                            $duplicateInfo[$sourceId] = [
+                                'first' => [
+                                    'index' => $firstAcl['index'] ?? 'unknown',
+                                    'class' => $firstAcl['class'] ?? '',
+                                    'method' => $firstAcl['method'] ?? '',
+                                    'route' => $firstAcl['route'] ?? '',
+                                    'router' => $firstAcl['router'] ?? '',
+                                ],
+                                'duplicates' => []
+                            ];
+                        }
+                        // 记录重复出现的信息
+                        $duplicateInfo[$sourceId]['duplicates'][] = [
+                            'index' => $index,
+                            'class' => $acl['class'] ?? '',
+                            'method' => $acl['method'] ?? '',
+                            'route' => $acl['route'] ?? '',
+                            'router' => $acl['router'] ?? '',
+                        ];
+                    }
+                    // 找到已存在的记录并替换
+                    foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
+                        if (($existingAcl['source_id'] ?? '') === $sourceId) {
+                            $deduplicatedAcls[$existingIndex] = $acl;
+                            break;
+                        }
+                    }
+                } else {
+                    // 第一次遇到这个 source_id
+                    // 开发环境：保存第一个 ACL 的引用，以便后续发现重复时使用
+                    if (DEV) {
+                        $seenSourceIds[$sourceId] = [
+                            'index' => $index,
+                            'class' => $acl['class'] ?? '',
+                            'method' => $acl['method'] ?? '',
+                            'route' => $acl['route'] ?? '',
+                            'router' => $acl['router'] ?? '',
+                        ];
+                    } else {
+                        $seenSourceIds[$sourceId] = true;
+                    }
                     $deduplicatedAcls[] = $acl;
                 }
             } else {
@@ -490,10 +615,41 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
         }
         
+        // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
+        if (DEV && !empty($duplicateInfo)) {
+            $errorMessages = [];
+            $errorMessages[] = __('【ACL 重复检测】模块: %{1} (方法级别权限)', [$module]);
+            $errorMessages[] = __('发现以下重复的 source_id：');
+            foreach ($duplicateInfo as $sourceId => $info) {
+                $errorMessages[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
+                $errorMessages[] = __('  首次出现:');
+                $first = $info['first'] ?? [];
+                $errorMessages[] = __('    - 类: %{1}', [$first['class'] ?? '']);
+                $errorMessages[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
+                $errorMessages[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
+                $errorMessages[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
+                $duplicates = $info['duplicates'] ?? [];
+                $errorMessages[] = __('  重复出现 (%{1} 次):', [count($duplicates)]);
+                foreach ($duplicates as $dup) {
+                    $errorMessages[] = __('    - 索引 #%{1}:', [$dup['index']]);
+                    $errorMessages[] = __('      类: %{1}', [$dup['class']]);
+                    $errorMessages[] = __('      方法: %{1}', [$dup['method']]);
+                    $errorMessages[] = __('      路由: %{1}', [$dup['route']]);
+                    $errorMessages[] = __('      路由器: %{1}', [$dup['router']]);
+                }
+            }
+            $errorMessages[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
+            // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
+            pp(implode("\n", $errorMessages));
+        }
+        
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            $this->acl->insert($deduplicatedAcls, 'source_id')->fetch();
+            // 🔧 修复：使用 insertOrUpdate 语法，如果 source_id 已存在则更新，否则插入
+            // 第二个参数指定冲突检测字段（数组格式），第三个参数指定要更新的字段（空字符串表示更新所有字段）
+            // 这样可以避免唯一约束违反错误
+            $this->acl->insert($deduplicatedAcls, ['source_id'], '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
             $this->acl->rollBack();
