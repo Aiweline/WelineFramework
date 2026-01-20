@@ -11,14 +11,18 @@
  */
 
 /** @var \Weline\Framework\View\Template $this */
-$productJsUrl = $this->getStaticUrl('WeShop_Product::frontend/js/product.js');
-$wasmUrl = $this->getStaticUrl('WeShop_Product::frontend/wasm/price-calculator.wasm');
+$productJsUrl = $this->getStaticUrl('WeShop_Product::frontend/js/product.js') ?? '';
+$wasmUrl = $this->getStaticUrl('WeShop_Product::frontend/wasm/price-calculator.wasm') ?? '';
 ?>
 <script>
 // 配置WASM路径（供product.js使用）
 if (typeof window.__WeShopProductConfig === 'undefined') {
     window.__WeShopProductConfig = {};
 }
+<?php if ($wasmUrl): ?>
 window.__WeShopProductConfig.wasmUrl = '<?= htmlspecialchars($wasmUrl) ?>';
+<?php endif; ?>
 </script>
+<?php if ($productJsUrl): ?>
 <script src="<?= htmlspecialchars($productJsUrl) ?>"></script>
+<?php endif; ?>

@@ -11,10 +11,16 @@
  */
 
 /** @var \Weline\Framework\View\Template $this */
-$storageJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-storage.js');
-$locationJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-location.js');
-$priceCalculatorJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-price-calculator.js');
+$storageJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-storage.js') ?? '';
+$locationJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-location.js') ?? '';
+$priceCalculatorJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-price-calculator.js') ?? '';
 ?>
+<?php if ($storageJsUrl): ?>
 <script src="<?= htmlspecialchars($storageJsUrl) ?>"></script>
+<?php endif; ?>
+<?php if ($locationJsUrl): ?>
 <script src="<?= htmlspecialchars($locationJsUrl) ?>"></script>
+<?php endif; ?>
+<?php if ($priceCalculatorJsUrl): ?>
 <script src="<?= htmlspecialchars($priceCalculatorJsUrl) ?>"></script>
+<?php endif; ?>

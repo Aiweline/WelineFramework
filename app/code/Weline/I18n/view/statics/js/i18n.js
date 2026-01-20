@@ -1,0 +1,475 @@
+/**
+ * Weline 国际化（i18n）模块
+ * 
+ * 功能：
+ * 1. 自动初始化语言切换器
+ * 2. 更新语言切换链接
+ * 3. 监听语言切换事件
+ * 4. 更新当前语言显示
+ */
+(function (window, document) {
+    'use strict';
+
+    // 防止重复初始化
+    if (window.WelineI18n && window.WelineI18n.__initialized) {
+        return;
+    }
+
+    /**
+     * 获取当前语言代码
+     */
+    function getCurrentLang() {
+        // 从 Cookie 获取
+        if (typeof window.getCookie === 'function') {
+            const cookieLang = window.getCookie('WELINE_USER_LANG');
+            if (cookieLang) {
+                return cookieLang;
+            }
+        }
+
+        // 从 URL 参数获取
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLang = urlParams.get('lang');
+        if (urlLang) {
+            return urlLang;
+        }
+
+        // 从 URL 路径获取（如 /zh_Hans_CN/...）
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        for (const part of pathParts) {
+            if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
+                return part;
+            }
+        }
+
+        // 从配置获取
+        const config = window.__WelineThemeConfig || {};
+        return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
+    }
+
+    /**
+     * 将语言代码转换为显示标识
+     * zh_Hans_CN -> ZH, en_US -> EN, zh_Hant_TW -> TW
+     */
+    function getLangDisplay(langCode) {
+        if (!langCode) {
+            return 'ZH';
+        }
+
+        // 提取语言代码的主要部分
+        const parts = langCode.split('_');
+        if (parts.length >= 2) {
+            // 取前两个部分，如 zh_Hans -> ZH, en_US -> EN
+            const lang = parts[0].toUpperCase();
+            const region = parts[1].toUpperCase();
+
+            // 如果是中文，显示 ZH
+            if (lang === 'ZH') {
+                if (region === 'HANT') {
+                    return 'TW'; // 繁体中文显示 TW
+                }
+                return 'ZH';
+            }
+
+            // 其他语言显示前两个字母
+            return lang.substring(0, 2);
+        }
+
+        // 如果格式不对，返回前两个大写字母
+        return langCode.substring(0, 2).toUpperCase();
+    }
+
+    /**
+     * 更新当前语言显示
+     */
+    function updateCurrentLanguageDisplay() {
+        const currentLang = getCurrentLang();
+        const langDisplay = getLangDisplay(currentLang);
+
+        // 更新 current-language 元素
+        const currentLangElements = document.querySelectorAll('.current-language');
+        currentLangElements.forEach(el => {
+            el.textContent = langDisplay;
+        });
+
+        // 更新 active 状态（通过属性标记查找）
+        const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
+        languageSwitchers.forEach(languageSwitcher => {
+            // 通过属性标记查找语言选项（优先使用 data-language-option）
+            const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
+            languageOptions.forEach(option => {
+                const langCode = option.getAttribute('data-lang') || option.dataset.lang;
+                if (langCode === currentLang) {
+                    option.classList.add('active');
+                } else {
+                    option.classList.remove('active');
+                }
+            });
+        });
+    }
+
+    /**
+     * 更新语言切换器链接
+     * 通过 data-i18n-switcher 属性标记来查找语言切换器元素
+     */
+    function updateLanguageSwitcherLinks() {
+        // 通过属性标记查找语言切换器（支持多个）
+        const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
+        if (languageSwitchers.length === 0) {
+            // 找不到属性标记，静默返回（不报错）
+            if (window.DEV) {
+                console.log('[WelineI18n] 未找到语言切换器元素 [data-i18n-switcher]');
+            }
+            return;
+        }
+
+        // 遍历所有找到的语言切换器
+        languageSwitchers.forEach(languageSwitcher => {
+            // 通过属性标记查找语言选项（优先使用 data-language-option）
+            const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
+            if (languageOptions.length === 0) {
+                if (window.DEV) {
+                    console.log('[WelineI18n] 在语言切换器中未找到语言选项');
+                }
+                return;
+            }
+
+            // 获取当前 URL 和语言配置
+            const currentPath = window.location.pathname + window.location.search;
+            const config = window.__WelineThemeConfig || {};
+
+            // 获取当前货币（用于保持货币）
+            let currentCurrency = '';
+            const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
+            for (const part of pathParts) {
+                if (/^[A-Z]{3}$/.test(part)) {
+                    currentCurrency = part;
+                    break;
+                }
+            }
+            if (!currentCurrency) {
+                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+            }
+
+            languageOptions.forEach(option => {
+                const langCode = option.getAttribute('data-lang') || option.dataset.lang;
+                if (!langCode) {
+                    return;
+                }
+
+                let langUrl = '';
+
+                // 使用 window.urlWithLang 生成带语言的 URL（框架推荐的路径格式，会自动保持货币）
+                if (typeof window.urlWithLang === 'function') {
+                    langUrl = window.urlWithLang(currentPath, langCode);
+                } else if (typeof window.inject_path === 'function') {
+                    // 使用 inject_path（会自动保持货币）
+                    const pathOnly = currentPath.split('?')[0];
+                    const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+                    langUrl = window.inject_path(pathOnly, langCode, 'lang') + (search ? '?' + search : '');
+                } else {
+                    // 降级方案：手动构建路径格式的 URL（需要手动保持货币）
+                    const pathOnly = currentPath.split('?')[0];
+                    const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+
+                    // 移除路径中的语言代码和货币代码（如果存在）
+                    const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+                    const currencyPattern = /^[A-Z]{3}$/;
+                    const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+                    const cleanPath = '/' + filteredParts.join('/');
+
+                    // 构建新 URL：/[currency]/[lang]/path（保持货币）
+                    langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                }
+
+                if (langUrl) {
+                    option.setAttribute('href', langUrl);
+                    if (window.DEV) {
+                        console.log(`[WelineI18n] 更新语言选项链接: ${langCode} -> ${langUrl}`);
+                    }
+                }
+            });
+        });
+
+        // 更新当前语言显示
+        updateCurrentLanguageDisplay();
+    }
+
+    /**
+     * 切换语言（会自动保持当前货币）
+     * @param {string} lang 语言代码
+     * @returns {Promise<void>}
+     */
+    async function switchLang(lang) {
+        if (!lang) {
+            console.warn('[WelineI18n] switchLang: 语言代码不能为空');
+            return;
+        }
+
+        // 优先使用 select_language 函数（来自 url-frontend 模块，会自动保持货币）
+        if (typeof window.select_language === 'function') {
+            window.select_language(lang);
+            return;
+        }
+
+        // 次优先使用 urlWithLang 函数（来自 url-frontend 模块，会自动保持货币）
+        if (typeof window.urlWithLang === 'function') {
+            const currentPath = window.location.pathname + window.location.search;
+            const langUrl = window.urlWithLang(currentPath, lang);
+
+            // 保存语言偏好到 localStorage
+            localStorage.setItem('weline_user_lang', lang);
+
+            // 保存语言偏好到 Cookie（如果 getCookie/setCookie 函数存在）
+            if (typeof window.setCookie === 'function') {
+                window.setCookie('WELINE_USER_LANG', lang, 365); // 保存365天
+            }
+
+            // 立即跳转到新 URL
+            window.location.href = langUrl;
+            return;
+        }
+
+        // 降级方案：使用 inject_path（会自动保持货币）
+        if (typeof window.inject_path === 'function') {
+            const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + window.location.search;
+
+            // 保存语言偏好
+            localStorage.setItem('weline_user_lang', lang);
+            if (typeof window.setCookie === 'function') {
+                window.setCookie('WELINE_USER_LANG', lang, 365);
+            }
+
+            // 立即跳转到新 URL
+            window.location.href = langUrl;
+            return;
+        }
+
+        // 最后的降级方案：手动构建路径格式的 URL（需要手动保持货币）
+        let currentPath = window.location.pathname;
+        const pathParts = currentPath.split('/').filter(Boolean);
+
+        // 获取当前货币（从 URL 或配置）
+        let currentCurrency = '';
+        for (const part of pathParts) {
+            if (/^[A-Z]{3}$/.test(part)) {
+                currentCurrency = part;
+                break;
+            }
+        }
+        if (!currentCurrency) {
+            const config = window.__WelineThemeConfig || {};
+            currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+        }
+
+        // 移除路径中的语言代码和货币代码（格式：zh_Hans_CN, en_US 等）
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const currencyPattern = /^[A-Z]{3}$/;
+        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+        const cleanPath = '/' + filteredParts.join('/');
+
+        // 构建新 URL：/[currency]/[lang]/path（保持货币）
+        const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
+
+        // 保存语言偏好
+        localStorage.setItem('weline_user_lang', lang);
+        if (typeof window.setCookie === 'function') {
+            window.setCookie('WELINE_USER_LANG', lang, 365);
+        }
+
+        // 立即跳转到新 URL
+        window.location.href = langUrl;
+    }
+
+    /**
+     * 初始化语言切换器
+     */
+    function initLanguageSwitcher() {
+        // 等待 URL 模块加载（由 weline-modules 配置控制，不主动加载）
+        let urlModuleRetryCount = 0;
+        const MAX_URL_MODULE_RETRIES = 10; // 最多等待10次（给模块加载器时间）
+
+        function waitForUrlModule() {
+            // 如果 URL 函数已存在，直接使用
+            if (typeof window.urlWithLang === 'function' || typeof window.url === 'function') {
+                updateLanguageSwitcherLinks();
+                return;
+            }
+
+            // 重试次数限制
+            if (urlModuleRetryCount >= MAX_URL_MODULE_RETRIES) {
+                // 使用降级方案（即使 URL 模块未加载，也要更新链接）
+                updateLanguageSwitcherLinks();
+                return;
+            }
+
+            // 延迟重试（等待模块加载器从配置中加载模块）
+            urlModuleRetryCount++;
+            setTimeout(waitForUrlModule, 200);
+        }
+
+        // 确保 DOM 完全加载后再执行
+        function initAfterDOMReady() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                    // DOM 加载完成后，再等待一小段时间确保所有元素都已渲染
+                    setTimeout(waitForUrlModule, 100);
+                });
+            } else {
+                // DOM 已加载，等待一小段时间确保所有元素都已渲染
+                setTimeout(waitForUrlModule, 100);
+            }
+        }
+
+        initAfterDOMReady();
+
+        // 监听 URL 变化（用于浏览器前进/后退）
+        let lastUrl = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== lastUrl) {
+                lastUrl = window.location.href;
+                updateCurrentLanguageDisplay();
+            }
+        }, 500);
+    }
+
+    /**
+     * URL 解析辅助函数
+     */
+    function resolveApiUrl(path) {
+        if (!path) return '';
+        if (/^https?:\/\//i.test(path)) {
+            return path;
+        }
+
+        // 尝试使用 Weline.Url.resolve
+        if (window.Weline && window.Weline.Url && typeof window.Weline.Url.resolve === 'function') {
+            try {
+                return window.Weline.Url.resolve(path, { type: 'frontend' });
+            } catch (e) {
+                // 如果解析失败，使用原始路径
+            }
+        }
+
+        // Fallback: 直接返回绝对路径
+        const normalizedOrigin = window.location.origin.replace(/\/+$/, '');
+        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+        return normalizedOrigin + '/' + cleanPath;
+    }
+
+    /**
+     * 检测当前区域（frontend 或 backend）
+     */
+    function detectArea() {
+        const path = window.location.pathname || '';
+        if (path.indexOf('/admin') === 0 || path.indexOf('/backend') === 0) {
+            return 'backend';
+        }
+        return 'frontend';
+    }
+
+    /**
+     * 初始化 i18n 对象（包含翻译字典、API URL 等）
+     */
+    function initI18nObject() {
+        // 从全局配置读取 i18n 配置
+        const config = window.__WelineThemeConfig || {};
+        const i18nConfig = config.i18n || {};
+        const currentLang = config.currentLang || i18nConfig.currentLang || getCurrentLang() || 'zh_Hans_CN';
+
+        // 默认 API URL（根据区域自动选择）
+        const area = detectArea();
+        const defaultApiUrl = `/i18n/${area}/word/get-translations`;
+        const apiUrl = resolveApiUrl(i18nConfig.apiUrl || defaultApiUrl);
+
+        // 初始化字典
+        let dictionary = i18nConfig.dictionary || {};
+
+        // 如果字典为空，尝试从多个来源读取
+        if (Object.keys(dictionary).length === 0) {
+            // 1. 从 window.site.i18n 读取（footer hook 设置的）
+            if (window.site && window.site.i18n && typeof window.site.i18n === 'object' && Object.keys(window.site.i18n).length > 0) {
+                dictionary = window.site.i18n;
+            }
+            // 2. 从 window.__WelineI18nDictionary 读取（如果存在）
+            else if (window.__WelineI18nDictionary && typeof window.__WelineI18nDictionary === 'object' && Object.keys(window.__WelineI18nDictionary).length > 0) {
+                dictionary = window.__WelineI18nDictionary;
+                delete window.__WelineI18nDictionary; // 清理临时变量
+            }
+        }
+
+        const i18nObj = {
+            currentLang: currentLang,
+            dictionary: dictionary,
+            apiUrl: apiUrl,
+
+            setDictionary: (dict) => {
+                i18nObj.dictionary = dict || {};
+            },
+
+            translate: (key, params = {}) => {
+                let text = i18nObj.dictionary[key] || key;
+                Object.keys(params).forEach(paramKey => {
+                    text = text.replace(new RegExp(`%{${paramKey}}`, 'g'), params[paramKey]);
+                });
+                return text;
+            },
+
+            // 按需加载翻译词（如果字典为空）
+            loadDictionary: async function () {
+                if (Object.keys(this.dictionary).length > 0) {
+                    return this.dictionary;
+                }
+
+                try {
+                    const response = await fetch(this.apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            this.dictionary = result.data.dictionary || result.data || {};
+                            return this.dictionary;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[WelineI18n] 加载翻译字典失败:', error);
+                }
+
+                return this.dictionary;
+            },
+        };
+
+        return i18nObj;
+    }
+
+    // 初始化 i18n 对象
+    const i18nObj = initI18nObject();
+
+    // 导出模块 API
+    window.WelineI18n = {
+        __initialized: true,
+        getCurrentLang: getCurrentLang,
+        getLangDisplay: getLangDisplay,
+        updateCurrentLanguageDisplay: updateCurrentLanguageDisplay,
+        updateLanguageSwitcherLinks: updateLanguageSwitcherLinks,
+        switchLang: switchLang,
+        // 翻译相关 API
+        currentLang: i18nObj.currentLang,
+        dictionary: i18nObj.dictionary,
+        apiUrl: i18nObj.apiUrl,
+        setDictionary: i18nObj.setDictionary,
+        translate: i18nObj.translate,
+        loadDictionary: i18nObj.loadDictionary,
+        init: initLanguageSwitcher
+    };
+
+    // 自动初始化
+    initLanguageSwitcher();
+
+})(window, document);
