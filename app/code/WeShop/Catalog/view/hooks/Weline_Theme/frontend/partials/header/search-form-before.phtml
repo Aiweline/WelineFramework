@@ -31,20 +31,20 @@ $convertCategoryToOptions = function($category, $level = 0, $parentPath = '') us
     
     $options = [];
     
-    // 获取分类的 url_key
-    $urlKey = $category['url_key'] ?? '';
+    // 获取分类的 handle
+    $handle = $category['handle'] ?? '';
     
     // 构建完整的路径（用于 value）
     $fullPath = '';
-    if (!empty($urlKey)) {
+    if (!empty($handle)) {
         // 如果有父级路径，拼接完整路径
         if (!empty($parentPath)) {
-            $fullPath = $parentPath . '/' . $urlKey;
+            $fullPath = $parentPath . '/' . $handle;
         } else {
-            $fullPath = $urlKey;
+            $fullPath = $handle;
         }
     } else {
-        // 如果没有 url_key，使用 category_id 构建路径
+        // 如果没有 handle，使用 category_id 构建路径
         $categoryId = $category['category_id'] ?? '';
         if (!empty($parentPath)) {
             $fullPath = $parentPath . '/' . $categoryId;

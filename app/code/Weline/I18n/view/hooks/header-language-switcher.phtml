@@ -101,13 +101,11 @@ if ($event) {
 $languages = $eventLanguages ?? $i18nLanguages;
 $displayCurrentLang = $eventCurrentLang ?? $currentLang;
 
-// 生成语言切换链接
-$baseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
-$urlBuilder = $this->request->getUrlBuilder();
-
 // 渲染语言切换器
+// 注意：URL 链接由前端 i18n.js 模块动态生成（通过 updateLanguageSwitcherLinks()）
+// 使用 data-i18n-switcher 属性标记，供 JavaScript 识别和初始化
 ?>
-<div class="language-switcher" role="button" tabindex="0" aria-label="<?= __('切换语言') ?>">
+<div class="language-switcher" data-i18n-switcher="true" role="button" tabindex="0" aria-label="<?= __('切换语言') ?>">
     <span class="action-line-1"><?= __('语言') ?></span>
     <span class="action-line-2">
         <i class="fas fa-globe" aria-hidden="true"></i>
@@ -131,11 +129,12 @@ $urlBuilder = $this->request->getUrlBuilder();
             $langName = $lang['native'] ?? $lang['name'] ?? $langCode;
             $isCurrent = ($langCode === $displayCurrentLang);
             
-            // 生成语言切换 URL
-            $langUrl = $urlBuilder->getFrontendUrl('', ['lang' => $langCode], false);
+            // URL 由前端 i18n.js 模块动态生成（使用框架推荐的路径格式）
+            // 这里只生成基本的链接结构，href 会在前端通过 updateLanguageSwitcherLinks() 更新
             ?>
-            <a href="<?= htmlspecialchars($langUrl) ?>" 
+            <a href="#" 
                class="language-option <?= $isCurrent ? 'active' : '' ?>" 
+               data-language-option="true"
                data-lang="<?= htmlspecialchars($langCode) ?>" 
                role="menuitem">
                 <span><?= htmlspecialchars($langName) ?></span>

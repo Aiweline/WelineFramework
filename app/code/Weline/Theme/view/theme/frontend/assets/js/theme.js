@@ -91,8 +91,9 @@
             delete window.__WelineThemeConfig;
             return config;
         }
+        // 兼容旧的 window.WelineConfig，但引导用户迁移到新的配置方式
         if (window.WelineConfig) {
-            console.warn('[Weline] window.WelineConfig 已废弃，请改用 Theme.js 注入配置。');
+            console.warn('[Weline] window.WelineConfig 已废弃，请在 head 模板中设置 window.__WelineThemeConfig 或使用 Weline.Theme.applyConfig(...) 注入配置。');
             return window.WelineConfig;
         }
         return {};
@@ -692,14 +693,14 @@
             configurable: true,
             get() {
                 if (!warnedGet && window.console) {
-                    console.warn('[Weline] window.WelineConfig 已废弃，请使用 window.Weline.config');
+                    console.warn('[Weline] window.WelineConfig 已废弃，请改用 Weline.config 或 Weline.Theme.applyConfig(...) 注入配置。');
                     warnedGet = true;
                 }
                 return runtimeConfig;
             },
             set(value) {
                 if (!warnedSet && window.console) {
-                    console.warn('[Weline] window.WelineConfig 设置方式已废弃，请使用 Weline.Theme.applyConfig(...)');
+                    console.warn('[Weline] window.WelineConfig 设置方式已废弃，请改用 Weline.Theme.applyConfig(...) 注入配置。');
                     warnedSet = true;
                 }
                 mergeConfig(value);
@@ -1062,137 +1063,115 @@
         },
 
         /**
-         * i18n 国际化对象（自动从全局配置读取）
+         * i18n 国际化对象（代理到 i18n 模块）
          */
         i18n: (function () {
-            // 自动从全局配置读取 i18n 配置
-            const i18nConfig = runtimeConfig.i18n || {};
-            const currentLang = runtimeConfig.currentLang || i18nConfig.currentLang || 'zh_Hans_CN';
-
-            // URL 解析辅助函数
-            const resolveApiUrl = (path) => {
-                if (!path) return '';
-                if (/^https?:\/\//i.test(path)) {
-                    return path;
-                }
-
-                // 尝试使用 Weline.Url.resolve
-                if (window.Weline && window.Weline.Url && typeof window.Weline.Url.resolve === 'function') {
-                    try {
-                        return window.Weline.Url.resolve(path, { type: 'frontend' });
-                    } catch (e) {
-                        // 如果解析失败，使用原始路径
+            // 创建一个代理对象，按需加载 i18n 模块
+            const i18nProxy = {
+                get currentLang() {
+                    // 优先从 i18n 模块获取
+                    if (window.WelineI18n && window.WelineI18n.currentLang) {
+                        return window.WelineI18n.currentLang;
                     }
-                }
-
-                // Fallback: 直接返回绝对路径
-                const normalizedOrigin = window.location.origin.replace(/\/+$/, '');
-                const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-                return normalizedOrigin + '/' + cleanPath;
-            };
-
-            // 检测当前区域（frontend 或 backend）
-            const detectArea = () => {
-                const path = window.location.pathname || '';
-                if (path.indexOf('/admin') === 0 || path.indexOf('/backend') === 0) {
-                    return 'backend';
-                }
-                return 'frontend';
-            };
-
-            // 默认 API URL（根据区域自动选择）
-            const area = detectArea();
-            const defaultApiUrl = `/i18n/${area}/word/get-translations`;
-
-            const i18nObj = {
-                currentLang: currentLang,
-                dictionary: i18nConfig.dictionary || {},
-                apiUrl: resolveApiUrl(i18nConfig.apiUrl || defaultApiUrl),
-
-                setDictionary: (dict) => {
-                    i18nObj.dictionary = dict || {};
+                    // 降级：从配置获取
+                    const config = runtimeConfig.i18n || {};
+                    return runtimeConfig.currentLang || config.currentLang || 'zh_Hans_CN';
                 },
-
-                translate: (key, params = {}) => {
-                    let text = i18nObj.dictionary[key] || key;
+                get dictionary() {
+                    // 优先从 i18n 模块获取
+                    if (window.WelineI18n && window.WelineI18n.dictionary) {
+                        return window.WelineI18n.dictionary;
+                    }
+                    // 降级：从配置获取
+                    return runtimeConfig.i18n?.dictionary || {};
+                },
+                get apiUrl() {
+                    // 优先从 i18n 模块获取
+                    if (window.WelineI18n && window.WelineI18n.apiUrl) {
+                        return window.WelineI18n.apiUrl;
+                    }
+                    // 降级：从配置获取
+                    const area = window.location.pathname?.indexOf('/admin') === 0 || window.location.pathname?.indexOf('/backend') === 0 ? 'backend' : 'frontend';
+                    return runtimeConfig.i18n?.apiUrl || `/i18n/${area}/word/get-translations`;
+                },
+                setDictionary: async (dict) => {
+                    // 优先使用 i18n 模块的方法
+                    if (window.WelineI18n && typeof window.WelineI18n.setDictionary === 'function') {
+                        return window.WelineI18n.setDictionary(dict);
+                    }
+                    // 降级：直接设置到配置
+                    if (!runtimeConfig.i18n) {
+                        runtimeConfig.i18n = {};
+                    }
+                    runtimeConfig.i18n.dictionary = dict || {};
+                },
+                translate: async (key, params = {}) => {
+                    // 优先使用 i18n 模块的方法
+                    if (window.WelineI18n && typeof window.WelineI18n.translate === 'function') {
+                        return window.WelineI18n.translate(key, params);
+                    }
+                    // 降级：从配置字典翻译
+                    const dict = i18nProxy.dictionary;
+                    let text = dict[key] || key;
                     Object.keys(params).forEach(paramKey => {
                         text = text.replace(new RegExp(`%{${paramKey}}`, 'g'), params[paramKey]);
                     });
                     return text;
                 },
-
                 switchLang: async (lang) => {
+                    // 优先使用 i18n 模块的方法
+                    if (window.WelineI18n && typeof window.WelineI18n.switchLang === 'function') {
+                        return window.WelineI18n.switchLang(lang);
+                    }
+                    // 降级：使用基本 URL 参数切换
                     localStorage.setItem('weline_user_lang', lang);
                     const url = new URL(window.location.href);
                     url.searchParams.set('lang', lang);
                     window.location.href = url.toString();
                 },
-
-                // 按需加载翻译词（如果字典为空）
                 loadDictionary: async function () {
-                    if (Object.keys(this.dictionary).length > 0) {
-                        return this.dictionary;
+                    // 优先使用 i18n 模块的方法
+                    if (window.WelineI18n && typeof window.WelineI18n.loadDictionary === 'function') {
+                        return window.WelineI18n.loadDictionary();
                     }
-
-                    try {
-                        const response = await fetch(this.apiUrl, {
-                            method: 'GET',
-                            headers: {
-                                'Accept': 'application/json',
-                            },
-                            credentials: 'include'
-                        });
-
-                        if (response.ok) {
-                            const result = await response.json();
-                            if (result.success && result.data) {
-                                this.dictionary = result.data.dictionary || result.data || {};
-                                return this.dictionary;
-                            }
-                        }
-                    } catch (error) {
-                        console.warn('[Weline.i18n] 加载翻译字典失败:', error);
-                    }
-
-                    return this.dictionary;
+                    // 降级：返回当前字典
+                    return i18nProxy.dictionary;
                 },
             };
-
-            // 如果字典为空，尝试从多个来源读取（PHP 可能在多个地方设置了 dictionary）
-            // PHP 在模板编译时会收集翻译词并传递给前端
-            if (Object.keys(i18nObj.dictionary).length === 0) {
-                // 1. 优先从全局配置读取
-                if (i18nConfig.dictionary && Object.keys(i18nConfig.dictionary).length > 0) {
-                    i18nObj.dictionary = i18nConfig.dictionary;
-                }
-                // 2. 从 window.site.i18n 读取（footer hook 设置的）
-                else if (window.site && window.site.i18n && typeof window.site.i18n === 'object' && Object.keys(window.site.i18n).length > 0) {
-                    i18nObj.dictionary = window.site.i18n;
-                }
-                // 3. 从 window.__WelineI18nDictionary 读取（如果存在）
-                else if (window.__WelineI18nDictionary && typeof window.__WelineI18nDictionary === 'object' && Object.keys(window.__WelineI18nDictionary).length > 0) {
-                    i18nObj.dictionary = window.__WelineI18nDictionary;
-                    delete window.__WelineI18nDictionary; // 清理临时变量
-                }
-            }
-
-            return i18nObj;
+            return i18nProxy;
         })(),
 
         /**
-         * 货币和语言切换对象
+         * 货币和语言切换对象（代理到各自模块）
          */
         Locale: {
-            currentCurrency: runtimeConfig.currentCurrency || 'CNY',
-            currentLang: runtimeConfig.currentLang || 'zh_Hans_CN',
-
+            get currentCurrency() {
+                // 优先从 currency 模块获取
+                if (window.WelineCurrency && typeof window.WelineCurrency.getCurrentCurrency === 'function') {
+                    return window.WelineCurrency.getCurrentCurrency();
+                }
+                // 降级：从配置获取
+                return runtimeConfig.currentCurrency || 'CNY';
+            },
+            get currentLang() {
+                // 优先从 i18n 模块获取
+                if (window.WelineI18n && typeof window.WelineI18n.getCurrentLang === 'function') {
+                    return window.WelineI18n.getCurrentLang();
+                }
+                // 降级：从配置获取
+                return runtimeConfig.currentLang || 'zh_Hans_CN';
+            },
             switchCurrency: async (currency) => {
+                // 优先使用 currency 模块的方法
+                if (window.WelineCurrency && typeof window.WelineCurrency.switchCurrency === 'function') {
+                    return window.WelineCurrency.switchCurrency(currency);
+                }
+                // 降级：使用基本 URL 参数切换
                 localStorage.setItem('weline_user_currency', currency);
                 const url = new URL(window.location.href);
                 url.searchParams.set('currency', currency);
                 window.location.href = url.toString();
             },
-
             switchLang: async (lang) => {
                 return Weline.i18n.switchLang(lang);
             },
@@ -1300,18 +1279,39 @@
             },
 
             init: function () {
+                // 确保主题列表已初始化
+                if (!this.themes || this.themes.length === 0) {
+                    this.themes = runtimeConfig.theme?.available || ['light'];
+                }
+
                 const savedTheme = localStorage.getItem('weline-theme');
                 let systemTheme = 'light';
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     systemTheme = 'dark';
                 }
-                const theme = savedTheme || systemTheme;
+
+                // 检查保存的主题是否在可用列表中
+                let theme = savedTheme;
+                if (theme && !this.themes.includes(theme)) {
+                    // 如果保存的主题不可用，清除它并使用系统主题
+                    localStorage.removeItem('weline-theme');
+                    theme = null;
+                }
+
+                // 如果没有保存的主题，使用系统主题，但要确保系统主题在可用列表中
+                if (!theme) {
+                    theme = this.themes.includes(systemTheme) ? systemTheme : (this.themes[0] || 'light');
+                }
+
                 this.switch(theme);
 
                 if (window.matchMedia) {
                     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                         if (!localStorage.getItem('weline-theme')) {
-                            this.switch(e.matches ? 'dark' : 'light');
+                            // 只有在没有手动保存主题时才跟随系统主题，但要确保系统主题在可用列表中
+                            const newSystemTheme = e.matches ? 'dark' : 'light';
+                            const validTheme = this.themes.includes(newSystemTheme) ? newSystemTheme : (this.themes[0] || 'light');
+                            this.switch(validTheme);
                         }
                     });
                 }
@@ -1857,177 +1857,7 @@
         }
     })();
 
-    // ========== Mini购物车处理（在购物车模块declare后） ==========
-    (function () {
-        'use strict';
-
-        let miniCartInitialized = false;
-
-        function initMiniCart() {
-            if (miniCartInitialized) {
-                return;
-            }
-
-            const headerCart = document.querySelector('.header-cart');
-            if (!headerCart) {
-                return;
-            }
-
-            const miniCart = document.getElementById('mini-cart');
-            const miniCartOverlay = document.getElementById('mini-cart-overlay');
-            const miniCartClose = document.getElementById('mini-cart-close');
-            const cartLink = headerCart.querySelector('.cart-link');
-
-            if (!miniCart || !miniCartOverlay) {
-                return;
-            }
-
-            // 打开购物车
-            function openMiniCart() {
-                headerCart.classList.add('mini-cart-open');
-                miniCart.setAttribute('aria-hidden', 'false');
-                miniCartOverlay.setAttribute('aria-hidden', 'false');
-                document.body.style.overflow = 'hidden';
-
-                // 加载购物车内容
-                if (window.Weline && window.Weline.Api) {
-                    loadMiniCartContent();
-                }
-            }
-
-            // 关闭购物车
-            function closeMiniCart() {
-                headerCart.classList.remove('mini-cart-open');
-                miniCart.setAttribute('aria-hidden', 'true');
-                miniCartOverlay.setAttribute('aria-hidden', 'true');
-                document.body.style.overflow = '';
-            }
-
-            // 加载购物车内容
-            async function loadMiniCartContent() {
-                try {
-                    if (!window.Weline || !window.Weline.Api) {
-                        return;
-                    }
-
-                    // 这里可以调用API获取购物车内容
-                    // const cartData = await window.Weline.Api.request('/cart/mini', { method: 'GET' });
-                    // renderMiniCart(cartData);
-                } catch (error) {
-                    console.error('加载购物车内容失败:', error);
-                }
-            }
-
-            // 渲染购物车内容
-            function renderMiniCart(cartData) {
-                const miniCartItems = document.getElementById('mini-cart-items');
-                const miniCartEmpty = document.getElementById('mini-cart-empty');
-                const miniCartFooter = document.getElementById('mini-cart-footer');
-
-                if (!miniCartItems || !miniCartEmpty) {
-                    return;
-                }
-
-                if (cartData && cartData.items && cartData.items.length > 0) {
-                    miniCartEmpty.style.display = 'none';
-                    miniCartItems.style.display = 'block';
-                    if (miniCartFooter) {
-                        miniCartFooter.style.display = 'block';
-                    }
-                    // 渲染购物车商品列表
-                    // TODO: 实现商品列表渲染逻辑
-                } else {
-                    miniCartEmpty.style.display = 'flex';
-                    miniCartItems.style.display = 'none';
-                    if (miniCartFooter) {
-                        miniCartFooter.style.display = 'none';
-                    }
-                }
-            }
-
-            // 绑定事件
-            if (cartLink) {
-                cartLink.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openMiniCart();
-                });
-            }
-
-            if (miniCartClose) {
-                miniCartClose.addEventListener('click', closeMiniCart);
-            }
-
-            if (miniCartOverlay) {
-                miniCartOverlay.addEventListener('click', closeMiniCart);
-            }
-
-            // ESC键关闭
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && headerCart.classList.contains('mini-cart-open')) {
-                    closeMiniCart();
-                }
-            });
-
-            miniCartInitialized = true;
-        }
-
-        // 监听购物车模块declare事件
-        function waitForCartModule() {
-            if (window.Weline && window.Weline.declarer) {
-                // 检查购物车模块是否已声明
-                if (window.Weline.declarer.isDeclared('cart') || window.Weline.declarer.isDeclared('api')) {
-                    initMiniCart();
-                } else {
-                    // 监听declare事件
-                    const originalDeclare = window.Weline.declarer.declare;
-                    if (originalDeclare) {
-                        window.Weline.declarer.declare = function (...args) {
-                            const result = originalDeclare.apply(this, args);
-                            const moduleNames = Array.isArray(args[0]) ? args[0] : [args[0]];
-                            if (moduleNames.includes('cart') || moduleNames.includes('api')) {
-                                setTimeout(initMiniCart, 0);
-                            }
-                            return result;
-                        };
-                    }
-                }
-            } else {
-                // 如果Weline未加载，延迟重试
-                setTimeout(waitForCartModule, 100);
-            }
-        }
-
-        // 等待DOM和Weline加载
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', waitForCartModule);
-        } else {
-            setTimeout(waitForCartModule, 0);
-        }
-    })();
-
-    // ========== 声明并加载 URL 模块 ==========
-    // 根据 area 自动选择前端或后端 URL 模块
-    // 前端使用 url-frontend，后端使用 url-backend
-    (function loadUrlModule() {
-        const config = window.__WelineThemeConfig || {};
-        const area = config.theme?.area || config.area || 'frontend';
-        const isBackend = area === 'backend' || area === 'admin';
-        const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
-        const urlModulePath = isBackend
-            ? 'Weline_Framework::js/url-backend.js'
-            : 'Weline_Framework::js/url-frontend.js';
-
-        if (window.Weline && window.Weline.declare) {
-            Weline.declare(urlModuleName, true, urlModulePath);
-        } else if (window.Weline && window.Weline.load) {
-            // 如果 declare 不可用，直接加载
-            window.Weline.load(urlModuleName, urlModulePath);
-        }
-    })();
-
     // ========== 初始化语言切换器 ==========
-    // 使用框架语言配置生成语言切换链接
     (function initLanguageSwitcher() {
         /**
          * 获取当前语言代码
@@ -2063,33 +1893,23 @@
 
         /**
          * 将语言代码转换为显示标识
-         * zh_Hans_CN -> ZH, en_US -> EN, zh_Hant_TW -> TW
          */
         function getLangDisplay(langCode) {
             if (!langCode) {
                 return 'ZH';
             }
-
-            // 提取语言代码的主要部分
             const parts = langCode.split('_');
             if (parts.length >= 2) {
-                // 取前两个部分，如 zh_Hans -> ZH, en_US -> EN
                 const lang = parts[0].toUpperCase();
                 const region = parts[1].toUpperCase();
-
-                // 如果是中文，显示 ZH
                 if (lang === 'ZH') {
                     if (region === 'HANT') {
-                        return 'TW'; // 繁体中文显示 TW
+                        return 'TW';
                     }
                     return 'ZH';
                 }
-
-                // 其他语言显示前两个字母
                 return lang.substring(0, 2);
             }
-
-            // 如果格式不对，返回前两个大写字母
             return langCode.substring(0, 2).toUpperCase();
         }
 
@@ -2101,15 +1921,15 @@
             const langDisplay = getLangDisplay(currentLang);
 
             // 更新 current-language 元素
-            const currentLangElements = document.querySelectorAll('.current-language');
+            const currentLangElements = document.querySelectorAll('[data-i18n-switcher] .current-language');
             currentLangElements.forEach(el => {
                 el.textContent = langDisplay;
             });
 
             // 更新 active 状态
-            const languageSwitcher = document.querySelector('.header-language-switcher, .language-switcher');
-            if (languageSwitcher) {
-                const languageOptions = languageSwitcher.querySelectorAll('.language-option, a[data-lang]');
+            const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
+            languageSwitchers.forEach(languageSwitcher => {
+                const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
                     if (langCode === currentLang) {
@@ -2118,104 +1938,181 @@
                         option.classList.remove('active');
                     }
                 });
-            }
+            });
         }
 
+        /**
+         * 更新语言切换器链接
+         */
         function updateLanguageSwitcherLinks() {
-            const languageSwitcher = document.querySelector('.header-language-switcher, .language-switcher');
-            if (!languageSwitcher) {
+            const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
+            if (languageSwitchers.length === 0) {
                 return;
             }
 
-            const languageOptions = languageSwitcher.querySelectorAll('.language-option, a[data-lang]');
-            if (languageOptions.length === 0) {
-                return;
-            }
-
-            // 获取当前 URL 和语言配置
             const currentPath = window.location.pathname + window.location.search;
             const config = window.__WelineThemeConfig || {};
-            const availableLangs = config.i18n?.availableLangs || config.availableLangs || [
-                { code: 'zh_Hans_CN', name: '简体中文' },
-                { code: 'en_US', name: 'English' },
-                { code: 'zh_Hant_TW', name: '繁體中文' }
-            ];
 
-            languageOptions.forEach(option => {
-                const langCode = option.getAttribute('data-lang') || option.dataset.lang;
-                if (!langCode) {
-                    return;
+            // 获取当前货币（用于保持货币）
+            let currentCurrency = '';
+            const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
+            for (const part of pathParts) {
+                if (/^[A-Z]{3}$/.test(part)) {
+                    currentCurrency = part;
+                    break;
                 }
+            }
+            if (!currentCurrency) {
+                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+            }
 
-                // 使用 window.urlWithLang 生成带语言的 URL
-                if (typeof window.urlWithLang === 'function') {
-                    const langUrl = window.urlWithLang(currentPath, langCode);
-                    option.setAttribute('href', langUrl);
-                } else if (typeof window.url === 'function') {
-                    // 降级方案：使用 window.url 并手动添加 lang 参数
-                    const url = new URL(currentPath, window.location.origin);
-                    url.searchParams.set('lang', langCode);
-                    option.setAttribute('href', url.pathname + url.search);
-                } else {
-                    // 最后的降级方案：直接使用查询参数
-                    const url = new URL(currentPath, window.location.origin);
-                    url.searchParams.set('lang', langCode);
-                    option.setAttribute('href', url.pathname + url.search);
-                }
+            languageSwitchers.forEach(languageSwitcher => {
+                const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
+                languageOptions.forEach(option => {
+                    const langCode = option.getAttribute('data-lang') || option.dataset.lang;
+                    if (!langCode) {
+                        return;
+                    }
+
+                    let langUrl = '';
+
+                    // 使用 window.urlWithLang 生成带语言的 URL（框架推荐的路径格式，会自动保持货币）
+                    if (typeof window.urlWithLang === 'function') {
+                        langUrl = window.urlWithLang(currentPath, langCode);
+                    } else if (typeof window.inject_path === 'function') {
+                        // 使用 inject_path（会自动保持货币）
+                        const pathOnly = currentPath.split('?')[0];
+                        const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+                        langUrl = window.inject_path(pathOnly, langCode, 'lang') + (search ? '?' + search : '');
+                    } else {
+                        // 降级方案：手动构建路径格式的 URL（需要手动保持货币）
+                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+                        const currencyPattern = /^[A-Z]{3}$/;
+                        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+                        const cleanPath = '/' + filteredParts.join('/');
+                        const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+                        langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                    }
+
+                    if (langUrl) {
+                        option.setAttribute('href', langUrl);
+                    }
+                });
             });
 
-            // 更新当前语言显示
             updateCurrentLanguageDisplay();
         }
 
-        // 等待 DOM 和 URL 模块加载
+        /**
+         * 切换语言
+         */
+        function switchLang(lang) {
+            if (!lang) {
+                return;
+            }
+
+            // 优先使用 select_language 函数（来自 url-frontend 模块，会自动保持货币）
+            if (typeof window.select_language === 'function') {
+                window.select_language(lang);
+                return;
+            }
+
+            // 次优先使用 urlWithLang 函数
+            if (typeof window.urlWithLang === 'function') {
+                const currentPath = window.location.pathname + window.location.search;
+                const langUrl = window.urlWithLang(currentPath, lang);
+                localStorage.setItem('weline_user_lang', lang);
+                if (typeof window.setCookie === 'function') {
+                    window.setCookie('WELINE_USER_LANG', lang, 365);
+                }
+                window.location.href = langUrl;
+                return;
+            }
+
+            // 降级方案：使用 inject_path
+            if (typeof window.inject_path === 'function') {
+                const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + window.location.search;
+                localStorage.setItem('weline_user_lang', lang);
+                if (typeof window.setCookie === 'function') {
+                    window.setCookie('WELINE_USER_LANG', lang, 365);
+                }
+                window.location.href = langUrl;
+                return;
+            }
+
+            // 最后的降级方案：手动构建 URL
+            let currentPath = window.location.pathname;
+            const pathParts = currentPath.split('/').filter(Boolean);
+            let currentCurrency = '';
+            for (const part of pathParts) {
+                if (/^[A-Z]{3}$/.test(part)) {
+                    currentCurrency = part;
+                    break;
+                }
+            }
+            if (!currentCurrency) {
+                const config = window.__WelineThemeConfig || {};
+                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+            }
+
+            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+            const currencyPattern = /^[A-Z]{3}$/;
+            const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+            const cleanPath = '/' + filteredParts.join('/');
+            const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
+
+            localStorage.setItem('weline_user_lang', lang);
+            if (typeof window.setCookie === 'function') {
+                window.setCookie('WELINE_USER_LANG', lang, 365);
+            }
+            window.location.href = langUrl;
+        }
+
+        // 等待 URL 模块加载
         function waitForUrlModule() {
             if (typeof window.urlWithLang === 'function' || typeof window.url === 'function') {
                 updateLanguageSwitcherLinks();
-            } else if (window.Weline && window.Weline.load) {
-                // 如果 URL 模块未加载，尝试加载
-                const config = window.__WelineThemeConfig || {};
-                const area = config.theme?.area || config.area || 'frontend';
-                const isBackend = area === 'backend' || area === 'admin';
-                const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
-                const urlModulePath = isBackend
-                    ? 'Weline_Framework::js/url-backend.js'
-                    : 'Weline_Framework::js/url-frontend.js';
+                return;
+            }
 
-                window.Weline.load(urlModuleName, urlModulePath).then(() => {
-                    setTimeout(updateLanguageSwitcherLinks, 100);
-                }).catch(() => {
-                    // 加载失败，使用降级方案
-                    setTimeout(updateLanguageSwitcherLinks, 100);
+            // 延迟重试
+            setTimeout(() => {
+                updateLanguageSwitcherLinks();
+            }, 100);
+        }
+
+        // 等待 DOM 加载
+        function initAfterDOMReady() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                    setTimeout(waitForUrlModule, 100);
                 });
             } else {
-                // 延迟重试
                 setTimeout(waitForUrlModule, 100);
             }
         }
 
-        // 等待 DOM 加载
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', waitForUrlModule);
-        } else {
-            setTimeout(waitForUrlModule, 0);
-        }
+        initAfterDOMReady();
 
-        // 监听语言切换事件，更新显示
+        // 监听语言切换事件
         document.addEventListener('click', function (e) {
-            const langOption = e.target.closest('.language-option, a[data-lang]');
+            const languageSwitcher = e.target.closest('[data-i18n-switcher]');
+            if (!languageSwitcher) {
+                return;
+            }
+
+            const langOption = e.target.closest('[data-language-option], .language-option, a[data-lang]');
             if (langOption) {
                 const langCode = langOption.getAttribute('data-lang') || langOption.dataset.lang;
                 if (langCode) {
-                    // 立即更新显示（不等待页面跳转）
-                    setTimeout(() => {
-                        updateCurrentLanguageDisplay();
-                    }, 50);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    switchLang(langCode);
                 }
             }
         });
 
-        // 监听 URL 变化（用于浏览器前进/后退）
+        // 监听 URL 变化
         let lastUrl = window.location.href;
         setInterval(() => {
             if (window.location.href !== lastUrl) {
@@ -2226,7 +2123,6 @@
     })();
 
     // ========== 初始化货币切换器 ==========
-    // 使用框架货币配置生成货币切换链接
     (function initCurrencySwitcher() {
         /**
          * 获取当前货币代码
@@ -2267,15 +2163,15 @@
             const currentCurrency = getCurrentCurrency();
 
             // 更新 current-currency 元素
-            const currentCurrencyElements = document.querySelectorAll('.current-currency');
+            const currentCurrencyElements = document.querySelectorAll('[data-currency-switcher] .current-currency');
             currentCurrencyElements.forEach(el => {
                 el.textContent = currentCurrency;
             });
 
             // 更新 active 状态
-            const currencySwitcher = document.querySelector('.header-currency-switcher, .currency-switcher');
-            if (currencySwitcher) {
-                const currencyOptions = currencySwitcher.querySelectorAll('.currency-option, a[data-currency]');
+            const currencySwitchers = document.querySelectorAll('[data-currency-switcher]');
+            currencySwitchers.forEach(currencySwitcher => {
+                const currencyOptions = currencySwitcher.querySelectorAll('[data-currency-option], .currency-option, a[data-currency]');
                 currencyOptions.forEach(option => {
                     const currencyCode = (option.getAttribute('data-currency') || option.dataset.currency || '').toUpperCase();
                     if (currencyCode === currentCurrency) {
@@ -2284,105 +2180,183 @@
                         option.classList.remove('active');
                     }
                 });
-            }
+            });
         }
 
+        /**
+         * 更新货币切换器链接
+         */
         function updateCurrencySwitcherLinks() {
-            const currencySwitcher = document.querySelector('.header-currency-switcher, .currency-switcher');
-            if (!currencySwitcher) {
+            const currencySwitchers = document.querySelectorAll('[data-currency-switcher]');
+            if (currencySwitchers.length === 0) {
                 return;
             }
 
-            const currencyOptions = currencySwitcher.querySelectorAll('.currency-option, a[data-currency]');
-            if (currencyOptions.length === 0) {
-                return;
-            }
-
-            // 获取当前 URL 和货币配置
             const currentPath = window.location.pathname + window.location.search;
             const config = window.__WelineThemeConfig || {};
-            const availableCurrencies = config.availableCurrencies || [
-                { code: 'CNY', name: 'CNY (¥)' },
-                { code: 'USD', name: 'USD ($)' },
-                { code: 'EUR', name: 'EUR (€)' },
-                { code: 'GBP', name: 'GBP (£)' }
-            ];
 
-            currencyOptions.forEach(option => {
-                const currencyCode = (option.getAttribute('data-currency') || option.dataset.currency || '').toUpperCase();
-                if (!currencyCode) {
-                    return;
+            // 获取当前语言（用于保持语言）
+            let currentLang = '';
+            const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
+            for (const part of pathParts) {
+                if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
+                    currentLang = part;
+                    break;
                 }
+            }
+            if (!currentLang) {
+                currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
+            }
 
-                // 使用 window.urlWithCurrency 生成带货币的 URL
-                if (typeof window.urlWithCurrency === 'function') {
-                    const currencyUrl = window.urlWithCurrency(currentPath, currencyCode);
-                    option.setAttribute('href', currencyUrl);
-                } else if (typeof window.url === 'function') {
-                    // 降级方案：使用 window.url 并手动添加 currency 参数
-                    const url = new URL(currentPath, window.location.origin);
-                    url.searchParams.set('currency', currencyCode);
-                    option.setAttribute('href', url.pathname + url.search);
-                } else {
-                    // 最后的降级方案：直接使用查询参数
-                    const url = new URL(currentPath, window.location.origin);
-                    url.searchParams.set('currency', currencyCode);
-                    option.setAttribute('href', url.pathname + url.search);
-                }
+            currencySwitchers.forEach(currencySwitcher => {
+                const currencyOptions = currencySwitcher.querySelectorAll('[data-currency-option], .currency-option, a[data-currency]');
+                currencyOptions.forEach(option => {
+                    const currencyCode = (option.getAttribute('data-currency') || option.dataset.currency || '').toUpperCase();
+                    if (!currencyCode) {
+                        return;
+                    }
+
+                    let currencyUrl = '';
+
+                    // 使用 window.urlWithCurrency 生成带货币的 URL（框架推荐的路径格式，会自动保持语言）
+                    if (typeof window.urlWithCurrency === 'function') {
+                        currencyUrl = window.urlWithCurrency(currentPath, currencyCode);
+                    } else if (typeof window.inject_path === 'function') {
+                        // 使用 inject_path（会自动保持语言）
+                        const pathOnly = currentPath.split('?')[0];
+                        const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+                        currencyUrl = window.inject_path(pathOnly, currencyCode, 'currency') + (search ? '?' + search : '');
+                    } else {
+                        // 降级方案：手动构建路径格式的 URL（需要手动保持语言）
+                        const currencyPattern = /^[A-Z]{3}$/;
+                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+                        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+                        const cleanPath = '/' + filteredParts.join('/');
+                        const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
+                        currencyUrl = '/' + currencyCode + '/' + currentLang + cleanPath + (search ? '?' + search : '');
+                    }
+
+                    if (currencyUrl) {
+                        option.setAttribute('href', currencyUrl);
+                    }
+                });
             });
 
-            // 更新当前货币显示
             updateCurrentCurrencyDisplay();
         }
 
-        // 等待 DOM 和 URL 模块加载
+        /**
+         * 切换货币
+         */
+        function switchCurrency(currency) {
+            if (!currency) {
+                return;
+            }
+
+            currency = currency.toUpperCase();
+
+            // 优先使用 select_currency 函数（来自 url-frontend 模块，会自动保持语言）
+            if (typeof window.select_currency === 'function') {
+                window.select_currency(currency);
+                return;
+            }
+
+            // 次优先使用 urlWithCurrency 函数
+            if (typeof window.urlWithCurrency === 'function') {
+                const currentPath = window.location.pathname + window.location.search;
+                const currencyUrl = window.urlWithCurrency(currentPath, currency);
+                localStorage.setItem('weline_user_currency', currency);
+                if (typeof window.setCookie === 'function') {
+                    window.setCookie('WELINE_USER_CURRENCY', currency, 365);
+                }
+                window.location.href = currencyUrl;
+                return;
+            }
+
+            // 降级方案：使用 inject_path
+            if (typeof window.inject_path === 'function') {
+                const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + window.location.search;
+                localStorage.setItem('weline_user_currency', currency);
+                if (typeof window.setCookie === 'function') {
+                    window.setCookie('WELINE_USER_CURRENCY', currency, 365);
+                }
+                window.location.href = currencyUrl;
+                return;
+            }
+
+            // 最后的降级方案：手动构建 URL
+            let currentPath = window.location.pathname;
+            const pathParts = currentPath.split('/').filter(Boolean);
+            let currentLang = '';
+            for (const part of pathParts) {
+                if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
+                    currentLang = part;
+                    break;
+                }
+            }
+            if (!currentLang) {
+                const config = window.__WelineThemeConfig || {};
+                currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
+            }
+
+            const currencyPattern = /^[A-Z]{3}$/;
+            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+            const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+            const cleanPath = '/' + filteredParts.join('/');
+            const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + window.location.search;
+
+            localStorage.setItem('weline_user_currency', currency);
+            if (typeof window.setCookie === 'function') {
+                window.setCookie('WELINE_USER_CURRENCY', currency, 365);
+            }
+            window.location.href = currencyUrl;
+        }
+
+        // 等待 URL 模块加载
         function waitForUrlModule() {
             if (typeof window.urlWithCurrency === 'function' || typeof window.url === 'function') {
                 updateCurrencySwitcherLinks();
-            } else if (window.Weline && window.Weline.load) {
-                // 如果 URL 模块未加载，尝试加载
-                const config = window.__WelineThemeConfig || {};
-                const area = config.theme?.area || config.area || 'frontend';
-                const isBackend = area === 'backend' || area === 'admin';
-                const urlModuleName = isBackend ? 'url-backend' : 'url-frontend';
-                const urlModulePath = isBackend
-                    ? 'Weline_Framework::js/url-backend.js'
-                    : 'Weline_Framework::js/url-frontend.js';
+                return;
+            }
 
-                window.Weline.load(urlModuleName, urlModulePath).then(() => {
-                    setTimeout(updateCurrencySwitcherLinks, 100);
-                }).catch(() => {
-                    // 加载失败，使用降级方案
-                    setTimeout(updateCurrencySwitcherLinks, 100);
+            // 延迟重试
+            setTimeout(() => {
+                updateCurrencySwitcherLinks();
+            }, 100);
+        }
+
+        // 等待 DOM 加载
+        function initAfterDOMReady() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                    setTimeout(waitForUrlModule, 100);
                 });
             } else {
-                // 延迟重试
                 setTimeout(waitForUrlModule, 100);
             }
         }
 
-        // 等待 DOM 加载
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', waitForUrlModule);
-        } else {
-            setTimeout(waitForUrlModule, 0);
-        }
+        initAfterDOMReady();
 
-        // 监听货币切换事件，更新显示
+        // 监听货币切换事件
         document.addEventListener('click', function (e) {
-            const currencyOption = e.target.closest('.currency-option, a[data-currency]');
+            const currencySwitcher = e.target.closest('[data-currency-switcher]');
+            if (!currencySwitcher) {
+                return;
+            }
+
+            const currencyOption = e.target.closest('[data-currency-option], .currency-option, a[data-currency]');
             if (currencyOption) {
                 const currencyCode = (currencyOption.getAttribute('data-currency') || currencyOption.dataset.currency || '').toUpperCase();
                 if (currencyCode) {
-                    // 立即更新显示（不等待页面跳转）
-                    setTimeout(() => {
-                        updateCurrentCurrencyDisplay();
-                    }, 50);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    switchCurrency(currencyCode);
                 }
             }
         });
 
-        // 监听 URL 变化（用于浏览器前进/后退）
+        // 监听 URL 变化
         let lastUrl = window.location.href;
         setInterval(() => {
             if (window.location.href !== lastUrl) {
