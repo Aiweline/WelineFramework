@@ -33,6 +33,7 @@ class Product extends EavModel
     public const fields_meta_keywords = 'meta_keywords';
     public const fields_spu = 'spu';
     public const fields_sku = 'sku';
+    public const fields_HANDLE = 'handle';
     public const fields_stock = 'stock';
     public const fields_cost = 'cost';
     public const fields_price = 'price';
@@ -128,7 +129,49 @@ class Product extends EavModel
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 如果表不存在，执行安装
+        if (!$setup->tableExist()) {
+            $this->install($setup, $context);
+            return;
+        }
+        
+        // 添加 handle 字段（如果不存在）
+        if (!$setup->hasField(self::fields_HANDLE)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_HANDLE,
+                    self::fields_sku, // 在sku字段之后添加
+                    TableInterface::column_type_VARCHAR,
+                    255,
+                    '',
+                    '产品 Handle（简短标识，用于友好URL）'
+                )
+                ->alter();
+            
+            // 添加 handle 索引
+            $setup->alterTable()
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_handle',
+                    self::fields_HANDLE,
+                    '产品 Handle 索引'
+                )
+                ->alter();
+        }
+        
+        // 移除 url_key 字段（如果存在）
+        if ($setup->hasField('url_key')) {
+            $setup->alterTable()
+                ->dropColumn('url_key')
+                ->alter();
+            
+            // 移除 url_key 索引（如果存在）
+            if ($setup->hasIndex('idx_url_key')) {
+                $setup->alterTable()
+                    ->dropIndex('idx_url_key')
+                    ->alter();
+            }
+        }
     }
 
     /**
@@ -173,6 +216,13 @@ class Product extends EavModel
                     60,
                     'not null unique',
                     '最小存货单位（SKU）'
+                )
+                ->addColumn(
+                    $this::fields_HANDLE,
+                    TableInterface::column_type_VARCHAR,
+                    255,
+                    '',
+                    '产品 Handle（简短标识，用于友好URL）'
                 )
                 ->addColumn(
                     $this::fields_stock,
@@ -306,6 +356,12 @@ class Product extends EavModel
                     'idx_parent_id',
                     $this::fields_parent_id,
                     '父级ID索引'
+                )
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_handle',
+                    $this::fields_HANDLE,
+                    '产品 Handle 索引'
                 )
                 ->create();
         }
