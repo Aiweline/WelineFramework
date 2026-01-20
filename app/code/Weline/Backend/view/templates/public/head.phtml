@@ -23,6 +23,8 @@ endif;
 <!--<script src="@static(Weline_Backend::base/require.configs.js)"></script>-->
 <!--加载配置页头-->
 <?php
-echo $this->getHeader()->getHtml();
+if($this->getHeader()){
+    echo $this->getHeader()->getHtml();
+}
 ?>
 

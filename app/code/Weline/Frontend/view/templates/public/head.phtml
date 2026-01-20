@@ -83,5 +83,7 @@ $themeConfigPayload = [
 <!-- 注意：Theme JS 和初始化由 Theme 模块的 head partial 负责，不在此处加载 -->
 <!--加载配置页头-->
 <?php
-echo $this->getHeader()->getHtml();
+if($this->getHeader()){
+    echo $this->getHeader()->getHtml();
+}
 ?>

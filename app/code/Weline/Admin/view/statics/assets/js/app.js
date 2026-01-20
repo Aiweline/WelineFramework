@@ -16,8 +16,44 @@ File: Main Js File
         var isCollapsedMode = $('body').hasClass('vertical-collpsed');
 
         if (!isCollapsedMode) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    sessionId: 'debug-session',
+                    runId: 'pre-fix',
+                    hypothesisId: 'H1',
+                    location: 'Admin/app.js:initMetisMenu',
+                    message: 'Before init metisMenu on #sidebar-menu',
+                    data: {
+                        sidebarCount: $("#sidebar-menu").length,
+                        firstTag: $("#sidebar-menu").get(0) ? $("#sidebar-menu").get(0).tagName : null
+                    },
+                    timestamp: Date.now()
+                })
+            }).catch(function () {});
+            // #endregion agent log
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    sessionId: 'debug-session',
+                    runId: 'post-fix',
+                    hypothesisId: 'H3',
+                    location: 'Admin/app.js:initMetisMenu',
+                    message: 'Before init metisMenu on #side-menu',
+                    data: {
+                        sideMenuCount: $("#side-menu").length,
+                        firstTag: $("#side-menu").get(0) ? $("#side-menu").get(0).tagName : null
+                    },
+                    timestamp: Date.now()
+                })
+            }).catch(function () {});
+            // #endregion agent log
             // 只在非图标模式下启用MetisMenu
-            $("#sidebar-menu").metisMenu();
+            $("#side-menu").metisMenu();
         } else {
             // 图标模式下不初始化MetisMenu，完全依赖CSS hover
             console.log('图标模式：已禁用MetisMenu，依赖CSS hover效果');
@@ -83,6 +119,23 @@ File: Main Js File
         // 注意：允许 frequent-menus-section 下的菜单显示激活状态，但禁止对其进行滚动定位
         $(document).ready(function () {
             if ($("#sidebar-menu").length > 0) {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        sessionId: 'debug-session',
+                        runId: 'pre-fix',
+                        hypothesisId: 'H1',
+                        location: 'Admin/app.js:initMenuItemScroll',
+                        message: '#sidebar-menu presence before scroll logic',
+                        data: {
+                            sidebarCount: $("#sidebar-menu").length
+                        },
+                        timestamp: Date.now()
+                    })
+                }).catch(function () {});
+                // #endregion agent log
                 // 查找所有激活的菜单项，排除 frequent-menus-section 和 frequent-menu-item 相关的菜单项
                 var $activeLinks = $("#sidebar-menu .mm-active .active");
                 var $activeLink = null;
@@ -103,6 +156,24 @@ File: Main Js File
                     // 如果不在排除范围内，则使用它
                     if (!isInFrequentSection && !isFrequentMenuItem && !hasFrequentParent) {
                         $activeLink = $link;
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                sessionId: 'debug-session',
+                                runId: 'pre-fix',
+                                hypothesisId: 'H2',
+                                location: 'Admin/app.js:initMenuItemScroll',
+                                message: 'Chosen active menu link for scroll',
+                                data: {
+                                    href: $link.attr('href') || null,
+                                    text: $link.text() || null
+                                },
+                                timestamp: Date.now()
+                            })
+                        }).catch(function () {});
+                        // #endregion agent log
                         return false; // 跳出循环
                     }
                 });
