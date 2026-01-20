@@ -105,9 +105,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // 处理更新依据条件
         if (is_string($update_where_fields) && $update_where_fields) {
             $update_where_fields = explode(',', $update_where_fields);
+            // 🔧 修复：过滤掉空字符串（explode(',', '') 会返回 ['']）
+            $update_where_fields = array_filter(array_map('trim', $update_where_fields), function($field) {
+                return !empty($field);
+            });
         }
-        if (is_array($update_where_fields)) {
-            $this->insert_update_where_fields = $update_where_fields;
+        if (is_array($update_where_fields) && !empty($update_where_fields)) {
+            $this->insert_update_where_fields = array_values($update_where_fields); // 重新索引数组
         }
         
         // 如果没有忽略主键，则需要添加主键
@@ -126,13 +130,22 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         
         // 处理 ON CONFLICT 语法
-        if (!empty($this->insert_update_fields) && !empty($this->insert_update_where_fields)) {
-            $this->exist_update_sql = 'DO UPDATE SET ';
-            foreach ($this->insert_update_fields as $field) {
-                $field = trim(str_replace(['`', '"'], '', $field));
-                $this->exist_update_sql .= "\"{$field}\"=EXCLUDED.\"{$field}\",";
+        // 🔧 修复：即使 insert_update_fields 为空，只要有 insert_update_where_fields，也应该设置 exist_update_sql
+        // 这样可以在 buildInsertForPgsql 中自动添加 ON CONFLICT 子句
+        if (!empty($this->insert_update_where_fields)) {
+            if (!empty($this->insert_update_fields)) {
+                // 如果指定了要更新的字段，只更新这些字段
+                $this->exist_update_sql = 'DO UPDATE SET ';
+                foreach ($this->insert_update_fields as $field) {
+                    $field = trim(str_replace(['`', '"'], '', $field));
+                    $this->exist_update_sql .= "\"{$field}\"=EXCLUDED.\"{$field}\",";
+                }
+                $this->exist_update_sql = trim($this->exist_update_sql, ',');
+            } else {
+                // 如果没有指定要更新的字段，更新所有字段（除了冲突检测字段和主键字段）
+                // 这里先设置一个标记，在 buildInsertForPgsql 中会根据实际字段生成更新语句
+                $this->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
             }
-            $this->exist_update_sql = trim($this->exist_update_sql, ',');
         }
         
         // 插入数据
@@ -625,76 +638,44 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function formatTableNameForPgsql(string $table): string
     {
-        // 🔧 修复：检查表名是否已经格式化（包含双引号和点号）
-        // 如果已经是 "schema"."table" 格式，直接返回，但需要修复可能的双引号重复问题
-        if (preg_match('/^"([^"]+)"\."([^"]+)"$/', $table, $matches)) {
-            // 已经是正确格式，直接返回
-            return $table;
-        }
-        
-        // 🔧 修复：处理可能已经部分格式化的表名（如 "public"."."table"）
-        // 先修复 "schema"."."table" 格式（两个连续的双引号，中间有点）
-        $table = preg_replace('/"([^"]+)"\."\."([^"]+)"/', '"$1"."$2"', $table);
-        // 修复连续的双引号："." -> "."
-        $table = preg_replace('/"\."\."/', '".', $table);
-        
-        // 如果修复后已经是正确格式，直接返回
+        // 如果已经是 "schema"."table" 这种标准格式，直接返回
         if (preg_match('/^"([^"]+)"\."([^"]+)"$/', $table)) {
             return $table;
         }
-        
-        // 移除所有引号，重新处理
-        $table = trim($table, '`"');
-        
-        // 🔧 修复：如果表名为空，抛出异常
-        if (empty($table)) {
+
+        // 去掉所有 MySQL 风格或残留的引号，统一用裸表名来解析
+        $raw = str_replace(['`', '"'], '', trim($table));
+
+        // 表名不能为空
+        if ($raw === '') {
             throw new DbException(__('表名不能为空'));
         }
-        
-        // 如果包含点号，说明是限定名（schema.table）
-        if (str_contains($table, '.')) {
-            $parts = explode('.', $table);
-            // 🔧 修复：过滤空的部分，并去除每个部分的前后空格
-            $parts = array_map('trim', $parts);
-            $parts = array_filter($parts, fn($part) => !empty($part));
-            $parts = array_values($parts); // 重新索引数组
-            
-            if (empty($parts)) {
-                throw new DbException(__('表名格式错误：%{1}', [$table]));
-            }
-            
-            // 处理数据库名 -> schema 转换
-            $dbName = $this->db_name ?? 'public';
-            if (count($parts) >= 2 && $parts[0] === $dbName) {
-                $parts[0] = 'public';
-            }
-            
-            // 如果只有一个部分，直接返回
-            if (count($parts) === 1) {
-                return '"' . $parts[0] . '"';
-            }
-            
-            // 🔧 修复：确保所有部分都不为空后再拼接
-            $formattedParts = [];
-            foreach ($parts as $part) {
-                $part = trim($part);
-                if (!empty($part)) {
-                    $formattedParts[] = $part;
-                }
-            }
-            
-            if (empty($formattedParts)) {
-                throw new DbException(__('表名格式错误：%{1}', [$table]));
-            }
-            
-            if (count($formattedParts) === 1) {
-                return '"' . $formattedParts[0] . '"';
-            }
-            
-            return '"' . implode('"."', $formattedParts) . '"';
+
+        // 按点拆分，处理 db.schema.table 或 schema.table 或 table
+        $parts = array_values(array_filter(array_map('trim', explode('.', $raw)), fn($p) => $p !== ''));
+
+        if (empty($parts)) {
+            throw new DbException(__('表名格式错误：%{1}', [$table]));
         }
-        
-        return '"' . $table . '"';
+
+        // 处理数据库名 -> schema 转换：如果首段是当前 db_name，则替换为 public
+        $dbName = $this->db_name ?? 'public';
+        if (count($parts) >= 2 && $parts[0] === $dbName) {
+            $parts[0] = 'public';
+        }
+
+        // 最多保留 schema.table 两段，多余的视为表名一部分，取最后两段
+        if (count($parts) > 2) {
+            $parts = array_slice($parts, -2);
+        }
+
+        // 只有一个部分：视为当前 schema 下的表
+        if (count($parts) === 1) {
+            return '"' . $parts[0] . '"';
+        }
+
+        // 两个部分：schema.table
+        return '"' . $parts[0] . '"."' . $parts[1] . '"';
     }
 
     /**
@@ -756,11 +737,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '*';
         }
         
-        // 如果已经包含引号，先移除
-        $field = trim($field, '`"');
-        
-        // 如果包含点号，说明是限定名（table.field 格式）
+        // 如果包含点号，说明是限定名（table.field 或 alias.field 格式）
         if (str_contains($field, '.')) {
+            // 🔧 修复：统一去掉内部的 MySQL 风格引号（`table`.`field`、`table.field`、"table"."field" 等）
+            // 然后再按点拆分并用 PostgreSQL 风格的双引号包裹
+            $field = str_replace(['`', '"'], '', $field);
             $parts = explode('.', $field);
             // 处理数据库名 -> schema 转换
             $dbName = $this->db_name ?? 'public';
@@ -770,6 +751,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '"' . implode('"."', $parts) . '"';
         }
         
+        // 普通字段名：去掉首尾引号后再包一层 PostgreSQL 风格双引号
+        $field = trim($field, '`"');
         return '"' . $field . '"';
     }
 
@@ -784,17 +767,32 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         $joins = '';
         foreach ($this->joins as $join) {
-            $table = $join[0];
+            // join[0] 里是类似 "m_role `r`" 或 "m_role r" 的字符串
+            $tableWithAlias = trim($join[0]);
             $condition = $join[1];
             $type = strtoupper($join[2] ?? 'LEFT');
-            
-            // 格式化表名
-            $table = $this->formatTableNameForPgsql($table);
+
+            // 🔧 不用正则，按空格简单拆分表名和别名
+            $rawTable = $tableWithAlias;
+            $alias = '';
+            // 直接按空格拆分，并过滤掉空字符串（多空格的情况）
+            $parts = array_values(array_filter(explode(' ', $tableWithAlias), fn($p) => $p !== ''));
+            if (count($parts) >= 2) {
+                // 最后一个 token 视为别名（去掉反引号/双引号）
+                $aliasToken = $parts[count($parts) - 1];
+                $alias = trim($aliasToken, '`"');
+                // 其余部分还原成原始表名字符串
+                $rawTable = implode(' ', array_slice($parts, 0, -1));
+            }
+
+            // 格式化表名（只对真正的表名部分做 schema/引号处理）
+            $table = $this->formatTableNameForPgsql($rawTable);
+            $aliasSql = $alias ? ' AS "' . $alias . '"' : '';
             
             // 格式化条件（处理标识符）
             $condition = $this->formatJoinCondition($condition);
             
-            $joins .= " {$type} JOIN {$table} ON {$condition} ";
+            $joins .= " {$type} JOIN {$table}{$aliasSql} ON {$condition} ";
         }
         
         return $joins;
@@ -860,22 +858,30 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $isLast = ($currentIndex === $whereCount);
             
             // 格式化字段名
+            // 情况 1：函数或复杂表达式（包含括号），例如：DATE(main_table.login_time)
+            // 这类表达式不再尝试拆分 table.field，只做简单的反引号替换，避免把函数名当成表名
             $field = $where[0];
-            if (!str_contains($field, '"') && !str_contains($field, '`')) {
-                if (str_contains($field, '.')) {
-                    $parts = explode('.', $field);
-                    $field = '"' . implode('"."', $parts) . '"';
-                } else {
-                    if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field)) {
-                        $field = '"' . $field . '"';
-                    }
-                }
+            if (is_string($field) && str_contains($field, '(')) {
+                // 仅将 MySQL 风格的 ` 标识符引号替换为 PgSQL 的 "，其余保持原样
+                $field = str_replace('`', '"', $field);
             } else {
-                // 移除反引号，使用双引号（确保 $field 是字符串）
-                if (is_string($field)) {
-                    $field = str_replace('`', '"', $field);
+                // 情况 2：普通字段或 table.field
+                if (!str_contains((string)$field, '"') && !str_contains((string)$field, '`')) {
+                    if (str_contains((string)$field, '.')) {
+                        $parts = explode('.', (string)$field);
+                        $field = '"' . implode('"."', $parts) . '"';
+                    } else {
+                        if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', (string)$field)) {
+                            $field = '"' . $field . '"';
+                        }
+                    }
                 } else {
-                    $field = (string)$field;
+                    // 已经带引号的情况：只把反引号替换为双引号，确保 PgSQL 能识别
+                    if (is_string($field)) {
+                        $field = str_replace('`', '"', $field);
+                    } else {
+                        $field = (string)$field;
+                    }
                 }
             }
             
@@ -1135,15 +1141,43 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 
                 // 如果有 ON CONFLICT 需求，添加 ON CONFLICT 子句
                 if (!empty($this->exist_update_sql)) {
-                    // 构建冲突字段列表
+                    // 构建冲突字段列表（仅使用真实存在于插入字段中的列，过滤非法/占位字段，如 '.' 或空字符串）
                     $conflictFields = [];
                     if (!empty($this->insert_update_where_fields)) {
                         foreach ($this->insert_update_where_fields as $field) {
-                            $conflictFields[] = '"' . $field . '"';
+                            $field = trim((string)$field);
+                            // 只保留当前 insert 记录里真实存在的字段
+                            if ($field !== '' && in_array($field, $insert_fields, true)) {
+                                $conflictFields[] = '"' . $field . '"';
+                            }
                         }
                     }
                     if (!empty($conflictFields)) {
+                        // 🔧 修复：如果 exist_update_sql 是 'DO UPDATE SET ALL_FIELDS'，生成所有字段的更新语句
+                        if ($this->exist_update_sql === 'DO UPDATE SET ALL_FIELDS') {
+                            $updateParts = [];
+                            foreach ($insert_fields as $field) {
+                                // 跳过冲突检测字段
+                                if (in_array($field, $this->insert_update_where_fields, true)) {
+                                    continue;
+                                }
+                                // 跳过主键字段
+                                if ($this->identity_field && $field === $this->identity_field) {
+                                    continue;
+                                }
+                                $updateParts[] = "\"{$field}\"=EXCLUDED.\"{$field}\"";
+                            }
+                            if (!empty($updateParts)) {
+                                $this->exist_update_sql = 'DO UPDATE SET ' . implode(', ', $updateParts);
+                            } else {
+                                // 如果没有要更新的字段，使用 DO NOTHING
+                                $this->exist_update_sql = 'DO NOTHING';
+                            }
+                        }
                         $sql .= ' ON CONFLICT (' . implode(', ', $conflictFields) . ') ' . $this->exist_update_sql;
+                    } else {
+                        // 如果没有合法的冲突字段，取消 ON CONFLICT 子句，退回为普通 INSERT
+                        $this->exist_update_sql = '';
                     }
                 }
                 
@@ -1166,13 +1200,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             throw new DbException(__('请设置更新条件'));
         }
         
-        $updates = '';
+        // 使用数组收集每个字段的更新表达式，避免对同一字段重复赋值
+        $updateExpressions = [];
         
         // 处理 dec_inc_updates
         if (!empty($this->dec_inc_updates)) {
             foreach ($this->dec_inc_updates as $dec_inc_update_field => $dec_inc_update_value) {
                 $field_quoted = '"' . $dec_inc_update_field . '"';
-                $updates .= "{$field_quoted} = {$field_quoted} {$dec_inc_update_value},";
+                // 直接覆盖同名字段的表达式，确保不会出现重复赋值
+                $updateExpressions[$dec_inc_update_field] = "{$field_quoted} = {$field_quoted} {$dec_inc_update_value}";
             }
         }
         
@@ -1191,22 +1227,60 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $wheres .= ($wheres ? ' AND ' : 'WHERE ') . "{$identity_field_quoted} IN ($identity_values_str)";
                 
                 // 使用 CASE WHEN 进行批量更新
+                // PostgreSQL 在 CASE 表达式中要求所有分支返回相同类型
+                // 需要根据值的类型进行适当的类型转换
                 $keys = array_keys(current($this->updates));
                 foreach ($keys as $column) {
                     if ($column === $this->identity_field) {
                         continue;
                     }
                     $column_quoted = '"' . $column . '"';
-                    $updates .= sprintf("%s = CASE %s \n", $column_quoted, $identity_field_quoted);
+                    // 为当前列构建 CASE 表达式
+                    $caseSql = sprintf("%s = CASE %s \n", $column_quoted, $identity_field_quoted);
+                    
+                    // 检测该列的值类型，决定是否需要类型转换
+                    $needsCast = false;
+                    $castType = null;
+                    foreach ($this->updates as $line) {
+                        $value = $line[$column] ?? null;
+                        if ($value !== null) {
+                            // 检查是否为整数类型
+                            if (is_int($value) || (is_string($value) && is_numeric($value) && !str_contains((string)$value, '.'))) {
+                                $needsCast = true;
+                                $castType = 'INTEGER';
+                                break;
+                            } elseif (is_bool($value)) {
+                                $needsCast = true;
+                                $castType = 'INTEGER';
+                                break;
+                            }
+                        }
+                    }
+                    
                     foreach ($this->updates as $update_key => $line) {
                         $update_key += 1;
                         $identity_field_column_key = ':' . md5("{$this->identity_field}_{$column}_key_{$update_key}");
                         $this->bound_values[$identity_field_column_key] = (string)$line[$this->identity_field];
                         $identity_field_column_value = ':' . md5("update_{$column}_value_{$update_key}");
-                        $this->bound_values[$identity_field_column_value] = (string)$line[$column];
-                        $updates .= sprintf('WHEN %s THEN %s ', $identity_field_column_key, $identity_field_column_value);
+                        $value = $line[$column] ?? null;
+                        
+                        // 根据类型处理值
+                        if (is_bool($value)) {
+                            $this->bound_values[$identity_field_column_value] = $value ? '1' : '0';
+                            $caseSql .= sprintf('WHEN %s THEN CAST(%s AS INTEGER) ', $identity_field_column_key, $identity_field_column_value);
+                        } elseif (is_int($value) || (is_string($value) && is_numeric($value) && !str_contains((string)$value, '.'))) {
+                            // 整数或数字字符串（不包含小数点）
+                            $this->bound_values[$identity_field_column_value] = (string)$value;
+                            $caseSql .= sprintf('WHEN %s THEN CAST(%s AS INTEGER) ', $identity_field_column_key, $identity_field_column_value);
+                        } else {
+                            // 其他类型（字符串、浮点数、NULL等）
+                            $this->bound_values[$identity_field_column_value] = $value === null ? null : (string)$value;
+                            $caseSql .= sprintf('WHEN %s THEN %s ', $identity_field_column_key, $identity_field_column_value);
+                        }
                     }
-                    $updates .= 'END,';
+                    $caseSql .= 'END';
+                    // 覆盖当前列的更新表达式，避免重复赋值
+                    $updateExpressions[$column] = $caseSql;
                 }
             } else {
                 // 单条更新
@@ -1217,7 +1291,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     $update_key = ':' . md5($update_field);
                     $update_field_quoted = '"' . $update_field . '"';
                     $this->bound_values[$update_key] = (string)$field_value;
-                    $updates .= "{$update_field_quoted} = $update_key,";
+                    // 单条更新时也通过数组覆盖，确保同一字段只有一个赋值
+                    $updateExpressions[$update_field] = "{$update_field_quoted} = $update_key";
                 }
             }
         }
@@ -1228,15 +1303,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $update_field_quoted = '"' . $update_field . '"';
                 $update_key = ':' . md5($update_field);
                 $this->bound_values[$update_key] = (string)$update_value;
-                $updates .= "{$update_field_quoted}=$update_key,";
+                // single_updates 的值优先级最高，覆盖前面的表达式
+                $updateExpressions[$update_field] = "{$update_field_quoted}=$update_key";
             }
         }
         
-        if (!$updates) {
+        if (empty($updateExpressions)) {
             throw new DbException(__('没有要更新的字段'));
         }
         
-        $updates = rtrim($updates, ',');
+        // 将每个字段的更新表达式拼接为最终的 SET 子句
+        $updates = implode(',', $updateExpressions);
         return "UPDATE {$table} SET {$updates} {$wheres} {$this->additional_sql}";
     }
 
@@ -1325,23 +1402,98 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
 
     /**
-     * 解析字段名，将反引号替换为双引号
-     * PostgreSQL 使用双引号作为标识符
+     * @DESC          # 解析数组键（PgSQL 版）
+     * 基于 SqlTrait::parserFiled 逻辑改造，只是把 MySQL 的反引号改为 PgSQL 的双引号。
+     *
+     * @param string|array $field 解析数据：一维数组值 或者 二维数组值
+     *
+     * @return string|array
      */
     protected static function parserFiled(mixed &$field): mixed
     {
-        if (!is_string($field)) {
+        if (!is_array($field) && !is_string($field)) {
             return $field;
         }
-        
-        // 去除反引号，添加双引号
-        $field = str_replace('`', '', $field);
-        // 如果包含点号，分别处理
-        if (str_contains($field, '.')) {
-            $parts = explode('.', $field);
-            $field = '"' . implode('"."', $parts) . '"';
-        } else {
-            $field = '"' . $field . '"';
+        if (is_string($field)) {
+            // 以()号隔开
+            if (str_contains($field, '(')) {
+                $field = explode('(', $field);
+                foreach ($field as &$f) {
+                    $f = self::parserFiled($f);
+                }
+                $field = implode('(', $field);
+                return $field;
+            }
+            if (str_contains($field, ')')) {
+                $field = explode(')', $field);
+                foreach ($field as &$f) {
+                    $f = self::parserFiled($f);
+                }
+                $field = implode(')', $field);
+                return $field;
+            }
+            // 以逗号隔开
+            if (str_contains($field, ',')) {
+                $field = explode(',', $field);
+                foreach ($field as &$f) {
+                    $f = self::parserFiled($f);
+                }
+                $field = implode(',', $field);
+                if (str_contains($field, '""')) {
+                    return str_replace('""', '"', $field);
+                }
+                return $field;
+            }
+            if (str_starts_with($field, '"') || str_starts_with($field, "'")) {
+                if (str_contains($field, '""')) {
+                    return str_replace('""', '"', $field);
+                }
+                return $field;
+            }
+            // 如果没有空格，也没有等于符号【单纯字段】直接加上双引号
+            if (!str_contains($field, ' ') && !str_contains($field, '=')) {
+                if (str_contains($field, '.')) {
+                    $field = '"' . str_replace('.', '"."', $field) . '"';
+                }
+                if (str_contains($field, '""')) {
+                    $field = str_replace('""', '"', $field);
+                }
+                $field = str_replace('"*"', '*', $field);
+                return $field;
+            }
+            $field = preg_replace('/\s+/', ' ', $field);
+            // 解决类似 main_table.parent_source is null 的问题
+            $field_arr = explode(' ', $field);
+            foreach ($field_arr as $field_arr_key => $field_arr_value) {
+                if (strtolower($field_arr_value) == 'as') {
+                    if (isset($field_arr[$field_arr_key + 1])) {
+                        $field_arr[$field_arr_key + 1] = '"' . $field_arr[$field_arr_key + 1] . '"';
+                    }
+                }
+                if (str_contains($field_arr_value, '.')) {
+                    if (str_contains($field_arr_value, '=')) {
+                        $field_arr_value_arr = explode('=', $field_arr_value);
+                        $field_arr_value_arr[0] = self::parserFiled($field_arr_value_arr[0]);
+                        $field_arr_value_arr[1] = self::parserFiled($field_arr_value_arr[1]);
+                        $field_arr_value = implode('=', $field_arr_value_arr);
+                    } else {
+                        $field_arr_value = '"' . str_replace('.', '"."', $field_arr_value) . '"';
+                    }
+                    $field_arr_value = str_replace('""', '"', $field_arr_value);
+                    $field_arr[$field_arr_key] = $field_arr_value;
+                }
+            }
+            $field = implode(' ', $field_arr);
+            $field = str_replace('"*"', '*', $field);
+        } elseif (is_array($field)) {
+            foreach ($field as $field_key => $value) {
+                unset($field[$field_key]);
+                $field_key = self::parserFiled($field_key);
+                $field[$field_key] = $value;
+            }
+        }
+        if (str_contains($field, '""')) {
+            return str_replace('""', '"', $field);
         }
         return $field;
     }
@@ -2278,6 +2430,51 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return $this->processFetchResult($model_class);
         }
         
+        // 🔧 修复：在执行 INSERT 时，如果遇到 ON CONFLICT 错误（42P10），回退到普通插入
+        if ($this->fetch_type == 'insert' && !empty($this->exist_update_sql) && stripos($this->sql, 'ON CONFLICT') !== false) {
+            try {
+                // 先尝试执行带 ON CONFLICT 的 SQL
+                if ($this->PDOStatement === null && !empty($this->sql)) {
+                    $this->PDOStatement = $this->preparePgsql($this->sql);
+                }
+                if ($this->PDOStatement !== null) {
+                    $this->PDOStatement->execute($this->bound_values);
+                }
+                return $this->processFetchResult($model_class);
+            } catch (\PDOException $e) {
+                // 检查是否是 ON CONFLICT 错误（42P10: Invalid column reference）
+                $errorCode = $e->getCode();
+                $errorMessage = $e->getMessage();
+                if ($errorCode == '42P10' || 
+                    str_contains($errorMessage, 'there is no unique or exclusion constraint matching the ON CONFLICT specification') ||
+                    str_contains($errorMessage, 'ON CONFLICT specification')) {
+                    // 回退到普通插入：移除 ON CONFLICT 子句
+                    $sqlWithoutConflict = preg_replace('/\s+ON CONFLICT\s+\([^)]+\)\s+(?:DO UPDATE SET|DO NOTHING)[^;]*/i', '', $this->sql);
+                    // 移除 RETURNING 子句（如果有），因为普通插入可能不需要
+                    $sqlWithoutConflict = preg_replace('/\s+RETURNING\s+[^;]+/i', '', $sqlWithoutConflict);
+                    $this->sql = trim($sqlWithoutConflict);
+                    
+                    // 清除旧的 PDOStatement 和 bound_values（如果需要）
+                    $this->PDOStatement = null;
+                    
+                    // 重新准备语句
+                    $this->PDOStatement = $this->preparePgsql($this->sql);
+                    if ($this->PDOStatement === false) {
+                        throw new \PDOException(
+                            __('无法回退到普通插入：SQL 准备失败'),
+                            (int)$errorCode,
+                            $e
+                        );
+                    }
+                    // 重新执行
+                    $this->PDOStatement->execute($this->bound_values);
+                    return $this->processFetchResult($model_class);
+                }
+                // 其他错误，继续抛出
+                throw $e;
+            }
+        }
+        
         // 处理批量插入
         if ($this->batch && $this->fetch_type == 'insert') {
             $hasReturning = stripos($this->sql, 'RETURNING') !== false;
@@ -2317,7 +2514,36 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     $this->PDOStatement->execute($this->bound_values);
                     $this->batch = false;
                 } catch (\PDOException $e) {
-                    throw $e;
+                    // 🔧 修复：检查是否是 ON CONFLICT 错误（42P10），回退到普通插入
+                    $errorCode = $e->getCode();
+                    $errorMessage = $e->getMessage();
+                    if ($errorCode == '42P10' || 
+                        str_contains($errorMessage, 'there is no unique or exclusion constraint matching the ON CONFLICT specification') ||
+                        str_contains($errorMessage, 'ON CONFLICT specification')) {
+                        // 回退到普通插入：移除 ON CONFLICT 子句
+                        $sqlWithoutConflict = preg_replace('/\s+ON CONFLICT\s+\([^)]+\)\s+(?:DO UPDATE SET|DO NOTHING)[^;]*/i', '', $this->sql);
+                        // 移除 RETURNING 子句（如果有），因为普通插入可能不需要
+                        $sqlWithoutConflict = preg_replace('/\s+RETURNING\s+[^;]+/i', '', $sqlWithoutConflict);
+                        $this->sql = trim($sqlWithoutConflict);
+                        
+                        // 清除旧的 PDOStatement
+                        $this->PDOStatement = null;
+                        
+                        // 重新准备语句
+                        $this->PDOStatement = $this->preparePgsql($this->sql);
+                        if ($this->PDOStatement === false) {
+                            throw new \PDOException(
+                                __('无法回退到普通插入：SQL 准备失败'),
+                                (int)$errorCode,
+                                $e
+                            );
+                        }
+                        // 重新执行
+                        $this->PDOStatement->execute($this->bound_values);
+                        $this->batch = false;
+                    } else {
+                        throw $e;
+                    }
                 }
             }
         } elseif (!empty($this->sql)) {
