@@ -730,7 +730,7 @@ abstract class AbstractModel extends DataObject
         $model_event_name = str_replace('\\', '_', $this::class);
         $evenData = new DataObject(['model' => &$this]);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
-        $this->getQuery()->beginTransaction();
+        // $this->getQuery()->beginTransaction();
         $save_result = false; // 初始化默认值
         try {
             if ($this->force_check_flag) {
@@ -745,9 +745,10 @@ abstract class AbstractModel extends DataObject
             if (!$this->getId() && $save_result) {
                 $this->setData($this->_primary_key, $save_result);
             }
-            $this->getQuery()->commit();
+            // $this->getQuery()->commit();
         } catch (\Exception $exception) {
-            $this->getQuery()->rollBack();
+            // 🔧 修复：业务层负责检查事务状态，只有在有活动事务时才回滚
+            // $this->getQuery()->rollBack();
             $msg = __('保存数据出错! ');
             $msg .= __('消息: %{1}', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %{1}', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %{1}', $this->getQuery()->getSql());
             throw new Exception($msg);

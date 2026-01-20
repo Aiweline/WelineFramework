@@ -61,8 +61,8 @@ class AiTenant extends Model
                 ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
                 ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex('domain', '', '', 'idx_domain')
-                ->addIndex('status', '', '', 'idx_status')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_domain', 'domain')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_status', 'status')
                 ->create();
         }
     }

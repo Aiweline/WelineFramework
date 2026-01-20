@@ -73,6 +73,15 @@ class SetupUpgradeAfter implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        
+        // 如果是部分更新模式，跳过 AI 模块资源扫描（资源扫描应该在完整升级时执行）
+        if ($isPartialUpgrade) {
+            return;
+        }
+        
         try {
             $this->printing->note(__('开始扫描AI模块资源...'));
             

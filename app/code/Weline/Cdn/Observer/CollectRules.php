@@ -37,6 +37,19 @@ class CollectRules implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        $modelOnly = $eventData['model_only'] ?? false;
+        
+        // 如果是仅更新模型模式，跳过 CDN 规则收集（CDN 规则与路由相关，路由更新时可能需要收集）
+        if ($modelOnly) {
+            if (defined('CLI') && CLI) {
+                echo "检测到仅更新模型模式，跳过 CDN 规则收集\n";
+            }
+            return;
+        }
+        
         try {
             // 收集所有规则
             $collected = $this->ruleCollector->collectAll();

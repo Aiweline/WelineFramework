@@ -65,25 +65,25 @@ class AiAssistantRevenue extends \Weline\Framework\Database\Model
             [self::fields_PERIOD_TYPE, self::fields_PERIOD_DATE],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('助手收入统计表')
                 ->addColumn(
                     self::fields_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'primary key auto_increment',
                     '主键'
                 )
                 ->addColumn(
                     self::fields_USER_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '用户ID（所有者）'
                 )
                 ->addColumn(
                     self::fields_ASSISTANT_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'null',
                     '助手ID'
@@ -104,14 +104,14 @@ class AiAssistantRevenue extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_RENTAL_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '租赁次数'
                 )
                 ->addColumn(
                     self::fields_USAGE_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '使用次数'
@@ -139,14 +139,14 @@ class AiAssistantRevenue extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_NEW_RENTERS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '新增租用者'
                 )
                 ->addColumn(
                     self::fields_ACTIVE_RENTERS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '活跃租用者'
@@ -160,7 +160,7 @@ class AiAssistantRevenue extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_RATING_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '评分数量'
@@ -180,17 +180,17 @@ class AiAssistantRevenue extends \Weline\Framework\Database\Model
                     '更新时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_user',
                     self::fields_USER_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_assistant',
                     self::fields_ASSISTANT_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_period',
                     self::fields_PERIOD_TYPE . ',' . self::fields_PERIOD_DATE
                 )
