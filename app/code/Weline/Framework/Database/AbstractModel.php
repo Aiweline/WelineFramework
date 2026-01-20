@@ -730,7 +730,7 @@ abstract class AbstractModel extends DataObject
         $model_event_name = str_replace('\\', '_', $this::class);
         $evenData = new DataObject(['model' => &$this]);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
-        // $this->getQuery()->beginTransaction();
+        $this->getQuery()->beginTransaction();
         $save_result = false; // 初始化默认值
         try {
             if ($this->force_check_flag) {
@@ -745,10 +745,10 @@ abstract class AbstractModel extends DataObject
             if (!$this->getId() && $save_result) {
                 $this->setData($this->_primary_key, $save_result);
             }
-            // $this->getQuery()->commit();
+            $this->getQuery()->commit();
         } catch (\Exception $exception) {
             // 🔧 修复：业务层负责检查事务状态，只有在有活动事务时才回滚
-            // $this->getQuery()->rollBack();
+            $this->getQuery()->rollBack();
             $msg = __('保存数据出错! ');
             $msg .= __('消息: %{1}', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %{1}', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %{1}', $this->getQuery()->getSql());
             throw new Exception($msg);
@@ -1775,7 +1775,28 @@ PAGINATION;
         } else {
             $check_result = $this->unique_data;
         }
-
+        
+        // 🔧 修复：如果 unique_data 中没有主键，但数据中包含主键，也应该检查主键是否存在
+        // 避免主键冲突（例如：只检查 code 字段，但 eav_entity_id 已存在的情况）
+        // 注意：不能使用 reset()，因为 Query::reset() 会把 table 清空，导致“没有指定table表名！”错误
+        if (empty($check_result) && $this->_primary_key && $this->getData($this->_primary_key)) {
+            $primaryKeyValue = $this->getData($this->_primary_key);
+            // 使用 getQuery(false) + clearQuery() 清理查询条件，但保留表名和连接信息
+            $primaryKeyCheck = $this->getQuery(false)
+                ->clearQuery()
+                ->where($this->_primary_key, $primaryKeyValue)
+                ->find()
+                ->fetchArray() ?? [];
+            if (!empty($primaryKeyCheck) && isset($primaryKeyCheck[$this->_primary_key])) {
+                // 主键已存在，使用主键查询结果
+                $check_result = $primaryKeyCheck;
+                // 将主键添加到 unique_data 中，以便后续更新使用
+                if (empty($this->unique_data)) {
+                    $this->unique_data = [];
+                }
+                $this->unique_data[$this->_primary_key] = $primaryKeyValue;
+            }
+        }
 
         # 存在更新
         if (isset($check_result[$this->_primary_key])) {
@@ -1827,8 +1848,15 @@ PAGINATION;
         } else {
             $unique_fields = array_keys($this->unique_data);
             $this->_unit_primary_keys = array_unique(array_merge($this->_unit_primary_keys, $unique_fields));
+            
+            // 🔧 修复：如果数据包含主键，也应该将主键加入到冲突检测字段中
+            $conflictFields = $this->unique_data ? array_keys($this->unique_data) : $this->_unit_primary_keys;
+            if ($this->_primary_key && $this->getData($this->_primary_key) && !in_array($this->_primary_key, $conflictFields, true)) {
+                $conflictFields[] = $this->_primary_key;
+            }
+            
             $save_result = $this->getQuery()
-                ->insert($this->getModelData(), $this->unique_data ? array_keys($this->unique_data) : $this->_unit_primary_keys)
+                ->insert($this->getModelData(), $conflictFields)
                 ->fetch();
             $this->setId($save_result);
         }
