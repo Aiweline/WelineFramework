@@ -66,21 +66,21 @@ class InstallData
         foreach ($categories as $catData) {
             $category->clear();
             
-            // 从完整路径中提取最后一部分作为url_key
-            $urlKey = $catData['url_key'] ?? '';
-            if (strpos($urlKey, '/') !== false) {
-                $urlKeyParts = explode('/', $urlKey);
-                $urlKey = end($urlKeyParts);
+            // 从完整路径中提取最后一部分作为handle
+            $handle = $catData['handle'] ?? '';
+            if (strpos($handle, '/') !== false) {
+                $handleParts = explode('/', $handle);
+                $handle = end($handleParts);
             }
             
-            // 如果没有提供url_key，则生成
-            if (empty($urlKey)) {
-                $urlKey = $this->generateUrlKey($catData['name']);
+            // 如果没有提供handle，则生成
+            if (empty($handle)) {
+                $handle = $this->generateHandle($catData['name']);
             }
             
-            // 检查分类是否已存在（通过url_key和parent_id）
+            // 检查分类是否已存在（通过handle和parent_id）
             $existing = $category->clear()
-                ->where(Category::fields_URL_KEY, $urlKey)
+                ->where(Category::fields_HANDLE, $handle)
                 ->where(Category::fields_PARENT_ID, $parentId)
                 ->find()
                 ->fetch();
@@ -92,7 +92,7 @@ class InstallData
                 $category->clear()
                     ->forceCheck(false)
                     ->setData(Category::fields_NAME, $catData['name'])
-                    ->setData(Category::fields_URL_KEY, $urlKey)
+                    ->setData(Category::fields_HANDLE, $handle)
                     ->setData(Category::fields_PARENT_ID, $parentId)
                     ->setData(Category::fields_SORT_ORDER, $sortOrder)
                     ->setData(Category::fields_IS_ACTIVE, $catData['is_active'] ?? 1)
@@ -134,15 +134,15 @@ class InstallData
     }
 
     /**
-     * 生成URL标识
+     * 生成Handle标识
      */
-    private function generateUrlKey(string $name): string
+    private function generateHandle(string $name): string
     {
-        // 简单的URL标识生成（实际应该使用更完善的转换函数）
-        $urlKey = strtolower($name);
-        $urlKey = preg_replace('/[^a-z0-9]+/', '-', $urlKey);
-        $urlKey = trim($urlKey, '-');
-        return $urlKey;
+        // 简单的Handle标识生成（实际应该使用更完善的转换函数）
+        $handle = strtolower($name);
+        $handle = preg_replace('/[^a-z0-9]+/', '-', $handle);
+        $handle = trim($handle, '-');
+        return $handle;
     }
 
     /**
@@ -153,230 +153,230 @@ class InstallData
         return [
             [
                 'name' => '电子产品',
-                'url_key' => 'electronics',
+                'handle' => 'electronics',
                 'is_active' => 1,
                 'children' => [
                     [
                         'name' => '手机通讯',
-                        'url_key' => 'electronics/phones',
+                        'handle' => 'electronics/phones',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '智能手机', 'url_key' => 'electronics/phones/smartphones', 'is_active' => 1],
-                            ['name' => '功能手机', 'url_key' => 'electronics/phones/feature-phones', 'is_active' => 1],
-                            ['name' => '5G手机', 'url_key' => 'electronics/phones/5g-phones', 'is_active' => 1],
-                            ['name' => '折叠手机', 'url_key' => 'electronics/phones/foldable', 'is_active' => 1],
-                            ['name' => '手机壳', 'url_key' => 'electronics/phones/cases', 'is_active' => 1],
-                            ['name' => '屏幕保护膜', 'url_key' => 'electronics/phones/screen-protectors', 'is_active' => 1],
-                            ['name' => '充电器', 'url_key' => 'electronics/phones/chargers', 'is_active' => 1],
-                            ['name' => '数据线', 'url_key' => 'electronics/phones/cables', 'is_active' => 1],
-                            ['name' => '移动电源', 'url_key' => 'electronics/phones/power-banks', 'is_active' => 1],
-                            ['name' => '手机耳机', 'url_key' => 'electronics/phones/headphones', 'is_active' => 1],
+                            ['name' => '智能手机', 'handle' => 'electronics/phones/smartphones', 'is_active' => 1],
+                            ['name' => '功能手机', 'handle' => 'electronics/phones/feature-phones', 'is_active' => 1],
+                            ['name' => '5G手机', 'handle' => 'electronics/phones/5g-phones', 'is_active' => 1],
+                            ['name' => '折叠手机', 'handle' => 'electronics/phones/foldable', 'is_active' => 1],
+                            ['name' => '手机壳', 'handle' => 'electronics/phones/cases', 'is_active' => 1],
+                            ['name' => '屏幕保护膜', 'handle' => 'electronics/phones/screen-protectors', 'is_active' => 1],
+                            ['name' => '充电器', 'handle' => 'electronics/phones/chargers', 'is_active' => 1],
+                            ['name' => '数据线', 'handle' => 'electronics/phones/cables', 'is_active' => 1],
+                            ['name' => '移动电源', 'handle' => 'electronics/phones/power-banks', 'is_active' => 1],
+                            ['name' => '手机耳机', 'handle' => 'electronics/phones/headphones', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '电脑办公',
-                        'url_key' => 'electronics/computers',
+                        'handle' => 'electronics/computers',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '笔记本', 'url_key' => 'electronics/computers/laptops', 'is_active' => 1],
-                            ['name' => '游戏本', 'url_key' => 'electronics/computers/gaming-laptops', 'is_active' => 1],
-                            ['name' => '超极本', 'url_key' => 'electronics/computers/ultrabooks', 'is_active' => 1],
-                            ['name' => '台式机', 'url_key' => 'electronics/computers/desktops', 'is_active' => 1],
-                            ['name' => '一体机', 'url_key' => 'electronics/computers/all-in-one', 'is_active' => 1],
-                            ['name' => '平板电脑', 'url_key' => 'electronics/computers/tablets', 'is_active' => 1],
-                            ['name' => '显示器', 'url_key' => 'electronics/computers/monitors', 'is_active' => 1],
-                            ['name' => '键盘', 'url_key' => 'electronics/computers/keyboards', 'is_active' => 1],
-                            ['name' => '鼠标', 'url_key' => 'electronics/computers/mice', 'is_active' => 1],
-                            ['name' => '摄像头', 'url_key' => 'electronics/computers/webcams', 'is_active' => 1],
-                            ['name' => '存储设备', 'url_key' => 'electronics/computers/storage', 'is_active' => 1],
+                            ['name' => '笔记本', 'handle' => 'electronics/computers/laptops', 'is_active' => 1],
+                            ['name' => '游戏本', 'handle' => 'electronics/computers/gaming-laptops', 'is_active' => 1],
+                            ['name' => '超极本', 'handle' => 'electronics/computers/ultrabooks', 'is_active' => 1],
+                            ['name' => '台式机', 'handle' => 'electronics/computers/desktops', 'is_active' => 1],
+                            ['name' => '一体机', 'handle' => 'electronics/computers/all-in-one', 'is_active' => 1],
+                            ['name' => '平板电脑', 'handle' => 'electronics/computers/tablets', 'is_active' => 1],
+                            ['name' => '显示器', 'handle' => 'electronics/computers/monitors', 'is_active' => 1],
+                            ['name' => '键盘', 'handle' => 'electronics/computers/keyboards', 'is_active' => 1],
+                            ['name' => '鼠标', 'handle' => 'electronics/computers/mice', 'is_active' => 1],
+                            ['name' => '摄像头', 'handle' => 'electronics/computers/webcams', 'is_active' => 1],
+                            ['name' => '存储设备', 'handle' => 'electronics/computers/storage', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '智能设备',
-                        'url_key' => 'electronics/smart-devices',
+                        'handle' => 'electronics/smart-devices',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '智能手表', 'url_key' => 'electronics/smart-devices/smart-watches', 'is_active' => 1],
-                            ['name' => '运动手环', 'url_key' => 'electronics/smart-devices/fitness-trackers', 'is_active' => 1],
-                            ['name' => '智能音箱', 'url_key' => 'electronics/smart-devices/smart-speakers', 'is_active' => 1],
-                            ['name' => '智能照明', 'url_key' => 'electronics/smart-devices/smart-lights', 'is_active' => 1],
-                            ['name' => '智能门锁', 'url_key' => 'electronics/smart-devices/smart-locks', 'is_active' => 1],
-                            ['name' => '智能摄像头', 'url_key' => 'electronics/smart-devices/smart-cameras', 'is_active' => 1],
-                            ['name' => '智能家居套装', 'url_key' => 'electronics/smart-devices/smart-home', 'is_active' => 1],
-                            ['name' => '可穿戴设备', 'url_key' => 'electronics/smart-devices/wearables', 'is_active' => 1],
+                            ['name' => '智能手表', 'handle' => 'electronics/smart-devices/smart-watches', 'is_active' => 1],
+                            ['name' => '运动手环', 'handle' => 'electronics/smart-devices/fitness-trackers', 'is_active' => 1],
+                            ['name' => '智能音箱', 'handle' => 'electronics/smart-devices/smart-speakers', 'is_active' => 1],
+                            ['name' => '智能照明', 'handle' => 'electronics/smart-devices/smart-lights', 'is_active' => 1],
+                            ['name' => '智能门锁', 'handle' => 'electronics/smart-devices/smart-locks', 'is_active' => 1],
+                            ['name' => '智能摄像头', 'handle' => 'electronics/smart-devices/smart-cameras', 'is_active' => 1],
+                            ['name' => '智能家居套装', 'handle' => 'electronics/smart-devices/smart-home', 'is_active' => 1],
+                            ['name' => '可穿戴设备', 'handle' => 'electronics/smart-devices/wearables', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '影音娱乐',
-                        'url_key' => 'electronics/audio-video',
+                        'handle' => 'electronics/audio-video',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '无线耳机', 'url_key' => 'electronics/audio-video/wireless-headphones', 'is_active' => 1],
-                            ['name' => '有线耳机', 'url_key' => 'electronics/audio-video/wired-headphones', 'is_active' => 1],
-                            ['name' => '入耳式耳机', 'url_key' => 'electronics/audio-video/earbuds', 'is_active' => 1],
-                            ['name' => '蓝牙音响', 'url_key' => 'electronics/audio-video/speakers', 'is_active' => 1],
-                            ['name' => 'Soundbar', 'url_key' => 'electronics/audio-video/soundbars', 'is_active' => 1],
-                            ['name' => '单反相机', 'url_key' => 'electronics/audio-video/dslr-cameras', 'is_active' => 1],
-                            ['name' => '微单相机', 'url_key' => 'electronics/audio-video/mirrorless', 'is_active' => 1],
-                            ['name' => '运动相机', 'url_key' => 'electronics/audio-video/action-cameras', 'is_active' => 1],
-                            ['name' => '游戏主机', 'url_key' => 'electronics/audio-video/gaming-consoles', 'is_active' => 1],
-                            ['name' => '游戏配件', 'url_key' => 'electronics/audio-video/gaming-accessories', 'is_active' => 1],
+                            ['name' => '无线耳机', 'handle' => 'electronics/audio-video/wireless-headphones', 'is_active' => 1],
+                            ['name' => '有线耳机', 'handle' => 'electronics/audio-video/wired-headphones', 'is_active' => 1],
+                            ['name' => '入耳式耳机', 'handle' => 'electronics/audio-video/earbuds', 'is_active' => 1],
+                            ['name' => '蓝牙音响', 'handle' => 'electronics/audio-video/speakers', 'is_active' => 1],
+                            ['name' => 'Soundbar', 'handle' => 'electronics/audio-video/soundbars', 'is_active' => 1],
+                            ['name' => '单反相机', 'handle' => 'electronics/audio-video/dslr-cameras', 'is_active' => 1],
+                            ['name' => '微单相机', 'handle' => 'electronics/audio-video/mirrorless', 'is_active' => 1],
+                            ['name' => '运动相机', 'handle' => 'electronics/audio-video/action-cameras', 'is_active' => 1],
+                            ['name' => '游戏主机', 'handle' => 'electronics/audio-video/gaming-consoles', 'is_active' => 1],
+                            ['name' => '游戏配件', 'handle' => 'electronics/audio-video/gaming-accessories', 'is_active' => 1],
                         ]
                     ],
                 ]
             ],
             [
                 'name' => '服装服饰',
-                'url_key' => 'clothing',
+                'handle' => 'clothing',
                 'is_active' => 1,
                 'children' => [
                     [
                         'name' => '男装',
-                        'url_key' => 'clothing/men',
+                        'handle' => 'clothing/men',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '衬衫', 'url_key' => 'clothing/men/shirts', 'is_active' => 1],
-                            ['name' => 'T恤', 'url_key' => 'clothing/men/t-shirts', 'is_active' => 1],
-                            ['name' => 'Polo衫', 'url_key' => 'clothing/men/polo-shirts', 'is_active' => 1],
-                            ['name' => '长裤', 'url_key' => 'clothing/men/pants', 'is_active' => 1],
-                            ['name' => '短裤', 'url_key' => 'clothing/men/shorts', 'is_active' => 1],
-                            ['name' => '外套', 'url_key' => 'clothing/men/jackets', 'is_active' => 1],
-                            ['name' => '毛衣', 'url_key' => 'clothing/men/sweaters', 'is_active' => 1],
-                            ['name' => '皮鞋', 'url_key' => 'clothing/men/shoes', 'is_active' => 1],
-                            ['name' => '运动鞋', 'url_key' => 'clothing/men/sneakers', 'is_active' => 1],
-                            ['name' => '皮带', 'url_key' => 'clothing/men/belts', 'is_active' => 1],
-                            ['name' => '手表', 'url_key' => 'clothing/men/watches', 'is_active' => 1],
-                            ['name' => '包袋', 'url_key' => 'clothing/men/bags', 'is_active' => 1],
+                            ['name' => '衬衫', 'handle' => 'clothing/men/shirts', 'is_active' => 1],
+                            ['name' => 'T恤', 'handle' => 'clothing/men/t-shirts', 'is_active' => 1],
+                            ['name' => 'Polo衫', 'handle' => 'clothing/men/polo-shirts', 'is_active' => 1],
+                            ['name' => '长裤', 'handle' => 'clothing/men/pants', 'is_active' => 1],
+                            ['name' => '短裤', 'handle' => 'clothing/men/shorts', 'is_active' => 1],
+                            ['name' => '外套', 'handle' => 'clothing/men/jackets', 'is_active' => 1],
+                            ['name' => '毛衣', 'handle' => 'clothing/men/sweaters', 'is_active' => 1],
+                            ['name' => '皮鞋', 'handle' => 'clothing/men/shoes', 'is_active' => 1],
+                            ['name' => '运动鞋', 'handle' => 'clothing/men/sneakers', 'is_active' => 1],
+                            ['name' => '皮带', 'handle' => 'clothing/men/belts', 'is_active' => 1],
+                            ['name' => '手表', 'handle' => 'clothing/men/watches', 'is_active' => 1],
+                            ['name' => '包袋', 'handle' => 'clothing/men/bags', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '女装',
-                        'url_key' => 'clothing/women',
+                        'handle' => 'clothing/women',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '连衣裙', 'url_key' => 'clothing/women/dresses', 'is_active' => 1],
-                            ['name' => '上装', 'url_key' => 'clothing/women/tops', 'is_active' => 1],
-                            ['name' => '衬衫', 'url_key' => 'clothing/women/blouses', 'is_active' => 1],
-                            ['name' => '下装', 'url_key' => 'clothing/women/bottoms', 'is_active' => 1],
-                            ['name' => '半身裙', 'url_key' => 'clothing/women/skirts', 'is_active' => 1],
-                            ['name' => '外套', 'url_key' => 'clothing/women/outerwear', 'is_active' => 1],
-                            ['name' => '大衣', 'url_key' => 'clothing/women/coats', 'is_active' => 1],
-                            ['name' => '高跟鞋', 'url_key' => 'clothing/women/heels', 'is_active' => 1],
-                            ['name' => '平底鞋', 'url_key' => 'clothing/women/flats', 'is_active' => 1],
-                            ['name' => '靴子', 'url_key' => 'clothing/women/boots', 'is_active' => 1],
-                            ['name' => '手提包', 'url_key' => 'clothing/women/handbags', 'is_active' => 1],
-                            ['name' => '斜挎包', 'url_key' => 'clothing/women/crossbody-bags', 'is_active' => 1],
-                            ['name' => '首饰', 'url_key' => 'clothing/women/jewelry', 'is_active' => 1],
+                            ['name' => '连衣裙', 'handle' => 'clothing/women/dresses', 'is_active' => 1],
+                            ['name' => '上装', 'handle' => 'clothing/women/tops', 'is_active' => 1],
+                            ['name' => '衬衫', 'handle' => 'clothing/women/blouses', 'is_active' => 1],
+                            ['name' => '下装', 'handle' => 'clothing/women/bottoms', 'is_active' => 1],
+                            ['name' => '半身裙', 'handle' => 'clothing/women/skirts', 'is_active' => 1],
+                            ['name' => '外套', 'handle' => 'clothing/women/outerwear', 'is_active' => 1],
+                            ['name' => '大衣', 'handle' => 'clothing/women/coats', 'is_active' => 1],
+                            ['name' => '高跟鞋', 'handle' => 'clothing/women/heels', 'is_active' => 1],
+                            ['name' => '平底鞋', 'handle' => 'clothing/women/flats', 'is_active' => 1],
+                            ['name' => '靴子', 'handle' => 'clothing/women/boots', 'is_active' => 1],
+                            ['name' => '手提包', 'handle' => 'clothing/women/handbags', 'is_active' => 1],
+                            ['name' => '斜挎包', 'handle' => 'clothing/women/crossbody-bags', 'is_active' => 1],
+                            ['name' => '首饰', 'handle' => 'clothing/women/jewelry', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '童装',
-                        'url_key' => 'clothing/kids',
+                        'handle' => 'clothing/kids',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '男童装', 'url_key' => 'clothing/kids/boys', 'is_active' => 1],
-                            ['name' => '女童装', 'url_key' => 'clothing/kids/girls', 'is_active' => 1],
-                            ['name' => '婴儿装', 'url_key' => 'clothing/kids/baby', 'is_active' => 1],
-                            ['name' => '童鞋', 'url_key' => 'clothing/kids/shoes', 'is_active' => 1],
-                            ['name' => '童装配饰', 'url_key' => 'clothing/kids/accessories', 'is_active' => 1],
-                            ['name' => '校服', 'url_key' => 'clothing/kids/school-uniforms', 'is_active' => 1],
-                            ['name' => '泳装', 'url_key' => 'clothing/kids/swimwear', 'is_active' => 1],
+                            ['name' => '男童装', 'handle' => 'clothing/kids/boys', 'is_active' => 1],
+                            ['name' => '女童装', 'handle' => 'clothing/kids/girls', 'is_active' => 1],
+                            ['name' => '婴儿装', 'handle' => 'clothing/kids/baby', 'is_active' => 1],
+                            ['name' => '童鞋', 'handle' => 'clothing/kids/shoes', 'is_active' => 1],
+                            ['name' => '童装配饰', 'handle' => 'clothing/kids/accessories', 'is_active' => 1],
+                            ['name' => '校服', 'handle' => 'clothing/kids/school-uniforms', 'is_active' => 1],
+                            ['name' => '泳装', 'handle' => 'clothing/kids/swimwear', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '运动服饰',
-                        'url_key' => 'clothing/sports',
+                        'handle' => 'clothing/sports',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '运动装', 'url_key' => 'clothing/sports/athletic-wear', 'is_active' => 1],
-                            ['name' => '跑步装备', 'url_key' => 'clothing/sports/running-gear', 'is_active' => 1],
-                            ['name' => '健身服', 'url_key' => 'clothing/sports/fitness-wear', 'is_active' => 1],
-                            ['name' => '运动鞋', 'url_key' => 'clothing/sports/sports-shoes', 'is_active' => 1],
-                            ['name' => '跑鞋', 'url_key' => 'clothing/sports/running-shoes', 'is_active' => 1],
-                            ['name' => '篮球鞋', 'url_key' => 'clothing/sports/basketball-shoes', 'is_active' => 1],
-                            ['name' => '户外装备', 'url_key' => 'clothing/sports/outdoor', 'is_active' => 1],
-                            ['name' => '露营装备', 'url_key' => 'clothing/sports/camping', 'is_active' => 1],
+                            ['name' => '运动装', 'handle' => 'clothing/sports/athletic-wear', 'is_active' => 1],
+                            ['name' => '跑步装备', 'handle' => 'clothing/sports/running-gear', 'is_active' => 1],
+                            ['name' => '健身服', 'handle' => 'clothing/sports/fitness-wear', 'is_active' => 1],
+                            ['name' => '运动鞋', 'handle' => 'clothing/sports/sports-shoes', 'is_active' => 1],
+                            ['name' => '跑鞋', 'handle' => 'clothing/sports/running-shoes', 'is_active' => 1],
+                            ['name' => '篮球鞋', 'handle' => 'clothing/sports/basketball-shoes', 'is_active' => 1],
+                            ['name' => '户外装备', 'handle' => 'clothing/sports/outdoor', 'is_active' => 1],
+                            ['name' => '露营装备', 'handle' => 'clothing/sports/camping', 'is_active' => 1],
                         ]
                     ],
                 ]
             ],
             [
                 'name' => '家居用品',
-                'url_key' => 'home',
+                'handle' => 'home',
                 'is_active' => 1,
                 'children' => [
                     [
                         'name' => '家具',
-                        'url_key' => 'home/furniture',
+                        'handle' => 'home/furniture',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '沙发', 'url_key' => 'home/furniture/sofas', 'is_active' => 1],
-                            ['name' => '沙发床', 'url_key' => 'home/furniture/sofa-beds', 'is_active' => 1],
-                            ['name' => '餐桌', 'url_key' => 'home/furniture/tables', 'is_active' => 1],
-                            ['name' => '茶几', 'url_key' => 'home/furniture/coffee-tables', 'is_active' => 1],
-                            ['name' => '椅子', 'url_key' => 'home/furniture/chairs', 'is_active' => 1],
-                            ['name' => '办公椅', 'url_key' => 'home/furniture/office-chairs', 'is_active' => 1],
-                            ['name' => '床具', 'url_key' => 'home/furniture/beds', 'is_active' => 1],
-                            ['name' => '衣柜', 'url_key' => 'home/furniture/wardrobes', 'is_active' => 1],
-                            ['name' => '书柜', 'url_key' => 'home/furniture/bookcases', 'is_active' => 1],
+                            ['name' => '沙发', 'handle' => 'home/furniture/sofas', 'is_active' => 1],
+                            ['name' => '沙发床', 'handle' => 'home/furniture/sofa-beds', 'is_active' => 1],
+                            ['name' => '餐桌', 'handle' => 'home/furniture/tables', 'is_active' => 1],
+                            ['name' => '茶几', 'handle' => 'home/furniture/coffee-tables', 'is_active' => 1],
+                            ['name' => '椅子', 'handle' => 'home/furniture/chairs', 'is_active' => 1],
+                            ['name' => '办公椅', 'handle' => 'home/furniture/office-chairs', 'is_active' => 1],
+                            ['name' => '床具', 'handle' => 'home/furniture/beds', 'is_active' => 1],
+                            ['name' => '衣柜', 'handle' => 'home/furniture/wardrobes', 'is_active' => 1],
+                            ['name' => '书柜', 'handle' => 'home/furniture/bookcases', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '家纺',
-                        'url_key' => 'home/textiles',
+                        'handle' => 'home/textiles',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '床上用品', 'url_key' => 'home/textiles/bedding', 'is_active' => 1],
-                            ['name' => '床单被套', 'url_key' => 'home/textiles/sheets', 'is_active' => 1],
-                            ['name' => '枕头', 'url_key' => 'home/textiles/pillows', 'is_active' => 1],
-                            ['name' => '被子', 'url_key' => 'home/textiles/quilts', 'is_active' => 1],
-                            ['name' => '窗帘', 'url_key' => 'home/textiles/curtains', 'is_active' => 1],
-                            ['name' => '毛巾', 'url_key' => 'home/textiles/towels', 'is_active' => 1],
-                            ['name' => '地毯', 'url_key' => 'home/textiles/rugs', 'is_active' => 1],
-                            ['name' => '靠垫', 'url_key' => 'home/textiles/cushions', 'is_active' => 1],
+                            ['name' => '床上用品', 'handle' => 'home/textiles/bedding', 'is_active' => 1],
+                            ['name' => '床单被套', 'handle' => 'home/textiles/sheets', 'is_active' => 1],
+                            ['name' => '枕头', 'handle' => 'home/textiles/pillows', 'is_active' => 1],
+                            ['name' => '被子', 'handle' => 'home/textiles/quilts', 'is_active' => 1],
+                            ['name' => '窗帘', 'handle' => 'home/textiles/curtains', 'is_active' => 1],
+                            ['name' => '毛巾', 'handle' => 'home/textiles/towels', 'is_active' => 1],
+                            ['name' => '地毯', 'handle' => 'home/textiles/rugs', 'is_active' => 1],
+                            ['name' => '靠垫', 'handle' => 'home/textiles/cushions', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '厨房用品',
-                        'url_key' => 'home/kitchen',
+                        'handle' => 'home/kitchen',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '锅具', 'url_key' => 'home/kitchen/cookware', 'is_active' => 1],
-                            ['name' => '刀具', 'url_key' => 'home/kitchen/knives', 'is_active' => 1],
-                            ['name' => '餐具', 'url_key' => 'home/kitchen/dining', 'is_active' => 1],
-                            ['name' => '杯具', 'url_key' => 'home/kitchen/cups', 'is_active' => 1],
-                            ['name' => '收纳', 'url_key' => 'home/kitchen/storage', 'is_active' => 1],
-                            ['name' => '厨房工具', 'url_key' => 'home/kitchen/kitchen-tools', 'is_active' => 1],
-                            ['name' => '小家电', 'url_key' => 'home/kitchen/small-appliances', 'is_active' => 1],
+                            ['name' => '锅具', 'handle' => 'home/kitchen/cookware', 'is_active' => 1],
+                            ['name' => '刀具', 'handle' => 'home/kitchen/knives', 'is_active' => 1],
+                            ['name' => '餐具', 'handle' => 'home/kitchen/dining', 'is_active' => 1],
+                            ['name' => '杯具', 'handle' => 'home/kitchen/cups', 'is_active' => 1],
+                            ['name' => '收纳', 'handle' => 'home/kitchen/storage', 'is_active' => 1],
+                            ['name' => '厨房工具', 'handle' => 'home/kitchen/kitchen-tools', 'is_active' => 1],
+                            ['name' => '小家电', 'handle' => 'home/kitchen/small-appliances', 'is_active' => 1],
                         ]
                     ],
                     [
                         'name' => '装饰用品',
-                        'url_key' => 'home/decor',
+                        'handle' => 'home/decor',
                         'is_active' => 1,
                         'children' => [
-                            ['name' => '墙饰', 'url_key' => 'home/decor/wall-art', 'is_active' => 1],
-                            ['name' => '花瓶', 'url_key' => 'home/decor/vases', 'is_active' => 1],
-                            ['name' => '灯具', 'url_key' => 'home/decor/lamps', 'is_active' => 1],
-                            ['name' => '镜子', 'url_key' => 'home/decor/mirrors', 'is_active' => 1],
-                            ['name' => '绿植', 'url_key' => 'home/decor/plants', 'is_active' => 1],
+                            ['name' => '墙饰', 'handle' => 'home/decor/wall-art', 'is_active' => 1],
+                            ['name' => '花瓶', 'handle' => 'home/decor/vases', 'is_active' => 1],
+                            ['name' => '灯具', 'handle' => 'home/decor/lamps', 'is_active' => 1],
+                            ['name' => '镜子', 'handle' => 'home/decor/mirrors', 'is_active' => 1],
+                            ['name' => '绿植', 'handle' => 'home/decor/plants', 'is_active' => 1],
                         ]
                     ],
                 ]
             ],
             [
                 'name' => '运动户外',
-                'url_key' => 'sports',
+                'handle' => 'sports',
                 'is_active' => 1,
             ],
             [
                 'name' => '图书音像',
-                'url_key' => 'books',
+                'handle' => 'books',
                 'is_active' => 1,
             ],
             [
                 'name' => '食品饮料',
-                'url_key' => 'food',
+                'handle' => 'food',
                 'is_active' => 1,
             ],
         ];

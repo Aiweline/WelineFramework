@@ -528,7 +528,14 @@ $defaultNavItems = [
                     Weline_Theme::frontend::partials::header::categories-before
                     <else/>
                     <div class="header-categories">
-                    <?php if (!empty($navItems)): ?>
+                    <?php 
+                    // hook 执行后，重新从模板数据中获取 navItems
+                    $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
+                    // 如果 hook 没有设置，使用默认值
+                    if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
+                        $navItems = $defaultNavItems;
+                    }
+                    if (!empty($navItems)): ?>
                         <nav class="categories-nav">
                             <ul class="categories-list" id="categories-list">
                                 <?php 
@@ -614,11 +621,29 @@ $defaultNavItems = [
         <!-- 侧边栏首部：快捷链接 (今日特价等，仅在手机端显示) -->
         <div class="sidebar-shortcuts mobile-only">
             <ul class="sidebar-shortcuts-list">
-                <li><a href="/deals"><i class="fas fa-bolt"></i> <lang>今日特价</lang></a></li>
-                <li><a href="/video"><i class="fas fa-play"></i> <lang>Prime Video</lang></a></li>
-                <li><a href="/registry"><i class="fas fa-gift"></i> <lang>礼品心愿单</lang></a></li>
-                <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <lang>礼品卡</lang></a></li>
-                <li><a href="/help"><i class="fas fa-question-circle"></i> <lang>客户服务</lang></a></li>
+                <?php
+                // 获取侧边栏快捷方式数据（从 hook 中设置）
+                $sidebarShortcuts = $this->getData('sidebarShortcuts') ?? $meta['sidebarShortcuts'] ?? [];
+                
+                // 如果 hook 设置了侧边栏快捷方式，使用 hook 的数据
+                if (!empty($sidebarShortcuts)):
+                    foreach ($sidebarShortcuts as $shortcut):
+                        $shortcutUrl = htmlspecialchars($shortcut['url'] ?? '#');
+                        $shortcutText = htmlspecialchars($shortcut['text'] ?? '');
+                        $shortcutIcon = htmlspecialchars($shortcut['icon'] ?? 'fas fa-circle');
+                ?>
+                    <li><a href="<?= $shortcutUrl ?>"><i class="<?= $shortcutIcon ?>"></i> <lang><?= $shortcutText ?></lang></a></li>
+                <?php
+                    endforeach;
+                else:
+                    // 如果没有 hook 数据，使用默认快捷方式
+                ?>
+                    <li><a href="/deals"><i class="fas fa-bolt"></i> <lang>今日特价</lang></a></li>
+                    <li><a href="/video"><i class="fas fa-play"></i> <lang>Prime Video</lang></a></li>
+                    <li><a href="/registry"><i class="fas fa-gift"></i> <lang>礼品心愿单</lang></a></li>
+                    <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <lang>礼品卡</lang></a></li>
+                    <li><a href="/help"><i class="fas fa-question-circle"></i> <lang>客户服务</lang></a></li>
+                <?php endif; ?>
             </ul>
         </div>
 
@@ -626,12 +651,10 @@ $defaultNavItems = [
             <ul class="categories-sidebar-list" id="categories-sidebar-list">
                 <?php 
                 // 确保使用最新的 navItems（hook 可能已经设置了真实分类数据）
-                // 如果 navItems 还是 null，从模板数据中获取
-                if ($navItems === null) {
-                    $navItems = $this->getData('navItems');
-                }
+                // hook 执行后，重新从模板数据中获取 navItems
+                $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
                 // 如果 hook 没有设置，使用默认值
-                if ($navItems === null || (is_array($navItems) && empty($navItems) && !$this->getData('navItems_set_by_hook'))) {
+                if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
                     $navItems = $defaultNavItems;
                 }
                 // 使用相同的渲染函数生成侧边栏菜单（汉堡菜单）
@@ -643,6 +666,9 @@ $defaultNavItems = [
                             <div class="sidebar-category-link-wrapper">
                                 <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-category-link">
                                     <?= htmlspecialchars($item['text'] ?? '') ?>
+                                    <?php if ($hasChildren): ?>
+                                        <span class="sidebar-category-badge" aria-label="有子菜单">▶</span>
+                                    <?php endif; ?>
                                 </a>
                                 <?php if ($hasChildren): ?>
                                     <i class="fas fa-chevron-right sidebar-category-arrow" role="button" aria-label="展开子菜单"></i>
@@ -671,6 +697,67 @@ $defaultNavItems = [
 /* ========================================
    Amazon风格 - Header样式
    ======================================== */
+
+/* 全局滚动条样式（遵循主题规范） */
+html,
+body {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 表单控件与下拉框滚动条（包含搜索分类 select） */
+select,
+textarea,
+.search-category-select {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+select::-webkit-scrollbar,
+textarea::-webkit-scrollbar,
+.search-category-select::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+select::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track,
+.search-category-select::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+select::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb,
+.search-category-select::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+select::-webkit-scrollbar-thumb:hover,
+textarea::-webkit-scrollbar-thumb:hover,
+.search-category-select::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
 
 /* 跳过内容链接 */
 .skip-to-content {
@@ -2062,7 +2149,7 @@ $defaultNavItems = [
 }
 
 .sidebar-category-arrow {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
     cursor: pointer;
     pointer-events: auto;
@@ -2070,6 +2157,38 @@ $defaultNavItems = [
     padding: 0.25rem;
     margin-left: 0.5rem;
     transition: transform 0.2s ease, color 0.2s ease;
+    font-weight: 600;
+}
+
+/* 有子菜单的链接标记 */
+.sidebar-category-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-size: 0.7rem;
+    color: <?= htmlspecialchars($colors['textSecondary'] ?? '#565959') ?>;
+    vertical-align: middle;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-category-link:hover .sidebar-category-badge {
+    opacity: 1;
+    color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
+}
+
+/* 有子菜单的项目视觉增强 */
+.sidebar-category-item.has-children .sidebar-category-link {
+    font-weight: 500;
+    position: relative;
+}
+
+.sidebar-category-item.has-children .sidebar-category-link-wrapper {
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.sidebar-category-item.has-children:hover .sidebar-category-link-wrapper {
+    border-left-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
 }
 
 .sidebar-category-item.active .sidebar-category-arrow {
@@ -2531,6 +2650,29 @@ $defaultNavItems = [
         const headerCart = document.querySelector('.header-cart');
         const cartLink = document.querySelector('.cart-link');
 
+        // 迷你购物车控制函数（需要在 if 之前定义，以便在 if 内部调用）
+        function toggleMiniCart() {
+            if (headerCart && headerCart.classList.contains('mini-cart-open')) {
+                hideMiniCart();
+            } else {
+                showMiniCart();
+            }
+        }
+
+        function showMiniCart() {
+            if (headerCart) {
+                headerCart.classList.add('mini-cart-open');
+                headerCart.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        function hideMiniCart() {
+            if (headerCart) {
+                headerCart.classList.remove('mini-cart-open');
+                headerCart.setAttribute('aria-expanded', 'false');
+            }
+        }
+
         if (miniCartOverlay && miniCart && headerCart && cartLink) {
             // 点击购物车按钮切换显示/隐藏
             cartLink.addEventListener('click', function(e) {
@@ -2597,35 +2739,14 @@ $defaultNavItems = [
                 // 点击页面其他地方，立即关闭
                 hideMiniCart();
             });
-
-        // 迷你购物车控制函数（保持原有逻辑）
-        function toggleMiniCart() {
-            if (headerCart.classList.contains('mini-cart-open')) {
-                hideMiniCart();
-            } else {
-                showMiniCart();
-            }
-        }
-
-        function showMiniCart() {
-            headerCart.classList.add('mini-cart-open');
-            headerCart.setAttribute('aria-expanded', 'true');
-        }
-
-        function hideMiniCart() {
-            headerCart.classList.remove('mini-cart-open');
-            headerCart.setAttribute('aria-expanded', 'false');
-        }
         }
 
         // --- 修复：导航条溢出检测与处理 ---
         const mainNav = document.querySelector('.header-main-nav');
         const navLeft = document.querySelector('.header-nav-left');
         const navRight = document.querySelector('.header-nav-right');
-        const navFill = document.getElementById('header-nav-fill');
-        const navList = document.getElementById('nav-links-list');
-        const navMoreWrapper = document.getElementById('nav-more-wrapper');
-        const navMoreDropdown = document.getElementById('nav-more-dropdown');
+        // 复用上面已声明的变量：headerNavFill, navLinksList, navMoreWrapper, navMoreDropdown
+        const navList = navLinksList; // navLinksList 已在上面声明
 
         if (mainNav && navList && navMoreWrapper) {
             function checkNavFillOverflow() {
@@ -2704,7 +2825,6 @@ $defaultNavItems = [
             // 初始执行
             setTimeout(checkNavFillOverflow, 100); // 稍微延迟以等待布局完全稳定
         }
-    });
 })();
 </script>
 

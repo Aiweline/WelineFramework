@@ -55,4 +55,9 @@
     /* 品牌色通常保持不变 */
     /* --color-primary: #f0c14b; */
     /* 使用默认值 */
+
+    /* 滚动条色系（暗色主题） */
+    --scrollbar-thumb: #8590a5;
+    --scrollbar-thumb-hover: #a2adb7;
+    --scrollbar-track: transparent;
 }

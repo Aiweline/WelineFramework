@@ -52,6 +52,44 @@ class ProductService
     }
     
     /**
+     * 通过handle或sku获取产品
+     * 
+     * @param string $handle Handle标识或SKU
+     * @return Product|null
+     */
+    public function getProductByHandle(string $handle): ?Product
+    {
+        /** @var Product $product */
+        $product = ObjectManager::getInstance(Product::class);
+        
+        // 先尝试通过 handle 查询（如果模型有 handle 字段）
+        if (defined(Product::class . '::fields_HANDLE')) {
+            $product->clear()
+                ->where(Product::fields_HANDLE, $handle)
+                ->where(Product::fields_status, 'enabled')
+                ->find()
+                ->fetch();
+            
+            if ($product->getId()) {
+                return $product;
+            }
+        }
+        
+        // 如果通过 handle 没找到，尝试通过sku查询
+        $product->clear()
+            ->where(Product::fields_sku, $handle)
+            ->where(Product::fields_status, 'enabled')
+            ->find()
+            ->fetch();
+        
+        if ($product->getId()) {
+            return $product;
+        }
+        
+        return null;
+    }
+    
+    /**
      * 获取产品列表
      * 
      * @param array $filters 过滤条件
