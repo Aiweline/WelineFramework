@@ -1697,12 +1697,113 @@
 
                 if (!this.sidebar || !this.overlay) return;
 
-                // 汉堡菜单按钮点击
+                // 汉堡菜单按钮点击 - 使用防误触机制
                 if (this.hamburgerBtn) {
+                    // 检查是否已经有其他监听器（避免与 default.phtml 中的实现冲突）
+                    // 如果按钮已经有 data-hamburger-handler 标记，说明已经有其他处理器
+                    if (this.hamburgerBtn.dataset.hamburgerHandler) {
+                        return; // 不重复添加监听器
+                    }
+
+                    // 标记已处理
+                    this.hamburgerBtn.dataset.hamburgerHandler = 'true';
+
+                    let isProcessing = false;
+                    let lastClickTime = 0;
+                    let mouseDownPos = null;
+                    let mouseDownTime = 0;
+
+                    // 记录鼠标按下位置和时间
+                    this.hamburgerBtn.addEventListener('mousedown', (e) => {
+                        mouseDownPos = { x: e.clientX, y: e.clientY };
+                        mouseDownTime = Date.now();
+                    }, true);
+
+                    // 触摸设备支持
+                    this.hamburgerBtn.addEventListener('touchstart', (e) => {
+                        const touch = e.touches[0];
+                        mouseDownPos = { x: touch.clientX, y: touch.clientY };
+                        mouseDownTime = Date.now();
+                    }, true);
+
+                    this.hamburgerBtn.addEventListener('touchend', (e) => {
+                        if (!mouseDownPos) return;
+
+                        const touch = e.changedTouches[0];
+                        const moveDistance = Math.sqrt(
+                            Math.pow(touch.clientX - mouseDownPos.x, 2) +
+                            Math.pow(touch.clientY - mouseDownPos.y, 2)
+                        );
+
+                        // 触摸移动距离超过 10px，认为是滑动
+                        if (moveDistance > 10) {
+                            mouseDownPos = null;
+                            mouseDownTime = 0;
+                            return;
+                        }
+
+                        // 模拟点击事件
+                        const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: touch.clientX,
+                            clientY: touch.clientY
+                        });
+                        this.hamburgerBtn.dispatchEvent(clickEvent);
+                    }, true);
+
+                    // 点击处理
                     this.hamburgerBtn.addEventListener('click', (e) => {
+                        // 防止重复触发
+                        const now = Date.now();
+                        if (isProcessing || (now - lastClickTime < 300)) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return;
+                        }
+
+                        // 检测是否为误触：如果鼠标移动距离过大，可能是滑动操作
+                        if (mouseDownPos) {
+                            const moveDistance = Math.sqrt(
+                                Math.pow(e.clientX - mouseDownPos.x, 2) +
+                                Math.pow(e.clientY - mouseDownPos.y, 2)
+                            );
+                            // 如果移动距离超过 5px，认为是滑动操作，不触发
+                            if (moveDistance > 5) {
+                                mouseDownPos = null;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                e.stopImmediatePropagation();
+                                return;
+                            }
+                        }
+
+                        // 检测点击持续时间：如果按下时间过短（< 50ms），可能是误触
+                        if (mouseDownTime && (now - mouseDownTime < 50)) {
+                            mouseDownPos = null;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return;
+                        }
+
                         e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+
+                        isProcessing = true;
+                        lastClickTime = now;
+                        mouseDownPos = null;
+                        mouseDownTime = 0;
+
                         this.toggle();
-                    });
+
+                        // 延迟后重置标志，防止快速连续点击
+                        setTimeout(() => {
+                            isProcessing = false;
+                        }, 300);
+                    }, true);
                 }
 
                 // 关闭按钮

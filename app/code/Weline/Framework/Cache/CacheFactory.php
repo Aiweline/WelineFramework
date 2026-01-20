@@ -36,7 +36,8 @@ class CacheFactory implements CacheFactoryInterface
      */
     public function __construct(string $identity = 'cache_system', string $tip = '', bool $permanently = false)
     {
-        $this->config = App::Env('cache');
+        $config = App::Env('cache');
+        $this->config = is_array($config) ? $config : [];
         $this->identity = $identity;
         $this->tip = $tip;
         $this->keep = $permanently;

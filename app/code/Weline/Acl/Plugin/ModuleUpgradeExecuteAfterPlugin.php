@@ -30,9 +30,24 @@ class ModuleUpgradeExecuteAfterPlugin
      * 
      * 注意：此方法在系统升级开始前执行，清空ACL表以便重新收集所有权限
      * 权限收集是在升级过程中通过 ControllerAttributes 观察者进行的
+     * 
+     * @param mixed $subject Upgrade 实例
+     * @param array ...$args execute 方法的参数 [$args, $data]
      */
-    function beforeExecute()
+    function beforeExecute($subject, ...$args)
     {
+        // 检查是否是部分更新模式（仅更新路由或模型）
+        $executeArgs = $args[0] ?? [];
+        $isRouteOnly = isset($executeArgs['route']);
+        $isModelOnly = isset($executeArgs['model']);
+        
+        // 如果是部分更新模式，跳过清空 ACL 表
+        // ACL 表应该在完整升级时清空，以便重新收集所有权限
+        if ($isRouteOnly || $isModelOnly) {
+            // 部分更新模式，不清空 ACL 表
+            return;
+        }
+        
         try {
             // 清空ACL表，以便重新收集所有权限
             if ($this->acl->getTable()) {

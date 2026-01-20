@@ -77,7 +77,7 @@ class AiAssistantRental extends \Weline\Framework\Database\Model
             [self::fields_STATUS],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('助手租赁记录表')
                 ->addColumn(
                     self::fields_ID,

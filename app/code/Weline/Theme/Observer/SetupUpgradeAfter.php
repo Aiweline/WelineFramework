@@ -30,6 +30,18 @@ class SetupUpgradeAfter implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        $routeOnly = $eventData['route_only'] ?? false;
+        $modelOnly = $eventData['model_only'] ?? false;
+        
+        // 如果是部分更新模式，跳过主题相关操作（主题注册和缓存清理应该在完整升级时执行）
+        if ($isPartialUpgrade) {
+            // 部分更新模式，跳过主题相关操作
+            return;
+        }
+        
         try {
             /** @var WelineTheme $theme */
             $theme = ObjectManager::getInstance(WelineTheme::class);

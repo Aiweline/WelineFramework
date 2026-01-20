@@ -68,6 +68,15 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        
+        // 如果是部分更新模式，跳过数据库适配器扫描（适配器扫描应该在完整升级时执行）
+        if ($isPartialUpgrade) {
+            return;
+        }
+        
         try {
             // 如果已经扫描过，直接返回，避免重复扫描和输出
             if (self::$hasScanned) {

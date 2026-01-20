@@ -11,14 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
-use http\Env;
-use Weline\Framework\App\Debug;
-use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Exception\DbException;
-use Weline\Framework\Database\Exception\QueryException;
-use Weline\Framework\Database\Exception\SqlParserException;
-use Weline\Framework\Output\Log;
 
 trait SqlTrait
 {

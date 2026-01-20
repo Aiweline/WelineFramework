@@ -35,6 +35,20 @@ class SetupUpgradeObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式（仅更新路由或模型）
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        $routeOnly = $eventData['route_only'] ?? false;
+        $modelOnly = $eventData['model_only'] ?? false;
+        
+        // 如果是仅更新路由模式，跳过数据库迁移（数据库迁移应该在完整升级或仅更新模型时执行）
+        if ($routeOnly) {
+            $this->printing->info("检测到仅更新路由模式，跳过数据库迁移执行");
+            return;
+        }
+        
+        // 如果是仅更新模型模式，可以执行数据库迁移
+        // 完整升级模式也会执行数据库迁移
         $this->printing->info("系统升级事件触发，开始检查所有模块的迁移");
         
         try {

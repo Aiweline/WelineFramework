@@ -63,32 +63,32 @@ class AiAssistantRating extends \Weline\Framework\Database\Model
             [self::fields_RATING],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('助手评分表')
                 ->addColumn(
                     self::fields_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'primary key auto_increment',
                     '主键'
                 )
                 ->addColumn(
                     self::fields_ASSISTANT_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '助手ID'
                 )
                 ->addColumn(
                     self::fields_USER_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '评分用户ID'
                 )
                 ->addColumn(
                     self::fields_RENTAL_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'null',
                     '租赁记录ID'
@@ -144,14 +144,14 @@ class AiAssistantRating extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_HELPFUL_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '有帮助数'
                 )
                 ->addColumn(
                     self::fields_REPORT_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '举报数'
@@ -171,22 +171,22 @@ class AiAssistantRating extends \Weline\Framework\Database\Model
                     '更新时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_assistant',
                     self::fields_ASSISTANT_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_user',
                     self::fields_USER_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_rating',
                     self::fields_RATING
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_created',
                     self::fields_CREATED_TIME
                 )

@@ -24,19 +24,24 @@ if (empty($rightMenuCategories)) {
     return;
 }
 
-// 获取前端URL
-$frontendUrl = $this->getUrl('');
+// 获取模板实例引用，用于在闭包中生成 URL
+$template = $this;
 
 // 递归函数：将分类数据转换为菜单项格式
-$convertCategoryToMenuItem = function($category) use (&$convertCategoryToMenuItem, $frontendUrl) {
+$convertCategoryToMenuItem = function($category) use (&$convertCategoryToMenuItem, $template) {
     // 只处理启用的分类
     if (empty($category['is_active']) || $category['is_active'] != 1) {
         return null;
     }
     
+    // 使用 getUrl() 方法生成 URL，自动包含当前语言和货币参数
+    // 使用友好的URL格式：catalog/category/{handle}，路由重写器会自动处理
+    $categoryHandle = $category['handle'] ?? '';
+    $categoryUrl = $template->getUrl('catalog/category/' . urlencode($categoryHandle));
+    
     $menuItem = [
         'text' => $category['name'] ?? '',
-        'url' => $frontendUrl . 'catalog/category/' . urlencode($category['handle'] ?? ''),
+        'url' => $categoryUrl,
     ];
     
     // 如果有子分类，递归处理

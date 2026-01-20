@@ -72,7 +72,7 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
             [self::fields_CREATED_TIME],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('API调用日志表')
                 ->addColumn(
                     self::fields_ID,
@@ -83,14 +83,14 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_API_KEY_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     'API密钥ID'
                 )
                 ->addColumn(
                     self::fields_USER_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '用户ID'
@@ -104,7 +104,7 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_MODEL_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '模型ID'
@@ -139,21 +139,21 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_PROMPT_TOKENS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '输入Token数'
                 )
                 ->addColumn(
                     self::fields_COMPLETION_TOKENS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '输出Token数'
                 )
                 ->addColumn(
                     self::fields_TOTAL_TOKENS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '总Token数'
@@ -195,14 +195,14 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_RESPONSE_STATUS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'null',
                     '响应状态码'
                 )
                 ->addColumn(
                     self::fields_RESPONSE_TIME,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'null',
                     '响应时间（毫秒）'
@@ -229,12 +229,12 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                     '创建时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_api_key',
                     self::fields_API_KEY_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_user',
                     self::fields_USER_ID
                 )
@@ -244,17 +244,17 @@ class AiApiCallLog extends \Weline\Framework\Database\Model
                     self::fields_REQUEST_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_model',
                     self::fields_MODEL_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_time',
                     self::fields_CREATED_TIME
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_status',
                     self::fields_STATUS
                 )

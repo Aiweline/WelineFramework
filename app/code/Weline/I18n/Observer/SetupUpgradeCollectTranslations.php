@@ -39,6 +39,15 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        
+        // 如果是部分更新模式，跳过语言包收集（语言包收集应该在完整升级时执行）
+        if ($isPartialUpgrade) {
+            return;
+        }
+        
         try {
             if (php_sapi_name() === 'cli') {
                 echo "\n[I18n] 正在收集语言包...\n";

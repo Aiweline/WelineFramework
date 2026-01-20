@@ -363,8 +363,61 @@ class GenericDialectAdapter implements DialectAdapterInterface
             }
             $exist_sql = rtrim($exist_sql, 'OR ');
             $existsQuery = $query->getLink()->prepare($exist_sql);
-            $existsQuery->execute($bound_filed_values);
-            $exists = $existsQuery->fetchAll(PDO::FETCH_ASSOC);
+            try {
+                $existsQuery->execute($bound_filed_values);
+                $exists = $existsQuery->fetchAll(PDO::FETCH_ASSOC);
+            } catch (\PDOException $e) {
+                // 🔧 修复：如果执行失败，检查是否是事务失败错误（25P02）
+                // 如果是，尝试回滚事务，然后重新执行查询
+                $errorCode = $e->getCode();
+                $errorMsg = $e->getMessage();
+                $isTransactionFailed = (
+                    $errorCode === '25P02' || 
+                    str_contains((string)$errorCode, '25P02') ||
+                    str_contains($errorMsg, 'current transaction is aborted') ||
+                    str_contains($errorMsg, 'In failed sql transaction')
+                );
+                
+                if ($isTransactionFailed) {
+                    // 尝试回滚失败的事务
+                    try {
+                        $link = $query->getLink();
+                        // 🔧 修复：检查对象是否已初始化（PHP 8.2+ 匿名类可能未初始化）
+                        if ($link !== null) {
+                            try {
+                                // 尝试调用 inTransaction()，如果对象未初始化会抛出错误
+                                if ($link->inTransaction()) {
+                                    $link->rollBack();
+                                }
+                            } catch (\Error $uninitializedError) {
+                                // 如果对象未初始化，跳过回滚操作
+                                // 这通常发生在匿名 PDO 类没有正确调用父类构造函数时
+                                if (str_contains($uninitializedError->getMessage(), 'uninitialized')) {
+                                    // 对象未初始化，无法回滚，继续抛出原始错误
+                                } else {
+                                    // 其他错误，重新抛出
+                                    throw $uninitializedError;
+                                }
+                            }
+                        }
+                    } catch (\Exception $rollbackException) {
+                        // 忽略回滚错误
+                    }
+                    
+                    // 重新执行查询
+                    try {
+                        $existsQuery = $query->getLink()->prepare($exist_sql);
+                        $existsQuery->execute($bound_filed_values);
+                        $exists = $existsQuery->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (\PDOException $retryException) {
+                        // 如果重试仍然失败，抛出原始错误
+                        throw $e;
+                    }
+                } else {
+                    // 其他错误，直接抛出
+                    throw $e;
+                }
+            }
             $insert_update_where_fields_times = count($query->insert_update_where_fields);
             
             if (count($exists) > 0) {
@@ -513,7 +566,18 @@ class GenericDialectAdapter implements DialectAdapterInterface
         $values = rtrim($values, ',');
         $sql = $update_inserts_sql . $identity_inserts_sql;
         if (!empty($values)) {
-            $sql .= "INSERT INTO {$query->table} {$query->fields} VALUES {$values}";
+            // 🔧 修复：从 insert_items 中提取字段列表，而不是使用 $query->fields（可能是 main_table.*）
+            // 获取第一个 insert 记录的字段列表
+            $firstInsertItem = reset($insert_items);
+            if (!empty($firstInsertItem)) {
+                $insert_fields = array_keys($firstInsertItem);
+                $insert_fields_quoted = array_map(fn($field) => $formatter->quote($field), $insert_fields);
+                $insert_fields_str = '(' . implode(',', $insert_fields_quoted) . ')';
+                $sql .= "INSERT INTO {$query->table} {$insert_fields_str} VALUES {$values}";
+            } else {
+                // 如果没有 insert_items，不应该到达这里，但为了安全起见
+                $sql .= "INSERT INTO {$query->table} VALUES {$values}";
+            }
         }
         return $sql;
     }

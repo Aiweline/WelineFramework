@@ -50,7 +50,7 @@ class update_api_key_quota_fields_20250114_v2_0_0
             $setup->getConnection()->addColumn(
                 $table,
                 'call_count',
-                TableInterface::column_type_INT,
+                TableInterface::column_type_INTEGER,
                 0,
                 '累计调用次数'
             );

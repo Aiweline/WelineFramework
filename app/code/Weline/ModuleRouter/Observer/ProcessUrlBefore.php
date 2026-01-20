@@ -69,6 +69,10 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
                 self::$staticCacheInstance = $this->moduleRouterCache;
             }
             $cache_key = 'routers_rules_cache';
+            // #region agent log - 强制清除缓存以重新扫描
+            // 临时清除缓存以确保重新扫描路由器
+            self::$staticCacheInstance->delete($cache_key);
+            // #endregion
             $router_rules = self::$staticCacheInstance->get($cache_key);
             if ($router_rules !== false && is_array($router_rules) && !empty($router_rules)) {
                 // 缓存命中，直接使用
@@ -84,14 +88,30 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
         }
         $moduleRouters = self::$cachedModuleRouters;
         $moduleCount = 0;
+        
+        // #region agent log
+        file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'A','location'=>'ProcessUrlBefore.php:85','message'=>'ProcessUrlBefore execute','data'=>['path'=>$path,'moduleRoutersCount'=>count($moduleRouters),'moduleRouters'=>array_keys($moduleRouters)],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+        // #endregion
+        
         foreach ($moduleRouters as $module => $moduleRouter) {
             $routerClass = $moduleRouter['class'];
+            
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'A','location'=>'ProcessUrlBefore.php:92','message'=>'checking router class','data'=>['module'=>$module,'routerClass'=>$routerClass,'classExists'=>class_exists($routerClass),'isSubclass'=>class_exists($routerClass)?is_subclass_of($routerClass, RouterInterface::class):false],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+            // #endregion
             
             // RouterInterface::process() 是静态方法，直接使用类名调用，无需实例化
             // 这样可以支持静态类（如 Weline\BackendThemeUpzet\Controller\Router）
             if (class_exists($routerClass) && is_subclass_of($routerClass, RouterInterface::class)) {
+                // #region agent log
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'A','location'=>'ProcessUrlBefore.php:98','message'=>'calling router process','data'=>['module'=>$module,'routerClass'=>$routerClass,'path'=>$path],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+                // #endregion
                 $routerClass::process($path, $rule);
                 $moduleCount++;
+                
+                // #region agent log
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'A','location'=>'ProcessUrlBefore.php:103','message'=>'after router process','data'=>['module'=>$module,'path'=>$path,'rule_module'=>($rule['module']??'none')],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+                // #endregion
             }
             
             // 优化：如果路由已匹配，提前退出循环
