@@ -33,7 +33,7 @@ class Reader extends ModuleFileReader
      * Read 初始函数...
      *
      * @param Scanner   $scanner
-     * @param I18NCache $cache
+     * @param I18nCache $cache
      */
     public function __construct(
         Scanner   $scanner,

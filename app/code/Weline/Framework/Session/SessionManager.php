@@ -55,7 +55,15 @@ class SessionManager
                 $driver_name = pathinfo($driver_file, PATHINFO_FILENAME);
                 $driver_file_class = $module['namespace_path'] . '\\Session\\Driver\\' . ucfirst($driver_name);
                 if (!class_exists($driver_file_class)) {
+                    // 跳过接口文件（接口不能作为驱动类）
+                    if (interface_exists($driver_file_class, true)) {
+                        continue;
+                    }
                     new Exception(__('Session 驱动找不到！请检查env配置文件中 session[\'default\'] 是否正确。驱动类：%{1}', $driver_file_class));
+                }
+                // 跳过接口（接口不能作为驱动类）
+                if (interface_exists($driver_file_class, true)) {
+                    continue;
                 }
                 $driver_ref_instance = ObjectManager::getReflectionInstance($driver_file_class);
                 if ($driver_ref_instance->isInstantiable()) {

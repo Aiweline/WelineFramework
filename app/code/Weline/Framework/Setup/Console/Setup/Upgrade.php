@@ -36,6 +36,7 @@ use Weline\Framework\Setup\Stage\ModuleSetupStage;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Hook\HookRegistry;
+use Weline\Framework\Router\Service\RouteUpdateService;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
 {
@@ -366,10 +367,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->recollectRegistryAfterModuleChange();
         }
         
-        // 4. 触发系统升级后事件
+        // 4. 触发系统升级后事件（传递部分更新模式参数）
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+        // 检查是否指定了部分更新模式
+        $doModel = isset($args['model']);
+        $doRoute = isset($args['route']);
+        $isPartialUpgrade = $doModel || $doRoute;
+        $eventData = [
+            'is_partial_upgrade' => $isPartialUpgrade,
+            'route_only' => $doRoute,
+            'model_only' => $doModel,
+            'args' => $args
+        ];
+        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', $eventData);
         
         // 5. 检查是否需要再次收集（升级过程中可能有新模块安装）
         $this->checkAndRecollectIfNeeded();
@@ -570,62 +581,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
         
         if ($doRoute) {
-            
+            // 使用独立的路由更新服务
+            // 注意：路由更新不依赖 register.php，register.php 只负责模块注册
             $stageNum = 1;
-            // 扫描模型注册代码
-            list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
-            // 注册路由信息
-            /**@var Handle $module_handle */
-            $module_handle = ObjectManager::getInstance(Handle::class);
-            $modules = $module_handle->getModules();
             $this->printing->note($stageNum . '、指定注册路由信息...', '系统');
             
-            // 使用阶段更新管理器确保原子性
-            /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
-            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
-            $routeStage = ObjectManager::make(RouteUpdateStage::class, ['routerHelper' => $routerHelper]);
+            /**@var Handle $module_handle */
+            $module_handle = ObjectManager::getInstance(Handle::class);
             
-            // 准备路由更新阶段
-            $routeStage->prepare([
-                'modules_to_clear' => $argsModule ?: []
+            /**@var RouteUpdateService $routeUpdateService */
+            $routeUpdateService = ObjectManager::make(RouteUpdateService::class, [
+                'printing' => $this->printing,
+                'moduleHandle' => $module_handle
             ]);
             
-            foreach ($modules as $module_name => $module) {
-                if ($argsModule and !in_array($module_name, $argsModule)) {
-                    continue;
-                }
-                // 注册模组
-                if (is_file($module['base_path'] . '/register.php')) {
-                    require $module['base_path'] . '/register.php';
-                }
-                try {
-                    $module_handle->registerRoute(new Module($module));
-                } catch (Exception $exception) {
-                    $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
-                    $routeStage->rollback();
-                    throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
-                }
-            }
-            
-            // 验证并提交路由更新（一次性写入所有路由文件）
-            $stageNum++;
-            $this->printing->note($stageNum . '、验证并提交路由更新...', '系统');
-            try {
-                if (!$routeStage->validate()) {
-                    $status = $routeStage->getStatus();
-                    $errors = $status['errors'] ?? [];
-                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
-                    throw new Exception(__('路由更新验证失败：%{1}', [$errorMsg]));
-                }
-                
-                $this->printing->note(__('   - 正在写入路由文件...'));
-                $routeStage->commit();
-                $this->printing->success(__('✓ 路由文件写入完成！'));
-            } catch (Exception $exception) {
-                $this->printing->error(__('路由文件写入失败：%{1}', [$exception->getMessage()]));
-                $routeStage->rollback();
-                throw new Exception(__('路由文件写入失败：%{1}', [$exception->getMessage()]), 0, $exception);
-            }
+            // 更新路由（支持指定模块）
+            $routeUpdateService->updateRoutes($argsModule ?: []);
         }
         
         if ($appoint) {
@@ -830,6 +801,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $modules = $module_handle->getModules();
         
         // ========== 使用阶段更新管理器统一管理所有更新 ==========
+        // 检查是否指定了部分更新模式
+        $doModel = isset($args['model']);
+        $doRoute = isset($args['route']);
+        $isRouteOnly = $doRoute && !$doModel;
+        
         $stageNumber = 1;
         $this->printing->note($stageNumber . '、初始化阶段更新管理器...', '系统');
         /**@var StageUpdateManager $stageManager */
@@ -839,10 +815,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $moduleSetupStage = ObjectManager::make(ModuleSetupStage::class, ['moduleHandle' => $module_handle]);
         $stageManager->registerStage($moduleSetupStage, 1);
         
-        /**@var ModelManager $modelManager */
-        $modelManager = ObjectManager::getInstance(ModelManager::class);
-        $databaseStage = ObjectManager::make(DatabaseUpdateStage::class, ['modelManager' => $modelManager]);
-        $stageManager->registerStage($databaseStage, 2);
+        // 仅在非仅更新路由模式下创建数据库更新阶段
+        $databaseStage = null;
+        if (!$isRouteOnly) {
+            /**@var ModelManager $modelManager */
+            $modelManager = ObjectManager::getInstance(ModelManager::class);
+            $databaseStage = ObjectManager::make(DatabaseUpdateStage::class, ['modelManager' => $modelManager]);
+            $stageManager->registerStage($databaseStage, 2);
+        }
         
         /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
         $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
@@ -875,48 +855,53 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
         
-        // 收集数据库更新任务
-        $this->printing->note(__('   - 批量收集数据库更新任务...'));
-        foreach ($modules as $module_name => $module) {
-            if ($argsModule and !in_array($module_name, $argsModule)) {
-                continue;
+        // 收集数据库更新任务（仅在非仅更新路由模式下执行）
+        // 如果是仅更新路由模式，跳过数据库更新任务收集
+        if (!$isRouteOnly && $databaseStage !== null) {
+            $this->printing->note(__('   - 批量收集数据库更新任务...'));
+            foreach ($modules as $module_name => $module) {
+                if ($argsModule and !in_array($module_name, $argsModule)) {
+                    continue;
+                }
+                
+                $moduleObj = new Module($module);
+                $setupContext = ObjectManager::make(SetupContext::class, [
+                    'module_name' => $moduleObj->getName(),
+                    'module_version' => $moduleObj->getVersion(),
+                    'module_description' => $moduleObj->getDescription()
+                ], '__construct');
+                
+                // 根据模块状态决定更新类型
+                /**@var \Weline\Framework\Module\Helper\Data $moduleHelper */
+                $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+                $oldModules = $module_handle->getModules(); // 获取旧模块列表（在注册前）
+                
+                if (isset($module['installing']) and $module['installing']) {
+                    // 新安装的模块
+                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'install');
+                    if (DEV) {
+                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                    }
+                } elseif (isset($module['upgrading']) and $module['upgrading']) {
+                    // 升级的模块
+                    $old_version = $moduleHelper->isInstalled($oldModules, $moduleObj->getName()) 
+                        ? ($oldModules[$moduleObj->getName()]['version'] ?? '1.0.0')
+                        : '1.0.0';
+                    if ($moduleHelper->isUpgrade($old_version, $moduleObj->getVersion())) {
+                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'upgrade');
+                    }
+                    if (DEV) {
+                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                    }
+                } else {
+                    // 已存在的模块，只执行 setup（开发模式）
+                    if (DEV) {
+                        $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
+                    }
+                }
             }
-            
-            $moduleObj = new Module($module);
-            $setupContext = ObjectManager::make(SetupContext::class, [
-                'module_name' => $moduleObj->getName(),
-                'module_version' => $moduleObj->getVersion(),
-                'module_description' => $moduleObj->getDescription()
-            ], '__construct');
-            
-            // 根据模块状态决定更新类型
-            /**@var \Weline\Framework\Module\Helper\Data $moduleHelper */
-            $moduleHelper = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
-            $oldModules = $module_handle->getModules(); // 获取旧模块列表（在注册前）
-            
-            if (isset($module['installing']) and $module['installing']) {
-                // 新安装的模块
-                $databaseStage->addUpdateTask($moduleObj, $setupContext, 'install');
-                if (DEV) {
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
-                }
-            } elseif (isset($module['upgrading']) and $module['upgrading']) {
-                // 升级的模块
-                $old_version = $moduleHelper->isInstalled($oldModules, $moduleObj->getName()) 
-                    ? ($oldModules[$moduleObj->getName()]['version'] ?? '1.0.0')
-                    : '1.0.0';
-                if ($moduleHelper->isUpgrade($old_version, $moduleObj->getVersion())) {
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'upgrade');
-                }
-                if (DEV) {
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
-                }
-            } else {
-                // 已存在的模块，只执行 setup（开发模式）
-                if (DEV) {
-                    $databaseStage->addUpdateTask($moduleObj, $setupContext, 'setup');
-                }
-            }
+        } else {
+            $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新任务收集'));
         }
         
         // 准备路由更新阶段
@@ -1070,11 +1055,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 
                 // 重新验证已更新的阶段（确保新添加的任务有效）
                 $this->printing->note(__('   - 重新验证更新的阶段...'));
-                if (!$databaseStage->validate()) {
-                    $status = $databaseStage->getStatus();
-                    $errors = $status['errors'] ?? [];
-                    $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
-                    throw new Exception(__('数据库更新阶段验证失败：%{1}', [$errorMsg]));
+                if (!$isRouteOnly && $databaseStage !== null) {
+                    if (!$databaseStage->validate()) {
+                        $status = $databaseStage->getStatus();
+                        $errors = $status['errors'] ?? [];
+                        $errorMsg = !empty($errors) ? implode('; ', $errors) : __('验证失败');
+                        throw new Exception(__('数据库更新阶段验证失败：%{1}', [$errorMsg]));
+                    }
                 }
                 if (!$routeStage->validate()) {
                     $status = $routeStage->getStatus();
@@ -1084,9 +1071,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
             
-            // 第二步：提交数据库更新阶段
-            $this->printing->note(__('   - 提交数据库更新阶段...'));
-            $databaseStage->commit();
+            // 第二步：提交数据库更新阶段（仅在非仅更新路由模式下执行）
+            if (!$isRouteOnly && $databaseStage !== null) {
+                $this->printing->note(__('   - 提交数据库更新阶段...'));
+                $databaseStage->commit();
+            } else {
+                $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新阶段提交'));
+            }
             
             // 第三步：提交路由更新阶段
             $this->printing->note(__('   - 提交路由更新阶段...'));

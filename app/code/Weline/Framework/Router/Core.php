@@ -196,6 +196,9 @@ class Core
         if ($this->is_admin) {
             $this->routerGeneratedGetParams = [];
             $url = $this->request->getUrlPath();
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run2','hypothesisId'=>'I','location'=>'Core.php:201','message'=>'getUrlPath result','data'=>['url'=>$url,'REQUEST_URI'=>($_SERVER['REQUEST_URI']??'none'),'PATH_INFO'=>($_SERVER['PATH_INFO']??'none')],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+            // #endregion
             if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
                 $url = str_replace($this->area_router, '', $url);
             }
@@ -318,6 +321,9 @@ class Core
             } else {
                 $this->routerGeneratedGetParams = [];
                 $url = $this->request->getUrlPath();
+                // #region agent log
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['sessionId'=>'debug-session','runId'=>'run2','hypothesisId'=>'I','location'=>'Core.php:320','message'=>'getUrlPath result (non-admin)','data'=>['url'=>$url,'REQUEST_URI'=>($_SERVER['REQUEST_URI']??'none'),'PATH_INFO'=>($_SERVER['PATH_INFO']??'none')],'timestamp'=>time()*1000])."\n", FILE_APPEND);
+                // #endregion
                 if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
                     $url = str_replace($this->area_router, '', $url);
                 }

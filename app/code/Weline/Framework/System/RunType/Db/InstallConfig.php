@@ -16,8 +16,6 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Setup\DataInterface;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Helper\Data;
-use PDO;
-use PDOException;
 
 class InstallConfig
 {
@@ -77,21 +75,24 @@ class InstallConfig
         }
         $tmp['数据库：2、数据库链接检测...'] = '系统';
         try {
-            //初始化一个PDO对象
-            $dbh = new PDO($db_config['type'] . ':host=' . $db_config['hostname'] . ';dbname=' . $db_config['database'], $db_config['username'], $db_config['password']);
+            // 使用框架的数据库连接对象进行检测
+            $configProvider = new ConfigProvider($db_conf);
+            $connect = ConnectionFactory::getInstance($configProvider);
+            // 尝试创建连接以检测是否成功
+            $connect->getConnector();
             if (CLI) {
-                $this->printer->success('PDO数据库链接检测通过', 'OK');
+                $this->printer->success('数据库链接检测通过', 'OK');
             }
-            $tmp['PDO数据库链接检测通过'] = '【✔】';
-            $dbh                          = null;
-        } catch (PDOException $e) {
+            $tmp['数据库链接检测通过'] = '【✔】';
+            $connect->close();
+        } catch (\Throwable $e) {
             if (CLI) {
-                $this->printer->error('PDO数据库链接检测失败!' . 'Error: ' . $e->getMessage(), 'ERROR');
+                $this->printer->error('数据库链接检测失败!' . 'Error: ' . $e->getMessage(), 'ERROR');
                 exit();
             };
             $hasErr                        = true;
-            $msg                           = 'PDO数据库链接检测失败!' . 'Error: ' . $e->getMessage();
-            $tmp['PDO数据库链接检测失败!'] = $msg . '【✖】';
+            $msg                           = '数据库链接检测失败!' . 'Error: ' . $e->getMessage();
+            $tmp['数据库链接检测失败!'] = $msg . '【✖】';
             return ['data' => $tmp, 'hasErr' => $hasErr, 'msg' => $msg . '【✖】'];
         }
         // 数据库信息安装
@@ -128,22 +129,24 @@ class InstallConfig
         }
         $tmp['数据库：1、Debug调试数据库链接检测...'] = '系统';
         try {
-            //初始化一个PDO对象
-            $configProvider = new ConfigProvider();
+            // 使用框架的数据库连接对象进行检测
+            $configProvider = new ConfigProvider($sandbox_db_conf);
             $connect = ConnectionFactory::getInstance($configProvider);
+            // 尝试创建连接以检测是否成功
+            $connect->getConnector();
             if (CLI) {
-                $this->printer->success('PDO数据库链接检测通过', 'OK');
+                $this->printer->success('数据库链接检测通过', 'OK');
             }
-            $tmp['PDO数据库链接检测通过'] = '【✔】';
+            $tmp['数据库链接检测通过'] = '【✔】';
             $connect->close();
-        } catch (PDOException $e) {
+        } catch (\Throwable $e) {
             if (CLI) {
-                $this->printer->error('PDO数据库链接检测失败!' . 'Error: ' . $e->getMessage(), 'ERROR');
+                $this->printer->error('数据库链接检测失败!' . 'Error: ' . $e->getMessage(), 'ERROR');
                 exit();
             };
             $hasErr                        = true;
-            $msg                           = 'PDO数据库链接检测失败!' . 'Error: ' . $e->getMessage();
-            $tmp['PDO数据库链接检测失败!'] = $msg . '【✖】';
+            $msg                           = '数据库链接检测失败!' . 'Error: ' . $e->getMessage();
+            $tmp['数据库链接检测失败!'] = $msg . '【✖】';
         }
         // 调试数据库信息安装
         if (CLI) {

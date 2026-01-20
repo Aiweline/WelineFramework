@@ -24,7 +24,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
             $setup->getConnection()->addColumn(
                 $table,
                 'owner_id',
-                TableInterface::column_type_INT,
+                TableInterface::column_type_INTEGER,
                 0,
                 '所有者用户ID'
             );
@@ -92,7 +92,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
             $setup->getConnection()->addColumn(
                 $table,
                 'rating_count',
-                TableInterface::column_type_INT,
+                TableInterface::column_type_INTEGER,
                 0,
                 '评分数量'
             );
@@ -103,7 +103,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
             $setup->getConnection()->addColumn(
                 $table,
                 'rental_count',
-                TableInterface::column_type_INT,
+                TableInterface::column_type_INTEGER,
                 0,
                 '累计租赁次数'
             );
@@ -114,7 +114,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
             $setup->getConnection()->addColumn(
                 $table,
                 'usage_count',
-                TableInterface::column_type_INT,
+                TableInterface::column_type_INTEGER,
                 0,
                 '累计使用次数'
             );
@@ -195,7 +195,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
                 $table,
                 'idx_owner',
                 'owner_id',
-                TableInterface::index_type_NORMAL
+                TableInterface::index_type_DEFAULT
             );
             echo "✅ 已添加 ai_assistant.owner_id 索引\n";
         }
@@ -205,7 +205,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
                 $table,
                 'idx_rentable',
                 'is_rentable',
-                TableInterface::index_type_NORMAL
+                TableInterface::index_type_DEFAULT
             );
             echo "✅ 已添加 ai_assistant.is_rentable 索引\n";
         }
@@ -215,7 +215,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
                 $table,
                 'idx_rating',
                 'rating_average',
-                TableInterface::index_type_NORMAL
+                TableInterface::index_type_DEFAULT
             );
             echo "✅ 已添加 ai_assistant.rating_average 索引\n";
         }
@@ -225,7 +225,7 @@ class add_assistant_rental_fields_20250114_v2_0_0
                 $table,
                 'idx_category',
                 'category',
-                TableInterface::index_type_NORMAL
+                TableInterface::index_type_DEFAULT
             );
             echo "✅ 已添加 ai_assistant.category 索引\n";
         }
