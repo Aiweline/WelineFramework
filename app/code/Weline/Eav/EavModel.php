@@ -91,7 +91,8 @@ abstract class EavModel extends Model implements EavInterface
 
     public function getEavEntityId(): int
     {
-        return $this->eav_Entity()->getId();
+        // 有些数据库驱动会把主键 ID 以字符串形式返回，这里统一强转为 int，确保返回类型正确
+        return (int)$this->eav_Entity()->getId();
     }
 
     public function getEntityFieldIdType(): string

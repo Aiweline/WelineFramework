@@ -105,7 +105,7 @@ class InstallData
                     throw new \Exception(__('保存分类失败: %{1} (parent_id: %{2})', [$catData['name'], $parentId]));
                 }
                 
-                $categoryId = $category->getId();
+                $categoryId = (int)$category->getId();
                 if (!$categoryId) {
                     // 如果 getId() 为空，尝试从 saveResult 获取
                     if (is_numeric($saveResult)) {
@@ -124,7 +124,8 @@ class InstallData
 
             // 如果有子分类，递归插入
             if (!empty($catData['children']) && is_array($catData['children'])) {
-                $insertedCount += $this->insertCategories($category, $catData['children'], $categoryId, 0);
+                // 确保 $categoryId 是 int 类型
+                $insertedCount += $this->insertCategories($category, $catData['children'], (int)$categoryId, 0);
             }
 
             $sortOrder++;

@@ -48,7 +48,9 @@ class ModelManager
         if (!in_array($type, ['setup', 'upgrade', 'install'])) {
             throw new Exception(__('$type允许的值不在：%{1} 中', "'setup','upgrade','install'"));
         }
-        $model_files_data = array_reverse($this->moduleReader->readClass($module, 'Model'));
+        $model_files_data = $this->moduleReader->readClass($module, 'Model');
+        // 按照目录层级和类名长度排序：层级越低、名字越短的越先升级
+        $model_files_data = $this->sortModelsByPriority($model_files_data);
         foreach ($model_files_data as $key => $model_class) {
             $this->printing->note($model_class, __('Model升级'));
             if (class_exists($model_class)) {
@@ -101,13 +103,7 @@ class ModelManager
         // 如果是 upgrade 或 setup，先检查表是否存在
         // 如果表不存在，先执行 install 安装表
         if (in_array($type, ['upgrade', 'setup'])) {
-            if (!$modelSetup->tableExist()) {
-                // 表不存在，先执行 install
-                if (method_exists($model, 'install')) {
-                    $this->printing->note(__('表 %{1} 不存在，先执行 install 安装表...', [$model->getTable()]));
-                    $model->install($modelSetup, $context);
-                }
-            }
+            $model->install($modelSetup, $context);
         }
         
         // 执行模型升级/安装/设置，如果遇到表不存在的错误，尝试先安装
@@ -136,5 +132,48 @@ class ModelManager
                 throw $e;
             }
         }
+    }
+
+    /**
+     * @DESC          # 按照目录层级和类名长度对模型进行排序
+     * 
+     * 排序规则（优先级从高到低）：
+     * 1. 目录层级深度：层级越浅（深度越小）的模型越先升级
+     * 2. 类名长度：名字越短的模型越先升级
+     * 3. 字母顺序：确保排序的稳定性
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/01/XX
+     * 参数区：
+     *
+     * @param array $model_classes 模型类名数组
+     *
+     * @return array 排序后的模型类名数组
+     */
+    private function sortModelsByPriority(array $model_classes): array
+    {
+        usort($model_classes, function ($a, $b) {
+            // 计算目录层级深度（通过命名空间的反斜杠数量）
+            $depthA = substr_count($a, '\\');
+            $depthB = substr_count($b, '\\');
+            
+            // 第一优先级：目录层级深度（层级越浅越先）
+            if ($depthA !== $depthB) {
+                return $depthA <=> $depthB;
+            }
+            
+            // 第二优先级：类名长度（名字越短越先）
+            $lengthA = strlen($a);
+            $lengthB = strlen($b);
+            if ($lengthA !== $lengthB) {
+                return $lengthA <=> $lengthB;
+            }
+            
+            // 第三优先级：字母顺序（确保排序的稳定性）
+            return strcmp($a, $b);
+        });
+        
+        return $model_classes;
     }
 }
