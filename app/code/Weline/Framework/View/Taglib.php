@@ -689,15 +689,17 @@ class Taglib
                                 $result = "<?php if({$condition}):echo {$content_arr[0][1]};endif;?>";
                             } else {
                                 foreach ($content_arr as $key => $data) {
+                                    // 统一转成数组，避免在 count() / 下标访问时出现字符串类型
+                                    $dataArray = (array)$data;
                                     if (0 === $key) {
-                                        $condition = $this->varParser($data[0]);
-                                        $result = "<?php if($condition):echo " . $data[1] . ';';
+                                        $condition = $this->varParser($dataArray[0]);
+                                        $result = "<?php if($condition):echo " . $dataArray[1] . ';';
                                     } else {
-                                        if (count($data) > 1) {
-                                            $condition = $this->varParser($data[0]);
-                                            $result .= " elseif($condition):echo " . $data[1] . ';';
+                                        if (count($dataArray) > 1) {
+                                            $condition = $this->varParser($dataArray[0]);
+                                            $result .= " elseif($condition):echo " . $dataArray[1] . ';';
                                         } else {
-                                            $result .= ' else: echo ' . $data[0] . ';';
+                                            $result .= ' else: echo ' . $dataArray[0] . ';';
                                         }
                                     }
                                     if (end($content_arr) === $data) {
@@ -839,15 +841,17 @@ class Taglib
                             } else {
                                 $result = '';
                                 foreach ($content_arr as $key => $data) {
+                                    // 统一转为数组，避免 count()/下标访问时类型为 string
+                                    $dataArray = (array)$data;
                                     if (0 === $key) {
-                                        $name = $this->varParser($data[0]);
-                                        $result = "<?php if(!empty($name)):echo " . $data[1] . ';';
+                                        $name = $this->varParser($dataArray[0]);
+                                        $result = "<?php if(!empty($name)):echo " . $dataArray[1] . ';';
                                     } else {
-                                        if (count($data) > 1) {
-                                            $name = $this->varParser($data[0]);
-                                            $result .= " elseif(!empty($name)):echo " . $data[1] . ';';
+                                        if (count($dataArray) > 1) {
+                                            $name = $this->varParser($dataArray[0]);
+                                            $result .= " elseif(!empty($name)):echo " . $dataArray[1] . ';';
                                         } else {
-                                            $result .= ' else: echo ' . $data[0] . ';';
+                                            $result .= ' else: echo ' . $dataArray[0] . ';';
                                         }
                                     }
                                     if (end($content_arr) === $data) {

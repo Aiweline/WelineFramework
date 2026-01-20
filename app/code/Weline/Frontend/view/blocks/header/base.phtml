@@ -371,7 +371,9 @@ endif;
 </script>
 <!--加载配置页头-->
 <?php
-echo $this->getHeader()->getHtml();
+if($this->getHeader()){
+    echo $this->getHeader()->getHtml();
+}
 ?>
 <!--后台配置头部-->
 <hook>Weline_Frontend::frontend::partials::head::before</hook>

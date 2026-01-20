@@ -146,6 +146,11 @@ return [
         'description' => __('在模板编译完成后触发，允许其他模块处理编译后的模板内容。可以修改模板内容、提取信息、注入代码等。'),
         'doc' => 'template/模板编译后.md',
     ],
+    'Weline_Framework_Template::after_render' => [
+        'name' => __('模板渲染后'),
+        'description' => __('在模板完成渲染（输出HTML）之后触发，允许其他模块对最终HTML进行分析、提取静态资源、注入追踪代码等操作。注意：此时不应再出现PHP代码，只能处理纯HTML字符串。'),
+        'doc' => 'template/模板渲染后.md',
+    ],
     
     // ========== 控制器事件 ==========
     'Weline_Framework_Controller::fetch_file_before' => [

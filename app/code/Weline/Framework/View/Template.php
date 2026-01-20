@@ -396,7 +396,10 @@ class Template extends DataObject
      * @throws \Exception
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
-    {$comFileName = $this->getFetchFile($fileName);$result = $this->ob_file($comFileName, $dictionary);return $result;
+    {
+        $comFileName = $this->getFetchFile($fileName);
+        $result = $this->ob_file($comFileName, $dictionary);
+        return $result;
     }
 
     /**
@@ -425,7 +428,8 @@ class Template extends DataObject
             # 将数组存储的变量散列到当前页内存中，使得变量可在页面中暴露出来（可直接使用）
             if ($this->getData()) {
                 extract($this->getData(), EXTR_SKIP);
-            }include $filename;} catch (\Exception $exception) {
+            }
+            include $filename;} catch (\Exception $exception) {
             ob_end_clean();
             throw $exception;
         }
@@ -501,7 +505,7 @@ class Template extends DataObject
             $hookFiles = $hookReader->getFileList(); // 已按顺序排序
             
             // 获取完整的hook信息（包含solo等元数据）
-            $hookFilesWithMeta = $hookReader->getFileListWithMeta()??[];
+            $hookFilesWithMeta = $hookReader->getFileListWithMeta();
         } catch (\Throwable $e) {
             // 如果获取失败，尝试使用Hooker（向后兼容）
             /**@var Hooker $hooker */
