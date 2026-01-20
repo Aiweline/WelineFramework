@@ -26,7 +26,6 @@ class ModelSetup
 {
     protected ?AbstractModel $model = null;
 
-    private ?Table $ddl_table = null;
     private Printing $printing;
 
     /**

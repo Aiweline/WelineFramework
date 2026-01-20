@@ -85,7 +85,7 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
         }
         
         /**@var CacheFactory $cacheObj */
-        $cacheObj = ObjectManager::makeWithoutFactory($cacheClass);
+        $cacheObj = ObjectManager::make($cacheClass, [], '__construct');
         
         // 检查是否有 getIdentity 方法，如果没有则使用类名作为标识
         $identity = method_exists($cacheObj, 'getIdentity') 

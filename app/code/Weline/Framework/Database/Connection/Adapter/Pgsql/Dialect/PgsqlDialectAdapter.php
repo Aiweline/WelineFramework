@@ -318,6 +318,31 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
         $formatter = $query->getIdentifierFormatter();
         $insert_items = $query->insert['insert'] ?? [];
         $insert_or_update_items = $query->insert['i_o_u'] ?? [];
+        $insert_origin = $query->insert['origin'] ?? [];
+        
+        // 🔧 修复：如果有 insert_update_where_fields，将 insert['origin'] 中的数据也视为需要 insertOrUpdate 处理
+        // 这样可以自动检测冲突并更新，而不需要先查询数据库
+        if (!empty($insert_origin) && !empty($query->insert_update_where_fields)) {
+            // 将 origin 中的数据合并到 insert_or_update_items 中
+            if (empty($insert_or_update_items)) {
+                $insert_or_update_items = [];
+            }
+            // 处理 origin 数据（可能是单个数组或多个数组）
+            if (isset($insert_origin[0]) && is_array($insert_origin[0])) {
+                // 多个记录（数组的数组）
+                $insert_or_update_items = array_merge($insert_or_update_items, $insert_origin);
+            } elseif (is_array($insert_origin) && !empty($insert_origin)) {
+                // 单个记录（关联数组）
+                // 检查是否是关联数组（有字符串键）还是索引数组
+                if (is_string(array_key_first($insert_origin))) {
+                    // 关联数组，是单个记录
+                    $insert_or_update_items[] = $insert_origin;
+                } else {
+                    // 索引数组，可能是多个记录
+                    $insert_or_update_items = array_merge($insert_or_update_items, $insert_origin);
+                }
+            }
+        }
         
         // 保存 insert 数据的副本，以便在需要时回退到父类逻辑
         $insert_origin_backup = $query->insert['origin'] ?? null;
