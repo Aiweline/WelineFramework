@@ -114,26 +114,26 @@ class DbManager
     public function create(string $connection_name = 'default', null|ConfigProvider $configProvider = null): ConnectionFactory
     {
         $connection = $this->getConnection($connection_name);
-        // 如果不更新连接配置，且已经存在连接就直接读取
-        if (empty($configProvider) && $connection) {
-            return $connection;
-        }
-        // 存在连接配置则
-        if ($configProvider && $connection) {
-            // 如果更新连接配置，但是配置内容一致，且存在使用此配置存在的连接则直接返回
-            if ($connection->getConfigProvider()->getData() == $configProvider->getData()) {
+        
+        // 确定要使用的配置：如果不提供配置类，使用默认的配置链接
+        $targetConfigProvider = $configProvider ?? $this->configProvider;
+        
+        // 如果已有连接，检查是否需要更新
+        if ($connection) {
+            // 如果不更新连接配置，直接返回已有连接
+            if (empty($configProvider)) {
                 return $connection;
-            } else {
-                $connection = ConnectionFactory::getInstance($configProvider);
             }
-        } else {
-            if ($configProvider && empty($connection)) {
-                $connection = ConnectionFactory::getInstance($configProvider);
-            } else {
-                // 延迟初始化：只有在真正需要时才创建连接
-                $connection = ConnectionFactory::getInstance($this->configProvider);
+            // 如果提供了新配置，检查配置是否一致
+            if ($connection->getConfigProvider()->getData() == $targetConfigProvider->getData()) {
+                return $connection;
             }
         }
+        
+        // 创建新连接（使用目标配置）
+        $connection = ConnectionFactory::getInstance($targetConfigProvider);
+        
+        // 保存连接
         $this->connections[$connection_name] = $connection;
 //        $this->connections->offsetSet($connection, $connection_name);
         if ('default' === $connection_name) {

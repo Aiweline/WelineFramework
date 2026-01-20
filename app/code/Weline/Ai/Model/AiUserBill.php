@@ -60,7 +60,7 @@ class AiUserBill extends \Weline\Framework\Database\Model
             [self::fields_BILL_TYPE, self::fields_BILL_DATE],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('用户账单表')
                 ->addColumn(
                     self::fields_ID,
@@ -71,7 +71,7 @@ class AiUserBill extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_USER_ID,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'not null',
                     '用户ID'
@@ -92,14 +92,14 @@ class AiUserBill extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_CALL_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '调用次数'
                 )
                 ->addColumn(
                     self::fields_TOTAL_TOKENS,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '总Token数'
@@ -120,7 +120,7 @@ class AiUserBill extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_RECHARGE_COUNT,
-                    TableInterface::column_type_INT,
+                    TableInterface::column_type_INTEGER,
                     11,
                     'default 0',
                     '充值次数'
@@ -161,12 +161,12 @@ class AiUserBill extends \Weline\Framework\Database\Model
                     '更新时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_user',
                     self::fields_USER_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_DEFAULT,
                     'idx_bill',
                     self::fields_BILL_TYPE . ',' . self::fields_BILL_DATE
                 )

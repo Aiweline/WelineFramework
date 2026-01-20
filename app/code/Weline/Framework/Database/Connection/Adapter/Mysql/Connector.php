@@ -25,6 +25,7 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrateg
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
+use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Helper\Standar;
@@ -33,7 +34,7 @@ use Weline\Framework\Manager\ObjectManager;
 final class Connector extends Query implements ConnectorInterface
 {
     public function __construct(
-        private readonly ?ConfigProviderInterface $configProvider
+        private readonly ?ConfigProvider $configProvider
     ) {
         $identifierFormatter = new DefaultIdentifierFormatter();
         $tableStrategy = new DefaultTableNameStrategy(
@@ -255,8 +256,30 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function tableExist(string $table_name): bool
     {
         try {
-            $this->query("DESC {$table_name}")->fetch();
-            return true;
+            // 清理表名，移除反引号
+            $table_name = str_replace(['`', '"'], '', $table_name);
+            
+            // 处理数据库名和表名（如果包含点号分隔）
+            $dbName = $this->configProvider->getDatabase();
+            $schema = $dbName;
+            $table = $table_name;
+            
+            if (str_contains($table_name, '.')) {
+                $parts = explode('.', $table_name, 2);
+                $schema = $parts[0];
+                $table = $parts[1] ?? $parts[0];
+            }
+            
+            // 使用 information_schema 查询表是否存在，不会产生错误或警告
+            $sql = "SELECT COUNT(*) as count FROM information_schema.tables 
+                    WHERE table_schema = :schema AND table_name = :table";
+            $stmt = $this->getLink()->prepare($sql);
+            $stmt->execute([
+                ':schema' => $schema,
+                ':table' => $table
+            ]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return (bool)($result['count'] ?? 0);
         } catch (\Exception $exception) {
             return false;
         }

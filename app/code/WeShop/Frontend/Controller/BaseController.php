@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Frontend\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\ThemeConfigHelper;
 use Weline\Theme\Model\WelineTheme;
@@ -148,7 +149,7 @@ class BaseController extends FrontendController
         $this->assign('store_name', $this->getStoreName());
         
         // 设置当前语言
-        $this->assign('locale', $this->getLocale());
+        $this->assign('locale', State::getLangLocal());
     }
     
     /**

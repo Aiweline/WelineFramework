@@ -20,11 +20,10 @@
 ssh_tools.jsonc
 weline-async.json
 
-# generated目录规则：保留目录结构，但忽略具体文件
-/generated/**/*
-!/generated/
-!/generated/.gitkeep
+# generated目录规则：忽略所有文件，但保留 generated/code/.gitkeep
+/generated/*
 !/generated/code/
+/generated/code/*
 !/generated/code/.gitkeep
 
 # 数据库文件
@@ -48,10 +47,6 @@ response_*.html
 # 不再追踪的业务模块
 app/code/GuoLaiRen/Center/
 app/code/GuoLaiRen/Smtp/
-
-# Windows-MCP 目录（不应该提交）
-Windows-MCP/
-Windows-MCP使用说明.md
 
 # Tests node_modules（不应该提交）
 tests/**/node_modules/

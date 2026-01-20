@@ -271,7 +271,8 @@ class Handle implements HandleInterface, RegisterInterface
             $module->setStatus(true);
             $module['installing'] = true;
             $this->modules[$module->getName()] = $module->getData();
-            $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
+            // 安装模块的 Model 数据库表
+            $this->setupModel($module);
         }
         $this->modules[$module->getName()] = $module->getData();
         // 更新模块
