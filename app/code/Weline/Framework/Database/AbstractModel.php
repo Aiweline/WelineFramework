@@ -1693,8 +1693,10 @@ PAGINATION;
         if (is_string($model)) {
             /**@var Model $model */
             $model = ObjectManager::getInstance($model);
+            // 绑定到当前查询（共享同一个 Query 对象）
             $model->bindQuery($query);
-            $model->alias($alias);
+            // 注意：不再在这里调用 $model->alias($alias)
+            // 主表别名始终保留为 main_table，关联表别名由 join() 中的 $alias 控制
         }
 
         # 自动设置条件
