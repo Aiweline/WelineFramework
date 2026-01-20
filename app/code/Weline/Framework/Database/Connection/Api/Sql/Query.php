@@ -65,6 +65,9 @@ abstract class Query implements QueryInterface
 
     public string $backup_file = '';
     public bool $batch = false;
+    
+    // 用于存储回退数据的数组（避免 PHP 8.2+ 动态属性警告）
+    public array $_fallback_data = [];
 
     protected IdentifierFormatterInterface $identifierFormatter;
     protected TableNameStrategyInterface $tableNameStrategy;
@@ -685,7 +688,7 @@ abstract class Query implements QueryInterface
             // 检查 SQL 是否包含 RETURNING 子句（PostgreSQL）
             $hasReturning = stripos($this->sql, 'RETURNING') !== false;
             
-            if ($hasReturning) {
+                if ($hasReturning) {
                 // 如果使用 RETURNING，需要使用 prepare/execute 来获取结果
                 $this->PDOStatement = $this->getLink()->prepare($this->sql);
                 $this->PDOStatement->execute($this->bound_values);
@@ -710,23 +713,10 @@ abstract class Query implements QueryInterface
             $this->reset();
         } else {
             // 单条语句，使用 prepare/execute
-            // PostgreSQL 的 prepared statement 不支持多个 SQL 命令
-            // 如果 SQL 包含多个命令，prepare() 会抛出异常，我们捕获并处理
             try {
                 $this->PDOStatement = $this->getLink()->prepare($this->sql);
-                // 🔧 PostgreSQL 参数类型绑定：
-                // 对于数字字符串参数，使用 PDO::PARAM_INT 或 PDO::PARAM_STR
-                // 让 PostgreSQL 的 PDO 驱动自动处理类型转换
-                // 但是，由于无法推测类型，我们只能让 PostgreSQL 自动处理
-                // 如果出现类型不匹配错误，说明需要显式转换
-                // 但我们无法推测类型，所以只能保持原样
                 $this->PDOStatement->execute($this->bound_values);
             } catch (\PDOException $e) {
-                // 检查是否是"不能插入多个命令"的错误
-                if (str_contains($e->getMessage(), 'cannot insert multiple commands') || 
-                    str_contains($e->getMessage(), 'multiple commands')) {
-                    throw new \Exception(__('PostgreSQL 的 prepared statement 不支持包含多个 SQL 命令。请将查询拆分为单独的语句，或使用 exec() 方法执行多个语句。SQL: %{1}', [substr($this->sql, 0, 200)]), 0, $e);
-                }
                 // 其他错误继续抛出
                 throw $e;
             }
@@ -911,7 +901,9 @@ abstract class Query implements QueryInterface
 
     public function rollBack(): void
     {
-        $this->getLink()->rollBack();
+        if($this->getLink()->inTransaction()) {
+            $this->getLink()->rollBack();
+        }
     }
 
     public function commit(): void

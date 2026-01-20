@@ -166,6 +166,66 @@ class Create extends AbstractTable implements CreateInterface
         
         return $mapping[$type] ?? strtoupper($type);
     }
+    
+    /**
+     * 在 SQL 执行前转换 MySQL 类型为 PostgreSQL 兼容类型
+     * 处理 SQL 字符串中直接包含的 MySQL 类型（如 TINYINT(1)）
+     * 
+     * @param string $sql SQL 语句
+     * @return string 转换后的 SQL
+     */
+    private function convertMysqlTypesToPostgres(string $sql): string
+    {
+        // MySQL 类型到 PostgreSQL 类型的映射
+        $typeMappings = [
+            // 整数类型
+            '/\bTINYINT\s*\(\s*\d+\s*\)/i' => 'SMALLINT',
+            '/\bTINYINT\b/i' => 'SMALLINT',
+            '/\bSMALLINT\s*\(\s*\d+\s*\)/i' => 'SMALLINT',
+            '/\bMEDIUMINT\s*\(\s*\d+\s*\)/i' => 'INTEGER',
+            '/\bMEDIUMINT\b/i' => 'INTEGER',
+            '/\bINT\s*\(\s*\d+\s*\)/i' => 'INTEGER',
+            '/\bINTEGER\s*\(\s*\d+\s*\)/i' => 'INTEGER',
+            '/\bBIGINT\s*\(\s*\d+\s*\)/i' => 'BIGINT',
+            
+            // 浮点类型
+            '/\bFLOAT\s*\(\s*\d+\s*(?:,\s*\d+)?\s*\)/i' => 'REAL',
+            '/\bDOUBLE\s*\(\s*\d+\s*(?:,\s*\d+)?\s*\)/i' => 'DOUBLE PRECISION',
+            
+            // 文本类型
+            '/\bTINYTEXT\b/i' => 'TEXT',
+            '/\bMEDIUMTEXT\b/i' => 'TEXT',
+            '/\bLONGTEXT\b/i' => 'TEXT',
+            
+            // 二进制类型
+            '/\bTINYBLOB\b/i' => 'BYTEA',
+            '/\bMEDIUMBLOB\b/i' => 'BYTEA',
+            '/\bLONGBLOB\b/i' => 'BYTEA',
+            '/\bBLOB\b/i' => 'BYTEA',
+            
+            // 日期时间类型
+            '/\bDATETIME\b/i' => 'TIMESTAMP',
+            '/\bYEAR\s*\(\s*\d+\s*\)/i' => 'INTEGER',
+            '/\bYEAR\b/i' => 'INTEGER',
+            
+            // JSON 类型
+            '/\bJSON\b/i' => 'JSONB',
+            
+            // ENUM 和 SET 类型（需要特殊处理，这里先转换为 VARCHAR）
+            // 注意：ENUM 和 SET 的完整转换需要解析值列表，这里只做基本转换
+        ];
+        
+        // 应用类型转换
+        foreach ($typeMappings as $pattern => $replacement) {
+            $sql = preg_replace($pattern, $replacement, $sql);
+        }
+        
+        // 移除 SMALLINT、INTEGER、BIGINT 等类型的长度参数（PostgreSQL 不支持）
+        // 匹配模式：SMALLINT(数字) -> SMALLINT
+        $sql = preg_replace('/\b(SMALLINT|INTEGER|BIGINT|REAL|DOUBLE PRECISION|TEXT|BYTEA|DATE|TIME|TIMESTAMP|JSONB|SERIAL|BIGSERIAL)\s*\(\s*\d+\s*\)/i', '$1', $sql);
+        
+        return $sql;
+    }
 
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = ''): CreateInterface
     {
@@ -399,6 +459,28 @@ class Create extends AbstractTable implements CreateInterface
                 if (!$schemaExists) {
                     $pdo->exec("CREATE SCHEMA IF NOT EXISTS \"{$schemaName}\"");
                 }
+            } else {
+                // 对于 public schema，检查用户是否有创建权限
+                // 如果没有权限，尝试授予权限（如果用户有 GRANT 权限）
+                try {
+                    $checkPermissionSql = "SELECT has_schema_privilege(current_user, 'public', 'CREATE')";
+                    $hasPermissionResult = @$pdo->query($checkPermissionSql)->fetchColumn();
+                    // PostgreSQL 返回 't' 或 'f' 字符串，转换为布尔值
+                    $hasPermission = ($hasPermissionResult === 't' || $hasPermissionResult === true);
+                    if (!$hasPermission) {
+                        // 尝试授予权限（如果当前用户有权限）
+                        try {
+                            $currentUser = @$pdo->query("SELECT current_user")->fetchColumn();
+                            if ($currentUser) {
+                                @$pdo->exec("GRANT CREATE ON SCHEMA public TO " . $currentUser);
+                            }
+                        } catch (\PDOException $grantException) {
+                            // 如果无法授予权限，继续执行，让后续的错误处理提供更详细的提示
+                        }
+                    }
+                } catch (\PDOException $checkException) {
+                    // 权限检查失败，继续执行，让后续的错误处理提供更详细的提示
+                }
             }
             
             // 逐个执行 SQL 语句
@@ -407,13 +489,61 @@ class Create extends AbstractTable implements CreateInterface
                 if (empty($sql)) {
                     continue;
                 }
+                // 在执行前转换 MySQL 类型为 PostgreSQL 兼容类型
+                $sql = $this->convertMysqlTypesToPostgres($sql);
                 try {
-                    $pdo->exec($sql);
+                    // 使用 @ 抑制可能的 Warning
+                    @$pdo->exec($sql);
                 } catch (\PDOException $e) {
                     // 如果是索引已存在的错误，忽略（因为使用了 IF NOT EXISTS）
                     // 如果是其他错误，继续抛出
                     $errorCode = $e->getCode();
                     $errorMessage = $e->getMessage();
+                    
+                    // 检查是否是权限错误（42501）
+                    if ($errorCode === '42501' || str_contains($errorMessage, 'permission denied')) {
+                        // 权限错误：提供详细的解决方案提示
+                        try {
+                            $currentUser = @$pdo->query("SELECT current_user")->fetchColumn() ?: 'your_user';
+                            $dbName = @$pdo->query("SELECT current_database()")->fetchColumn() ?: 'your_database';
+                        } catch (\Exception $userException) {
+                            $currentUser = 'your_user';
+                            $dbName = 'your_database';
+                        }
+                        
+                        // 检查 PostgreSQL 版本
+                        $pgVersion = '';
+                        try {
+                            $versionResult = @$pdo->query("SELECT version()")->fetchColumn();
+                            if (preg_match('/PostgreSQL (\d+)/', $versionResult, $matches)) {
+                                $pgVersion = $matches[1];
+                            }
+                        } catch (\Exception $versionException) {
+                            // 忽略版本检查错误
+                        }
+                        
+                        $hint = PHP_EOL . PHP_EOL . __('权限错误说明：') . PHP_EOL;
+                        if ($pgVersion && (int)$pgVersion >= 15) {
+                            $hint .= __('PostgreSQL 15+ 中，普通用户默认没有 public schema 的 CREATE 权限（安全改进）。') . PHP_EOL;
+                            $hint .= __('只有数据库所有者（owner）或已显式授权的用户才能创建表。') . PHP_EOL;
+                        } else {
+                            $hint .= __('当前数据库用户没有在 public schema 中创建表的权限。') . PHP_EOL;
+                        }
+                        $hint .= PHP_EOL . __('解决方案：') . PHP_EOL;
+                        $hint .= __('1. 使用数据库超级用户（如 postgres）连接到数据库 "%{1}"：', [$dbName]) . PHP_EOL;
+                        $hint .= __('   psql -U postgres -d %{1}', [$dbName]) . PHP_EOL;
+                        $hint .= PHP_EOL;
+                        $hint .= __('2. 执行以下命令授予权限：') . PHP_EOL;
+                        $hint .= __('   GRANT USAGE, CREATE ON SCHEMA public TO %{1};', [$currentUser]) . PHP_EOL;
+                        $hint .= __('   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %{1};', [$currentUser]) . PHP_EOL;
+                        $hint .= __('   GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %{1};', [$currentUser]) . PHP_EOL;
+                        $hint .= __('   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %{1};', [$currentUser]) . PHP_EOL;
+                        $hint .= __('   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %{1};', [$currentUser]) . PHP_EOL;
+                        $hint .= PHP_EOL;
+                        $hint .= __('3. 或者修改配置文件，使用数据库超级用户连接数据库。') . PHP_EOL;
+                        $hint .= __('   编辑 app/etc/env.php，将数据库用户名改为 postgres 或其他超级用户。') . PHP_EOL;
+                        throw new \PDOException($errorMessage . $hint, (int)$errorCode, $e);
+                    }
                     
                     // PostgreSQL 错误代码：42P07 = duplicate_table, 42710 = duplicate_object
                     // 如果是索引或表已存在的错误，且使用了 IF NOT EXISTS，则忽略

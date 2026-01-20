@@ -11,7 +11,6 @@ namespace Weline\Framework\Session\Driver;
 
 interface SessionDriverHandlerInterface extends \SessionHandlerInterface
 {
-    public function __construct(array $config);
     /**
      * @DESC          # 设置数据
      *

@@ -33,11 +33,6 @@ class Remove extends CommandAbstract
     private Data $data;
 
     /**
-     * @var Upgrade
-     */
-    private Upgrade $upgrade;
-
-    /**
      * @var Handle
      */
     private Handle $handle;
@@ -45,13 +40,11 @@ class Remove extends CommandAbstract
     public function __construct(
         System  $system,
         Data    $data,
-        Upgrade $upgrade,
         Handle  $handle
     )
     {
         $this->system = $system;
         $this->data = $data;
-        $this->upgrade = $upgrade;
         $this->handle = $handle;
     }
 
