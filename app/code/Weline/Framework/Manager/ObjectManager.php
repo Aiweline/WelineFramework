@@ -219,7 +219,18 @@ class ObjectManager implements ManagerInterface
         
         // 防止尝试反射接口（接口必须通过工厂类实例化）
         if (interface_exists($className, true)) {
-            throw new Exception("尝试反射接口 {$className}，接口必须通过工厂类实例化");
+            // 获取调用堆栈信息
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+            $callerInfo = '';
+            if (isset($backtrace[2])) {
+                $caller = $backtrace[2];
+                $callerFile = $caller['file'] ?? 'unknown';
+                $callerLine = $caller['line'] ?? 'unknown';
+                $callerFunction = $caller['function'] ?? 'unknown';
+                $callerClass = $caller['class'] ?? '';
+                $callerInfo = "\n调用位置: " . ($callerClass ? $callerClass . '::' : '') . $callerFunction . "()\n文件: " . str_replace(BP, '', $callerFile) . ":" . $callerLine;
+            }
+            throw new Exception("禁止反射接口 {$className}，接口必须通过工厂类实例化。{$callerInfo}");
         }
         
         if (!isset(self::$reflections[$className])) {
@@ -902,7 +913,18 @@ class ObjectManager implements ManagerInterface
         
         // 先检查是否是接口（接口不能解析方法参数）
         if (interface_exists($className, true)) {
-            throw new Exception("尝试解析接口 {$className} 的方法参数，接口必须通过工厂类实例化");
+            // 获取调用堆栈信息
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+            $callerInfo = '';
+            if (isset($backtrace[2])) {
+                $caller = $backtrace[2];
+                $callerFile = $caller['file'] ?? 'unknown';
+                $callerLine = $caller['line'] ?? 'unknown';
+                $callerFunction = $caller['function'] ?? 'unknown';
+                $callerClass = $caller['class'] ?? '';
+                $callerInfo = "\n调用位置: " . ($callerClass ? $callerClass . '::' : '') . $callerFunction . "()\n文件: " . str_replace(BP, '', $callerFile) . ":" . $callerLine;
+            }
+            throw new Exception("禁止实例化接口 {$className}，接口必须通过工厂类实例化。{$callerInfo}");
         }
         
         // 优化：使用缓存的 ReflectionClass，避免重复创建

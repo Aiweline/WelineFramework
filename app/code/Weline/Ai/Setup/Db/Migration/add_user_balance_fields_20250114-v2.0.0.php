@@ -69,7 +69,7 @@ class add_user_balance_fields_20250114_v2_0_0
                 $table,
                 'idx_balance',
                 'balance',
-                TableInterface::index_type_NORMAL
+                TableInterface::index_type_DEFAULT
             );
             echo "✅ 已添加 frontend_user.balance 索引\n";
         }

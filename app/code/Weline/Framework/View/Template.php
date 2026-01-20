@@ -501,7 +501,7 @@ class Template extends DataObject
             $hookFiles = $hookReader->getFileList(); // 已按顺序排序
             
             // 获取完整的hook信息（包含solo等元数据）
-            $hookFilesWithMeta = $hookReader->getFileListWithMeta();
+            $hookFilesWithMeta = $hookReader->getFileListWithMeta()??[];
         } catch (\Throwable $e) {
             // 如果获取失败，尝试使用Hooker（向后兼容）
             /**@var Hooker $hooker */

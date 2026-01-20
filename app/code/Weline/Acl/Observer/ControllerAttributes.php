@@ -421,10 +421,30 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             return;
         }
         
+        // 🔧 修复：去重 pending_class_level_acls，只保留每个 source_id 的最新记录
+        // 因为同一个 source_id 可能因为不同的路由变体或多次扫描被收集多次
+        // 但 ACL 权限应该只保存一次，所以需要去重
+        $deduplicatedAcls = [];
+        $seenSourceIds = [];
+        foreach ($this->pending_class_level_acls[$module] as $acl) {
+            $sourceId = $acl['source_id'] ?? '';
+            if (!empty($sourceId)) {
+                // 如果已经见过这个 source_id，跳过（保留第一个）
+                // 或者如果需要保留最新的，可以改为：$seenSourceIds[$sourceId] = $acl;
+                if (!isset($seenSourceIds[$sourceId])) {
+                    $seenSourceIds[$sourceId] = true;
+                    $deduplicatedAcls[] = $acl;
+                }
+            } else {
+                // 如果没有 source_id，保留（虽然这种情况不应该发生）
+                $deduplicatedAcls[] = $acl;
+            }
+        }
+        
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            $this->acl->insert($this->pending_class_level_acls[$module], 'source_id')->fetch();
+            $this->acl->insert($deduplicatedAcls, 'source_id')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
             $this->acl->rollBack();

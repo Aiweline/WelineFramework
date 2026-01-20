@@ -35,6 +35,20 @@ class SetupUpgradeAfter implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 检查是否是部分更新模式
+        $eventData = $event->getData();
+        $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
+        $routeOnly = $eventData['route_only'] ?? false;
+        $modelOnly = $eventData['model_only'] ?? false;
+        
+        // 如果是部分更新模式，跳过 WASM 编译（WASM 编译应该在完整升级时执行）
+        if ($isPartialUpgrade) {
+            $this->printing->note(__('检测到部分更新模式（%{1}），跳过 WASM 编译检查', [
+                $routeOnly ? '仅更新路由' : ($modelOnly ? '仅更新模型' : '部分更新')
+            ]));
+            return;
+        }
+        
         $this->printing->note(__(''));
         $this->printing->note(__('=== AutoLeadAgent WASM 编译检查 ==='));
 

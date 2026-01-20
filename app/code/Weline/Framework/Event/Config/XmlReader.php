@@ -21,6 +21,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
      * @var CacheInterface
      */
     private CacheInterface $eventCache;
+    
+    /**
+     * 静态变量：记录已经输出过的错误信息，避免重复输出
+     * @var array
+     */
+    private static array $loggedErrors = [];
 
     public function __construct(
         EventCache $eventCache,
@@ -63,18 +69,42 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             // 提取模块名（格式：ModuleName::path/to/file.xml）
             $moduleName = explode('::', $module_and_file)[0] ?? '';
             if (empty($moduleName)) {
-                error_log(__('无法从文件路径提取模块名：%{1}', [$module_and_file]));
+                // 使用文件路径作为唯一标识，避免重复输出
+                if (!isset(self::$loggedErrors[$module_and_file . '_empty_module'])) {
+                    error_log(__('无法从文件路径提取模块名：%{1}', [$module_and_file]));
+                    self::$loggedErrors[$module_and_file . '_empty_module'] = true;
+                }
                 continue;
             }
 
             $module_event_observers = [];
             // 跳过没有正确格式的配置
             if (!isset($config['config']) || !is_array($config['config'])) {
-                error_log(__('跳过格式不正确的配置文件：%{1}', [$module_and_file]));
+                // 检查文件是否为空
+                $filePath = explode('::', $module_and_file, 2)[1] ?? '';
+                $isEmpty = false;
+                if ($filePath && file_exists($filePath)) {
+                    $fileContent = trim(file_get_contents($filePath));
+                    $isEmpty = empty($fileContent);
+                }
+                // 使用文件路径作为唯一标识，避免重复输出
+                $errorKey = $module_and_file . ($isEmpty ? '_empty' : '_invalid_format');
+                if (!isset(self::$loggedErrors[$errorKey])) {
+                    if ($isEmpty) {
+                        error_log(__('跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）', [$module_and_file]));
+                    } else {
+                        error_log(__('跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）', [$module_and_file]));
+                    }
+                    self::$loggedErrors[$errorKey] = true;
+                }
                 continue;
             }
             if (!isset($config['config']['_attribute']) || !is_array($config['config']['_attribute'])) {
-                error_log(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
+                // 使用文件路径作为唯一标识，避免重复输出
+                if (!isset(self::$loggedErrors[$module_and_file . '_missing_attributes'])) {
+                    error_log(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
+                    self::$loggedErrors[$module_and_file . '_missing_attributes'] = true;
+                }
                 continue;
             }
             if (

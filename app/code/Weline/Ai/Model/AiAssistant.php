@@ -103,11 +103,11 @@ class AiAssistant extends Model
                 ->addColumn('adapter_params', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '适配器参数JSON')
                 ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '创建时间')
                 ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '更新时间')
-                ->addIndex('tenant_id', '', '', 'idx_tenant_id')
-                ->addIndex('status', '', '', 'idx_status')
-                ->addIndex('is_rentable', '', '', 'idx_is_rentable')
-                ->addIndex('category', '', '', 'idx_category')
-                ->addIndex('audit_status', '', '', 'idx_audit_status')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_tenant_id', 'tenant_id')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_status', 'status')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_is_rentable', 'is_rentable')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_category', 'category')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_audit_status', 'audit_status')
                 ->create();
         }
     }

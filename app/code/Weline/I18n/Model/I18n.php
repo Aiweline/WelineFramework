@@ -9,7 +9,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Data\File;
-use Weline\I18n\Cache\I18NCache;
+use Weline\I18n\Cache\I18nCache;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Observer\ParserWordsRegister;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
@@ -23,7 +23,7 @@ class I18n
 
     public function __construct(
         Reader    $reader,
-        I18NCache $i18nCache
+        I18nCache $i18nCache
     ) {
         $this->reader = $reader;
         $this->i18nCache = $i18nCache->create();

@@ -310,10 +310,64 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
     }
 
     /**
-     * 重写 buildInsert，为 PostgreSQL 添加 RETURNING 子句
+     * 重写 buildInsert，为 PostgreSQL 使用 ON CONFLICT 实现真正的 upsert
+     * 当指定了 insert_update_where_fields 时，使用 PostgreSQL 的 ON CONFLICT 语法
      */
     protected function buildInsert(Query $query): string
     {
+        $formatter = $query->getIdentifierFormatter();
+        $insert_items = $query->insert['insert'] ?? [];
+        $insert_or_update_items = $query->insert['i_o_u'] ?? [];
+        
+        // 保存 insert 数据的副本，以便在需要时回退到父类逻辑
+        $insert_origin_backup = $query->insert['origin'] ?? null;
+        $insert_update_where_fields_backup = $query->insert_update_where_fields ?? [];
+        $insert_update_fields_backup = $query->insert_update_fields ?? [];
+        
+        unset($query->insert['i_o_u'], $query->insert['origin'], $query->insert['insert']);
+        
+        // 如果有 insert_update_where_fields，尝试使用 PostgreSQL 的 ON CONFLICT 语法实现真正的 upsert
+        // 注意：如果字段没有唯一约束，ON CONFLICT 会失败（42P10），此时需要回退到父类逻辑
+        if (!empty($insert_or_update_items) && !empty($query->insert_update_where_fields)) {
+            // 构建 INSERT ... ON CONFLICT ... DO UPDATE SET 语句
+            $sql = $this->buildInsertWithOnConflict($query, $insert_or_update_items, $formatter);
+            
+            // 如果还有普通的 insert_items，需要合并处理
+            if (!empty($insert_items)) {
+                // 对于普通的 insert_items，也使用 ON CONFLICT（如果有唯一字段）
+                $normalInsertSql = $this->buildNormalInsert($query, $insert_items, $formatter);
+                if (!empty($normalInsertSql)) {
+                    // 合并 SQL（用分号分隔，但注意 PostgreSQL prepared statement 不支持多个命令）
+                    // 所以我们需要分别处理
+                    $sql = $normalInsertSql . ($sql ? '; ' . $sql : '');
+                }
+            }
+            
+            // 设置 SQL 和备份数据（用于回退）
+            // 使用数组存储备份数据，避免 PHP 8.2+ 动态属性警告
+            $query->sql = $sql;
+            if (!isset($query->_fallback_data)) {
+                $query->_fallback_data = [];
+            }
+            $query->_fallback_data['insert_origin'] = $insert_origin_backup;
+            $query->_fallback_data['insert_update_where_fields'] = $insert_update_where_fields_backup;
+            $query->_fallback_data['insert_update_fields'] = $insert_update_fields_backup;
+            
+            // 准备语句
+            if (!empty($sql)) {
+                try {
+                    $query->PDOStatement = $query->getLink()->prepare($sql);
+                } catch (\Throwable $e) {
+                    $query->PDOStatement = null;
+                }
+            } else {
+                $query->PDOStatement = null;
+            }
+            
+            return $sql;
+        }
+        
+        // 否则使用父类的逻辑（先查询再更新）
         $sql = parent::buildInsert($query);
         
         // 如果 SQL 为空，直接返回
@@ -346,6 +400,147 @@ class PgsqlDialectAdapter extends GenericDialectAdapter
                 // 注意：不添加分号，因为 PostgreSQL prepared statement 不需要末尾分号
                 $sql .= " RETURNING {$identity_field_quoted}";
             }
+        }
+        
+        return $sql;
+    }
+    
+    /**
+     * 使用 PostgreSQL 的 ON CONFLICT 语法构建 INSERT 语句
+     */
+    private function buildInsertWithOnConflict(Query $query, array $insert_or_update_items, $formatter): string
+    {
+        if (empty($insert_or_update_items)) {
+            return '';
+        }
+        
+        // 获取第一个记录来确定字段
+        $firstItem = reset($insert_or_update_items);
+        $fields = array_keys($firstItem);
+        $fieldsQuoted = array_map(function($field) use ($formatter) {
+            return $formatter->quote($field);
+        }, $fields);
+        $fieldsStr = '(' . implode(', ', $fieldsQuoted) . ')';
+        
+        // 构建 VALUES 部分
+        $valuesParts = [];
+        foreach ($insert_or_update_items as $item) {
+            $valueParts = [];
+            foreach ($fields as $field) {
+                $value = $item[$field] ?? null;
+                if (is_array($value)) {
+                    $value = json_encode($value, JSON_UNESCAPED_UNICODE);
+                }
+                $paramKey = ':' . md5('insert_' . $field . '_' . count($valuesParts) . '_' . $item[$query->insert_update_where_fields[0] ?? '']);
+                $query->bound_values[$paramKey] = $value === null ? null : (string)$value;
+                $valueParts[] = $paramKey;
+            }
+            $valuesParts[] = '(' . implode(', ', $valueParts) . ')';
+        }
+        $valuesStr = implode(', ', $valuesParts);
+        
+        // 构建 ON CONFLICT 部分
+        // PostgreSQL 的 ON CONFLICT 语法：ON CONFLICT (column_name) 或 ON CONFLICT ON CONSTRAINT constraint_name
+        // 这里使用列名形式，因为 source_id 字段上有唯一约束
+        $conflictFields = array_map(function($field) use ($formatter) {
+            return $formatter->quote($field);
+        }, $query->insert_update_where_fields);
+        $conflictStr = '(' . implode(', ', $conflictFields) . ')';
+        
+        // 构建 DO UPDATE SET 部分
+        $updateParts = [];
+        $updateFields = $query->insert_update_fields ?? $fields;
+        foreach ($updateFields as $field) {
+            // 跳过唯一字段（ON CONFLICT 的冲突检测字段）
+            if (in_array($field, $query->insert_update_where_fields, true)) {
+                continue;
+            }
+            // 🔧 修复：跳过主键字段（identity_field），因为主键不应该在 UPDATE 时被修改
+            // 主键字段可能已经在 ON CONFLICT 中，或者不应该被更新
+            if ($query->identity_field && $field === $query->identity_field) {
+                continue;
+            }
+            $fieldQuoted = $formatter->quote($field);
+            $updateParts[] = "{$fieldQuoted} = EXCLUDED.{$fieldQuoted}";
+        }
+        
+        // 如果没有要更新的字段，尝试更新所有字段（除了唯一字段和主键字段）
+        if (empty($updateParts)) {
+            foreach ($fields as $field) {
+                // 跳过唯一字段（ON CONFLICT 的冲突检测字段）
+                if (in_array($field, $query->insert_update_where_fields, true)) {
+                    continue;
+                }
+                // 🔧 修复：跳过主键字段（identity_field），因为主键不应该在 UPDATE 时被修改
+                if ($query->identity_field && $field === $query->identity_field) {
+                    continue;
+                }
+                $fieldQuoted = $formatter->quote($field);
+                $updateParts[] = "{$fieldQuoted} = EXCLUDED.{$fieldQuoted}";
+            }
+        }
+        
+        // 构建完整的 INSERT ... ON CONFLICT 语句
+        $sql = "INSERT INTO {$query->table} {$fieldsStr} VALUES {$valuesStr}";
+        
+        // 如果没有要更新的字段，使用 DO NOTHING（避免语法错误）
+        if (empty($updateParts)) {
+            $sql .= " ON CONFLICT {$conflictStr} DO NOTHING";
+        } else {
+            $updateStr = implode(', ', $updateParts);
+            $sql .= " ON CONFLICT {$conflictStr} DO UPDATE SET {$updateStr}";
+        }
+        
+        // 添加 RETURNING 子句
+        if ($query->identity_field) {
+            $identity_field_quoted = $formatter->quote($query->identity_field);
+            $sql .= " RETURNING {$identity_field_quoted}";
+        }
+        
+        return $sql;
+    }
+    
+    /**
+     * 构建普通的 INSERT 语句（没有 upsert）
+     */
+    private function buildNormalInsert(Query $query, array $insert_items, $formatter): string
+    {
+        if (empty($insert_items)) {
+            return '';
+        }
+        
+        // 获取第一个记录来确定字段
+        $firstItem = reset($insert_items);
+        $fields = array_keys($firstItem);
+        $fieldsQuoted = array_map(function($field) use ($formatter) {
+            return $formatter->quote($field);
+        }, $fields);
+        $fieldsStr = '(' . implode(', ', $fieldsQuoted) . ')';
+        
+        // 构建 VALUES 部分
+        $valuesParts = [];
+        foreach ($insert_items as $item) {
+            $valueParts = [];
+            foreach ($fields as $field) {
+                $value = $item[$field] ?? null;
+                if (is_array($value)) {
+                    $value = json_encode($value, JSON_UNESCAPED_UNICODE);
+                }
+                $paramKey = ':' . md5('insert_' . $field . '_' . count($valuesParts));
+                $query->bound_values[$paramKey] = $value === null ? null : (string)$value;
+                $valueParts[] = $paramKey;
+            }
+            $valuesParts[] = '(' . implode(', ', $valueParts) . ')';
+        }
+        $valuesStr = implode(', ', $valuesParts);
+        
+        // 构建 INSERT 语句
+        $sql = "INSERT INTO {$query->table} {$fieldsStr} VALUES {$valuesStr}";
+        
+        // 添加 RETURNING 子句
+        if ($query->identity_field) {
+            $identity_field_quoted = $formatter->quote($query->identity_field);
+            $sql .= " RETURNING {$identity_field_quoted}";
         }
         
         return $sql;

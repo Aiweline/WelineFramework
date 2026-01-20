@@ -103,7 +103,28 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (count($statements) == 1) {
                 // 使用重试机制执行单条语句
                 $origin_data = $this->executeWithRetry(function() {
-                    $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                    $stmt = $this->getLink()->prepare($this->sql);
+                    if ($stmt === false) {
+                        $errorInfo = $this->getLink()->errorInfo();
+                        $errorCode = $errorInfo[0] ?? '';
+                        $errorMessage = $errorInfo[2] ?? '';
+                        
+                        // SQLite 变量限制错误
+                        if (str_contains($errorMessage, 'too many SQL variables') || 
+                            str_contains($errorMessage, 'SQLITE_MAX_VARIABLE_NUMBER')) {
+                            throw new Exception(
+                                __('SQLite 变量数量超过限制（最多999个变量）。请将批量操作拆分为更小的批次。SQL预览：%{1}', 
+                                [substr($this->sql, 0, 200)])
+                            );
+                        }
+                        
+                        // 其他 PDO prepare 错误
+                        throw new Exception(
+                            __('PDO prepare 失败：%{1} (错误代码: %{2})。SQL预览：%{3}', 
+                            [$errorMessage, $errorCode, substr($this->sql, 0, 200)])
+                        );
+                    }
+                    $this->PDOStatement = $stmt;
                     $this->PDOStatement->execute($this->bound_values);
                     return $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
                 });
@@ -256,7 +277,28 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->reset();
         $this->sql = $sql;
         $this->fetch_type = __FUNCTION__;
-        $this->PDOStatement = $this->getLink()->prepare($sql);
+        $stmt = $this->getLink()->prepare($sql);
+        if ($stmt === false) {
+            $errorInfo = $this->getLink()->errorInfo();
+            $errorCode = $errorInfo[0] ?? '';
+            $errorMessage = $errorInfo[2] ?? '';
+            
+            // SQLite 变量限制错误
+            if (str_contains($errorMessage, 'too many SQL variables') || 
+                str_contains($errorMessage, 'SQLITE_MAX_VARIABLE_NUMBER')) {
+                throw new Exception(
+                    __('SQLite 变量数量超过限制（最多999个变量）。请将批量操作拆分为更小的批次。SQL预览：%{1}', 
+                    [substr($sql, 0, 200)])
+                );
+            }
+            
+            // 其他 PDO prepare 错误
+            throw new Exception(
+                __('PDO prepare 失败：%{1} (错误代码: %{2})。SQL预览：%{3}', 
+                [$errorMessage, $errorCode, substr($sql, 0, 200)])
+            );
+        }
+        $this->PDOStatement = $stmt;
         return $this;
     }
 

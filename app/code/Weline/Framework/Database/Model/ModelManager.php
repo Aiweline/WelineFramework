@@ -97,7 +97,44 @@ class ModelManager
     {
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($model);
-        # 执行模型升级
-        $model->$type($modelSetup, $context);
+        
+        // 如果是 upgrade 或 setup，先检查表是否存在
+        // 如果表不存在，先执行 install 安装表
+        if (in_array($type, ['upgrade', 'setup'])) {
+            if (!$modelSetup->tableExist()) {
+                // 表不存在，先执行 install
+                if (method_exists($model, 'install')) {
+                    $this->printing->note(__('表 %{1} 不存在，先执行 install 安装表...', [$model->getTable()]));
+                    $model->install($modelSetup, $context);
+                }
+            }
+        }
+        
+        // 执行模型升级/安装/设置，如果遇到表不存在的错误，尝试先安装
+        try {
+            $model->$type($modelSetup, $context);
+        } catch (\PDOException $e) {
+            // 捕获表不存在的错误（MySQL: 1146, PostgreSQL: 42P01, SQLite: 1）
+            $errorCode = $e->getCode();
+            $errorMessage = $e->getMessage();
+            $isTableNotFound = (
+                strpos($errorMessage, "doesn't exist") !== false ||
+                strpos($errorMessage, "does not exist") !== false ||
+                strpos($errorMessage, "Base table or view not found") !== false ||
+                $errorCode == 1146 || // MySQL table not found
+                $errorCode == '42P01' || // PostgreSQL table not found
+                $errorCode == 1 // SQLite table not found
+            );
+            
+            if ($isTableNotFound && in_array($type, ['upgrade', 'setup']) && method_exists($model, 'install')) {
+                $this->printing->warning(__('执行 %{1} 时表不存在，自动执行 install 安装表...', [$type]));
+                $model->install($modelSetup, $context);
+                // 安装后再次尝试执行原操作
+                $model->$type($modelSetup, $context);
+            } else {
+                // 其他错误，重新抛出
+                throw $e;
+            }
+        }
     }
 }

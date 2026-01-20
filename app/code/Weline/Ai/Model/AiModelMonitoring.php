@@ -40,9 +40,9 @@ class AiModelMonitoring extends Model
                 ->addColumn('total_cost', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default 0', '总成本')
                 ->addColumn('date', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'not null', '日期')
                 ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '创建时间')
-                ->addIndex('model_id', '', '', 'idx_model_id')
-                ->addIndex('tenant_id', '', '', 'idx_tenant_id')
-                ->addIndex('date', '', '', 'idx_date')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_model_id', 'model_id')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_tenant_id', 'tenant_id')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_DEFAULT, 'idx_date', 'date')
                 ->create();
         }
     }
