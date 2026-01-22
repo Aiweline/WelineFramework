@@ -1,0 +1,185 @@
+<?php
+/**
+ * AWS 配置列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var array $configs */
+$configs = $configs ?? [];
+/** @var array $regions */
+$regions = $regions ?? [];
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><lang>AWS配置管理</lang></h4>
+                <a href="<?= $this->getBackendUrl('aws/backend/config/form') ?>" class="btn btn-primary">
+                    <i class="mdi mdi-plus-circle-outline me-1"></i>
+                    <lang>新增配置</lang>
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th><lang>ID</lang></th>
+                            <th><lang>名称</lang></th>
+                            <th><lang>Access Key ID</lang></th>
+                            <th><lang>区域</lang></th>
+                            <th><lang>默认</lang></th>
+                            <th><lang>状态</lang></th>
+                            <th><lang>创建时间</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($configs)): ?>
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    <lang>暂无配置，请点击上方按钮新增</lang>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($configs as $config): ?>
+                                <tr>
+                                    <td><?= (int)($config['config_id'] ?? 0) ?></td>
+                                    <td><?= htmlspecialchars((string)($config['name'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td>
+                                        <code><?= htmlspecialchars(substr((string)($config['access_key_id'] ?? ''), 0, 8)) ?>****</code>
+                                    </td>
+                                    <td>
+                                        <?php $region = $config['region'] ?? 'us-east-1'; ?>
+                                        <?= htmlspecialchars($regions[$region] ?? $region, ENT_QUOTES) ?>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($config['is_default'] ?? 0) === 1): ?>
+                                            <span class="badge bg-primary"><lang>默认</lang></span>
+                                        <?php else: ?>
+                                            <a href="javascript:void(0)" onclick="setDefault(<?= (int)($config['config_id'] ?? 0) ?>)"
+                                               class="btn btn-sm btn-outline-secondary">
+                                                <lang>设为默认</lang>
+                                            </a>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($config['is_active'] ?? 0) === 1): ?>
+                                            <span class="badge bg-success"><lang>启用</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars((string)($config['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td>
+                                        <a href="<?= $this->getBackendUrl('aws/backend/config/form', ['id' => (int)($config['config_id'] ?? 0)]) ?>"
+                                           class="btn btn-sm btn-outline-primary me-1">
+                                            <i class="mdi mdi-pencil"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-info me-1"
+                                                onclick="testConnection(<?= (int)($config['config_id'] ?? 0) ?>)">
+                                            <i class="mdi mdi-connection"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                onclick="deleteConfig(<?= (int)($config['config_id'] ?? 0) ?>)">
+                                            <i class="mdi mdi-delete"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><lang>使用说明</lang></h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li><lang>登录 AWS 控制台，进入 IAM 服务</lang></li>
+                    <li><lang>创建一个具有 Route53DomainsFullAccess 权限的用户</lang></li>
+                    <li><lang>生成 Access Key ID 和 Secret Access Key</lang></li>
+                    <li><lang>在此页面添加配置，填入上述凭证信息</lang></li>
+                    <li><lang>点击"测试连接"按钮验证配置是否正确</lang></li>
+                </ol>
+                <div class="alert alert-warning mb-0">
+                    <i class="mdi mdi-alert-circle-outline me-2"></i>
+                    <lang>注意：AWS Route 53 Domains 服务仅在 us-east-1 区域可用</lang>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setDefault(id) {
+    if (!confirm('<?= __('确定要将此配置设为默认吗？') ?>')) {
+        return;
+    }
+    fetch('<?= $this->getBackendUrl('aws/backend/config/setDefault') ?>?id=' + id)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || '<?= __('操作失败') ?>');
+            }
+        })
+        .catch(err => {
+            alert('<?= __('请求失败') ?>: ' + err.message);
+        });
+}
+
+function testConnection(id) {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+    btn.disabled = true;
+
+    fetch('<?= $this->getBackendUrl('aws/backend/config/test') ?>?id=' + id)
+        .then(res => res.json())
+        .then(data => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            if (data.success) {
+                alert('<?= __('连接测试成功') ?>');
+            } else {
+                alert(data.message || '<?= __('连接测试失败') ?>');
+            }
+        })
+        .catch(err => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            alert('<?= __('请求失败') ?>: ' + err.message);
+        });
+}
+
+function deleteConfig(id) {
+    if (!confirm('<?= __('确定要删除此配置吗？此操作不可撤销。') ?>')) {
+        return;
+    }
+    fetch('<?= $this->getBackendUrl('aws/backend/config/delete') ?>?id=' + id)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || '<?= __('删除失败') ?>');
+            }
+        })
+        .catch(err => {
+            alert('<?= __('请求失败') ?>: ' + err.message);
+        });
+}
+</script>

@@ -1,0 +1,26 @@
+{
+    "module_name": "Weline_Theme",
+    "version": "1.0.0",
+    "description": "",
+    "router": "",
+    "controllers": [],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": false,
+    "created_at": "2026-01-21 14:51:43",
+    "updated_at": "2026-01-21 14:51:58",
+    "i18n": [
+        {
+            "extracted_at": "2026-01-21 14:51:58",
+            "languages": [
+                "en_US"
+            ],
+            "total_strings": 1198,
+            "translated_strings": 0,
+            "untranslated_strings": 1198
+        }
+    ]
+}

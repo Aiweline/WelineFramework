@@ -1,0 +1,103 @@
+<?php
+/**
+ * 部件模板：分类页左侧筛选（Category Filters）
+ *
+ * - 通过 Widget 引擎渲染：
+ *   使用 w:widget type="sidebar" name="category-filters" 标签
+ *   支持 params='{"html":"..."}' 参数传入业务渲染的筛选结构
+ * - 支持通过参数 html 传入业务渲染的筛选结构；
+ *   未传入 html 时，使用内置的亚马逊风格 Mock 内容，方便可视化编辑与设计预览。
+ *
+ * 样式类说明（由主题 layouts 提供样式）：
+ * - .category-filter-mock
+ * - .category-filter-header / .category-filter-title / .category-filter-clear
+ * - .category-filter-applied / .filter-chip / .chip-remove
+ * - .category-filter-group / .category-filter-group-title
+ * - .category-filter-list / .category-filter-item / .label / .count / .stars
+ */
+
+/** @var array $meta */
+$meta = $this->getData('meta') ?? [];
+
+// 优先使用 Widget 参数 html，其次 meta.filters，最后使用内置 Mock
+$filtersHtml = $this->getData('html') ?? ($meta['filters'] ?? '');
+
+if (!empty($filtersHtml) && is_string($filtersHtml)) {
+    // 如果传入了 html，直接输出
+    echo $filtersHtml;
+} else {
+    // 否则输出默认模板内容
+?>
+<div class="category-filter-mock">
+    <div class="category-filter-header">
+        <div class="category-filter-title"><lang>筛选条件</lang></div>
+        <a href="javascript:void(0)" class="category-filter-clear"><lang>清除全部</lang></a>
+    </div>
+
+    <div class="category-filter-applied">
+        <span class="filter-chip is-active">
+            <lang>电子产品</lang>
+            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
+        </span>
+        <span class="filter-chip">
+            <lang>100 - 299 元</lang>
+            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
+        </span>
+    </div>
+
+    <div class="category-filter-group">
+        <div class="category-filter-group-title"><lang>价格区间</lang></div>
+        <ul class="category-filter-list">
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>0 - 99 元</lang></span><span class="count">128</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>100 - 299 元</lang></span><span class="count">86</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>300 元以上</lang></span><span class="count">42</span></a></li>
+        </ul>
+    </div>
+
+    <div class="category-filter-group">
+        <div class="category-filter-group-title"><lang>配送方式</lang></div>
+        <ul class="category-filter-list">
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>Prime 极速达</lang></span><span class="count">64</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>免运费</lang></span><span class="count">97</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>当日/次日达</lang></span><span class="count">23</span></a></li>
+        </ul>
+    </div>
+
+    <div class="category-filter-group">
+        <div class="category-filter-group-title"><lang>品牌</lang></div>
+        <ul class="category-filter-list">
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
+        </ul>
+    </div>
+    <div class="category-filter-group">
+        <div class="category-filter-group-title"><lang>颜色</lang></div>
+        <ul class="category-filter-list">
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>黑色</lang></span><span class="count">73</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>白色</lang></span><span class="count">41</span></a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>蓝色</lang></span><span class="count">27</span></a></li>
+        </ul>
+    </div>
+
+    <div class="category-filter-group">
+        <div class="category-filter-group-title"><lang>用户评分</lang></div>
+        <ul class="category-filter-list">
+            <li><a href="javascript:void(0)" class="category-filter-item">
+                <span class="label"><span class="stars">★★★★★</span> <lang>及以上</lang></span>
+                <span class="count">12</span>
+            </a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item">
+                <span class="label"><span class="stars">★★★★☆</span> <lang>及以上</lang></span>
+                <span class="count">48</span>
+            </a></li>
+            <li><a href="javascript:void(0)" class="category-filter-item">
+                <span class="label"><span class="stars">★★★☆☆</span> <lang>及以上</lang></span>
+                <span class="count">96</span>
+            </a></li>
+        </ul>
+    </div>
+</div>
+<?php
+}
+?>

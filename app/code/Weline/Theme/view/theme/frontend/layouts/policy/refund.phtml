@@ -1,0 +1,278 @@
+<?php
+/**
+ * 布局：退款政策页面
+ *
+ * 用于展示网站退款、退货、换货政策
+ * 字段
+ * @meta.name {default="退款政策页面",name="退款政策页面",description="用于展示网站退款、退货、换货政策"}
+ * @meta.description {default="说明退款、退货、换货的条件、流程和规则",name="退款政策说明",description="用于展示退款条件、退货流程、换货规则、退款时效等内容"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="退款政策",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.refund::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.refund::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-policy-page weline-refund-policy">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+
+            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> refund-policy" id="refund-policy-main" data-layout="policy-refund">
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <div class="policy-default-content">
+                        <div class="container">
+                            <section class="policy-header">
+                                <h1 class="policy-title">
+                                    <if condition="meta.title">
+                                        {{meta.title}}
+                                    <else/>
+                                        <lang>退款政策</lang>
+                                    </if>
+                                </h1>
+                                <p class="policy-description">
+                                    <lang>为了保障您的权益，我们制定了完善的退款、退货、换货政策。请您仔细阅读以下内容，了解退款条件和流程。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>一、退款条件</lang></h2>
+                                <p class="section-text">
+                                    <lang>在符合以下条件的情况下，您可以申请退款：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）商品存在质量问题或与描述不符；</lang></li>
+                                    <li><lang>（2）未收到商品或商品在运输过程中损坏；</lang></li>
+                                    <li><lang>（3）在规定的退货期限内提出申请（通常为收到商品后7-15天内）；</lang></li>
+                                    <li><lang>（4）商品保持原状，未使用、未损坏、未影响二次销售；</lang></li>
+                                    <li><lang>（5）提供完整的商品、包装、配件、赠品等；</lang></li>
+                                    <li><lang>（6）其他符合法律法规规定的情形。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>二、不予退款的情况</lang></h2>
+                                <p class="section-text">
+                                    <lang>以下情况不予退款：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）超过退货期限的商品；</lang></li>
+                                    <li><lang>（2）已使用、损坏或影响二次销售的商品；</lang></li>
+                                    <li><lang>（3）定制类商品或特殊商品（如个性化定制、数字产品等）；</lang></li>
+                                    <li><lang>（4）因用户原因导致的退款申请（如选错规格、颜色等）；</lang></li>
+                                    <li><lang>（5）特价商品、清仓商品（如商品页面明确标注不支持退货）；</lang></li>
+                                    <li><lang>（6）其他不符合退款条件的情形。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>三、退款流程</lang></h2>
+                                <p class="section-text">
+                                    <lang>3.1 提交申请：您需要在订单管理页面或联系客服提交退款申请，并提供相关证明材料（如商品照片、问题描述等）。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.2 审核处理：我们将在收到申请后1-3个工作日内完成审核。审核通过后，我们会通知您退货地址和注意事项。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.3 退回商品：您需要按照要求将商品退回指定地址，并保留物流凭证。建议使用可追踪的物流方式。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.4 确认退款：我们收到退回商品并确认无误后，将在3-15个工作日内完成退款。退款将原路退回至您的支付账户。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>四、退款金额</lang></h2>
+                                <p class="section-text">
+                                    <lang>4.1 退款金额包括：商品实际支付金额、运费（如因商品问题导致的退货，运费由我们承担）。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.2 退款金额不包括：已使用的优惠券、积分、赠品等（如赠品已使用或损坏，可能需要扣除相应费用）。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.3 如因用户原因导致的退货，运费由用户承担，退款金额将扣除运费。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>五、换货政策</lang></h2>
+                                <p class="section-text">
+                                    <lang>5.1 如商品存在质量问题，您可以选择换货。换货流程与退货类似，需要提交换货申请并退回原商品。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.2 换货商品需与原商品规格、型号一致。如无相同商品，我们可能建议您选择退款。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.3 换货产生的运费，如因商品质量问题，由我们承担；如因用户原因，由用户承担。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>六、退款时效</lang></h2>
+                                <p class="section-text">
+                                    <lang>6.1 退款申请审核：1-3个工作日；</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.2 商品退回确认：收到退回商品后1-2个工作日；</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.3 退款到账：确认无误后3-15个工作日（具体到账时间以支付平台为准）。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.4 如遇节假日或特殊情况，退款时间可能相应延长，我们会及时通知您。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>七、特殊说明</lang></h2>
+                                <p class="section-text">
+                                    <lang>7.1 数字产品、虚拟商品、服务类商品等特殊商品，如无质量问题，一般不支持退款，具体以商品页面说明为准。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.2 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.3 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>八、联系我们</lang></h2>
+                                <p class="section-text">
+                                    <lang>如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站提供的联系方式与我们联系。我们将竭诚为您服务。</lang>
+                                </p>
+                            </section>
+                        </div>
+                    </div>
+                </if>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::policy.refund::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .refund-policy.policy-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+
+    .policy-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .policy-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+
+    .policy-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+
+    .policy-section {
+        margin-top: 1.75rem;
+    }
+
+    .policy-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-list {
+        margin: 0.75rem 0;
+        padding-left: 1.5rem;
+        list-style-type: decimal;
+    }
+
+    .policy-list li {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .refund-policy.policy-main {
+            padding: 1.5rem 0;
+        }
+
+        .policy-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+
+        .policy-title {
+            font-size: 1.6rem;
+        }
+
+        .policy-section .section-title {
+            font-size: 1.1rem;
+        }
+
+        .policy-list {
+            padding-left: 1.25rem;
+        }
+
+        .policy-list li {
+            font-size: 0.9rem;
+        }
+    }
+    </style>
+</body>
+</html>
