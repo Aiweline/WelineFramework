@@ -16,6 +16,8 @@ use Weline\Seo\Model\SeoTask;
 use Weline\Seo\Model\SeoSubject;
 use Weline\Seo\Model\SeoKeyword;
 use Weline\Seo\Service\EventDispatcher;
+use Weline\Seo\Model\SeoAccount;
+use Weline\Seo\Service\SearchEngineAdapterRegistry;
 
 /**
  * SEO 任务处理器
@@ -31,19 +33,22 @@ class TaskProcessor
     private KeywordExtractorService $keywordExtractor;
     private FeedRegistryService $feedRegistryService;
     private EventDispatcher $eventDispatcher;
+    private SearchEngineAdapterRegistry $adapterRegistry;
 
     public function __construct(
         ObjectManager $objectManager,
         SubjectResolver $subjectResolver,
         KeywordExtractorService $keywordExtractor,
         FeedRegistryService $feedRegistryService,
-        EventDispatcher $eventDispatcher
+        EventDispatcher $eventDispatcher,
+        SearchEngineAdapterRegistry $adapterRegistry
     ) {
         $this->objectManager = $objectManager;
         $this->subjectResolver = $subjectResolver;
         $this->keywordExtractor = $keywordExtractor;
         $this->feedRegistryService = $feedRegistryService;
         $this->eventDispatcher = $eventDispatcher;
+        $this->adapterRegistry = $adapterRegistry;
     }
 
     /**
@@ -212,17 +217,59 @@ class TaskProcessor
     {
         $payload = $task->getPayloadArray();
         $urls = $payload['urls'] ?? [];
-        $platforms = $payload['platforms'] ?? ['google', 'baidu'];
+        $provider = (string)($payload['provider'] ?? '');
+        $accountId = (int)($payload['account_id'] ?? 0);
+        $scope = (string)($payload['scope'] ?? '');
+        $module = (string)($payload['module'] ?? '');
 
         if (empty($urls)) {
             $task->markError('URL列表为空');
             return false;
         }
 
-        // TODO: 实现搜索引擎推送逻辑
-        // 这里需要调用 SearchEngineAdapterInterface 的实现
-        
-        $task->markDone('URL推送成功');
+        if ($provider === '' || $accountId <= 0) {
+            $task->markError('缺少provider或account_id，无法推送URL');
+            return false;
+        }
+
+        /** @var SeoAccount $accountModel */
+        $accountModel = $this->objectManager->getInstance(SeoAccount::class);
+        $account = $accountModel->reset()->load($accountId);
+
+        if (!$account->getId() || !$account->isActive()) {
+            $task->markError('SEO账户不可用或未启用，account_id=' . $accountId);
+            return false;
+        }
+
+        $adapter = $this->adapterRegistry->getAdapter($provider);
+        if ($adapter === null) {
+            $task->markError('未找到对应的搜索引擎适配器: ' . $provider);
+            return false;
+        }
+
+        $options = [
+            'scope' => $scope,
+            'module' => $module,
+            'account' => [
+                'id' => $account->getId(),
+                'scope' => $account->getData(SeoAccount::fields_SCOPE),
+                'module' => $account->getData(SeoAccount::fields_MODULE),
+                'provider' => $account->getData(SeoAccount::fields_PROVIDER),
+                'name' => $account->getData(SeoAccount::fields_NAME),
+            ],
+            'config' => $account->getConfigArray(),
+        ];
+
+        $result = $adapter->pushUrls($urls, $options);
+
+        if (!($result['success'] ?? false)) {
+            $message = (string)($result['message'] ?? 'URL推送失败');
+            $task->markError($message);
+            return false;
+        }
+
+        $message = (string)($result['message'] ?? 'URL推送成功');
+        $task->markDone($message);
         return true;
     }
 

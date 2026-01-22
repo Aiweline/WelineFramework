@@ -56,6 +56,10 @@ class Core
     private const RULE_CACHE_RULE_KEY = 'rule';
     private const RULE_CACHE_PARAMS_KEY = 'generated_get_params';
     
+    // 性能优化：缓存统一缓存数据，避免重复读取
+    // 注意：cache->get() 可能返回 false，所以使用 mixed 类型
+    private mixed $unifiedCacheData = null;
+    
     // 统一缓存结构键名（已移至 RouterCache 类，请使用 RouterCache::UNIFIED_CACHE_*_KEY）
 
     /**
@@ -126,27 +130,36 @@ class Core
     public function start()
     {
         # ----------事件：路由开始前 开始------------
-        /**@var EventsManager $eventManager */
-        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        // 性能优化：使用静态变量缓存 EventsManager 实例
+        static $eventManager = null;
+        if ($eventManager === null) {
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+        }
         $eventData = ['router' => $this];
         $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
         # ----------事件：路由开始前 结束------------
+        
         # 获取URL
         $this->url = $url = $this->processUrl();
+        
+        // 性能优化：复用已读取的统一缓存数据
+        if ($this->unifiedCacheData === null) {
+            $cached = $this->cache->get($this->unified_cache_key);
+            // 将 false 转换为 null，保持类型一致性
+            $this->unifiedCacheData = ($cached === false) ? null : $cached;
+        }
+        
         // 优先从统一缓存中读取 router
-        $unifiedCache = $this->cache->get($this->unified_cache_key);
-        if (is_array($unifiedCache) && isset($unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY]) && !empty($unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY])) {
-            $this->router = $unifiedCache[RouterCache::UNIFIED_CACHE_ROUTER_KEY];
-            $result = $this->route();
-            return $result;
+        if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY])) {
+            $this->router = $this->unifiedCacheData[RouterCache::UNIFIED_CACHE_ROUTER_KEY];
+            return $this->route();
         }
         
         // 回退到旧的缓存方式（兼容性）
         $router = $this->cache->get($this->_router_cache_key);
         if ($router) {
             $this->router = $router;
-            $result = $this->route();
-            return $result;
+            return $this->route();
         }
         # 后台接口请求
         switch ($this->request_area) {
@@ -242,9 +255,16 @@ class Core
             return $url;
         }
         
+        // 性能优化：复用已读取的统一缓存数据
+        if ($this->unifiedCacheData === null) {
+            $cached = $this->cache->get($this->unified_cache_key);
+            // 将 false 转换为 null，保持类型一致性
+            $this->unifiedCacheData = ($cached === false) ? null : $cached;
+        }
+        
         // 优先尝试读取统一缓存（减少 IO 操作）
-        $unifiedCache = $this->cache->get($this->unified_cache_key);
-        if (is_array($unifiedCache) && !empty($unifiedCache)) {
+        if (is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
+            $unifiedCache = $this->unifiedCacheData;
             // 从统一缓存中提取数据
             $url = $unifiedCache[RouterCache::UNIFIED_CACHE_URL_KEY] ?? null;
             $ruleFromCache = $unifiedCache[RouterCache::UNIFIED_CACHE_RULE_KEY] ?? [];
@@ -576,9 +596,14 @@ class Core
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         if (!$this->is_admin && $routerCacheEnabled && $frontendCacheEnabled) {
+            // 性能优化：复用已读取的统一缓存数据
+            if ($this->unifiedCacheData === null) {
+                $this->unifiedCacheData = $this->cache->get($this->unified_cache_key);
+            }
+            
             // 优先从统一缓存中读取
-            $unifiedCache = $this->cache->get($this->unified_cache_key);
-            if (is_array($unifiedCache) && isset($unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY]) && !empty($unifiedCache[RouterCache::UNIFIED_CACHE_FPC_KEY])) {
+            if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_FPC_KEY]) && !empty($this->unifiedCacheData[RouterCache::UNIFIED_CACHE_FPC_KEY])) {
+                $unifiedCache = $this->unifiedCacheData;
                 // 恢复响应头（先清除已存在的响应头，避免重复）
                 if (isset($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY]) && !headers_sent()) {
                     foreach ($unifiedCache[RouterCache::UNIFIED_CACHE_HEADERS_KEY] as $header) {

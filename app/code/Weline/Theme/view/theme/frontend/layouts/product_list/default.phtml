@@ -31,6 +31,13 @@ $this->assign('title', $title);
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)
+
+    <!-- 产品列表页布局的面包屑导航区域 -->
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
     
     <main class="product-list-main <?= htmlspecialchars($class ?? '') ?>" id="product-list-main" data-layout="product_list">
         <div class="product-list-container">

@@ -7,11 +7,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Fron
 /**@var \Weline\Framework\View\Template $this */
 ?>
 <meta charset="UTF-8">
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no'>
 <title><?php echo $this->getData('title') ?? __('欢迎使用WelineFramework框架！'); ?></title>
 <!--元数据-->
 <meta content="<?php echo $this->getData('description'); ?>" name="description"/>
 <meta charset='UTF-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1.0, shrink-to-fit=no'>
 <meta content="<?php echo $this->getData('title'); ?>" name='author'/>
 <meta content="<?php echo $this->getData('description'); ?>" name='description'/>
 <link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">

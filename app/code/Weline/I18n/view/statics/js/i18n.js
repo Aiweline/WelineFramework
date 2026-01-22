@@ -176,10 +176,28 @@
                     const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
                     const currencyPattern = /^[A-Z]{3}$/;
                     const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-                    const cleanPath = '/' + filteredParts.join('/');
 
-                    // 构建新 URL：/[currency]/[lang]/path（保持货币）
-                    langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                    // 处理带有前缀（如租户/站点编码）的路径，保持其在最前面
+                    let prefixSegment = '';
+                    if (pathParts.length > 0 &&
+                        !langPattern.test(pathParts[0]) &&
+                        !currencyPattern.test(pathParts[0])) {
+                        prefixSegment = pathParts[0];
+                    }
+
+                    let cleanPath = '';
+                    if (prefixSegment) {
+                        const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
+                        cleanPath = '/' + prefixSegment + (nonPrefix.length ? '/' + nonPrefix.join('/') : '');
+                        // 构建新 URL：/[prefix]/[currency]/[lang]/path
+                        langUrl = '/' + prefixSegment + '/' + currentCurrency + '/' + langCode +
+                            (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
+                            (search ? '?' + search : '');
+                    } else {
+                        cleanPath = '/' + filteredParts.join('/');
+                        // 构建新 URL：/[currency]/[lang]/path（保持货币）
+                        langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                    }
                 }
 
                 if (langUrl) {
@@ -266,10 +284,27 @@
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
         const currencyPattern = /^[A-Z]{3}$/;
         const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-        const cleanPath = '/' + filteredParts.join('/');
 
-        // 构建新 URL：/[currency]/[lang]/path（保持货币）
-        const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
+        // 处理带有前缀（如租户/站点编码）的路径，保持其在最前面
+        let prefixSegment = '';
+        if (pathParts.length > 0 &&
+            !langPattern.test(pathParts[0]) &&
+            !currencyPattern.test(pathParts[0])) {
+            prefixSegment = pathParts[0];
+        }
+
+        let langUrl = '';
+        if (prefixSegment) {
+            const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
+            // 构建新 URL：/[prefix]/[currency]/[lang]/path（保持租户前缀 + 货币）
+            langUrl = '/' + prefixSegment + '/' + currentCurrency + '/' + lang +
+                (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
+                window.location.search;
+        } else {
+            const cleanPath = '/' + filteredParts.join('/');
+            // 构建新 URL：/[currency]/[lang]/path（保持货币）
+            langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
+        }
 
         // 保存语言偏好
         localStorage.setItem('weline_user_lang', lang);

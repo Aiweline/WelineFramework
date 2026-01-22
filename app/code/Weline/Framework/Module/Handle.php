@@ -34,6 +34,36 @@ class Handle implements HandleInterface, RegisterInterface
 
     public const pc_DIR = 'Controller';// pc特殊目录，注册pc路由
 
+    /**
+     * 是否延迟注册表更新（在批量升级时设置为true，避免每个模块注册都触发完整注册表更新）
+     * 遵循SOLID原则：通过静态标志控制行为，减少不必要的重复操作
+     * @var bool
+     */
+    private static bool $deferRegistryUpdate = false;
+    
+    /**
+     * 设置是否延迟注册表更新
+     * 在系统升级开始时调用 setDeferRegistryUpdate(true)
+     * 在系统升级结束时调用 setDeferRegistryUpdate(false)
+     * 
+     * @param bool $defer 是否延迟
+     * @return void
+     */
+    public static function setDeferRegistryUpdate(bool $defer): void
+    {
+        self::$deferRegistryUpdate = $defer;
+    }
+    
+    /**
+     * 检查是否处于延迟注册表更新模式
+     * 
+     * @return bool
+     */
+    public static function isDeferRegistryUpdate(): bool
+    {
+        return self::$deferRegistryUpdate;
+    }
+
     private Printing $printer;
 
     private array $modules;
@@ -137,13 +167,16 @@ class Handle implements HandleInterface, RegisterInterface
         }
         
         // 更新注册表（模块卸载后）
-        try {
-            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
-            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
-            $registryService->updateAllRegistries(true); // 静默执行
-        } catch (\Exception $e) {
-            // 注册表更新失败不影响模块卸载，只记录日志
-            \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块卸载后注册表更新失败: %{1}', [$e->getMessage()]));
+        // 优化：如果处于延迟模式（批量升级时），跳过立即更新，由顶层统一处理
+        if (!self::$deferRegistryUpdate) {
+            try {
+                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+                $registryService->updateAllRegistries(true); // 静默执行
+            } catch (\Exception $e) {
+                // 注册表更新失败不影响模块卸载，只记录日志
+                \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块卸载后注册表更新失败: %{1}', [$e->getMessage()]));
+            }
         }
         
         $this->printer->success($module . __('模块已卸载完成！'));
@@ -172,7 +205,10 @@ class Handle implements HandleInterface, RegisterInterface
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = '', array $dependencies = []): mixed
     {
         // 重新加载模块列表，确保获取最新的模块状态（特别是在重装场景下）
-        $this->modules = Env::getInstance()->getModuleList(true); // 强制重新加载
+        // 优化：在延迟模式下（批量升级时），使用缓存的模块列表，避免重复文件IO
+        // 遵循SOLID原则：通过状态标志控制行为，减少不必要的IO操作
+        $forceReload = !self::$deferRegistryUpdate;
+        $this->modules = Env::getInstance()->getModuleList($forceReload);
         
         // 检测依赖
         foreach ($dependencies as $dependency) {
@@ -279,13 +315,16 @@ class Handle implements HandleInterface, RegisterInterface
         $this->helper->updateModules($this->modules);
         
         // 更新注册表（模块安装/升级后）
-        try {
-            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
-            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
-            $registryService->updateAllRegistries(true); // 静默执行
-        } catch (\Exception $e) {
-            // 注册表更新失败不影响模块安装，只记录日志
-            \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块安装后注册表更新失败: %{1}', [$e->getMessage()]));
+        // 优化：如果处于延迟模式（批量升级时），跳过立即更新，由顶层统一处理
+        if (!self::$deferRegistryUpdate) {
+            try {
+                /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
+                $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+                $registryService->updateAllRegistries(true); // 静默执行
+            } catch (\Exception $e) {
+                // 注册表更新失败不影响模块安装，只记录日志
+                \Weline\Framework\App\Env::log_warning('registry_update.log', __('模块安装后注册表更新失败: %{1}', [$e->getMessage()]));
+            }
         }
         
         return $module;

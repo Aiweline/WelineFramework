@@ -50,6 +50,20 @@ class TestCore extends TestCase
     use Boot;
 
     /**
+     * 构造函数：确保正确调用父类构造函数
+     * 
+     * @param string|null $name 测试名称
+     * @param array $data 测试数据
+     * @param string $dataName 数据名称
+     */
+    public function __construct(?string $name = null, array $data = [], string $dataName = '')
+    {
+        // 如果名称为 null，使用默认值
+        $name = $name ?? '';
+        parent::__construct($name, $data, $dataName);
+    }
+
+    /**
      * Pest 兼容性：让 Pest 能够识别 PHPUnit 测试用例
      * 通过实现 Pest 期望的方法，使现有的 PHPUnit 测试能被 Pest 运行
      */

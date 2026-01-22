@@ -59,6 +59,32 @@
             max-width: 700px;
             position: relative;
             z-index: 1;
+            margin: 0 auto;
+        }
+        
+        /* 版心容器 - 用于右上角hook定位 */
+        .maintenance-wrapper {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+            width: 100%;
+        }
+        
+        /* 右上角语言选择器容器 - 固定定位 */
+        .maintenance-header {
+            position: fixed;
+            top: 20px;
+            right: 40px;
+            z-index: 1000;
+        }
+        
+        @media (max-width: 700px) {
+            .maintenance-wrapper {
+                padding: 0 20px;
+            }
+            .maintenance-header {
+                right: 20px;
+            }
         }
         
         .icon-container {
@@ -198,54 +224,247 @@
             background: rgba(99, 102, 241, 0.1);
         }
         
+        /* 语言选择器样式 */
+        .maintenance-language-switcher {
+            position: relative;
+        }
+        
+        .maintenance-language-switcher .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            font-size: 0.875rem;
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-1 {
+            display: none;
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-2 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .maintenance-language-switcher .language-switcher .current-language {
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .maintenance-language-switcher .language-options {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover .language-options,
+        .maintenance-language-switcher .language-switcher:focus .language-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .maintenance-language-switcher .language-option {
+            display: block;
+            padding: 10px 16px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: background 0.2s ease;
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .maintenance-language-switcher .language-option:last-child {
+            border-bottom: none;
+        }
+        
+        .maintenance-language-switcher .language-option:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        .maintenance-language-switcher .language-option.active {
+            background: rgba(99, 102, 241, 0.3);
+            color: var(--primary);
+        }
+        
+        .maintenance-language-switcher .language-option .fas.fa-check {
+            float: right;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .maintenance-language-switcher .language-option.active .fas.fa-check {
+            opacity: 1;
+        }
+        
         @media (max-width: 600px) {
             h1 { font-size: 1.75rem; }
             .subtitle { font-size: 1rem; }
             .icon-container { width: 80px; height: 80px; border-radius: 20px; }
             .icon { font-size: 40px; }
             .info-cards { grid-template-columns: 1fr; }
+            .maintenance-header {
+                top: 10px;
+                right: 20px; /* 往版心内侧一点，避免贴边 */
+            }
+            .maintenance-language-switcher .language-switcher {
+                padding: 6px 12px;
+                font-size: 0.75rem;
+            }
+            /* 手机端下拉列表保持在版心内，居中展开 */
+            .maintenance-language-switcher .language-options {
+                left: 50%;
+                right: auto;
+                transform: translate(-50%, -10px);
+                max-width: calc(100vw - 40px);
+            }
         }
     </style>
+    <!-- Font Awesome图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- 加载i18n.js以支持语言切换 -->
+    <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="icon-container">
-            <span class="icon">🔧</span>
-        </div>
-        
-        <h1><?= $heading ?? '系统升级维护中' ?></h1>
-        <p class="subtitle"><?= $message1 ?? '网站正在维护中...' ?><br><?= $message2 ?? '请稍等片刻' ?></p>
-        
-        <div class="progress-container">
-            <div class="progress">
-                <div class="progress-bar"></div>
+    <div class="maintenance-wrapper">
+        <!-- 右上角语言选择器Hook -->
+        <div class="maintenance-header">
+            <div class="maintenance-language-switcher">
+                <?php
+                // 尝试渲染hook
+                if (isset($template) && $template instanceof \Weline\Framework\View\Template) {
+                    $hookContent = $template->getHook('header-language-switcher');
+                    if (!empty(trim($hookContent))) {
+                        echo $hookContent;
+                    } else {
+                        // 如果没有hook实现，显示简单的语言选择器
+                        $currentLang = $lang ?? 'zh_Hans_CN';
+                        $langDisplay = strtoupper(explode('_', $currentLang)[0] ?? 'ZH');
+                        if ($langDisplay === 'ZH' && isset(explode('_', $currentLang)[1]) && explode('_', $currentLang)[1] === 'Hant') {
+                            $langDisplay = 'TW';
+                        }
+                        ?>
+                        <div class="language-switcher" role="button" tabindex="0">
+                            <span class="action-line-2">
+                                <i class="fas fa-globe" aria-hidden="true"></i>
+                                <span class="current-language"><?= $langDisplay ?></span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </span>
+                            <div class="language-options" role="menu">
+                                <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
+                                    <span>简体中文</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
+                                    <span>English</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
+                                    <span>繁體中文</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <?php
+                    }
+                } else {
+                    // 如果Template不可用，显示简单的语言选择器
+                    $currentLang = $lang ?? 'zh_Hans_CN';
+                    $langDisplay = strtoupper(explode('_', $currentLang)[0] ?? 'ZH');
+                    if ($langDisplay === 'ZH' && isset(explode('_', $currentLang)[1]) && explode('_', $currentLang)[1] === 'Hant') {
+                        $langDisplay = 'TW';
+                    }
+                    ?>
+                    <div class="language-switcher" role="button" tabindex="0">
+                        <span class="action-line-2">
+                            <i class="fas fa-globe" aria-hidden="true"></i>
+                            <span class="current-language"><?= $langDisplay ?></span>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </span>
+                        <div class="language-options" role="menu">
+                            <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
+                                <span>简体中文</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                            <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
+                                <span>English</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                            <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
+                                <span>繁體中文</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <?php
+                }
+                ?>
             </div>
         </div>
-        
-        <div class="info-cards">
-            <div class="card">
-                <div class="card-icon">🤔</div>
-                <h3><?= $whyTitle ?? '为什么网站会处于维护模式？' ?></h3>
-                <p><?= $whyContent ?? '网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。' ?></p>
+        <div class="container">
+            <div class="icon-container">
+                <span class="icon">🔧</span>
             </div>
             
-            <div class="card">
-                <div class="card-icon">⏱️</div>
-                <h3><?= $howLongTitle ?? '多久能够恢复？' ?></h3>
-                <p><?= $howLongContent ?? '大部分的网站升级活动都只有几分钟甚至几秒钟的时间。' ?></p>
+            <h1><?= $heading ?? '系统升级维护中' ?></h1>
+            <p class="subtitle"><?= $message1 ?? '网站正在维护中...' ?><br><?= $message2 ?? '请稍等片刻' ?></p>
+            
+            <div class="progress-container">
+                <div class="progress">
+                    <div class="progress-bar"></div>
+                </div>
             </div>
             
-            <div class="card">
-                <div class="card-icon">💬</div>
-                <h3><?= $helpTitle ?? '需要帮助吗？' ?></h3>
-                <p><?= $helpContent ?? '如果你长期看到这个页面，对网站存在疑惑，请联系：' ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
+            <div class="info-cards">
+                <div class="card">
+                    <div class="card-icon">🤔</div>
+                    <h3><?= $whyTitle ?? '为什么网站会处于维护模式？' ?></h3>
+                    <p><?= $whyContent ?? '网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。' ?></p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">⏱️</div>
+                    <h3><?= $howLongTitle ?? '多久能够恢复？' ?></h3>
+                    <p><?= $howLongContent ?? '大部分的网站升级活动都只有几分钟甚至几秒钟的时间。' ?></p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">💬</div>
+                    <h3><?= $helpTitle ?? '需要帮助吗？' ?></h3>
+                    <p><?= $helpContent ?? '如果你长期看到这个页面，对网站存在疑惑，请联系：' ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
+                </div>
             </div>
+            
+            <a href="/" class="back-btn">
+                <span>←</span>
+                <span><?= $backHome ?? '返回首页' ?></span>
+            </a>
         </div>
-        
-        <a href="/" class="back-btn">
-            <span>←</span>
-            <span><?= $backHome ?? '返回首页' ?></span>
-        </a>
     </div>
 </body>
 </html>

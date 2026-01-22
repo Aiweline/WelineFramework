@@ -104,6 +104,22 @@ class HookScanner
                 if (file_exists($docFile)) {
                     $hasDoc = true;
                     $docPath = 'doc/hook/' . $docFileName;
+                } else {
+                    // 配置了doc但文档不存在，记录错误（不致命错误，只检测）
+                    $errorMessage = sprintf(
+                        "[警告] Hook 文档文件不存在\n" .
+                        "模块：%s\n" .
+                        "Hook 名：%s\n" .
+                        "配置的文档路径：%s\n" .
+                        "期望的文档文件：%s\n" .
+                        "配置文件：%s/hook.php\n",
+                        $moduleName,
+                        $hookName,
+                        $docFileName,
+                        $docFile,
+                        $basePath
+                    );
+                    error_log($errorMessage);
                 }
             }
 

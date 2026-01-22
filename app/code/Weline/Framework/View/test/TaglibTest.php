@@ -96,4 +96,37 @@ class TaglibTest extends TestCore
         $result2 = $parse_str === "1111<?php if((\$setting['url']??'')  ):echo 'hhh'; else: echo  'http://www.amayum.com'; endif;?>2222";
         self::assertTrue($result1 && $result2, '变量解析默认值通过');
     }
+
+    public function testHtmlVoidTagParsing()
+    {
+        $template = new Template();
+        $content = '<head><meta charset="utf-8"></head>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        self::assertSame($content, $parse_str, 'HTML void tag should not break AST parsing');
+    }
+
+    public function testLangStaticCompileTime()
+    {
+        $template = new Template();
+        $content = '<lang>hello</lang>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        self::assertSame(__('hello'), $parse_str, 'static lang should be compile-time');
+    }
+
+    public function testLangDynamicInlineRuntime()
+    {
+        $template = new Template();
+        $content = '@lang($name)';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        self::assertSame("<?=__(\$name)?>", $parse_str, 'dynamic inline lang should be runtime');
+    }
+
+    public function testLangDynamicAttributeRuntime()
+    {
+        $template = new Template();
+        $content = '<lang args="<?= $args ?>">hello</lang>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        self::assertTrue(str_contains($parse_str, 'renderRuntimeTag'), 'dynamic args should be runtime');
+        self::assertTrue(str_contains($parse_str, '\'args\' => (\$args)'), 'php attribute should be parsed');
+    }
 }

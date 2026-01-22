@@ -1421,11 +1421,13 @@ class Create extends CommandAbstract
                 );
                 // 使用 echo 直接输出，确保进度条实时更新
                 echo "\r" . $progressBar;
-                // 刷新输出缓冲区
-                if (function_exists('ob_flush')) {
+                // 刷新输出缓冲区（只有在存在缓冲区时才调用 ob_flush，避免 “No buffer to flush” 报错）
+                if (function_exists('ob_get_level') && ob_get_level() > 0 && function_exists('ob_flush')) {
                     @ob_flush();
                 }
-                flush();
+                if (function_exists('flush')) {
+                    @flush();
+                }
                 
                 try {
                     // 使用 TranslationService 的批量翻译方法

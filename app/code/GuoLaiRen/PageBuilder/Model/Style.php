@@ -25,12 +25,103 @@ class Style extends Model
     public const fields_DESCRIPTION = 'description';
     public const fields_PATH = 'path';
     public const fields_PREVIEW_IMAGE = 'preview_image';
+    public const fields_SUPPORTED_TYPES = 'supported_types';
     public const fields_IS_ACTIVE = 'is_active';
     public const fields_IS_PUBLISHED = 'is_published';
     public const fields_SORT_ORDER = 'sort_order';
     public const fields_CREATE_TIME = 'create_time';
     public const fields_UPDATE_TIME = 'update_time';
     
+    // 页面类型常量（与Page模型对应）
+    public const PAGE_TYPE_ALL = 'all';  // 支持所有类型
+    public const PAGE_TYPE_HOME = 'home_page';
+    public const PAGE_TYPE_ABOUT = 'about_page';
+    public const PAGE_TYPE_CONTACT = 'contact_page';
+    public const PAGE_TYPE_BLOG = 'blog_post';
+    public const PAGE_TYPE_BLOG_CATEGORY = 'blog_category';
+    public const PAGE_TYPE_BLOG_LIST = 'blog_list';
+    public const PAGE_TYPE_CUSTOM = 'custom_page';
+    
+    /**
+     * 获取所有页面类型选项
+     */
+    public static function getPageTypeOptions(): array
+    {
+        return [
+            self::PAGE_TYPE_ALL => __('所有类型'),
+            self::PAGE_TYPE_HOME => __('首页'),
+            self::PAGE_TYPE_ABOUT => __('关于我们'),
+            self::PAGE_TYPE_CONTACT => __('联系我们'),
+            self::PAGE_TYPE_BLOG => __('博客文章'),
+            self::PAGE_TYPE_BLOG_CATEGORY => __('博客分类'),
+            self::PAGE_TYPE_BLOG_LIST => __('博客列表'),
+            self::PAGE_TYPE_CUSTOM => __('自定义页面'),
+        ];
+    }
+
+    /**
+     * 获取样式支持的页面类型数组
+     */
+    public function getSupportedTypes(): array
+    {
+        $types = $this->getData(self::fields_SUPPORTED_TYPES);
+        if (empty($types)) {
+            return [self::PAGE_TYPE_ALL]; // 默认支持所有类型
+        }
+        $decoded = json_decode($types, true);
+        return is_array($decoded) ? $decoded : [self::PAGE_TYPE_ALL];
+    }
+
+    /**
+     * 设置样式支持的页面类型
+     */
+    public function setSupportedTypes(array $types): self
+    {
+        return $this->setData(self::fields_SUPPORTED_TYPES, json_encode($types));
+    }
+
+    /**
+     * 检查样式是否支持指定的页面类型
+     */
+    public function supportsPageType(string $pageType): bool
+    {
+        $types = $this->getSupportedTypes();
+        // 如果支持所有类型，或者明确支持指定类型
+        return in_array(self::PAGE_TYPE_ALL, $types) || in_array($pageType, $types);
+    }
+
+    /**
+     * 获取支持指定页面类型的所有样式
+     */
+    public static function getStylesByPageType(string $pageType, bool $activeOnly = true, bool $publishedOnly = false): array
+    {
+        $styleModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
+        $query = $styleModel->clear();
+        
+        if ($activeOnly) {
+            $query->where(self::fields_IS_ACTIVE, 1);
+        }
+        if ($publishedOnly) {
+            $query->where(self::fields_IS_PUBLISHED, 1);
+        }
+        
+        $allStyles = $query
+            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        // 筛选支持指定类型的样式
+        $result = [];
+        foreach ($allStyles as $style) {
+            if ($style->supportsPageType($pageType)) {
+                $result[] = $style;
+            }
+        }
+        
+        return $result;
+    }
+
     /**
      * 自动扫描开关 - 是否在获取样式列表时自动扫描
      */
@@ -97,6 +188,7 @@ class Style extends Model
             // 读取README内容
             $readmeContent = file_get_contents($readmeFile);
             $description = self::extractDescriptionFromReadmeStatic($readmeContent);
+            $supportedTypes = self::extractSupportedTypesFromReadme($readmeContent);
             
             // 检测预览图（优先webp，其次png）
             $previewImage = '';
@@ -121,6 +213,7 @@ class Style extends Model
                         ->setData(self::fields_DESCRIPTION, $description)
                         ->setData(self::fields_PATH, 'style/' . $styleName)
                         ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
+                        ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                         ->save();
                 }
             } else {
@@ -132,6 +225,7 @@ class Style extends Model
                     ->setData(self::fields_DESCRIPTION, $description)
                     ->setData(self::fields_PATH, 'style/' . $styleName)
                     ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
+                    ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                     ->setData(self::fields_IS_ACTIVE, 1)
                     ->setData(self::fields_SORT_ORDER, 10)
                     ->save(true);
@@ -195,6 +289,56 @@ class Style extends Model
         self::autoScan(0);
     }
     
+    /**
+     * 静态方法：从README中提取支持的页面类型
+     * 
+     * 支持的格式：
+     * - SUPPORTED_TYPES: blog_post, blog_category, blog_list
+     * - 支持类型: blog_post, blog_category
+     * - Page Types: all
+     */
+    private static function extractSupportedTypesFromReadme(string $content): array
+    {
+        // 尝试匹配多种格式
+        $patterns = [
+            '/SUPPORTED_TYPES:\s*([^\n]+)/i',
+            '/支持类型:\s*([^\n]+)/i',
+            '/Page\s*Types?:\s*([^\n]+)/i',
+            '/模板类型:\s*([^\n]+)/i',
+        ];
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $content, $matches)) {
+                $typesStr = trim($matches[1]);
+                // 分割并清理
+                $types = array_map('trim', preg_split('/[,，、\s]+/', $typesStr));
+                $types = array_filter($types);
+                
+                if (!empty($types)) {
+                    // 验证类型是否有效
+                    $validTypes = [
+                        self::PAGE_TYPE_ALL,
+                        self::PAGE_TYPE_HOME,
+                        self::PAGE_TYPE_ABOUT,
+                        self::PAGE_TYPE_CONTACT,
+                        self::PAGE_TYPE_BLOG,
+                        self::PAGE_TYPE_BLOG_CATEGORY,
+                        self::PAGE_TYPE_BLOG_LIST,
+                        self::PAGE_TYPE_CUSTOM,
+                    ];
+                    
+                    $result = array_intersect($types, $validTypes);
+                    if (!empty($result)) {
+                        return array_values($result);
+                    }
+                }
+            }
+        }
+        
+        // 默认支持所有类型
+        return [self::PAGE_TYPE_ALL];
+    }
+
     /**
      * 静态方法：从README中提取描述
      */
@@ -1195,6 +1339,13 @@ class Style extends Model
                 '预览图片路径'
             )
             ->addColumn(
+                self::fields_SUPPORTED_TYPES,
+                TableInterface::column_type_TEXT,
+                0,
+                '',
+                '支持的页面类型(JSON数组)'
+            )
+            ->addColumn(
                 self::fields_IS_ACTIVE,
                 TableInterface::column_type_SMALLINT,
                 1,
@@ -1253,6 +1404,18 @@ class Style extends Model
             ->alter();
         }
         
+        // 添加 supported_types 字段（如果不存在）
+        if ($setup->tableExist() && !$setup->hasField(self::fields_SUPPORTED_TYPES)) {
+            $setup->alterTable()->addColumn(
+                self::fields_SUPPORTED_TYPES,
+                self::fields_PREVIEW_IMAGE,
+                TableInterface::column_type_TEXT,
+                0,
+                '',
+                '支持的页面类型(JSON数组)'
+            )->alter();
+        }
+        
         // 扫描并注册默认样式模板
         $this->scanAndRegisterStyles();
     }
@@ -1288,6 +1451,7 @@ class Style extends Model
             $readmeFile = $styleDir . '/readme.md';
             $readmeContent = file_get_contents($readmeFile);
             $description = $this->extractDescriptionFromReadme($readmeContent);
+            $supportedTypes = self::extractSupportedTypesFromReadme($readmeContent);
             
             // 检查数据库中是否已存在
             $existing = clone $this;
@@ -1304,6 +1468,7 @@ class Style extends Model
                     ->setData(self::fields_NAME, $this->formatStyleName($styleName))
                     ->setData(self::fields_DESCRIPTION, $description)
                     ->setData(self::fields_PATH, 'style/' . $styleName)
+                    ->setData(self::fields_SUPPORTED_TYPES, json_encode($supportedTypes))
                     ->setData(self::fields_IS_ACTIVE, 1)
                     ->setData(self::fields_SORT_ORDER, 10)
                     ->save(true);

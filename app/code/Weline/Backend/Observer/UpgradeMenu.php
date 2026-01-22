@@ -11,26 +11,19 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
-use Weline\Acl\Model\Acl;
-use Weline\Backend\Config\MenuXmlReader;
-use Weline\Backend\Model\Menu;
-use Weline\Framework\App\Env;
+use Weline\Backend\Service\MenuCollector;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 class UpgradeMenu implements ObserverInterface
 {
-    private \Weline\Backend\Model\Menu $menu;
-    private MenuXmlReader $menuReader;
+    private MenuCollector $menuCollector;
 
     public function __construct(
-        \Weline\Backend\Model\Menu $menu,
-        MenuXmlReader              $menuReader
+        MenuCollector $menuCollector
     )
     {
-        $this->menu = $menu;
-        $this->menuReader = $menuReader;
+        $this->menuCollector = $menuCollector;
     }
 
     /**
@@ -38,257 +31,24 @@ class UpgradeMenu implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        list($menus, $menu, $modules_info) = $this->collectMenus();
+        // 从事件数据中获取需要更新菜单的模块列表（可选）
+        $modules = $event->getEvenData('modules');
+        if (!is_array($modules)) {
+            $modules = [];
+        }
+        
+        // 委托给菜单收集服务（收集所有模块的菜单，禁用模块的菜单会自动设置为 is_enable=0）
+        $this->collectMenus($modules);
         // 注意：Observer 的 execute 方法应该返回 void，返回值被忽略
     }
 
     /**
-     * 递归收集子菜单的 source
-     * 
-     * @param string $parentSource 父菜单的 source
-     * @param array &$sourcesToDelete 要删除的菜单 source 数组（引用传递）
-     * @return void
-     */
-    private function collectChildMenuSources(string $parentSource, array &$sourcesToDelete): void
-    {
-        $childMenus = $this->menu->reset()
-            ->where(Menu::fields_PARENT_SOURCE, $parentSource)
-            ->select()
-            ->fetchArray();
-        
-        foreach ($childMenus as $childMenu) {
-            $childSource = $childMenu[Menu::fields_SOURCE];
-            if (!in_array($childSource, $sourcesToDelete)) {
-                $sourcesToDelete[] = $childSource;
-                // 递归查找子菜单的子菜单
-                $this->collectChildMenuSources($childSource, $sourcesToDelete);
-            }
-        }
-    }
-
-    /**
-     * @DESC          # 如果动作路径有*号，替换为路由所指模块的路由
-     *
-     * @AUTH  秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 7/4/2024 下午4:40
-     * 参数区：
-     * @param mixed $menu
-     * @param array $modules_info
-     * @param mixed $module
      * @return array
      * @throws \Exception
      */
-    private function replaceModuleAction(array &$menu, array &$modules_info): array
+    public function collectMenus(array $modulesFilter = []): array
     {
-        if (strpos($menu[Menu::fields_ACTION], '*') !== false) {
-            $module_info = $modules_info[$menu['module']] ?? [];
-            if (empty($module_info)) {
-                $module_info = Env::getInstance()->getModuleInfo($menu['module']);
-                $modules_info[$menu['module']] = $module_info;
-                if (empty($module_info)) {
-                    throw new \Exception(__('模块不存在：%{1}', $module_info['name']));
-                }
-            }
-            if (empty($menu['is_backend'])) {
-                $menu['is_backend'] = true;
-            }
-            $router = $module_info['router'];
-            if ($menu['is_backend']) {
-                $router = $module_info['backend_router'];
-            }
-            $menu[Menu::fields_ACTION] = str_replace('*', $router, $menu[Menu::fields_ACTION]);
-        }
-        return $menu;
-    }
-
-    /**
-     * @return array
-     * @throws \Exception
-     */
-    public function collectMenus(): array
-    {
-        $update_items = [];
-        # 读取菜单配置
-        $modules_xml_menus = $this->menuReader->read();
-        $modules_info = [];
-        
-        # 收集所有文件中的菜单 source，用于后续删除不在文件中的菜单
-        $file_menu_sources = [];
-        # 先更新顶层菜单
-        foreach ($modules_xml_menus as $module => &$menus) {
-            foreach ($menus['data'] as $key => $menu) {
-                if (empty($menu['parent'])) {
-                    unset($menu['parent']);
-                    # 清空查询条件
-                    $menu[Menu::fields_MODULE] = $module;
-                    $menu[Menu::fields_PARENT_SOURCE] = '';
-                    $menu[Menu::fields_PID] = 0;
-                    $menu[Menu::fields_LEVEL] = 1;
-                    $menu[Menu::fields_ACTION] = trim($menu[Menu::fields_ACTION], '/');
-                    # 如果动作路径有*号，替换为路由所指模块的路由
-                    $menu = $this->replaceModuleAction($menu, $modules_info);
-                    # 收集文件中的菜单 source
-                    $file_menu_sources[] = $menu[Menu::fields_SOURCE];
-                    # 先查询一遍
-                    /**@var Menu $menuModel */
-                    $this->menu->clear();
-                    // 以唯一source索引为准检测，存在更新不存在新增
-                    $result = $this->menu->setData($menu)->save(true, 'source');
-                    $menu[Menu::fields_PATH] = $this->menu->getData(Menu::fields_ID);
-                    $this->menu->setData($menu)
-                        ->save(true, 'source');
-                    unset($menus['data'][$key]);
-                }
-            }
-//            if ($module == 'Weline_BackendActivity' || $module == 'Weline_Admin') {
-//                $d[] = $menus;
-//            }else{
-//                unset($modules_xml_menus[$module]);
-//            }
-        }
-        # 子菜单
-        foreach ($modules_xml_menus as $module => $sub_menus) {
-            foreach ($sub_menus['data'] as $menu) {
-                # 清空查询条件
-                $this->menu->clear();
-                $menu[Menu::fields_MODULE] = $module;
-                $menu[Menu::fields_PARENT_SOURCE] = $menu['parent'] ?? '';
-                $menu[Menu::fields_ACTION] = trim($menu[Menu::fields_ACTION], '/');
-                $menu = $this->replaceModuleAction($menu, $modules_info);
-                # 收集文件中的菜单 source
-                $file_menu_sources[] = $menu[Menu::fields_SOURCE];
-                unset($menu['parent']);
-                # 1 存在父资源 检查父资源的 ID
-                $parent = clone $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_PARENT_SOURCE])->find()->fetch();
-                if ($pid = $parent->getId()) {
-                    $menu[Menu::fields_PID] = $pid;
-                    $menu[Menu::fields_LEVEL] = $parent->getData(Menu::fields_LEVEL) + 1;
-                } else {
-                    $menu[Menu::fields_PID] = 0;
-                }
-                $this->menu->clearData();
-                $menu[Menu::fields_PID] = $menu[Menu::fields_PID] ?? 0;
-                $result = $this->menu->setData($menu)->save(true, 'source');
-                $parent_path = $parent->getData(Menu::fields_PATH);
-                $path = ($parent_path ? ($parent_path . '/') : '') . $this->menu->getData(Menu::fields_ID);
-                $menu[Menu::fields_PATH] = $path;
-                $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_SOURCE])
-                    ->update($menu)
-                    ->fetch();
-                # 2 检查自身是否被别的模块作为父分类
-//                $this->menu->clearData();
-//                if ($this_menu_id = $this->menu->getId() && $is_others_parent = $this->menu->where(Menu::fields_PARENT_SOURCE, $menu[Menu::fields_SOURCE])->select()->fetch()) {
-//                    foreach ($is_others_parent as $other_menu) {
-//                        if (empty($other_menu['pid'])) {
-//                            $other_menu['pid'] = $this_menu_id;
-//                            $other_menu[Menu::fields_PATH] = $this->menu->getData(Menu::fields_PATH).'/'. $other_menu[Menu::fields_ID];
-//                            $other_menu[Menu::fields_LEVEL] = $this->menu->getData(Menu::fields_LEVEL)+1;
-//                            $this->menu->save($other_menu,'source');
-//                        }
-//                    }
-//                }
-            }
-        }
-        # 再次处理父菜单
-        $this->menu->clearData();
-        $top_menus = $this->menu->where(Menu::fields_PID, 0)->select()->fetch();
-        foreach ($top_menus->getItems() as $menu) {
-            # 如果存在父菜单，则更新父菜单的id到当前子菜单【pid】
-            if ($menu[Menu::fields_PARENT_SOURCE]) {
-                # 查找父菜单，获取父菜单的id
-                $parent = $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_PARENT_SOURCE])->find()->fetch();
-                if ($pid = $parent->getData(Menu::fields_ID)) {
-                    $menu[Menu::fields_PID] = $pid;
-                    $menu[Menu::fields_LEVEL] = $parent->getData(Menu::fields_LEVEL) + 1;
-                    $menu[Menu::fields_PATH] = $parent->getData(Menu::fields_PATH) . '/' . $menu[Menu::fields_PATH];
-                    $this->menu->save($menu);
-                }
-            }
-        }
-        // 删除数据库中不在文件中的菜单项（以文件为准）
-        // 需要递归删除：如果父菜单被删除，子菜单也应该被删除
-        if (!empty($file_menu_sources)) {
-            // 先找出所有需要删除的菜单（不在文件中的）
-            $menusToDelete = $this->menu->reset()
-                ->where(Menu::fields_SOURCE, $file_menu_sources, 'not in')
-                ->select()
-                ->fetchArray();
-            
-            // 收集所有需要删除的菜单 source（包括子菜单）
-            $sourcesToDelete = [];
-            foreach ($menusToDelete as $menu) {
-                $sourcesToDelete[] = $menu[Menu::fields_SOURCE];
-                // 递归查找所有子菜单
-                $this->collectChildMenuSources($menu[Menu::fields_SOURCE], $sourcesToDelete);
-            }
-            
-            // 删除所有需要删除的菜单（包括子菜单）
-            if (!empty($sourcesToDelete)) {
-                $this->menu->reset()
-                    ->where(Menu::fields_SOURCE, $sourcesToDelete, 'in')
-                    ->delete()
-                    ->fetch();
-            }
-        } else {
-            // 如果文件中没有任何菜单，删除所有菜单
-            $this->menu->reset()->delete()->fetch();
-        }
-        
-        // 更新菜单到权限表
-        $all_menus = $this->menu->reset()->order('order', 'ASC')->select()->fetchArray();
-        
-        // 先收集所有应该存在的菜单 source，用于清理权限表中不存在的菜单权限
-        $collected_menu_sources = [];
-        foreach ($all_menus as $menu) {
-            $collected_menu_sources[] = $menu['source'];
-        }
-        
-        // 删除权限表中不在收集列表中的菜单权限（type='menus'）
-        /**@var \Weline\Acl\Model\Acl $alcModel */
-        $alcModel = ObjectManager::getInstance(Acl::class);
-        
-        if (!empty($collected_menu_sources)) {
-            // 删除所有不在收集列表中的菜单权限
-            $alcModel->reset()
-                ->where(Acl::fields_TYPE, 'menus')
-                ->where(Acl::fields_SOURCE_ID, $collected_menu_sources, 'not in')
-                ->delete()
-                ->fetch();
-        } else {
-            // 如果没有收集到任何菜单，删除所有菜单权限
-            $alcModel->reset()
-                ->where(Acl::fields_TYPE, 'menus')
-                ->delete()
-                ->fetch();
-        }
-        
-        // 插入或更新菜单权限
-        $acl_items = [];
-        foreach ($all_menus as $menu) {
-            $acl_items[] = [
-                Acl::fields_SOURCE_ID => $menu['source'],
-                Acl::fields_ORDER => $menu['order'],
-                Acl::fields_PARENT_SOURCE => $menu['parent_source'],
-                Acl::fields_TYPE => 'menus',
-                Acl::fields_CLASS => '',
-                Acl::fields_MODULE => $menu['module'],
-                Acl::fields_SOURCE_NAME => $menu['title'],
-                Acl::fields_ROUTER => '',
-                Acl::fields_ROUTE => trim($menu['action'], '/'),
-                Acl::fields_METHOD => 'GET',
-                Acl::fields_DOCUMENT => $menu['is_system'] ? __('系统菜单') : __('用户菜单'),
-                Acl::fields_REWRITE => '',
-                Acl::fields_ICON => $menu['icon'],
-                Acl::fields_IS_ENABLE => $menu['is_enable'],
-                Acl::fields_IS_BACKEND => $menu['is_backend'],
-            ];
-        }
-
-        if ($acl_items) {
-            $alcModel->reset()->insert($acl_items, 'source_id')
-                ->fetch();
-        }
-        return array($menus, $menu, $modules_info);
+        // 统一委托给菜单收集服务，保持向后兼容返回值结构
+        return $this->menuCollector->collect($modulesFilter);
     }
 }

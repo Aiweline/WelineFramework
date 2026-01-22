@@ -189,7 +189,7 @@ class Alter extends AbstractTable implements AlterInterface
                 $dump_sqls[] = $sql;
             } else {
                 try {
-                    $this->query($sql);
+                    $this->query($sql)->fetch();  // 🔧 修复：必须调用 fetch() 才能真正执行 SQL
                 } catch (\Exception $exception) {
                     exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $sql) . PHP_EOL);
                 }

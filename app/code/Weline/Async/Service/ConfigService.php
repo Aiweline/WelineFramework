@@ -65,7 +65,8 @@ class ConfigService
             }
         }
 
-        return [
+        // 基础映射配置
+        $mappingConfig = [
             'mapping_id' => $mapping->getId(),
             'host' => [
                 'host' => $host->getData(SyncHost::fields_HOST),
@@ -82,6 +83,26 @@ class ConfigService
                 'exclude_patterns' => $mapping->getExcludePatternsArray(),
             ],
         ];
+
+        // 如果本地路径在框架根目录（BP）内，自动排除 var 和 vendor 目录，避免自同步日志/依赖
+        $localPath = $mappingConfig['mapping']['local_path'] ?? '';
+        if (!empty($localPath)) {
+            $realLocal = realpath($localPath) ?: $localPath;
+            $realBp = realpath(BP) ?: BP;
+            if ($realBp !== '' && str_starts_with($realLocal, $realBp)) {
+                $exclude = $mappingConfig['mapping']['exclude_patterns'] ?? [];
+                // 统一使用相对目录名作为排除模式
+                $extraExcludes = ['var', 'vendor'];
+                foreach ($extraExcludes as $pattern) {
+                    if (!in_array($pattern, $exclude, true) && !in_array($pattern . '/', $exclude, true)) {
+                        $exclude[] = $pattern;
+                    }
+                }
+                $mappingConfig['mapping']['exclude_patterns'] = $exclude;
+            }
+        }
+
+        return $mappingConfig;
     }
 
     /**
@@ -266,7 +287,8 @@ class ConfigService
             $remotePaths = [$localPath];
         }
 
-        return [
+        // 基础映射配置
+        $mapping = [
             'mapping_id' => 'project', // 使用特殊标识
             'host' => [
                 'host' => $config['host']['host'] ?? '',
@@ -283,6 +305,22 @@ class ConfigService
                 'exclude_patterns' => $config['mapping']['exclude_patterns'] ?? [],
             ],
         ];
+
+        // 如果项目映射的 local_path 在框架根目录（BP）内，自动排除 var 和 vendor 目录，避免自同步日志/依赖
+        $realLocal = realpath($mapping['mapping']['local_path']) ?: $mapping['mapping']['local_path'];
+        $realBp = realpath(BP) ?: BP;
+        if ($realBp !== '' && str_starts_with($realLocal, $realBp)) {
+            $exclude = $mapping['mapping']['exclude_patterns'] ?? [];
+            $extraExcludes = ['var', 'vendor'];
+            foreach ($extraExcludes as $pattern) {
+                if (!in_array($pattern, $exclude, true) && !in_array($pattern . '/', $exclude, true)) {
+                    $exclude[] = $pattern;
+                }
+            }
+            $mapping['mapping']['exclude_patterns'] = $exclude;
+        }
+
+        return $mapping;
     }
 
     /**

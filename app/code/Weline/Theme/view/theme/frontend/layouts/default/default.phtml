@@ -35,6 +35,11 @@
         <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
         <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     </if>
+
+    <!-- 全站统一的面包屑导航区域：位于 Header 和主内容之间 -->
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
     
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>

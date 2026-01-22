@@ -50,6 +50,9 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
                                 <i class="mdi mdi-folder-open"></i> <?= __('浏览') ?>
                             </button>
                         </div>
+                        <small class="form-text text-muted d-block mb-1">
+                            <?= __('本地目录的完整路径；如果在框架根目录(BP)内，会自动排除 var 与 vendor 目录；单个文件大于 1MB 将不会同步，只会在异步日志中记录。') ?>
+                        </small>
                         <div id="local_directory_tree" class="border rounded p-2 async-directory-tree" style="max-height: 300px; overflow-y: auto; display: none;">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div>

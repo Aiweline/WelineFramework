@@ -555,4 +555,16 @@ interface QueryInterface
      * @return string
      */
     public function getPrepareSql(bool $format = false): string;
+
+    /**
+     * 获取指定表字段的结构定义信息（方言适配由各驱动自身实现）
+     *
+     * - 返回值通常来自 information_schema / PRAGMA 等系统视图
+     * - 不同数据库返回的字段内容可能不同，由各适配器统一封装
+     *
+     * @param string $tableName 表名（未经方言加工的原始表名）
+     * @param string $fieldName 字段名（未经方言加工的原始字段名）
+     * @return array|null 找到则返回结构数组，未找到返回 null
+     */
+    public function getColumnDefinition(string $tableName, string $fieldName): ?array;
 }

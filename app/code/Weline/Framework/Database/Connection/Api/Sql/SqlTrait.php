@@ -16,6 +16,53 @@ use Weline\Framework\Database\Exception\DbException;
 
 trait SqlTrait
 {
+    /**
+     * AST 结构变量声明
+     * 用于 IDE 类型提示，确保 AST 结构完整
+     * 
+     * AST 完整结构说明：
+     * - action: 操作类型 ('select'|'insert'|'update'|'delete'|'find')
+     * - from: FROM 子句信息，包含表名、别名，以及子查询标记
+     * - select: SELECT 字段信息
+     * - joins: JOIN 连接信息数组
+     * - where: WHERE 条件数组
+     * - group: GROUP BY 子句
+     * - having: HAVING 子句
+     * - order: ORDER BY 排序数组
+     * - limit: LIMIT 限制字符串
+     * - extra: 额外的 SQL 片段
+     * - insert: INSERT 数据数组
+     * - update: UPDATE 数据，包含 single 和 batch 两部分
+     * - subqueries: 子查询 AST 结构映射（key 为子查询 ID，value 为子查询的 AST）
+     * - index_sort_keys: 索引排序键数组
+     * - unit_primary_keys: 联合主键数组
+     * 
+     * @var array{
+     *   action?: string,
+     *   from?: array{table?: string, alias?: string, is_subquery?: bool, subquery_id?: string},
+     *   select?: array{fields?: string},
+     *   joins?: array,
+     *   where?: array,
+     *   group?: string,
+     *   having?: string,
+     *   order?: array,
+     *   limit?: string,
+     *   extra?: string,
+     *   insert?: array,
+     *   update?: array{single?: array, batch?: array},
+     *   subqueries?: array<string, array>,
+     *   index_sort_keys?: array,
+     *   unit_primary_keys?: array
+     * }
+     */
+    protected array $ast = [];
+    
+    /**
+     * 子查询计数器，用于生成唯一的子查询标识
+     * @var int
+     */
+    protected int $subquery_counter = 0;
+    /** @var array */
     public array $conditions = [
         '>',
         '<',
@@ -142,10 +189,17 @@ trait SqlTrait
      * @DateTime: 2021/8/17 22:52
      * 参数区：
      * @throws null
+     * 
+     * @deprecated 此方法已被各个适配器的 prepareSql 方法覆盖，不再使用 DialectAdapter。
+     *             各个适配器（Mysql, Pgsql, Sqlite）现在都有自己的 SQL 构建逻辑。
+     *             此方法保留仅为了兼容性，实际不会被调用（各个适配器都覆盖了此方法）。
      */
     private function prepareSql($action): void
     {
-        $this->dialectAdapter->compile($this, $action);
+        // 此方法已被各个适配器覆盖，不会被执行
+        // 保留此方法仅为了兼容性，实际不会被调用
+        // 如果意外调用到此方法，抛出异常提示
+        throw new \RuntimeException(__('prepareSql 方法已被各个适配器覆盖，不应该调用 trait 中的方法。请确保适配器正确实现了 prepareSql 方法。'));
     }
 
 
@@ -308,5 +362,263 @@ trait SqlTrait
     {
         // formatSql is now simplified - logging moved to fetch() for actual values
         return $sql;
+    }
+
+    /**
+     * 清理 AST 值：移除方言特定的引号，保持操作结构干净
+     * AST 是操作结构，不应该包含方言特定的语法信息（如引号）
+     * 
+     * @param string $value 可能包含引号的表名或字段表达式
+     * @return string 清理后的干净值
+     */
+    protected function cleanAstValue(string $value): string
+    {
+        $value = trim($value);
+        // 移除所有可能的引号（MySQL 反引号、PostgreSQL 双引号、SQL Server 方括号等）
+        $value = str_replace(['`', '"', '[', ']'], '', $value);
+        return $value;
+    }
+
+    /**
+     * 清理 AST 字段表达式：移除引号但保留函数调用和结构
+     * AST 是操作结构，不应该包含方言特定的语法信息（如引号）
+     * 
+     * @param string $fields 可能包含引号的字段表达式
+     * @return string 清理后的干净字段表达式
+     */
+    protected function cleanAstFields(string $fields): string
+    {
+        $fields = trim($fields);
+        
+        // 如果是 *，直接返回
+        if ($fields === '*') {
+            return $fields;
+        }
+        
+        // 处理逗号分隔的多个字段
+        if (str_contains($fields, ',')) {
+            $fieldList = array_map('trim', explode(',', $fields));
+            $cleanedFields = [];
+            foreach ($fieldList as $field) {
+                $cleanedFields[] = $this->cleanSingleField($field);
+            }
+            return implode(', ', $cleanedFields);
+        }
+        
+        // 单个字段
+        return $this->cleanSingleField($fields);
+    }
+    
+    /**
+     * 清理单个字段表达式
+     * 
+     * @param string $field 单个字段表达式
+     * @return string 清理后的字段表达式
+     */
+    protected function cleanSingleField(string $field): string
+    {
+        $field = trim($field);
+        
+        // 处理 AS 别名的情况：expression AS alias
+        if (preg_match('/^(.+?)\s+(AS|as)\s+(.+)$/i', $field, $matches)) {
+            $expr = trim($matches[1]);
+            $alias = trim($matches[3]);
+            // 清理表达式和别名中的引号
+            $expr = $this->cleanFieldExpression($expr);
+            $alias = $this->cleanAstValue($alias);
+            return $expr . ' AS ' . $alias;
+        }
+        
+        // 处理函数调用：count(*), sum(field) 等
+        if (preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/i', $field, $funcMatches)) {
+            $funcName = $funcMatches[1];
+            $funcParams = $funcMatches[2];
+            // 清理参数中的引号，但保留函数结构
+            $funcParams = str_replace(['`', '"', '[', ']'], '', $funcParams);
+            return $funcName . '(' . $funcParams . ')';
+        }
+        
+        // 普通字段，清理引号
+        return $this->cleanFieldExpression($field);
+    }
+    
+    /**
+     * 清理字段表达式（处理 table.field 格式）
+     * 
+     * @param string $field 字段表达式
+     * @return string 清理后的字段表达式
+     */
+    protected function cleanFieldExpression(string $field): string
+    {
+        $field = trim($field);
+        // 移除所有可能的引号
+        $field = str_replace(['`', '"', '[', ']'], '', $field);
+        return $field;
+    }
+
+    /**
+     * AST 收集方法 - 更新 AST 中的表信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     * AST 中存储的表名应该是干净的，不包含方言特定的引号
+     */
+    protected function updateAstTable(string $table, string $alias = ''): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        if (!isset($this->ast['from'])) {
+            $this->ast['from'] = [];
+        }
+        // 🔧 清理表名：AST 是操作结构，不应该包含引号等方言信息
+        $this->ast['from']['table'] = $this->cleanAstValue($table);
+        if ($alias) {
+            $this->ast['from']['alias'] = $this->cleanAstValue($alias);
+        } elseif (isset($this->table_alias)) {
+            $this->ast['from']['alias'] = $this->cleanAstValue($this->table_alias);
+        }
+    }
+
+    /**
+     * AST 收集方法 - 更新 AST 中的字段信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     * AST 中存储的字段表达式应该是干净的，不包含方言特定的引号
+     */
+    protected function updateAstFields(string $fields): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        if (!isset($this->ast['select'])) {
+            $this->ast['select'] = [];
+        }
+        // 🔧 清理字段表达式：AST 是操作结构，不应该包含引号等方言信息
+        $this->ast['select']['fields'] = $this->cleanAstFields($fields);
+    }
+
+    /**
+     * AST 收集方法 - 添加 JOIN 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     * 注意：此方法会追加 JOIN，如果需要同步 joins 属性，应该在调用此方法后同步
+     */
+    protected function updateAstJoin(string $table, string $condition, string $type): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        if (!isset($this->ast['joins'])) {
+            $this->ast['joins'] = [];
+        }
+        // 追加 JOIN（joins 属性已经在方法调用前更新）
+        // 这里只需要确保 AST 中的 joins 与属性同步
+        if (isset($this->joins) && is_array($this->joins)) {
+            $this->ast['joins'] = $this->joins;
+        }
+    }
+
+    /**
+     * AST 收集方法 - 添加 WHERE 条件
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     * 注意：此方法会追加 WHERE，如果需要同步 wheres 属性，应该在调用此方法后同步
+     */
+    protected function updateAstWhere(array $where): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        // 同步 wheres 属性到 AST（wheres 属性已经在方法调用前更新）
+        if (isset($this->wheres) && is_array($this->wheres)) {
+            $this->ast['where'] = $this->wheres;
+        }
+    }
+
+    /**
+     * AST 收集方法 - 更新 ORDER BY 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstOrder(string $field, string $sort): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        // 同步 order 属性到 AST（order 属性已经在方法调用前更新）
+        if (isset($this->order) && is_array($this->order)) {
+            $this->ast['order'] = $this->order;
+        }
+    }
+
+    /**
+     * AST 收集方法 - 更新 GROUP BY 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstGroup(string $groupBy): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        $this->ast['group'] = $groupBy;
+    }
+
+    /**
+     * AST 收集方法 - 更新 HAVING 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstHaving(string $having): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        $this->ast['having'] = $having;
+    }
+
+    /**
+     * AST 收集方法 - 更新 LIMIT 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstLimit(string $limit): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        $this->ast['limit'] = $limit;
+    }
+
+    /**
+     * AST 收集方法 - 更新 INSERT 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstInsert(array $insert): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        $this->ast['insert'] = $insert;
+    }
+
+    /**
+     * AST 收集方法 - 更新 UPDATE 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstUpdate(array $singleUpdates, array $batchUpdates): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        if (!isset($this->ast['update'])) {
+            $this->ast['update'] = [];
+        }
+        $this->ast['update']['single'] = $singleUpdates;
+        $this->ast['update']['batch'] = $batchUpdates;
+    }
+
+    /**
+     * AST 收集方法 - 更新额外 SQL 信息
+     * 这是 SqlTrait 提供的 AST 收集方法，用于实时更新 AST
+     */
+    protected function updateAstExtra(string $extra): void
+    {
+        if (!isset($this->ast)) {
+            $this->ast = [];
+        }
+        $this->ast['extra'] = $extra;
     }
 }

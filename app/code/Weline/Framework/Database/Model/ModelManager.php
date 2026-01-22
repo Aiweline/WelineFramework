@@ -53,6 +53,10 @@ class ModelManager
         $model_files_data = $this->sortModelsByPriority($model_files_data);
         foreach ($model_files_data as $key => $model_class) {
             $this->printing->note($model_class, __('Model升级'));
+            // 先检查是否是 trait 或 interface，这些不需要升级
+            if (trait_exists($model_class) || interface_exists($model_class)) {
+                continue;
+            }
             if (class_exists($model_class)) {
                 // 跳过抽象类、trait、接口和静态类
                 $reflection = new \ReflectionClass($model_class);
@@ -99,6 +103,7 @@ class ModelManager
     {
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($model);
+        $modelSetup->setContext($context); // 设置上下文，用于字段备份和恢复
         
         // 如果是 upgrade 或 setup，先检查表是否存在
         // 如果表不存在，先执行 install 安装表

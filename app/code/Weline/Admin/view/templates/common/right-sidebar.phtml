@@ -32,6 +32,7 @@ $layoutClass = $currentLayouts['class'] ?? '';
                 <select class='form-select' id='layout-preset'>
                     <option value='default' <?= ($dataLayout === '' && $dataLayoutSize === '' && $layoutClass === '' && $dataTopbar !== 'colored' && $dataSidebarSize !== 'small') ? 'selected' : '' ?>><?= __('默认布局') ?></option>
                     <option value='light-sidebar' <?= ($dataTopbar === 'colored' && $dataLayout === '' && $dataSidebar === 'light' && $dataLayoutSize === '' && $dataSidebarSize === '' && $layoutClass === '') ? 'selected' : '' ?>><?= __('浅色侧边栏') ?></option>
+                    <option value='dark-sidebar' <?= ($dataLayout === '' && $dataTopbar === 'dark' && $dataSidebar === 'dark' && $dataLayoutSize === '' && $dataSidebarSize === '' && $dataKeepEnlarged !== 'true' && $layoutClass === '') ? 'selected' : '' ?>><?= __('深色菜单') ?></option>
                     <option value='icon-sidebar' <?= ($dataSidebar === 'dark' && $dataKeepEnlarged === 'true' && $layoutClass === 'vertical-collpsed' && $dataLayout === '' && $dataLayoutSize === '' && $dataSidebarSize === '') ? 'selected' : '' ?>><?= __('图标侧边栏') ?></option>
                     <option value='compact-sidebar' <?= ($dataSidebar === 'dark' && $dataSidebarSize === 'small' && $dataLayout === '' && $dataLayoutSize === '' && $dataKeepEnlarged !== 'true' && $layoutClass === '') ? 'selected' : '' ?>><?= __('紧凑侧边栏') ?></option>
                     <option value='horizontal' <?= ($dataLayout === 'horizontal' && $dataTopbar === 'light' && $dataLayoutSize === '' && $dataSidebar === '') ? 'selected' : '' ?>><?= __('水平布局') ?></option>
@@ -94,6 +95,17 @@ $layoutClass = $currentLayouts['class'] ?? '';
                     'data-layout': 'horizontal',
                     'data-topbar': 'light',
                     'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'dark-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': 'dark',
+                    'data-sidebar': 'dark',
                     'data-sidebar-size': '',
                     'data-layout-size': '',
                     'data-keep-enlarged': '',
