@@ -209,11 +209,53 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* 确保viewport正确设置 */
+/* 确保viewport正确设置和移动端适配 */
+/* 防止移动端缩放，强制响应式布局 */
+html {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* iOS Safari特定优化 */
 @supports (-webkit-touch-callout: none) {
-    /* iOS Safari特定优化 */
     html {
         -webkit-text-size-adjust: 100%;
+    }
+}
+
+/* 移动端基础优化 */
+@media screen and (max-width: 768px) {
+    html {
+        font-size: 14px; /* 移动端基础字号 */
+    }
+    
+    body {
+        font-size: 14px;
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+    
+    /* 防止移动端横向滚动 */
+    * {
+        max-width: 100%;
+    }
+    
+    img, video, iframe {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+/* 超小屏幕优化 */
+@media screen and (max-width: 480px) {
+    html {
+        font-size: 14px;
+    }
+    
+    body {
+        font-size: 14px;
     }
 }
 
@@ -222,11 +264,88 @@ html {
    这些样式会被提取系统收集到生成的布局CSS文件中
    ======================================== */
 
-/* weline-main-content 基础样式（开发模式下需要被收集） */
+/* ========================================
+   全局基础样式 - 所有布局共用
+   ======================================== */
+
+/* 基础重置和全局样式（使用主题变量） */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-text-primary, #111);
+    background-color: var(--color-bg-primary, #fff);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+}
+
+/* 全局页面容器 */
+.weline-page-wrapper {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 全局主内容区域（开发模式下需要被收集） */
 .weline-main-content {
     flex: 1;
     width: 100%;
     min-height: 80vh;
+}
+
+/* 全局容器样式 */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* 全局按钮样式（使用主题变量） */
+.btn {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary {
+    background-color: var(--color-primary, #f0c14b);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-dark, #e7b92e);
+    transform: translateY(-2px);
+}
+
+/* 全局响应式设计 */
+@media (max-width: 1024px) {
+    .container {
+        padding: 0 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 0.5rem;
+    }
 }
 </style>
 

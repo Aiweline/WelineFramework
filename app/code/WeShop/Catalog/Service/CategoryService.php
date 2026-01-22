@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Catalog\Service;
 
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Catalog\Model\Category;
 
@@ -34,7 +35,7 @@ class CategoryService
     /**
      * 通过handle获取分类
      * 
-     * @param string $handle Handle标识
+     * @param string $handle Handle标识（支持层级路径，如 "men/shirts"）
      * @return Category|null
      */
     public function getCategoryByHandle(string $handle): ?Category
@@ -42,16 +43,48 @@ class CategoryService
         /** @var Category $category */
         $category = ObjectManager::getInstance(Category::class);
         
+        $decodedHandle = urldecode($handle);
+
+        // 1. 优先用完整 handle 精确匹配（支持层级路径已直接存入 handle 的场景）
         $category->clear()
-            ->where(Category::fields_HANDLE, $handle)
+            ->where(Category::fields_HANDLE, $decodedHandle)
             ->where(Category::fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
-        
+
         if ($category->getId()) {
             return $category;
         }
-        
+
+        // 2. 如果包含层级路径（如 men/shirts），尝试使用最后一段作为 handle 匹配
+        if (str_contains($decodedHandle, '/')) {
+            $leafHandle = basename($decodedHandle);
+            if ($leafHandle !== '') {
+                $category->clear()
+                    ->where(Category::fields_HANDLE, $leafHandle)
+                    ->where(Category::fields_IS_ACTIVE, 1)
+                    ->find()
+                    ->fetch();
+
+                if ($category->getId()) {
+                    return $category;
+                }
+            }
+        }
+
+        // 3. 最后退回到原始 handle 精确匹配（兼容部分场景）
+        if ($decodedHandle !== $handle) {
+            $category->clear()
+                ->where(Category::fields_HANDLE, $handle)
+                ->where(Category::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+
+            if ($category->getId()) {
+                return $category;
+            }
+        }
+
         return null;
     }
     

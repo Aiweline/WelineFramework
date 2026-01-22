@@ -30,6 +30,8 @@ class SeoSubject extends Model
     public const fields_ID = 'subject_id';
     public const fields_SUBJECT_TYPE = 'subject_type';
     public const fields_SUBJECT_ID = 'subject_entity_id';
+    public const fields_SCOPE = 'scope';
+    public const fields_MODULE = 'module';
     public const fields_URL = 'url';
     public const fields_TITLE = 'title';
     public const fields_DESCRIPTION = 'description';
@@ -76,6 +78,20 @@ class SeoSubject extends Model
                     0,
                     'not null',
                     '主体实体ID'
+                )
+                ->addColumn(
+                    self::fields_SCOPE,
+                    TableInterface::column_type_VARCHAR,
+                    100,
+                    '',
+                    '业务scope标识，如page_builder、catalog等'
+                )
+                ->addColumn(
+                    self::fields_MODULE,
+                    TableInterface::column_type_VARCHAR,
+                    150,
+                    '',
+                    '来源模块名，例如GuoLaiRen_PageBuilder'
                 )
                 ->addColumn(
                     self::fields_URL,
@@ -151,6 +167,12 @@ class SeoSubject extends Model
                     self::fields_STATUS,
                     '状态索引'
                 )
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_scope_module',
+                    [self::fields_SCOPE, self::fields_MODULE],
+                    'scope+module索引'
+                )
                 ->create();
         }
     }
@@ -168,7 +190,33 @@ class SeoSubject extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 升级逻辑
+        if (!$setup->tableExist()) {
+            return;
+        }
+
+        // 为旧表补充 scope 字段
+        if (!$setup->hasField(self::fields_SCOPE)) {
+            $setup->alterTable()->addColumn(
+                self::fields_SCOPE,
+                '',
+                TableInterface::column_type_VARCHAR,
+                100,
+                '',
+                '业务scope标识，如page_builder、catalog等'
+            )->alter();
+        }
+
+        // 为旧表补充 module 字段
+        if (!$setup->hasField(self::fields_MODULE)) {
+            $setup->alterTable()->addColumn(
+                self::fields_MODULE,
+                '',
+                TableInterface::column_type_VARCHAR,
+                150,
+                '',
+                '来源模块名，例如GuoLaiRen_PageBuilder'
+            )->alter();
+        }
     }
 
     /**

@@ -21,6 +21,11 @@ SEO描述：%{1},SEO描述：%{1}
 页面ID不能为空,页面ID不能为空
 模板代码不能为空,模板代码不能为空
 模板不存在,模板不存在
+页面构建器配置,"Page Builder Configuration"
+页面管理,"Page Management"
+配置,Configuration
+配置保存成功,配置保存成功
+保存失败：%{1},保存失败：%{1}
 页面构建器,"Page Builder"
 内容管理,"Content Management"
 新建页面,"New Page"
@@ -34,8 +39,10 @@ SEO描述：%{1},SEO描述：%{1}
 页面创建失败！,"Failed to create page!"
 页面ID不能为空！,"Page ID cannot be empty!"
 页面不存在！,"Page does not exist!"
+您没有权限编辑该页面所属的站点。,您没有权限编辑该页面所属的站点。
 编辑页面,"Edit Page"
 页面还有以下语言未翻译：%{1},"The following languages are not translated: %{1}"
+"SEO 配置已保存","SEO 配置已保存"
 "已将 %{1} 个子页面提升到父级页面","已将 %{1} 个子页面提升到父级页面"
 子页面配置已从父页面继承,子页面配置已从父页面继承
 页面不存在，无法更新！,页面不存在，无法更新！
@@ -94,7 +101,6 @@ ZIP文件为空,ZIP文件为空
 提交记录删除失败！,提交记录删除失败！
 导出失败！,导出失败！
 模板管理,模板管理
-页面管理,"Page Management"
 模板ID不能为空,模板ID不能为空
 模板已发布,模板已发布
 模板已取消发布,模板已取消发布
@@ -102,6 +108,8 @@ ZIP文件为空,ZIP文件为空
 色系选择,色系选择
 选择不同的色系可以快速改变整个模板的颜色方案,选择不同的色系可以快速改变整个模板的颜色方案
 配置已保存,配置已保存
+站点分配已更新,站点分配已更新
+站点分配,站点分配
 非法请求,非法请求
 请输入邮箱地址,请输入邮箱地址
 请输入电话号码,请输入电话号码
@@ -121,9 +129,13 @@ ZIP文件为空,ZIP文件为空
 服务条款,"Terms of Service"
 退款政策,"Refund Policy"
 配送政策,"Shipping Policy"
+博客文章,博客文章
+博客分类,博客分类
+博客列表,博客列表
 自定义页面,"Custom Page"
 已发布,Published
 草稿,Draft
+所有类型,所有类型
 头部配置,头部配置
 内容配置,内容配置
 页脚配置,页脚配置
@@ -139,6 +151,19 @@ ZIP文件为空,ZIP文件为空
 效果,效果
 SEO设置,"SEO Settings"
 统计代码,统计代码
+功能配置,功能配置
+开启AI功能,"Enable AI Features"
+开启后，在页面编辑界面和可视化编辑界面中将显示AI生成内容功能和AI生成配置功能。关闭后，这些AI相关功能将隐藏。,"When enabled, AI content generation and AI configuration generation features will be displayed in the page editing interface and visual editing interface. When disabled, these AI-related features will be hidden."
+开启多语言功能,"Enable Multi-language Features"
+开启后，在页面编辑界面中将显示多语言内容翻译功能，后端会提示未翻译的语言信息，可视化编辑界面中也会显示语言切换配置。关闭后，这些多语言相关功能将隐藏。,"When enabled, multi-language content translation features will be displayed in the page editing interface, the backend will prompt for untranslated language information, and the visual editing interface will also display language switching configuration. When disabled, these multi-language related features will be hidden."
+"SEO提交账户（PageBuilder Scope）","SEO提交账户（PageBuilder Scope）"
+"这里展示 scope=page_builder 的 SEO 账户。点击按钮可跳转到 SEO 模块中进行账户管理。","这里展示 scope=page_builder 的 SEO 账户。点击按钮可跳转到 SEO 模块中进行账户管理。"
+查看SEO账户,查看SEO账户
+新增SEO账户,新增SEO账户
+保存配置,保存配置
+重置,Reset
+保存失败,"Save failed"
+确定要重置表单吗？,确定要重置表单吗？
 页面表单,页面表单
 基本信息,"Basic Information"
 页面句柄,"Page Handle"
@@ -344,7 +369,6 @@ PageSpeed（手机）,PageSpeed（手机）
 退出全屏,退出全屏
 展开面板,展开面板
 保存中...,保存中...
-保存失败,"Save failed"
 请先选择样式模板,请先选择样式模板
 加载配置失败,加载配置失败
 配置数据格式错误,配置数据格式错误
@@ -382,6 +406,18 @@ Handle,Handle
 确认恢复,确认恢复
 AI一键生成页面内容,AI一键生成页面内容
 AI生成内容,AI生成内容
+所属站点,所属站点
+请选择所属站点,请选择所属站点
+新建站点,新建站点
+请选择该页面所属的业务站点。只有被分配到该站点的后台用户才有权限查看和编辑此页面。,请选择该页面所属的业务站点。只有被分配到该站点的后台用户才有权限查看和编辑此页面。
+"Google SEO JSON-LD 结构化数据（只读）","Google SEO JSON-LD 结构化数据（只读）"
+"此数据根据页面标题、描述、URL 等自动生成，用于 Google 富结果与 SEO 优化，在此处仅作预览不可编辑。","此数据根据页面标题、描述、URL 等自动生成，用于 Google 富结果与 SEO 优化，在此处仅作预览不可编辑。"
+"Header 自定义代码","Header Custom Code"
+"在此输入需要在页面头部（&lt;head&gt;标签内）添加的自定义代码，例如：Google Search Console验证代码、统计代码等","Enter custom code to be added in the page header (&lt;head&gt; tag), such as: Google Search Console verification code, tracking code, etc."
+"此代码将添加到页面 &lt;head&gt; 标签内，可用于 GSC 验证、统计代码等","This code will be added inside the page &lt;head&gt; tag, can be used for GSC verification, tracking code, etc."
+"Footer 自定义代码","Footer Custom Code"
+在此输入需要在页面底部（&lt;/body&gt;标签前）添加的自定义代码，例如：统计代码、验证代码等,"Enter custom code to be added before the page footer (&lt;/body&gt; tag), such as: tracking code, verification code, etc."
+"此代码将添加到页面 &lt;/body&gt; 标签前，可用于统计代码、验证代码等","This code will be added before the page &lt;/body&gt; tag, can be used for tracking code, verification code, etc."
 页面描述,页面描述
 AI将基于当前页面的信息生成内容，您也可以修改描述以调整生成方向...,AI将基于当前页面的信息生成内容，您也可以修改描述以调整生成方向...
 请描述您想要创建的页面内容，例如：创建一个关于我们页面，介绍公司历史、团队和使命...,请描述您想要创建的页面内容，例如：创建一个关于我们页面，介绍公司历史、团队和使命...
@@ -401,6 +437,7 @@ AI将根据您填写的描述和页面现有信息生成内容。主页类型页
 请刷新页面重试,请刷新页面重试
 发布失败,发布失败
 请重试,请重试
+没有支持当前页面类型的样式模板,没有支持当前页面类型的样式模板
 刷新失败,刷新失败
 AI正在生成配置,AI正在生成配置
 请稍候，生成完成后将展示预览并让你确认是否应用。,请稍候，生成完成后将展示预览并让你确认是否应用。
@@ -470,6 +507,17 @@ Logo地址,Logo地址
 版权所有,版权所有
 AI正在生成配置，请等待生成完成,AI正在生成配置，请等待生成完成
 恢复,恢复
+"SEO / TDK 设置","SEO / TDK 设置"
+"页面标题（Meta Title）","页面标题（Meta Title）"
+用于浏览器标题和搜索结果的主标题,用于浏览器标题和搜索结果的主标题
+"建议控制在 30-60 个字符内，包含核心关键词。","建议控制在 30-60 个字符内，包含核心关键词。"
+"页面描述（Meta Description）","页面描述（Meta Description）"
+用于搜索结果摘要的描述性文案,用于搜索结果摘要的描述性文案
+"建议控制在 70-150 个字符内，清晰说明页面价值和核心卖点。","建议控制在 70-150 个字符内，清晰说明页面价值和核心卖点。"
+"关键词（Meta Keywords，可选）","关键词（Meta Keywords，可选）"
+"以英文逗号分隔的关键词，例如：landing page,seo,marketing","以英文逗号分隔的关键词，例如：landing page,seo,marketing"
+现代搜索引擎已弱化该字段，仅做补充参考使用。,现代搜索引擎已弱化该字段，仅做补充参考使用。
+"此处修改会直接覆盖当前页面对象记录中的 SEO 字段，而不会写入样式配置。支持按当前预览语言分别维护多语言 TDK。","此处修改会直接覆盖当前页面对象记录中的 SEO 字段，而不会写入样式配置。支持按当前预览语言分别维护多语言 TDK。"
 暂无配置项,暂无配置项
 恢复全部,恢复全部
 恢复此分组所有字段为默认值,恢复此分组所有字段为默认值
@@ -503,12 +551,12 @@ AI正在生成配置，请等待生成完成,AI正在生成配置，请等待生
 拷贝,拷贝
 页面发布后才能查看,页面发布后才能查看
 页面发布后才能复制链接,页面发布后才能复制链接
+发布,发布
 新增子页面,新增子页面
 编辑,Edit
 导出为静态HTML文件（包含所有静态资源）,导出为静态HTML文件（包含所有静态资源）
 导出,导出
 只有首页类型的顶级页面可以导出,只有首页类型的顶级页面可以导出
-发布,发布
 确定要删除此页面吗？如果有子页面，子页面也会被删除！,确定要删除此页面吗？如果有子页面，子页面也会被删除！
 删除,Delete
 确定要删除此子页面吗？,确定要删除此子页面吗？
@@ -545,7 +593,6 @@ SEO信息翻译,"SEO Information Translation"
 选择字段,选择字段
 字段值,字段值
 筛选,筛选
-重置,Reset
 导出CSV,导出CSV
 提交记录列表,提交记录列表
 ID,ID
@@ -596,10 +643,34 @@ IP地址,IP地址
 操作失败，请稍后重试,操作失败，请稍后重试
 预览生成失败,预览生成失败
 刷新配置界面,刷新配置界面
+站点与后台用户一对一分配,站点与后台用户一对一分配
+每个站点同一时间只能分配给一个后台用户，将站点分配给新的用户后，会自动取消原有用户的归属关系。,每个站点同一时间只能分配给一个后台用户，将站点分配给新的用户后，会自动取消原有用户的归属关系。
+"当前还没有可分配的站点，请先在 Websites 模块中创建站点。","当前还没有可分配的站点，请先在 Websites 模块中创建站点。"
+站点名称,站点名称
+站点代码,站点代码
+站点URL,站点URL
+当前分配用户,当前分配用户
+未分配（任何用户不可见）,未分配（任何用户不可见）
+提示：拥有“站点分配”权限的用户可以看到所有站点并修改归属关系，普通用户仅能看到分配给自己的站点。,提示：拥有“站点分配”权限的用户可以看到所有站点并修改归属关系，普通用户仅能看到分配给自己的站点。
+保存分配,保存分配
 注意：,Notice:
 此页面还没有当前语言的翻译版本，显示的是默认语言内容。,此页面还没有当前语言的翻译版本，显示的是默认语言内容。
 切换语言：,切换语言：
 "⚠️ 表示该语言版本尚未翻译","⚠️ 表示该语言版本尚未翻译"
+阅读,阅读
+标签：,标签：
+分享：,分享：
+相关文章,相关文章
+暂无文章,暂无文章
+该分类下还没有文章，请稍后再来查看。,该分类下还没有文章，请稍后再来查看。
+分类,分类
+最近文章,最近文章
+标签,标签
+欢迎访问我们的博客，这里有最新的资讯和文章。,欢迎访问我们的博客，这里有最新的资讯和文章。
+文章分类,文章分类
+快速链接,快速链接
+博客,博客
+全部,全部
 保留所有权利。,保留所有权利。
 没有找到可填充的配置项,没有找到可填充的配置项
 即将回填配置,即将回填配置

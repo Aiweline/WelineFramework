@@ -48,7 +48,7 @@ class MessageManager
     public function addError(string $msg = '', string $title = '', string $class = 'danger'): static
     {
         $title = $title ?: __('错误！');
-        $this->session->addData('system-message', $this->processMessage($msg, $title, $class));
+        $this->session->addData('system-message', self::process_message($msg, $title, $class));
         $this->session->setData('has-error', '1');
         return $this;
     }
@@ -92,12 +92,12 @@ class MessageManager
     public function addException(\Exception $exception, string $title = '', string $class = 'warning')
     {
         $msg = $exception->getMessage();
-        $this->session->addData('system-message', $this->processMessage($msg, __('异常警告！'), $class));
+        $this->session->addData('system-message', self::process_message($msg, __('异常警告！'), $class));
         $this->session->setData('has-exception', '1');
         return $this;
     }
 
-    public static function exception(\Exception $exception, string $title = '', string $class = 'warning'): self
+    public static function exception(\Exception $exception, string $title = '', string $class = 'warning'): void
     {
         $msg = $exception->getMessage();
         self::session()->addData('system-message', self::process_message($msg, $title, $class));
@@ -127,7 +127,7 @@ class MessageManager
     public function addSuccess(string $msg = '', string $title = '', string $class = 'success')
     {
         $title = $title ?: __('操作成功！');
-        $this->session->addData('system-message', $this->processMessage($msg, $title, $class));
+        $this->session->addData('system-message', self::process_message($msg, $title, $class));
         $this->session->setData('has-success', '1');
         return $this;
     }
@@ -163,7 +163,7 @@ class MessageManager
     public function addWarning(string $msg = '', string $title = '', string $class = 'warning'): self
     {
         $title = $title ?: __('警告！');
-        $this->session->addData('system-message', $this->processMessage($msg, $title, $class));
+        $this->session->addData('system-message', self::process_message($msg, $title, $class));
         $this->session->setData('has-warning', '1');
         return $this;
     }
@@ -199,7 +199,7 @@ class MessageManager
     public function addNotes(string $msg = '', string $title = '', string $class = 'notes')
     {
         $title = $title ?: __('提示！');
-        $this->session->addData('system-message', $this->processMessage($msg, $title, $class));
+        $this->session->addData('system-message', self::process_message($msg, $title, $class));
         $this->session->setData('has-notes', '1');
         return $this;
     }

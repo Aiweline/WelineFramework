@@ -251,6 +251,22 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     color: #ffc107;
 }
 
+/* SEO / TDK 配置块样式 */
+.config-section.seo-section {
+    border-top: 2px solid #0bb197;
+    background: var(--visual-config-bg-secondary, #f8f9fa);
+}
+
+.config-section.seo-section .config-section-header {
+    background: linear-gradient(135deg, #0bb197 0%, #17a2b8 100%);
+    color: #fff;
+    font-weight: 700;
+}
+
+.config-section.seo-section .config-section-body {
+    background: var(--visual-config-section-bg, #fff);
+}
+
 /* 通用表单控件样式 - 适配主题 */
 .visual-config-wrapper .form-control,
 .visual-config-wrapper .form-select,
@@ -882,7 +898,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
                 }
             }
             ?>
-            <?php if (!empty($pageDefaultLocale) || !empty($pageLocales)): ?>
+            <?php if (($i18n_enabled ?? '0') === '1' && (!empty($pageDefaultLocale) || !empty($pageLocales))): ?>
             <div class="language-switcher-visual">
                 <i class="mdi mdi-translate"></i>
                 <select id="visualLanguageSelect" class="form-select form-select-sm" onchange="switchVisualLanguage(this.value)">
@@ -909,6 +925,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         
         <div class="visual-toolbar-right">
             <!-- AI一键生成模板配置 -->
+            <?php if (($ai_enabled ?? '0') === '1'): ?>
             <button type="button" 
                     class="btn btn-sm btn-gradient-primary" 
                     onclick="generateTemplateConfig()"
@@ -916,6 +933,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
                     title="<?= __('AI一键生成模板所需的所有配置信息') ?>">
                 <i class="mdi mdi-robot"></i> <?= __('AI生成配置') ?>
             </button>
+            <?php endif; ?>
             
             <!-- PageSpeed Insights（手机端，基于当前预览URL） -->
             <?php
@@ -1830,6 +1848,66 @@ window.refreshPreview = function() {
     };
 }
 
+// 通过可视化面板自动保存 SEO / TDK（直接写入页面记录，而不是样式配置）
+window.saveSeoConfig = async function () {
+    try {
+        const metaTitleInput = document.getElementById('seo_meta_title');
+        const metaDescInput = document.getElementById('seo_meta_description');
+        const metaKeywordsInput = document.getElementById('seo_meta_keywords');
+        if (!metaTitleInput || !metaDescInput || !metaKeywordsInput) {
+            return;
+        }
+
+        const pageId = window.visualPageId || window.pageId || 0;
+        if (!pageId) {
+            return;
+        }
+
+        const locale = window.currentVisualLanguage || window.defaultLanguage || '';
+
+        if (typeof window.updateSaveStatus === 'function') {
+            window.updateSaveStatus('saving', '<?= __('保存中...') ?>');
+        }
+
+        const payload = {
+            page_id: pageId,
+            locale: locale,
+            meta_title: metaTitleInput.value || '',
+            meta_description: metaDescInput.value || '',
+            meta_keywords: metaKeywordsInput.value || ''
+        };
+
+        const response = await fetch('<?= $this->getBackendUrl('*/backend/page/autoSaveSeo') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (result && result.success) {
+            if (typeof window.updateSaveStatus === 'function') {
+                window.updateSaveStatus('saved', '<?= __('已保存') ?>');
+            }
+            if (typeof window.refreshPreview === 'function') {
+                window.refreshPreview();
+            }
+        } else {
+            if (typeof window.updateSaveStatus === 'function') {
+                window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+            }
+            console.error('[SEO AutoSave] 失败:', result && result.message ? result.message : 'unknown');
+        }
+    } catch (e) {
+        if (typeof window.updateSaveStatus === 'function') {
+            window.updateSaveStatus('error', '<?= __('保存失败') ?>');
+        }
+        console.error('[SEO AutoSave] 异常:', e);
+    }
+};
+
 // 色系选择函数（全局函数）
 window.selectColorScheme = function(fieldId, schemeKey) {
     const hiddenInput = document.getElementById(fieldId);
@@ -2026,6 +2104,112 @@ async function loadTemplateStyleConfig(forceScan = false) {
 // 模板配置模式：渲染模板配置
 function renderTemplateConfig(configGroups) {
     try { console.log('[VisualConfig] 渲染配置分组'); console.log('分组keys:', Object.keys(configGroups || {})); } catch (_) {}
+
+    // 初始化 SEO / TDK 配置块：同步当前语言下的 TDK 值，并绑定自动保存
+    function initSeoSection() {
+        const metaTitleInput = document.getElementById('seo_meta_title');
+        const metaDescInput = document.getElementById('seo_meta_description');
+        const metaKeywordsInput = document.getElementById('seo_meta_keywords');
+
+        if (!metaTitleInput || !metaDescInput || !metaKeywordsInput) {
+            return;
+        }
+
+        const getCurrentLocale = function () {
+            return window.currentVisualLanguage || window.defaultLanguage || '';
+        };
+
+        const isDefaultLocale = function (locale) {
+            const def = window.defaultLanguage || '';
+            if (!locale || !def) {
+                return true;
+            }
+            return locale === def;
+        };
+
+        const syncFromBaseFields = function () {
+            const locale = getCurrentLocale();
+            const useDefault = isDefaultLocale(locale);
+
+            const titleId = useDefault ? 'meta_title' : 'meta_title_' + locale;
+            const descId = useDefault ? 'meta_description' : 'meta_description_' + locale;
+            const keywordsId = useDefault ? 'meta_keywords' : 'meta_keywords_' + locale;
+
+            const baseTitle = document.getElementById(titleId);
+            const baseDesc = document.getElementById(descId);
+            const baseKeywords = document.getElementById(keywordsId);
+
+            metaTitleInput.value = baseTitle ? (baseTitle.value || '') : '';
+            metaDescInput.value = baseDesc ? (baseDesc.value || '') : '';
+            metaKeywordsInput.value = baseKeywords ? (baseKeywords.value || '') : '';
+        };
+
+        const syncToBaseFields = function () {
+            const locale = getCurrentLocale();
+            const useDefault = isDefaultLocale(locale);
+
+            const titleId = useDefault ? 'meta_title' : 'meta_title_' + locale;
+            const descId = useDefault ? 'meta_description' : 'meta_description_' + locale;
+            const keywordsId = useDefault ? 'meta_keywords' : 'meta_keywords_' + locale;
+
+            const baseTitle = document.getElementById(titleId);
+            const baseDesc = document.getElementById(descId);
+            const baseKeywords = document.getElementById(keywordsId);
+
+            if (baseTitle) {
+                baseTitle.value = metaTitleInput.value;
+            }
+            if (baseDesc) {
+                baseDesc.value = metaDescInput.value;
+            }
+            if (baseKeywords) {
+                baseKeywords.value = metaKeywordsInput.value;
+            }
+        };
+
+        let seoSaveTimer = null;
+
+        const scheduleSeoSave = function () {
+            if (seoSaveTimer) {
+                clearTimeout(seoSaveTimer);
+                seoSaveTimer = null;
+            }
+            seoSaveTimer = setTimeout(function () {
+                window.saveSeoConfig && window.saveSeoConfig();
+            }, 800);
+        };
+
+        const bindSeoField = function (input) {
+            input.addEventListener('input', function () {
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('', '<?= __('未保存') ?>');
+                }
+                syncToBaseFields();
+                scheduleSeoSave();
+            });
+            input.addEventListener('change', function () {
+                if (typeof window.updateSaveStatus === 'function') {
+                    window.updateSaveStatus('', '<?= __('未保存') ?>');
+                }
+                syncToBaseFields();
+                scheduleSeoSave();
+            });
+        };
+
+        // 首次同步当前语言的 TDK 值
+        syncFromBaseFields();
+
+        // 绑定输入事件
+        bindSeoField(metaTitleInput);
+        bindSeoField(metaDescInput);
+        bindSeoField(metaKeywordsInput);
+
+        // 当预览语言切换时，外部会更新 window.currentVisualLanguage，这里提供一个简易的重新同步接口
+        window.refreshSeoSection && window.refreshSeoSection();
+        window.refreshSeoSection = function () {
+            syncFromBaseFields();
+        };
+    }
     // 辅助函数：渲染单个配置字段
     function renderConfigField(configKey, config) {
         const rawValue = config.value !== undefined ? config.value : (config.default || '');
@@ -2219,6 +2403,54 @@ function renderTemplateConfig(configGroups) {
     
     // 收集所有配置分组，确保色系配置（fileKey === 'color_scheme'）渲染在最顶部
     let html = '';
+
+    // 在样式分组之前渲染一个独立的 SEO / TDK 配置块（仅普通页面模式）
+    if (!window.isTemplateConfigMode) {
+        html += `<div class="config-section seo-section" id="seo_section">
+            <div class="config-section-header">
+                <span><i class="mdi mdi-google"></i> <?= __('SEO / TDK 设置') ?></span>
+            </div>
+            <div class="config-section-body">
+                <div class="mb-3">
+                    <label for="seo_meta_title" class="form-label"><?= __('页面标题（Meta Title）') ?></label>
+                    <input type="text"
+                           id="seo_meta_title"
+                           class="form-control"
+                           placeholder="<?= __('用于浏览器标题和搜索结果的主标题') ?>">
+                    <div class="form-text">
+                        <?= __('建议控制在 30-60 个字符内，包含核心关键词。') ?>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="seo_meta_description" class="form-label"><?= __('页面描述（Meta Description）') ?></label>
+                    <textarea id="seo_meta_description"
+                              class="form-control"
+                              rows="3"
+                              placeholder="<?= __('用于搜索结果摘要的描述性文案') ?>"></textarea>
+                    <div class="form-text">
+                        <?= __('建议控制在 70-150 个字符内，清晰说明页面价值和核心卖点。') ?>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="seo_meta_keywords" class="form-label"><?= __('关键词（Meta Keywords，可选）') ?></label>
+                    <input type="text"
+                           id="seo_meta_keywords"
+                           class="form-control"
+                           placeholder="<?= __('以英文逗号分隔的关键词，例如：landing page,seo,marketing') ?>">
+                    <div class="form-text">
+                        <?= __('现代搜索引擎已弱化该字段，仅做补充参考使用。') ?>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-0">
+                    <i class="mdi mdi-information-outline"></i>
+                    <?= __('此处修改会直接覆盖当前页面对象记录中的 SEO 字段，而不会写入样式配置。支持按当前预览语言分别维护多语言 TDK。') ?>
+                </div>
+            </div>
+        </div>`;
+    }
     const orderedFileKeys = Object.keys(configGroups || {});
     // 将 color_scheme 提前
     const idx = orderedFileKeys.indexOf('color_scheme');
@@ -2242,9 +2474,18 @@ function renderTemplateConfig(configGroups) {
     const configFields = document.querySelector('.config-panel-body');
     if (configFields) {
         configFields.innerHTML = html || '<div class="alert alert-info m-3"><?= __('暂无配置项') ?></div>';
+
+        // 普通页面模式下，初始化 SEO / TDK 配置块，自动从页面表单 TDK 字段回填
+        if (!window.isTemplateConfigMode) {
+            try {
+                initSeoSection();
+            } catch (e) {
+                console.error('[VisualConfig] 初始化 SEO / TDK 区域失败:', e);
+            }
+        }
         
-        // 恢复分组展开状态并默认展开第一个组
-        const allSections = Array.from(document.querySelectorAll('.config-section:not(.color-scheme-section)'));
+        // 恢复分组展开状态并默认展开第一个组（SEO 与配色分组始终展开）
+        const allSections = Array.from(document.querySelectorAll('.config-section:not(.color-scheme-section):not(.seo-section)'));
         let firstSectionFound = false;
         
         // 获取所有保存的状态

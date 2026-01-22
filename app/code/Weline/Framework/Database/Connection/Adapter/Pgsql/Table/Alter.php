@@ -389,22 +389,42 @@ class Alter extends AbstractTable implements AlterInterface
                     $dump_sqls[] = $sql;
                 } else {
                     try {
-                        $this->query($sql);
+                        $this->query($sql)->fetch();  // 🔧 修复：必须调用 fetch() 才能真正执行 SQL
                     } catch (\Exception $exception) {
                         exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $sql) . PHP_EOL);
                     }
                 }
             }
             
-            // 执行注释语句
+            // 执行注释语句（仅在字段真实存在时执行，避免因列缺失导致升级中断）
             foreach ($commentStatements as $commentSql) {
                 if ($dump_sql) {
                     $dump_sqls[] = $commentSql;
                 } else {
+                    // 简单从 COMMENT 语句中解析出字段名，用于存在性检测
+                    $fieldName = null;
+                    if (preg_match('/COMMENT\s+ON\s+COLUMN\s+.+?"([^"]+)"\s+IS\s+/i', $commentSql, $m)) {
+                        $fieldName = $m[1] ?? null;
+                    }
+
+                    // 如果能解析出字段名且字段不存在，则跳过该注释语句
+                    if ($fieldName) {
+                        try {
+                            if (!$this->connector->hasField($this->table, $fieldName)) {
+                                // 字段尚未存在或添加失败，跳过注释，避免报错中断
+                                continue;
+                            }
+                        } catch (\Throwable $e) {
+                            // 检测失败时不阻断流程，继续尝试执行注释
+                        }
+                    }
+
                     try {
                         $this->query($commentSql)->fetch();
                     } catch (\Exception $exception) {
-                        exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $commentSql) . PHP_EOL);
+                        // 注释失败不再中断整个升级流程，仅输出提示信息
+                        // 原因场景：字段已被删除或未成功添加，但不影响结构主流程
+                        echo $exception->getMessage() . PHP_EOL . __('数据库SQL:%{1}', $commentSql) . PHP_EOL;
                     }
                 }
             }

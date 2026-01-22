@@ -26,26 +26,50 @@ if (!defined('APP_CODE_PATH')) {
     define('APP_CODE_PATH', BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
 }
 // 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前）
-// 只在类未加载时检查，性能影响最小
-// 使用静态变量记录已加载的文件，防止重复加载
+// 说明：类映射缓存在 setup:upgrade 时生成，运行时只读取不更新
 spl_autoload_register(function ($class) {
+    // 静态缓存：记录已加载的文件
     static $loadedFiles = [];
+    static $classMap = null;
+    static $classMapLoaded = false;
     
     // 如果类已加载，直接返回（避免重复检查）
     if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-        return true; // 已加载，停止自动加载链
+        return true;
     }
     
-    // 规范化路径，确保路径一致性
+    // 首次调用时加载类映射缓存（仅在生产模式有效）
+    // 缓存文件由 setup:upgrade 命令生成
+    if (!$classMapLoaded) {
+        $classMapLoaded = true;
+        $classMapFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'classmap.php';
+        if (is_file($classMapFile)) {
+            $classMap = @include $classMapFile;
+            if (!is_array($classMap)) {
+                $classMap = null;
+            }
+        }
+    }
+    
+    // 如果有类映射缓存且命中，直接加载
+    if ($classMap !== null && isset($classMap[$class])) {
+        $cachedPath = $classMap[$class];
+        if (!isset($loadedFiles[$cachedPath]) && is_file($cachedPath)) {
+            $loadedFiles[$cachedPath] = true;
+            require_once $cachedPath;
+            return true;
+        }
+    }
+    
+    // 规范化路径
     $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
     
     // 首先检查 generated/code 目录（拦截器类）
     $generatedPath = BP . 'generated' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . $relativePath;
-    $normalizedGeneratedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $generatedPath);
     
-    if (!isset($loadedFiles[$normalizedGeneratedPath]) && file_exists($normalizedGeneratedPath)) {
-        $loadedFiles[$normalizedGeneratedPath] = true;
-        require_once $normalizedGeneratedPath;
+    if (!isset($loadedFiles[$generatedPath]) && is_file($generatedPath)) {
+        $loadedFiles[$generatedPath] = true;
+        require_once $generatedPath;
         if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
             return true;
         }
@@ -53,40 +77,31 @@ spl_autoload_register(function ($class) {
     
     // 然后检查 app/code 目录
     $fullPath = APP_CODE_PATH . $relativePath;
-    $normalizedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $fullPath);
     
     // 如果文件已被加载过，直接返回
-    if (isset($loadedFiles[$normalizedPath])) {
-        return true; // 文件已加载，停止自动加载链
-    }
-    
-    // 如果 app/code 下存在该类文件，优先加载它
-    if (file_exists($normalizedPath)) {
-        // 标记文件为已加载（在 require 之前，防止并发问题和重复加载）
-        $loadedFiles[$normalizedPath] = true;
-        // 使用 require_once 防止重复加载（即使类定义失败，文件也只加载一次）
-        require_once $normalizedPath;
-        // 验证类是否成功加载
-        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-            return true; // 已加载，停止自动加载链
-        }
-        // 即使类没有成功定义，也返回 true 阻止其他自动加载器再次加载同一文件
-        // 这样可以避免 "Cannot redeclare class" 错误
+    if (isset($loadedFiles[$fullPath])) {
         return true;
     }
     
-    return false; // 返回 false 让其他自动加载器继续处理
-}, true, true); // prepend=true 表示优先于其他自动加载器
+    // 如果 app/code 下存在该类文件，优先加载它
+    if (is_file($fullPath)) {
+        $loadedFiles[$fullPath] = true;
+        require_once $fullPath;
+        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
+            return true;
+        }
+        return true;
+    }
+    
+    return false;
+}, true, true);
 
 // 检测Composer自动加载代理
 try {
     $autoloader = VENDOR_PATH . 'autoload.php';
     if (is_file($autoloader)) {
         // 如果是 Web 请求（非 CLI），阻止加载 Pest 测试框架的函数文件
-        // 请求生命周期中不允许运行测试框架
         if (PHP_SAPI !== 'cli') {
-            // 在加载 Composer 自动加载器之前，定义 Pest 函数为已存在（阻止加载）
-            // 这样可以防止 Composer 的 autoload_files.php 加载 Pest 的函数文件
             if (!function_exists('beforeEach')) {
                 function beforeEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
             }
@@ -103,26 +118,34 @@ try {
         
         $composerLoader = require $autoloader;
         
-        // 获取所有 PSR-4 映射并修改，确保 app/code 路径优先
-        $psr4Map = $composerLoader->getPrefixesPsr4();
+        // PSR-4 映射优化：缓存由 setup:upgrade 生成，运行时只读取
+        $psr4CacheFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'psr4_map.php';
         
-        foreach ($psr4Map as $prefix => $paths) {
-            // 将命名空间前缀转换为目录路径
-            // Weline\Admin\ -> Weline/Admin/
-            $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, trim($prefix, '\\'));
-            $appCodePath = APP_CODE_PATH . $relativePath . DIRECTORY_SEPARATOR;
+        // 尝试加载缓存
+        if (is_file($psr4CacheFile)) {
+            $cachedPsr4 = @include $psr4CacheFile;
+            if (is_array($cachedPsr4) && !empty($cachedPsr4)) {
+                // 直接应用缓存的 PSR-4 映射
+                foreach ($cachedPsr4 as $prefix => $paths) {
+                    $composerLoader->setPsr4($prefix, $paths);
+                }
+            }
+        } else {
+            // 缓存不存在时，实时计算（开发模式或首次运行）
+            $psr4Map = $composerLoader->getPrefixesPsr4();
             
-            // 如果 app/code 下存在对应的目录
-            if (is_dir($appCodePath)) {
-                // 移除已存在的 app/code 路径（避免重复）
-                $paths = array_filter($paths, function($path) use ($appCodePath) {
-                    $normalizedPath = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-                    return $normalizedPath !== $appCodePath;
-                });
-                // 将 app/code 路径添加到数组最前面
-                array_unshift($paths, $appCodePath);
-                // 重新设置映射
-                $composerLoader->setPsr4($prefix, array_values($paths));
+            foreach ($psr4Map as $prefix => $paths) {
+                $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, trim($prefix, '\\'));
+                $appCodePath = APP_CODE_PATH . $relativePath . DIRECTORY_SEPARATOR;
+                
+                if (is_dir($appCodePath)) {
+                    $paths = array_filter($paths, function($path) use ($appCodePath) {
+                        $normalizedPath = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                        return $normalizedPath !== $appCodePath;
+                    });
+                    array_unshift($paths, $appCodePath);
+                    $composerLoader->setPsr4($prefix, array_values($paths));
+                }
             }
         }
     } else {

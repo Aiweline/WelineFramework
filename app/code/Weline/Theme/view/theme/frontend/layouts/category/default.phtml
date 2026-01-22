@@ -10,14 +10,20 @@
  * @param title {default="分类",name="页面标题",description="页面标题，用于设置页面标题"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
  * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  */
 ?>
 <?php
-$title = $this->getData('title') ?? __('分类');
-$content = $this->getData('content') ?? '';
-$class = $this->getData('class') ?? '';
+$meta = $this->getData('meta') ?? [];
+// 兼容旧的 title/content/class 参数
+$title = $meta['title'] ?? $this->getData('title') ?? __('分类');
+$content = $meta['content'] ?? $this->getData('content') ?? '';
+$class = $meta['class'] ?? $this->getData('class') ?? '';
+// 兼容配置方式：支持通过 meta.filter_sidebar 或 filter_sidebar 变量传入筛选内容
+$filter_sidebar = $meta['filter_sidebar'] ?? $this->getData('filter_sidebar') ?? '';
 
 // 设置页面标题
 $this->assign('title', $title);
@@ -25,6 +31,8 @@ $this->assign('title', $title);
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no">
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
@@ -32,22 +40,621 @@ $this->assign('title', $title);
 </head>
 <body>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-    @template(Weline_Frontend::templates/public/header.phtml)
-    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
-    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-    <main class="category-grid-main <?= htmlspecialchars($class ?? '') ?>" id="category-grid-main" data-layout="category_grid">
-        <div class="category-grid-container">
-            {{content}}
+    <div class="weline-page-wrapper">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::category::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::category::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <!-- 分类页布局的面包屑导航区域 -->
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::category::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::category::breadcrumb-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::category::content-before</w:hook>
+
+            <main class="category-grid-main <?= htmlspecialchars($class ?? '') ?>" id="category-grid-main" data-layout="category_grid">
+                <w:hook>Weline_Theme::frontend::layouts::category::main-before</w:hook>
+
+                <div class="category-grid-layout">
+                    <!-- 移动端筛选按钮（图标） -->
+                    <button type="button" class="category-filter-toggle" aria-label="@lang{筛选条件}" aria-expanded="false">
+                        <svg class="filter-toggle-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 5h16M5 10h10M8 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span class="filter-toggle-badge" id="filter-count-badge" style="display: none;">0</span>
+                    </button>
+                    
+                    <aside class="category-filter-sidebar" id="category-filter-sidebar">
+                        <div class="category-filter-sidebar-header">
+                            <h3 class="category-filter-sidebar-title"><lang>筛选条件</lang></h3>
+                            <button type="button" class="category-filter-close" aria-label="@lang{关闭筛选}">×</button>
+                        </div>
+                        <div class="category-filter-sidebar-content">
+                            <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
+                            <!-- 子分类筛选 -->
+                            <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
+                            <!-- 不要修改，兼容配置和部件两种方式 -->
+                            {{meta.filter_sidebar ?: filter_sidebar}}
+                            <w:widget type="sidebar" name="category-filters"/>
+                            <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                        </div>
+                    </aside>
+                    
+                    <!-- 移动端遮罩层 -->
+                    <div class="category-filter-overlay" id="category-filter-overlay"></div>
+
+                    <section class="category-grid-content">
+                        <div class="category-grid-container">
+                            {{meta.content ?: content}}
+                        </div>
+                    </section>
+                </div>
+
+                <w:hook>Weline_Theme::frontend::layouts::category::main-after</w:hook>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::category::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
-    </main>
-    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-    
-    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-    @template(Weline_Frontend::templates/public/footer.phtml)
-    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::category::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::category::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::category::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    /* ========================================
+       分类页 - 默认网格布局样式
+       使用主题 CSS 变量，适配明暗/换肤
+       ======================================== */
+
+    .category-grid-main {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .category-grid-layout {
+        width: 100%;
+        /* 与 header-container 版心保持一致，支持主题变量 */
+        max-width: var(--layout-max-width, 1600px);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: flex-start;
+    }
+
+    .category-filter-sidebar {
+        background-color: var(--color-bg-primary, #fff);
+        border: 1px solid var(--color-border-light, #e5e7eb);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+    }
+
+    /* 筛选栏头部（移动端） */
+    .category-filter-sidebar-header {
+        display: none; /* 桌面端隐藏 */
+    }
+
+    .category-filter-sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .category-filter-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        line-height: 1;
+        padding: 0;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--color-text-secondary, #6b7280);
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    }
+
+    .category-filter-close:hover {
+        background-color: var(--color-bg-secondary, #f3f4f6);
+    }
+
+    /* 筛选按钮（移动端） */
+    .category-filter-toggle {
+        display: none; /* 桌面端隐藏 */
+    }
+
+    /* 遮罩层（移动端） */
+    .category-filter-overlay {
+        display: none; /* 桌面端隐藏 */
+    }
+
+    .category-filter-mock {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+        color: var(--color-text-secondary, #4b5563);
+    }
+
+    .category-filter-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.25rem;
+    }
+
+    .category-filter-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .category-filter-clear {
+        font-size: 0.8rem;
+        color: var(--color-link, #0066c0);
+        text-decoration: none;
+    }
+
+    .category-filter-clear:hover {
+        text-decoration: underline;
+    }
+
+    .category-filter-applied {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        background-color: var(--color-accent-light, rgba(59,130,246,0.08));
+        color: var(--color-accent, #2563eb);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        font-size: 0.8rem;
+    }
+
+    .filter-chip .chip-remove {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        color: inherit;
+        font-size: 0.8rem;
+        line-height: 1;
+    }
+
+    .category-filter-group {
+        padding-top: 0.5rem;
+        margin-top: 0.5rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .category-grid-content {
+        min-width: 0;
+    }
+
+    .category-filter-group-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .category-filter-list {
+        list-style: none;
+        padding: 0;
+        margin: 0.1rem 0 0;
+    }
+
+    .category-filter-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.15rem 0;
+        color: var(--color-text-primary, #111827);
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .category-filter-item .label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.85rem;
+    }
+
+    .category-filter-item .stars {
+        color: #f59e0b; /* 评分星星颜色，保持亚马逊风格 */
+        font-size: 0.8rem;
+    }
+
+    .category-filter-item .count {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary, #6b7280);
+    }
+
+    .category-filter-item:hover .label {
+        color: var(--color-link, #0066c0);
+    }
+
+    .category-grid-container {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .category-grid-item {
+        background-color: var(--color-bg-primary, #fff);
+        border: 1px solid var(--color-border-light, #e5e7eb);
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        text-decoration: none;
+        color: var(--color-text-primary, #111);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .category-grid-item:hover {
+        border-color: var(--color-border-focus, #e77600);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+        transform: translateY(-2px);
+        background-color: var(--color-bg-secondary, #f8f9fa);
+    }
+
+    .category-grid-item__title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0;
+    }
+
+    .category-grid-item__desc {
+        font-size: 0.9rem;
+        color: var(--color-text-muted, #475569);
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .category-grid-item__meta {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: var(--color-text-secondary, #767676);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .category-grid-item__badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        background-color: var(--color-accent-light, rgba(59,130,246,0.05));
+        color: var(--color-accent, #3b82f6);
+    }
+
+    /* 移动端响应式适配 */
+    @media screen and (max-width: 768px) {
+        .category-grid-main {
+            padding: 1rem 0 1.5rem;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden; /* 防止横向滚动 */
+        }
+
+        .category-grid-layout {
+            padding: 0 1rem;
+            padding-bottom: 5rem; /* 为底部浮动按钮留出空间 */
+            grid-template-columns: 1fr; /* 单列布局 */
+            gap: 1rem;
+            width: 100%;
+            max-width: 100%;
+            position: relative;
+        }
+
+        /* 移动端筛选按钮（图标样式） */
+        .category-filter-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            bottom: 2rem;
+            right: 1rem;
+            width: 56px;
+            height: 56px;
+            background-color: var(--color-bg-primary, #fff);
+            border: 2px solid var(--color-border-light, #e5e7eb);
+            border-radius: 50%;
+            cursor: pointer;
+            color: var(--color-text-primary, #111827);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            z-index: 998;
+            padding: 0;
+            margin: 0;
+        }
+
+        .category-filter-toggle:hover,
+        .category-filter-toggle:active {
+            background-color: var(--color-bg-secondary, #f9fafb);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            transform: scale(1.05);
+        }
+
+        .category-filter-toggle[aria-expanded="true"] {
+            background-color: var(--color-accent, #2563eb);
+            color: #fff;
+            border-color: var(--color-accent, #2563eb);
+        }
+
+        .category-filter-toggle[aria-expanded="true"] .filter-toggle-icon {
+            stroke: #fff;
+        }
+
+        .filter-toggle-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .filter-toggle-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            background-color: #ef4444;
+            color: #fff;
+            border-radius: 9px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            border: 2px solid var(--color-bg-primary, #fff);
+        }
+
+        /* 移动端筛选栏：默认隐藏，点击后显示 */
+        .category-filter-sidebar {
+            display: none; /* 默认隐藏 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 85%;
+            max-width: 320px;
+            height: 100vh;
+            z-index: 1000;
+            border-radius: 0;
+            border: none;
+            border-right: 1px solid var(--color-border-light, #e5e7eb);
+            padding: 0;
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .category-filter-sidebar.active {
+            transform: translateX(0);
+        }
+
+
+        .category-filter-sidebar.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .category-filter-sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+            background-color: var(--color-bg-primary, #fff);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .category-filter-sidebar-content {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            overflow-y: auto;
+        }
+
+        /* 遮罩层 */
+        .category-filter-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .category-filter-overlay.active {
+            display: block;
+        }
+
+        .category-grid-content {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .category-grid-container {
+            width: 100%;
+            grid-template-columns: 1fr; /* 移动端单列 */
+            gap: 1rem;
+        }
+
+        .category-grid-item {
+            padding: 1rem;
+            width: 100%;
+            max-width: 100%;
+        }
+    }
+
+    /* 超小屏幕优化 */
+    @media screen and (max-width: 480px) {
+        .category-grid-main {
+            padding: 0.75rem 0 1rem;
+        }
+
+        .category-grid-layout {
+            padding: 0 0.75rem;
+            gap: 0.75rem;
+        }
+
+        .category-filter-sidebar {
+            padding: 0.75rem;
+        }
+
+        .category-grid-item {
+            padding: 0.875rem;
+        }
+    }
+    </style>
+    <script>
+    (function() {
+        // 移动端筛选栏展开/收起功能
+        const filterToggle = document.querySelector('.category-filter-toggle');
+        const filterSidebar = document.getElementById('category-filter-sidebar');
+        const filterOverlay = document.getElementById('category-filter-overlay');
+        const filterClose = document.querySelector('.category-filter-close');
+        const filterBadge = document.getElementById('filter-count-badge');
+
+        if (filterToggle && filterSidebar && filterOverlay) {
+            // 更新筛选数量徽章
+            function updateFilterBadge() {
+                if (!filterBadge) return;
+                const activeFilters = document.querySelectorAll('.filter-chip.is-active');
+                const count = activeFilters.length;
+                if (count > 0) {
+                    filterBadge.textContent = count;
+                    filterBadge.style.display = 'flex';
+                } else {
+                    filterBadge.style.display = 'none';
+                }
+            }
+
+            // 打开筛选栏
+            function openFilterSidebar() {
+                filterSidebar.classList.add('active');
+                filterOverlay.classList.add('active');
+                filterToggle.setAttribute('aria-expanded', 'true');
+                document.body.style.overflow = 'hidden'; // 防止背景滚动
+            }
+
+            // 关闭筛选栏
+            function closeFilterSidebar() {
+                filterSidebar.classList.remove('active');
+                filterOverlay.classList.remove('active');
+                filterToggle.setAttribute('aria-expanded', 'false');
+                document.body.style.overflow = ''; // 恢复滚动
+            }
+
+            // 点击筛选按钮
+            filterToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (filterSidebar.classList.contains('active')) {
+                    closeFilterSidebar();
+                } else {
+                    openFilterSidebar();
+                }
+            });
+
+            // 点击关闭按钮
+            if (filterClose) {
+                filterClose.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeFilterSidebar();
+                });
+            }
+
+            // 点击遮罩层关闭
+            filterOverlay.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeFilterSidebar();
+            });
+
+            // 点击筛选栏内部不关闭（阻止事件冒泡）
+            filterSidebar.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+
+            // ESC 键关闭
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && filterSidebar.classList.contains('active')) {
+                    closeFilterSidebar();
+                }
+            });
+
+            // 监听筛选变化，更新徽章
+            document.addEventListener('DOMContentLoaded', function() {
+                updateFilterBadge();
+                // 使用 MutationObserver 监听筛选状态变化
+                const observer = new MutationObserver(function(mutations) {
+                    updateFilterBadge();
+                });
+                const filterContainer = document.querySelector('.category-filter-applied');
+                if (filterContainer) {
+                    observer.observe(filterContainer, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ['class']
+                    });
+                }
+            });
+
+            // 延迟执行，确保 DOM 已加载
+            setTimeout(updateFilterBadge, 100);
+        }
+    })();
+    </script>
 </body>
 </html>
-

@@ -582,16 +582,6 @@ class Data extends AbstractHelper
             return;
         }
         
-        // 获取路由 Helper
-        /** @var \Weline\Framework\Router\Helper\Data $routerHelper */
-        $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
-        
-        // 如果批量模式未启用，才启用（避免清空已收集的路由）
-        // 注意：RouteUpdateStage->prepare() 已经启用了批量模式，所以这里不会重复启用
-        if (!$routerHelper->isBatchMode()) {
-            $routerHelper->enableBatchMode();
-        }
-        
         // 批量注册所有路由
         foreach ($this->collected_route_registrations as $registration) {
             Register::register(

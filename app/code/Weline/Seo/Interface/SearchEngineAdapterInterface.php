@@ -36,7 +36,7 @@ interface SearchEngineAdapterInterface
      * 推送 URL 到搜索引擎
      * 
      * @param array $urls URL数组
-     * @param array $options 选项
+     * @param array $options 选项（必须包含 account/config 等必要信息）
      * @return array 推送结果，格式：
      *   [
      *     'success' => true/false,
@@ -45,6 +45,15 @@ interface SearchEngineAdapterInterface
      *   ]
      */
     public function pushUrls(array $urls, array $options = []): array;
+
+    /**
+     * 提交 Sitemap 到搜索引擎
+     *
+     * @param string $sitemapUrl Sitemap 地址
+     * @param array $options 选项（必须包含 account/config 等必要信息）
+     * @return array 结果结构同 pushUrls
+     */
+    public function submitSitemap(string $sitemapUrl, array $options = []): array;
 
     /**
      * 获取配置要求

@@ -21,13 +21,38 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Framework\App\Debug;
+
 $page = $this->getData('page');
 $isPreview = (bool)($this->getData('is_preview') ?? false);
+
+// 获取样式配置（用于读取像素配置）
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
 
 // 获取统计代码配置
 $gtmId = $page ? $page->getData('gtm_id') : '';
 $gaId = $page ? ($page->getData('ga4_id') ?: $page->getData('ga_id')) : '';
 $fbId = $page ? ($page->getData('fb_pixel_id') ?: $page->getData('fb_id')) : '';
+
+// 读取像素统计配置（遵循模板配置规则）
+// 确保 $pixelEnabled 始终有值，避免未定义变量错误
+$pixelEnabled = 'yes'; // 默认启用
+$pixelName = '';
+if (!empty($styleSettings)) {
+    // 从样式配置中读取像素配置
+    $pixelEnabled = $styleSettings['pixel.enabled'] ?? 'yes';
+    $pixelName = $styleSettings['pixel.name'] ?? '';
+}
+// 确保 $pixelEnabled 始终是字符串类型，避免类型错误
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+
+// 如果像素名称为空，使用页面的 handle
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+
+// 直接从页面对象获取 website_id（页面已有此字段，无需配置）
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
 ?>
 
 <!-- 头部统计代码（Head Section） -->
@@ -65,6 +90,42 @@ $fbId = $page ? ($page->getData('fb_pixel_id') ?: $page->getData('fb_id')) : '';
     </script>
     <noscript><img height="1" width="1" style="display:none" alt=""
     src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbId ?? '') ?>&ev=PageView&noscript=1"/></noscript>
+    <?php endif; ?>
+    
+    <!-- Weline Visitor Pixel（遵循模板配置规则） -->
+    <?php
+    // 如果页面绑定了网站且有像素名称，输出像素标签（通过 enabled 属性控制是否统计）
+    if ($websiteId > 0 && !empty($pixelName)):
+        // 设置 website_id Cookie，供像素代码读取
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+        
+        // 获取网站 URL（用于像素统计）
+        $websiteUrl = '';
+        try {
+            if (class_exists('\Weline\Websites\Model\Website')) {
+                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website = clone $websiteModel;
+                $website->clear()->load($websiteId);
+                if ($website->getId()) {
+                    $websiteUrl = $website->getData('url') ?? '';
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果获取网站信息失败，不影响像素功能
+        }
+        
+        // 设置 website_url Cookie
+        if (!empty($websiteUrl)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+        }
+        
+        // 使用变量传递方式，避免在标签属性中使用 PHP 标签
+        $this->assign('pixel_name', htmlspecialchars($pixelName));
+        $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+        Debug::env('pixel_name', true);
+    ?>
+        <!-- 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
+        <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
     <?php endif; ?>
 <?php endif; ?>
 

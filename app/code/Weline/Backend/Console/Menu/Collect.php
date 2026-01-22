@@ -2,7 +2,7 @@
 
 namespace Weline\Backend\Console\Menu;
 
-use Weline\Backend\Observer\UpgradeMenu;
+use Weline\Backend\Service\MenuCollector;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
@@ -10,7 +10,7 @@ use Weline\Framework\Output\Cli\Printing;
 class Collect implements CommandInterface
 {
     function __construct(
-        private UpgradeMenu $upgradeMenu,
+        private MenuCollector $menuCollector,
         private Printing $printing
     )
     {
@@ -21,9 +21,9 @@ class Collect implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 收集菜单
+        // 收集菜单（默认收集所有已启用模块的菜单）
         $this->printing->note(__('开始收集菜单...'));
-        $this->upgradeMenu->collectMenus();
+        $this->menuCollector->collect([]);
         $this->printing->success(__('菜单收集完成！'));
         
         // 清理事件缓存（菜单更新可能触发事件，需要清理事件缓存）

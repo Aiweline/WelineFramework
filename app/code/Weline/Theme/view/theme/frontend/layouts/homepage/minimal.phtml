@@ -29,6 +29,14 @@
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     @template(Weline_Frontend::templates/public/header.phtml)
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <!-- 极简首页布局的面包屑导航区域 -->
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::breadcrumb-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
     <main class="homepage-main minimal <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage_minimal">
