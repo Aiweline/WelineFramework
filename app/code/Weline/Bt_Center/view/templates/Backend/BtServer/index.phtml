@@ -1,0 +1,178 @@
+<?php
+/**
+ * 宝塔服务器列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var array $servers */
+$servers = $servers ?? [];
+$platform = $platform ?? '';
+$keyword = $keyword ?? '';
+/** @var array $platformOptions */
+$platformOptions = $platformOptions ?? [];
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><lang>宝塔服务器列表</lang></h4>
+                <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/form') ?>"
+                   class="btn btn-primary">
+                    <i class="mdi mdi-plus-circle-outline me-1"></i>
+                    <lang>新增服务器</lang>
+                </a>
+            </div>
+        </div>
+
+        <!-- 筛选表单 -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="get" action="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label"><lang>云平台</lang></label>
+                        <select name="platform" class="form-select">
+                            <option value=""><lang>全部平台</lang></option>
+                            <?php foreach ($platformOptions as $key => $label): ?>
+                                <option value="<?= htmlspecialchars($key, ENT_QUOTES) ?>" <?= $platform === $key ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($label, ENT_QUOTES) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label"><lang>关键词</lang></label>
+                        <input type="text"
+                               name="keyword"
+                               class="form-control"
+                               value="<?= htmlspecialchars($keyword, ENT_QUOTES) ?>"
+                               placeholder="<lang>搜索名称、地址、用户名</lang>">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="mdi mdi-magnify me-1"></i>
+                            <lang>搜索</lang>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>" class="btn btn-secondary">
+                            <lang>重置</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th><lang>ID</lang></th>
+                            <th><lang>服务器名称</lang></th>
+                            <th><lang>云平台</lang></th>
+                            <th><lang>外网地址</lang></th>
+                            <th><lang>内网地址</lang></th>
+                            <th><lang>用户名</lang></th>
+                            <th><lang>端口</lang></th>
+                            <th><lang>创建时间</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($servers)): ?>
+                            <tr>
+                                <td colspan="9" class="text-center text-muted">
+                                    <lang>暂无服务器</lang>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($servers as $server): ?>
+                                <tr>
+                                    <td><?= (int)($server['server_id'] ?? 0) ?></td>
+                                    <td><?= htmlspecialchars((string)($server['name'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td>
+                                        <?php
+                                        $serverPlatform = (string)($server['platform'] ?? '');
+                                        $platformLabel = $platformOptions[$serverPlatform] ?? $serverPlatform;
+                                        ?>
+                                        <span class="badge bg-info"><?= htmlspecialchars($platformLabel, ENT_QUOTES) ?></span>
+                                    </td>
+                                    <td>
+                                        <a href="<?= htmlspecialchars((string)($server['external_url'] ?? ''), ENT_QUOTES) ?>" 
+                                           target="_blank" 
+                                           class="text-primary">
+                                            <?= htmlspecialchars((string)($server['external_url'] ?? ''), ENT_QUOTES) ?>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($server['internal_url'])): ?>
+                                            <span class="text-muted"><?= htmlspecialchars((string)$server['internal_url'], ENT_QUOTES) ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars((string)($server['username'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td><?= (int)($server['port'] ?? 8888) ?></td>
+                                    <td><?= htmlspecialchars((string)($server['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td>
+                                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/form', [
+                                            'id' => (int)($server['server_id'] ?? 0)
+                                        ]) ?>"
+                                           class="btn btn-sm btn-outline-primary me-1">
+                                            <i class="mdi mdi-pencil"></i>
+                                            <lang>编辑</lang>
+                                        </a>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick="deleteServer(<?= (int)($server['server_id'] ?? 0) ?>)">
+                                            <i class="mdi mdi-delete"></i>
+                                            <lang>删除</lang>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteServer(id) {
+    if (!confirm('<?= __('确定要删除这个服务器吗？') ?>')) {
+        return;
+    }
+
+    const formData = new URLSearchParams();
+    formData.append('id', id);
+
+    fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/delete') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData
+    })
+        .then(response => response.json())
+        .then(resp => {
+            if (resp.success) {
+                showPageMessage('success', resp.message);
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else {
+                showPageMessage('error', resp.message || '删除失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showPageMessage('error', '请求失败');
+        });
+}
+</script>

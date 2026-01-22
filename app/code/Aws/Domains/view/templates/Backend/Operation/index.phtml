@@ -1,0 +1,270 @@
+<?php
+/**
+ * 操作记录列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Aws\Domains\Model\DomainOperation;
+
+/** @var array $operations */
+$operations = $operations ?? [];
+/** @var array $operation_types */
+$operation_types = $operation_types ?? [];
+/** @var array $statuses */
+$statuses = $statuses ?? [];
+/** @var string $domain */
+$domain = $domain ?? '';
+/** @var string $type */
+$type = $type ?? '';
+/** @var string $status */
+$status = $status ?? '';
+/** @var int $page */
+$page = $page ?? 1;
+/** @var int $total */
+$total = $total ?? 0;
+/** @var int $total_pages */
+$total_pages = $total_pages ?? 1;
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><lang>操作记录</lang></h4>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <form method="get" class="row g-2 align-items-center">
+                    <div class="col-auto">
+                        <input type="text" name="domain" class="form-control form-control-sm" placeholder="<?= __('域名') ?>"
+                               value="<?= htmlspecialchars($domain, ENT_QUOTES) ?>">
+                    </div>
+                    <div class="col-auto">
+                        <select name="type" class="form-select form-select-sm">
+                            <option value="">-- <?= __('操作类型') ?> --</option>
+                            <?php foreach ($operation_types as $key => $name): ?>
+                                <option value="<?= htmlspecialchars($key, ENT_QUOTES) ?>" <?= $type === $key ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($name, ENT_QUOTES) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">-- <?= __('状态') ?> --</option>
+                            <?php foreach ($statuses as $key => $name): ?>
+                                <option value="<?= htmlspecialchars($key, ENT_QUOTES) ?>" <?= $status === $key ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($name, ENT_QUOTES) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="mdi mdi-magnify me-1"></i>
+                            <lang>搜索</lang>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('aws/backend/operation/index') ?>" class="btn btn-sm btn-secondary">
+                            <lang>重置</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th><lang>域名</lang></th>
+                            <th><lang>操作类型</lang></th>
+                            <th><lang>状态</lang></th>
+                            <th><lang>AWS 操作ID</lang></th>
+                            <th><lang>操作人</lang></th>
+                            <th><lang>创建时间</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($operations)): ?>
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    <lang>暂无记录</lang>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($operations as $op): ?>
+                                <tr>
+                                    <td><?= (int)($op['operation_id'] ?? 0) ?></td>
+                                    <td>
+                                        <?php if (!empty($op['domain_name'])): ?>
+                                            <strong><?= htmlspecialchars($op['domain_name'], ENT_QUOTES) ?></strong>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $opType = $op['operation_type'] ?? '';
+                                        $typeName = $operation_types[$opType] ?? $opType;
+                                        ?>
+                                        <span class="badge bg-info"><?= htmlspecialchars($typeName, ENT_QUOTES) ?></span>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $opStatus = $op['status'] ?? '';
+                                        $statusName = $statuses[$opStatus] ?? $opStatus;
+                                        $statusClass = match ($opStatus) {
+                                            DomainOperation::STATUS_SUCCESS => 'bg-success',
+                                            DomainOperation::STATUS_FAILED => 'bg-danger',
+                                            DomainOperation::STATUS_IN_PROGRESS => 'bg-warning text-dark',
+                                            DomainOperation::STATUS_CANCELLED => 'bg-secondary',
+                                            default => 'bg-light text-dark',
+                                        };
+                                        ?>
+                                        <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($statusName, ENT_QUOTES) ?></span>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($op['aws_operation_id'])): ?>
+                                            <code class="small"><?= htmlspecialchars(substr($op['aws_operation_id'], 0, 20), ENT_QUOTES) ?>...</code>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars($op['operator_name'] ?? '-', ENT_QUOTES) ?></td>
+                                    <td><?= htmlspecialchars($op['created_at'] ?? '-', ENT_QUOTES) ?></td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-info"
+                                                onclick="showDetail(<?= (int)($op['operation_id'] ?? 0) ?>)">
+                                            <i class="mdi mdi-information-outline"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php if ($total_pages > 1): ?>
+                    <nav class="mt-3">
+                        <ul class="pagination justify-content-center mb-0">
+                            <?php if ($page > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $this->getBackendUrl('aws/backend/operation/index', array_filter([
+                                        'domain' => $domain,
+                                        'type' => $type,
+                                        'status' => $status,
+                                        'page' => $page - 1
+                                    ])) ?>">
+                                        <lang>上一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+
+                            <li class="page-item disabled">
+                                <span class="page-link"><?= $page ?> / <?= $total_pages ?></span>
+                            </li>
+
+                            <?php if ($page < $total_pages): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $this->getBackendUrl('aws/backend/operation/index', array_filter([
+                                        'domain' => $domain,
+                                        'type' => $type,
+                                        'status' => $status,
+                                        'page' => $page + 1
+                                    ])) ?>">
+                                        <lang>下一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                    <div class="text-center text-muted small mt-2">
+                        <lang>共</lang> <?= $total ?> <lang>条记录</lang>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><lang>操作详情</lang></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailContent">
+                <div class="text-center py-4">
+                    <i class="mdi mdi-loading mdi-spin mdi-48px"></i>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>关闭</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showDetail(id) {
+    const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+    const content = document.getElementById('detailContent');
+
+    content.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin mdi-48px"></i></div>';
+    modal.show();
+
+    fetch('<?= $this->getBackendUrl('aws/backend/operation/detail') ?>?id=' + id)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.operation) {
+                const op = data.operation;
+                let html = `
+                    <table class="table table-borderless">
+                        <tr><th width="30%"><?= __('操作ID') ?></th><td>${op.id}</td></tr>
+                        <tr><th><?= __('域名') ?></th><td>${op.domain_name || '-'}</td></tr>
+                        <tr><th><?= __('操作类型') ?></th><td>${op.operation_type_name}</td></tr>
+                        <tr><th><?= __('状态') ?></th><td>${op.status_name}</td></tr>
+                        <tr><th><?= __('AWS 操作ID') ?></th><td><code>${op.aws_operation_id || '-'}</code></td></tr>
+                        ${op.error_message ? `<tr><th><?= __('错误信息') ?></th><td class="text-danger">${op.error_message}</td></tr>` : ''}
+                        <tr><th><?= __('操作人') ?></th><td>${op.operator_name || '-'}</td></tr>
+                        <tr><th><?= __('创建时间') ?></th><td>${op.created_at}</td></tr>
+                        <tr><th><?= __('更新时间') ?></th><td>${op.updated_at}</td></tr>
+                    </table>
+                `;
+
+                if (op.request_data && Object.keys(op.request_data).length > 0) {
+                    html += `
+                        <h6><?= __('请求数据') ?></h6>
+                        <pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">${JSON.stringify(op.request_data, null, 2)}</pre>
+                    `;
+                }
+
+                if (op.response_data && Object.keys(op.response_data).length > 0) {
+                    html += `
+                        <h6><?= __('响应数据') ?></h6>
+                        <pre class="bg-light p-2 rounded small" style="max-height: 200px; overflow: auto;">${JSON.stringify(op.response_data, null, 2)}</pre>
+                    `;
+                }
+
+                content.innerHTML = html;
+            } else {
+                content.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('获取失败') ?>') + '</div>';
+            }
+        })
+        .catch(err => {
+            content.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + err.message + '</div>';
+        });
+}
+</script>

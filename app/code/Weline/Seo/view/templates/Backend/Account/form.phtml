@@ -1,0 +1,202 @@
+<?php
+/**
+ * SEO 账户表单
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var \Weline\Seo\Model\SeoAccount $account */
+$account = $account ?? null;
+$scope = $scope ?? '';
+$module = $module ?? '';
+
+$id = $account ? (int)$account->getId() : 0;
+$name = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_NAME) : '';
+$provider = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_PROVIDER) : 'google_indexing_api';
+$description = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_DESCRIPTION) : '';
+$isActive = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::fields_IS_ACTIVE) : 1;
+$enableCronPush = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::fields_ENABLE_CRON_PUSH_URLS) : 1;
+$enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::fields_ENABLE_CRON_SITEMAP) : 0;
+
+$configArray = $account ? $account->getConfigArray() : [];
+$configJson = $configArray ? json_encode($configArray, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '';
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <?php if ($id): ?>
+                        <lang>编辑SEO账户</lang> #<?= $id ?>
+                    <?php else: ?>
+                        <lang>新增SEO账户</lang>
+                    <?php endif; ?>
+                </h4>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
+                    <input type="hidden" name="id" value="<?= $id ?>">
+                    <input type="hidden" name="scope" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>">
+                    <input type="hidden" name="module" value="<?= htmlspecialchars($module, ENT_QUOTES) ?>">
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>Scope</lang></label>
+                        <input type="text"
+                               class="form-control"
+                               value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>"
+                               disabled>
+                        <div class="form-text">
+                            <lang>由URL参数指定的scope不可修改，用于区分不同业务范围，例如 page_builder。</lang>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>模块</lang></label>
+                        <input type="text"
+                               class="form-control"
+                               value="<?= htmlspecialchars($module, ENT_QUOTES) ?>"
+                               disabled>
+                        <div class="form-text">
+                            <lang>由URL参数指定的来源模块不可修改，例如 GuoLaiRen_PageBuilder。</lang>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>账户名称</lang></label>
+                        <input type="text"
+                               name="name"
+                               class="form-control"
+                               value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
+                               required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>供应商(provider)</lang></label>
+                        <select name="provider" class="form-select" required>
+                            <option value="google_indexing_api" <?= $provider === 'google_indexing_api' ? 'selected' : '' ?>>
+                                <lang>Google Indexing API</lang>
+                            </option>
+                        </select>
+                        <div class="form-text">
+                            <lang>每个供应商对应一个适配器，目前仅内置 Google Indexing API。</lang>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>描述</lang></label>
+                        <textarea name="description" class="form-control" rows="2"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>账户配置(JSON)</lang></label>
+                        <textarea name="config_json" class="form-control" rows="10"
+                                  placeholder='{"service_account": {...}, "sitemaps": ["https://example.com/sitemap.xml"]}'><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
+                        <div class="form-text">
+                            <lang>请粘贴 Google Service Account JSON 到 service_account 字段，并可配置 sitemaps 列表。</lang>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="is_active"
+                                       value="1"
+                                       id="is_active"
+                                       <?= $isActive === 1 ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_active">
+                                    <lang>启用账户</lang>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="enable_cron_push_urls"
+                                       value="1"
+                                       id="enable_cron_push_urls"
+                                       <?= $enableCronPush === 1 ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="enable_cron_push_urls">
+                                    <lang>启用URL定时推送</lang>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="enable_cron_sitemap"
+                                       value="1"
+                                       id="enable_cron_sitemap"
+                                       <?= $enableCronSitemap === 1 ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="enable_cron_sitemap">
+                                    <lang>启用Sitemap定时提交</lang>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-1"></i>
+                            <lang>保存</lang>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope, 'module' => $module]) ?>"
+                           class="btn btn-secondary ms-2">
+                            <lang>返回列表</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveSeoAccount(event) {
+    event.preventDefault();
+    const form = document.getElementById('seoAccountForm');
+    const formData = new FormData(form);
+
+    formData.set('is_active', document.getElementById('is_active').checked ? '1' : '0');
+    formData.set('enable_cron_push_urls', document.getElementById('enable_cron_push_urls').checked ? '1' : '0');
+    formData.set('enable_cron_sitemap', document.getElementById('enable_cron_sitemap').checked ? '1' : '0');
+
+    const data = {};
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+
+    fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+        .then(response => response.json())
+        .then(resp => {
+            if (resp.success) {
+                showPageMessage('success', resp.message);
+                setTimeout(() => {
+                    window.location.href = '<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope, 'module' => $module]) ?>';
+                }, 800);
+            } else {
+                showPageMessage('error', resp.message || '保存失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showPageMessage('error', '请求失败');
+        });
+}
+</script>
+

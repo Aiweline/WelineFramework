@@ -1,0 +1,241 @@
+<?php
+/**
+ * 布局：活动页面 - 默认布局
+ *
+ * 活动页面默认布局，参考首页默认布局结构
+ * 字段
+ * @meta.name {default="活动页面默认布局",name="活动页面默认布局",description="活动页面默认布局，用于描述布局的名称"}
+ * @meta.description {default="活动页面默认布局，适用于营销活动、促销专题等页面",name="活动页面默认布局",description="用于展示营销活动、促销专题、品牌活动等内容"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="活动专题",name="页面标题",description="页面标题，用于设置活动页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置活动页面主体内容"}
+ * @param banner {default="",name="活动Banner（HTML字符串）",description="活动Banner区域内容，用于展示活动主视觉"}
+ * @param highlight {default="",name="活动亮点区块（HTML字符串）",description="活动亮点区块内容（HTML字符串），用于展示活动卖点"}
+ * @param products {default="",name="活动商品区块（HTML字符串）",description="活动商品区块内容（HTML字符串），用于展示参与活动的商品"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::activity::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::activity::body-start</w:hook>
+    
+    <div class="weline-page-wrapper weline-activity-page">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::activity::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::activity::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <!-- 活动页布局的面包屑导航区域 -->
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::activity::breadcrumb-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+        <w:hook>Weline_Theme::frontend::layouts::activity::breadcrumb-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::activity::content-before</w:hook>
+            
+            <if condition="meta.banner">
+                <section class="activity-banner">
+                    {{meta.banner}}
+                </section>
+            </if>
+            
+            <if condition="meta.highlight">
+                <section class="activity-section activity-highlight">
+                    <div class="container">
+                        {{meta.highlight}}
+                    </div>
+                </section>
+            </if>
+            
+            <w:hook>Weline_Theme::frontend::layouts::activity::main-before</w:hook>
+            <main class="activity-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="activity-main" data-layout="activity">
+                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::activity::main-content<else/>
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <else/>
+                        <div class="activity-default-content">
+                            <div class="container">
+                                <section class="activity-header">
+                                    <h1 class="activity-title">
+                                        <if condition="meta.title">
+                                            {{meta.title}}
+                                        <else/>
+                                            <lang>精彩活动进行中</lang>
+                                        </if>
+                                    </h1>
+                                    <p class="activity-description">
+                                        <lang>这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。</lang>
+                                    </p>
+                                </section>
+                                
+                                <section class="activity-preview">
+                                    <div class="activity-preview-grid">
+                                        <div class="activity-preview-card">
+                                            <h2 class="section-title"><lang>活动亮点示例</lang></h2>
+                                            <p class="section-text">
+                                                <lang>在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。</lang>
+                                            </p>
+                                        </div>
+                                        <div class="activity-preview-card">
+                                            <h2 class="section-title"><lang>活动商品示例</lang></h2>
+                                            <p class="section-text">
+                                                <lang>在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。</lang>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </if>
+                </w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-after</w:hook>
+            </main>
+            <w:hook>Weline_Theme::frontend::layouts::activity::main-after</w:hook>
+            
+            <if condition="meta.products">
+                <w:hook>Weline_Theme::frontend::layouts::activity::products-before</w:hook>
+                <section class="activity-section activity-products">
+                    <div class="container">
+                        {{meta.products}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::activity::products-after</w:hook>
+            </if>
+            
+            <w:hook>Weline_Theme::frontend::layouts::activity::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+        
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::activity::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::activity::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::activity::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <style>
+    .activity-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+    
+    .activity-banner {
+        width: 100%;
+    }
+    
+    .activity-section {
+        width: 100%;
+        padding: 2rem 0;
+    }
+    
+    .activity-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+    
+    .activity-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+    
+    .activity-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+    
+    .activity-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+    
+    .activity-preview {
+        margin-top: 2rem;
+    }
+    
+    .activity-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .activity-preview-card {
+        background-color: var(--color-bg-primary, #fff);
+        border: 1px solid var(--color-border-light, #e0e0e0);
+        border-radius: 8px;
+        padding: 1.75rem;
+    }
+    
+    .activity-products {
+        margin-top: 1rem;
+    }
+    
+    .activity-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+    
+    .activity-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0;
+    }
+    
+    @media (max-width: 768px) {
+        .activity-main {
+            padding: 1.5rem 0;
+        }
+        
+        .activity-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+        
+        .activity-title {
+            font-size: 1.7rem;
+        }
+        
+        .activity-preview-card {
+            padding: 1.5rem;
+        }
+    }
+    </style>
+</body>
+</html>
+
