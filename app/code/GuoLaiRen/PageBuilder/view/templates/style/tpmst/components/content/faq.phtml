@@ -1,0 +1,195 @@
+<?php
+/**
+ * TPMST FAQ组件 - FAQ Component
+ * 
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板，支持问答展开收起
+ * category: content
+ * region: content
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:faq => FAQ设置
+ * faq.display => 显示FAQ:select:yes|yes,no
+ * faq.title => 标题:text:FAQs
+ * faq.bg_color => 背景颜色:color:#0f0f1e
+ * 
+ * group:texts => FAQ内容
+ * texts.faq_1_question => 问题1:text:What is Teen Patti Master?
+ * texts.faq_1_answer => 答案1:textarea:Teen Patti Master is India's best online card game...
+ * texts.faq_2_question => 问题2:text:How to Download Teen Patti Master APK?
+ * texts.faq_2_answer => 答案2:textarea:Go to a reliable website and select the download option...
+ * texts.faq_3_question => 问题3:text:Is Teen Patti Master Safe to Play?
+ * texts.faq_3_answer => 答案3:textarea:Yes, Teen Patti Master is designed to be secure...
+ * texts.faq_4_question => 问题4:text:How to Win Real Cash?
+ * texts.faq_4_answer => 答案4:textarea:Win real money by mastering methods like bluffing...
+ * texts.faq_5_question => 问题5:text:What are the Game Variants?
+ * texts.faq_5_answer => 答案5:textarea:Teen Patti Master includes variants such as AK47, Muflis, and Joker...
+ * 
+ * @fields_end
+ */
+
+$componentId = 'tpmst-faq-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('faq.display', 'yes') !== 'no';
+if (!$display) return;
+
+$title = $getConfig('faq.title', 'FAQs');
+$bgColor = $getConfig('faq.bg_color', '#0f0f1e');
+
+$faqs = [
+    [
+        'question' => $getConfig('texts.faq_1_question', 'What is Teen Patti Master?'),
+        'answer' => $getConfig('texts.faq_1_answer', "Teen Patti Master is India's best online card game, which combines strategy and luck for real cash prizes.")
+    ],
+    [
+        'question' => $getConfig('texts.faq_2_question', 'How to Download Teen Patti Master APK?'),
+        'answer' => $getConfig('texts.faq_2_answer', "Go to a reliable website and select the download option for the most recent version. It's free, safe, and mobile-friendly.")
+    ],
+    [
+        'question' => $getConfig('texts.faq_3_question', 'Is Teen Patti Master Safe to Play?'),
+        'answer' => $getConfig('texts.faq_3_answer', 'Yes, Teen Patti Master is designed to be secure, with features like SSL encryption to protect data.')
+    ],
+    [
+        'question' => $getConfig('texts.faq_4_question', 'How to Win Real Cash?'),
+        'answer' => $getConfig('texts.faq_4_answer', 'Win real money by mastering methods like bluffing with strong hands (e.g., Trail or Pure Sequence).')
+    ],
+    [
+        'question' => $getConfig('texts.faq_5_question', 'What are the Game Variants?'),
+        'answer' => $getConfig('texts.faq_5_answer', 'Teen Patti Master includes variants such as AK47, Muflis, and Joker for varied teen patti action.')
+    ],
+];
+?>
+<!-- TPMST FAQ Component Start: <?= $componentId ?> -->
+<style>
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    padding: 60px 20px;
+}
+
+#<?= $componentId ?> .tpmst-faq-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .tpmst-faq-title {
+    text-align: center;
+    font-size: clamp(24px, 5vw, 36px);
+    color: #ffd700;
+    margin-bottom: 40px;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .tpmst-faq-item {
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+#<?= $componentId ?> .tpmst-faq-question {
+    padding: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #ffd700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.3s;
+}
+
+#<?= $componentId ?> .tpmst-faq-question:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+#<?= $componentId ?> .tpmst-faq-icon {
+    font-size: 20px;
+    transition: transform 0.3s;
+}
+
+#<?= $componentId ?> .tpmst-faq-item.active .tpmst-faq-icon {
+    transform: rotate(45deg);
+}
+
+#<?= $componentId ?> .tpmst-faq-answer {
+    padding: 0 20px 20px;
+    color: #ffffff;
+    display: none;
+    line-height: 1.8;
+    opacity: 0.9;
+}
+
+#<?= $componentId ?> .tpmst-faq-item.active .tpmst-faq-answer {
+    display: block;
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 40px 15px;
+    }
+    
+    #<?= $componentId ?> .tpmst-faq-question {
+        padding: 15px;
+        font-size: 14px;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="tpmst-faq-component">
+    <div class="tpmst-faq-container">
+        <h2 class="tpmst-faq-title"><?= htmlspecialchars($title) ?></h2>
+        <?php foreach ($faqs as $index => $faq): ?>
+        <div class="tpmst-faq-item" data-faq-index="<?= $index ?>">
+            <div class="tpmst-faq-question">
+                <span><?= htmlspecialchars($faq['question']) ?></span>
+                <span class="tpmst-faq-icon">+</span>
+            </div>
+            <div class="tpmst-faq-answer">
+                <?= nl2br(htmlspecialchars($faq['answer'])) ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+</section>
+
+<script>
+(function() {
+    var componentId = '<?= $componentId ?>';
+    var container = document.getElementById(componentId);
+    if (!container) return;
+    
+    container.querySelectorAll('.tpmst-faq-question').forEach(function(question) {
+        question.addEventListener('click', function() {
+            var item = this.parentElement;
+            var wasActive = item.classList.contains('active');
+            
+            // 关闭其他
+            container.querySelectorAll('.tpmst-faq-item').forEach(function(otherItem) {
+                otherItem.classList.remove('active');
+                otherItem.querySelector('.tpmst-faq-icon').textContent = '+';
+            });
+            
+            // 切换当前
+            if (!wasActive) {
+                item.classList.add('active');
+                item.querySelector('.tpmst-faq-icon').textContent = '−';
+            }
+        });
+    });
+})();
+</script>
+<!-- TPMST FAQ Component End: <?= $componentId ?> -->

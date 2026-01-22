@@ -1,0 +1,352 @@
+<?php
+/**
+ * 导航编辑器组件 - Navigation Editor
+ * 
+ * 支持：
+ * 1. 可视化编辑导航项
+ * 2. 拖拽排序
+ * 3. 添加/编辑/删除导航项
+ * 4. 支持链接类型：锚点、页面、外部链接
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
+
+$page = $this->getData('page');
+$pageId = $page && $page->getId() ? $page->getId() : 0;
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 获取当前导航配置
+$navItemsConfig = $styleSettings['header.navigation.items'] ?? $styleSettings['navigation.items'] ?? '';
+if (empty($navItemsConfig)) {
+    $navItemsConfig = "Home=>#home\nAbout=>#about\nBlog=>#blog\nFAQs=>#faqs";
+}
+
+// 解析导航项
+$navItems = [];
+if (!empty($navItemsConfig)) {
+    $lines = preg_split('/\r?\n/', str_replace('\\n', "\n", $navItemsConfig));
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        if (strpos($line, '=>') !== false) {
+            $parts = explode('=>', $line, 2);
+            $text = trim($parts[0]);
+            $href = trim($parts[1] ?? '');
+            if (!empty($text)) {
+                $navItems[] = [
+                    'text' => $text,
+                    'href' => !empty($href) ? $href : '#',
+                    'type' => $this->getNavItemType($href)
+                ];
+            }
+        }
+    }
+}
+
+// 辅助函数：判断链接类型
+if (!function_exists('getNavItemType')) {
+    function getNavItemType($href) {
+        if (empty($href) || $href === '#') return 'anchor';
+        if (strpos($href, '#') === 0) return 'anchor';
+        if (preg_match('/^https?:\/\//', $href)) return 'external';
+        return 'page';
+    }
+}
+?>
+
+<style>
+/* 导航编辑器样式 */
+.nav-editor {
+    background: var(--visual-config-section-bg, #fff);
+    border: 1px solid var(--visual-config-border, #dee2e6);
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.nav-editor-header {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--visual-config-border, #dee2e6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-editor-header h6 {
+    margin: 0;
+    font-size: 14px;
+    color: var(--visual-config-text, #333);
+}
+
+.nav-editor-body {
+    padding: 15px;
+}
+
+.nav-items-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--visual-config-input-bg, #f8f9fa);
+    border: 1px solid var(--visual-config-border, #dee2e6);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: move;
+}
+
+.nav-item-row:hover {
+    border-color: #3498db;
+}
+
+.nav-item-drag {
+    color: var(--visual-config-text-muted, #6c757d);
+    cursor: grab;
+}
+
+.nav-item-drag:active {
+    cursor: grabbing;
+}
+
+.nav-item-text {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--visual-config-border, #dee2e6);
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.nav-item-href {
+    flex: 2;
+    padding: 6px 10px;
+    border: 1px solid var(--visual-config-border, #dee2e6);
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.nav-item-type {
+    width: 100px;
+    padding: 6px 8px;
+    border: 1px solid var(--visual-config-border, #dee2e6);
+    border-radius: 4px;
+    font-size: 12px;
+    background: #fff;
+}
+
+.nav-item-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.nav-item-actions button {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    background: transparent;
+    color: var(--visual-config-text-muted, #6c757d);
+}
+
+.nav-item-actions button:hover {
+    background: var(--visual-config-section-hover, #f0f0f0);
+}
+
+.nav-item-actions button.btn-danger:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.nav-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    padding: 10px;
+    border: 2px dashed var(--visual-config-border, #dee2e6);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--visual-config-text-muted, #6c757d);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-add-btn:hover {
+    border-color: #3498db;
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.05);
+}
+
+.nav-item-row.dragging {
+    opacity: 0.5;
+}
+
+.nav-item-row.drag-over {
+    border-color: #3498db;
+    background: rgba(52, 152, 219, 0.1);
+}
+</style>
+
+<div class="nav-editor" id="navEditor">
+    <div class="nav-editor-header">
+        <h6><i class="mdi mdi-menu"></i> <?= __('导航项配置') ?></h6>
+        <span class="text-muted small"><?= __('拖拽排序') ?></span>
+    </div>
+    <div class="nav-editor-body">
+        <ul class="nav-items-list" id="navItemsList">
+            <?php foreach ($navItems as $index => $item): ?>
+            <li class="nav-item-row" draggable="true" data-index="<?= $index ?>">
+                <span class="nav-item-drag"><i class="mdi mdi-drag"></i></span>
+                <input type="text" class="nav-item-text" value="<?= htmlspecialchars($item['text']) ?>" placeholder="<?= __('名称') ?>">
+                <input type="text" class="nav-item-href" value="<?= htmlspecialchars($item['href']) ?>" placeholder="<?= __('链接') ?>">
+                <select class="nav-item-type">
+                    <option value="anchor" <?= ($item['type'] ?? '') === 'anchor' ? 'selected' : '' ?>><?= __('锚点') ?></option>
+                    <option value="page" <?= ($item['type'] ?? '') === 'page' ? 'selected' : '' ?>><?= __('页面') ?></option>
+                    <option value="external" <?= ($item['type'] ?? '') === 'external' ? 'selected' : '' ?>><?= __('外部') ?></option>
+                </select>
+                <div class="nav-item-actions">
+                    <button type="button" class="btn-danger" onclick="removeNavItem(this)" title="<?= __('删除') ?>">
+                        <i class="mdi mdi-delete"></i>
+                    </button>
+                </div>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        
+        <button type="button" class="nav-add-btn" onclick="addNavItem()">
+            <i class="mdi mdi-plus"></i> <?= __('添加导航项') ?>
+        </button>
+    </div>
+</div>
+
+<!-- 隐藏字段用于存储导航配置 -->
+<input type="hidden" name="style[header.navigation.items]" id="navItemsHidden" class="auto-save-field" 
+       value="<?= htmlspecialchars($navItemsConfig) ?>">
+
+<script>
+(function() {
+    const navList = document.getElementById('navItemsList');
+    const navHidden = document.getElementById('navItemsHidden');
+    
+    // 序列化导航项
+    function serializeNavItems() {
+        const items = [];
+        navList.querySelectorAll('.nav-item-row').forEach(row => {
+            const text = row.querySelector('.nav-item-text').value.trim();
+            const href = row.querySelector('.nav-item-href').value.trim();
+            if (text) {
+                items.push(text + '=>' + (href || '#'));
+            }
+        });
+        return items.join('\n');
+    }
+    
+    // 更新隐藏字段
+    function updateHiddenField() {
+        navHidden.value = serializeNavItems();
+        // 触发 change 事件以便自动保存
+        navHidden.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    
+    // 添加导航项
+    window.addNavItem = function() {
+        const row = document.createElement('li');
+        row.className = 'nav-item-row';
+        row.draggable = true;
+        row.innerHTML = `
+            <span class="nav-item-drag"><i class="mdi mdi-drag"></i></span>
+            <input type="text" class="nav-item-text" value="" placeholder="<?= __('名称') ?>">
+            <input type="text" class="nav-item-href" value="#" placeholder="<?= __('链接') ?>">
+            <select class="nav-item-type">
+                <option value="anchor" selected><?= __('锚点') ?></option>
+                <option value="page"><?= __('页面') ?></option>
+                <option value="external"><?= __('外部') ?></option>
+            </select>
+            <div class="nav-item-actions">
+                <button type="button" class="btn-danger" onclick="removeNavItem(this)" title="<?= __('删除') ?>">
+                    <i class="mdi mdi-delete"></i>
+                </button>
+            </div>
+        `;
+        
+        navList.appendChild(row);
+        setupRowEvents(row);
+        row.querySelector('.nav-item-text').focus();
+    };
+    
+    // 删除导航项
+    window.removeNavItem = function(btn) {
+        const row = btn.closest('.nav-item-row');
+        row.remove();
+        updateHiddenField();
+    };
+    
+    // 设置行事件
+    function setupRowEvents(row) {
+        // 输入事件
+        row.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('input', updateHiddenField);
+            input.addEventListener('change', updateHiddenField);
+        });
+        
+        // 拖拽事件
+        row.addEventListener('dragstart', handleDragStart);
+        row.addEventListener('dragend', handleDragEnd);
+        row.addEventListener('dragover', handleDragOver);
+        row.addEventListener('drop', handleDrop);
+    }
+    
+    // 拖拽处理
+    let draggedRow = null;
+    
+    function handleDragStart(e) {
+        draggedRow = this;
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        navList.querySelectorAll('.nav-item-row').forEach(row => {
+            row.classList.remove('drag-over');
+        });
+        draggedRow = null;
+        updateHiddenField();
+    }
+    
+    function handleDragOver(e) {
+        e.preventDefault();
+        if (this !== draggedRow) {
+            this.classList.add('drag-over');
+        }
+    }
+    
+    function handleDrop(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        
+        if (draggedRow && this !== draggedRow) {
+            const allRows = [...navList.querySelectorAll('.nav-item-row')];
+            const draggedIndex = allRows.indexOf(draggedRow);
+            const droppedIndex = allRows.indexOf(this);
+            
+            if (draggedIndex < droppedIndex) {
+                this.parentNode.insertBefore(draggedRow, this.nextSibling);
+            } else {
+                this.parentNode.insertBefore(draggedRow, this);
+            }
+        }
+    }
+    
+    // 初始化现有行的事件
+    navList.querySelectorAll('.nav-item-row').forEach(setupRowEvents);
+})();
+</script>

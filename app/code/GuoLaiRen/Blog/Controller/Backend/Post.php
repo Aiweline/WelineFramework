@@ -13,15 +13,19 @@ use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Multipass\Model\MultipassSite;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog', '博客管理', 'mdi mdi-notebook-outline', '管理博客文章')]
 class Post extends BackendController
 {
     private PostModel $postModel;
+    private MultipassSite $siteModel;
 
     public function __construct(PostModel $postModel)
     {
         $this->postModel = $postModel;
+        $this->siteModel = ObjectManager::getInstance(MultipassSite::class);
     }
 
     /**
@@ -30,6 +34,29 @@ class Post extends BackendController
     private function getCategoryOptions(): array
     {
         return Category::getFlatCategoryList();
+    }
+
+    /**
+     * 获取启用的站点列表
+     */
+    private function getSiteOptions(): array
+    {
+        $sites = $this->siteModel->clear()
+            ->where(MultipassSite::fields_IS_ENABLED, 1)
+            ->order(MultipassSite::fields_SITE_NAME, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        $options = [];
+        foreach ($sites as $site) {
+            $options[] = [
+                'site_id' => $site->getId(),
+                'site_name' => $site->getSiteName(),
+                'site_url' => $site->getSiteUrl(),
+            ];
+        }
+        return $options;
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_index', '博客列表', 'mdi mdi-view-list', '查看博客文章列表', 'GuoLaiRen_Blog::blog')]
@@ -69,6 +96,7 @@ class Post extends BackendController
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/post/create'));
         $this->assign('post', null);
         $this->assign('categories', $this->getCategoryOptions());
+        $this->assign('sites', $this->getSiteOptions());
 
         return $this->fetch('form');
     }
@@ -105,6 +133,7 @@ class Post extends BackendController
             $post = clone $this->postModel;
             $post->setData(PostModel::fields_TITLE, $title)
                 ->setData(PostModel::fields_SLUG, $slug)
+                ->setData(PostModel::fields_SITE_ID, (int)($data['site_id'] ?? 0))
                 ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
                 ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
                 ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
@@ -145,6 +174,7 @@ class Post extends BackendController
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/post/edit', ['id' => $id]));
         $this->assign('post', $post);
         $this->assign('categories', $this->getCategoryOptions());
+        $this->assign('sites', $this->getSiteOptions());
 
         return $this->fetch('form');
     }
@@ -189,6 +219,7 @@ class Post extends BackendController
 
             $post->setData(PostModel::fields_TITLE, $title)
                 ->setData(PostModel::fields_SLUG, $slug)
+                ->setData(PostModel::fields_SITE_ID, (int)($data['site_id'] ?? 0))
                 ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
                 ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
                 ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))

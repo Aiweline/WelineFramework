@@ -32,7 +32,6 @@ URL别名,"URL Slug"
 数字越小越靠前,"Smaller number appears first"
 状态,Status
 分类描述,"Category Description"
-封面图片URL,"Cover Image URL"
 SEO设置,"SEO Settings"
 SEO标题,"SEO Title"
 留空则使用分类名称,"Leave empty to use category name"
@@ -43,14 +42,19 @@ SEO关键词,"SEO Keywords"
 分类用于对博客文章进行归类整理。,"Categories are used to organize blog posts."
 URL别名将用于生成分类页面的访问地址。,"URL slug will be used to generate category page URL."
 排序数字越小，分类在列表中显示越靠前。,"Smaller sort order number appears first."
+首页,Homepage
+博客分类,"Blog Category"
+封面图片,封面图片
+点击上方按钮选择或上传封面图片,点击上方按钮选择或上传封面图片
 "关键词1, 关键词2, 关键词3","关键词1, 关键词2, 关键词3"
 保存分类,"Save Category"
 创建分类,创建分类
 分类列表,"Category List"
+博客分类管理,博客分类管理
+搜索分类...,"Search categories..."
 暂无分类，请点击右上角按钮创建,"No categories yet"
 文章数,"Post Count"
 操作,Actions
-搜索分类...,"Search categories..."
 编辑,编辑
 删除,删除
 确定要删除这个分类吗？,"Are you sure you want to delete this category?"
@@ -67,6 +71,11 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 请输入文章内容（支持HTML）,请输入文章内容（支持HTML）
 支持HTML格式，可以使用富文本编辑器,支持HTML格式，可以使用富文本编辑器
 发布设置,"Publish Settings"
+所属站点,所属站点
+请选择,请选择
+新建站点,新建站点
+新建,新建
+请选择所属站点,请选择所属站点
 发布时间,"Published At"
 留空则使用当前时间,留空则使用当前时间
 设为精选文章,"Set as Featured"
@@ -82,9 +91,28 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 其他设置,"Other Settings"
 作者,Author
 文章作者名称,"Author name"
-例如：https://example.com/image.jpg,例如：https://example.com/image.jpg
-文章封面图片的完整URL地址,文章封面图片的完整URL地址
 浏览量,"View Count"
+快速新建站点,快速新建站点
+站点名称,站点名称
+例如：我的博客站点,例如：我的博客站点
+请输入站点名称,请输入站点名称
+站点URL,站点URL
+例如：https://example.com,例如：https://example.com
+请输入有效的站点URL,请输入有效的站点URL
+加密密钥,加密密钥
+留空自动生成,留空自动生成
+生成,生成
+用于数据加密传输，建议自动生成,用于数据加密传输，建议自动生成
+用户类型,用户类型
+前台用户,前台用户
+后台用户,后台用户
+启用站点,启用站点
+保存站点,保存站点
+保存中...,保存中...
+保存失败,保存失败
+网络错误，请重试,网络错误，请重试
+博客文章管理,博客文章管理
+博客文章,"Blog Post"
 博客文章列表,"Blog Posts List"
 按标题或URL别名搜索,"Search by title or URL slug"
 搜索,Search
@@ -100,13 +128,13 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
+封面图片URL,"Cover Image URL"
+例如：https://example.com/image.jpg,例如：https://example.com/image.jpg
+文章封面图片的完整URL地址,文章封面图片的完整URL地址
 "当前第 %{page} 页","Page %{page}"
 文章管理,"Post Management"
-博客文章,"Blog Post"
-博客分类,"Blog Category"
 博客列表,"Blog List"
 全部,All
-首页,Homepage
 关于我们,"About Us"
 联系我们,"Contact Us"
 隐私政策,"Privacy Policy"

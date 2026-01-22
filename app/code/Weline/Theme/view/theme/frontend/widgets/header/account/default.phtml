@@ -1,0 +1,246 @@
+<?php
+/**
+ * Header 用户账户部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - show_avatar: 显示头像
+ * - show_name: 显示用户名
+ * - dropdown_items: 下拉菜单项
+ */
+
+$showAvatar = (bool)($this->getData('show_avatar') ?? true);
+$showName = (bool)($this->getData('show_name') ?? false);
+$dropdownItems = $this->getData('dropdown_items') ?? [];
+
+// 示例：检查登录状态（实际应从Session获取）
+$isLoggedIn = false;
+$userName = '用户名';
+$userAvatar = '';
+
+// 默认下拉菜单
+if (empty($dropdownItems)) {
+    $dropdownItems = [
+        ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'ri-user-line'],
+        ['label' => __('我的订单'), 'url' => '/account/orders', 'icon' => 'ri-file-list-line'],
+        ['label' => __('我的收藏'), 'url' => '/account/wishlist', 'icon' => 'ri-heart-line'],
+        ['label' => __('地址管理'), 'url' => '/account/addresses', 'icon' => 'ri-map-pin-line'],
+        ['type' => 'divider'],
+        ['label' => __('退出登录'), 'url' => '/account/logout', 'icon' => 'ri-logout-box-line'],
+    ];
+}
+?>
+
+<div class="widget-header-account">
+    <?php if ($isLoggedIn): ?>
+        <!-- 已登录状态 -->
+        <div class="account-logged-in">
+            <a href="/account" class="account-link">
+                <?php if ($showAvatar): ?>
+                    <span class="account-avatar">
+                        <?php if ($userAvatar): ?>
+                            <img src="<?= htmlspecialchars($userAvatar) ?>" alt="<?= htmlspecialchars($userName) ?>">
+                        <?php else: ?>
+                            <i class="ri-user-line"></i>
+                        <?php endif; ?>
+                    </span>
+                <?php endif; ?>
+                
+                <?php if ($showName): ?>
+                    <span class="account-name"><?= htmlspecialchars($userName) ?></span>
+                <?php endif; ?>
+                
+                <i class="ri-arrow-down-s-line dropdown-arrow"></i>
+            </a>
+            
+            <!-- 下拉菜单 -->
+            <div class="account-dropdown">
+                <div class="dropdown-header">
+                    <span class="welcome-text"><?= __('欢迎回来') ?></span>
+                    <span class="user-name"><?= htmlspecialchars($userName) ?></span>
+                </div>
+                <ul class="dropdown-menu">
+                    <?php foreach ($dropdownItems as $item): ?>
+                        <?php if (($item['type'] ?? '') === 'divider'): ?>
+                            <li class="divider"></li>
+                        <?php else: ?>
+                            <li>
+                                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
+                                    <?php if (!empty($item['icon'])): ?>
+                                        <i class="<?= htmlspecialchars($item['icon']) ?>"></i>
+                                    <?php endif; ?>
+                                    <?= htmlspecialchars($item['label'] ?? '') ?>
+                                </a>
+                            </li>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    <?php else: ?>
+        <!-- 未登录状态 -->
+        <div class="account-guest">
+            <a href="/account/login" class="account-link">
+                <span class="account-avatar">
+                    <i class="ri-user-line"></i>
+                </span>
+                <span class="account-text">
+                    <span class="login-text"><?= __('登录') ?></span>
+                    <span class="register-text"><?= __('注册') ?></span>
+                </span>
+            </a>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-header-account {
+    position: relative;
+}
+
+.widget-header-account .account-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--text-color, #333);
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: background-color 0.3s;
+}
+
+.widget-header-account .account-link:hover {
+    background-color: var(--hover-bg, rgba(0,0,0,0.05));
+}
+
+.widget-header-account .account-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-light, #f5f5f5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.widget-header-account .account-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.widget-header-account .account-avatar i {
+    font-size: 20px;
+    color: #666;
+}
+
+.widget-header-account .account-name {
+    font-weight: 500;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.widget-header-account .account-text {
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.widget-header-account .login-text {
+    font-weight: 600;
+}
+
+.widget-header-account .register-text {
+    color: #666;
+    font-size: 12px;
+}
+
+.widget-header-account .dropdown-arrow {
+    font-size: 14px;
+    transition: transform 0.3s;
+}
+
+.widget-header-account .account-logged-in:hover .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+/* 下拉菜单 */
+.widget-header-account .account-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 220px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 1000;
+    margin-top: 10px;
+}
+
+.widget-header-account .account-logged-in:hover .account-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.widget-header-account .dropdown-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    background: var(--bg-light, #f9f9f9);
+    border-radius: 12px 12px 0 0;
+}
+
+.widget-header-account .welcome-text {
+    display: block;
+    font-size: 12px;
+    color: #666;
+}
+
+.widget-header-account .user-name {
+    display: block;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.widget-header-account .dropdown-menu {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+}
+
+.widget-header-account .dropdown-menu li a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.widget-header-account .dropdown-menu li a:hover {
+    background-color: var(--hover-bg, #f5f5f5);
+    color: var(--primary-color, #007bff);
+}
+
+.widget-header-account .dropdown-menu li a i {
+    font-size: 18px;
+    width: 20px;
+    text-align: center;
+}
+
+.widget-header-account .dropdown-menu .divider {
+    height: 1px;
+    background: #eee;
+    margin: 8px 0;
+}
+</style>

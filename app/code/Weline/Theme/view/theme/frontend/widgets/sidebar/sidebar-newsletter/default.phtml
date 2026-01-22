@@ -1,0 +1,128 @@
+<?php
+/**
+ * 邮件订阅（侧栏）部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('订阅我们');
+$description = $this->getData('description') ?? __('订阅获取最新优惠信息');
+$buttonText = $this->getData('button_text') ?? __('订阅');
+$placeholder = $this->getData('placeholder') ?? __('请输入邮箱地址');
+
+$widgetId = 'sidebar-newsletter-' . uniqid();
+?>
+
+<div class="widget-sidebar-newsletter" id="<?= $widgetId ?>">
+    <div class="newsletter-icon">
+        <i class="ri-mail-send-line"></i>
+    </div>
+    
+    <?php if ($title): ?>
+        <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
+    <?php endif; ?>
+    
+    <?php if ($description): ?>
+        <p class="widget-description"><?= htmlspecialchars($description) ?></p>
+    <?php endif; ?>
+    
+    <form class="newsletter-form" action="/newsletter/subscribe" method="post">
+        <input type="email" 
+               name="email" 
+               class="newsletter-input" 
+               placeholder="<?= htmlspecialchars($placeholder) ?>"
+               required>
+        <button type="submit" class="newsletter-submit">
+            <?= htmlspecialchars($buttonText) ?>
+        </button>
+    </form>
+    
+    <p class="newsletter-privacy">
+        <i class="ri-shield-check-line"></i>
+        <?= __('我们不会分享您的邮箱地址') ?>
+    </p>
+</div>
+
+<style>
+.widget-sidebar-newsletter {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+    color: #fff;
+}
+
+.widget-sidebar-newsletter .newsletter-icon {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+}
+
+.widget-sidebar-newsletter .newsletter-icon i {
+    font-size: 28px;
+}
+
+.widget-sidebar-newsletter .widget-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 10px;
+}
+
+.widget-sidebar-newsletter .widget-description {
+    font-size: 13px;
+    opacity: 0.9;
+    margin: 0 0 20px;
+}
+
+.widget-sidebar-newsletter .newsletter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.widget-sidebar-newsletter .newsletter-input {
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.widget-sidebar-newsletter .newsletter-input:focus {
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+}
+
+.widget-sidebar-newsletter .newsletter-submit {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #fff;
+    color: #764ba2;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.widget-sidebar-newsletter .newsletter-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.widget-sidebar-newsletter .newsletter-privacy {
+    font-size: 11px;
+    opacity: 0.8;
+    margin: 15px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+</style>

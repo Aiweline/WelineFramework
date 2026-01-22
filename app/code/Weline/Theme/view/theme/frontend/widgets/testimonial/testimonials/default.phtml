@@ -1,0 +1,210 @@
+<?php
+/**
+ * 客户评价部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('客户评价');
+$subtitle = $this->getData('subtitle') ?? __('看看客户怎么说');
+$testimonials = $this->getData('testimonials') ?? [];
+$columns = $this->getData('columns') ?? '3';
+$layout = $this->getData('layout') ?? 'grid';
+$showRating = (bool)($this->getData('show_rating') ?? true);
+$showAvatar = (bool)($this->getData('show_avatar') ?? true);
+
+// 示例数据
+if (empty($testimonials)) {
+    $testimonials = [
+        [
+            'content' => __('产品质量非常好，物流速度也很快，下次还会继续购买！'),
+            'author' => '张先生',
+            'position' => __('企业客户'),
+            'avatar' => '/images/avatars/avatar1.jpg',
+            'rating' => 5,
+        ],
+        [
+            'content' => __('客服态度很好，有问题都能及时解决，购物体验非常满意。'),
+            'author' => '李女士',
+            'position' => __('普通用户'),
+            'avatar' => '/images/avatars/avatar2.jpg',
+            'rating' => 5,
+        ],
+        [
+            'content' => __('价格实惠，性价比很高，已经推荐给身边的朋友了。'),
+            'author' => '王先生',
+            'position' => __('VIP会员'),
+            'avatar' => '/images/avatars/avatar3.jpg',
+            'rating' => 4,
+        ],
+    ];
+}
+
+$widgetId = 'testimonials-' . uniqid();
+?>
+
+<div class="widget-testimonials" id="<?= $widgetId ?>">
+    <?php if ($title || $subtitle): ?>
+        <div class="widget-header">
+            <?php if ($title): ?>
+                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
+    <div class="testimonials-container layout-<?= htmlspecialchars($layout) ?>">
+        <div class="testimonials-grid columns-<?= htmlspecialchars($columns) ?>">
+            <?php foreach ($testimonials as $testimonial): ?>
+                <div class="testimonial-card">
+                    <div class="testimonial-quote">
+                        <i class="ri-double-quotes-l"></i>
+                    </div>
+                    
+                    <?php if ($showRating && isset($testimonial['rating'])): ?>
+                        <div class="testimonial-rating">
+                            <?php for ($i = 1; $i <= 5; $i++): ?>
+                                <i class="ri-star-<?= $i <= $testimonial['rating'] ? 'fill' : 'line' ?>"></i>
+                            <?php endfor; ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <p class="testimonial-content"><?= htmlspecialchars($testimonial['content']) ?></p>
+                    
+                    <div class="testimonial-author">
+                        <?php if ($showAvatar && !empty($testimonial['avatar'])): ?>
+                            <img src="<?= htmlspecialchars($testimonial['avatar']) ?>" 
+                                 alt="<?= htmlspecialchars($testimonial['author']) ?>"
+                                 class="author-avatar">
+                        <?php endif; ?>
+                        
+                        <div class="author-info">
+                            <h4 class="author-name"><?= htmlspecialchars($testimonial['author']) ?></h4>
+                            <?php if (!empty($testimonial['position'])): ?>
+                                <span class="author-position"><?= htmlspecialchars($testimonial['position']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.widget-testimonials {
+    padding: 60px 0;
+    background: #f9f9f9;
+}
+
+.widget-testimonials .widget-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.widget-testimonials .widget-title {
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 10px;
+}
+
+.widget-testimonials .widget-subtitle {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+}
+
+.widget-testimonials .testimonials-grid {
+    display: grid;
+    gap: 30px;
+}
+
+.widget-testimonials .testimonials-grid.columns-1 { grid-template-columns: 1fr; max-width: 700px; margin: 0 auto; }
+.widget-testimonials .testimonials-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-testimonials .testimonials-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+
+.widget-testimonials .testimonial-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 30px;
+    position: relative;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    transition: all 0.3s;
+}
+
+.widget-testimonials .testimonial-card:hover {
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    transform: translateY(-5px);
+}
+
+.widget-testimonials .testimonial-quote {
+    position: absolute;
+    top: 20px;
+    right: 25px;
+    font-size: 40px;
+    color: #eee;
+}
+
+.widget-testimonials .testimonial-rating {
+    margin-bottom: 15px;
+}
+
+.widget-testimonials .testimonial-rating i {
+    color: #ffc107;
+    font-size: 16px;
+}
+
+.widget-testimonials .testimonial-rating i.ri-star-line {
+    color: #ddd;
+}
+
+.widget-testimonials .testimonial-content {
+    font-size: 15px;
+    line-height: 1.7;
+    color: #555;
+    margin: 0 0 20px;
+    font-style: italic;
+}
+
+.widget-testimonials .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.widget-testimonials .author-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.widget-testimonials .author-name {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.widget-testimonials .author-position {
+    font-size: 13px;
+    color: #888;
+}
+
+@media (max-width: 992px) {
+    .widget-testimonials .testimonials-grid.columns-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .widget-testimonials .testimonials-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .widget-testimonials .widget-title {
+        font-size: 24px;
+    }
+}
+</style>

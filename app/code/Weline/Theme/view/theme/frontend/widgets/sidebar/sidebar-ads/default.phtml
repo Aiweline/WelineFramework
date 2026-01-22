@@ -1,0 +1,90 @@
+<?php
+/**
+ * 侧栏广告部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$ads = $this->getData('ads') ?? [];
+$showLabel = (bool)($this->getData('show_label') ?? true);
+
+// 示例广告数据
+if (empty($ads)) {
+    $ads = [
+        [
+            'image' => '/images/ads/sidebar-ad-1.jpg',
+            'link' => '/promotions/summer',
+            'alt' => __('夏季促销'),
+            'open_new_tab' => false,
+        ],
+        [
+            'image' => '/images/ads/sidebar-ad-2.jpg',
+            'link' => '/promotions/new-arrivals',
+            'alt' => __('新品上市'),
+            'open_new_tab' => false,
+        ],
+    ];
+}
+
+$widgetId = 'sidebar-ads-' . uniqid();
+?>
+
+<div class="widget-sidebar-ads" id="<?= $widgetId ?>">
+    <?php foreach ($ads as $index => $ad): ?>
+        <div class="ad-item">
+            <a href="<?= htmlspecialchars($ad['link'] ?? '#') ?>" 
+               class="ad-link"
+               <?= !empty($ad['open_new_tab']) ? 'target="_blank" rel="noopener"' : '' ?>>
+                <img src="<?= htmlspecialchars($ad['image']) ?>" 
+                     alt="<?= htmlspecialchars($ad['alt'] ?? __('广告')) ?>"
+                     class="ad-image"
+                     loading="lazy">
+                
+                <?php if ($showLabel): ?>
+                    <span class="ad-label"><?= __('广告') ?></span>
+                <?php endif; ?>
+            </a>
+        </div>
+    <?php endforeach; ?>
+</div>
+
+<style>
+.widget-sidebar-ads {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.widget-sidebar-ads .ad-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.widget-sidebar-ads .ad-link {
+    display: block;
+}
+
+.widget-sidebar-ads .ad-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s;
+}
+
+.widget-sidebar-ads .ad-item:hover .ad-image {
+    transform: scale(1.03);
+}
+
+.widget-sidebar-ads .ad-label {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+</style>

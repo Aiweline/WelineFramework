@@ -1,0 +1,118 @@
+<?php
+/**
+ * 页脚社交图标部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? '';
+$facebook = $this->getData('facebook') ?? '';
+$twitter = $this->getData('twitter') ?? '';
+$instagram = $this->getData('instagram') ?? '';
+$youtube = $this->getData('youtube') ?? '';
+$linkedin = $this->getData('linkedin') ?? '';
+$pinterest = $this->getData('pinterest') ?? '';
+$tiktok = $this->getData('tiktok') ?? '';
+$wechatQr = $this->getData('wechat_qr') ?? '';
+$weibo = $this->getData('weibo') ?? '';
+$iconSize = $this->getData('icon_size') ?? 'medium';
+
+// 构建社交链接
+$socials = [];
+if ($facebook) $socials[] = ['name' => 'Facebook', 'url' => $facebook, 'icon' => 'ri-facebook-fill'];
+if ($twitter) $socials[] = ['name' => 'Twitter/X', 'url' => $twitter, 'icon' => 'ri-twitter-x-fill'];
+if ($instagram) $socials[] = ['name' => 'Instagram', 'url' => $instagram, 'icon' => 'ri-instagram-fill'];
+if ($youtube) $socials[] = ['name' => 'YouTube', 'url' => $youtube, 'icon' => 'ri-youtube-fill'];
+if ($linkedin) $socials[] = ['name' => 'LinkedIn', 'url' => $linkedin, 'icon' => 'ri-linkedin-fill'];
+if ($pinterest) $socials[] = ['name' => 'Pinterest', 'url' => $pinterest, 'icon' => 'ri-pinterest-fill'];
+if ($tiktok) $socials[] = ['name' => 'TikTok', 'url' => $tiktok, 'icon' => 'ri-tiktok-fill'];
+if ($weibo) $socials[] = ['name' => '微博', 'url' => $weibo, 'icon' => 'ri-weibo-fill'];
+
+// 示例数据
+if (empty($socials)) {
+    $socials = [
+        ['name' => 'Facebook', 'url' => '#', 'icon' => 'ri-facebook-fill'],
+        ['name' => 'Twitter/X', 'url' => '#', 'icon' => 'ri-twitter-x-fill'],
+        ['name' => 'Instagram', 'url' => '#', 'icon' => 'ri-instagram-fill'],
+        ['name' => 'YouTube', 'url' => '#', 'icon' => 'ri-youtube-fill'],
+    ];
+}
+
+$widgetId = 'footer-social-' . uniqid();
+?>
+
+<div class="widget-footer-social size-<?= htmlspecialchars($iconSize) ?>" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+        <h4 class="social-title"><?= htmlspecialchars($title) ?></h4>
+    <?php endif; ?>
+    
+    <div class="social-links">
+        <?php foreach ($socials as $social): ?>
+            <a href="<?= htmlspecialchars($social['url']) ?>" 
+               class="social-link"
+               title="<?= htmlspecialchars($social['name']) ?>"
+               target="_blank"
+               rel="noopener noreferrer">
+                <i class="<?= htmlspecialchars($social['icon']) ?>"></i>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-footer-social .social-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 15px;
+    color: #fff;
+}
+
+.widget-footer-social .social-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.widget-footer-social .social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.widget-footer-social .social-link:hover {
+    background: var(--primary-color, #007bff);
+    transform: translateY(-3px);
+}
+
+/* 尺寸 */
+.widget-footer-social.size-small .social-link {
+    width: 32px;
+    height: 32px;
+}
+
+.widget-footer-social.size-small .social-link i {
+    font-size: 16px;
+}
+
+.widget-footer-social.size-medium .social-link {
+    width: 40px;
+    height: 40px;
+}
+
+.widget-footer-social.size-medium .social-link i {
+    font-size: 20px;
+}
+
+.widget-footer-social.size-large .social-link {
+    width: 48px;
+    height: 48px;
+}
+
+.widget-footer-social.size-large .social-link i {
+    font-size: 24px;
+}
+</style>

@@ -1,0 +1,114 @@
+<?php
+/**
+ * 相关产品部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('相关产品');
+$limit = (int)($this->getData('limit') ?? 4);
+$columns = $this->getData('columns') ?? '4';
+$layout = $this->getData('layout') ?? 'carousel';
+
+// 示例产品数据
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('相关产品 %d', $i),
+        'url' => '/product/related-' . $i,
+        'image' => '/images/products/related-' . $i . '.jpg',
+        'price' => rand(50, 400),
+        'original_price' => rand(50, 400) * 1.15,
+        'rating' => rand(35, 50) / 10,
+        'review_count' => rand(10, 300),
+    ];
+}
+
+$widgetId = 'related-products-' . uniqid();
+?>
+
+<div class="widget-related-products widget-products" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+    </div>
+    
+    <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-prev" type="button">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <div class="products-wrapper">
+            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+                <?php foreach ($products as $product): ?>
+                    <div class="product-card">
+                        <div class="product-image-wrapper">
+                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                                     class="product-image"
+                                     loading="lazy">
+                            </a>
+                            
+                            <div class="product-actions">
+                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line"></i>
+                                </button>
+                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= htmlspecialchars($product['url']) ?>">
+                                    <?= htmlspecialchars($product['name']) ?>
+                                </a>
+                            </h3>
+                            
+                            <div class="product-rating">
+                                <div class="stars">
+                                    <?php for ($s = 1; $s <= 5; $s++): ?>
+                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                    <?php endfor; ?>
+                                </div>
+                                <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                            </div>
+                            
+                            <div class="product-price">
+                                <?php if ($product['original_price'] > $product['price']): ?>
+                                    <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                <?php endif; ?>
+                                <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                            </div>
+                            
+                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
+                                <i class="ri-shopping-cart-line"></i>
+                                <span><?= __('加入购物车') ?></span>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-next" type="button">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-related-products .product-rating .stars i {
+    color: #ffc107;
+}
+
+.widget-related-products .product-rating .stars i.ri-star-line {
+    color: #ddd;
+}
+</style>

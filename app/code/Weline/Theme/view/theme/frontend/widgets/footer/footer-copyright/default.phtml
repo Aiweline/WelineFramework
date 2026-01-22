@@ -1,0 +1,92 @@
+<?php
+/**
+ * 页脚版权部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$copyrightText = $this->getData('copyright_text') ?? '© {year} {site_name}. All Rights Reserved.';
+$icpNumber = $this->getData('icp_number') ?? '';
+$icpLink = $this->getData('icp_link') ?? 'https://beian.miit.gov.cn/';
+$policeNumber = $this->getData('police_number') ?? '';
+$policeLink = $this->getData('police_link') ?? '';
+$additionalText = $this->getData('additional_text') ?? '';
+
+// 替换变量
+$siteName = 'WeShop'; // 应从系统配置获取
+$copyrightText = str_replace(
+    ['{year}', '{site_name}'],
+    [date('Y'), $siteName],
+    $copyrightText
+);
+
+$widgetId = 'footer-copyright-' . uniqid();
+?>
+
+<div class="widget-footer-copyright" id="<?= $widgetId ?>">
+    <div class="copyright-text">
+        <?= htmlspecialchars($copyrightText) ?>
+    </div>
+    
+    <?php if ($icpNumber || $policeNumber || $additionalText): ?>
+        <div class="copyright-links">
+            <?php if ($icpNumber): ?>
+                <a href="<?= htmlspecialchars($icpLink) ?>" target="_blank" rel="noopener noreferrer" class="icp-link">
+                    <?= htmlspecialchars($icpNumber) ?>
+                </a>
+            <?php endif; ?>
+            
+            <?php if ($policeNumber): ?>
+                <a href="<?= htmlspecialchars($policeLink) ?>" target="_blank" rel="noopener noreferrer" class="police-link">
+                    <img src="/images/icons/police-badge.png" alt="" class="police-icon">
+                    <?= htmlspecialchars($policeNumber) ?>
+                </a>
+            <?php endif; ?>
+            
+            <?php if ($additionalText): ?>
+                <span class="additional-text"><?= htmlspecialchars($additionalText) ?></span>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-footer-copyright {
+    text-align: center;
+    padding: 20px 0;
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+}
+
+.widget-footer-copyright .copyright-text {
+    margin-bottom: 10px;
+}
+
+.widget-footer-copyright .copyright-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.widget-footer-copyright .copyright-links a {
+    color: rgba(255,255,255,0.6);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.widget-footer-copyright .copyright-links a:hover {
+    color: #fff;
+}
+
+.widget-footer-copyright .police-link {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.widget-footer-copyright .police-icon {
+    width: 16px;
+    height: 16px;
+}
+</style>

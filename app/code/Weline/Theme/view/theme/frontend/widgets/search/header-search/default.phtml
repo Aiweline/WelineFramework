@@ -1,0 +1,238 @@
+<?php
+/**
+ * Header 搜索框部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - placeholder: 占位符文字
+ * - show_hot_words: 显示热搜词
+ * - auto_complete: 启用自动补全
+ * - search_type: 搜索范围
+ */
+
+$placeholder = $this->getData('placeholder') ?? __('搜索商品...');
+$showHotWords = (bool)($this->getData('show_hot_words') ?? true);
+$autoComplete = (bool)($this->getData('auto_complete') ?? true);
+$searchType = $this->getData('search_type') ?? 'all';
+
+// 示例热搜词
+$hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
+?>
+
+<div class="widget-header-search" data-autocomplete="<?= $autoComplete ? 'true' : 'false' ?>">
+    <form action="/search" method="get" class="search-form">
+        <div class="search-input-wrapper">
+            <?php if ($searchType !== 'all'): ?>
+                <input type="hidden" name="type" value="<?= htmlspecialchars($searchType) ?>">
+            <?php endif; ?>
+            
+            <input type="search" 
+                   name="q" 
+                   class="search-input" 
+                   placeholder="<?= htmlspecialchars($placeholder) ?>"
+                   autocomplete="off">
+            
+            <button type="submit" class="search-button">
+                <i class="ri-search-line"></i>
+            </button>
+            
+            <?php if ($autoComplete): ?>
+                <div class="search-suggestions" style="display: none;">
+                    <div class="suggestion-list"></div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </form>
+    
+    <?php if ($showHotWords && !empty($hotWords)): ?>
+        <div class="hot-words">
+            <span class="hot-label"><i class="ri-fire-line"></i> <?= __('热搜') ?>:</span>
+            <?php foreach ($hotWords as $word): ?>
+                <a href="/search?q=<?= urlencode($word) ?>" class="hot-word"><?= htmlspecialchars($word) ?></a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-header-search {
+    width: 100%;
+    max-width: 600px;
+}
+
+.widget-header-search .search-form {
+    width: 100%;
+}
+
+.widget-header-search .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.widget-header-search .search-input {
+    width: 100%;
+    padding: 12px 50px 12px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 25px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.widget-header-search .search-input:focus {
+    border-color: var(--primary-color, #007bff);
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.widget-header-search .search-button {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s;
+}
+
+.widget-header-search .search-button:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+.widget-header-search .search-button i {
+    font-size: 18px;
+}
+
+/* 热搜词 */
+.widget-header-search .hot-words {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+.widget-header-search .hot-label {
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.widget-header-search .hot-label i {
+    color: #ff6b6b;
+}
+
+.widget-header-search .hot-word {
+    color: #666;
+    text-decoration: none;
+    padding: 2px 8px;
+    background: #f5f5f5;
+    border-radius: 10px;
+    transition: all 0.3s;
+}
+
+.widget-header-search .hot-word:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+/* 搜索建议 */
+.widget-header-search .search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    margin-top: 5px;
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.widget-header-search .suggestion-item {
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.widget-header-search .suggestion-item:hover {
+    background-color: #f5f5f5;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchWidget = document.querySelector('.widget-header-search');
+    if (!searchWidget) return;
+    
+    const searchInput = searchWidget.querySelector('.search-input');
+    const suggestions = searchWidget.querySelector('.search-suggestions');
+    const autoComplete = searchWidget.dataset.autocomplete === 'true';
+    
+    if (autoComplete && searchInput && suggestions) {
+        let debounceTimer;
+        
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                suggestions.style.display = 'none';
+                return;
+            }
+            
+            debounceTimer = setTimeout(function() {
+                // 这里应该调用实际的搜索API
+                // fetch('/api/search/suggestions?q=' + encodeURIComponent(query))
+                //     .then(response => response.json())
+                //     .then(data => {
+                //         // 渲染建议
+                //     });
+                
+                // 示例数据
+                const mockSuggestions = [
+                    query + ' 热销',
+                    query + ' 新款',
+                    query + ' 特价'
+                ];
+                
+                const list = suggestions.querySelector('.suggestion-list');
+                list.innerHTML = mockSuggestions.map(s => 
+                    '<div class="suggestion-item">' + s + '</div>'
+                ).join('');
+                
+                suggestions.style.display = 'block';
+            }, 300);
+        });
+        
+        // 点击建议项
+        suggestions.addEventListener('click', function(e) {
+            if (e.target.classList.contains('suggestion-item')) {
+                searchInput.value = e.target.textContent;
+                suggestions.style.display = 'none';
+                searchInput.closest('form').submit();
+            }
+        });
+        
+        // 点击外部关闭
+        document.addEventListener('click', function(e) {
+            if (!searchWidget.contains(e.target)) {
+                suggestions.style.display = 'none';
+            }
+        });
+    }
+});
+</script>

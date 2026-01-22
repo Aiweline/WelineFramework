@@ -1,0 +1,349 @@
+<?php
+/**
+ * 产品轮播部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? '';
+$productSource = $this->getData('product_source') ?? 'featured';
+$productIds = $this->getData('product_ids') ?? '';
+$limit = (int)($this->getData('limit') ?? 10);
+$slidesPerView = (int)($this->getData('slides_per_view') ?? 4);
+$autoplay = (bool)($this->getData('autoplay') ?? false);
+$loop = (bool)($this->getData('loop') ?? true);
+
+// 示例产品数据
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('轮播产品 %d', $i),
+        'url' => '/product/carousel-' . $i,
+        'image' => '/images/products/carousel-' . $i . '.jpg',
+        'price' => rand(50, 500),
+        'original_price' => rand(50, 500) * 1.2,
+        'rating' => rand(35, 50) / 10,
+    ];
+}
+
+$widgetId = 'product-carousel-' . uniqid();
+?>
+
+<div class="widget-product-carousel" id="<?= $widgetId ?>" 
+     data-slides-per-view="<?= $slidesPerView ?>"
+     data-autoplay="<?= $autoplay ? 'true' : 'false' ?>"
+     data-loop="<?= $loop ? 'true' : 'false' ?>">
+    
+    <?php if ($title): ?>
+        <div class="widget-header">
+            <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+        </div>
+    <?php endif; ?>
+    
+    <div class="carousel-container">
+        <button class="carousel-arrow carousel-prev" type="button">
+            <i class="ri-arrow-left-s-line"></i>
+        </button>
+        
+        <div class="carousel-viewport">
+            <div class="carousel-track">
+                <?php foreach ($products as $product): ?>
+                    <div class="carousel-slide">
+                        <div class="product-card">
+                            <div class="product-image-wrapper">
+                                <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                                    <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                         alt="<?= htmlspecialchars($product['name']) ?>"
+                                         class="product-image"
+                                         loading="lazy">
+                                </a>
+                                
+                                <div class="product-actions">
+                                    <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                        <i class="ri-heart-line"></i>
+                                    </button>
+                                    <button class="action-btn btn-cart" title="<?= __('加入购物车') ?>">
+                                        <i class="ri-shopping-cart-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="product-info">
+                                <h3 class="product-name">
+                                    <a href="<?= htmlspecialchars($product['url']) ?>">
+                                        <?= htmlspecialchars($product['name']) ?>
+                                    </a>
+                                </h3>
+                                
+                                <div class="product-price">
+                                    <?php if ($product['original_price'] > $product['price']): ?>
+                                        <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                    <?php endif; ?>
+                                    <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <button class="carousel-arrow carousel-next" type="button">
+            <i class="ri-arrow-right-s-line"></i>
+        </button>
+    </div>
+</div>
+
+<style>
+.widget-product-carousel {
+    padding: 20px 0;
+}
+
+.widget-product-carousel .widget-header {
+    margin-bottom: 20px;
+}
+
+.widget-product-carousel .widget-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.widget-product-carousel .carousel-container {
+    position: relative;
+    padding: 0 50px;
+}
+
+.widget-product-carousel .carousel-viewport {
+    overflow: hidden;
+}
+
+.widget-product-carousel .carousel-track {
+    display: flex;
+    gap: 20px;
+    transition: transform 0.4s ease;
+}
+
+.widget-product-carousel .carousel-slide {
+    flex: 0 0 auto;
+}
+
+/* 产品卡片 */
+.widget-product-carousel .product-card {
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s;
+}
+
+.widget-product-carousel .product-card:hover {
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transform: translateY(-3px);
+}
+
+.widget-product-carousel .product-image-wrapper {
+    position: relative;
+    padding-top: 100%;
+}
+
+.widget-product-carousel .product-image-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-product-carousel .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+}
+
+.widget-product-carousel .product-card:hover .product-image {
+    transform: scale(1.05);
+}
+
+.widget-product-carousel .product-actions {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: all 0.3s;
+}
+
+.widget-product-carousel .product-card:hover .product-actions {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.widget-product-carousel .action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: all 0.3s;
+}
+
+.widget-product-carousel .action-btn:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+.widget-product-carousel .product-info {
+    padding: 15px;
+}
+
+.widget-product-carousel .product-name {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.widget-product-carousel .product-name a {
+    color: var(--text-color, #333);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.widget-product-carousel .product-price {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-product-carousel .price-original {
+    font-size: 12px;
+    color: #999;
+    text-decoration: line-through;
+}
+
+.widget-product-carousel .price-current {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 箭头 */
+.widget-product-carousel .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 10;
+    transition: all 0.3s;
+}
+
+.widget-product-carousel .carousel-arrow:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+.widget-product-carousel .carousel-arrow i {
+    font-size: 24px;
+}
+
+.widget-product-carousel .carousel-prev {
+    left: 0;
+}
+
+.widget-product-carousel .carousel-next {
+    right: 0;
+}
+
+@media (max-width: 768px) {
+    .widget-product-carousel .carousel-container {
+        padding: 0 15px;
+    }
+    
+    .widget-product-carousel .carousel-arrow {
+        width: 36px;
+        height: 36px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const track = widget.querySelector('.carousel-track');
+    const slides = widget.querySelectorAll('.carousel-slide');
+    const prevBtn = widget.querySelector('.carousel-prev');
+    const nextBtn = widget.querySelector('.carousel-next');
+    
+    if (!track || !slides.length) return;
+    
+    const slidesPerView = parseInt(widget.dataset.slidesPerView) || 4;
+    const autoplay = widget.dataset.autoplay === 'true';
+    const loop = widget.dataset.loop === 'true';
+    
+    let currentIndex = 0;
+    const slideWidth = slides[0].offsetWidth + 20; // 包含gap
+    const maxIndex = Math.max(0, slides.length - slidesPerView);
+    
+    // 设置slide宽度
+    const viewportWidth = widget.querySelector('.carousel-viewport').offsetWidth;
+    const calculatedSlideWidth = (viewportWidth - (slidesPerView - 1) * 20) / slidesPerView;
+    slides.forEach(slide => {
+        slide.style.width = calculatedSlideWidth + 'px';
+    });
+    
+    function goToSlide(index) {
+        if (loop) {
+            currentIndex = ((index % slides.length) + slides.length) % slides.length;
+            if (currentIndex > maxIndex) currentIndex = 0;
+        } else {
+            currentIndex = Math.max(0, Math.min(index, maxIndex));
+        }
+        
+        const offset = currentIndex * (calculatedSlideWidth + 20);
+        track.style.transform = 'translateX(-' + offset + 'px)';
+    }
+    
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => goToSlide(currentIndex - 1));
+    }
+    
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => goToSlide(currentIndex + 1));
+    }
+    
+    // 自动播放
+    let autoplayInterval;
+    if (autoplay) {
+        autoplayInterval = setInterval(() => goToSlide(currentIndex + 1), 4000);
+        
+        widget.addEventListener('mouseenter', () => clearInterval(autoplayInterval));
+        widget.addEventListener('mouseleave', () => {
+            autoplayInterval = setInterval(() => goToSlide(currentIndex + 1), 4000);
+        });
+    }
+})();
+</script>

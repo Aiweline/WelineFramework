@@ -74,7 +74,7 @@ class Listing implements CommandInterface
         }
 
         // 显示标题
-        $this->printing->note(__('路由列表 (共 %1 条)', [$totalCount]));
+        $this->printing->note(__('路由列表 (共 %{1} 条)', [$totalCount]));
         $this->printing->printing(str_repeat('═', 120) . PHP_EOL);
 
         // 按类型显示路由

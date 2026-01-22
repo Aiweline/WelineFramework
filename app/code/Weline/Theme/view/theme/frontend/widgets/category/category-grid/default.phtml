@@ -1,0 +1,189 @@
+<?php
+/**
+ * 分类网格部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('热门分类');
+$subtitle = $this->getData('subtitle') ?? __('浏览我们的商品分类');
+$categoryIds = $this->getData('category_ids') ?? '';
+$limit = (int)($this->getData('limit') ?? 8);
+$columns = $this->getData('columns') ?? '4';
+$showCount = (bool)($this->getData('show_count') ?? true);
+$imageRatio = $this->getData('image_ratio') ?? 'square';
+
+// 图片比例映射
+$ratioMap = [
+    'square'    => '100%',
+    'landscape' => '56.25%',
+    'portrait'  => '133.33%',
+];
+$paddingTop = $ratioMap[$imageRatio] ?? '100%';
+
+// 示例分类数据
+$categories = [
+    ['id' => 1, 'name' => __('电子产品'), 'url' => '/category/electronics', 'image' => '/images/categories/electronics.jpg', 'count' => 156],
+    ['id' => 2, 'name' => __('服装鞋帽'), 'url' => '/category/fashion', 'image' => '/images/categories/fashion.jpg', 'count' => 243],
+    ['id' => 3, 'name' => __('家居生活'), 'url' => '/category/home', 'image' => '/images/categories/home.jpg', 'count' => 178],
+    ['id' => 4, 'name' => __('美妆个护'), 'url' => '/category/beauty', 'image' => '/images/categories/beauty.jpg', 'count' => 134],
+    ['id' => 5, 'name' => __('食品生鲜'), 'url' => '/category/food', 'image' => '/images/categories/food.jpg', 'count' => 89],
+    ['id' => 6, 'name' => __('母婴用品'), 'url' => '/category/baby', 'image' => '/images/categories/baby.jpg', 'count' => 67],
+    ['id' => 7, 'name' => __('运动户外'), 'url' => '/category/sports', 'image' => '/images/categories/sports.jpg', 'count' => 112],
+    ['id' => 8, 'name' => __('图书文具'), 'url' => '/category/books', 'image' => '/images/categories/books.jpg', 'count' => 78],
+];
+
+$categories = array_slice($categories, 0, $limit);
+$widgetId = 'category-grid-' . uniqid();
+?>
+
+<div class="widget-category-grid" id="<?= $widgetId ?>">
+    <?php if ($title || $subtitle): ?>
+        <div class="widget-header">
+            <?php if ($title): ?>
+                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
+    <div class="category-grid columns-<?= htmlspecialchars($columns) ?>">
+        <?php foreach ($categories as $category): ?>
+            <a href="<?= htmlspecialchars($category['url']) ?>" class="category-card">
+                <div class="category-image-wrapper" style="padding-top: <?= $paddingTop ?>;">
+                    <img src="<?= htmlspecialchars($category['image']) ?>" 
+                         alt="<?= htmlspecialchars($category['name']) ?>"
+                         class="category-image"
+                         loading="lazy">
+                    <div class="category-overlay"></div>
+                </div>
+                
+                <div class="category-info">
+                    <h3 class="category-name"><?= htmlspecialchars($category['name']) ?></h3>
+                    <?php if ($showCount): ?>
+                        <span class="category-count"><?= $category['count'] ?> <?= __('件商品') ?></span>
+                    <?php endif; ?>
+                </div>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-category-grid {
+    padding: 40px 0;
+}
+
+.widget-category-grid .widget-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.widget-category-grid .widget-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 10px;
+}
+
+.widget-category-grid .widget-subtitle {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+}
+
+.widget-category-grid .category-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.widget-category-grid .category-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-category-grid .category-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.widget-category-grid .category-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.widget-category-grid .category-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+.widget-category-grid .category-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+
+.widget-category-grid .category-card {
+    display: block;
+    text-decoration: none;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s;
+}
+
+.widget-category-grid .category-card:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    transform: translateY(-5px);
+}
+
+.widget-category-grid .category-image-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.widget-category-grid .category-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+}
+
+.widget-category-grid .category-card:hover .category-image {
+    transform: scale(1.1);
+}
+
+.widget-category-grid .category-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.4) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.widget-category-grid .category-card:hover .category-overlay {
+    opacity: 1;
+}
+
+.widget-category-grid .category-info {
+    padding: 15px;
+    text-align: center;
+}
+
+.widget-category-grid .category-name {
+    margin: 0 0 5px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color, #333);
+}
+
+.widget-category-grid .category-count {
+    font-size: 13px;
+    color: #666;
+}
+
+@media (max-width: 992px) {
+    .widget-category-grid .category-grid.columns-5,
+    .widget-category-grid .category-grid.columns-6 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .widget-category-grid .category-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .widget-category-grid .widget-title {
+        font-size: 22px;
+    }
+}
+</style>

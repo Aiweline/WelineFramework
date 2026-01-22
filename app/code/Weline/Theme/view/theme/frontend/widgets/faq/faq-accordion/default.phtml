@@ -1,0 +1,271 @@
+<?php
+/**
+ * FAQ折叠面板部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('常见问题');
+$subtitle = $this->getData('subtitle') ?? '';
+$faqs = $this->getData('faqs') ?? [];
+$expandFirst = (bool)($this->getData('expand_first') ?? true);
+$allowMultiple = (bool)($this->getData('allow_multiple') ?? false);
+$searchEnabled = (bool)($this->getData('search_enabled') ?? false);
+
+// 示例数据
+if (empty($faqs)) {
+    $faqs = [
+        ['question' => __('如何下单购买？'), 'answer' => __('您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。')],
+        ['question' => __('支持哪些支付方式？'), 'answer' => __('我们支持支付宝、微信支付、银联卡、信用卡等多种支付方式。')],
+        ['question' => __('多久可以收到商品？'), 'answer' => __('一般情况下，付款后1-3个工作日发货，根据您的地址不同，快递时间为1-5天。')],
+        ['question' => __('如何申请退换货？'), 'answer' => __('收到商品7天内，如有质量问题或其他原因需要退换，请联系客服申请退换货。')],
+        ['question' => __('如何联系客服？'), 'answer' => __('您可以通过在线客服、客服电话或邮件联系我们，客服工作时间为每天9:00-21:00。')],
+    ];
+}
+
+$widgetId = 'faq-accordion-' . uniqid();
+?>
+
+<div class="widget-faq-accordion" 
+     id="<?= $widgetId ?>"
+     data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">
+    
+    <?php if ($title || $subtitle): ?>
+        <div class="widget-header">
+            <?php if ($title): ?>
+                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
+    <?php if ($searchEnabled): ?>
+        <div class="faq-search">
+            <input type="text" class="faq-search-input" placeholder="<?= __('搜索问题...') ?>">
+            <i class="ri-search-line"></i>
+        </div>
+    <?php endif; ?>
+    
+    <div class="faq-list">
+        <?php foreach ($faqs as $index => $faq): ?>
+            <div class="faq-item <?= ($expandFirst && $index === 0) ? 'expanded' : '' ?>" data-index="<?= $index ?>">
+                <button class="faq-question" type="button">
+                    <span class="question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                    <span class="question-icon">
+                        <i class="ri-add-line"></i>
+                    </span>
+                </button>
+                <div class="faq-answer" <?= ($expandFirst && $index === 0) ? '' : 'style="display: none;"' ?>>
+                    <div class="answer-content">
+                        <?= nl2br(htmlspecialchars($faq['answer'])) ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-faq-accordion {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 0;
+}
+
+.widget-faq-accordion .widget-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.widget-faq-accordion .widget-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 10px;
+}
+
+.widget-faq-accordion .widget-subtitle {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+}
+
+/* 搜索框 */
+.widget-faq-accordion .faq-search {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.widget-faq-accordion .faq-search-input {
+    width: 100%;
+    padding: 15px 20px 15px 50px;
+    border: 2px solid #eee;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.widget-faq-accordion .faq-search-input:focus {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-faq-accordion .faq-search i {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: #999;
+}
+
+/* FAQ列表 */
+.widget-faq-accordion .faq-list {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+}
+
+.widget-faq-accordion .faq-item {
+    background: #fff;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.widget-faq-accordion .faq-item:last-child {
+    border-bottom: none;
+}
+
+.widget-faq-accordion .faq-question {
+    width: 100%;
+    padding: 20px 25px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    text-align: left;
+    transition: background-color 0.3s;
+}
+
+.widget-faq-accordion .faq-question:hover {
+    background: #f9f9f9;
+}
+
+.widget-faq-accordion .question-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.widget-faq-accordion .question-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.3s;
+}
+
+.widget-faq-accordion .question-icon i {
+    font-size: 18px;
+    transition: transform 0.3s;
+}
+
+.widget-faq-accordion .faq-item.expanded .question-icon i {
+    transform: rotate(45deg);
+}
+
+.widget-faq-accordion .faq-answer {
+    overflow: hidden;
+}
+
+.widget-faq-accordion .answer-content {
+    padding: 0 25px 25px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #666;
+}
+
+/* 隐藏不匹配搜索的项 */
+.widget-faq-accordion .faq-item.hidden {
+    display: none;
+}
+
+@media (max-width: 576px) {
+    .widget-faq-accordion .widget-title {
+        font-size: 22px;
+    }
+    
+    .widget-faq-accordion .faq-question {
+        padding: 15px 20px;
+    }
+    
+    .widget-faq-accordion .question-text {
+        font-size: 14px;
+    }
+    
+    .widget-faq-accordion .answer-content {
+        padding: 0 20px 20px;
+        font-size: 14px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const allowMultiple = widget.dataset.allowMultiple === 'true';
+    const items = widget.querySelectorAll('.faq-item');
+    const searchInput = widget.querySelector('.faq-search-input');
+    
+    // 展开/折叠
+    items.forEach(function(item) {
+        const question = item.querySelector('.faq-question');
+        const answer = item.querySelector('.faq-answer');
+        
+        question.addEventListener('click', function() {
+            const isExpanded = item.classList.contains('expanded');
+            
+            if (!allowMultiple) {
+                // 折叠其他项
+                items.forEach(function(other) {
+                    if (other !== item) {
+                        other.classList.remove('expanded');
+                        other.querySelector('.faq-answer').style.display = 'none';
+                    }
+                });
+            }
+            
+            item.classList.toggle('expanded');
+            answer.style.display = isExpanded ? 'none' : 'block';
+        });
+    });
+    
+    // 搜索功能
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const keyword = this.value.toLowerCase().trim();
+            
+            items.forEach(function(item) {
+                const question = item.querySelector('.question-text').textContent.toLowerCase();
+                const answer = item.querySelector('.answer-content').textContent.toLowerCase();
+                
+                if (keyword === '' || question.includes(keyword) || answer.includes(keyword)) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+        });
+    }
+})();
+</script>

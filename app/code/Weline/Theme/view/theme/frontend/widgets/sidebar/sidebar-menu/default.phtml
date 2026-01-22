@@ -1,0 +1,175 @@
+<?php
+/**
+ * 侧栏菜单部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('导航菜单');
+$menuItems = $this->getData('menu_items') ?? [];
+$collapsedByDefault = (bool)($this->getData('collapsed_by_default') ?? false);
+$showIcons = (bool)($this->getData('show_icons') ?? true);
+
+// 示例菜单数据
+if (empty($menuItems)) {
+    $menuItems = [
+        ['label' => __('我的账户'), 'url' => '/account', 'icon' => 'ri-user-line'],
+        ['label' => __('我的订单'), 'url' => '/account/orders', 'icon' => 'ri-file-list-line'],
+        ['label' => __('我的收藏'), 'url' => '/account/wishlist', 'icon' => 'ri-heart-line'],
+        ['label' => __('浏览历史'), 'url' => '/account/history', 'icon' => 'ri-history-line'],
+        ['label' => __('地址管理'), 'url' => '/account/addresses', 'icon' => 'ri-map-pin-line'],
+        ['label' => __('账户安全'), 'url' => '/account/security', 'icon' => 'ri-shield-line'],
+    ];
+}
+
+$widgetId = 'sidebar-menu-' . uniqid();
+?>
+
+<div class="widget-sidebar-menu" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+        <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
+    <?php endif; ?>
+    
+    <ul class="sidebar-menu-list">
+        <?php foreach ($menuItems as $item): ?>
+            <li class="menu-item <?= !empty($item['children']) ? 'has-children' : '' ?> <?= !empty($item['active']) ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="menu-link">
+                    <?php if ($showIcons && !empty($item['icon'])): ?>
+                        <i class="<?= htmlspecialchars($item['icon']) ?>"></i>
+                    <?php endif; ?>
+                    <span><?= htmlspecialchars($item['label']) ?></span>
+                    <?php if (!empty($item['badge'])): ?>
+                        <span class="menu-badge"><?= htmlspecialchars($item['badge']) ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($item['children'])): ?>
+                        <i class="ri-arrow-down-s-line toggle-icon"></i>
+                    <?php endif; ?>
+                </a>
+                
+                <?php if (!empty($item['children'])): ?>
+                    <ul class="submenu" <?= $collapsedByDefault ? 'style="display:none;"' : '' ?>>
+                        <?php foreach ($item['children'] as $child): ?>
+                            <li class="submenu-item">
+                                <a href="<?= htmlspecialchars($child['url'] ?? '#') ?>">
+                                    <?= htmlspecialchars($child['label']) ?>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+
+<style>
+.widget-sidebar-menu {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.widget-sidebar-menu .widget-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.widget-sidebar-menu .sidebar-menu-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.widget-sidebar-menu .menu-item {
+    margin-bottom: 2px;
+}
+
+.widget-sidebar-menu .menu-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.widget-sidebar-menu .menu-link:hover,
+.widget-sidebar-menu .menu-item.active .menu-link {
+    background: var(--primary-light, #e3f2fd);
+    color: var(--primary-color, #007bff);
+}
+
+.widget-sidebar-menu .menu-link i:first-child {
+    font-size: 18px;
+    width: 20px;
+    text-align: center;
+}
+
+.widget-sidebar-menu .menu-link span {
+    flex: 1;
+    font-size: 14px;
+}
+
+.widget-sidebar-menu .menu-badge {
+    padding: 2px 8px;
+    background: var(--danger-color, #dc3545);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.widget-sidebar-menu .toggle-icon {
+    transition: transform 0.3s;
+}
+
+.widget-sidebar-menu .menu-item.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.widget-sidebar-menu .submenu {
+    list-style: none;
+    margin: 5px 0 0;
+    padding: 0 0 0 47px;
+}
+
+.widget-sidebar-menu .submenu-item a {
+    display: block;
+    padding: 8px 15px;
+    color: #666;
+    text-decoration: none;
+    font-size: 13px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.widget-sidebar-menu .submenu-item a:hover {
+    background: #f5f5f5;
+    color: var(--primary-color, #007bff);
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    widget.querySelectorAll('.has-children > .menu-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const item = this.closest('.menu-item');
+            const submenu = item.querySelector('.submenu');
+            
+            if (submenu) {
+                item.classList.toggle('expanded');
+                submenu.style.display = submenu.style.display === 'none' ? '' : 'none';
+            }
+        });
+    });
+})();
+</script>

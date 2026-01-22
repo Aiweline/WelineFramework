@@ -1,0 +1,203 @@
+<?php
+/**
+ * TPMST 组件 - 用户评价 (Testimonials)
+ * 用户评价展示，支持头像、评分和内容
+ * 
+ * @component_start
+ * name => 用户评价
+ * name_en => Testimonials
+ * description => 用户评价展示卡片，支持头像、评分星级和评价内容
+ * category => content
+ * type => section
+ * sort_order => 50
+ * compatible_styles => *
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:testimonials => 用户评价设置
+ * testimonials.title => 评价区域标题:text:Testimonials
+ * testimonials.display => 显示评价区域:select:yes|yes,no
+ * testimonials.bg_color => 背景颜色:color:#1a1a2e
+ * testimonials.avatar_1 => 评价1-头像:textarea:|默认使用本地user/Rajesh-Kumar-1.avif
+ * testimonials.name_1 => 评价1-姓名:text:Rajesh Kumar (Mumbai)
+ * testimonials.rating_1 => 评价1-评分:text:⭐⭐⭐⭐⭐
+ * testimonials.content_1 => 评价1-内容:textarea:Best app I've used! I've been playing for 6 months and won ₹45,000 so far.
+ * testimonials.footer_1 => 评价1-底部信息:text:Verified Purchase | Playing Since: Aug 2023
+ * testimonials.avatar_2 => 评价2-头像:textarea:|默认使用本地user/Priya-Sharma-2.avif
+ * testimonials.name_2 => 评价2-姓名:text:Priya Sharma (Delhi)
+ * testimonials.rating_2 => 评价2-评分:text:⭐⭐⭐⭐⭐
+ * testimonials.content_2 => 评价2-内容:textarea:Fair game, genuine payments. Customer support is responsive.
+ * testimonials.footer_2 => 评价2-底部信息:text:Verified Purchase | Playing Since: Nov 2023
+ * testimonials.avatar_3 => 评价3-头像:textarea:|默认使用本地user/Amit-Patel-3.avif
+ * testimonials.name_3 => 评价3-姓名:text:Amit Patel (Ahmedabad)
+ * testimonials.rating_3 => 评价3-评分:text:⭐⭐⭐⭐☆
+ * testimonials.content_3 => 评价3-内容:textarea:Love the game variety. Won ₹12K last week in a tournament.
+ * testimonials.footer_3 => 评价3-底部信息:text:Verified Purchase | Playing Since: Sept 2023
+ * 
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$componentConfig = $this->getData('component_config') ?? [];
+$styleSettings = $componentConfig ?: ($this->getData('style') ?: $this->getData('style_settings') ?: []);
+$colors = $this->getData('colors') ?? [];
+
+// 辅助函数
+if (!function_exists('tpmst_test_getConfig')) {
+    function tpmst_test_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        return ($value === '' && $default !== '') ? $default : $value;
+    }
+}
+
+// 显示控制
+$displayRaw = tpmst_test_getConfig($styleSettings, 'testimonials.display', 'yes');
+$display = in_array($displayRaw, ['yes', true, 'true', 1, '1'], true);
+
+if (!$display) {
+    return;
+}
+
+// 配置
+$title = tpmst_test_getConfig($styleSettings, 'testimonials.title', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonials_title', 'Testimonials');
+$bgColor = $colors['testimonials_bg'] ?? tpmst_test_getConfig($styleSettings, 'testimonials.bg_color', '#1a1a2e');
+
+// 默认头像
+$defaultAvatar1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Rajesh-Kumar-1.avif');
+$defaultAvatar2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Priya-Sharma-2.avif');
+$defaultAvatar3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Amit-Patel-3.avif');
+
+// 评价列表
+$testimonials = [
+    [
+        'avatar' => tpmst_test_getConfig($styleSettings, 'testimonials.avatar_1', '') ?: $defaultAvatar1,
+        'name' => tpmst_test_getConfig($styleSettings, 'testimonials.name_1', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_1_name', 'Rajesh Kumar (Mumbai)'),
+        'rating' => tpmst_test_getConfig($styleSettings, 'testimonials.rating_1', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_1_rating', '⭐⭐⭐⭐⭐'),
+        'content' => tpmst_test_getConfig($styleSettings, 'testimonials.content_1', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_1_content', 'Best Teen Patti app I\'ve used! I\'ve been playing for 6 months and won ₹45,000 so far. Withdrawals are super fast - money hits my Paytm in 10 minutes.'),
+        'footer' => tpmst_test_getConfig($styleSettings, 'testimonials.footer_1', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_1_footer', 'Verified Purchase | Playing Since: Aug 2023 | Total Winnings: ₹45,230'),
+    ],
+    [
+        'avatar' => tpmst_test_getConfig($styleSettings, 'testimonials.avatar_2', '') ?: $defaultAvatar2,
+        'name' => tpmst_test_getConfig($styleSettings, 'testimonials.name_2', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_2_name', 'Priya Sharma (Delhi)'),
+        'rating' => tpmst_test_getConfig($styleSettings, 'testimonials.rating_2', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_2_rating', '⭐⭐⭐⭐⭐'),
+        'content' => tpmst_test_getConfig($styleSettings, 'testimonials.content_2', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_2_content', 'Fair game, genuine payments. I was skeptical at first, but after winning ₹8,000 in my first month, I\'m hooked!'),
+        'footer' => tpmst_test_getConfig($styleSettings, 'testimonials.footer_2', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_2_footer', 'Verified Purchase | Playing Since: Nov 2023 | Total Winnings: ₹23,500'),
+    ],
+    [
+        'avatar' => tpmst_test_getConfig($styleSettings, 'testimonials.avatar_3', '') ?: $defaultAvatar3,
+        'name' => tpmst_test_getConfig($styleSettings, 'testimonials.name_3', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_3_name', 'Amit Patel (Ahmedabad)'),
+        'rating' => tpmst_test_getConfig($styleSettings, 'testimonials.rating_3', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_3_rating', '⭐⭐⭐⭐☆'),
+        'content' => tpmst_test_getConfig($styleSettings, 'testimonials.content_3', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_3_content', 'Love the game variety. Won ₹12K last week in a tournament. Sometimes laggy during peak hours.'),
+        'footer' => tpmst_test_getConfig($styleSettings, 'testimonials.footer_3', '') ?: tpmst_test_getConfig($styleSettings, 'texts.testimonial_3_footer', 'Verified Purchase | Playing Since: Sept 2023 | Total Winnings: ₹31,800'),
+    ],
+];
+
+// 颜色
+$headingColor = $colors['heading_color'] ?? '#ffd700';
+$textColor = $colors['text_color'] ?? '#ffffff';
+$accentColor = $colors['accent_color'] ?? '#ff6b35';
+
+$componentId = 'tpmst-testimonials-' . uniqid();
+?>
+
+<!-- TPMST 组件: 用户评价 -->
+<section class="tpmst-component tpmst-component-testimonials" id="<?= $componentId ?>" style="background: <?= htmlspecialchars($bgColor) ?>;">
+    <div class="tpmst-testimonials-container">
+        <h2 class="tpmst-testimonials-title"><?= htmlspecialchars($title) ?></h2>
+        
+        <div class="tpmst-testimonials-grid">
+            <?php foreach ($testimonials as $item): ?>
+            <div class="tpmst-testimonial-card">
+                <div class="tpmst-testimonial-header">
+                    <img src="<?= htmlspecialchars($item['avatar']) ?>" 
+                         alt="<?= htmlspecialchars($item['name']) ?>" 
+                         class="tpmst-testimonial-avatar"
+                         loading="lazy">
+                    <div class="tpmst-testimonial-info">
+                        <div class="tpmst-testimonial-name"><?= htmlspecialchars($item['name']) ?></div>
+                        <div class="tpmst-testimonial-rating"><?= htmlspecialchars($item['rating']) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-testimonial-content"><?= htmlspecialchars($item['content']) ?></p>
+                <?php if ($item['footer']): ?>
+                <p class="tpmst-testimonial-footer"><?= htmlspecialchars($item['footer']) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    padding: clamp(40px, 8vw, 90px) 15px;
+    width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-testimonials-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .tpmst-testimonials-title {
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 700;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    text-align: center;
+    margin-bottom: clamp(30px, 5vw, 50px);
+}
+
+#<?= $componentId ?> .tpmst-testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 25px;
+    border-left: 4px solid <?= htmlspecialchars($accentColor) ?>;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-name {
+    font-weight: 600;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    margin-bottom: 5px;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-rating {
+    color: <?= htmlspecialchars($headingColor) ?>;
+    font-size: 14px;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-content {
+    color: <?= htmlspecialchars($textColor) ?>;
+    line-height: 1.7;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+#<?= $componentId ?> .tpmst-testimonial-footer {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
+}
+</style>

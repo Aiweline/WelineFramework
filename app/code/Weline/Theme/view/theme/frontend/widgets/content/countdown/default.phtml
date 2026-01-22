@@ -1,0 +1,240 @@
+<?php
+/**
+ * 倒计时部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('限时活动');
+$endDate = $this->getData('end_date') ?? date('Y-m-d 23:59:59', strtotime('+7 days'));
+$expiredText = $this->getData('expired_text') ?? __('活动已结束');
+$showDays = (bool)($this->getData('show_days') ?? true);
+$showHours = (bool)($this->getData('show_hours') ?? true);
+$showMinutes = (bool)($this->getData('show_minutes') ?? true);
+$showSeconds = (bool)($this->getData('show_seconds') ?? true);
+$style = $this->getData('style') ?? 'boxes';
+
+$widgetId = 'countdown-' . uniqid();
+?>
+
+<div class="widget-countdown style-<?= htmlspecialchars($style) ?>" 
+     id="<?= $widgetId ?>"
+     data-end="<?= htmlspecialchars($endDate) ?>"
+     data-expired-text="<?= htmlspecialchars($expiredText) ?>">
+    
+    <?php if ($title): ?>
+        <h3 class="countdown-title"><?= htmlspecialchars($title) ?></h3>
+    <?php endif; ?>
+    
+    <div class="countdown-timer">
+        <?php if ($showDays): ?>
+            <div class="time-unit">
+                <span class="time-value" data-unit="days">00</span>
+                <span class="time-label"><?= __('天') ?></span>
+            </div>
+            <span class="time-separator">:</span>
+        <?php endif; ?>
+        
+        <?php if ($showHours): ?>
+            <div class="time-unit">
+                <span class="time-value" data-unit="hours">00</span>
+                <span class="time-label"><?= __('时') ?></span>
+            </div>
+            <span class="time-separator">:</span>
+        <?php endif; ?>
+        
+        <?php if ($showMinutes): ?>
+            <div class="time-unit">
+                <span class="time-value" data-unit="minutes">00</span>
+                <span class="time-label"><?= __('分') ?></span>
+            </div>
+            <span class="time-separator">:</span>
+        <?php endif; ?>
+        
+        <?php if ($showSeconds): ?>
+            <div class="time-unit">
+                <span class="time-value" data-unit="seconds">00</span>
+                <span class="time-label"><?= __('秒') ?></span>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <div class="countdown-expired" style="display: none;">
+        <?= htmlspecialchars($expiredText) ?>
+    </div>
+</div>
+
+<style>
+.widget-countdown {
+    text-align: center;
+    padding: 30px;
+}
+
+.widget-countdown .countdown-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 20px;
+}
+
+.widget-countdown .countdown-timer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* 方框样式 */
+.widget-countdown.style-boxes .time-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    padding: 15px 20px;
+    border-radius: 10px;
+    min-width: 70px;
+}
+
+.widget-countdown.style-boxes .time-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    font-family: monospace;
+}
+
+.widget-countdown.style-boxes .time-label {
+    font-size: 12px;
+    margin-top: 5px;
+    opacity: 0.9;
+}
+
+.widget-countdown.style-boxes .time-separator {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary-color, #007bff);
+}
+
+/* 行内样式 */
+.widget-countdown.style-inline .time-unit {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+}
+
+.widget-countdown.style-inline .time-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+    font-family: monospace;
+}
+
+.widget-countdown.style-inline .time-label {
+    font-size: 14px;
+    color: #666;
+}
+
+.widget-countdown.style-inline .time-separator {
+    font-size: 28px;
+    color: #ccc;
+    margin: 0 5px;
+}
+
+/* 圆形样式 */
+.widget-countdown.style-circle .time-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    background: #fff;
+    border: 3px solid var(--primary-color, #007bff);
+    border-radius: 50%;
+}
+
+.widget-countdown.style-circle .time-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary-color, #007bff);
+    line-height: 1;
+    font-family: monospace;
+}
+
+.widget-countdown.style-circle .time-label {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.widget-countdown.style-circle .time-separator {
+    font-size: 24px;
+    color: #ddd;
+}
+
+/* 过期状态 */
+.widget-countdown .countdown-expired {
+    font-size: 18px;
+    color: #999;
+    padding: 20px;
+}
+
+@media (max-width: 480px) {
+    .widget-countdown.style-boxes .time-unit {
+        padding: 10px 12px;
+        min-width: 50px;
+    }
+    
+    .widget-countdown.style-boxes .time-value {
+        font-size: 24px;
+    }
+    
+    .widget-countdown.style-circle .time-unit {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .widget-countdown.style-circle .time-value {
+        font-size: 20px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const endDate = new Date(widget.dataset.end).getTime();
+    const timer = widget.querySelector('.countdown-timer');
+    const expiredEl = widget.querySelector('.countdown-expired');
+    
+    function updateCountdown() {
+        const now = Date.now();
+        const diff = endDate - now;
+        
+        if (diff <= 0) {
+            timer.style.display = 'none';
+            expiredEl.style.display = 'block';
+            return;
+        }
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        const daysEl = widget.querySelector('[data-unit="days"]');
+        const hoursEl = widget.querySelector('[data-unit="hours"]');
+        const minutesEl = widget.querySelector('[data-unit="minutes"]');
+        const secondsEl = widget.querySelector('[data-unit="seconds"]');
+        
+        if (daysEl) daysEl.textContent = String(days).padStart(2, '0');
+        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+        if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+    }
+    
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+})();
+</script>

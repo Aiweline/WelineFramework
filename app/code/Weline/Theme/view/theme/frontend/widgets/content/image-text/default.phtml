@@ -1,0 +1,211 @@
+<?php
+/**
+ * 图文组合部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$image = $this->getData('image') ?? '/images/placeholder.jpg';
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$buttonText = $this->getData('button_text') ?? '';
+$buttonLink = $this->getData('button_link') ?? '';
+$layout = $this->getData('layout') ?? 'image-left';
+$imageWidth = $this->getData('image_width') ?? '50';
+
+$widgetId = 'image-text-' . uniqid();
+?>
+
+<div class="widget-image-text layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
+    <?php if ($layout === 'image-bg'): ?>
+        <!-- 图片背景布局 -->
+        <div class="bg-container" style="background-image: url('<?= htmlspecialchars($image) ?>');">
+            <div class="bg-overlay"></div>
+            <div class="text-content">
+                <?php if ($title): ?>
+                    <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+                <?php endif; ?>
+                <?php if ($content): ?>
+                    <div class="content-text"><?= $content ?></div>
+                <?php endif; ?>
+                <?php if ($buttonText && $buttonLink): ?>
+                    <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php elseif ($layout === 'image-top'): ?>
+        <!-- 图上文下布局 -->
+        <div class="image-section">
+            <img src="<?= htmlspecialchars($image) ?>" alt="<?= htmlspecialchars($title) ?>" class="content-image">
+        </div>
+        <div class="text-section">
+            <?php if ($title): ?>
+                <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($content): ?>
+                <div class="content-text"><?= $content ?></div>
+            <?php endif; ?>
+            <?php if ($buttonText && $buttonLink): ?>
+                <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <!-- 图左文右 / 图右文左 -->
+        <div class="content-row">
+            <div class="image-section" style="flex: 0 0 <?= $imageWidth ?>%;">
+                <img src="<?= htmlspecialchars($image) ?>" alt="<?= htmlspecialchars($title) ?>" class="content-image">
+            </div>
+            <div class="text-section">
+                <?php if ($title): ?>
+                    <h2 class="content-title"><?= htmlspecialchars($title) ?></h2>
+                <?php endif; ?>
+                <?php if ($content): ?>
+                    <div class="content-text"><?= $content ?></div>
+                <?php endif; ?>
+                <?php if ($buttonText && $buttonLink): ?>
+                    <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-image-text {
+    margin: 30px 0;
+}
+
+/* 横向布局 */
+.widget-image-text .content-row {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+.widget-image-text.layout-image-right .content-row {
+    flex-direction: row-reverse;
+}
+
+.widget-image-text .image-section {
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.widget-image-text .content-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.5s;
+}
+
+.widget-image-text:hover .content-image {
+    transform: scale(1.03);
+}
+
+.widget-image-text .text-section {
+    flex: 1;
+}
+
+.widget-image-text .content-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 15px;
+    color: var(--heading-color, #222);
+}
+
+.widget-image-text .content-text {
+    font-size: 16px;
+    line-height: 1.7;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.widget-image-text .content-button {
+    display: inline-block;
+    padding: 12px 30px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.widget-image-text .content-button:hover {
+    background: var(--primary-dark, #0056b3);
+    transform: translateY(-2px);
+}
+
+/* 图上文下布局 */
+.widget-image-text.layout-image-top .text-section {
+    text-align: center;
+    padding: 30px 0;
+}
+
+/* 图片背景布局 */
+.widget-image-text.layout-image-bg .bg-container {
+    position: relative;
+    min-height: 400px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.widget-image-text.layout-image-bg .bg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+}
+
+.widget-image-text.layout-image-bg .text-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 40px;
+    max-width: 700px;
+}
+
+.widget-image-text.layout-image-bg .content-title {
+    color: #fff;
+    font-size: 36px;
+}
+
+.widget-image-text.layout-image-bg .content-text {
+    color: rgba(255,255,255,0.9);
+}
+
+.widget-image-text.layout-image-bg .content-button {
+    background: #fff;
+    color: #333;
+}
+
+.widget-image-text.layout-image-bg .content-button:hover {
+    background: rgba(255,255,255,0.9);
+}
+
+@media (max-width: 768px) {
+    .widget-image-text .content-row {
+        flex-direction: column;
+    }
+    
+    .widget-image-text.layout-image-right .content-row {
+        flex-direction: column;
+    }
+    
+    .widget-image-text .image-section {
+        flex: none !important;
+        width: 100%;
+    }
+    
+    .widget-image-text .content-title {
+        font-size: 22px;
+    }
+}
+</style>

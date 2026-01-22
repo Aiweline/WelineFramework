@@ -1,0 +1,122 @@
+<?php
+/**
+ * 视频播放器部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$videoType = $this->getData('video_type') ?? 'youtube';
+$videoUrl = $this->getData('video_url') ?? '';
+$embedCode = $this->getData('embed_code') ?? '';
+$poster = $this->getData('poster') ?? '';
+$autoplay = (bool)($this->getData('autoplay') ?? false);
+$muted = (bool)($this->getData('muted') ?? false);
+$loop = (bool)($this->getData('loop') ?? false);
+$aspectRatio = $this->getData('aspect_ratio') ?? '16:9';
+
+// 计算宽高比
+$ratioMap = [
+    '16:9' => '56.25%',
+    '4:3'  => '75%',
+    '1:1'  => '100%',
+    '9:16' => '177.78%',
+];
+$paddingTop = $ratioMap[$aspectRatio] ?? '56.25%';
+
+// 提取YouTube/Vimeo视频ID
+$videoId = '';
+if ($videoType === 'youtube' && $videoUrl) {
+    preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\?\/]+)/', $videoUrl, $matches);
+    $videoId = $matches[1] ?? $videoUrl;
+} elseif ($videoType === 'vimeo' && $videoUrl) {
+    preg_match('/vimeo\.com\/(\d+)/', $videoUrl, $matches);
+    $videoId = $matches[1] ?? $videoUrl;
+}
+
+$widgetId = 'video-player-' . uniqid();
+?>
+
+<div class="widget-video-player" id="<?= $widgetId ?>">
+    <div class="video-container" style="padding-top: <?= $paddingTop ?>;">
+        <?php if ($videoType === 'youtube' && $videoId): ?>
+            <iframe src="https://www.youtube.com/embed/<?= htmlspecialchars($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'mute=1&' : '' ?><?= $loop ? 'loop=1&playlist=' . htmlspecialchars($videoId) : '' ?>"
+                    class="video-iframe"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen></iframe>
+        
+        <?php elseif ($videoType === 'vimeo' && $videoId): ?>
+            <iframe src="https://player.vimeo.com/video/<?= htmlspecialchars($videoId) ?>?<?= $autoplay ? 'autoplay=1&' : '' ?><?= $muted ? 'muted=1&' : '' ?><?= $loop ? 'loop=1' : '' ?>"
+                    class="video-iframe"
+                    frameborder="0"
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    allowfullscreen></iframe>
+        
+        <?php elseif ($videoType === 'local' && $videoUrl): ?>
+            <video class="video-native"
+                   <?= $autoplay ? 'autoplay' : '' ?>
+                   <?= $muted ? 'muted' : '' ?>
+                   <?= $loop ? 'loop' : '' ?>
+                   <?= $poster ? 'poster="' . htmlspecialchars($poster) . '"' : '' ?>
+                   controls>
+                <source src="<?= htmlspecialchars($videoUrl) ?>" type="video/mp4">
+                <?= __('您的浏览器不支持视频标签。') ?>
+            </video>
+        
+        <?php elseif ($videoType === 'embed' && $embedCode): ?>
+            <?= $embedCode ?>
+        
+        <?php else: ?>
+            <div class="video-placeholder">
+                <i class="ri-play-circle-line"></i>
+                <p><?= __('视频加载中...') ?></p>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-video-player {
+    margin: 20px 0;
+}
+
+.widget-video-player .video-container {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.widget-video-player .video-iframe,
+.widget-video-player .video-native {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-video-player .video-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+}
+
+.widget-video-player .video-placeholder i {
+    font-size: 60px;
+    opacity: 0.8;
+}
+
+.widget-video-player .video-placeholder p {
+    margin: 10px 0 0;
+    opacity: 0.6;
+}
+</style>

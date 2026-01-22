@@ -1,0 +1,437 @@
+<?php
+/**
+ * Hero 轮播图部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - slides: 轮播图片数组
+ * - autoplay: 自动播放
+ * - autoplay_speed: 自动播放间隔
+ * - show_dots: 显示指示点
+ * - show_arrows: 显示箭头
+ * - effect: 切换效果
+ * - height: 轮播高度
+ */
+
+$slides = $this->getData('slides') ?? [];
+$autoplay = (bool)($this->getData('autoplay') ?? true);
+$autoplaySpeed = (int)($this->getData('autoplay_speed') ?? 5000);
+$showDots = (bool)($this->getData('show_dots') ?? true);
+$showArrows = (bool)($this->getData('show_arrows') ?? true);
+$effect = $this->getData('effect') ?? 'slide';
+$height = $this->getData('height') ?? '500px';
+
+// 示例数据
+if (empty($slides)) {
+    $slides = [
+        [
+            'image' => '/images/banners/slide1.jpg',
+            'title' => __('2026春季新品上市'),
+            'subtitle' => __('探索最新时尚潮流'),
+            'button_text' => __('立即选购'),
+            'link' => '/products/new',
+            'text_position' => 'left', // left/center/right
+        ],
+        [
+            'image' => '/images/banners/slide2.jpg',
+            'title' => __('限时特惠'),
+            'subtitle' => __('全场满300减50'),
+            'button_text' => __('查看详情'),
+            'link' => '/promotions',
+            'text_position' => 'center',
+        ],
+        [
+            'image' => '/images/banners/slide3.jpg',
+            'title' => __('品质生活'),
+            'subtitle' => __('精选优质好物'),
+            'button_text' => __('开始探索'),
+            'link' => '/featured',
+            'text_position' => 'right',
+        ],
+    ];
+}
+
+$sliderId = 'hero-slider-' . uniqid();
+?>
+
+<div class="widget-hero-slider" id="<?= $sliderId ?>" style="height: <?= htmlspecialchars($height) ?>;">
+    <div class="slider-container effect-<?= htmlspecialchars($effect) ?>">
+        <div class="slider-wrapper">
+            <?php foreach ($slides as $index => $slide): ?>
+                <div class="slide <?= $index === 0 ? 'active' : '' ?>" 
+                     data-index="<?= $index ?>"
+                     style="background-image: url('<?= htmlspecialchars($slide['image'] ?? '') ?>');">
+                    <div class="slide-overlay"></div>
+                    <div class="slide-content text-<?= htmlspecialchars($slide['text_position'] ?? 'left') ?>">
+                        <div class="slide-text">
+                            <?php if (!empty($slide['title'])): ?>
+                                <h2 class="slide-title"><?= htmlspecialchars($slide['title']) ?></h2>
+                            <?php endif; ?>
+                            <?php if (!empty($slide['subtitle'])): ?>
+                                <p class="slide-subtitle"><?= htmlspecialchars($slide['subtitle']) ?></p>
+                            <?php endif; ?>
+                            <?php if (!empty($slide['button_text'])): ?>
+                                <a href="<?= htmlspecialchars($slide['link'] ?? '#') ?>" class="slide-button">
+                                    <?= htmlspecialchars($slide['button_text']) ?>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <?php if ($showArrows && count($slides) > 1): ?>
+            <button class="slider-arrow slider-prev" type="button" aria-label="<?= __('上一张') ?>">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+            <button class="slider-arrow slider-next" type="button" aria-label="<?= __('下一张') ?>">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <?php if ($showDots && count($slides) > 1): ?>
+            <div class="slider-dots">
+                <?php foreach ($slides as $index => $slide): ?>
+                    <button class="dot <?= $index === 0 ? 'active' : '' ?>" 
+                            data-index="<?= $index ?>"
+                            type="button"
+                            aria-label="<?= __('第%d张', $index + 1) ?>"></button>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-hero-slider {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.widget-hero-slider .slider-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-hero-slider .slider-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-hero-slider .slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    z-index: 1;
+}
+
+.widget-hero-slider .slide.active {
+    opacity: 1;
+    z-index: 2;
+}
+
+/* Slide效果 */
+.widget-hero-slider .effect-slide .slide {
+    transform: translateX(100%);
+    transition: transform 0.6s ease, opacity 0.6s ease;
+}
+
+.widget-hero-slider .effect-slide .slide.active {
+    transform: translateX(0);
+}
+
+.widget-hero-slider .effect-slide .slide.prev {
+    transform: translateX(-100%);
+}
+
+/* 遮罩 */
+.widget-hero-slider .slide-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 100%);
+}
+
+/* 内容 */
+.widget-hero-slider .slide-content {
+    position: relative;
+    z-index: 3;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 10%;
+}
+
+.widget-hero-slider .text-left .slide-text {
+    text-align: left;
+}
+
+.widget-hero-slider .text-center {
+    justify-content: center;
+}
+
+.widget-hero-slider .text-center .slide-text {
+    text-align: center;
+}
+
+.widget-hero-slider .text-right {
+    justify-content: flex-end;
+}
+
+.widget-hero-slider .text-right .slide-text {
+    text-align: right;
+}
+
+.widget-hero-slider .slide-title {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 15px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    animation: slideUp 0.6s ease forwards;
+}
+
+.widget-hero-slider .slide-subtitle {
+    font-size: 1.25rem;
+    color: rgba(255,255,255,0.9);
+    margin: 0 0 30px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    animation: slideUp 0.6s 0.2s ease forwards;
+    opacity: 0;
+}
+
+.widget-hero-slider .slide-button {
+    display: inline-block;
+    padding: 15px 40px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s;
+    animation: slideUp 0.6s 0.4s ease forwards;
+    opacity: 0;
+}
+
+.widget-hero-slider .slide-button:hover {
+    background: var(--primary-dark, #0056b3);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 箭头 */
+.widget-hero-slider .slider-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 50px;
+    height: 50px;
+    background: rgba(255,255,255,0.9);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.3s;
+    opacity: 0;
+}
+
+.widget-hero-slider:hover .slider-arrow {
+    opacity: 1;
+}
+
+.widget-hero-slider .slider-arrow:hover {
+    background: #fff;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.widget-hero-slider .slider-arrow i {
+    font-size: 24px;
+    color: #333;
+}
+
+.widget-hero-slider .slider-prev {
+    left: 20px;
+}
+
+.widget-hero-slider .slider-next {
+    right: 20px;
+}
+
+/* 指示点 */
+.widget-hero-slider .slider-dots {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+
+.widget-hero-slider .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.widget-hero-slider .dot:hover,
+.widget-hero-slider .dot.active {
+    background: #fff;
+    transform: scale(1.2);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .widget-hero-slider .slide-title {
+        font-size: 2rem;
+    }
+    
+    .widget-hero-slider .slide-subtitle {
+        font-size: 1rem;
+    }
+    
+    .widget-hero-slider .slide-button {
+        padding: 12px 30px;
+        font-size: 0.9rem;
+    }
+    
+    .widget-hero-slider .slider-arrow {
+        width: 40px;
+        height: 40px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const slider = document.getElementById('<?= $sliderId ?>');
+    if (!slider) return;
+    
+    const slides = slider.querySelectorAll('.slide');
+    const dots = slider.querySelectorAll('.dot');
+    const prevBtn = slider.querySelector('.slider-prev');
+    const nextBtn = slider.querySelector('.slider-next');
+    
+    let currentIndex = 0;
+    let autoplayInterval = null;
+    const autoplay = <?= $autoplay ? 'true' : 'false' ?>;
+    const autoplaySpeed = <?= $autoplaySpeed ?>;
+    
+    function goToSlide(index) {
+        slides[currentIndex].classList.remove('active');
+        if (dots[currentIndex]) dots[currentIndex].classList.remove('active');
+        
+        currentIndex = (index + slides.length) % slides.length;
+        
+        slides[currentIndex].classList.add('active');
+        if (dots[currentIndex]) dots[currentIndex].classList.add('active');
+    }
+    
+    function nextSlide() {
+        goToSlide(currentIndex + 1);
+    }
+    
+    function prevSlide() {
+        goToSlide(currentIndex - 1);
+    }
+    
+    function startAutoplay() {
+        if (autoplay && slides.length > 1) {
+            autoplayInterval = setInterval(nextSlide, autoplaySpeed);
+        }
+    }
+    
+    function stopAutoplay() {
+        if (autoplayInterval) {
+            clearInterval(autoplayInterval);
+            autoplayInterval = null;
+        }
+    }
+    
+    // 事件绑定
+    if (prevBtn) prevBtn.addEventListener('click', function() {
+        prevSlide();
+        stopAutoplay();
+        startAutoplay();
+    });
+    
+    if (nextBtn) nextBtn.addEventListener('click', function() {
+        nextSlide();
+        stopAutoplay();
+        startAutoplay();
+    });
+    
+    dots.forEach(function(dot, index) {
+        dot.addEventListener('click', function() {
+            goToSlide(index);
+            stopAutoplay();
+            startAutoplay();
+        });
+    });
+    
+    // 鼠标悬停暂停
+    slider.addEventListener('mouseenter', stopAutoplay);
+    slider.addEventListener('mouseleave', startAutoplay);
+    
+    // 触摸支持
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    slider.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+        stopAutoplay();
+    }, { passive: true });
+    
+    slider.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+        startAutoplay();
+    }, { passive: true });
+    
+    function handleSwipe() {
+        const diff = touchStartX - touchEndX;
+        if (Math.abs(diff) > 50) {
+            if (diff > 0) {
+                nextSlide();
+            } else {
+                prevSlide();
+            }
+        }
+    }
+    
+    // 启动自动播放
+    startAutoplay();
+})();
+</script>

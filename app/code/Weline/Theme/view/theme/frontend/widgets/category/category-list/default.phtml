@@ -1,0 +1,249 @@
+<?php
+/**
+ * 分类列表部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('商品分类');
+$parentId = (int)($this->getData('parent_id') ?? 0);
+$maxDepth = (int)($this->getData('max_depth') ?? 2);
+$showCount = (bool)($this->getData('show_count') ?? true);
+$showImage = (bool)($this->getData('show_image') ?? false);
+$collapsed = (bool)($this->getData('collapsed') ?? false);
+
+// 示例分类数据
+$categories = [
+    [
+        'id' => 1,
+        'name' => __('电子产品'),
+        'url' => '/category/electronics',
+        'image' => '/images/categories/electronics.jpg',
+        'count' => 156,
+        'children' => [
+            ['id' => 11, 'name' => __('手机'), 'url' => '/category/phones', 'count' => 45],
+            ['id' => 12, 'name' => __('电脑'), 'url' => '/category/computers', 'count' => 38],
+            ['id' => 13, 'name' => __('平板'), 'url' => '/category/tablets', 'count' => 22],
+        ],
+    ],
+    [
+        'id' => 2,
+        'name' => __('服装鞋帽'),
+        'url' => '/category/fashion',
+        'image' => '/images/categories/fashion.jpg',
+        'count' => 243,
+        'children' => [
+            ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
+            ['id' => 22, 'name' => __('女装'), 'url' => '/category/womens', 'count' => 112],
+            ['id' => 23, 'name' => __('童装'), 'url' => '/category/kids', 'count' => 42],
+        ],
+    ],
+    [
+        'id' => 3,
+        'name' => __('家居生活'),
+        'url' => '/category/home',
+        'image' => '/images/categories/home.jpg',
+        'count' => 178,
+        'children' => [
+            ['id' => 31, 'name' => __('家具'), 'url' => '/category/furniture', 'count' => 56],
+            ['id' => 32, 'name' => __('家纺'), 'url' => '/category/textiles', 'count' => 67],
+            ['id' => 33, 'name' => __('收纳'), 'url' => '/category/storage', 'count' => 55],
+        ],
+    ],
+    [
+        'id' => 4,
+        'name' => __('美妆个护'),
+        'url' => '/category/beauty',
+        'count' => 134,
+    ],
+    [
+        'id' => 5,
+        'name' => __('食品生鲜'),
+        'url' => '/category/food',
+        'count' => 89,
+    ],
+];
+
+$widgetId = 'category-list-' . uniqid();
+
+/**
+ * 递归渲染分类
+ */
+function renderCategoryList($categories, $depth = 0, $maxDepth = 2, $showCount = true, $showImage = false, $collapsed = false) {
+    if ($depth >= $maxDepth || empty($categories)) return;
+    
+    $isCollapsed = $collapsed && $depth > 0;
+    ?>
+    <ul class="category-list depth-<?= $depth ?>" <?= $isCollapsed ? 'style="display: none;"' : '' ?>>
+        <?php foreach ($categories as $category): ?>
+            <li class="category-item <?= !empty($category['children']) ? 'has-children' : '' ?>">
+                <a href="<?= htmlspecialchars($category['url']) ?>" class="category-link">
+                    <?php if ($showImage && !empty($category['image'])): ?>
+                        <img src="<?= htmlspecialchars($category['image']) ?>" 
+                             alt="<?= htmlspecialchars($category['name']) ?>"
+                             class="category-image">
+                    <?php endif; ?>
+                    
+                    <span class="category-name"><?= htmlspecialchars($category['name']) ?></span>
+                    
+                    <?php if ($showCount && isset($category['count'])): ?>
+                        <span class="category-count">(<?= $category['count'] ?>)</span>
+                    <?php endif; ?>
+                </a>
+                
+                <?php if (!empty($category['children'])): ?>
+                    <button class="toggle-btn <?= $isCollapsed ? 'collapsed' : '' ?>" type="button">
+                        <i class="ri-arrow-<?= $isCollapsed ? 'right' : 'down' ?>-s-line"></i>
+                    </button>
+                    <?php renderCategoryList($category['children'], $depth + 1, $maxDepth, $showCount, $showImage, $collapsed); ?>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+}
+?>
+
+<div class="widget-category-list" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+        <h3 class="widget-title">
+            <i class="ri-apps-line"></i>
+            <?= htmlspecialchars($title) ?>
+        </h3>
+    <?php endif; ?>
+    
+    <?php renderCategoryList($categories, 0, $maxDepth, $showCount, $showImage, $collapsed); ?>
+</div>
+
+<style>
+.widget-category-list {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.widget-category-list .widget-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-category-list .widget-title i {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-category-list .category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.widget-category-list .category-list.depth-1 {
+    padding-left: 15px;
+    margin-top: 5px;
+}
+
+.widget-category-list .category-list.depth-2 {
+    padding-left: 15px;
+    margin-top: 5px;
+}
+
+.widget-category-list .category-item {
+    position: relative;
+}
+
+.widget-category-list .category-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 30px 10px 0;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    border-bottom: 1px solid #f5f5f5;
+    transition: all 0.2s;
+}
+
+.widget-category-list .category-item:last-child .category-link {
+    border-bottom: none;
+}
+
+.widget-category-list .category-link:hover {
+    color: var(--primary-color, #007bff);
+    padding-left: 5px;
+}
+
+.widget-category-list .category-image {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.widget-category-list .category-name {
+    flex: 1;
+    font-size: 14px;
+}
+
+.widget-category-list .category-count {
+    font-size: 12px;
+    color: #999;
+}
+
+.widget-category-list .toggle-btn {
+    position: absolute;
+    right: 0;
+    top: 8px;
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    transition: all 0.2s;
+}
+
+.widget-category-list .toggle-btn:hover {
+    color: var(--primary-color, #007bff);
+}
+
+/* 子分类样式 */
+.widget-category-list .depth-1 .category-link {
+    padding: 8px 30px 8px 0;
+    font-size: 13px;
+}
+
+.widget-category-list .depth-2 .category-link {
+    padding: 6px 30px 6px 0;
+    font-size: 12px;
+    color: #666;
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    widget.querySelectorAll('.toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const item = this.closest('.category-item');
+            const subList = item.querySelector('.category-list');
+            
+            if (subList) {
+                const isHidden = subList.style.display === 'none';
+                subList.style.display = isHidden ? '' : 'none';
+                this.classList.toggle('collapsed');
+                this.querySelector('i').className = isHidden ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line';
+            }
+        });
+    });
+})();
+</script>

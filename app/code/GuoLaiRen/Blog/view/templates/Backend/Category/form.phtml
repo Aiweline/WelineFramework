@@ -12,6 +12,30 @@ use GuoLaiRen\Blog\Model\Category;
 
 $isEdit = $category && $category->getId();
 ?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑分类') : __('新建分类') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('') ?>"><?= __('首页') ?></a></li>
+                    <li class="breadcrumb-item"><a href="<?= $this->getUrl('blog/backend/category/index') ?>"><?= __('博客分类') ?></a></li>
+                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑分类') : __('新建分类') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
 
 <div class="row">
     <div class="col-lg-8">
@@ -104,11 +128,21 @@ $isEdit = $category && $category->getId();
 
                     <div class="mb-3">
                         <label for="cover_image" class="form-label">
-                            <lang>封面图片URL</lang>
+                            <?= __('封面图片') ?>
                         </label>
-                        <input type="url" class="form-control" id="cover_image" name="cover_image"
-                               value="<?= htmlspecialchars($category ? $category->getData(Category::fields_COVER_IMAGE) : '') ?>"
-                               placeholder="https://example.com/image.jpg">
+                        <?php $cat_cover_image = $category ? $category->getData(Category::fields_COVER_IMAGE) : ''; ?>
+                        <input type="hidden" id="cover_image" name="cover_image"
+                               value="<?= htmlspecialchars($cat_cover_image) ?>">
+                        <file-manager target="#cover_image"
+                                      title="选择封面图片"
+                                      vars="cat_cover_image"
+                                      path="blog/categories/"
+                                      value="cat_cover_image"
+                                      multi="0"
+                                      ext="jpg,jpeg,png,gif,webp"
+                                      w="100"
+                                      h="60"/>
+                        <small class="text-muted"><?= __('点击上方按钮选择或上传封面图片') ?></small>
                     </div>
 
                     <hr>
@@ -191,3 +225,5 @@ document.getElementById('name').addEventListener('blur', function() {
     }
 });
 </script>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

@@ -472,7 +472,41 @@ class Preview extends BackendController
                 }
             } catch(e) {}
         })();</script>';
-        echo $previewBoot . $headerHtml . $contentHtml . $footerHtml;
+        
+        // 检测是否在可视化编辑器中
+        $isVisualEditor = $this->request->getGet('visual_editor') === '1';
+        
+        if ($isVisualEditor) {
+            // 可视化编辑器模式：添加插槽容器和拖拽支持
+            $dropZoneStyles = $this->getDropZoneStyles();
+            $dropZoneScripts = $this->getDropZoneScripts($pageId);
+            
+            // 将 header/content/footer 包装在插槽容器中
+            $wrappedHeader = '<div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>';
+            $wrappedContent = '<div class="pb-slot pb-slot-content" data-region="content" data-multiple="true" data-slot-name="Content">' . $contentHtml . '</div>';
+            $wrappedFooter = '<div class="pb-slot pb-slot-footer" data-region="footer" data-multiple="false" data-slot-name="Footer">' . $footerHtml . '</div>';
+            
+            // 注入样式到 head
+            $wrappedHeader = preg_replace(
+                '/(<\/head>)/i',
+                $dropZoneStyles . "\n    $1",
+                $wrappedHeader,
+                1
+            );
+            
+            // 注入脚本到 body 末尾
+            $wrappedFooter = preg_replace(
+                '/(<\/body>)/i',
+                "\n    " . $dropZoneScripts . "\n$1",
+                $wrappedFooter,
+                1
+            );
+            
+            echo $previewBoot . $wrappedHeader . $wrappedContent . $wrappedFooter;
+        } else {
+            // 普通预览模式
+            echo $previewBoot . $headerHtml . $contentHtml . $footerHtml;
+        }
     }
 
     /**
@@ -879,6 +913,378 @@ class Preview extends BackendController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+    
+    /**
+     * 获取插槽容器的样式
+     */
+    private function getDropZoneStyles(): string
+    {
+        return <<<'CSS'
+<style id="pb-dropzone-styles">
+/* ============================================
+   PageBuilder 插槽容器样式
+   用于可视化编辑器中的拖拽放置
+   ============================================ */
+
+/* 插槽容器基础样式 */
+.pb-slot {
+    position: relative;
+    min-height: 50px;
+    transition: all 0.3s ease;
+}
+
+/* 插槽标签 */
+.pb-slot::before {
+    content: attr(data-slot-name);
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 4px 12px;
+    background: rgba(52, 152, 219, 0.9);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 9998;
+    opacity: 0;
+    transform: translateY(-100%);
+    transition: opacity 0.2s, transform 0.2s;
+    border-radius: 0 0 4px 0;
+}
+
+.pb-slot:hover::before,
+.pb-slot.drag-over::before {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 插槽悬停效果 */
+.pb-slot:hover {
+    outline: 2px dashed rgba(52, 152, 219, 0.5);
+    outline-offset: -2px;
+}
+
+/* 拖拽进入效果 */
+.pb-slot.drag-over {
+    outline: 3px solid #3498db !important;
+    outline-offset: -3px;
+    background: rgba(52, 152, 219, 0.05) !important;
+}
+
+/* Header 插槽 - 蓝色 */
+.pb-slot-header::before {
+    background: rgba(41, 128, 185, 0.95);
+}
+
+.pb-slot-header:hover,
+.pb-slot-header.drag-over {
+    outline-color: #2980b9;
+}
+
+/* Content 插槽 - 绿色 */
+.pb-slot-content::before {
+    background: rgba(39, 174, 96, 0.95);
+}
+
+.pb-slot-content:hover,
+.pb-slot-content.drag-over {
+    outline-color: #27ae60;
+}
+
+/* Footer 插槽 - 紫色 */
+.pb-slot-footer::before {
+    background: rgba(142, 68, 173, 0.95);
+}
+
+.pb-slot-footer:hover,
+.pb-slot-footer.drag-over {
+    outline-color: #8e44ad;
+}
+
+/* 空插槽提示 */
+.pb-slot-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    background: rgba(0, 0, 0, 0.02);
+    border: 2px dashed rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    margin: 10px;
+}
+
+.pb-slot-empty::after {
+    content: '拖拽组件到此处';
+    color: rgba(0, 0, 0, 0.3);
+    font-size: 14px;
+}
+
+/* 拖拽指示器 */
+.pb-drop-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #3498db;
+    z-index: 9999;
+    pointer-events: none;
+    animation: pb-pulse 1s infinite;
+}
+
+@keyframes pb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 组件操作栏 */
+.pb-component-actions {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: none;
+    gap: 5px;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 5px;
+    border-radius: 6px;
+}
+
+.pb-slot:hover .pb-component-actions {
+    display: flex;
+}
+
+.pb-component-actions button {
+    padding: 5px 10px;
+    background: transparent;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.pb-component-actions button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.pb-component-actions button.btn-edit {
+    color: #3498db;
+}
+
+.pb-component-actions button.btn-delete {
+    color: #e74c3c;
+}
+
+/* 唯一插槽的替换提示 */
+.pb-slot[data-multiple="false"].has-component.drag-over::after {
+    content: '将替换当前组件';
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    background: rgba(231, 76, 60, 0.9);
+    color: #fff;
+    font-size: 12px;
+    border-radius: 4px;
+    z-index: 9999;
+}
+
+/* 多组件插槽的添加提示 */
+.pb-slot[data-multiple="true"].drag-over::after {
+    content: '添加到此区域';
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    background: rgba(39, 174, 96, 0.9);
+    color: #fff;
+    font-size: 12px;
+    border-radius: 4px;
+    z-index: 9999;
+}
+</style>
+CSS;
+    }
+    
+    /**
+     * 获取插槽容器的脚本
+     */
+    private function getDropZoneScripts(int $pageId): string
+    {
+        return <<<JS
+<script id="pb-dropzone-scripts">
+(function() {
+    'use strict';
+    
+    const pageId = {$pageId};
+    
+    // 初始化插槽
+    function initDropZones() {
+        document.querySelectorAll('.pb-slot').forEach(slot => {
+            // 检查是否有内容
+            if (slot.children.length > 0 && slot.children[0].tagName !== 'STYLE') {
+                slot.classList.add('has-component');
+            }
+            
+            // 拖拽事件
+            slot.addEventListener('dragover', handleDragOver);
+            slot.addEventListener('dragleave', handleDragLeave);
+            slot.addEventListener('drop', handleDrop);
+            slot.addEventListener('dragenter', handleDragEnter);
+        });
+    }
+    
+    function handleDragEnter(e) {
+        e.preventDefault();
+        this.classList.add('drag-over');
+    }
+    
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 设置拖拽效果
+        e.dataTransfer.dropEffect = 'copy';
+        
+        this.classList.add('drag-over');
+    }
+    
+    function handleDragLeave(e) {
+        e.preventDefault();
+        
+        // 检查是否真的离开了元素
+        const rect = this.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+            this.classList.remove('drag-over');
+        }
+    }
+    
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        this.classList.remove('drag-over');
+        
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const targetRegion = this.getAttribute('data-region');
+            const isMultiple = this.getAttribute('data-multiple') === 'true';
+            
+            console.log('📦 组件放置:', data, '目标区域:', targetRegion);
+            
+            // 检查区域匹配
+            if (data.region !== targetRegion) {
+                window.parent.Swal && window.parent.Swal.fire({
+                    icon: 'warning',
+                    title: '区域不匹配',
+                    text: '此组件只能放置在 ' + data.region.toUpperCase() + ' 区域',
+                    timer: 3000
+                });
+                return;
+            }
+            
+            // 检查唯一性
+            const hasComponent = this.classList.contains('has-component');
+            if (!isMultiple && hasComponent) {
+                window.parent.Swal && window.parent.Swal.fire({
+                    title: '替换组件？',
+                    text: '此区域只能放置一个组件，是否替换现有组件？',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '确认替换',
+                    cancelButtonText: '取消'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        addComponent(data, targetRegion, true);
+                    }
+                });
+                return;
+            }
+            
+            // 添加组件
+            addComponent(data, targetRegion, false);
+            
+        } catch (err) {
+            console.error('❌ 拖拽处理错误:', err);
+        }
+    }
+    
+    // 添加组件
+    async function addComponent(componentData, region, replace) {
+        try {
+            // 显示加载提示
+            window.parent.Swal && window.parent.Swal.fire({
+                title: '添加组件中...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    window.parent.Swal.showLoading();
+                }
+            });
+            
+            // 调用父窗口的添加组件函数
+            if (typeof window.parent.addComponentToLayout === 'function') {
+                await window.parent.addComponentToLayout(componentData, region, replace);
+            } else {
+                console.warn('⚠️ addComponentToLayout 函数不存在');
+                window.parent.Swal && window.parent.Swal.fire({
+                    icon: 'warning',
+                    title: '功能不可用',
+                    text: '请刷新页面后重试'
+                });
+            }
+        } catch (error) {
+            console.error('❌ 添加组件失败:', error);
+            window.parent.Swal && window.parent.Swal.fire({
+                icon: 'error',
+                title: '添加失败',
+                text: error.message || '未知错误'
+            });
+        }
+    }
+    
+    // 通知父窗口区域被高亮
+    function notifyParentHighlight(region) {
+        if (typeof window.parent.onSlotHighlight === 'function') {
+            window.parent.onSlotHighlight(region);
+        }
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDropZones);
+    } else {
+        initDropZones();
+    }
+    
+    // 暴露给父窗口的接口
+    window.pbSlots = {
+        highlight: function(region) {
+            document.querySelectorAll('.pb-slot').forEach(slot => {
+                if (slot.getAttribute('data-region') === region) {
+                    slot.classList.add('drag-over');
+                }
+            });
+        },
+        unhighlight: function() {
+            document.querySelectorAll('.pb-slot').forEach(slot => {
+                slot.classList.remove('drag-over');
+            });
+        },
+        refresh: function() {
+            initDropZones();
+        }
+    };
+})();
+</script>
+JS;
     }
 }
 

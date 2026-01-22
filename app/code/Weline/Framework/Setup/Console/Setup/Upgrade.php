@@ -462,7 +462,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         file_put_contents($classMapFile, $content, LOCK_EX);
         
-        $this->printing->note(__('  - 类映射缓存已生成，共 %1 个类', [count($classMap)]));
+        $this->printing->note(__('  - 类映射缓存已生成，共 %{1} 个类', [count($classMap)]));
     }
     
     /**
@@ -546,7 +546,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             
             file_put_contents($psr4CacheFile, $content, LOCK_EX);
             
-            $this->printing->note(__('  - PSR-4 映射缓存已生成，共 %1 个命名空间', [count($modifiedPsr4)]));
+            $this->printing->note(__('  - PSR-4 映射缓存已生成，共 %{1} 个命名空间', [count($modifiedPsr4)]));
         } else {
             $this->printing->note(__('  - 跳过 PSR-4 缓存生成：没有需要优化的映射'));
         }

@@ -1,0 +1,127 @@
+<?php
+/**
+ * 标签云部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('热门标签');
+$limit = (int)($this->getData('limit') ?? 20);
+$orderBy = $this->getData('order_by') ?? 'count';
+$showCount = (bool)($this->getData('show_count') ?? false);
+
+// 示例标签数据
+$tags = [
+    ['name' => __('手机'), 'url' => '/tag/phone', 'count' => 156],
+    ['name' => __('电脑'), 'url' => '/tag/computer', 'count' => 89],
+    ['name' => __('耳机'), 'url' => '/tag/headphone', 'count' => 67],
+    ['name' => __('相机'), 'url' => '/tag/camera', 'count' => 45],
+    ['name' => __('智能手表'), 'url' => '/tag/smartwatch', 'count' => 78],
+    ['name' => __('平板'), 'url' => '/tag/tablet', 'count' => 56],
+    ['name' => __('充电器'), 'url' => '/tag/charger', 'count' => 34],
+    ['name' => __('数据线'), 'url' => '/tag/cable', 'count' => 123],
+    ['name' => __('保护壳'), 'url' => '/tag/case', 'count' => 98],
+    ['name' => __('蓝牙'), 'url' => '/tag/bluetooth', 'count' => 76],
+    ['name' => __('音箱'), 'url' => '/tag/speaker', 'count' => 45],
+    ['name' => __('键盘'), 'url' => '/tag/keyboard', 'count' => 67],
+    ['name' => __('鼠标'), 'url' => '/tag/mouse', 'count' => 89],
+    ['name' => __('显示器'), 'url' => '/tag/monitor', 'count' => 34],
+    ['name' => __('路由器'), 'url' => '/tag/router', 'count' => 23],
+];
+
+// 排序
+switch ($orderBy) {
+    case 'name':
+        usort($tags, fn($a, $b) => strcmp($a['name'], $b['name']));
+        break;
+    case 'random':
+        shuffle($tags);
+        break;
+    default: // count
+        usort($tags, fn($a, $b) => $b['count'] - $a['count']);
+}
+
+$tags = array_slice($tags, 0, $limit);
+
+// 计算字体大小
+$maxCount = max(array_column($tags, 'count'));
+$minCount = min(array_column($tags, 'count'));
+$countRange = $maxCount - $minCount ?: 1;
+
+$widgetId = 'tags-cloud-' . uniqid();
+?>
+
+<div class="widget-tags-cloud" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+        <h3 class="widget-title">
+            <i class="ri-price-tag-3-line"></i>
+            <?= htmlspecialchars($title) ?>
+        </h3>
+    <?php endif; ?>
+    
+    <div class="tags-container">
+        <?php foreach ($tags as $tag): 
+            // 计算字体大小 (12px - 20px)
+            $fontSize = 12 + (($tag['count'] - $minCount) / $countRange) * 8;
+        ?>
+            <a href="<?= htmlspecialchars($tag['url']) ?>" 
+               class="tag-item"
+               style="font-size: <?= round($fontSize) ?>px;">
+                <?= htmlspecialchars($tag['name']) ?>
+                <?php if ($showCount): ?>
+                    <span class="tag-count">(<?= $tag['count'] ?>)</span>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-tags-cloud {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.widget-tags-cloud .widget-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-tags-cloud .widget-title i {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-tags-cloud .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    line-height: 1.8;
+}
+
+.widget-tags-cloud .tag-item {
+    display: inline-block;
+    padding: 4px 12px;
+    background: #f5f5f5;
+    color: #666;
+    text-decoration: none;
+    border-radius: 15px;
+    transition: all 0.2s;
+}
+
+.widget-tags-cloud .tag-item:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+.widget-tags-cloud .tag-count {
+    font-size: 11px;
+    opacity: 0.7;
+}
+</style>

@@ -1,0 +1,247 @@
+<?php
+/**
+ * 促销横幅部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - background_image: 背景图片
+ * - background_color: 背景颜色
+ * - text: 促销文字
+ * - text_color: 文字颜色
+ * - link: 链接地址
+ * - closeable: 允许关闭
+ * - countdown_end: 倒计时结束时间
+ */
+
+$backgroundImage = $this->getData('background_image') ?? '';
+$backgroundColor = $this->getData('background_color') ?? '#f8d7da';
+$text = $this->getData('text') ?? __('限时特惠！全场满300减50');
+$textColor = $this->getData('text_color') ?? '#721c24';
+$link = $this->getData('link') ?? '';
+$closeable = (bool)($this->getData('closeable') ?? true);
+$countdownEnd = $this->getData('countdown_end') ?? '';
+
+$bannerId = 'promo-banner-' . uniqid();
+$hasCountdown = !empty($countdownEnd);
+?>
+
+<div class="widget-promo-banner" id="<?= $bannerId ?>"
+     style="background-color: <?= htmlspecialchars($backgroundColor) ?>;
+            <?= $backgroundImage ? 'background-image: url(' . htmlspecialchars($backgroundImage) . ');' : '' ?>">
+    
+    <div class="promo-content">
+        <?php if ($link): ?>
+            <a href="<?= htmlspecialchars($link) ?>" class="promo-link" style="color: <?= htmlspecialchars($textColor) ?>;">
+        <?php endif; ?>
+        
+        <span class="promo-text" style="color: <?= htmlspecialchars($textColor) ?>;">
+            <?= htmlspecialchars($text) ?>
+        </span>
+        
+        <?php if ($hasCountdown): ?>
+            <span class="promo-countdown" data-end="<?= htmlspecialchars($countdownEnd) ?>">
+                <span class="countdown-label"><?= __('剩余') ?>:</span>
+                <span class="countdown-timer">
+                    <span class="time-part" data-unit="days"><span class="time-value">00</span><span class="time-label"><?= __('天') ?></span></span>
+                    <span class="time-part" data-unit="hours"><span class="time-value">00</span><span class="time-label"><?= __('时') ?></span></span>
+                    <span class="time-part" data-unit="minutes"><span class="time-value">00</span><span class="time-label"><?= __('分') ?></span></span>
+                    <span class="time-part" data-unit="seconds"><span class="time-value">00</span><span class="time-label"><?= __('秒') ?></span></span>
+                </span>
+            </span>
+        <?php endif; ?>
+        
+        <?php if ($link): ?>
+            <span class="promo-arrow">
+                <i class="ri-arrow-right-line"></i>
+            </span>
+            </a>
+        <?php endif; ?>
+    </div>
+    
+    <?php if ($closeable): ?>
+        <button class="promo-close" type="button" aria-label="<?= __('关闭') ?>">
+            <i class="ri-close-line"></i>
+        </button>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-promo-banner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 50px;
+    background-size: cover;
+    background-position: center;
+}
+
+.widget-promo-banner .promo-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.widget-promo-banner .promo-link {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    text-decoration: none;
+    transition: opacity 0.3s;
+}
+
+.widget-promo-banner .promo-link:hover {
+    opacity: 0.8;
+}
+
+.widget-promo-banner .promo-text {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.widget-promo-banner .promo-arrow {
+    display: flex;
+    align-items: center;
+}
+
+/* 倒计时 */
+.widget-promo-banner .promo-countdown {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    background: rgba(0,0,0,0.1);
+    border-radius: 20px;
+}
+
+.widget-promo-banner .countdown-label {
+    font-size: 13px;
+}
+
+.widget-promo-banner .countdown-timer {
+    display: flex;
+    gap: 5px;
+}
+
+.widget-promo-banner .time-part {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.widget-promo-banner .time-value {
+    font-weight: 700;
+    font-size: 15px;
+    font-family: monospace;
+}
+
+.widget-promo-banner .time-label {
+    font-size: 11px;
+}
+
+/* 关闭按钮 */
+.widget-promo-banner .promo-close {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    opacity: 0.6;
+    transition: opacity 0.3s;
+}
+
+.widget-promo-banner .promo-close:hover {
+    opacity: 1;
+}
+
+.widget-promo-banner .promo-close i {
+    font-size: 20px;
+}
+
+/* 隐藏状态 */
+.widget-promo-banner.hidden {
+    display: none;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .widget-promo-banner {
+        padding: 10px 40px 10px 15px;
+    }
+    
+    .widget-promo-banner .promo-text {
+        font-size: 13px;
+    }
+    
+    .widget-promo-banner .promo-countdown {
+        padding: 4px 10px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const banner = document.getElementById('<?= $bannerId ?>');
+    if (!banner) return;
+    
+    // 关闭功能
+    const closeBtn = banner.querySelector('.promo-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            banner.classList.add('hidden');
+            // 可以存储到 localStorage 避免重复显示
+            localStorage.setItem('promo-banner-closed-<?= $bannerId ?>', Date.now());
+        });
+        
+        // 检查是否已关闭
+        const closedTime = localStorage.getItem('promo-banner-closed-<?= $bannerId ?>');
+        if (closedTime) {
+            // 24小时后可再次显示
+            const hoursSinceClosed = (Date.now() - parseInt(closedTime)) / (1000 * 60 * 60);
+            if (hoursSinceClosed < 24) {
+                banner.classList.add('hidden');
+            }
+        }
+    }
+    
+    // 倒计时功能
+    const countdown = banner.querySelector('.promo-countdown');
+    if (countdown) {
+        const endDate = new Date(countdown.dataset.end).getTime();
+        
+        function updateCountdown() {
+            const now = Date.now();
+            const diff = endDate - now;
+            
+            if (diff <= 0) {
+                banner.classList.add('hidden');
+                return;
+            }
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            const daysEl = countdown.querySelector('[data-unit="days"] .time-value');
+            const hoursEl = countdown.querySelector('[data-unit="hours"] .time-value');
+            const minutesEl = countdown.querySelector('[data-unit="minutes"] .time-value');
+            const secondsEl = countdown.querySelector('[data-unit="seconds"] .time-value');
+            
+            if (daysEl) daysEl.textContent = String(days).padStart(2, '0');
+            if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+            if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+            if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+        }
+        
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+    }
+})();
+</script>

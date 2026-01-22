@@ -1,0 +1,275 @@
+<?php
+/**
+ * 迷你购物车部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('购物车');
+$maxItems = (int)($this->getData('max_items') ?? 5);
+$showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
+$showCheckoutButton = (bool)($this->getData('show_checkout_button') ?? true);
+$showViewCartButton = (bool)($this->getData('show_view_cart_button') ?? true);
+
+// 示例购物车数据
+$cartItems = [
+    ['id' => 1, 'name' => __('示例商品 1'), 'image' => '/images/products/1.jpg', 'price' => 99.00, 'qty' => 2],
+    ['id' => 2, 'name' => __('示例商品 2'), 'image' => '/images/products/2.jpg', 'price' => 149.00, 'qty' => 1],
+    ['id' => 3, 'name' => __('示例商品 3'), 'image' => '/images/products/3.jpg', 'price' => 79.00, 'qty' => 1],
+];
+
+$cartItems = array_slice($cartItems, 0, $maxItems);
+$subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['qty'], $cartItems));
+$itemCount = count($cartItems);
+
+$widgetId = 'mini-cart-' . uniqid();
+?>
+
+<div class="widget-mini-cart" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <h3 class="widget-title">
+            <i class="ri-shopping-cart-2-line"></i>
+            <?= htmlspecialchars($title) ?>
+            <span class="item-count">(<?= $itemCount ?>)</span>
+        </h3>
+    </div>
+    
+    <?php if (empty($cartItems)): ?>
+        <div class="cart-empty">
+            <i class="ri-shopping-cart-line"></i>
+            <p><?= __('购物车是空的') ?></p>
+            <a href="/products" class="btn-shop"><?= __('去购物') ?></a>
+        </div>
+    <?php else: ?>
+        <div class="cart-items">
+            <?php foreach ($cartItems as $item): ?>
+                <div class="cart-item" data-item-id="<?= $item['id'] ?>">
+                    <img src="<?= htmlspecialchars($item['image']) ?>" 
+                         alt="<?= htmlspecialchars($item['name']) ?>"
+                         class="item-image">
+                    
+                    <div class="item-details">
+                        <h4 class="item-name"><?= htmlspecialchars($item['name']) ?></h4>
+                        <div class="item-meta">
+                            <span class="item-price">¥<?= number_format($item['price'], 2) ?></span>
+                            <span class="item-qty">× <?= $item['qty'] ?></span>
+                        </div>
+                    </div>
+                    
+                    <button class="item-remove" type="button" title="<?= __('删除') ?>">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <?php if ($showSubtotal): ?>
+            <div class="cart-subtotal">
+                <span class="label"><?= __('小计') ?>:</span>
+                <span class="value">¥<?= number_format($subtotal, 2) ?></span>
+            </div>
+        <?php endif; ?>
+        
+        <div class="cart-actions">
+            <?php if ($showViewCartButton): ?>
+                <a href="/cart" class="btn btn-outline"><?= __('查看购物车') ?></a>
+            <?php endif; ?>
+            <?php if ($showCheckoutButton): ?>
+                <a href="/checkout" class="btn btn-primary"><?= __('去结算') ?></a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-mini-cart {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.widget-mini-cart .widget-header {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.widget-mini-cart .widget-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-mini-cart .widget-title i {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-mini-cart .item-count {
+    font-weight: 400;
+    color: #666;
+}
+
+/* 空购物车 */
+.widget-mini-cart .cart-empty {
+    text-align: center;
+    padding: 30px 0;
+}
+
+.widget-mini-cart .cart-empty i {
+    font-size: 48px;
+    color: #ddd;
+}
+
+.widget-mini-cart .cart-empty p {
+    color: #999;
+    margin: 10px 0 20px;
+}
+
+.widget-mini-cart .btn-shop {
+    display: inline-block;
+    padding: 10px 25px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+/* 购物车商品 */
+.widget-mini-cart .cart-items {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.widget-mini-cart .cart-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.widget-mini-cart .cart-item:last-child {
+    border-bottom: none;
+}
+
+.widget-mini-cart .item-image {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.widget-mini-cart .item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.widget-mini-cart .item-name {
+    margin: 0 0 5px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.widget-mini-cart .item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.widget-mini-cart .item-price {
+    color: var(--danger-color, #dc3545);
+    font-weight: 600;
+}
+
+.widget-mini-cart .item-qty {
+    color: #999;
+}
+
+.widget-mini-cart .item-remove {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.widget-mini-cart .item-remove:hover {
+    background: #fee;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 小计 */
+.widget-mini-cart .cart-subtotal {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 0;
+    border-top: 1px solid #eee;
+    margin-top: 10px;
+}
+
+.widget-mini-cart .cart-subtotal .label {
+    font-weight: 500;
+}
+
+.widget-mini-cart .cart-subtotal .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 操作按钮 */
+.widget-mini-cart .cart-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.widget-mini-cart .cart-actions .btn {
+    flex: 1;
+    padding: 10px 15px;
+    text-align: center;
+    border-radius: 6px;
+    font-weight: 500;
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.3s;
+}
+
+.widget-mini-cart .btn-outline {
+    border: 1px solid #ddd;
+    color: #333;
+    background: #fff;
+}
+
+.widget-mini-cart .btn-outline:hover {
+    border-color: var(--primary-color, #007bff);
+    color: var(--primary-color, #007bff);
+}
+
+.widget-mini-cart .btn-primary {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border: none;
+}
+
+.widget-mini-cart .btn-primary:hover {
+    background: var(--primary-dark, #0056b3);
+}
+</style>

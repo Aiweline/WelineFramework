@@ -1,0 +1,80 @@
+{
+    "template": "_shared",
+    "name": "共享组件库",
+    "description": "跨模板通用组件，可在任何模板中使用",
+    "version": "1.0.0",
+    "components": {
+        "cta-banner": {
+            "name": "行动号召横幅",
+            "name_en": "CTA Banner",
+            "description": "通用的行动号召横幅组件，支持标题、描述和按钮",
+            "category": "content",
+            "type": "section",
+            "sort_order": 10,
+            "compatible_styles": ["*"]
+        },
+        "feature-cards": {
+            "name": "功能卡片",
+            "name_en": "Feature Cards",
+            "description": "通用的功能/特色展示卡片组件",
+            "category": "content",
+            "type": "section",
+            "sort_order": 20,
+            "compatible_styles": ["*"]
+        },
+        "testimonials": {
+            "name": "用户评价",
+            "name_en": "Testimonials",
+            "description": "通用的用户评价/推荐组件",
+            "category": "content",
+            "type": "section",
+            "sort_order": 30,
+            "compatible_styles": ["*"]
+        },
+        "faq-accordion": {
+            "name": "FAQ折叠面板",
+            "name_en": "FAQ Accordion",
+            "description": "通用的常见问题折叠面板组件",
+            "category": "content",
+            "type": "section",
+            "sort_order": 40,
+            "compatible_styles": ["*"]
+        },
+        "contact-form": {
+            "name": "联系表单",
+            "name_en": "Contact Form",
+            "description": "通用的联系/咨询表单组件",
+            "category": "content",
+            "type": "widget",
+            "sort_order": 50,
+            "compatible_styles": ["*"]
+        },
+        "image-gallery": {
+            "name": "图片画廊",
+            "name_en": "Image Gallery",
+            "description": "通用的图片展示画廊组件",
+            "category": "content",
+            "type": "section",
+            "sort_order": 60,
+            "compatible_styles": ["*"]
+        },
+        "social-links": {
+            "name": "社交链接",
+            "name_en": "Social Links",
+            "description": "通用的社交媒体链接组件",
+            "category": "widget",
+            "type": "widget",
+            "sort_order": 70,
+            "compatible_styles": ["*"]
+        },
+        "newsletter-signup": {
+            "name": "订阅组件",
+            "name_en": "Newsletter Signup",
+            "description": "邮件订阅/通讯注册组件",
+            "category": "widget",
+            "type": "widget",
+            "sort_order": 80,
+            "compatible_styles": ["*"]
+        }
+    }
+}
