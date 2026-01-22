@@ -1,0 +1,269 @@
+<?php
+/** @var \GuoLaiRen\Blog\Model\Post|null $post */
+/** @var array $categories 分类列表 */
+$post = $this->getData('post');
+$categories = $this->getData('categories') ?? [];
+$isEdit = $post && $post->getId();
+?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <?= $this->getData('page_title') ?: __('博客表单') ?>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="<?= $this->getBackendUrl('blog/backend/post/index') ?>">
+                            <?= $this->getData('breadcrumb_parent') ?: __('博客管理') ?>
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">
+                        <?= $this->getData('breadcrumb_current') ?: __('博客表单') ?>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<form action="<?= $this->getData('action') ?>" method="post" class="needs-validation" novalidate>
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- 基本信息 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-information-outline"></i> <?= __('基本信息') ?>
+                    </h4>
+
+                    <!-- 标题 -->
+                    <div class="mb-3">
+                        <label for="title" class="form-label">
+                            <?= __('文章标题') ?> <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="title"
+                               name="title"
+                               value="<?= htmlspecialchars(($post ? ($post->getData('title') ?? '') : '')) ?>"
+                               placeholder="<?= __('请输入文章标题') ?>"
+                               required>
+                        <div class="invalid-feedback"><?= __('请输入文章标题') ?></div>
+                    </div>
+
+                    <!-- URL别名 -->
+                    <div class="mb-3">
+                        <label for="slug" class="form-label">
+                            <?= __('URL别名') ?> <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="slug"
+                               name="slug"
+                               value="<?= htmlspecialchars(($post ? ($post->getData('slug') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：my-first-blog-post') ?>"
+                               required
+                               pattern="[a-z0-9\-]+"
+                               title="<?= __('只能包含小写字母、数字和连字符') ?>">
+                        <div class="form-text"><?= __('用于生成文章URL，只能包含小写字母、数字和连字符') ?></div>
+                        <div class="invalid-feedback"><?= __('请输入有效的URL别名') ?></div>
+                    </div>
+
+                    <!-- 摘要 -->
+                    <div class="mb-3">
+                        <label for="summary" class="form-label">
+                            <?= __('文章摘要') ?>
+                        </label>
+                        <textarea class="form-control"
+                                  id="summary"
+                                  name="summary"
+                                  rows="3"
+                                  placeholder="<?= __('简要描述文章内容，用于列表页显示') ?>"><?= htmlspecialchars(($post ? ($post->getData('summary') ?? '') : '')) ?></textarea>
+                        <div class="form-text"><?= __('简要描述文章内容，用于列表页显示') ?></div>
+                    </div>
+
+                    <!-- 内容 -->
+                    <div class="mb-3">
+                        <label for="content" class="form-label">
+                            <?= __('文章内容') ?>
+                        </label>
+                        <textarea class="form-control"
+                                  id="content"
+                                  name="content"
+                                  rows="15"
+                                  placeholder="<?= __('请输入文章内容（支持HTML）') ?>"><?= htmlspecialchars(($post ? ($post->getData('content') ?? '') : '')) ?></textarea>
+                        <div class="form-text"><?= __('支持HTML格式，可以使用富文本编辑器') ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- 发布设置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-publish"></i> <?= __('发布设置') ?>
+                    </h4>
+
+                    <!-- 状态 -->
+                    <div class="mb-3">
+                        <label for="status" class="form-label"><?= __('状态') ?></label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="0" <?= (!$post || (int)$post->getData('status') === 0) ? 'selected' : '' ?>>
+                                <?= __('草稿') ?>
+                            </option>
+                            <option value="1" <?= ($post && (int)$post->getData('status') === 1) ? 'selected' : '' ?>>
+                                <?= __('已发布') ?>
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- 发布时间 -->
+                    <div class="mb-3">
+                        <label for="published_at" class="form-label"><?= __('发布时间') ?></label>
+                        <input type="datetime-local"
+                               class="form-control"
+                               id="published_at"
+                               name="published_at"
+                               value="<?php
+                               $publishedAt = $post ? $post->getData('published_at') : '';
+                               if ($publishedAt) {
+                                   echo date('Y-m-d\TH:i', strtotime($publishedAt));
+                               }
+                               ?>">
+                        <div class="form-text"><?= __('留空则使用当前时间') ?></div>
+                    </div>
+
+                    <!-- 精选 -->
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_featured" name="is_featured" value="1"
+                                <?= ($post && (int)$post->getData('is_featured') === 1) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="is_featured">
+                                <i class="mdi mdi-star text-warning"></i> <?= __('设为精选文章') ?>
+                            </label>
+                        </div>
+                        <div class="form-text"><?= __('精选文章会在首页或列表顶部展示') ?></div>
+                    </div>
+
+                    <!-- 保存按钮 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save"></i> <?= $isEdit ? __('更新博客') : __('创建博客') ?>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('blog/backend/post/index') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分类与标签 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-folder-outline"></i> <?= __('分类与标签') ?>
+                    </h4>
+
+                    <!-- 分类 -->
+                    <div class="mb-3">
+                        <label for="category_id" class="form-label"><?= __('文章分类') ?></label>
+                        <select class="form-select" id="category_id" name="category_id">
+                            <option value="0"><?= __('未分类') ?></option>
+                            <?php foreach ($categories as $catId => $catName): ?>
+                                <option value="<?= $catId ?>"
+                                    <?= ($post && (int)$post->getData('category_id') == $catId) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($catName) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <!-- 标签 -->
+                    <div class="mb-3">
+                        <label for="tags" class="form-label"><?= __('标签') ?></label>
+                        <input type="text"
+                               class="form-control"
+                               id="tags"
+                               name="tags"
+                               value="<?= htmlspecialchars(($post ? ($post->getData('tags') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：PHP, Web开发, 教程') ?>">
+                        <div class="form-text"><?= __('多个标签用英文逗号分隔') ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他设置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-image"></i> <?= __('其他设置') ?>
+                    </h4>
+
+                    <!-- 作者 -->
+                    <div class="mb-3">
+                        <label for="author" class="form-label"><?= __('作者') ?></label>
+                        <input type="text"
+                               class="form-control"
+                               id="author"
+                               name="author"
+                               value="<?= htmlspecialchars(($post ? ($post->getData('author') ?? '') : '')) ?>"
+                               placeholder="<?= __('文章作者名称') ?>">
+                    </div>
+
+                    <!-- 封面图片 -->
+                    <div class="mb-3">
+                        <label for="cover_image" class="form-label"><?= __('封面图片URL') ?></label>
+                        <input type="url"
+                               class="form-control"
+                               id="cover_image"
+                               name="cover_image"
+                               value="<?= htmlspecialchars(($post ? ($post->getData('cover_image') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：https://example.com/image.jpg') ?>">
+                        <div class="form-text"><?= __('文章封面图片的完整URL地址') ?></div>
+                    </div>
+
+                    <?php if ($isEdit): ?>
+                    <!-- 浏览量（只读） -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('浏览量') ?></label>
+                        <div class="form-control-plaintext">
+                            <i class="mdi mdi-eye"></i> <?= (int)$post->getData('view_count') ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+// 自动生成URL别名（基于标题）
+document.getElementById('title')?.addEventListener('input', function() {
+    const slugInput = document.getElementById('slug');
+    if (slugInput && !slugInput.value) {
+        const title = this.value;
+        const slug = title.toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim();
+        slugInput.value = slug;
+    }
+});
+</script>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

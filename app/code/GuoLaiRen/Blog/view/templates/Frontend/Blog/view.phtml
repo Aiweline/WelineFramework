@@ -1,0 +1,88 @@
+<?php
+/** @var \GuoLaiRen\Blog\Model\Post $post */
+$post = $this->getData('post');
+?>
+
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <article class="blog-post">
+                <!-- 返回列表 -->
+                <div class="mb-3">
+                    <a href="<?= $this->request->getUrlBuilder()->getFrontendUrl('blog/frontend/index/index') ?>" 
+                       class="btn btn-outline-secondary btn-sm">
+                        <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
+                    </a>
+                </div>
+
+                <!-- 标题 -->
+                <h1 class="mb-3">
+                    <?= htmlspecialchars($post->getData('title') ?? '') ?>
+                </h1>
+
+                <!-- 元信息 -->
+                <div class="mb-4 text-muted">
+                    <?php if ($post->getData('published_at')): ?>
+                        <i class="mdi mdi-clock-outline"></i>
+                        <lang>发布时间：</lang><?= htmlspecialchars($post->getData('published_at') ?? '') ?>
+                    <?php endif; ?>
+                </div>
+
+                <!-- 封面图片 -->
+                <?php if ($post->getData('cover_image')): ?>
+                    <div class="mb-4">
+                        <img src="<?= htmlspecialchars($post->getData('cover_image') ?? '') ?>" 
+                             class="img-fluid rounded" 
+                             alt="<?= htmlspecialchars($post->getData('title') ?? '') ?>">
+                    </div>
+                <?php endif; ?>
+
+                <!-- 摘要 -->
+                <?php if ($post->getData('summary')): ?>
+                    <div class="alert alert-light mb-4">
+                        <strong><lang>摘要：</lang></strong>
+                        <?= htmlspecialchars($post->getData('summary') ?? '') ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- 内容 -->
+                <div class="blog-content">
+                    <?= $post->getData('content') ?? '' ?>
+                </div>
+
+                <!-- 返回列表 -->
+                <div class="mt-5 pt-4 border-top">
+                    <a href="<?= $this->request->getUrlBuilder()->getFrontendUrl('blog/frontend/index/index') ?>" 
+                       class="btn btn-outline-primary">
+                        <i class="mdi mdi-arrow-left"></i> <lang>返回博客列表</lang>
+                    </a>
+                </div>
+            </article>
+        </div>
+    </div>
+</div>
+
+<style>
+.blog-content {
+    line-height: 1.8;
+    font-size: 1.1rem;
+}
+
+.blog-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 1.5rem 0;
+}
+
+.blog-content p {
+    margin-bottom: 1.5rem;
+}
+
+.blog-content h2,
+.blog-content h3,
+.blog-content h4 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+</style>

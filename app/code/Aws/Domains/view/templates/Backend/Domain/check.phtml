@@ -1,0 +1,228 @@
+<?php
+/**
+ * 域名可用性检查
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var array $configs */
+$configs = $configs ?? [];
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><lang>域名查询</lang></h4>
+                <a href="<?= $this->getBackendUrl('aws/backend/domain/index') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left me-1"></i>
+                    <lang>返回列表</lang>
+                </a>
+            </div>
+        </div>
+
+        <?php if (empty($configs)): ?>
+            <div class="alert alert-warning">
+                <i class="mdi mdi-alert-circle-outline me-2"></i>
+                <lang>请先配置 AWS 凭证</lang>
+                <a href="<?= $this->getBackendUrl('aws/backend/config/index') ?>" class="alert-link ms-2">
+                    <lang>前往配置</lang>
+                </a>
+            </div>
+        <?php else: ?>
+            <div class="card">
+                <div class="card-body">
+                    <form id="checkForm">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="config_id" class="form-label"><lang>AWS 账户</lang></label>
+                                    <select class="form-select" id="config_id" name="config_id">
+                                        <?php foreach ($configs as $c): ?>
+                                            <option value="<?= (int)$c['config_id'] ?>"
+                                                <?= (int)($c['is_default'] ?? 0) === 1 ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($c['name'], ENT_QUOTES) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="domain" class="form-label"><lang>域名</lang></label>
+                                    <input type="text" class="form-control" id="domain" name="domain"
+                                           placeholder="<?= __('例如：example.com') ?>" required>
+                                    <div class="form-text"><lang>输入完整域名，包含后缀（如 .com, .net 等）</lang></div>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary w-100" id="checkBtn">
+                                        <i class="mdi mdi-magnify me-1"></i>
+                                        <lang>查询</lang>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div id="checkResult" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><lang>域名建议</lang></h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="getSuggestionsBtn" disabled>
+                        <i class="mdi mdi-lightbulb-outline me-1"></i>
+                        <lang>获取建议</lang>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="suggestionsResult" class="text-muted">
+                        <lang>输入域名后点击"获取建议"按钮</lang>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<script>
+document.getElementById('checkForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    checkDomain();
+});
+
+document.getElementById('domain').addEventListener('input', function() {
+    document.getElementById('getSuggestionsBtn').disabled = this.value.trim() === '';
+});
+
+document.getElementById('getSuggestionsBtn').addEventListener('click', function() {
+    getSuggestions();
+});
+
+function checkDomain() {
+    const domain = document.getElementById('domain').value.trim();
+    const configId = document.getElementById('config_id').value;
+    const resultDiv = document.getElementById('checkResult');
+    const checkBtn = document.getElementById('checkBtn');
+    const originalHtml = checkBtn.innerHTML;
+
+    if (!domain) {
+        alert('<?= __('请输入域名') ?>');
+        return;
+    }
+
+    checkBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __('查询中...') ?>';
+    checkBtn.disabled = true;
+    resultDiv.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('domain', domain);
+    formData.append('config_id', configId);
+
+    fetch('<?= $this->getBackendUrl('aws/backend/domain/checkAvailability') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        checkBtn.innerHTML = originalHtml;
+        checkBtn.disabled = false;
+        resultDiv.style.display = 'block';
+
+        if (data.success) {
+            const availableClass = data.available ? 'alert-success' : 'alert-warning';
+            const icon = data.available ? 'mdi-check-circle-outline' : 'mdi-alert-circle-outline';
+
+            let html = `<div class="alert ${availableClass}">
+                <i class="mdi ${icon} me-2"></i>
+                ${data.message}
+            </div>`;
+
+            if (data.available) {
+                html += `<a href="<?= $this->getBackendUrl('aws/backend/domain/register') ?>?domain=${encodeURIComponent(domain)}&config_id=${configId}"
+                           class="btn btn-success">
+                    <i class="mdi mdi-cart-plus me-1"></i>
+                    <?= __('立即购买') ?>
+                </a>`;
+            }
+
+            resultDiv.innerHTML = html;
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle-outline me-2"></i>
+                ${data.message || '<?= __('查询失败') ?>'}
+            </div>`;
+        }
+    })
+    .catch(err => {
+        checkBtn.innerHTML = originalHtml;
+        checkBtn.disabled = false;
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `<div class="alert alert-danger">
+            <i class="mdi mdi-alert-circle-outline me-2"></i>
+            <?= __('请求失败') ?>: ${err.message}
+        </div>`;
+    });
+}
+
+function getSuggestions() {
+    const domain = document.getElementById('domain').value.trim();
+    const configId = document.getElementById('config_id').value;
+    const resultDiv = document.getElementById('suggestionsResult');
+    const btn = document.getElementById('getSuggestionsBtn');
+    const originalHtml = btn.innerHTML;
+
+    if (!domain) {
+        alert('<?= __('请先输入域名') ?>');
+        return;
+    }
+
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __('获取中...') ?>';
+    btn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('domain', domain);
+    formData.append('config_id', configId);
+
+    fetch('<?= $this->getBackendUrl('aws/backend/domain/suggestions') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+
+        if (data.success && data.suggestions && data.suggestions.length > 0) {
+            let html = '<div class="row">';
+            data.suggestions.forEach(function(suggestion) {
+                const domainName = suggestion.DomainName || suggestion;
+                const availability = suggestion.Availability || 'AVAILABLE';
+                const badgeClass = availability === 'AVAILABLE' ? 'bg-success' : 'bg-secondary';
+
+                html += `<div class="col-md-4 mb-2">
+                    <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                        <span>${domainName}</span>
+                        <span class="badge ${badgeClass}">${availability === 'AVAILABLE' ? '<?= __('可用') ?>' : availability}</span>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+            resultDiv.innerHTML = html;
+        } else {
+            resultDiv.innerHTML = '<div class="text-muted"><?= __('暂无建议') ?></div>';
+        }
+    })
+    .catch(err => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        resultDiv.innerHTML = `<div class="text-danger"><?= __('获取失败') ?>: ${err.message}</div>`;
+    });
+}
+</script>
