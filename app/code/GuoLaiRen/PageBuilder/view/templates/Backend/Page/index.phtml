@@ -58,9 +58,13 @@
                                 </form>
                             </div>
                         </div>
-                        <div class='col-6'>
+                        <div class='col-6 text-end'>
                             <acl source="GuoLaiRen_PageBuilder::page_builder_create">
-                                <a class='btn btn-primary pull-right mt-1 mb-1'
+                                <button type="button" class="btn btn-success mt-1 mb-1 me-2" 
+                                        data-bs-toggle="modal" data-bs-target="#quickSiteModal">
+                                    <i class="mdi mdi-rocket-launch"></i> <lang>一键建站</lang>
+                                </button>
+                                <a class='btn btn-primary mt-1 mb-1'
                                    href="<?= $this->getBackendUrl('*/backend/page/create') ?>">
                                     <i class="mdi mdi-plus"></i> <lang>新建页面</lang>
                                 </a>
@@ -70,23 +74,10 @@
                 </div>
 
                 <?php
-                // 组织页面数据为树形结构
-                $pages = $this->getData('pages') ?: [];
-                $parentPages = [];
-                $childPages = [];
-                
-                // 分组：父页面和子页面
-                foreach ($pages as $page) {
-                    $parentId = $page->getData('parent_id');
-                    if (empty($parentId) || $parentId == 0) {
-                        $parentPages[] = $page;
-                    } else {
-                        if (!isset($childPages[$parentId])) {
-                            $childPages[$parentId] = [];
-                        }
-                        $childPages[$parentId][] = $page;
-                    }
-                }
+                // 获取控制器传递的父页面和子页面数据
+                $parentPages = $this->getData('parent_pages') ?: [];
+                $childPages = $this->getData('child_pages') ?: [];
+                $pagination = $this->getData('pagination');
                 ?>
                 
                 <?php if (empty($parentPages)): ?>
@@ -255,15 +246,29 @@
                                                 <?php endif; ?>
                                             </acl>
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_delete">
-                                                <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
-                                                      method='post' 
-                                                      style="display:inline;"
-                                                      onsubmit="return confirm('<?= __('确定要删除此页面吗？如果有子页面，子页面也会被删除！') ?>');">
-                                                    <input type='hidden' name='id' value='<?= $page->getId() ?>'>
-                                                    <button type='submit' class='btn btn-sm btn-danger d-inline-flex align-items-center' style="min-width: 70px; white-space: nowrap;">
-                                                        <i class="mdi mdi-delete me-1"></i><?= __('删除') ?>
+                                                <?php if ($isHomePage && $isTopLevel): ?>
+                                                    <!-- 首页类型：一键删除站点 -->
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-danger d-inline-flex align-items-center delete-site-btn"
+                                                            data-page-id="<?= $page->getId() ?>"
+                                                            data-page-name="<?= htmlspecialchars($page->getData('name') ?? '') ?>"
+                                                            data-child-count="<?= $hasChildren ? count($childPages[$page->getId()]) : 0 ?>"
+                                                            style="min-width: 90px; white-space: nowrap;"
+                                                            title="<?= __('删除整个站点（包含所有子页面）') ?>">
+                                                        <i class="mdi mdi-delete-sweep me-1"></i><?= __('删除站点') ?>
                                                     </button>
-                                                </form>
+                                                <?php else: ?>
+                                                    <!-- 普通页面：单独删除 -->
+                                                    <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
+                                                          method='post' 
+                                                          style="display:inline;"
+                                                          onsubmit="return confirm('<?= __('确定要删除此页面吗？') ?>');">
+                                                        <input type='hidden' name='id' value='<?= $page->getId() ?>'>
+                                                        <button type='submit' class='btn btn-sm btn-danger d-inline-flex align-items-center' style="min-width: 70px; white-space: nowrap;">
+                                                            <i class="mdi mdi-delete me-1"></i><?= __('删除') ?>
+                                                        </button>
+                                                    </form>
+                                                <?php endif; ?>
                                             </acl>
                                         </div>
                                     </div>
@@ -410,6 +415,84 @@
                             </div>
                         <?php endforeach; ?>
                     </div>
+                    
+                    <!-- 翻页组件 -->
+                    <?php if ($pagination && $pagination['totalPages'] > 1): ?>
+                    <nav aria-label="Page navigation" class="mt-4">
+                        <ul class="pagination justify-content-center mb-0">
+                            <?php 
+                            $currentPage = $pagination['currentPage'] ?? 1;
+                            $totalPages = $pagination['totalPages'] ?? 1;
+                            $baseUrl = $this->getBackendUrl('*/backend/page/index');
+                            $search = $this->request->getGet('search', '');
+                            
+                            // 构建URL参数
+                            $buildUrl = function($page) use ($baseUrl, $search) {
+                                $params = ['page' => $page];
+                                if ($search) $params['search'] = $search;
+                                return $baseUrl . '?' . http_build_query($params);
+                            };
+                            ?>
+                            
+                            <!-- 上一页 -->
+                            <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= $currentPage > 1 ? $buildUrl($currentPage - 1) : '#' ?>">
+                                    <i class="mdi mdi-chevron-left"></i>
+                                </a>
+                            </li>
+                            
+                            <?php
+                            // 计算显示的页码范围
+                            $startPage = max(1, $currentPage - 2);
+                            $endPage = min($totalPages, $currentPage + 2);
+                            
+                            // 确保显示至少5个页码
+                            if ($endPage - $startPage < 4) {
+                                if ($startPage == 1) {
+                                    $endPage = min($totalPages, 5);
+                                } else {
+                                    $startPage = max(1, $totalPages - 4);
+                                }
+                            }
+                            
+                            // 显示第一页
+                            if ($startPage > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $buildUrl(1) ?>">1</a>
+                                </li>
+                                <?php if ($startPage > 2): ?>
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            
+                            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                <li class="page-item <?= $i == $currentPage ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            
+                            <?php // 显示最后一页
+                            if ($endPage < $totalPages): ?>
+                                <?php if ($endPage < $totalPages - 1): ?>
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                <?php endif; ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $buildUrl($totalPages) ?>"><?= $totalPages ?></a>
+                                </li>
+                            <?php endif; ?>
+                            
+                            <!-- 下一页 -->
+                            <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= $currentPage < $totalPages ? $buildUrl($currentPage + 1) : '#' ?>">
+                                    <i class="mdi mdi-chevron-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                        <div class="text-center mt-2 text-muted small">
+                            <?= __('共 %1 个站点，第 %2/%3 页', $pagination['totalRecords'] ?? 0, $currentPage, $totalPages) ?>
+                        </div>
+                    </nav>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
@@ -417,6 +500,349 @@
 </div>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
+
+<!-- 一键建站 Modal -->
+<div class="modal fade" id="quickSiteModal" tabindex="-1" aria-labelledby="quickSiteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="quickSiteModalLabel">
+                    <i class="mdi mdi-rocket-launch"></i> <?= __('一键建站') ?>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickSiteForm">
+                    <!-- 步骤指示器 -->
+                    <div class="d-flex justify-content-center mb-4">
+                        <div class="step-indicator">
+                            <span class="step active" data-step="1">1. <?= __('选择站点和模板') ?></span>
+                            <span class="step-divider"><i class="mdi mdi-chevron-right"></i></span>
+                            <span class="step" data-step="2">2. <?= __('配置信息') ?></span>
+                            <span class="step-divider"><i class="mdi mdi-chevron-right"></i></span>
+                            <span class="step" data-step="3">3. <?= __('完成创建') ?></span>
+                        </div>
+                    </div>
+                    
+                    <!-- 第1步：选择站点和模板 -->
+                    <div class="step-content" id="step1Content">
+                        <div class="alert alert-info mb-3">
+                            <i class="mdi mdi-information-outline"></i>
+                            <?= __('选择站点和模板后，系统将自动创建首页、关于我们、联系我们、隐私政策、服务条款等所有必需页面。') ?>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- 左侧：选择站点 -->
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white py-2">
+                                        <i class="mdi mdi-web"></i> <?= __('选择站点') ?> <span class="text-warning">*</span>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div id="websiteSelector" class="website-list" style="max-height: 280px; overflow-y: auto;">
+                                            <?php 
+                                            $websites = $this->getData('websites') ?? [];
+                                            if (empty($websites)): ?>
+                                                <div class="text-center py-3 text-muted">
+                                                    <i class="mdi mdi-alert-circle-outline"></i> <?= __('暂无站点') ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <?php foreach ($websites as $website):
+                                                    $wid = (int)($website['website_id'] ?? 0);
+                                                    if ($wid <= 0) continue;
+                                                ?>
+                                                    <div class="website-item p-2 border-bottom" data-website-id="<?= $wid ?>" onclick="selectWebsite(this)">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="mdi mdi-checkbox-blank-circle-outline me-2 website-check"></i>
+                                                            <div>
+                                                                <div class="fw-bold"><?= htmlspecialchars($website['name'] ?? '') ?></div>
+                                                                <small class="text-muted"><?= htmlspecialchars($website['code'] ?? '') ?></small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="mt-2 pt-2 border-top">
+                                            <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="showQuickWebsiteForm()">
+                                                <i class="mdi mdi-plus"></i> <?= __('快速新建站点') ?>
+                                            </button>
+                                        </div>
+                                        <!-- 快速新建站点表单 -->
+                                        <div id="quickWebsiteForm" class="d-none mt-2 p-2 bg-body-secondary rounded">
+                                            <div class="mb-2">
+                                                <input type="text" class="form-control form-control-sm" id="newWebsiteName" 
+                                                       placeholder="<?= __('站点名称') ?>">
+                                            </div>
+                                            <div class="mb-2">
+                                                <input type="text" class="form-control form-control-sm" id="newWebsiteCode" 
+                                                       placeholder="<?= __('站点代码（如：my-site）') ?>">
+                                            </div>
+                                            <div class="mb-2">
+                                                <input type="text" class="form-control form-control-sm" id="newWebsiteUrl" 
+                                                       placeholder="<?= __('站点URL（如：https://example.com）') ?>">
+                                            </div>
+                                            <div class="d-flex gap-1">
+                                                <button type="button" class="btn btn-success btn-sm flex-grow-1" onclick="createQuickWebsite()">
+                                                    <i class="mdi mdi-check"></i> <?= __('创建') ?>
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-sm" onclick="hideQuickWebsiteForm()">
+                                                    <i class="mdi mdi-close"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="website_id" id="selectedWebsiteId" required>
+                            </div>
+                            
+                            <!-- 右侧：选择模板 -->
+                            <div class="col-md-8">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white py-2">
+                                        <i class="mdi mdi-palette"></i> <?= __('选择模板') ?> <span class="text-warning">*</span>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div id="templateSelector" class="row g-2" style="max-height: 320px; overflow-y: auto;">
+                                            <div class="col-12 text-center py-4">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                                </div>
+                                                <p class="mt-2 text-muted"><?= __('正在加载模板列表...') ?></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="style_code" id="selectedStyleCode" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 第2步：配置信息 -->
+                    <div class="step-content d-none" id="step2Content">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="siteName" class="form-label"><?= __('页面名称前缀') ?> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="siteName" name="site_name" 
+                                       placeholder="<?= __('例如：我的商城') ?>" required>
+                                <div class="form-text"><?= __('将用于页面标题，如：我的商城 - 首页') ?></div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="siteHandle" class="form-label"><?= __('URL前缀') ?> <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">/</span>
+                                    <input type="text" class="form-control" id="siteHandle" name="site_handle" 
+                                           placeholder="my-site" pattern="[a-z0-9-]+" required>
+                                </div>
+                                <div class="form-text"><?= __('页面URL前缀，如：/my-site（仅小写字母、数字、连字符）') ?></div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="siteDefaultLocale" class="form-label"><?= __('默认语言') ?></label>
+                                <select class="form-select" id="siteDefaultLocale" name="default_locale">
+                                    <option value="zh_Hans_CN"><?= __('简体中文') ?></option>
+                                    <option value="en_US"><?= __('英语') ?></option>
+                                    <option value="hi_IN"><?= __('印地语') ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><?= __('已选择') ?></label>
+                                <div class="p-2 bg-light rounded">
+                                    <div><small class="text-muted"><?= __('站点') ?>:</small> <strong id="selectedWebsiteDisplay">-</strong></div>
+                                    <div><small class="text-muted"><?= __('模板') ?>:</small> <strong id="selectedTemplateDisplay">-</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('要创建的页面类型') ?></label>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="home_page" id="ptHome" checked disabled>
+                                        <label class="form-check-label" for="ptHome"><?= __('首页') ?> <span class="badge bg-primary"><?= __('必需') ?></span></label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="about_page" id="ptAbout" checked>
+                                        <label class="form-check-label" for="ptAbout"><?= __('关于我们') ?></label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="contact_page" id="ptContact" checked>
+                                        <label class="form-check-label" for="ptContact"><?= __('联系我们') ?></label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="privacy_policy" id="ptPrivacy" checked>
+                                        <label class="form-check-label" for="ptPrivacy"><?= __('隐私政策') ?></label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="terms_of_service" id="ptTerms" checked>
+                                        <label class="form-check-label" for="ptTerms"><?= __('服务条款') ?></label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="refund_policy" id="ptRefund" checked>
+                                        <label class="form-check-label" for="ptRefund"><?= __('退款政策') ?></label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="blog_list" id="ptBlogList" checked>
+                                        <label class="form-check-label" for="ptBlogList"><?= __('博客列表') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="blog_post" id="ptBlogPost" checked>
+                                        <label class="form-check-label" for="ptBlogPost"><?= __('博客文章') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 第3步：创建进度 -->
+                    <div class="step-content d-none" id="step3Content">
+                        <div id="creationProgress" class="text-center py-4">
+                            <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden"><?= __('创建中...') ?></span>
+                            </div>
+                            <h5><?= __('正在创建页面...') ?></h5>
+                            <div class="progress mt-3" style="height: 20px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                     role="progressbar" style="width: 0%;" id="createProgressBar">0%</div>
+                            </div>
+                            <div id="creationLog" class="mt-3 text-start small" style="max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+                        <div id="creationResult" class="d-none">
+                            <!-- 创建完成后显示结果 -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCancel">
+                    <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-outline-primary d-none" id="btnPrev">
+                    <i class="mdi mdi-chevron-left"></i> <?= __('上一步') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="btnNext">
+                    <?= __('下一步') ?> <i class="mdi mdi-chevron-right"></i>
+                </button>
+                <button type="button" class="btn btn-success d-none" id="btnCreate">
+                    <i class="mdi mdi-check"></i> <?= __('开始创建') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.step-indicator { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.step-indicator .step { 
+    padding: 6px 12px; 
+    background: #e9ecef; 
+    border-radius: 20px; 
+    font-size: 13px;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+.step-indicator .step.active { background: #198754; color: white; }
+.step-indicator .step.completed { background: #0d6efd; color: white; }
+.step-indicator .step-divider { color: var(--bs-secondary-color, #6c757d); }
+
+/* 暗色主题下步骤指示器 */
+[data-bs-theme="dark"] .step-indicator .step {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+/* 站点选择样式 - 支持亮/暗主题 */
+.website-item {
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    margin-bottom: 2px;
+}
+.website-item:hover { 
+    background: var(--bs-tertiary-bg, #f8f9fa); 
+    border-color: #0d6efd;
+}
+.website-item.selected { 
+    background: rgba(25, 135, 84, 0.15); 
+    border-left: 3px solid #198754 !important;
+    border-color: #198754;
+}
+.website-item.selected .website-check::before {
+    content: "\F0134"; /* mdi-checkbox-marked-circle */
+    color: #198754;
+}
+.website-item .website-check { color: var(--bs-secondary-color, #dee2e6); }
+
+/* 模板卡片样式 - 支持亮/暗主题 */
+.template-card {
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    height: 100%;
+    background: var(--bs-body-bg, #fff);
+}
+.template-card:hover { 
+    border-color: #0d6efd; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+}
+.template-card.selected { 
+    border-color: #198754; 
+    background: rgba(25, 135, 84, 0.1); 
+}
+.template-card .template-preview {
+    height: 80px;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border-radius: 4px 4px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.template-card .template-preview img { max-width: 100%; max-height: 100%; object-fit: cover; }
+.template-card .template-info { padding: 8px; }
+.template-card .template-name { 
+    font-weight: 600; 
+    font-size: 13px; 
+    margin-bottom: 2px; 
+    color: var(--bs-body-color, #212529); 
+}
+.template-card .template-desc { 
+    font-size: 11px; 
+    color: var(--bs-secondary-color, #6c757d); 
+    line-height: 1.3; 
+}
+
+/* 暗色主题特定覆盖 */
+[data-bs-theme="dark"] .website-item,
+[data-bs-theme="dark"] .template-card {
+    background: var(--bs-tertiary-bg);
+}
+[data-bs-theme="dark"] .website-item:hover {
+    background: rgba(13, 110, 253, 0.15);
+}
+[data-bs-theme="dark"] .website-item.selected {
+    background: rgba(25, 135, 84, 0.25);
+}
+[data-bs-theme="dark"] .template-card:hover {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+[data-bs-theme="dark"] .template-card.selected {
+    background: rgba(25, 135, 84, 0.2);
+}
+[data-bs-theme="dark"] .template-card .template-preview {
+    background: var(--bs-secondary-bg);
+}
+</style>
 
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
@@ -542,6 +968,96 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // ============ 一键删除站点功能 ============
+    const deleteSiteButtons = document.querySelectorAll('.delete-site-btn');
+    deleteSiteButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const pageId = this.getAttribute('data-page-id');
+            const pageName = this.getAttribute('data-page-name');
+            const childCount = parseInt(this.getAttribute('data-child-count') || '0');
+            
+            if (!pageId) {
+                showToast('error', '<?= __("删除失败") ?>', '<?= __("页面ID不存在") ?>');
+                return;
+            }
+            
+            // 构建确认消息
+            let confirmMessage = '<?= __("确定要删除站点") ?> "' + pageName + '" <?= __("吗？") ?>';
+            if (childCount > 0) {
+                confirmMessage += '\n\n<?= __("此操作将同时删除") ?> ' + childCount + ' <?= __("个子页面！") ?>';
+            }
+            confirmMessage += '\n\n<?= __("此操作不可恢复！") ?>';
+            
+            // 使用 SweetAlert2 如果可用，否则使用原生 confirm
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: '<?= __("确认删除站点") ?>',
+                    html: `<div class="text-start">
+                        <p class="mb-2"><strong><?= __("站点名称") ?>:</strong> ${pageName}</p>
+                        ${childCount > 0 ? `<p class="mb-2 text-danger"><strong><?= __("子页面数量") ?>:</strong> ${childCount} <?= __("个") ?></p>` : ''}
+                        <p class="text-danger"><strong><?= __("警告") ?>:</strong> <?= __("此操作将删除该站点及其所有子页面，且不可恢复！") ?></p>
+                    </div>`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '<?= __("确认删除") ?>',
+                    cancelButtonText: '<?= __("取消") ?>',
+                    focusCancel: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        deleteSite(pageId, pageName, button);
+                    }
+                });
+            } else {
+                if (confirm(confirmMessage)) {
+                    deleteSite(pageId, pageName, button);
+                }
+            }
+        });
+    });
+    
+    // 执行删除站点
+    function deleteSite(pageId, pageName, button) {
+        const originalHtml = button.innerHTML;
+        const originalDisabled = button.disabled;
+        
+        // 显示loading状态
+        button.disabled = true;
+        button.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __("删除中...") ?>';
+        
+        fetch('<?= $this->getBackendUrl("*/backend/page/deleteSite") ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ id: pageId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('success', '<?= __("删除成功") ?>', data.message || ('<?= __("站点") ?> "' + pageName + '" <?= __("已删除") ?>'));
+                // 刷新页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                button.disabled = originalDisabled;
+                button.innerHTML = originalHtml;
+                showToast('error', '<?= __("删除失败") ?>', data.message || '<?= __("未知错误") ?>');
+            }
+        })
+        .catch(error => {
+            console.error('删除站点失败:', error);
+            button.disabled = originalDisabled;
+            button.innerHTML = originalHtml;
+            showToast('error', '<?= __("删除失败") ?>', '<?= __("网络错误，请重试") ?>');
+        });
+    }
+    
     // 导出页面功能（带loading）
     const exportButtons = document.querySelectorAll('.export-page-btn');
     exportButtons.forEach(function(button) {
@@ -602,6 +1118,407 @@ document.addEventListener('DOMContentLoaded', function() {
                     showToast('info', '<?= __("导出处理中") ?>', '<?= __("文件可能较大，正在生成中，请稍候...") ?>');
                 }
             }, 30000); // 30秒超时保护
+        });
+    });
+    
+    // ============ 一键建站功能 ============
+    const quickSiteModal = document.getElementById('quickSiteModal');
+    const btnNext = document.getElementById('btnNext');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnCreate = document.getElementById('btnCreate');
+    const btnCancel = document.getElementById('btnCancel');
+    let currentStep = 1;
+    let selectedWebsiteName = '';
+    let selectedTemplateName = '';
+    
+    // 加载模板列表
+    function loadTemplates() {
+        const container = document.getElementById('templateSelector');
+        fetch('<?= $this->getBackendUrl("*/backend/page/getStyles") ?>')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data && data.data.length > 0) {
+                    let html = '';
+                    data.data.forEach(style => {
+                        const thumbnail = style.preview_image || '';
+                        const thumbnailHtml = thumbnail 
+                            ? `<img src="${thumbnail}" alt="${style.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-palette-outline\\' style=\\'font-size:32px;color:#6c757d;\\'></i>'">`
+                            : '<i class="mdi mdi-palette-outline" style="font-size:32px;color:#6c757d;"></i>';
+                        
+                        html += `
+                            <div class="col-6 col-lg-4">
+                                <div class="template-card" data-style-code="${style.code}" data-style-name="${style.name}" onclick="selectTemplate(this)">
+                                    <div class="template-preview">${thumbnailHtml}</div>
+                                    <div class="template-info">
+                                        <div class="template-name">${style.name}</div>
+                                        <div class="template-desc text-truncate">${style.description || '<?= __("暂无描述") ?>'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `
+                        <div class="col-12 text-center py-4">
+                            <i class="mdi mdi-alert-circle-outline text-warning" style="font-size:48px;"></i>
+                            <p class="mt-2 text-muted"><?= __('暂无可用模板，请先创建模板') ?></p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('加载模板失败:', error);
+                container.innerHTML = `
+                    <div class="col-12 text-center py-4">
+                        <i class="mdi mdi-alert-circle-outline text-danger" style="font-size:48px;"></i>
+                        <p class="mt-2 text-danger"><?= __('加载模板失败，请刷新页面重试') ?></p>
+                    </div>
+                `;
+            });
+    }
+    
+    // 选择站点
+    window.selectWebsite = function(item) {
+        document.querySelectorAll('.website-item').forEach(i => {
+            i.classList.remove('selected');
+            i.querySelector('.website-check').className = 'mdi mdi-checkbox-blank-circle-outline me-2 website-check';
+        });
+        item.classList.add('selected');
+        item.querySelector('.website-check').className = 'mdi mdi-checkbox-marked-circle me-2 website-check text-success';
+        document.getElementById('selectedWebsiteId').value = item.dataset.websiteId;
+        selectedWebsiteName = item.querySelector('.fw-bold').textContent;
+    };
+    
+    // 选择模板
+    window.selectTemplate = function(card) {
+        document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        document.getElementById('selectedStyleCode').value = card.dataset.styleCode;
+        selectedTemplateName = card.dataset.styleName;
+    };
+    
+    // 显示快速新建站点表单
+    window.showQuickWebsiteForm = function() {
+        document.getElementById('quickWebsiteForm').classList.remove('d-none');
+    };
+    
+    // 隐藏快速新建站点表单
+    window.hideQuickWebsiteForm = function() {
+        document.getElementById('quickWebsiteForm').classList.add('d-none');
+        document.getElementById('newWebsiteName').value = '';
+        document.getElementById('newWebsiteCode').value = '';
+        document.getElementById('newWebsiteUrl').value = '';
+    };
+    
+    // 创建快速站点
+    window.createQuickWebsite = function() {
+        const name = document.getElementById('newWebsiteName').value.trim();
+        const code = document.getElementById('newWebsiteCode').value.trim();
+        const url = document.getElementById('newWebsiteUrl').value.trim();
+        
+        if (!name || !code || !url) {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __("提示") ?>',
+                text: '<?= __("请填写完整的站点信息") ?>',
+                confirmButtonText: '<?= __("确定") ?>'
+            });
+            return;
+        }
+        
+        // 发送创建请求
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('code', code);
+        formData.append('url', url);
+        formData.append('default_timezone', 'Asia/Shanghai');
+        
+        fetch('<?= $this->getBackendUrl("*/admin/website/quickSave") ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 添加新站点到列表
+                const selector = document.getElementById('websiteSelector');
+                const newItem = document.createElement('div');
+                newItem.className = 'website-item p-2 border-bottom selected';
+                newItem.dataset.websiteId = data.website.website_id;
+                newItem.onclick = function() { selectWebsite(this); };
+                newItem.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="mdi mdi-checkbox-marked-circle me-2 website-check text-success"></i>
+                        <div>
+                            <div class="fw-bold">${name}</div>
+                            <small class="text-muted">${code}</small>
+                        </div>
+                    </div>
+                `;
+                
+                // 取消其他选中
+                document.querySelectorAll('.website-item').forEach(i => {
+                    i.classList.remove('selected');
+                    i.querySelector('.website-check').className = 'mdi mdi-checkbox-blank-circle-outline me-2 website-check';
+                });
+                
+                // 插入到列表开头
+                if (selector.querySelector('.text-muted')) {
+                    selector.innerHTML = '';
+                }
+                selector.insertBefore(newItem, selector.firstChild);
+                
+                document.getElementById('selectedWebsiteId').value = data.website.website_id;
+                selectedWebsiteName = name;
+                
+                hideQuickWebsiteForm();
+                showToast('success', '<?= __("站点创建成功") ?>', '');
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("创建失败") ?>',
+                    text: data.message || '<?= __("未知错误") ?>',
+                    confirmButtonText: '<?= __("确定") ?>'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('创建站点失败:', error);
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __("创建失败") ?>',
+                text: '<?= __("网络错误，请稍后重试") ?>',
+                confirmButtonText: '<?= __("确定") ?>'
+            });
+        });
+    };
+    
+    // 更新步骤指示器
+    function updateStepIndicator(step) {
+        document.querySelectorAll('.step-indicator .step').forEach((el, idx) => {
+            el.classList.remove('active', 'completed');
+            if (idx + 1 < step) el.classList.add('completed');
+            if (idx + 1 === step) el.classList.add('active');
+        });
+    }
+    
+    // 显示指定步骤内容
+    function showStep(step) {
+        currentStep = step;
+        updateStepIndicator(step);
+        
+        document.querySelectorAll('.step-content').forEach(el => el.classList.add('d-none'));
+        document.getElementById(`step${step}Content`).classList.remove('d-none');
+        
+        // 按钮显示逻辑
+        btnPrev.classList.toggle('d-none', step === 1);
+        btnNext.classList.toggle('d-none', step >= 2);
+        btnCreate.classList.toggle('d-none', step !== 2);
+        btnCancel.classList.toggle('d-none', step === 3);
+        
+        if (step === 3) {
+            btnPrev.classList.add('d-none');
+            btnCreate.classList.add('d-none');
+        }
+        
+        // 第2步时更新显示信息
+        if (step === 2) {
+            document.getElementById('selectedWebsiteDisplay').textContent = selectedWebsiteName || '-';
+            document.getElementById('selectedTemplateDisplay').textContent = selectedTemplateName || '-';
+        }
+    }
+    
+    // Modal 打开时加载模板
+    quickSiteModal.addEventListener('show.bs.modal', function() {
+        currentStep = 1;
+        showStep(1);
+        loadTemplates();
+        // 重置表单和选择状态
+        document.getElementById('quickSiteForm').reset();
+        document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.website-item').forEach(i => {
+            i.classList.remove('selected');
+            const check = i.querySelector('.website-check');
+            if (check) check.className = 'mdi mdi-checkbox-blank-circle-outline me-2 website-check';
+        });
+        document.getElementById('selectedWebsiteId').value = '';
+        document.getElementById('selectedStyleCode').value = '';
+        selectedWebsiteName = '';
+        selectedTemplateName = '';
+        hideQuickWebsiteForm();
+    });
+    
+    // 下一步
+    btnNext.addEventListener('click', function() {
+        if (currentStep === 1) {
+            const websiteId = document.getElementById('selectedWebsiteId').value;
+            const styleCode = document.getElementById('selectedStyleCode').value;
+            
+            if (!websiteId) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __("提示") ?>',
+                    text: '<?= __("请选择一个站点") ?>',
+                    confirmButtonText: '<?= __("确定") ?>'
+                });
+                return;
+            }
+            
+            if (!styleCode) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __("提示") ?>',
+                    text: '<?= __("请选择一个模板") ?>',
+                    confirmButtonText: '<?= __("确定") ?>'
+                });
+                return;
+            }
+            showStep(2);
+        }
+    });
+    
+    // 上一步
+    btnPrev.addEventListener('click', function() {
+        if (currentStep > 1) {
+            showStep(currentStep - 1);
+        }
+    });
+    
+    // 开始创建
+    btnCreate.addEventListener('click', function() {
+        const form = document.getElementById('quickSiteForm');
+        const siteName = document.getElementById('siteName').value.trim();
+        const siteHandle = document.getElementById('siteHandle').value.trim();
+        const websiteId = document.getElementById('selectedWebsiteId').value;
+        const styleCode = document.getElementById('selectedStyleCode').value;
+        
+        if (!siteName || !siteHandle) {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __("提示") ?>',
+                text: '<?= __("请填写完整信息") ?>',
+                confirmButtonText: '<?= __("确定") ?>'
+            });
+            return;
+        }
+        
+        // 验证handle格式
+        if (!/^[a-z0-9-]+$/.test(siteHandle)) {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __("提示") ?>',
+                text: '<?= __("URL前缀只能包含小写字母、数字和连字符") ?>',
+                confirmButtonText: '<?= __("确定") ?>'
+            });
+            return;
+        }
+        
+        showStep(3);
+        
+        // 收集选中的页面类型
+        const pageTypes = [];
+        document.querySelectorAll('input[name="page_types[]"]:checked').forEach(cb => {
+            pageTypes.push(cb.value);
+        });
+        // 确保首页在列表中
+        if (!pageTypes.includes('home_page')) {
+            pageTypes.unshift('home_page');
+        }
+        
+        // 发送创建请求
+        const formData = new FormData();
+        formData.append('style_code', styleCode);
+        formData.append('site_name', siteName);
+        formData.append('site_handle', siteHandle);
+        formData.append('website_id', websiteId);
+        formData.append('default_locale', document.getElementById('siteDefaultLocale').value);
+        formData.append('page_types', JSON.stringify(pageTypes));
+        
+        const progressBar = document.getElementById('createProgressBar');
+        const creationLog = document.getElementById('creationLog');
+        const creationProgress = document.getElementById('creationProgress');
+        const creationResult = document.getElementById('creationResult');
+        
+        creationLog.innerHTML = '<div class="text-muted"><?= __("开始创建...") ?></div>';
+        
+        fetch('<?= $this->getBackendUrl("*/backend/page/quickSite") ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                progressBar.style.width = '100%';
+                progressBar.textContent = '100%';
+                
+                // 显示成功结果
+                creationProgress.classList.add('d-none');
+                creationResult.classList.remove('d-none');
+                
+                let pagesHtml = '';
+                if (data.pages && data.pages.length > 0) {
+                    pagesHtml = '<ul class="list-group list-group-flush mb-3">';
+                    data.pages.forEach(page => {
+                        pagesHtml += `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="mdi mdi-file-document text-primary me-2"></i>${page.name}</span>
+                                <span class="badge bg-success">${page.handle}</span>
+                            </li>
+                        `;
+                    });
+                    pagesHtml += '</ul>';
+                }
+                
+                creationResult.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="mdi mdi-check-circle text-success" style="font-size:64px;"></i>
+                        <h4 class="mt-3 text-success"><?= __("站点创建成功！") ?></h4>
+                        <p class="text-muted"><?= __("已成功创建以下页面：") ?></p>
+                    </div>
+                    ${pagesHtml}
+                    <div class="text-center">
+                        <button type="button" class="btn btn-primary" onclick="window.location.reload()">
+                            <i class="mdi mdi-refresh"></i> <?= __("刷新页面列表") ?>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=${data.home_page_id}" class="btn btn-success ms-2">
+                            <i class="mdi mdi-pencil"></i> <?= __("编辑首页") ?>
+                        </a>
+                    </div>
+                `;
+            } else {
+                creationProgress.classList.add('d-none');
+                creationResult.classList.remove('d-none');
+                creationResult.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="mdi mdi-alert-circle text-danger" style="font-size:64px;"></i>
+                        <h4 class="mt-3 text-danger"><?= __("创建失败") ?></h4>
+                        <p class="text-muted">${data.message || '<?= __("未知错误") ?>'}</p>
+                    </div>
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="mdi mdi-close"></i> <?= __("关闭") ?>
+                        </button>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('创建失败:', error);
+            creationProgress.classList.add('d-none');
+            creationResult.classList.remove('d-none');
+            creationResult.innerHTML = `
+                <div class="text-center py-3">
+                    <i class="mdi mdi-alert-circle text-danger" style="font-size:64px;"></i>
+                    <h4 class="mt-3 text-danger"><?= __("创建失败") ?></h4>
+                    <p class="text-muted"><?= __("网络错误，请稍后重试") ?></p>
+                </div>
+                <div class="text-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="mdi mdi-close"></i> <?= __("关闭") ?>
+                    </button>
+                </div>
+            `;
         });
     });
 });

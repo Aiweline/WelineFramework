@@ -101,101 +101,83 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <?php endif; ?>
                     </div>
 
-                    <!-- 页面句柄 -->
-                    <div class="mb-3">
-                        <label for="handle" class="form-label">
-                            <?= __('页面句柄') ?> <span class="text-danger">*</span>
-                        </label>
-                        <div class="position-relative">
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="handle" 
-                                   name="handle" 
-                                  value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>"
-                                   placeholder="<?= __('例如：about-us, contact') ?>"
-                                   required
-                                   data-original-value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>">
-                            <div id="handle-validation-icon" class="position-absolute top-50 end-0 translate-middle-y pe-3" style="display: none;">
-                                <span class="handle-checking"><i class="mdi mdi-loading mdi-spin text-primary"></i></span>
-                                <span class="handle-available"><i class="mdi mdi-check-circle text-success"></i></span>
-                                <span class="handle-unavailable"><i class="mdi mdi-close-circle text-danger"></i></span>
-                            </div>
-                        </div>
-                        <div class="form-text"><?= __('页面的唯一标识符，用于URL，只能包含小写字母、数字和连字符') ?></div>
-                        <div id="handle-validation-message" class="small mt-1" style="display: none;"></div>
-                        <div class="invalid-feedback"><?= __('请输入页面句柄') ?></div>
-                        
-                        <?php if ($isEdit && $page && $page->getId()): ?>
-                        <!-- 页面访问地址 -->
-                        <div class="alert alert-info mt-3 mb-0" role="alert">
-                            <div class="d-flex align-items-start">
-                                <i class="mdi mdi-link-variant fs-4 me-2"></i>
-                                <div class="flex-grow-1">
-                                    <h6 class="alert-heading mb-2">
-                                        <i class="mdi mdi-earth"></i> <?= __('页面访问地址') ?>
-                                    </h6>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" 
-                                               class="form-control bg-white" 
-                                               id="pageUrlDisplay" 
-                                              value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
-                                               readonly>
-                                        <button class="btn btn-outline-primary" 
-                                                type="button" 
-                                                onclick="copyPageUrl()"
-                                                title="<?= __('复制地址') ?>">
-                                            <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
-                                        </button>
-                                        <button class="btn btn-outline-success" 
-                                                type="button" 
-                                                onclick="openPageUrl()"
-                                                title="<?= __('在新窗口打开') ?>">
-                                            <i class="mdi mdi-open-in-new"></i> <?= __('打开') ?>
-                                        </button>
-                                    </div>
-                                    <small class="text-muted mt-2 d-block">
-                                        <i class="mdi mdi-information-outline"></i>
-                                        <?= __('这是页面的前端访问地址，修改句柄后需要保存才会更新') ?>
-                                    </small>
+                    <!-- 页面句柄 + 访问地址 + 所属站点 (流式布局) -->
+                    <div class="d-flex flex-wrap gap-2 mb-3 align-items-end">
+                        <!-- 页面句柄 -->
+                        <div style="min-width: 100px; flex: 1 1 100px; max-width: 180px;">
+                            <label for="handle" class="form-label mb-1 small">
+                                <?= __('句柄') ?> <span class="text-danger">*</span>
+                            </label>
+                            <div class="position-relative">
+                                <input type="text" 
+                                       class="form-control form-control-sm" 
+                                       id="handle" 
+                                       name="handle" 
+                                       value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>"
+                                       placeholder="about-us"
+                                       required
+                                       data-original-value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>">
+                                <div id="handle-validation-icon" class="position-absolute top-50 end-0 translate-middle-y pe-3" style="display: none;">
+                                    <span class="handle-checking"><i class="mdi mdi-loading mdi-spin text-primary"></i></span>
+                                    <span class="handle-available"><i class="mdi mdi-check-circle text-success"></i></span>
+                                    <span class="handle-unavailable"><i class="mdi mdi-close-circle text-danger"></i></span>
                                 </div>
                             </div>
+                            <div id="handle-validation-message" class="small mt-1" style="display: none;"></div>
+                            <div class="invalid-feedback"><?= __('请输入页面句柄') ?></div>
                         </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- 页面所属站点 -->
-                    <div class="mb-3">
-                        <label for="website_id" class="form-label">
-                            <i class="mdi mdi-web"></i> <?= __('所属站点') ?> <span class="text-danger">*</span>
-                        </label>
-                        <div class="d-flex gap-2">
-                            <select class="form-select" id="website_id" name="website_id" required>
-                                <option value=""><?= __('请选择所属站点') ?></option>
-                                <?php 
-                                $currentWebsiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
-                                $websites = $this->getData('websites') ?? [];
-                                foreach ($websites as $website):
-                                    $wid = (int)($website['website_id'] ?? 0);
-                                    if ($wid <= 0) continue;
-                                    $wName = htmlspecialchars($website['name'] ?? '');
-                                    $wCode = htmlspecialchars($website['code'] ?? '');
-                                ?>
-                                    <option value="<?= $wid ?>" <?= $currentWebsiteId === $wid ? 'selected' : '' ?>>
-                                        <?= $wName ?> (<?= $wCode ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <a href="<?= $this->getBackendUrl('*/admin/website/add') ?>" 
-                               class="btn btn-outline-secondary" 
-                               target="_blank"
-                               title="<?= __('新建站点') ?>">
-                                <i class="mdi mdi-plus-circle-outline"></i> <?= __('新建站点') ?>
-                            </a>
+                        
+                        <!-- 页面访问地址 -->
+                        <div style="min-width: 150px; flex: 2 1 200px;">
+                            <label class="form-label mb-1 small">
+                                <i class="mdi mdi-link-variant"></i> <?= __('访问地址') ?>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" 
+                                       class="form-control bg-light" 
+                                       id="pageUrlDisplay" 
+                                       value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
+                                       readonly>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
+                                    <i class="mdi mdi-content-copy"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrl()" title="<?= __('打开') ?>">
+                                    <i class="mdi mdi-open-in-new"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="form-text">
-                            <?= __('请选择该页面所属的业务站点。只有被分配到该站点的后台用户才有权限查看和编辑此页面。') ?>
+                        
+                        <!-- 所属站点 -->
+                        <div style="min-width: 120px; flex: 1 1 120px; max-width: 200px;">
+                            <label for="website_id" class="form-label mb-1 small">
+                                <i class="mdi mdi-web"></i> <?= __('所属站点') ?> <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <select class="form-select form-select-sm" id="website_id" name="website_id" required>
+                                    <option value=""><?= __('选择') ?></option>
+                                    <?php 
+                                    $currentWebsiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+                                    $websites = $this->getData('websites') ?? [];
+                                    foreach ($websites as $website):
+                                        $wid = (int)($website['website_id'] ?? 0);
+                                        if ($wid <= 0) continue;
+                                        $wName = htmlspecialchars($website['name'] ?? '');
+                                        $wCode = htmlspecialchars($website['code'] ?? '');
+                                    ?>
+                                        <option value="<?= $wid ?>" <?= $currentWebsiteId === $wid ? 'selected' : '' ?>>
+                                            <?= $wName ?> (<?= $wCode ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <a href="<?= $this->getBackendUrl('*/admin/website/add') ?>" 
+                                   class="btn btn-outline-primary btn-sm" 
+                                   target="_blank"
+                                   title="<?= __('新建站点') ?>">
+                                    <i class="mdi mdi-plus"></i>
+                                </a>
+                            </div>
+                            <div class="invalid-feedback"><?= __('请选择所属站点') ?></div>
                         </div>
-                        <div class="invalid-feedback"><?= __('请选择所属站点') ?></div>
                     </div>
 
                     <!-- 页面层级 -->
@@ -1503,7 +1485,6 @@ if (typeof ClassicEditor === 'undefined') {
 .style-card.selected {
     border-color: #667eea;
     box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-    background-color: #f8f9ff;
 }
 
 .style-card-preview {

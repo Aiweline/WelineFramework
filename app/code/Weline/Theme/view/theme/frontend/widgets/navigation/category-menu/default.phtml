@@ -1,0 +1,378 @@
+<?php
+/**
+ * 分类菜单部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('全部分类');
+$maxDepth = (int)($this->getData('max_depth') ?? 3);
+$showIcons = (bool)($this->getData('show_icons') ?? true);
+$showCount = (bool)($this->getData('show_count') ?? false);
+$expandOnHover = (bool)($this->getData('expand_on_hover') ?? true);
+$style = $this->getData('style') ?? 'flyout';
+
+// 示例分类数据
+$categories = [
+    [
+        'id' => 1,
+        'name' => __('电子产品'),
+        'url' => '/category/electronics',
+        'icon' => 'ri-smartphone-line',
+        'count' => 156,
+        'children' => [
+            [
+                'id' => 11,
+                'name' => __('手机'),
+                'url' => '/category/phones',
+                'count' => 45,
+                'children' => [
+                    ['id' => 111, 'name' => 'iPhone', 'url' => '/category/iphone', 'count' => 15],
+                    ['id' => 112, 'name' => 'Android', 'url' => '/category/android', 'count' => 30],
+                ],
+            ],
+            ['id' => 12, 'name' => __('电脑'), 'url' => '/category/computers', 'count' => 38],
+            ['id' => 13, 'name' => __('平板'), 'url' => '/category/tablets', 'count' => 22],
+            ['id' => 14, 'name' => __('配件'), 'url' => '/category/accessories', 'count' => 51],
+        ],
+    ],
+    [
+        'id' => 2,
+        'name' => __('服装鞋帽'),
+        'url' => '/category/fashion',
+        'icon' => 'ri-t-shirt-line',
+        'count' => 243,
+        'children' => [
+            ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
+            ['id' => 22, 'name' => __('女装'), 'url' => '/category/womens', 'count' => 112],
+            ['id' => 23, 'name' => __('童装'), 'url' => '/category/kids', 'count' => 42],
+        ],
+    ],
+    [
+        'id' => 3,
+        'name' => __('家居生活'),
+        'url' => '/category/home',
+        'icon' => 'ri-home-4-line',
+        'count' => 178,
+    ],
+    [
+        'id' => 4,
+        'name' => __('美妆个护'),
+        'url' => '/category/beauty',
+        'icon' => 'ri-heart-2-line',
+        'count' => 134,
+    ],
+    [
+        'id' => 5,
+        'name' => __('食品生鲜'),
+        'url' => '/category/food',
+        'icon' => 'ri-restaurant-line',
+        'count' => 89,
+    ],
+    [
+        'id' => 6,
+        'name' => __('运动户外'),
+        'url' => '/category/sports',
+        'icon' => 'ri-run-line',
+        'count' => 112,
+    ],
+];
+
+$widgetId = 'category-menu-' . uniqid();
+
+/**
+ * 递归渲染子菜单
+ */
+function renderSubmenu($items, $depth = 1, $maxDepth = 3, $showCount = false) {
+    if ($depth >= $maxDepth || empty($items)) return;
+    ?>
+    <ul class="submenu submenu-depth-<?= $depth ?>">
+        <?php foreach ($items as $item): ?>
+            <li class="submenu-item <?= !empty($item['children']) ? 'has-children' : '' ?>">
+                <a href="<?= htmlspecialchars($item['url']) ?>" class="submenu-link">
+                    <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
+                    <?php if ($showCount && isset($item['count'])): ?>
+                        <span class="item-count"><?= $item['count'] ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($item['children'])): ?>
+                        <i class="ri-arrow-right-s-line"></i>
+                    <?php endif; ?>
+                </a>
+                <?php if (!empty($item['children'])): ?>
+                    <?php renderSubmenu($item['children'], $depth + 1, $maxDepth, $showCount); ?>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+}
+?>
+
+<div class="widget-category-menu menu-style-<?= htmlspecialchars($style) ?>" 
+     id="<?= $widgetId ?>"
+     data-expand-on-hover="<?= $expandOnHover ? 'true' : 'false' ?>">
+    
+    <button class="menu-trigger" type="button">
+        <i class="ri-menu-line"></i>
+        <span><?= htmlspecialchars($title) ?></span>
+        <i class="ri-arrow-down-s-line trigger-arrow"></i>
+    </button>
+    
+    <div class="menu-dropdown">
+        <ul class="category-menu-list">
+            <?php foreach ($categories as $category): ?>
+                <li class="menu-item <?= !empty($category['children']) ? 'has-children' : '' ?>">
+                    <a href="<?= htmlspecialchars($category['url']) ?>" class="menu-link">
+                        <?php if ($showIcons && !empty($category['icon'])): ?>
+                            <i class="<?= htmlspecialchars($category['icon']) ?> menu-icon"></i>
+                        <?php endif; ?>
+                        <span class="item-name"><?= htmlspecialchars($category['name']) ?></span>
+                        <?php if ($showCount && isset($category['count'])): ?>
+                            <span class="item-count"><?= $category['count'] ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($category['children'])): ?>
+                            <i class="ri-arrow-right-s-line arrow-icon"></i>
+                        <?php endif; ?>
+                    </a>
+                    <?php if (!empty($category['children'])): ?>
+                        <?php renderSubmenu($category['children'], 1, $maxDepth, $showCount); ?>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</div>
+
+<style>
+.widget-category-menu {
+    position: relative;
+}
+
+.widget-category-menu .menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    width: 100%;
+}
+
+.widget-category-menu .menu-trigger:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+.widget-category-menu .menu-trigger .trigger-arrow {
+    margin-left: auto;
+    transition: transform 0.3s;
+}
+
+.widget-category-menu.menu-open .trigger-arrow {
+    transform: rotate(180deg);
+}
+
+/* 下拉菜单 */
+.widget-category-menu .menu-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 280px;
+    background: #fff;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s;
+    z-index: 1000;
+}
+
+.widget-category-menu:hover .menu-dropdown,
+.widget-category-menu.menu-open .menu-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.widget-category-menu .category-menu-list {
+    list-style: none;
+    margin: 0;
+    padding: 10px 0;
+}
+
+.widget-category-menu .menu-item {
+    position: relative;
+}
+
+.widget-category-menu .menu-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.widget-category-menu .menu-link:hover {
+    background: #f8f9fa;
+    color: var(--primary-color, #007bff);
+}
+
+.widget-category-menu .menu-icon {
+    font-size: 20px;
+    width: 24px;
+    text-align: center;
+    color: #666;
+}
+
+.widget-category-menu .menu-link:hover .menu-icon {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-category-menu .item-name {
+    flex: 1;
+    font-size: 14px;
+}
+
+.widget-category-menu .item-count {
+    font-size: 12px;
+    color: #999;
+}
+
+.widget-category-menu .arrow-icon {
+    font-size: 16px;
+    color: #ccc;
+}
+
+/* Flyout子菜单 */
+.widget-category-menu.menu-style-flyout .submenu {
+    position: absolute;
+    top: 0;
+    left: 100%;
+    width: 250px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    list-style: none;
+    margin: 0;
+    padding: 10px 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-10px);
+    transition: all 0.3s;
+}
+
+.widget-category-menu.menu-style-flyout .menu-item:hover > .submenu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+.widget-category-menu .submenu-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.widget-category-menu .submenu-link:hover {
+    background: #f8f9fa;
+    color: var(--primary-color, #007bff);
+}
+
+.widget-category-menu .submenu .has-children > .submenu-link::after {
+    content: '';
+}
+
+.widget-category-menu .submenu .submenu {
+    top: 0;
+    left: 100%;
+}
+
+/* Accordion样式 */
+.widget-category-menu.menu-style-accordion .submenu {
+    position: static;
+    width: 100%;
+    background: #f9f9f9;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: max-height 0.3s ease;
+}
+
+.widget-category-menu.menu-style-accordion .menu-item.expanded > .submenu {
+    max-height: 500px;
+}
+
+.widget-category-menu.menu-style-accordion .submenu-link {
+    padding-left: 52px;
+}
+
+.widget-category-menu.menu-style-accordion .submenu .submenu-link {
+    padding-left: 70px;
+}
+
+@media (max-width: 768px) {
+    .widget-category-menu .menu-dropdown {
+        width: 100%;
+        position: relative;
+    }
+    
+    .widget-category-menu.menu-style-flyout .submenu {
+        position: static;
+        width: 100%;
+        box-shadow: none;
+        transform: none;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const trigger = widget.querySelector('.menu-trigger');
+    const expandOnHover = widget.dataset.expandOnHover === 'true';
+    
+    // 点击触发器
+    if (trigger) {
+        trigger.addEventListener('click', function() {
+            widget.classList.toggle('menu-open');
+        });
+    }
+    
+    // 点击外部关闭
+    document.addEventListener('click', function(e) {
+        if (!widget.contains(e.target)) {
+            widget.classList.remove('menu-open');
+        }
+    });
+    
+    // Accordion模式的展开/折叠
+    if (widget.classList.contains('menu-style-accordion')) {
+        widget.querySelectorAll('.has-children > .menu-link, .has-children > .submenu-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const item = this.closest('.menu-item, .submenu-item');
+                item.classList.toggle('expanded');
+            });
+        });
+    }
+})();
+</script>

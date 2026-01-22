@@ -1,0 +1,195 @@
+<?php
+/**
+ * Footer 容器部件模板
+ * 
+ * 定义底部布局和内部插槽位置
+ * 
+ * @var array $config 部件配置
+ * @var array $children 子部件（按插槽分组）
+ */
+
+$bgColor = $config['bg_color'] ?? '#1a1a2e';
+$textColor = $config['text_color'] ?? '#ffffff';
+
+// 子部件数据（由渲染器注入）
+$children = $children ?? [];
+?>
+<footer class="widget-footer-container" style="background-color: <?= htmlspecialchars($bgColor) ?>; color: <?= htmlspecialchars($textColor) ?>;">
+    
+    <!-- 顶部区域：链接和订阅 -->
+    <div class="footer-top">
+        <div class="footer-container">
+            
+            <!-- 链接区插槽 -->
+            <div class="footer-links-area">
+                <div class="footer-slot slot-links" data-slot="links" data-accept="footer-links">
+                    <?php if (!empty($children['links'])): ?>
+                        <?php foreach ($children['links'] as $child): ?>
+                            <div class="slot-widget footer-link-group" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                                <?= $child['html'] ?? '' ?>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="slot-placeholder">
+                            <i class="ri-links-line"></i>
+                            <span>页脚链接</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- 订阅区插槽 -->
+            <div class="footer-slot slot-newsletter" data-slot="newsletter" data-accept="footer-newsletter">
+                <?php if (!empty($children['newsletter'])): ?>
+                    <?php foreach ($children['newsletter'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-mail-line"></i>
+                        <span>邮件订阅</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- 底部区域：社交、支付、版权 -->
+    <div class="footer-bottom">
+        <div class="footer-container">
+            
+            <!-- 社交媒体插槽 -->
+            <div class="footer-slot slot-social" data-slot="social" data-accept="footer-social">
+                <?php if (!empty($children['social'])): ?>
+                    <?php foreach ($children['social'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-share-line"></i>
+                        <span>社交媒体</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 支付方式插槽 -->
+            <div class="footer-slot slot-payment" data-slot="payment" data-accept="footer-payment">
+                <?php if (!empty($children['payment'])): ?>
+                    <?php foreach ($children['payment'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-bank-card-line"></i>
+                        <span>支付方式</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 版权信息插槽 -->
+            <div class="footer-slot slot-copyright" data-slot="copyright" data-accept="footer-copyright">
+                <?php if (!empty($children['copyright'])): ?>
+                    <?php foreach ($children['copyright'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-copyright-line"></i>
+                        <span>版权信息</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+        </div>
+    </div>
+    
+</footer>
+
+<style>
+.widget-footer-container {
+    width: 100%;
+}
+
+.footer-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.footer-top {
+    padding: 50px 0 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.footer-top .footer-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+}
+
+.footer-links-area {
+    flex: 1;
+}
+
+.slot-links {
+    display: flex;
+    gap: 60px;
+}
+
+.footer-link-group {
+    min-width: 150px;
+}
+
+.slot-newsletter {
+    width: 300px;
+    flex-shrink: 0;
+}
+
+.footer-bottom {
+    padding: 30px 0;
+}
+
+.footer-bottom .footer-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+/* 插槽样式 */
+.footer-slot {
+    position: relative;
+    min-height: 40px;
+}
+
+/* 插槽占位符 */
+.footer-slot .slot-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 15px 20px;
+    border: 2px dashed rgba(255,255,255,0.3);
+    border-radius: 6px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+}
+
+.footer-slot .slot-placeholder i {
+    font-size: 18px;
+}
+
+/* 编辑模式高亮 */
+.footer-slot[data-slot]:hover {
+    outline: 2px dashed #007bff;
+    outline-offset: 2px;
+}
+</style>

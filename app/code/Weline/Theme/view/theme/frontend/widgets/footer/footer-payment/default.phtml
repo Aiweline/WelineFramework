@@ -1,0 +1,84 @@
+<?php
+/**
+ * 页脚支付图标部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('支付方式');
+$paymentMethods = $this->getData('payment_methods') ?? ['visa', 'mastercard', 'paypal', 'alipay', 'wechat'];
+$showLabel = (bool)($this->getData('show_label') ?? true);
+
+// 支付方式图标映射
+$paymentIcons = [
+    'visa'      => ['icon' => 'ri-visa-line', 'name' => 'Visa'],
+    'mastercard'=> ['icon' => 'ri-mastercard-line', 'name' => 'Mastercard'],
+    'amex'      => ['icon' => 'ri-bank-card-line', 'name' => 'American Express'],
+    'paypal'    => ['icon' => 'ri-paypal-line', 'name' => 'PayPal'],
+    'alipay'    => ['icon' => 'ri-alipay-line', 'name' => '支付宝'],
+    'wechat'    => ['icon' => 'ri-wechat-pay-line', 'name' => '微信支付'],
+    'unionpay'  => ['icon' => 'ri-bank-card-line', 'name' => '银联'],
+    'jcb'       => ['icon' => 'ri-bank-card-line', 'name' => 'JCB'],
+    'discover'  => ['icon' => 'ri-bank-card-line', 'name' => 'Discover'],
+    'applepay'  => ['icon' => 'ri-apple-line', 'name' => 'Apple Pay'],
+    'googlepay' => ['icon' => 'ri-google-line', 'name' => 'Google Pay'],
+];
+
+$widgetId = 'footer-payment-' . uniqid();
+?>
+
+<div class="widget-footer-payment" id="<?= $widgetId ?>">
+    <?php if ($showLabel && $title): ?>
+        <span class="payment-label"><?= htmlspecialchars($title) ?>:</span>
+    <?php endif; ?>
+    
+    <div class="payment-icons">
+        <?php foreach ($paymentMethods as $method): 
+            $payment = $paymentIcons[$method] ?? ['icon' => 'ri-bank-card-line', 'name' => ucfirst($method)];
+        ?>
+            <span class="payment-icon" title="<?= htmlspecialchars($payment['name']) ?>">
+                <i class="<?= htmlspecialchars($payment['icon']) ?>"></i>
+            </span>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-footer-payment {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.widget-footer-payment .payment-label {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+}
+
+.widget-footer-payment .payment-icons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.widget-footer-payment .payment-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 45px;
+    height: 30px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+.widget-footer-payment .payment-icon:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.widget-footer-payment .payment-icon i {
+    font-size: 20px;
+    color: rgba(255,255,255,0.8);
+}
+</style>

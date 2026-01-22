@@ -1,0 +1,75 @@
+<?php
+/**
+ * 文本块部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$alignment = $this->getData('alignment') ?? 'left';
+$backgroundColor = $this->getData('background_color') ?? 'transparent';
+$padding = $this->getData('padding') ?? '20px';
+
+$widgetId = 'text-block-' . uniqid();
+?>
+
+<div class="widget-text-block text-<?= htmlspecialchars($alignment) ?>" 
+     id="<?= $widgetId ?>"
+     style="background-color: <?= htmlspecialchars($backgroundColor) ?>; padding: <?= htmlspecialchars($padding) ?>;">
+    
+    <?php if ($title): ?>
+        <h2 class="block-title"><?= htmlspecialchars($title) ?></h2>
+    <?php endif; ?>
+    
+    <?php if ($content): ?>
+        <div class="block-content">
+            <?= $content // 允许HTML ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-text-block {
+    border-radius: 8px;
+}
+
+.widget-text-block.text-left { text-align: left; }
+.widget-text-block.text-center { text-align: center; }
+.widget-text-block.text-right { text-align: right; }
+
+.widget-text-block .block-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 15px;
+    color: var(--heading-color, #222);
+}
+
+.widget-text-block .block-content {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--text-color, #444);
+}
+
+.widget-text-block .block-content p {
+    margin: 0 0 15px;
+}
+
+.widget-text-block .block-content p:last-child {
+    margin-bottom: 0;
+}
+
+.widget-text-block .block-content a {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-text-block .block-content ul,
+.widget-text-block .block-content ol {
+    margin: 15px 0;
+    padding-left: 25px;
+}
+
+.widget-text-block .block-content li {
+    margin-bottom: 8px;
+}
+</style>

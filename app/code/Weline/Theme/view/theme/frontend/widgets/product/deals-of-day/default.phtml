@@ -1,0 +1,338 @@
+<?php
+/**
+ * 今日特价部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('今日特价');
+$subtitle = $this->getData('subtitle') ?? __('限时抢购，错过不再');
+$limit = (int)($this->getData('limit') ?? 4);
+$showCountdown = (bool)($this->getData('show_countdown') ?? true);
+$countdownEnd = $this->getData('countdown_end') ?? date('Y-m-d 23:59:59');
+$showDiscountPercent = (bool)($this->getData('show_discount_percent') ?? true);
+$showStockBar = (bool)($this->getData('show_stock_bar') ?? true);
+$columns = $this->getData('columns') ?? '4';
+
+// 示例产品数据
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $originalPrice = rand(100, 800);
+    $discount = rand(20, 50);
+    $products[] = [
+        'id' => $i,
+        'name' => __('特价产品 %d', $i),
+        'url' => '/product/deal-' . $i,
+        'image' => '/images/products/deal-' . $i . '.jpg',
+        'price' => $originalPrice * (100 - $discount) / 100,
+        'original_price' => $originalPrice,
+        'discount_percent' => $discount,
+        'rating' => rand(40, 50) / 10,
+        'review_count' => rand(20, 300),
+        'stock_total' => 100,
+        'stock_sold' => rand(50, 95),
+    ];
+}
+
+$widgetId = 'deals-of-day-' . uniqid();
+?>
+
+<div class="widget-deals-of-day widget-products" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <div class="header-left">
+            <?php if ($title): ?>
+                <h2 class="widget-title">
+                    <i class="ri-flashlight-fill" style="color: #ffc107;"></i>
+                    <?= htmlspecialchars($title) ?>
+                </h2>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+        
+        <?php if ($showCountdown): ?>
+            <div class="header-countdown" data-end="<?= htmlspecialchars($countdownEnd) ?>">
+                <span class="countdown-label"><?= __('距离结束') ?>:</span>
+                <div class="countdown-timer">
+                    <div class="time-block">
+                        <span class="time-value" data-unit="hours">00</span>
+                        <span class="time-label"><?= __('时') ?></span>
+                    </div>
+                    <span class="time-separator">:</span>
+                    <div class="time-block">
+                        <span class="time-value" data-unit="minutes">00</span>
+                        <span class="time-label"><?= __('分') ?></span>
+                    </div>
+                    <span class="time-separator">:</span>
+                    <div class="time-block">
+                        <span class="time-value" data-unit="seconds">00</span>
+                        <span class="time-label"><?= __('秒') ?></span>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <div class="products-container">
+        <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+            <?php foreach ($products as $product): ?>
+                <div class="product-card deal-card">
+                    <div class="product-image-wrapper">
+                        <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                            <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                 alt="<?= htmlspecialchars($product['name']) ?>"
+                                 class="product-image"
+                                 loading="lazy">
+                        </a>
+                        
+                        <?php if ($showDiscountPercent): ?>
+                            <div class="discount-badge">
+                                -<?= $product['discount_percent'] ?>%
+                            </div>
+                        <?php endif; ?>
+                        
+                        <div class="product-actions">
+                            <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                <i class="ri-heart-line"></i>
+                            </button>
+                            <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                <i class="ri-eye-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="product-info">
+                        <h3 class="product-name">
+                            <a href="<?= htmlspecialchars($product['url']) ?>">
+                                <?= htmlspecialchars($product['name']) ?>
+                            </a>
+                        </h3>
+                        
+                        <div class="product-rating">
+                            <div class="stars">
+                                <?php for ($s = 1; $s <= 5; $s++): ?>
+                                    <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                <?php endfor; ?>
+                            </div>
+                            <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                        </div>
+                        
+                        <div class="product-price">
+                            <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                            <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                        </div>
+                        
+                        <?php if ($showStockBar): ?>
+                            <div class="stock-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: <?= ($product['stock_sold'] / $product['stock_total']) * 100 ?>%;"></div>
+                                </div>
+                                <div class="stock-info">
+                                    <span class="sold"><?= __('已售') ?> <?= $product['stock_sold'] ?></span>
+                                    <span class="remaining"><?= __('剩余') ?> <?= $product['stock_total'] - $product['stock_sold'] ?></span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <button class="btn-add-to-cart btn-deal" data-product-id="<?= $product['id'] ?>">
+                            <i class="ri-flashlight-fill"></i>
+                            <span><?= __('立即抢购') ?></span>
+                        </button>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.widget-deals-of-day {
+    background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+    padding: 40px;
+    border-radius: 16px;
+}
+
+.widget-deals-of-day .widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.widget-deals-of-day .header-left {
+    text-align: left;
+}
+
+.widget-deals-of-day .widget-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 倒计时 */
+.widget-deals-of-day .header-countdown {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: #fff;
+    padding: 10px 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.widget-deals-of-day .countdown-label {
+    font-size: 14px;
+    color: #666;
+}
+
+.widget-deals-of-day .countdown-timer {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.widget-deals-of-day .time-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--danger-color, #dc3545);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    min-width: 50px;
+}
+
+.widget-deals-of-day .time-block .time-value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.widget-deals-of-day .time-block .time-label {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+.widget-deals-of-day .time-separator {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 折扣标签 */
+.widget-deals-of-day .discount-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--danger-color, #dc3545);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 14px;
+    z-index: 2;
+}
+
+/* 库存进度条 */
+.widget-deals-of-day .stock-progress {
+    margin: 12px 0;
+}
+
+.widget-deals-of-day .progress-bar {
+    height: 8px;
+    background: #eee;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.widget-deals-of-day .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b6b, #ee5253);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.widget-deals-of-day .stock-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #666;
+}
+
+.widget-deals-of-day .stock-info .sold {
+    color: var(--danger-color, #dc3545);
+}
+
+/* 抢购按钮 */
+.widget-deals-of-day .btn-deal {
+    background: linear-gradient(135deg, #ff6b6b, #ee5253);
+}
+
+.widget-deals-of-day .btn-deal:hover {
+    background: linear-gradient(135deg, #ee5253, #dc3545);
+}
+
+.widget-deals-of-day .product-rating .stars i {
+    color: #ffc107;
+}
+
+.widget-deals-of-day .product-rating .stars i.ri-star-line {
+    color: #ddd;
+}
+
+@media (max-width: 768px) {
+    .widget-deals-of-day {
+        padding: 20px;
+    }
+    
+    .widget-deals-of-day .widget-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .widget-deals-of-day .header-left {
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const countdown = widget.querySelector('.header-countdown');
+    if (!countdown) return;
+    
+    const endDate = new Date(countdown.dataset.end).getTime();
+    
+    function updateCountdown() {
+        const now = Date.now();
+        const diff = endDate - now;
+        
+        if (diff <= 0) {
+            widget.style.display = 'none';
+            return;
+        }
+        
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        const hoursEl = countdown.querySelector('[data-unit="hours"]');
+        const minutesEl = countdown.querySelector('[data-unit="minutes"]');
+        const secondsEl = countdown.querySelector('[data-unit="seconds"]');
+        
+        if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+        if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+        if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+    }
+    
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+})();
+</script>

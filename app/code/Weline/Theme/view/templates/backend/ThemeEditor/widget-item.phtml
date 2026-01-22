@@ -1,0 +1,68 @@
+<?php
+/**
+ * 预览区域中的部件项
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $widget
+ */
+
+$widget = $this->getData('widget');
+if (!$widget) return;
+
+$layoutId = $widget['layout_id'] ?? '';
+$widgetCode = $widget['widget_code'] ?? '';
+$widgetModule = $widget['widget_module'] ?? '';
+$widgetType = $widget['widget_type'] ?? '';
+$config = $widget['config'] ?? [];
+$meta = $widget['meta'] ?? [];
+$widgetName = $meta['name'] ?? $widgetCode;
+$widgetDesc = $meta['description'] ?? '';
+
+// 获取部件图标
+$typeIcons = [
+    'header' => 'ri-layout-top-line',
+    'footer' => 'ri-layout-bottom-line',
+    'sidebar' => 'ri-layout-left-line',
+    'banner' => 'ri-image-line',
+    'carousel' => 'ri-slideshow-line',
+    'product' => 'ri-shopping-bag-line',
+    'category' => 'ri-folder-line',
+    'navigation' => 'ri-menu-line',
+    'search' => 'ri-search-line',
+    'social' => 'ri-share-line',
+    'newsletter' => 'ri-mail-line',
+    'content' => 'ri-file-text-line',
+];
+$icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
+?>
+
+<div class="preview-widget-item" 
+     data-layout-id="<?= htmlspecialchars($layoutId) ?>"
+     data-widget-code="<?= htmlspecialchars($widgetCode) ?>"
+     data-widget-module="<?= htmlspecialchars($widgetModule) ?>"
+     data-widget-type="<?= htmlspecialchars($widgetType) ?>"
+     data-config='<?= htmlspecialchars(json_encode($config)) ?>'>
+    
+    <div class="widget-header">
+        <span class="widget-name">
+            <i class="<?= $icon ?>"></i>
+            <?= htmlspecialchars($widgetName) ?>
+        </span>
+        <div class="widget-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary btn-edit-widget" title="<?= __('编辑') ?>">
+                <i class="ri-edit-line"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-widget" title="<?= __('删除') ?>">
+                <i class="ri-delete-bin-line"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="widget-preview">
+        <?php if (!empty($meta['template'])): ?>
+            <span class="text-muted"><?= htmlspecialchars($widgetDesc ?: __('点击配置此部件')) ?></span>
+        <?php else: ?>
+            <span class="text-warning"><?= __('无模板') ?></span>
+        <?php endif; ?>
+    </div>
+</div>

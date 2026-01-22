@@ -1,0 +1,188 @@
+<?php
+/**
+ * Header 语言切换部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - show_flag: 显示国旗
+ * - show_name: 显示语言名
+ * - display_style: 显示样式 (dropdown/inline)
+ */
+
+$showFlag = (bool)($this->getData('show_flag') ?? true);
+$showName = (bool)($this->getData('show_name') ?? true);
+$displayStyle = $this->getData('display_style') ?? 'dropdown';
+
+// 示例语言列表（实际应从系统配置获取）
+$languages = [
+    ['code' => 'zh_CN', 'name' => '简体中文', 'flag' => '🇨🇳', 'active' => true],
+    ['code' => 'en_US', 'name' => 'English', 'flag' => '🇺🇸', 'active' => false],
+    ['code' => 'ja_JP', 'name' => '日本語', 'flag' => '🇯🇵', 'active' => false],
+    ['code' => 'ko_KR', 'name' => '한국어', 'flag' => '🇰🇷', 'active' => false],
+];
+
+$currentLang = array_filter($languages, fn($l) => $l['active']);
+$currentLang = reset($currentLang) ?: $languages[0];
+?>
+
+<div class="widget-language-switcher style-<?= htmlspecialchars($displayStyle) ?>">
+    <?php if ($displayStyle === 'dropdown'): ?>
+        <!-- 下拉菜单样式 -->
+        <div class="language-dropdown">
+            <button class="language-current" type="button">
+                <?php if ($showFlag): ?>
+                    <span class="lang-flag"><?= $currentLang['flag'] ?></span>
+                <?php endif; ?>
+                <?php if ($showName): ?>
+                    <span class="lang-name"><?= htmlspecialchars($currentLang['name']) ?></span>
+                <?php endif; ?>
+                <i class="ri-arrow-down-s-line"></i>
+            </button>
+            
+            <ul class="language-list">
+                <?php foreach ($languages as $lang): ?>
+                    <li class="<?= $lang['active'] ? 'active' : '' ?>">
+                        <a href="?lang=<?= htmlspecialchars($lang['code']) ?>">
+                            <?php if ($showFlag): ?>
+                                <span class="lang-flag"><?= $lang['flag'] ?></span>
+                            <?php endif; ?>
+                            <span class="lang-name"><?= htmlspecialchars($lang['name']) ?></span>
+                            <?php if ($lang['active']): ?>
+                                <i class="ri-check-line"></i>
+                            <?php endif; ?>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php else: ?>
+        <!-- 水平排列样式 -->
+        <div class="language-inline">
+            <?php foreach ($languages as $lang): ?>
+                <a href="?lang=<?= htmlspecialchars($lang['code']) ?>" 
+                   class="lang-item <?= $lang['active'] ? 'active' : '' ?>"
+                   title="<?= htmlspecialchars($lang['name']) ?>">
+                    <?php if ($showFlag): ?>
+                        <span class="lang-flag"><?= $lang['flag'] ?></span>
+                    <?php endif; ?>
+                    <?php if ($showName): ?>
+                        <span class="lang-name"><?= htmlspecialchars($lang['name']) ?></span>
+                    <?php endif; ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-language-switcher {
+    position: relative;
+}
+
+/* 下拉菜单样式 */
+.widget-language-switcher .language-dropdown {
+    position: relative;
+}
+
+.widget-language-switcher .language-current {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: none;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.widget-language-switcher .language-current:hover {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-language-switcher .lang-flag {
+    font-size: 16px;
+}
+
+.widget-language-switcher .lang-name {
+    font-size: 13px;
+}
+
+.widget-language-switcher .language-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 160px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    list-style: none;
+    margin: 5px 0 0;
+    padding: 8px 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 1000;
+}
+
+.widget-language-switcher .language-dropdown:hover .language-list {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.widget-language-switcher .language-list li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 15px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.widget-language-switcher .language-list li a:hover {
+    background-color: #f5f5f5;
+}
+
+.widget-language-switcher .language-list li.active a {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-language-switcher .language-list li a i {
+    margin-left: auto;
+    color: var(--primary-color, #007bff);
+}
+
+/* 水平排列样式 */
+.widget-language-switcher .language-inline {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.widget-language-switcher .lang-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    color: var(--text-color, #666);
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.3s;
+}
+
+.widget-language-switcher .lang-item:hover {
+    background-color: var(--hover-bg, rgba(0,0,0,0.05));
+    color: var(--primary-color, #007bff);
+}
+
+.widget-language-switcher .lang-item.active {
+    background-color: var(--primary-color, #007bff);
+    color: #fff;
+}
+</style>

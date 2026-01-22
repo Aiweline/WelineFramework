@@ -607,9 +607,10 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     overflow: hidden;
 }
 
-/* 右侧预览面板 */
+/* 中间预览面板 */
 .preview-panel {
     flex: 1;
+    min-width: 0; /* 防止 flex 子项溢出 */
     background: #ecf0f1;
     display: flex;
     flex-direction: column;
@@ -617,6 +618,12 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     justify-content: center;
     position: relative;
     overflow: auto;
+}
+
+/* 右侧组件面板 - 确保在三栏布局中正确显示 */
+.visual-content > .component-panel {
+    flex-shrink: 0;
+    border-left: 1px solid var(--visual-config-border, #dee2e6);
 }
 
 .preview-container {
@@ -992,6 +999,11 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
             <button type="button" class="btn btn-sm btn-info" onclick="refreshPreview()">
                 <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
             </button>
+            
+            <!-- 组件面板切换 -->
+            <button type="button" class="btn btn-sm btn-primary" onclick="toggleComponentPanel()" id="toggleComponentBtn" title="<?= __('组件库 - 拖拽组件到页面') ?>">
+                <i class="mdi mdi-puzzle"></i> <?= __('组件') ?>
+            </button>
         </div>
     </div>
     
@@ -1332,12 +1344,12 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
             </div>
         </div>
         
-        <!-- 右侧预览面板 -->
+        <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
                 <iframe id="previewIframe" 
                         class="preview-iframe" 
-                        src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId]) ?>"></iframe>
+                        src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
                 
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
@@ -1347,6 +1359,13 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
                 </div>
             </div>
         </div>
+        
+        <!-- 右侧组件面板 -->
+        <?php 
+        $this->assign('style_code', $page ? $page->getData('style') : 'default');
+        $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
+        ?>
+        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
 </div>
 
@@ -1818,12 +1837,12 @@ window.refreshPreview = function() {
     
     // 构建预览 URL（使用全局 pageId 或从 window 获取）
     const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
-    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId;
+    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
     
     if (isTemplateMode && styleCode) {
         previewUrl += '&style_code=' + encodeURIComponent(styleCode);
         if (templatePageId) {
-            previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode);
+            previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode) + '&visual_editor=1';
         }
     } else {
         // 普通页面配置模式：如果有外部样式选择，带上样式代码
@@ -3782,6 +3801,351 @@ window.clearConfigSearch = function() {
         section.classList.remove('config-section-empty');
     });
 };
+
+// ========== 组件拖拽放置功能 ==========
+
+// 高亮预览区域中的对应区域
+window.highlightPreviewRegion = function(region) {
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    
+    try {
+        const doc = previewFrame.contentWindow.document;
+        doc.querySelectorAll('[data-region]').forEach(zone => {
+            const zoneRegion = zone.getAttribute('data-region');
+            if (zoneRegion === region) {
+                zone.style.outline = '3px dashed #3498db';
+                zone.style.outlineOffset = '-3px';
+                zone.style.transition = 'outline 0.2s';
+            }
+        });
+    } catch (e) {
+        console.warn('无法访问预览iframe:', e);
+    }
+};
+
+// 取消高亮
+window.unhighlightPreviewRegion = function() {
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    
+    try {
+        const doc = previewFrame.contentWindow.document;
+        doc.querySelectorAll('[data-region]').forEach(zone => {
+            zone.style.outline = '';
+            zone.style.outlineOffset = '';
+        });
+    } catch (e) {
+        console.warn('无法访问预览iframe:', e);
+    }
+};
+
+// 设置预览iframe中的放置区域
+window.setupPreviewDropZones = function() {
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    
+    try {
+        const doc = previewFrame.contentWindow.document;
+        
+        // 添加放置区域样式
+        let style = doc.getElementById('component-drop-styles');
+        if (!style) {
+            style = doc.createElement('style');
+            style.id = 'component-drop-styles';
+            style.textContent = `
+                [data-region] {
+                    position: relative;
+                    min-height: 50px;
+                }
+                [data-region].drag-over {
+                    background: rgba(52, 152, 219, 0.1) !important;
+                    outline: 3px solid #3498db !important;
+                    outline-offset: -3px;
+                }
+                [data-region]::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    pointer-events: none;
+                    z-index: 9998;
+                }
+                .component-drop-indicator {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    height: 4px;
+                    background: #3498db;
+                    z-index: 9999;
+                    pointer-events: none;
+                }
+                .tpmst-component-wrapper {
+                    position: relative;
+                }
+                .tpmst-component-wrapper:hover {
+                    outline: 2px solid rgba(52, 152, 219, 0.5);
+                    outline-offset: -2px;
+                }
+                .tpmst-component-wrapper .component-actions {
+                    position: absolute;
+                    top: 5px;
+                    right: 5px;
+                    display: none;
+                    gap: 5px;
+                    z-index: 9999;
+                }
+                .tpmst-component-wrapper:hover .component-actions {
+                    display: flex;
+                }
+                .tpmst-component-wrapper .component-actions button {
+                    padding: 5px 10px;
+                    background: rgba(0,0,0,0.7);
+                    color: #fff;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                }
+                .tpmst-component-wrapper .component-actions button:hover {
+                    background: rgba(0,0,0,0.9);
+                }
+            `;
+            doc.head.appendChild(style);
+        }
+        
+        // 为每个区域添加放置监听
+        doc.querySelectorAll('[data-region]').forEach(zone => {
+            // 移除旧的监听器（如果有）
+            zone.removeEventListener('dragover', handlePreviewDragOver);
+            zone.removeEventListener('dragleave', handlePreviewDragLeave);
+            zone.removeEventListener('drop', handlePreviewDrop);
+            
+            // 添加新的监听器
+            zone.addEventListener('dragover', handlePreviewDragOver);
+            zone.addEventListener('dragleave', handlePreviewDragLeave);
+            zone.addEventListener('drop', handlePreviewDrop);
+        });
+        
+        // 为每个组件添加操作按钮
+        doc.querySelectorAll('.tpmst-component-wrapper').forEach(wrapper => {
+            if (wrapper.querySelector('.component-actions')) return;
+            
+            const actions = doc.createElement('div');
+            actions.className = 'component-actions';
+            actions.innerHTML = `
+                <button onclick="parent.editComponentInPreview(this.closest('.tpmst-component-wrapper'))" title="编辑">
+                    <i class="mdi mdi-pencil"></i>
+                </button>
+                <button onclick="parent.removeComponentInPreview(this.closest('.tpmst-component-wrapper'))" title="删除">
+                    <i class="mdi mdi-delete"></i>
+                </button>
+            `;
+            wrapper.appendChild(actions);
+        });
+        
+    } catch (e) {
+        console.warn('无法设置预览放置区域:', e);
+    }
+};
+
+function handlePreviewDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.add('drag-over');
+}
+
+function handlePreviewDragLeave(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+}
+
+function handlePreviewDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('drag-over');
+    
+    try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const targetRegion = this.getAttribute('data-region');
+        const isMultiple = this.getAttribute('data-multiple') === 'true';
+        
+        // 检查区域匹配
+        if (data.region !== targetRegion) {
+            window.parent.Swal.fire({
+                icon: 'warning',
+                title: '<?= __('区域不匹配') ?>',
+                text: '<?= __('此组件只能放置在') ?> ' + data.region + ' <?= __('区域') ?>'
+            });
+            return;
+        }
+        
+        // 检查唯一性
+        const existingComponents = this.querySelectorAll('.tpmst-component-wrapper').length;
+        if (!isMultiple && existingComponents > 0) {
+            window.parent.Swal.fire({
+                title: '<?= __('替换组件？') ?>',
+                text: '<?= __('此区域只能放置一个组件，是否替换现有组件？') ?>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<?= __('确认替换') ?>',
+                cancelButtonText: '<?= __('取消') ?>'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.parent.addComponentToLayout(data, targetRegion, true);
+                }
+            });
+            return;
+        }
+        
+        // 添加组件
+        window.parent.addComponentToLayout(data, targetRegion, false);
+        
+    } catch (err) {
+        console.error('Drop error:', err);
+    }
+}
+
+// 添加组件到布局
+window.addComponentToLayout = async function(componentData, region, replace = false) {
+    const pageId = window.visualPageId || 0;
+    if (!pageId) {
+        console.error('页面ID未定义');
+        return;
+    }
+    
+    try {
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/add') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                page_id: pageId,
+                component_code: componentData.code,
+                region: region,
+                replace: replace,
+                template_code: componentData.template
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 刷新预览
+            if (typeof refreshPreview === 'function') {
+                refreshPreview();
+            }
+            
+            Swal.fire({
+                icon: 'success',
+                title: '<?= __('组件已添加') ?>',
+                text: componentData.name,
+                timer: 1500,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('添加失败') ?>',
+                text: result.message || '<?= __('未知错误') ?>'
+            });
+        }
+    } catch (error) {
+        console.error('添加组件失败:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('添加失败') ?>',
+            text: error.message || '<?= __('网络错误') ?>'
+        });
+    }
+};
+
+// 编辑预览中的组件
+window.editComponentInPreview = function(wrapper) {
+    const componentCode = wrapper.getAttribute('data-component');
+    const region = wrapper.getAttribute('data-region');
+    
+    console.log('编辑组件:', componentCode, region);
+    
+    // TODO: 打开组件配置编辑器
+    Swal.fire({
+        title: '<?= __('编辑组件') ?>',
+        text: '<?= __('功能开发中...') ?>',
+        icon: 'info'
+    });
+};
+
+// 删除预览中的组件
+window.removeComponentInPreview = async function(wrapper) {
+    const componentCode = wrapper.getAttribute('data-component');
+    const region = wrapper.getAttribute('data-region');
+    const pageId = window.visualPageId || 0;
+    
+    const result = await Swal.fire({
+        title: '<?= __('删除组件？') ?>',
+        text: '<?= __('确定要删除此组件吗？') ?>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<?= __('确认删除') ?>',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonColor: '#d33'
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    try {
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/remove') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                page_id: pageId,
+                component_code: componentCode,
+                region: region
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // 刷新预览
+            if (typeof refreshPreview === 'function') {
+                refreshPreview();
+            }
+            
+            Swal.fire({
+                icon: 'success',
+                title: '<?= __('已删除') ?>',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('删除失败') ?>',
+                text: data.message || '<?= __('未知错误') ?>'
+            });
+        }
+    } catch (error) {
+        console.error('删除组件失败:', error);
+    }
+};
+
+// 预览iframe加载完成后设置放置区域
+document.addEventListener('DOMContentLoaded', function() {
+    const previewFrame = document.getElementById('previewIframe');
+    if (previewFrame) {
+        previewFrame.addEventListener('load', function() {
+            setTimeout(setupPreviewDropZones, 500);
+        });
+    }
+});
 </script>
 
 <!-- 恢复默认值确认模态框 -->

@@ -1,0 +1,123 @@
+<?php
+/**
+ * 搜索栏部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$placeholder = $this->getData('placeholder') ?? __('搜索...');
+$actionUrl = $this->getData('action_url') ?? '/search';
+$showButton = (bool)($this->getData('show_button') ?? true);
+$buttonText = $this->getData('button_text') ?? '';
+$style = $this->getData('style') ?? 'default';
+
+$widgetId = 'search-bar-' . uniqid();
+?>
+
+<div class="widget-search-bar style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>">
+    <form action="<?= htmlspecialchars($actionUrl) ?>" method="get" class="search-form">
+        <div class="search-input-group">
+            <input type="search" 
+                   name="q" 
+                   class="search-input" 
+                   placeholder="<?= htmlspecialchars($placeholder) ?>"
+                   value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
+                   autocomplete="off">
+            
+            <?php if ($showButton): ?>
+                <button type="submit" class="search-button">
+                    <i class="ri-search-line"></i>
+                    <?php if ($buttonText): ?>
+                        <span><?= htmlspecialchars($buttonText) ?></span>
+                    <?php endif; ?>
+                </button>
+            <?php endif; ?>
+        </div>
+    </form>
+</div>
+
+<style>
+.widget-search-bar .search-form {
+    width: 100%;
+}
+
+.widget-search-bar .search-input-group {
+    display: flex;
+    position: relative;
+}
+
+.widget-search-bar .search-input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.widget-search-bar .search-input:focus {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-search-bar .search-button {
+    padding: 12px 20px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.widget-search-bar .search-button:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+/* 默认样式 */
+.widget-search-bar.style-default .search-input {
+    border-radius: 6px 0 0 6px;
+}
+
+.widget-search-bar.style-default .search-button {
+    border-radius: 0 6px 6px 0;
+}
+
+/* 圆角样式 */
+.widget-search-bar.style-rounded .search-input {
+    border-radius: 25px 0 0 25px;
+    padding-left: 20px;
+}
+
+.widget-search-bar.style-rounded .search-button {
+    border-radius: 0 25px 25px 0;
+    padding: 12px 25px;
+}
+
+/* 极简样式 */
+.widget-search-bar.style-minimal .search-input-group {
+    border-bottom: 2px solid #e0e0e0;
+    transition: border-color 0.3s;
+}
+
+.widget-search-bar.style-minimal .search-input-group:focus-within {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-search-bar.style-minimal .search-input {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.widget-search-bar.style-minimal .search-button {
+    background: transparent;
+    color: #666;
+}
+
+.widget-search-bar.style-minimal .search-button:hover {
+    color: var(--primary-color, #007bff);
+}
+</style>

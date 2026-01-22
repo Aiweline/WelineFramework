@@ -1,0 +1,200 @@
+<?php
+/**
+ * 共享组件 - 功能卡片
+ * 
+ * 通用的功能/特色展示卡片组件
+ * 
+ * @component_start
+ * name => 功能卡片
+ * name_en => Feature Cards
+ * description => 通用的功能/特色展示卡片组件，支持图标、标题、描述
+ * category => content
+ * type => section
+ * sort_order => 20
+ * compatible_styles => *
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:section => 区域设置
+ * section.title => 区域标题:text:我们的优势
+ * section.subtitle => 区域副标题:text:为什么选择我们
+ * section.columns => 列数:select:3|2,3,4
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#ffffff
+ * style.card_bg => 卡片背景:color:#f8f9fa
+ * style.icon_color => 图标颜色:color:#3498db
+ * style.title_color => 标题颜色:color:#333333
+ * style.text_color => 文字颜色:color:#666666
+ * style.card_shadow => 卡片阴影:select:yes|yes,no
+ * 
+ * group:cards => 卡片内容
+ * cards.data => 卡片数据:json:[]|JSON格式
+ * 
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $component_config 组件配置
+ */
+
+// 获取配置
+$config = $this->getData('component_config') ?? [];
+
+// 区域配置
+$sectionTitle = $config['section.title'] ?? '我们的优势';
+$sectionSubtitle = $config['section.subtitle'] ?? '';
+$columns = $config['section.columns'] ?? '3';
+
+// 样式配置
+$bgColor = $config['style.bg_color'] ?? '#ffffff';
+$cardBg = $config['style.card_bg'] ?? '#f8f9fa';
+$iconColor = $config['style.icon_color'] ?? '#3498db';
+$titleColor = $config['style.title_color'] ?? '#333333';
+$textColor = $config['style.text_color'] ?? '#666666';
+$cardShadow = ($config['style.card_shadow'] ?? 'yes') === 'yes';
+
+// 卡片数据
+$cardsData = $config['cards.data'] ?? [];
+if (is_string($cardsData)) {
+    $cardsData = json_decode($cardsData, true) ?: [];
+}
+
+// 如果没有数据，使用默认数据
+if (empty($cardsData)) {
+    $cardsData = [
+        [
+            'icon' => 'mdi-rocket-launch',
+            'title' => '快速高效',
+            'description' => '采用先进技术，确保快速响应和高效处理',
+        ],
+        [
+            'icon' => 'mdi-shield-check',
+            'title' => '安全可靠',
+            'description' => '多重安全防护，保障您的数据安全',
+        ],
+        [
+            'icon' => 'mdi-headset',
+            'title' => '专业支持',
+            'description' => '7x24小时专业技术支持，随时为您服务',
+        ],
+    ];
+}
+
+// 列数对应的 Bootstrap 类
+$colClass = match($columns) {
+    '2' => 'col-md-6',
+    '4' => 'col-md-6 col-lg-3',
+    default => 'col-md-6 col-lg-4',
+};
+
+// 生成唯一ID
+$componentId = 'features_' . uniqid();
+?>
+
+<section class="shared-feature-cards" id="<?= $componentId ?>">
+    <style>
+        #<?= $componentId ?> {
+            background-color: <?= $bgColor ?>;
+            padding: 4rem 0;
+        }
+        
+        #<?= $componentId ?> .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        #<?= $componentId ?> .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: <?= $titleColor ?>;
+            margin-bottom: 0.5rem;
+        }
+        
+        #<?= $componentId ?> .section-subtitle {
+            font-size: 1.1rem;
+            color: <?= $textColor ?>;
+            opacity: 0.8;
+        }
+        
+        #<?= $componentId ?> .feature-card {
+            background: <?= $cardBg ?>;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            height: 100%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            <?php if ($cardShadow): ?>
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            <?php else: ?>
+            border: 1px solid #e9ecef;
+            <?php endif; ?>
+        }
+        
+        #<?= $componentId ?> .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+        
+        #<?= $componentId ?> .feature-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: <?= $iconColor ?>15;
+            color: <?= $iconColor ?>;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 1.5rem;
+        }
+        
+        #<?= $componentId ?> .feature-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: <?= $titleColor ?>;
+            margin-bottom: 0.75rem;
+        }
+        
+        #<?= $componentId ?> .feature-description {
+            font-size: 0.95rem;
+            color: <?= $textColor ?>;
+            line-height: 1.6;
+        }
+    </style>
+    
+    <div class="container">
+        <?php if ($sectionTitle || $sectionSubtitle): ?>
+        <div class="section-header">
+            <?php if ($sectionTitle): ?>
+            <h2 class="section-title"><?= htmlspecialchars($sectionTitle) ?></h2>
+            <?php endif; ?>
+            <?php if ($sectionSubtitle): ?>
+            <p class="section-subtitle"><?= htmlspecialchars($sectionSubtitle) ?></p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        
+        <div class="row g-4">
+            <?php foreach ($cardsData as $card): ?>
+            <div class="<?= $colClass ?>">
+                <div class="feature-card">
+                    <?php if (!empty($card['icon'])): ?>
+                    <div class="feature-icon">
+                        <i class="mdi <?= htmlspecialchars($card['icon']) ?>"></i>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($card['title'])): ?>
+                    <h3 class="feature-title"><?= htmlspecialchars($card['title']) ?></h3>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($card['description'])): ?>
+                    <p class="feature-description"><?= htmlspecialchars($card['description']) ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

@@ -27,10 +27,72 @@
 
 ```
 tpmst/
-├── header.phtml   - 头部区域（导航 + Hero区域 + 下载按钮）
-├── content.phtml  - 内容区域（优势、游戏、应用信息、策略、评价、FAQ）
-├── footer.phtml   - 页脚区域（链接 + 版权 + 免责声明）
-└── readme.md      - 本文档
+├── header.phtml       - 头部区域（导航 + Hero区域 + 下载按钮）
+├── content.phtml      - 内容区域（完整模板，包含所有区块）
+├── footer.phtml       - 页脚区域（链接 + 版权 + 免责声明）
+├── readme.md          - 本文档
+├── colors/            - 色系配置目录
+│   ├── default.phtml  - 默认色系
+│   ├── blue.phtml     - 蓝色色系
+│   ├── green.phtml    - 绿色色系
+│   ├── purple.phtml   - 紫色色系
+│   └── red.phtml      - 红色色系
+├── components/        - 🆕 可视化组件目录
+│   ├── component.json - 组件配置清单
+│   ├── slider.phtml   - 轮播组件
+│   ├── advantages.phtml - 优势区域组件
+│   ├── games.phtml    - 游戏介绍组件
+│   ├── testimonials.phtml - 用户评价组件
+│   └── faq.phtml      - FAQ组件
+└── asset/             - 静态资源目录
+    ├── css/
+    ├── img/
+    └── js/
+```
+
+## 🧩 组件系统（新功能）
+
+### 组件化设计
+
+tpmst 模板已支持可视化组件系统，可以：
+
+1. **拖拽组装** - 在可视化构建器中拖拽组件到页面
+2. **跨模板引用** - 引用其他模板的组件到当前页面
+3. **独立配置** - 每个组件实例可以有独立的配置
+4. **恢复原始** - 随时切换回完整的原始模板
+
+### 可用组件
+
+| 组件 | 文件 | 说明 | 跨模板 |
+|------|------|------|--------|
+| 轮播区域 | slider.phtml | 首屏轮播Banner，支持多图和自动播放 | ✅ |
+| 优势区域 | advantages.phtml | 三列卡片展示产品优势 | ✅ |
+| 游戏介绍 | games.phtml | 游戏/产品卡片，支持图文展示 | ✅ |
+| 用户评价 | testimonials.phtml | 用户评价卡片，带头像和评分 | ✅ |
+| FAQ | faq.phtml | 可折叠的常见问题面板 | ✅ |
+
+### 使用可视化构建器
+
+1. 进入页面编辑界面
+2. 点击"可视化构建器"按钮
+3. 从右侧组件库拖拽组件到页面
+4. 点击组件可以编辑配置
+5. 保存布局
+
+### 组件配置格式
+
+每个组件文件使用以下格式定义元数据：
+
+```php
+/**
+ * @component_start
+ * name => 组件名称
+ * description => 组件描述
+ * category => content
+ * type => section
+ * compatible_styles => *
+ * @component_end
+ */
 ```
 
 ### 页面布局
