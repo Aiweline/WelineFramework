@@ -1,0 +1,209 @@
+<?php
+/**
+ * 分页部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$style = $this->getData('style') ?? 'default';
+$showFirstLast = (bool)($this->getData('show_first_last') ?? true);
+$showPrevNext = (bool)($this->getData('show_prev_next') ?? true);
+$pageRange = (int)($this->getData('page_range') ?? 5);
+$prevText = $this->getData('prev_text') ?? __('上一页');
+$nextText = $this->getData('next_text') ?? __('下一页');
+
+// 分页数据（应从系统获取）
+$currentPage = (int)($this->getData('current_page') ?? 1);
+$totalPages = (int)($this->getData('total_pages') ?? 10);
+$baseUrl = $this->getData('base_url') ?? '?page=';
+
+// 计算显示的页码范围
+$startPage = max(1, $currentPage - floor($pageRange / 2));
+$endPage = min($totalPages, $startPage + $pageRange - 1);
+if ($endPage - $startPage + 1 < $pageRange) {
+    $startPage = max(1, $endPage - $pageRange + 1);
+}
+
+$widgetId = 'pagination-' . uniqid();
+
+if ($totalPages <= 1) return; // 只有一页时不显示
+?>
+
+<nav class="widget-pagination style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>" aria-label="<?= __('分页导航') ?>">
+    <ul class="pagination-list">
+        <?php if ($showFirstLast && $currentPage > 1): ?>
+            <li class="page-item">
+                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="page-link page-first" title="<?= __('第一页') ?>">
+                    <i class="ri-skip-back-line"></i>
+                </a>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($showPrevNext): ?>
+            <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                <?php if ($currentPage > 1): ?>
+                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage - 1)) ?>" class="page-link page-prev">
+                        <i class="ri-arrow-left-s-line"></i>
+                        <span><?= htmlspecialchars($prevText) ?></span>
+                    </a>
+                <?php else: ?>
+                    <span class="page-link page-prev">
+                        <i class="ri-arrow-left-s-line"></i>
+                        <span><?= htmlspecialchars($prevText) ?></span>
+                    </span>
+                <?php endif; ?>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($startPage > 1): ?>
+            <li class="page-item">
+                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="page-link">1</a>
+            </li>
+            <?php if ($startPage > 2): ?>
+                <li class="page-item ellipsis"><span class="page-link">...</span></li>
+            <?php endif; ?>
+        <?php endif; ?>
+        
+        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                <?php if ($i === $currentPage): ?>
+                    <span class="page-link" aria-current="page"><?= $i ?></span>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($baseUrl . $i) ?>" class="page-link"><?= $i ?></a>
+                <?php endif; ?>
+            </li>
+        <?php endfor; ?>
+        
+        <?php if ($endPage < $totalPages): ?>
+            <?php if ($endPage < $totalPages - 1): ?>
+                <li class="page-item ellipsis"><span class="page-link">...</span></li>
+            <?php endif; ?>
+            <li class="page-item">
+                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="page-link"><?= $totalPages ?></a>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($showPrevNext): ?>
+            <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
+                <?php if ($currentPage < $totalPages): ?>
+                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage + 1)) ?>" class="page-link page-next">
+                        <span><?= htmlspecialchars($nextText) ?></span>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </a>
+                <?php else: ?>
+                    <span class="page-link page-next">
+                        <span><?= htmlspecialchars($nextText) ?></span>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </span>
+                <?php endif; ?>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($showFirstLast && $currentPage < $totalPages): ?>
+            <li class="page-item">
+                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="page-link page-last" title="<?= __('最后一页') ?>">
+                    <i class="ri-skip-forward-line"></i>
+                </a>
+            </li>
+        <?php endif; ?>
+    </ul>
+</nav>
+
+<style>
+.widget-pagination {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.widget-pagination .pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.widget-pagination .page-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    color: #666;
+    text-decoration: none;
+    border: 1px solid #e0e0e0;
+    background: #fff;
+    transition: all 0.2s;
+}
+
+.widget-pagination .page-link:hover {
+    border-color: var(--primary-color, #007bff);
+    color: var(--primary-color, #007bff);
+}
+
+.widget-pagination .page-item.active .page-link {
+    background: var(--primary-color, #007bff);
+    border-color: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+.widget-pagination .page-item.disabled .page-link {
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+.widget-pagination .page-item.disabled .page-link:hover {
+    border-color: #e0e0e0;
+    color: #ccc;
+}
+
+.widget-pagination .ellipsis .page-link {
+    border: none;
+    background: none;
+    min-width: 30px;
+}
+
+/* 默认样式 */
+.widget-pagination.style-default .page-link {
+    border-radius: 6px;
+}
+
+/* 简洁样式 */
+.widget-pagination.style-simple .page-link {
+    border: none;
+    background: none;
+}
+
+.widget-pagination.style-simple .page-item.active .page-link {
+    background: var(--primary-color, #007bff);
+    border-radius: 6px;
+}
+
+/* 圆角样式 */
+.widget-pagination.style-rounded .page-link {
+    border-radius: 50%;
+}
+
+.widget-pagination.style-rounded .page-prev,
+.widget-pagination.style-rounded .page-next {
+    border-radius: 20px;
+}
+
+@media (max-width: 576px) {
+    .widget-pagination .page-prev span,
+    .widget-pagination .page-next span {
+        display: none;
+    }
+    
+    .widget-pagination .page-link {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        font-size: 13px;
+    }
+}
+</style>

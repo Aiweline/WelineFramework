@@ -142,14 +142,30 @@ class Page extends FrontendController
                 $postModel->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
             }
             
-            // 分页查询
-            $blogPosts = $postModel
-                ->order(BlogPost::fields_IS_FEATURED, 'DESC')
-                ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
-                ->page($pageNum, $pageSize)
-                ->pagination()
-                ->select()
-                ->fetch();
+            // 分页查询（is_featured字段可能不存在，使用try-catch处理）
+            try {
+                $blogPosts = $postModel
+                    ->order(BlogPost::fields_IS_FEATURED, 'DESC')
+                    ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
+                    ->page($pageNum, $pageSize)
+                    ->pagination()
+                    ->select()
+                    ->fetch();
+            } catch (\Exception $e) {
+                // 如果is_featured字段不存在，仅按发布时间排序
+                $postModel = clone $this->getBlogPostModel();
+                $postModel->clear()
+                    ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
+                if ($currentCategory) {
+                    $postModel->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
+                }
+                $blogPosts = $postModel
+                    ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
+                    ->page($pageNum, $pageSize)
+                    ->pagination()
+                    ->select()
+                    ->fetch();
+            }
             
             $this->assign('blog_posts', $blogPosts->getItems());
             $this->assign('pagination', $blogPosts->getPagination());
@@ -168,13 +184,17 @@ class Page extends FrontendController
         
         // 获取所有标签（用于标签云）
         $allTags = [];
-        $tagsModel = clone $this->getBlogPostModel();
-        $postsWithTags = $tagsModel->clear()
-            ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-            ->where(BlogPost::fields_TAGS, '', '!=')
-            ->select([BlogPost::fields_TAGS])
-            ->fetch()
-            ->getItems();
+        try {
+            $tagsModel = clone $this->getBlogPostModel();
+            $postsWithTags = $tagsModel->clear()
+                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
+                ->where(BlogPost::fields_TAGS, '', '!=')
+                ->select()
+                ->fetch()
+                ->getItems();
+        } catch (\Exception $e) {
+            $postsWithTags = [];
+        }
         foreach ($postsWithTags as $post) {
             $tags = $post->getTagsArray();
             foreach ($tags as $tag) {

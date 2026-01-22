@@ -1,8 +1,10 @@
 <?php
 /** @var \GuoLaiRen\Blog\Model\Post|null $post */
 /** @var array $categories 分类列表 */
+/** @var array $sites 站点列表 */
 $post = $this->getData('post');
 $categories = $this->getData('categories') ?? [];
+$sites = $this->getData('sites') ?? [];
 $isEdit = $post && $post->getId();
 ?>
 <w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
@@ -117,6 +119,28 @@ $isEdit = $post && $post->getId();
                         <i class="mdi mdi-publish"></i> <?= __('发布设置') ?>
                     </h4>
 
+                    <!-- 所属站点 -->
+                    <div class="mb-3">
+                        <label for="site_id" class="form-label">
+                            <?= __('所属站点') ?> <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <select class="form-select form-select-sm" id="site_id" name="site_id" required>
+                                <option value=""><?= __('请选择') ?></option>
+                                <?php foreach ($sites as $site): ?>
+                                    <option value="<?= $site['site_id'] ?>"
+                                        <?= ($post && (int)$post->getData('site_id') == $site['site_id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($site['site_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNewSite" aria-controls="offcanvasNewSite" title="<?= __('新建站点') ?>">
+                                <i class="mdi mdi-plus"></i> <?= __('新建') ?>
+                            </button>
+                        </div>
+                        <div class="invalid-feedback"><?= __('请选择所属站点') ?></div>
+                    </div>
+
                     <!-- 状态 -->
                     <div class="mb-3">
                         <label for="status" class="form-label"><?= __('状态') ?></label>
@@ -225,14 +249,22 @@ $isEdit = $post && $post->getId();
 
                     <!-- 封面图片 -->
                     <div class="mb-3">
-                        <label for="cover_image" class="form-label"><?= __('封面图片URL') ?></label>
-                        <input type="url"
-                               class="form-control"
+                        <label for="cover_image" class="form-label"><?= __('封面图片') ?></label>
+                        <?php $cover_image_value = $post ? ($post->getData('cover_image') ?? '') : ''; ?>
+                        <input type="hidden"
                                id="cover_image"
                                name="cover_image"
-                               value="<?= htmlspecialchars(($post ? ($post->getData('cover_image') ?? '') : '')) ?>"
-                               placeholder="<?= __('例如：https://example.com/image.jpg') ?>">
-                        <div class="form-text"><?= __('文章封面图片的完整URL地址') ?></div>
+                               value="<?= htmlspecialchars($cover_image_value) ?>">
+                        <file-manager target="#cover_image"
+                                      title="选择封面图片"
+                                      vars="cover_image_value"
+                                      path="blog/posts/"
+                                      value="cover_image_value"
+                                      multi="0"
+                                      ext="jpg,jpeg,png,gif,webp"
+                                      w="100"
+                                      h="60"/>
+                        <div class="form-text"><?= __('点击上方按钮选择或上传封面图片') ?></div>
                     </div>
 
                     <?php if ($isEdit): ?>
@@ -250,6 +282,95 @@ $isEdit = $post && $post->getId();
     </div>
 </form>
 
+<!-- Offcanvas 新建站点 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNewSite" aria-labelledby="offcanvasNewSiteLabel">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="offcanvasNewSiteLabel">
+            <i class="mdi mdi-web-plus"></i> <?= __('快速新建站点') ?>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <form id="quickSiteForm" class="needs-validation" novalidate>
+            <!-- 站点名称 -->
+            <div class="mb-3">
+                <label for="new_site_name" class="form-label">
+                    <?= __('站点名称') ?> <span class="text-danger">*</span>
+                </label>
+                <input type="text" 
+                       class="form-control" 
+                       id="new_site_name" 
+                       name="site_name" 
+                       placeholder="<?= __('例如：我的博客站点') ?>"
+                       required>
+                <div class="invalid-feedback"><?= __('请输入站点名称') ?></div>
+            </div>
+            
+            <!-- 站点URL -->
+            <div class="mb-3">
+                <label for="new_site_url" class="form-label">
+                    <?= __('站点URL') ?> <span class="text-danger">*</span>
+                </label>
+                <input type="url" 
+                       class="form-control" 
+                       id="new_site_url" 
+                       name="site_url" 
+                       placeholder="<?= __('例如：https://example.com') ?>"
+                       required>
+                <div class="invalid-feedback"><?= __('请输入有效的站点URL') ?></div>
+            </div>
+            
+            <!-- 密钥（自动生成） -->
+            <div class="mb-3">
+                <label for="new_secret_key" class="form-label">
+                    <?= __('加密密钥') ?>
+                </label>
+                <div class="input-group">
+                    <input type="text" 
+                           class="form-control" 
+                           id="new_secret_key" 
+                           name="secret_key" 
+                           placeholder="<?= __('留空自动生成') ?>"
+                           readonly>
+                    <button class="btn btn-outline-secondary" type="button" onclick="generateSecretKey()">
+                        <i class="mdi mdi-refresh"></i> <?= __('生成') ?>
+                    </button>
+                </div>
+                <div class="form-text"><?= __('用于数据加密传输，建议自动生成') ?></div>
+            </div>
+            
+            <!-- 用户类型 -->
+            <div class="mb-3">
+                <label for="new_user_type" class="form-label"><?= __('用户类型') ?></label>
+                <select class="form-select" id="new_user_type" name="user_type">
+                    <option value="frontend"><?= __('前台用户') ?></option>
+                    <option value="backend"><?= __('后台用户') ?></option>
+                </select>
+            </div>
+            
+            <!-- 是否启用 -->
+            <div class="mb-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="new_is_enabled" name="is_enabled" value="1" checked>
+                    <label class="form-check-label" for="new_is_enabled">
+                        <?= __('启用站点') ?>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- 提交按钮 -->
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary" id="btnSaveSite">
+                    <i class="mdi mdi-content-save"></i> <?= __('保存站点') ?>
+                </button>
+            </div>
+        </form>
+        
+        <!-- 保存结果提示 -->
+        <div id="siteFormAlert" class="mt-3" style="display: none;"></div>
+    </div>
+</div>
+
 <script>
 // 自动生成URL别名（基于标题）
 document.getElementById('title')?.addEventListener('input', function() {
@@ -262,6 +383,94 @@ document.getElementById('title')?.addEventListener('input', function() {
             .replace(/-+/g, '-')
             .trim();
         slugInput.value = slug;
+    }
+});
+
+// 生成随机密钥
+function generateSecretKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let key = '';
+    for (let i = 0; i < 32; i++) {
+        key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    document.getElementById('new_secret_key').value = key;
+}
+
+// 页面加载时自动生成密钥
+document.addEventListener('DOMContentLoaded', function() {
+    generateSecretKey();
+});
+
+// 快速创建站点表单提交
+document.getElementById('quickSiteForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const form = this;
+    const alertDiv = document.getElementById('siteFormAlert');
+    const submitBtn = document.getElementById('btnSaveSite');
+    
+    // 表单验证
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+    }
+    
+    // 禁用按钮，显示加载状态
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
+    
+    try {
+        const formData = new FormData(form);
+        
+        // 发送AJAX请求
+        const response = await fetch('<?= $this->getBackendUrl("multipass/backend/site/quickSave") ?>', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 显示成功提示
+            alertDiv.innerHTML = '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
+                '<i class="mdi mdi-check-circle me-1"></i>' + result.message +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+            alertDiv.style.display = 'block';
+            
+            // 将新站点添加到下拉列表并选中
+            const siteSelect = document.getElementById('site_id');
+            const option = new Option(result.site.site_name, result.site.site_id, true, true);
+            siteSelect.add(option);
+            
+            // 重置表单并生成新密钥
+            form.reset();
+            form.classList.remove('was-validated');
+            generateSecretKey();
+            
+            // 2秒后关闭offcanvas
+            setTimeout(() => {
+                const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('offcanvasNewSite'));
+                offcanvas?.hide();
+                alertDiv.style.display = 'none';
+            }, 1500);
+        } else {
+            // 显示错误提示
+            alertDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                '<i class="mdi mdi-alert-circle me-1"></i>' + (result.message || '<?= __("保存失败") ?>') +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+            alertDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alertDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+            '<i class="mdi mdi-alert-circle me-1"></i><?= __("网络错误，请重试") ?>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+        alertDiv.style.display = 'block';
+    } finally {
+        // 恢复按钮状态
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="mdi mdi-content-save"></i> <?= __("保存站点") ?>';
     }
 });
 </script>

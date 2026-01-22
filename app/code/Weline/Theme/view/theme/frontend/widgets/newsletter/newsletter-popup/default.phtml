@@ -1,0 +1,346 @@
+<?php
+/**
+ * 订阅弹窗部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('订阅获取优惠');
+$description = $this->getData('description') ?? __('订阅我们的邮件，立即获得10%折扣码！');
+$image = $this->getData('image') ?? '';
+$buttonText = $this->getData('button_text') ?? __('立即订阅');
+$trigger = $this->getData('trigger') ?? 'delay';
+$delaySeconds = (int)($this->getData('delay_seconds') ?? 5);
+$scrollPercent = (int)($this->getData('scroll_percent') ?? 50);
+$showOnce = (bool)($this->getData('show_once') ?? true);
+$cookieDays = (int)($this->getData('cookie_days') ?? 7);
+
+$widgetId = 'newsletter-popup-' . uniqid();
+?>
+
+<div class="widget-newsletter-popup" 
+     id="<?= $widgetId ?>"
+     data-trigger="<?= htmlspecialchars($trigger) ?>"
+     data-delay="<?= $delaySeconds * 1000 ?>"
+     data-scroll="<?= $scrollPercent ?>"
+     data-show-once="<?= $showOnce ? 'true' : 'false' ?>"
+     data-cookie-days="<?= $cookieDays ?>"
+     style="display: none;">
+    
+    <div class="popup-overlay"></div>
+    
+    <div class="popup-container">
+        <button class="popup-close" type="button" aria-label="<?= __('关闭') ?>">
+            <i class="ri-close-line"></i>
+        </button>
+        
+        <div class="popup-content">
+            <?php if ($image): ?>
+                <div class="popup-image">
+                    <img src="<?= htmlspecialchars($image) ?>" alt="">
+                </div>
+            <?php endif; ?>
+            
+            <div class="popup-body">
+                <div class="popup-icon">
+                    <i class="ri-gift-2-line"></i>
+                </div>
+                
+                <?php if ($title): ?>
+                    <h2 class="popup-title"><?= htmlspecialchars($title) ?></h2>
+                <?php endif; ?>
+                
+                <?php if ($description): ?>
+                    <p class="popup-description"><?= htmlspecialchars($description) ?></p>
+                <?php endif; ?>
+                
+                <form class="popup-form" action="/newsletter/subscribe" method="post">
+                    <input type="email" 
+                           name="email" 
+                           class="popup-input" 
+                           placeholder="<?= __('请输入您的邮箱') ?>"
+                           required>
+                    <button type="submit" class="popup-submit"><?= htmlspecialchars($buttonText) ?></button>
+                </form>
+                
+                <p class="popup-note">
+                    <i class="ri-shield-check-line"></i>
+                    <?= __('我们不会向您发送垃圾邮件') ?>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.widget-newsletter-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 99999;
+}
+
+.widget-newsletter-popup .popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    animation: fadeIn 0.3s ease;
+}
+
+.widget-newsletter-popup .popup-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translate(-50%, -40%);
+    }
+    to { 
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+.widget-newsletter-popup .popup-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 36px;
+    height: 36px;
+    background: rgba(0,0,0,0.1);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.3s;
+}
+
+.widget-newsletter-popup .popup-close:hover {
+    background: rgba(0,0,0,0.2);
+}
+
+.widget-newsletter-popup .popup-close i {
+    font-size: 20px;
+}
+
+.widget-newsletter-popup .popup-content {
+    display: flex;
+}
+
+.widget-newsletter-popup .popup-image {
+    flex: 0 0 40%;
+}
+
+.widget-newsletter-popup .popup-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.widget-newsletter-popup .popup-body {
+    flex: 1;
+    padding: 40px 30px;
+    text-align: center;
+}
+
+.widget-newsletter-popup .popup-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.widget-newsletter-popup .popup-icon i {
+    font-size: 28px;
+    color: #fff;
+}
+
+.widget-newsletter-popup .popup-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: #222;
+}
+
+.widget-newsletter-popup .popup-description {
+    font-size: 15px;
+    color: #666;
+    margin: 0 0 25px;
+    line-height: 1.6;
+}
+
+.widget-newsletter-popup .popup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.widget-newsletter-popup .popup-input {
+    padding: 14px 20px;
+    border: 2px solid #eee;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.widget-newsletter-popup .popup-input:focus {
+    border-color: #667eea;
+}
+
+.widget-newsletter-popup .popup-submit {
+    padding: 14px 30px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.widget-newsletter-popup .popup-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.widget-newsletter-popup .popup-note {
+    font-size: 12px;
+    color: #999;
+    margin: 15px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+@media (max-width: 576px) {
+    .widget-newsletter-popup .popup-content {
+        flex-direction: column;
+    }
+    
+    .widget-newsletter-popup .popup-image {
+        flex: none;
+        height: 150px;
+    }
+    
+    .widget-newsletter-popup .popup-body {
+        padding: 30px 20px;
+    }
+    
+    .widget-newsletter-popup .popup-title {
+        font-size: 20px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const popup = document.getElementById('<?= $widgetId ?>');
+    if (!popup) return;
+    
+    const trigger = popup.dataset.trigger;
+    const delay = parseInt(popup.dataset.delay);
+    const scrollPercent = parseInt(popup.dataset.scroll);
+    const showOnce = popup.dataset.showOnce === 'true';
+    const cookieDays = parseInt(popup.dataset.cookieDays);
+    const cookieName = 'newsletter_popup_<?= $widgetId ?>';
+    
+    // 检查Cookie
+    function getCookie(name) {
+        const value = '; ' + document.cookie;
+        const parts = value.split('; ' + name + '=');
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+    
+    function setCookie(name, value, days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=/';
+    }
+    
+    // 如果已显示过且设置了只显示一次
+    if (showOnce && getCookie(cookieName)) {
+        return;
+    }
+    
+    function showPopup() {
+        popup.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        if (showOnce) {
+            setCookie(cookieName, '1', cookieDays);
+        }
+    }
+    
+    function hidePopup() {
+        popup.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    
+    // 触发方式
+    if (trigger === 'delay') {
+        setTimeout(showPopup, delay);
+    } else if (trigger === 'scroll') {
+        let triggered = false;
+        window.addEventListener('scroll', function() {
+            if (triggered) return;
+            const scrolled = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
+            if (scrolled >= scrollPercent) {
+                triggered = true;
+                showPopup();
+            }
+        });
+    } else if (trigger === 'exit-intent') {
+        let triggered = false;
+        document.addEventListener('mouseout', function(e) {
+            if (triggered) return;
+            if (e.clientY <= 0) {
+                triggered = true;
+                showPopup();
+            }
+        });
+    }
+    
+    // 关闭事件
+    popup.querySelector('.popup-close').addEventListener('click', hidePopup);
+    popup.querySelector('.popup-overlay').addEventListener('click', hidePopup);
+    
+    // ESC关闭
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && popup.style.display === 'block') {
+            hidePopup();
+        }
+    });
+})();
+</script>

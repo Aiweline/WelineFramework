@@ -1,0 +1,69 @@
+{
+    "name": "布局类型配置",
+    "description": "定义不同的页面布局类型，布局决定了页面的整体结构和内容嵌入方式",
+    "version": "1.0.0",
+    "layouts": {
+        "default": {
+            "name": "默认布局",
+            "name_en": "Default Layout",
+            "description": "标准的落地页布局，包含 Header + Content + Footer",
+            "regions": ["header", "content", "footer"],
+            "supports_components": true,
+            "default": true
+        },
+        "blog": {
+            "name": "博客布局",
+            "name_en": "Blog Layout",
+            "description": "博客专用布局，包含文章列表/详情、侧边栏、分类导航等",
+            "regions": ["header", "sidebar", "content", "footer"],
+            "supports_components": true,
+            "content_type": "blog",
+            "features": {
+                "sidebar": true,
+                "categories": true,
+                "tags": true,
+                "pagination": true,
+                "search": true,
+                "related_posts": true
+            }
+        },
+        "landing": {
+            "name": "落地页布局",
+            "name_en": "Landing Page Layout",
+            "description": "营销落地页布局，支持多区块自由组合",
+            "regions": ["header", "hero", "content", "cta", "footer"],
+            "supports_components": true,
+            "features": {
+                "hero_section": true,
+                "cta_sections": true,
+                "full_width": true
+            }
+        },
+        "product": {
+            "name": "产品页布局",
+            "name_en": "Product Page Layout",
+            "description": "产品展示页布局，支持产品详情、规格、购买等",
+            "regions": ["header", "product_info", "content", "related", "footer"],
+            "supports_components": true,
+            "content_type": "product",
+            "features": {
+                "product_gallery": true,
+                "specifications": true,
+                "reviews": true,
+                "add_to_cart": true
+            }
+        },
+        "minimal": {
+            "name": "极简布局",
+            "name_en": "Minimal Layout",
+            "description": "极简布局，仅包含内容区域，适合嵌入式页面",
+            "regions": ["content"],
+            "supports_components": true,
+            "features": {
+                "no_header": true,
+                "no_footer": true,
+                "full_width": true
+            }
+        }
+    }
+}

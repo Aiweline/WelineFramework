@@ -1,0 +1,159 @@
+<?php
+/**
+ * 向上销售部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('您可能还喜欢');
+$limit = (int)($this->getData('limit') ?? 4);
+$columns = $this->getData('columns') ?? '4';
+$layout = $this->getData('layout') ?? 'carousel';
+
+// 示例产品数据
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('升级产品 %d', $i),
+        'url' => '/product/upsell-' . $i,
+        'image' => '/images/products/upsell-' . $i . '.jpg',
+        'price' => rand(200, 800),
+        'original_price' => rand(200, 800) * 1.1,
+        'rating' => rand(42, 50) / 10,
+        'review_count' => rand(30, 400),
+        'highlight' => __('更大容量') . ' / ' . __('更多功能'),
+    ];
+}
+
+$widgetId = 'up-sell-' . uniqid();
+?>
+
+<div class="widget-up-sell widget-products" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <h2 class="widget-title">
+            <i class="ri-arrow-up-circle-line" style="color: #27ae60;"></i>
+            <?= htmlspecialchars($title) ?>
+        </h2>
+    </div>
+    
+    <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-prev" type="button">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <div class="products-wrapper">
+            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+                <?php foreach ($products as $product): ?>
+                    <div class="product-card">
+                        <div class="product-image-wrapper">
+                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                                     class="product-image"
+                                     loading="lazy">
+                            </a>
+                            
+                            <div class="upgrade-badge">
+                                <i class="ri-arrow-up-line"></i>
+                                <?= __('升级版') ?>
+                            </div>
+                            
+                            <div class="product-actions">
+                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line"></i>
+                                </button>
+                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= htmlspecialchars($product['url']) ?>">
+                                    <?= htmlspecialchars($product['name']) ?>
+                                </a>
+                            </h3>
+                            
+                            <?php if (!empty($product['highlight'])): ?>
+                                <p class="product-highlight">
+                                    <i class="ri-checkbox-circle-fill"></i>
+                                    <?= htmlspecialchars($product['highlight']) ?>
+                                </p>
+                            <?php endif; ?>
+                            
+                            <div class="product-rating">
+                                <div class="stars">
+                                    <?php for ($s = 1; $s <= 5; $s++): ?>
+                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                    <?php endfor; ?>
+                                </div>
+                                <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                            </div>
+                            
+                            <div class="product-price">
+                                <?php if ($product['original_price'] > $product['price']): ?>
+                                    <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                <?php endif; ?>
+                                <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                            </div>
+                            
+                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
+                                <i class="ri-shopping-cart-line"></i>
+                                <span><?= __('加入购物车') ?></span>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-next" type="button">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-up-sell .upgrade-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+}
+
+.widget-up-sell .product-highlight {
+    font-size: 12px;
+    color: var(--success-color, #27ae60);
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.widget-up-sell .product-highlight i {
+    font-size: 14px;
+}
+
+.widget-up-sell .product-rating .stars i {
+    color: #ffc107;
+}
+
+.widget-up-sell .product-rating .stars i.ri-star-line {
+    color: #ddd;
+}
+</style>
