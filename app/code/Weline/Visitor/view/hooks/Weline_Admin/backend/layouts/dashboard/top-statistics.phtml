@@ -1,0 +1,154 @@
+<?php
+/**
+ * 后台首页顶部统计卡片 Hook 实现
+ *
+ * Hook 名称：Weline_Admin::backend::layouts::dashboard::top-statistics
+ *
+ * 功能：
+ * - 在 Admin 后台首页顶部展示真实的访客像素统计汇总数据
+ * - 使用 Weline_Visitor 的 PixelStatisticsService 聚合所有站点数据
+ *
+ * @hook-priority 150
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+use Weline\Visitor\Service\PixelStatisticsService;
+
+try {
+    $overview      = PixelStatisticsService::getGlobalDashboardOverview();
+    $stats         = $overview['stats'] ?? [];
+    $websiteIds    = $overview['website_ids'] ?? [];
+
+    $totalCount    = (int)($stats['total_count']   ?? 0);
+    $dealedCount   = (int)($stats['dealed_count']  ?? 0);
+    $unDealCount   = (int)($stats['un_deal_count'] ?? 0);
+    $totalValue    = (float)($stats['total_value'] ?? 0);
+    $siteCount     = is_array($websiteIds) ? count($websiteIds) : 0;
+
+    $dealRate      = $totalCount > 0 ? round($dealedCount * 100 / $totalCount, 2) : 0.0;
+} catch (\Throwable $e) {
+    // 失败时不影响后台首页其他内容，直接回退到默认实现
+    return;
+}
+?>
+<div class="row">
+    <div class="col-xl-3 col-sm-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3 align-self-center">
+                        <div class="avatar-sm">
+                            <div class="avatar-title bg-light rounded-circle text-primary font-size-20">
+                                <i class="ri-bar-chart-2-line"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <p class="mb-1">
+                            <lang>像素总记录数</lang>
+                        </p>
+                        <h5 class="mb-3"><?= number_format($totalCount) ?></h5>
+                        <p class="text-truncate mb-0">
+                            <span class="text-muted">
+                                <lang>包含所有站点的有效像素事件</lang>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-sm-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3 align-self-center">
+                        <div class="avatar-sm">
+                            <div class="avatar-title bg-light rounded-circle text-success font-size-20">
+                                <i class="ri-checkbox-circle-line"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <p class="mb-1">
+                            <lang>已处理像素</lang>
+                        </p>
+                        <h5 class="mb-3"><?= number_format($dealedCount) ?></h5>
+                        <p class="text-truncate mb-0">
+                            <span class="text-success me-2">
+                                <?= htmlspecialchars((string)$dealRate) ?>%
+                            </span>
+                            <span class="text-muted">
+                                <lang>处理占比</lang>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-sm-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3 align-self-center">
+                        <div class="avatar-sm">
+                            <div class="avatar-title bg-light rounded-circle text-warning font-size-20">
+                                <i class="ri-time-line"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <p class="mb-1">
+                            <lang>待处理像素</lang>
+                        </p>
+                        <h5 class="mb-3"><?= number_format($unDealCount) ?></h5>
+                        <p class="text-truncate mb-0">
+                            <span class="text-muted">
+                                <lang>建议尽快排查并处理异常事件</lang>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-sm-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex">
+                    <div class="flex-shrink-0 me-3 align-self-center">
+                        <div class="avatar-sm">
+                            <div class="avatar-title bg-light rounded-circle text-info font-size-20">
+                                <i class="ri-global-line"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <p class="mb-1">
+                            <lang>接入站点 / 累计价值</lang>
+                        </p>
+                        <h5 class="mb-3">
+                            <?= (int)$siteCount ?>
+                            <span class="text-muted ms-1">/</span>
+                            <span class="text-primary ms-1">
+                                <?= number_format($totalValue, 2) ?>
+                            </span>
+                        </h5>
+                        <p class="text-truncate mb-0">
+                            <span class="text-muted">
+                                <lang>站点数量 / 像素累计价值</lang>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

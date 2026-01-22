@@ -1,0 +1,218 @@
+<?php
+/**
+ * 页面构建器配置页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var string $ai_enabled
+ * @var string $i18n_enabled
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$aiEnabled = $ai_enabled ?? '0';
+$i18nEnabled = $i18n_enabled ?? '0';
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>页面构建器配置</lang></title>
+    <style>
+        .config-card {
+            margin-bottom: 1.5rem;
+        }
+        .config-card .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .config-card .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+        }
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            cursor: pointer;
+        }
+        .form-switch .form-check-label {
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+        .config-description {
+            color: #6c757d;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><lang>页面构建器配置</lang></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 配置表单 -->
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card config-card">
+                            <div class="card-header">
+                                <h5><i class="mdi mdi-cog me-2"></i><lang>功能配置</lang></h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="configForm" onsubmit="saveConfig(event)">
+                                    <!-- AI功能配置 -->
+                                    <div class="mb-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   name="ai_enabled"
+                                                   value="1"
+                                                   id="ai_enabled"
+                                                   <?= $aiEnabled === '1' ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="ai_enabled">
+                                                <strong><lang>开启AI功能</lang></strong>
+                                            </label>
+                                        </div>
+                                        <div class="config-description">
+                                            <lang>开启后，在页面编辑界面和可视化编辑界面中将显示AI生成内容功能和AI生成配置功能。关闭后，这些AI相关功能将隐藏。</lang>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <!-- 多语言功能配置 -->
+                                    <div class="mb-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   name="i18n_enabled"
+                                                   value="1"
+                                                   id="i18n_enabled"
+                                                   <?= $i18nEnabled === '1' ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="i18n_enabled">
+                                                <strong><lang>开启多语言功能</lang></strong>
+                                            </label>
+                                        </div>
+                                        <div class="config-description">
+                                            <lang>开启后，在页面编辑界面中将显示多语言内容翻译功能，后端会提示未翻译的语言信息，可视化编辑界面中也会显示语言切换配置。关闭后，这些多语言相关功能将隐藏。</lang>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <!-- SEO 账户配置（PageBuilder Scope） -->
+                                    <div class="mb-3">
+                                        <h5 class="mb-3">
+                                            <i class="mdi mdi-google me-2"></i>
+                                            <lang>SEO提交账户（PageBuilder Scope）</lang>
+                                        </h5>
+                                        <p class="config-description">
+                                            <lang>这里展示 scope=page_builder 的 SEO 账户。点击按钮可跳转到 SEO 模块中进行账户管理。</lang>
+                                        </p>
+                                        <div class="mb-2">
+                                            <a href="<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => 'page_builder', 'module' => 'GuoLaiRen_PageBuilder']) ?>"
+                                               class="btn btn-outline-primary btn-sm me-2">
+                                                <i class="mdi mdi-view-list-outline me-1"></i>
+                                                <lang>查看SEO账户</lang>
+                                            </a>
+                                            <a href="<?= $this->getBackendUrl('seo/backend/account/form', ['scope' => 'page_builder', 'module' => 'GuoLaiRen_PageBuilder']) ?>"
+                                               class="btn btn-primary btn-sm">
+                                                <i class="mdi mdi-plus-circle-outline me-1"></i>
+                                                <lang>新增SEO账户</lang>
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="mdi mdi-content-save me-2"></i><lang>保存配置</lang>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary ms-2" onclick="resetForm()">
+                                            <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+<script>
+function saveConfig(event) {
+    event.preventDefault();
+    const form = document.getElementById('configForm');
+    const formData = new FormData(form);
+    
+    // 处理复选框值
+    const aiEnabled = document.getElementById('ai_enabled').checked ? '1' : '0';
+    const i18nEnabled = document.getElementById('i18n_enabled').checked ? '1' : '0';
+    formData.set('ai_enabled', aiEnabled);
+    formData.set('i18n_enabled', i18nEnabled);
+    
+    const data = {};
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    fetch('<?= $this->getBackendUrl('pagebuilder/backend/config/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showPageMessage('success', data.message);
+            // 延迟刷新页面以显示更新后的配置
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showPageMessage('error', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showPageMessage('error', '<?= __('保存失败') ?>');
+    });
+}
+
+function resetForm() {
+    if (confirm('<?= __('确定要重置表单吗？') ?>')) {
+        document.getElementById('configForm').reset();
+    }
+}
+</script>
+
+</body>
+</html>

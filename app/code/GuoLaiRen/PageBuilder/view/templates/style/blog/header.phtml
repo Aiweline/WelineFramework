@@ -1,0 +1,237 @@
+<?php
+/**
+ * Blog模板 - Header
+ * 
+ * 可用变量：
+ * - $page: Page模型实例
+ * - $style: 样式配置数组
+ * - $seo: SEO数据
+ * - $blog_categories: 博客分类列表
+ * - $current_category: 当前分类（分类页时）
+ * 
+ * @fields_start
+ * group:layout => 布局配置
+ * layout.max_width => 最大宽度:text:1200|px
+ * layout.header_bg => 头部背景色:color:#ffffff
+ * layout.header_text_color => 头部文字颜色:color:#333333
+ * 
+ * group:navigation => 导航配置
+ * navigation.show_logo => 显示Logo:select:yes|yes,no
+ * navigation.logo_position => Logo位置:select:left|left,center
+ * navigation.show_categories => 显示分类导航:select:yes|yes,no
+ * navigation.nav_style => 导航样式:select:default|default,pills,underline
+ * 
+ * group:breadcrumb => 面包屑配置
+ * breadcrumb.show => 显示面包屑:select:yes|yes,no
+ * breadcrumb.separator => 分隔符:text:/
+ * breadcrumb.bg_color => 背景色:color:#f8f9fa
+ * @fields_end
+ */
+
+// 获取配置
+$maxWidth = $style['layout.max_width'] ?? '1200';
+$headerBg = $style['layout.header_bg'] ?? '#ffffff';
+$headerTextColor = $style['layout.header_text_color'] ?? '#333333';
+$showLogo = ($style['navigation.show_logo'] ?? 'yes') === 'yes';
+$logoPosition = $style['navigation.logo_position'] ?? 'left';
+$showCategories = ($style['navigation.show_categories'] ?? 'yes') === 'yes';
+$showBreadcrumb = ($style['breadcrumb.show'] ?? 'yes') === 'yes';
+$breadcrumbBg = $style['breadcrumb.bg_color'] ?? '#f8f9fa';
+
+// 获取页面数据
+$pageTitle = $seo['title'] ?? $page->getData('title') ?? '';
+$logo = $page->getData('logo') ?? '';
+$icon = $page->getData('icon') ?? '';
+
+// 博客数据
+$blogCategories = $blog_categories ?? [];
+$currentCategory = $current_category ?? null;
+?>
+<!DOCTYPE html>
+<html lang="<?= $current_locale ?? 'zh-CN' ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    
+    <?php if (!empty($seo['description'])): ?>
+    <meta name="description" content="<?= htmlspecialchars($seo['description']) ?>">
+    <?php endif; ?>
+    
+    <?php if (!empty($seo['keywords'])): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($seo['keywords']) ?>">
+    <?php endif; ?>
+    
+    <?php if (!empty($icon)): ?>
+    <link rel="icon" href="<?= htmlspecialchars($icon) ?>">
+    <?php endif; ?>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- MDI Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --blog-max-width: <?= $maxWidth ?>px;
+            --blog-header-bg: <?= $headerBg ?>;
+            --blog-header-text: <?= $headerTextColor ?>;
+            --blog-breadcrumb-bg: <?= $breadcrumbBg ?>;
+            --blog-primary: #0d6efd;
+            --blog-secondary: #6c757d;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .blog-container {
+            max-width: var(--blog-max-width);
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
+        /* Header Styles */
+        .blog-header {
+            background: var(--blog-header-bg);
+            color: var(--blog-header-text);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .blog-header .navbar {
+            padding: 0.75rem 0;
+        }
+        
+        .blog-header .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--blog-header-text);
+        }
+        
+        .blog-header .navbar-brand img {
+            max-height: 40px;
+        }
+        
+        .blog-header .nav-link {
+            color: var(--blog-header-text);
+            padding: 0.5rem 1rem;
+            transition: color 0.2s;
+        }
+        
+        .blog-header .nav-link:hover,
+        .blog-header .nav-link.active {
+            color: var(--blog-primary);
+        }
+        
+        /* Breadcrumb Styles */
+        .blog-breadcrumb {
+            background: var(--blog-breadcrumb-bg);
+            padding: 0.75rem 0;
+            font-size: 0.875rem;
+        }
+        
+        .blog-breadcrumb .breadcrumb {
+            margin-bottom: 0;
+            background: transparent;
+        }
+        
+        .blog-breadcrumb .breadcrumb-item a {
+            color: var(--blog-secondary);
+            text-decoration: none;
+        }
+        
+        .blog-breadcrumb .breadcrumb-item a:hover {
+            color: var(--blog-primary);
+        }
+        
+        .blog-breadcrumb .breadcrumb-item.active {
+            color: var(--blog-header-text);
+        }
+        
+        /* Category Nav Pills */
+        .category-nav .nav-pills .nav-link {
+            border-radius: 20px;
+            padding: 0.375rem 1rem;
+            margin: 0 0.25rem;
+            font-size: 0.875rem;
+            color: var(--blog-secondary);
+            background: #f8f9fa;
+        }
+        
+        .category-nav .nav-pills .nav-link:hover,
+        .category-nav .nav-pills .nav-link.active {
+            background: var(--blog-primary);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="blog-header">
+        <div class="blog-container">
+            <nav class="navbar navbar-expand-lg">
+                <?php if ($showLogo): ?>
+                <a class="navbar-brand" href="/">
+                    <?php if (!empty($logo)): ?>
+                        <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+                    <?php else: ?>
+                        <?= htmlspecialchars($pageTitle) ?>
+                    <?php endif; ?>
+                </a>
+                <?php endif; ?>
+                
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#blogNavbar">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="blogNavbar">
+                    <?php if ($showCategories && !empty($blogCategories)): ?>
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link <?= !$currentCategory ? 'active' : '' ?>" href="<?= $this->getUrl($page->getData('handle')) ?>">
+                                <?= __('全部') ?>
+                            </a>
+                        </li>
+                        <?php foreach ($blogCategories as $category): ?>
+                        <li class="nav-item">
+                            <a class="nav-link <?= ($currentCategory && $currentCategory->getId() == $category->getId()) ? 'active' : '' ?>" 
+                               href="<?= $this->getUrl($page->getData('handle'), ['category' => $category->getData('slug')]) ?>">
+                                <?= htmlspecialchars($category->getData('name')) ?>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+                </div>
+            </nav>
+        </div>
+    </header>
+    
+    <?php if ($showBreadcrumb): ?>
+    <!-- Breadcrumb -->
+    <nav class="blog-breadcrumb">
+        <div class="blog-container">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="/"><i class="mdi mdi-home"></i> <?= __('首页') ?></a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="<?= $this->getUrl($page->getData('handle')) ?>"><?= __('博客') ?></a>
+                </li>
+                <?php if ($currentCategory): ?>
+                <li class="breadcrumb-item active"><?= htmlspecialchars($currentCategory->getData('name')) ?></li>
+                <?php elseif (!empty($current_post)): ?>
+                <li class="breadcrumb-item active"><?= htmlspecialchars($current_post->getData('title')) ?></li>
+                <?php endif; ?>
+            </ol>
+        </div>
+    </nav>
+    <?php endif; ?>
+    
+    <!-- Main Content Start -->
+    <main class="blog-main">
