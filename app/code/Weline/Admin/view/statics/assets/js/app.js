@@ -83,34 +83,165 @@ File: Main Js File
         });
     }
 
+    /**
+     * 最长路径匹配算法 - 用于后台菜单选中
+     * 
+     * 算法说明：
+     * 1. 优先使用精确匹配（URL完全相同）
+     * 2. 支持前缀匹配：菜单路径是当前路径的前缀
+     * 3. 支持同级匹配：路径长度相同，只有最后一段不同（如 edit vs index）
+     * 4. 返回连续匹配的路径段数量，用于选择最佳匹配
+     * 
+     * 示例：
+     * - 当前页面：/admin/pagebuilder/backend/page/edit
+     * - 菜单A：/admin/pagebuilder/backend/page/index -> 匹配前4段，得分4
+     * - 菜单B：/admin/ -> 匹配前1段，得分1
+     * - 结果：选择菜单A（得分更高）
+     * 
+     * @param {string} currentPath - 当前页面路径
+     * @param {string} menuPath - 菜单项路径
+     * @returns {number} - 匹配的路径段数量，-1表示不匹配
+     */
+    function calculatePathMatchScore(currentPath, menuPath) {
+        // 移除协议和域名部分，只保留路径
+        var getPathname = function(url) {
+            try {
+                var a = document.createElement('a');
+                a.href = url;
+                return a.pathname.replace(/\/+$/, ''); // 移除末尾斜杠
+            } catch (e) {
+                return url.replace(/\/+$/, '');
+            }
+        };
+        
+        var currentPathname = getPathname(currentPath);
+        var menuPathname = getPathname(menuPath);
+        
+        // 精确匹配返回最高分
+        if (currentPathname === menuPathname) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+        
+        // 分割路径段
+        var currentSegments = currentPathname.split('/').filter(function(s) { return s.length > 0; });
+        var menuSegments = menuPathname.split('/').filter(function(s) { return s.length > 0; });
+        
+        // 如果菜单路径比当前路径长，不可能匹配
+        if (menuSegments.length > currentSegments.length) {
+            return -1;
+        }
+        
+        // 计算从开始连续匹配的路径段数量
+        var matchCount = 0;
+        var minLength = Math.min(currentSegments.length, menuSegments.length);
+        
+        for (var i = 0; i < minLength; i++) {
+            if (menuSegments[i] === currentSegments[i]) {
+                matchCount++;
+            } else {
+                // 遇到不匹配的段，停止计数
+                break;
+            }
+        }
+        
+        // 情况1：菜单路径完全是当前路径的前缀（所有菜单段都匹配）
+        // 例如：菜单 /admin/page 匹配当前 /admin/page/edit
+        if (matchCount === menuSegments.length) {
+            return matchCount;
+        }
+        
+        // 情况2：同级页面匹配（路径长度相同，前N-1段匹配，只有最后一段不同）
+        // 例如：菜单 /admin/page/index 匹配当前 /admin/page/edit
+        if (menuSegments.length === currentSegments.length && matchCount === menuSegments.length - 1) {
+            return matchCount;
+        }
+        
+        // 其他情况：不是有效匹配
+        return -1;
+    }
+    
     function initActiveMenu() {
-        // === following js will activate the menu in left side bar based on url ====
+        // === 最长路径匹配算法激活左侧菜单 ====
+        var pageUrl = window.location.href.split(/[?#]/)[0];
+        var bestMatch = null;
+        var bestScore = -1;
+        
+        // 第一遍：查找精确匹配或最长路径匹配
         $("#sidebar-menu a").each(function () {
-            var pageUrl = window.location.href.split(/[?#]/)[0];
-            if (this.href == pageUrl) {
-                $(this).addClass("active");
-                $(this).parent().addClass("mm-active"); // add active to li of the current link
-                $(this).parent().parent().addClass("mm-show");
-                $(this).parent().parent().prev().addClass("mm-active"); // add active class to an anchor
-                $(this).parent().parent().parent().addClass("mm-active");
-                $(this).parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
-                $(this).parent().parent().parent().parent().parent().addClass("mm-active");
+            var menuUrl = this.href;
+            
+            // 跳过无效链接（如 # 或 javascript:）
+            if (!menuUrl || menuUrl === '#' || menuUrl.indexOf('javascript:') === 0) {
+                return;
+            }
+            
+            var score = calculatePathMatchScore(pageUrl, menuUrl);
+            
+            // 精确匹配直接使用
+            if (score === Number.MAX_SAFE_INTEGER) {
+                bestMatch = $(this);
+                bestScore = score;
+                return false; // 跳出循环
+            }
+            
+            // 比较分数，选择最长匹配
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = $(this);
             }
         });
+        
+        // 激活最佳匹配的菜单项
+        if (bestMatch && bestScore > 0) {
+            bestMatch.addClass("active");
+            bestMatch.parent().addClass("mm-active"); // add active to li of the current link
+            bestMatch.parent().parent().addClass("mm-show");
+            bestMatch.parent().parent().prev().addClass("mm-active"); // add active class to an anchor
+            bestMatch.parent().parent().parent().addClass("mm-active");
+            bestMatch.parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
+            bestMatch.parent().parent().parent().parent().parent().addClass("mm-active");
+        }
     }
 
     function initMenuItem() {
+        // === 最长路径匹配算法激活顶部导航菜单 ====
+        var pageUrl = window.location.href.split(/[?#]/)[0];
+        var bestMatch = null;
+        var bestScore = -1;
+        
         $(".navbar-nav a").each(function () {
-            var pageUrl = window.location.href.split(/[?#]/)[0];
-            if (this.href == pageUrl) {
-                $(this).addClass("active");
-                $(this).parent().addClass("active");
-                $(this).parent().parent().addClass("active");
-                $(this).parent().parent().parent().addClass("active");
-                $(this).parent().parent().parent().parent().addClass("active");
-                $(this).parent().parent().parent().parent().parent().addClass("active");
+            var menuUrl = this.href;
+            
+            // 跳过无效链接
+            if (!menuUrl || menuUrl === '#' || menuUrl.indexOf('javascript:') === 0) {
+                return;
+            }
+            
+            var score = calculatePathMatchScore(pageUrl, menuUrl);
+            
+            // 精确匹配直接使用
+            if (score === Number.MAX_SAFE_INTEGER) {
+                bestMatch = $(this);
+                bestScore = score;
+                return false;
+            }
+            
+            // 比较分数，选择最长匹配
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = $(this);
             }
         });
+        
+        // 激活最佳匹配的菜单项
+        if (bestMatch && bestScore > 0) {
+            bestMatch.addClass("active");
+            bestMatch.parent().addClass("active");
+            bestMatch.parent().parent().addClass("active");
+            bestMatch.parent().parent().parent().addClass("active");
+            bestMatch.parent().parent().parent().parent().addClass("active");
+            bestMatch.parent().parent().parent().parent().parent().addClass("active");
+        }
     }
 
     function initMenuItemScroll() {

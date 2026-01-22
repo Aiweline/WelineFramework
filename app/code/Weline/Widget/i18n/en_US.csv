@@ -1,3 +1,8 @@
+开始刷新部件注册表...,开始刷新部件注册表...
+"✓ 部件注册表已刷新完成。","✓ 部件注册表已刷新完成。"
+位置：generated/widgets.php,位置：generated/widgets.php
+"✖ 写入部件注册表失败。","✖ 写入部件注册表失败。"
+刷新失败：%{1},刷新失败：%{1}
 可视化编辑器,"Visual Editor"
 内容管理,"Content Management"
 标题和标识不能为空,"Title and handle cannot be empty"

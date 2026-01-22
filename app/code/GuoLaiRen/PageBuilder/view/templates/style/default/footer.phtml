@@ -246,6 +246,14 @@ $createTime = $page ? $page->getData('create_time') : '';
             </div>
         </div>
     </footer>
+    
+    <!-- Footer 自定义代码 -->
+    <?php 
+    $footerCustomCode = $page ? $page->getData('footer_custom_code') : '';
+    if (!empty($footerCustomCode)): 
+    ?>
+        <?= $footerCustomCode ?>
+    <?php endif; ?>
 </body>
 </html>
 

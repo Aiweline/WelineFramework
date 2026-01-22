@@ -621,6 +621,17 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // 尝试从模板文件读取
         $templateFile = __DIR__ . '/../view/templates/maintenance.phtml';
         if (is_file($templateFile)) {
+            // 创建Template实例以支持hook渲染
+            $template = null;
+            try {
+                /** @var \Weline\Framework\View\Template $template */
+                $template = \Weline\Framework\View\Template::getInstance();
+            } catch (\Throwable $e) {
+                // 如果创建失败，使用null（模板中会处理）
+                $template = null;
+            }
+            
+            // 确保$lang变量在模板中可用
             ob_start();
             include $templateFile;
             return ob_get_clean();

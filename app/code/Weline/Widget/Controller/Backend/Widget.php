@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Widget\Service\WidgetScanner;
+use Weline\Widget\Service\WidgetData;
 
 /**
  * 部件管理控制器
@@ -20,11 +20,11 @@ use Weline\Widget\Service\WidgetScanner;
 #[\Weline\Framework\Acl\Acl('Weline_Widget::widget_management', '部件管理', 'mdi mdi-puzzle', '部件管理')]
 class Widget extends BackendController
 {
-    private WidgetScanner $widgetScanner;
+    private WidgetData $widgetData;
 
-    public function __construct(WidgetScanner $widgetScanner)
+    public function __construct(WidgetData $widgetData)
     {
-        $this->widgetScanner = $widgetScanner;
+        $this->widgetData = $widgetData;
     }
 
     /**
@@ -38,8 +38,8 @@ class Widget extends BackendController
         $typeFilter = $this->request->getParam('type', '');
         $search = $this->request->getParam('search', '');
 
-        // 扫描所有部件
-        $allWidgets = $this->widgetScanner->scanAllWidgets();
+        // 从注册表读取所有部件（运行时只读取，不扫描）
+        $allWidgets = $this->widgetData->getAllWidgets();
 
         // 筛选部件
         $filteredWidgets = [];
@@ -116,7 +116,7 @@ class Widget extends BackendController
                 ]);
             }
 
-            $widget = $this->widgetScanner->scanWidget($type, $name);
+            $widget = $this->widgetData->getWidget($type, $name);
             if (!$widget) {
                 return $this->fetchJson([
                     'success' => false,

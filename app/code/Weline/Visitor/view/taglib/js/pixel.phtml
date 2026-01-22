@@ -3,45 +3,139 @@
 <script type="text/javascript">
     // 创建像素对象
     if (!window.WelinePixel) {
+        /**
+         * 获取配置值
+         * @param {string} key - 配置键名
+         * @param {*} defaultValue - 默认值
+         * @returns {*} 配置值
+         */
+        function __getPixelConfig(key, defaultValue) {
+            var config = window.__WelineThemeConfig || {};
+            switch(key) {
+                case 'env_model':
+                    if (config.env && config.env.WELINE_ENV) {
+                        return config.env.WELINE_ENV === 'DEV' ? 'dev' : 'prod';
+                    }
+                    return window.DEV ? 'dev' : 'prod';
+                case 'user_id':
+                    return (config.site && config.site.user_id) || defaultValue;
+                case 'module':
+                    return (config.site && config.site.module) || defaultValue;
+                default:
+                    return (config.site && config.site[key]) || defaultValue;
+            }
+        }
+        
+        /**
+         * 获取前端 API URL
+         * @param {string} path - API 路径
+         * @returns {string} 完整的 API URL
+         */
+        function __getPixelApiUrl(path) {
+            // 使用 Weline.Url.frontendApi
+            if (window.Weline && window.Weline.Url && typeof window.Weline.Url.frontendApi === 'function') {
+                return window.Weline.Url.frontendApi(path);
+            }
+            // 从父窗口获取
+            if (window.parent && window.parent.Weline && window.parent.Weline.Url && typeof window.parent.Weline.Url.frontendApi === 'function') {
+                return window.parent.Weline.Url.frontendApi(path);
+            }
+            // 从配置构建 URL
+            var config = window.__WelineThemeConfig || window.parent?.__WelineThemeConfig || {};
+            var baseUrl = (config.baseUrl || window.location.origin).replace(/\/$/, '');
+            if (!path.startsWith('/')) {
+                path = '/' + path;
+            }
+            return baseUrl + path;
+        }
+        
+        /**
+         * 获取 Cookie 值
+         * @param {string} name - Cookie 名称
+         * @returns {string} Cookie 值
+         */
+        function __getPixelCookie(name) {
+            var value = "; " + document.cookie;
+            var parts = value.split("; " + name + "=");
+            if (parts.length === 2) {
+                return parts.pop().split(";").shift();
+            }
+            return '';
+        }
+        
+        /**
+         * 清理 URL 路径中的区域、货币、语言等前缀
+         * @param {string} path - 原始路径
+         * @returns {string} 清理后的路径
+         */
+        function __getPixelAppPath(path) {
+            if (!path || path.indexOf('://') < 0) {
+                return path;
+            }
+            
+            try {
+                var urlObj = new URL(path);
+                var parts = urlObj.pathname.split('/').filter(function(p) { return p !== ''; });
+                
+                var currencyPattern = /^[A-Z]{3}$/;
+                var langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+                var areaPattern = /^(frontend|backend|admin|api|api_admin)$/i;
+                var websiteCode = __getPixelCookie('WELINE_WEBSITE_CODE');
+                
+                var filtered = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i];
+                    if (websiteCode && part === websiteCode) continue;
+                    if (areaPattern.test(part)) continue;
+                    if (currencyPattern.test(part)) continue;
+                    if (langPattern.test(part)) continue;
+                    filtered.push(part);
+                }
+                
+                urlObj.pathname = '/' + filtered.join('/');
+                return urlObj.toString();
+            } catch (e) {
+                return path;
+            }
+        }
+        
         window.WelinePixel = {
-            url: window.parent.frontend_api('visitor/rest/v1/pixel'),
-            env_model: window.site.env_model,
+            url: __getPixelApiUrl('visitor/rest/v1/pixel'),
+            env_model: __getPixelConfig('env_model', 'prod'),
             init: {
                 url: window.location.href,
-                userId: window.site.user_id,
-                module: window.site.module,
+                userId: __getPixelConfig('user_id', ''),
+                module: __getPixelConfig('module', ''),
                 domain: window.location.hostname,
                 eventName: 'click',
                 name: '{:name}',
                 value: 0,
-                currency: getCookie('WELINE_USER_CURRENCY') || 'RMB',
-                websiteUrl: getCookie('WELINE_WEBSITE_URL') || '',
-                websiteId: getCookie('WELINE_WEBSITE_ID') || '',
-                userLang: getCookie('WELINE_USER_LANG') || 'zh-CN',
+                currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
+                websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
+                websiteId: __getPixelCookie('WELINE_WEBSITE_ID') || '',
+                userLang: __getPixelCookie('WELINE_USER_LANG') || 'zh-CN',
                 elementInfo: null,
                 additionalInfo: null
             },
             initData: {
-                userId: window.site.user_id,
+                userId: __getPixelConfig('user_id', ''),
                 url: window.location.href,
-                module: window.site.module,
+                module: __getPixelConfig('module', ''),
                 domain: window.location.hostname,
                 eventName: 'click',
                 name: '{:name}',
                 value: 0,
-                currency: getCookie('WELINE_USER_CURRENCY') || 'RMB',
-                websiteUrl: getCookie('WELINE_WEBSITE_URL') || '',
-                websiteId: getCookie('WELINE_WEBSITE_ID') || '',
-                userLang: getCookie('WELINE_USER_LANG') || 'zh-CN',
+                currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
+                websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
+                websiteId: __getPixelCookie('WELINE_WEBSITE_ID') || '',
+                userLang: __getPixelCookie('WELINE_USER_LANG') || 'zh-CN',
                 elementInfo: null,
                 additionalInfo: null
             },
             // 发送数据的函数
             send: function (data, url) {
-                // data 不存在则使用this.initData
-                data = data || this.initData
-                // 如果 url 不存在则使用 this.url
-                url = url || this.url
+                data = data || this.initData;
+                url = url || this.url;
                 let xhr = new XMLHttpRequest();
                 xhr.open('POST', url, true);
                 xhr.setRequestHeader('Content-Type', 'application/json');
@@ -80,56 +174,50 @@
                     outerHeight: window.outerHeight
                 };
                 // 自定义系统级别事件名
-                // homepage category info[about,contact,news,shipping,faq,terms,privacy,refund,return,help,service,account,login,register,logout]
-                // view-item
-                // add-to-cart view-cart buy-now place-order
-                // begin-checkout checkout-success checkout-failure
-                // 解析path
-                let url = new URL(window.app_path(window.location.href));
+                let url = new URL(__getPixelAppPath(window.location.href));
                 // 页面浏览提取事件名
                 if (event.type === 'DOMContentLoaded') {
                     switch (url.pathname) {
                         case '/':
-                            this.initData.eventName = 'homepage'
+                            this.initData.eventName = 'homepage';
                             break;
                         case '/cart':
                         case '/cart.html':
-                            this.initData.eventName = 'view-cart'
+                            this.initData.eventName = 'view-cart';
                             break;
                         case '/checkout':
                         case '/checkout.html':
-                            this.initData.eventName = 'begin-checkout'
+                            this.initData.eventName = 'begin-checkout';
                             break;
                         case '/checkout/success':
                         case '/checkout/success.html':
-                            this.initData.eventName = 'checkout-success'
+                            this.initData.eventName = 'checkout-success';
                             break;
                         case '/checkout/failure':
                         case '/checkout/failure.html':
-                            this.initData.eventName = 'checkout-failure'
+                            this.initData.eventName = 'checkout-failure';
                             break;
                         case '/category':
                         case '/category.html':
-                            this.initData.eventName = 'category'
+                            this.initData.eventName = 'category';
                             break;
                         default:
-                            this.initData.eventName = 'click'
+                            this.initData.eventName = 'click';
                     }
                     if (this.initData.eventName === 'click') {
-                        // 如果是信息页面: 解析信息页面事件
                         if (url.pathname.startsWith('/page/')) {
-                            this.initData.eventName = 'page_' + url.pathname.replace('/page/', '').replace('.html', '')
+                            this.initData.eventName = 'page_' + url.pathname.replace('/page/', '').replace('.html', '');
                         } else if (url.pathname.startsWith('/product/')) {
-                            this.initData.eventName = 'view-item'
+                            this.initData.eventName = 'view-item';
                         } else if (url.pathname.startsWith('/blog')) {
-                            this.initData.eventName = 'blog'
+                            this.initData.eventName = 'blog';
                         } else if (url.pathname.startsWith('/account/')) {
-                            this.initData.eventName = 'account_' + url.pathname.replace('/account/', '').replace('.html', '')
+                            this.initData.eventName = 'account_' + url.pathname.replace('/account/', '').replace('.html', '');
                         }
                     }
                 }
 
-                // 使得自定义事件生效 根据点击的元素 class 设置事件名 weline-pixel::{name}
+                // 使得自定义事件生效
                 if (event.target.className && event.type === 'click') {
                     if (event.target.className.indexOf('weline-pixel::') > -1) {
                         let classNames = event.target.className.split(' ');
@@ -157,12 +245,12 @@
                         try {
                             let ele = event.target.getElementsByClassName('weline-pixel::' + this.initData.eventName + ':value')[0];
                             if (ele.value) {
-                                this.initData.value = ele.value
+                                this.initData.value = ele.value;
                             } else {
-                                this.initData.value = ele.innerText
+                                this.initData.value = ele.innerText;
                             }
                         } catch (e) {
-                            throw new Error('@lang{事件' + this.initData.eventName + '需要指定value值所在位置，请用weline-pixel::' + this.initData.eventName + ':value类名指定值所在的元素，如果指定的元素有value属性，则将使用value属性的值，如果没有则使用innerText}');
+                            throw new Error(__('事件{eventName}需要指定value值所在位置，请用weline-pixel::{eventName}:value类名指定值所在的元素').replace(/{eventName}/g, this.initData.eventName));
                         }
                     }
                 }
@@ -171,32 +259,23 @@
     } else {
         console.error('@lang{Weline Pixel: 不允许重复加载像素，同一个页面只允许一个像素加载，要添加事件请使用像素hook方式添加事件}');
     }
-    // 创建一个 iframe 沙箱
+    
+    // 创建 iframe 沙箱
     var iframe = document.getElementById('sandbox-pixel');
     iframe.onload = function () {
-        if (window.parent.frontend_api === undefined) {
-            throw new Error('@lang{Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base}');
-        }
         var iframeWindow = iframe.contentWindow;
-        iframeWindow.WelinePixel = window.WelinePixel
+        iframeWindow.WelinePixel = window.WelinePixel;
         // 监听沙盒中的 JavaScript 代码发送的消息
         window.addEventListener('message', function (event) {
             if (event.data === 'sandboxListen') {
-                // 监听父窗口的点击事件
-                // console.log('监听父窗口的点击事件', event)
                 window.addEventListener('click', function (event) {
-                    // 将点击事件转发到沙盒中的 JavaScript 代码
-                    // 深拷贝
                     window.WelinePixel.initData = JSON.parse(JSON.stringify(window.WelinePixel.init));
-                    window.WelinePixel.target(event)
+                    window.WelinePixel.target(event);
                     iframeWindow.postMessage(window.WelinePixel.initData, '*');
                 });
-                // 监听父窗口的点击事件
                 window.addEventListener('DOMContentLoaded', function (event) {
-                    // 将点击事件转发到沙盒中的 JavaScript 代码
-                    // console.log('将点击事件转发到沙盒中的 JavaScript 代码', event)
                     window.WelinePixel.initData = JSON.parse(JSON.stringify(window.WelinePixel.init));
-                    window.WelinePixel.target(event)
+                    window.WelinePixel.target(event);
                     iframeWindow.postMessage(window.WelinePixel.initData, '*');
                 });
             }
@@ -211,9 +290,7 @@
             </head>
             <body>
                 <script type="text/javascript">
-                // 发送消息到父窗口，监听点击事件
                     window.parent.postMessage('sandboxListen', '*');
-                    // 监听父窗口发送的消息
                     window.addEventListener('message', function(event) {
                         window.WelinePixel.initData = event.data;
                         if(window.WelinePixel.initData.eventName !== 'click') {
@@ -222,11 +299,9 @@
                             }
                             window.WelinePixel.send();
                         }
-                        // 自定义事件
                         if(window.WelinePixel.env_model === 'dev') {
                             console.log('@lang{自定义事件}', window.WelinePixel.initData);
                         }
-                        // 框架系统事件Weline_Visitor::taglib_pixel返回的自定义事件js代码，通过这个方式你可以向任何第三方转发数据
                         {{ pixel_code }}
                     });
                 <\/script>
@@ -235,6 +310,5 @@
         `);
     };
 
-    // 加载 iframe
     iframe.src = 'about:blank';
 </script>

@@ -58,6 +58,12 @@ class ObjectManager implements ManagerInterface
      * 使用 const 替代 readonly（静态属性不能是 readonly）
      */
     private const MAGIC_METHODS = ['__construct', '__destruct', '__clone', '__wakeup', '__sleep'];
+    
+    /**
+     * 性能优化：缓存接口检测结果
+     * 格式：['ClassName' => bool]
+     */
+    private static array $interfaceCache = [];
 
     private function __clone()
     {
@@ -285,39 +291,32 @@ class ObjectManager implements ManagerInterface
             }
         }
         
-        // 如果是接口，尝试查找对应的工厂类（必须在实例化之前检查）
-        // 注意：接口不能直接实例化，必须通过工厂类创建实现类实例
-        // 策略：先检查工厂类是否存在，如果存在且类名以Interface结尾，按接口处理
+        // 性能优化：使用缓存检测接口，减少重复的 interface_exists 调用
         $factoryClass = $class . 'Factory';
         
-        // 检查是否是接口：优先检查工厂类是否存在
-        // 如果类名以Interface结尾且有对应的Factory类，假设这是接口
-        // 这样可以避免interface_exists在autoload未生效时返回false的问题
-        $isInterface = false;
-        
-        // 检查1: 如果类名以Interface结尾，优先检查是否有对应的工厂类
-        // 直接使用class_exists确保autoload生效，不使用缓存避免缓存问题
-        if (str_ends_with($class, 'Interface')) {
-            // 先尝试加载工厂类（这会触发autoload）
-            $factoryExists = class_exists($factoryClass, true);
-            if ($factoryExists) {
-                $isInterface = true;
-            } else {
-                // 即使没有Factory类，也检查是否是接口
-                $isInterface = interface_exists($class, true);
-            }
-        } else {
-            // 检查2: 直接检查是否是接口（使用autoload确保接口被加载）
-            $isInterface = interface_exists($class, true);
+        // 检查接口缓存
+        if (!isset(self::$interfaceCache[$class])) {
+            $isInterface = false;
             
-            // 检查3: 如果不是接口且不是类，检查是否有对应的工厂类
-            if (!$isInterface && !class_exists($class, true)) {
-                if (class_exists($factoryClass, true)) {
-                    // 再次尝试检查接口（autoload可能现在才生效）
+            // 快速路径：以 Interface 结尾的类名
+            if (str_ends_with($class, 'Interface')) {
+                // 先检查工厂类
+                $factoryExists = class_exists($factoryClass, true);
+                $isInterface = $factoryExists || interface_exists($class, true);
+            } else {
+                // 检查是否是接口
+                $isInterface = interface_exists($class, true);
+                
+                // 如果不是接口且不是类，检查工厂类
+                if (!$isInterface && !class_exists($class, true) && class_exists($factoryClass, true)) {
                     $isInterface = interface_exists($class, true);
                 }
             }
+            
+            self::$interfaceCache[$class] = $isInterface;
         }
+        
+        $isInterface = self::$interfaceCache[$class];
         
         // 如果确认是接口，使用工厂类创建实现类实例
         if ($isInterface) {
@@ -686,20 +685,30 @@ class ObjectManager implements ManagerInterface
     }
     
     /**
+     * 缓存 __init 方法存在性检测结果
+     */
+    private static array $initMethodCache = [];
+    
+    /**
      * 调用对象的 __init 方法（如果存在）
      * 
-     * PHP 8 性能优化：直接调用，避免 method_exists 检查（PHP 8 方法调用更快）
+     * 性能优化：缓存方法存在性检测结果，避免每次都用 try-catch
      * 
      * @param mixed $object 对象实例
      * @return void
      */
     private static function callInitMethod($object): void
     {
-        // PHP 8 性能优化：使用 try-catch 替代 method_exists（在某些情况下更快）
-        try {
+        $className = $object::class;
+        
+        // 检查缓存
+        if (!isset(self::$initMethodCache[$className])) {
+            self::$initMethodCache[$className] = method_exists($object, '__init');
+        }
+        
+        // 如果方法存在，调用它
+        if (self::$initMethodCache[$className]) {
             $object->__init();
-        } catch (\Error $e) {
-            // 方法不存在，忽略
         }
     }
     
@@ -715,11 +724,14 @@ class ObjectManager implements ManagerInterface
     }
     
     /**
+     * 缓存 create 方法存在性检测结果
+     */
+    private static array $createMethodCache = [];
+    
+    /**
      * 处理工厂类：调用 create 方法创建实际对象
      * 
-     * PHP 8 性能优化：
-     * - 使用 try-catch 替代 method_exists
-     * - 提前返回特殊处理
+     * 性能优化：缓存方法存在性检测结果
      * 
      * @param string $class 工厂类名
      * @param mixed $factoryObject 工厂类实例
@@ -727,19 +739,24 @@ class ObjectManager implements ManagerInterface
      */
     private static function processFactoryClass(string $class, $factoryObject): mixed
     {
-        // PHP 8 性能优化：提前返回特殊处理
+        // 提前返回特殊处理
         if (self::isDbManagerFactory($class)) {
-            // DbManagerFactory 不需要调用 create()，因为它本身就可以作为连接使用
             return $factoryObject;
         }
         
-        // PHP 8 性能优化：直接调用，使用 try-catch 处理不存在的情况
-        try {
-            return $factoryObject->create();
-        } catch (\Error $e) {
-            // create 方法不存在，返回原对象
-            return $factoryObject;
+        $className = $factoryObject::class;
+        
+        // 检查缓存
+        if (!isset(self::$createMethodCache[$className])) {
+            self::$createMethodCache[$className] = method_exists($factoryObject, 'create');
         }
+        
+        // 如果 create 方法存在，调用它
+        if (self::$createMethodCache[$className]) {
+            return $factoryObject->create();
+        }
+        
+        return $factoryObject;
     }
     
     /**
@@ -783,12 +800,6 @@ class ObjectManager implements ManagerInterface
             // 处理参数合并：正确处理依赖注入参数和data参数
             $final_params = [];
             $data_param = null;
-            
-            // 提取data参数（如果存在）
-            if (isset($params['data'])) {
-                $data_param = $params['data'];
-                unset($params['data']);
-            }
             
             // 获取方法参数信息
             $method_ref = $instance->getMethod($method);

@@ -154,6 +154,13 @@ return [
         'doc' => 'frontend/partials/head/module-declarations.md',
     ],
     
+    // ==================== Theme Frontend Partials - Breadcrumb ====================
+    'Weline_Theme::frontend::partials::breadcrumb::items' => [
+        'name' => __('面包屑自定义内容（items）'),
+        'description' => __('覆盖前台主题的面包屑节点列表，允许其他模块输出自定义的面包屑结构（如基于分类层级、搜索结果等动态生成路径）。如果未实现此 Hook，将回退到主题默认的面包屑渲染逻辑。'),
+        'doc' => 'frontend/partials/breadcrumb/items.md',
+    ],
+    
     // ==================== Theme Frontend Layouts - Base ====================
     'Weline_Theme::frontend::layouts::base::head-before' => [
         'name' => __('基础布局头部之前'),
@@ -511,6 +518,13 @@ return [
         'name' => __('产品通用布局 Body 结束'),
         'description' => __('在渲染产品通用布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。适用于所有产品相关页面。'),
         'doc' => 'frontend/layouts/product/body-end.md',
+    ],
+
+    // ==================== Theme Frontend Layouts - Category ====================
+    'Weline_Theme::frontend::layouts::category::subcategories-filter' => [
+        'name' => __('分类页子分类筛选'),
+        'description' => __('在分类页左侧筛选栏中渲染子分类筛选区域，支持显示上级分类返回入口和当前分类的直接子分类列表。'),
+        'doc' => 'frontend/layouts/category/subcategories-filter.md',
     ],
     
     // ==================== Theme Frontend Header Actions (简单格式 Hook，向后兼容) ====================

@@ -99,16 +99,33 @@ class Daemon extends CommandAbstract
             }
         }
 
-        // 检查后台配置的映射
-        $mappings = $this->syncMapping->clear()
-            ->where(SyncMapping::fields_STATUS, 1)
+        // 检查所有映射（包括已停止的）
+        $allMappings = $this->syncMapping->clear()
             ->select()
             ->fetch()
             ->getItems();
 
-        foreach ($mappings as $mapping) {
+        foreach ($allMappings as $mapping) {
             $mappingId = $mapping->getId();
+            $status = (int)$mapping->getData(SyncMapping::fields_STATUS);
             
+            // 如果映射状态为停止（0），停止对应的 watcher（如果正在运行），然后跳过检测
+            if ($status === 0) {
+                if ($this->watcherService->isWatcherRunning($mappingId)) {
+                    $this->printer->warning("检测到映射 #{$mappingId} 已停止，正在停止对应的 watcher...");
+                    $result = $this->watcherService->stopWatcher($mappingId);
+                    
+                    if ($result['success']) {
+                        $this->printer->success("映射 #{$mappingId} 的 watcher 已停止");
+                    } else {
+                        $this->printer->error("停止映射 #{$mappingId} 的 watcher 失败: {$result['message']}");
+                    }
+                }
+                // 跳过已停止的映射，不进行同步检测
+                continue;
+            }
+            
+            // 只对状态为开启（1）的映射进行检测和重启
             if (!$this->watcherService->isWatcherRunning($mappingId)) {
                 $this->printer->warning("检测到映射 #{$mappingId} 未运行，正在重启...");
                 $result = $this->watcherService->startWatcher($mappingId);

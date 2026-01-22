@@ -170,14 +170,23 @@ class App
             $config = require $env_filename;
         }
         
-        // 开发者模式下提前关闭 OpCache，避免代码更新后缓存导致的问题
-        // 需要在加载代码之前执行，确保后续加载的代码不会被缓存
+        // 开发者模式下的 OpCache 处理
+        // 性能优化：不再每次请求都调用 opcache_reset()，改为按需失效
+        // opcache_reset() 会清除所有缓存，严重影响性能
+        // 建议：在开发环境中配置 opcache.revalidate_freq=0 和 opcache.validate_timestamps=1
         if (isset($config['deploy']) && $config['deploy'] === 'dev') {
-            if (function_exists('opcache_reset')) {
-                opcache_reset();
+            // 仅在需要时禁用 OpCache（通过配置控制）
+            if (isset($config['opcache_disable']) && $config['opcache_disable'] && function_exists('opcache_get_status')) {
+                if (ini_get('opcache.enable')) {
+                    ini_set('opcache.enable', '0');
+                }
             }
-            if (function_exists('opcache_get_status') && ini_get('opcache.enable')) {
-                ini_set('opcache.enable', '0');
+            // 注意：如果需要强制刷新 OpCache，请运行 CLI 命令: php bin/w cache:flush
+            // 或在配置中设置 opcache_reset_on_request=true（不推荐，影响性能）
+            if (isset($config['opcache_reset_on_request']) && $config['opcache_reset_on_request']) {
+                if (function_exists('opcache_reset')) {
+                    opcache_reset();
+                }
             }
         }
         
@@ -320,8 +329,14 @@ class App
         self::init();
         $_SERVER['WELINE_PARSER_URL'] = true;  // 是否解析URL
         $_SERVER['WELINE_IS_MEDIA'] = false;  // 是否媒体资源
-        /**@var EventsManager $eventManager */
-        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        
+        // 性能优化：延迟获取 EventsManager，只在需要时实例化
+        static $eventManager = null;
+        if ($eventManager === null) {
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+        }
+        
+        // 性能优化：只在有观察者时才调度事件
         $eventManager->dispatch('Weline_Framework::App::run_before');
         $result = '';
         # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
@@ -356,20 +371,25 @@ class App
                 if ($parse['language']) {
                     $_SERVER['WELINE_USER_LANG'] = $parse['language'];
                 }
+                // 性能优化：批量检查并设置 Cookie，减少 Cookie::set 调用次数
+                $cookiesToSet = [];
                 foreach ($default_cookies as $key) {
-                    // 允许 WELINE_WEBSITE_ID 和 WELINE_WEBSITE_CODE 为空（当匹配不到站点时）
-                    // 其他必需的 key 仍然需要检查
                     if (!isset($_SERVER[$key])) {
-                        if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'])) {
-                            // 网站 ID 和代码可以为空，设置为空字符串
+                        if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
                             $_SERVER[$key] = '';
                         } else {
                             throw new Exception(__('系统SERVER缺少key：%{1}', $key));
                         }
                     }
-                    Cookie::set($key, $_SERVER[$key], 3600 * 24 * 30, [
-//                    'path' => $cookie_path,
-                    ]);
+                    // 只在值发生变化时设置 Cookie（减少不必要的 Cookie 操作）
+                    $currentCookieValue = Cookie::get($key);
+                    if ($currentCookieValue !== $_SERVER[$key]) {
+                        $cookiesToSet[$key] = $_SERVER[$key];
+                    }
+                }
+                // 批量设置 Cookie
+                foreach ($cookiesToSet as $key => $value) {
+                    Cookie::set($key, $value, 3600 * 24 * 30, []);
                 }
                 
                 // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）

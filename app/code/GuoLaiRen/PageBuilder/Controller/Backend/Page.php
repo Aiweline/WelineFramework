@@ -12,6 +12,7 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Model\WebsiteUser;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -20,13 +21,16 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locals;
+use Weline\SystemConfig\Model\SystemConfig;
 use Weline\UrlManager\Model\UrlRewrite;
+use Weline\Websites\Model\Website as WebsiteModel;
+use Weline\Acl\Model\Acl as AclModel;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
 class Page extends BackendController
@@ -36,19 +40,28 @@ class Page extends BackendController
     private I18n $i18nModel;
     private Locals $localsModel;
     private Style $styleModel;
+    private WebsiteUser $websiteUserModel;
+    private WebsiteModel $websiteModel;
+    private AclModel $aclModel;
 
     public function __construct(
         PageModel $pageModel,
         LocalDescription $localDescriptionModel,
         I18n $i18nModel,
         Locals $localsModel,
-        Style $styleModel
+        Style $styleModel,
+        WebsiteUser $websiteUserModel,
+        WebsiteModel $websiteModel,
+        AclModel $aclModel
     ) {
         $this->pageModel = $pageModel->loadLocalDescription();
         $this->localDescriptionModel = $localDescriptionModel;
         $this->i18nModel = $i18nModel;
         $this->localsModel = $localsModel;
         $this->styleModel = $styleModel;
+        $this->websiteUserModel = $websiteUserModel;
+        $this->websiteModel = $websiteModel;
+        $this->aclModel = $aclModel;
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_index', '页面列表', 'mdi mdi-view-list', '查看页面列表')]
@@ -62,6 +75,29 @@ class Page extends BackendController
         // 克隆一个新的模型用于列表查询（不使用 loadLocalDescription 避免联表歧义）
         $listModel = clone $this->pageModel;
         $listModel->clear();
+        
+        // 根据当前后台用户可访问的站点过滤页面（超管和拥有站点分配权限的用户可查看所有站点）
+        $userId = (int)$this->session->getLoginUserID();
+        $isSuperAdmin = ($userId === 1); // 超管ID为1
+        $hasWebsiteAssignmentPermission = false;
+        if ($userId > 0 && !$isSuperAdmin) {
+            $hasWebsiteAssignmentPermission = $this->aclModel->isAllowed($userId, 'GuoLaiRen_PageBuilder::website_assignment', 'GET');
+        }
+        
+        if ($isSuperAdmin || $hasWebsiteAssignmentPermission) {
+            // 超管和拥有站点分配权限的用户可以查看所有站点，不添加过滤条件
+            // 不添加任何 where 条件，也不需要检查站点分配
+        } else {
+            // 普通用户：需要检查站点分配情况
+            $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+            if (!empty($accessibleWebsiteIds)) {
+                // 只能查看被分配的站点
+                $listModel->where(PageModel::fields_WEBSITE_ID, $accessibleWebsiteIds, 'in');
+            } else {
+                // 如果没有可访问的站点，则不返回任何页面
+                $listModel->where(PageModel::fields_WEBSITE_ID, -1);
+            }
+        }
         
         // 搜索功能
         if ($search = $this->request->getGet('search')) {
@@ -138,6 +174,10 @@ class Page extends BackendController
         // 获取所有页面类型
         $this->assign('page_types', PageModel::getPageTypes());
         
+        // 站点选择：根据当前后台用户可访问的站点列表
+        $availableWebsites = $this->getAvailableWebsitesForCurrentUser();
+        $this->assign('websites', $availableWebsites);
+        
         // 样式列表将通过AJAX加载，这里传空数组
         $this->assign('styles', []);
         
@@ -177,7 +217,140 @@ class Page extends BackendController
         }
         $this->assign('parent_page_data', $parentPageData);
         
+        // 读取AI功能配置
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
+        $this->assign('ai_enabled', $aiEnabled);
+
+        // 读取多语言功能配置
+        $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $this->assign('i18n_enabled', $i18nEnabled);
+
+        // 如果多语言功能关闭，清空active_locales和selected_locales
+        if ($i18nEnabled !== '1') {
+            $this->assign('active_locales', []);
+            $this->assign('selected_locales', []);
+        }
+        
         return $this->fetch('form');
+    }
+
+    /**
+     * 构建单个页面的 Google SEO WebPage 结构化数据
+     */
+    private function buildStructuredDataForPage(PageModel $page): array
+    {
+        $baseHost = $this->request ? ($this->request->getBaseHost() ?? '') : '';
+        $handle = (string)$page->getData(PageModel::fields_HANDLE);
+        $pageUrl = '';
+        if ($baseHost !== '') {
+            $pageUrl = rtrim(rtrim($baseHost, '/'), ':') . '/' . ltrim($handle, '/');
+        }
+        
+        $locale = Cookie::getLang();
+        $title = (string)($page->getData(PageModel::fields_META_TITLE) ?: $page->getData(PageModel::fields_TITLE));
+        $description = (string)$page->getData(PageModel::fields_META_DESCRIPTION);
+        
+        $data = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebPage',
+            'name' => $title,
+            'url' => $pageUrl,
+            'inLanguage' => $locale,
+            'description' => $description,
+        ];
+        
+        $createTime = (string)($page->getData(PageModel::fields_CREATE_TIME) ?? '');
+        $updateTime = (string)($page->getData(PageModel::fields_UPDATE_TIME) ?? '');
+        if ($createTime !== '') {
+            $data['datePublished'] = $createTime;
+        }
+        if ($updateTime !== '') {
+            $data['dateModified'] = $updateTime;
+        }
+        
+        return $data;
+    }
+
+    /**
+     * 获取当前后台用户可访问的站点ID列表
+     * - 超管（ID为1）和拥有站点分配权限（GuoLaiRen_PageBuilder::website_assignment）的用户：返回空数组，表示不做限制
+     * - 普通用户：返回其被分配到的站点ID列表
+     */
+    private function getAccessibleWebsiteIds(): array
+    {
+        try {
+            $userId = (int)$this->session->getLoginUserID();
+            if ($userId <= 0) {
+                return [];
+            }
+
+            // 超管（ID为1）可以查看所有站点
+            if ($userId === 1) {
+                return [];
+            }
+
+            // 如果拥有站点分配权限，则不限制站点（查看所有站点）
+            if ($this->aclModel->isAllowed($userId, 'GuoLaiRen_PageBuilder::website_assignment', 'GET')) {
+                return [];
+            }
+
+            // 普通用户：查找其被分配到的站点
+            $mapping = clone $this->websiteUserModel;
+            $items = $mapping->clear()
+                ->where(WebsiteUser::fields_BACKEND_USER_ID, $userId)
+                ->select()
+                ->fetch()
+                ->getItems();
+
+            $ids = [];
+            foreach ($items as $item) {
+                $ids[] = (int)$item->getData(WebsiteUser::fields_WEBSITE_ID);
+            }
+            return array_values(array_unique(array_filter($ids)));
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * 获取当前用户可用的站点列表（用于新建页面时的站点选择）
+     */
+    private function getAvailableWebsitesForCurrentUser(): array
+    {
+        $accessibleIds = $this->getAccessibleWebsiteIds();
+
+        $websiteModel = clone $this->websiteModel;
+        $query = $websiteModel->clearQuery();
+
+        if (!empty($accessibleIds)) {
+            $query->where(WebsiteModel::fields_ID, $accessibleIds, 'in');
+        }
+
+        return $query->select()->fetchArray();
+    }
+
+    /**
+     * 获取当前用户可用的站点列表（编辑时保留当前页面站点）
+     */
+    private function getAvailableWebsitesForUserWithCurrentSelection(int $currentWebsiteId): array
+    {
+        $websites = $this->getAvailableWebsitesForCurrentUser();
+        $ids = array_column($websites, 'website_id');
+
+        // 如果当前页面的站点不在可用列表中（例如超管或站点分配刚调整），尝试补充进列表
+        if ($currentWebsiteId > 0 && !in_array($currentWebsiteId, $ids, true)) {
+            $extra = clone $this->websiteModel;
+            $extra->clear()->load($currentWebsiteId);
+            if ($extra->getWebsiteId()) {
+                $websites[] = $extra->getData();
+            }
+        }
+
+        return $websites;
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_create_post', '新建页面请求', '', '新建页面请求', 'GuoLaiRen_PageBuilder::page_builder')]
@@ -229,7 +402,7 @@ class Page extends BackendController
                     if (!empty($parentPageParentId) && $parentPageParentId > 0) {
                         // 将parent_id调整为父页面的父级页面（即顶级页面）
                         $parentId = (int)$parentPageParentId;
-                        $this->getMessageManager()->addWarning(
+                        MessageManager::warning(
                             __('子页面不能分配给子页面，已自动调整为顶级页面：%{1}', $parentId)
                         );
                         // 重新加载父页面模型（因为parentId已经改变）
@@ -246,12 +419,12 @@ class Page extends BackendController
                     }
                     
                     // 显示继承信息
-                    $this->getMessageManager()->addSuccess(__('子页面已继承父页面配置'));
+                    MessageManager::success(__('子页面已继承父页面配置'));
                     if (DEV) {
-                        $this->getMessageManager()->addSuccess(__('父页面ID：%{1}', $parentId));
-                        $this->getMessageManager()->addSuccess(__('继承样式：%{1}', $data['style'] ?? '无'));
-                        $this->getMessageManager()->addSuccess(__('继承Logo：%{1}', $data['logo'] ?? '无'));
-                        $this->getMessageManager()->addSuccess(__('继承默认语言：%{1}', $defaultLocale));
+                        MessageManager::success(__('父页面ID：%{1}', $parentId));
+                        MessageManager::success(__('继承样式：%{1}', $data['style'] ?? '无'));
+                        MessageManager::success(__('继承Logo：%{1}', $data['logo'] ?? '无'));
+                        MessageManager::success(__('继承默认语言：%{1}', $defaultLocale));
                     }
                 }
             }
@@ -286,19 +459,31 @@ class Page extends BackendController
                 ->setData(PageModel::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
                 ->setData(PageModel::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
                 ->setData(PageModel::fields_REDIRECT_URL, $data['redirect_url'] ?? '')
+                ->setData(PageModel::fields_HEADER_CUSTOM_CODE, $data['header_custom_code'] ?? '')
+                ->setData(PageModel::fields_FOOTER_CUSTOM_CODE, $data['footer_custom_code'] ?? '')
                 ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT);
+            
+            // 关联站点：仅允许设置为当前用户可访问的站点
+            $websiteId = (int)($data['website_id'] ?? 0);
+            $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+            if ($websiteId > 0 && (!empty($accessibleWebsiteIds) && in_array($websiteId, $accessibleWebsiteIds, true))) {
+                $page->setData(PageModel::fields_WEBSITE_ID, $websiteId);
+            } elseif ($websiteId > 0 && empty($accessibleWebsiteIds)) {
+                // 超管或未限制站点时，允许自由设置
+                $page->setData(PageModel::fields_WEBSITE_ID, $websiteId);
+            }
             
             $page->save(true);
             
             // 自动创建 URL 重写规则
             $this->createOrUpdateUrlRewrite($page);
             
-            $this->getMessageManager()->addSuccess(__('页面创建成功！'));
+            MessageManager::success(__('页面创建成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('页面创建失败！'));
+            MessageManager::warning(__('页面创建失败！'));
             if (DEV) {
-                $this->getMessageManager()->addException($exception);
+                MessageManager::exception($exception);
             }
             $this->redirect('*/backend/page/create');
         }
@@ -312,7 +497,7 @@ class Page extends BackendController
         
         $pageId = $this->request->getGet('id');
         if (!$pageId) {
-            $this->getMessageManager()->addError(__('页面ID不能为空！'));
+            MessageManager::error(__('页面ID不能为空！'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -321,7 +506,16 @@ class Page extends BackendController
         $page->clear()->loadLocalDescription()->load($pageId);
         
         if (!$page->getId()) {
-            $this->getMessageManager()->addError(__('页面不存在！'));
+            MessageManager::error(__('页面不存在！'));
+            $this->redirect('*/backend/page/index');
+            return;
+        }
+        
+        // 权限校验：仅允许访问有权限管理对应站点的页面（除非拥有站点分配权限）
+        $pageWebsiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+        $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+        if (!empty($accessibleWebsiteIds) && $pageWebsiteId > 0 && !in_array($pageWebsiteId, $accessibleWebsiteIds, true)) {
+            MessageManager::error(__('您没有权限编辑该页面所属的站点。'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -376,6 +570,10 @@ class Page extends BackendController
         
         // 获取所有页面类型
         $this->assign('page_types', PageModel::getPageTypes());
+        
+        // 站点选择：根据当前后台用户可访问的站点列表
+        $availableWebsites = $this->getAvailableWebsitesForUserWithCurrentSelection($pageWebsiteId);
+        $this->assign('websites', $availableWebsites);
         
         // 获取父页面列表（排除自己）
         $parentPages = clone $this->pageModel;
@@ -434,19 +632,34 @@ class Page extends BackendController
         $this->assign('translations', $translationsData);
         $this->assign('localized_contents', $localizedContents);
         
-        // 检查未翻译的语言
-        $missingTranslations = [];
-        foreach ($selectedLocales as $locale) {
-            if (!isset($translationsData[$locale])) {
-                $localeName = $this->i18nModel->getLocaleName($locale);
-                $missingTranslations[] = $localeName;
+        // 读取多语言功能配置
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $this->assign('i18n_enabled', $i18nEnabled);
+
+        // 检查未翻译的语言（仅在多语言功能开启时检查）
+        if ($i18nEnabled === '1') {
+            $missingTranslations = [];
+            foreach ($selectedLocales as $locale) {
+                if (!isset($translationsData[$locale])) {
+                    $localeName = $this->i18nModel->getLocaleName($locale);
+                    $missingTranslations[] = $localeName;
+                }
+            }
+            
+            if (!empty($missingTranslations)) {
+                MessageManager::warning(
+                    __('页面还有以下语言未翻译：%{1}', implode(', ', $missingTranslations))
+                );
             }
         }
-        
-        if (!empty($missingTranslations)) {
-            $this->getMessageManager()->addWarning(
-                __('页面还有以下语言未翻译：%{1}', implode(', ', $missingTranslations))
-            );
+
+        // 如果多语言功能关闭，清空active_locales和selected_locales
+        if ($i18nEnabled !== '1') {
+            $this->assign('active_locales', []);
+            $this->assign('selected_locales', []);
         }
         
         // 样式列表将通过AJAX加载，这里传空数组
@@ -499,7 +712,125 @@ class Page extends BackendController
         $this->assign('style_configs', $styleConfigs);
         $this->assign('style_settings', $currentStyleSettings);
         
+        // 生成并分配 Google SEO JSON-LD 结构化数据（只读展示用）
+        try {
+            $structuredData = $this->buildStructuredDataForPage($page);
+            $this->assign(
+                'seo_structured_data_json',
+                json_encode($structuredData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+            );
+        } catch (\Throwable $e) {
+            $this->assign('seo_structured_data_json', '');
+        }
+        
+        // 读取AI功能配置
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
+        $this->assign('ai_enabled', $aiEnabled);
+        
         return $this->fetch('form');
+    }
+
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_auto_save_seo', '自动保存SEO配置', '', '通过可视化编辑器保存TDK到页面记录', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function autoSaveSeo()
+    {
+        try {
+            // 获取 JSON 请求体
+            $rawBody = file_get_contents('php://input');
+            $data = json_decode($rawBody ?? '', true);
+
+            if (!is_array($data) || !$data) {
+                $data = [
+                    'page_id' => (int)$this->request->getPost('page_id'),
+                    'meta_title' => (string)($this->request->getPost('meta_title', '') ?? ''),
+                    'meta_description' => (string)($this->request->getPost('meta_description', '') ?? ''),
+                    'meta_keywords' => (string)($this->request->getPost('meta_keywords', '') ?? ''),
+                    'locale' => (string)($this->request->getPost('locale', '') ?? ''),
+                ];
+            }
+
+            $pageId = (int)($data['page_id'] ?? 0);
+            if ($pageId <= 0) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面ID不能为空！'),
+                ]);
+            }
+
+            $page = clone $this->pageModel;
+            $page->clear()->load($pageId);
+            if (!$page->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面不存在！'),
+                ]);
+            }
+
+            $metaTitle = (string)($data['meta_title'] ?? '');
+            $metaDescription = (string)($data['meta_description'] ?? '');
+            $metaKeywords = (string)($data['meta_keywords'] ?? '');
+            $locale = (string)($data['locale'] ?? '');
+
+            $defaultLocale = (string)($page->getData(PageModel::fields_DEFAULT_LOCALE) ?? '');
+            $isTranslationScope = $locale !== '' && $defaultLocale !== '' && $locale !== $defaultLocale;
+
+            if ($isTranslationScope) {
+                // 多语言场景：保存到 LocalDescription 表
+                $localDesc = clone $this->localDescriptionModel;
+                $existing = $localDesc->clear()
+                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where('local_code', $locale)
+                    ->find()
+                    ->fetch();
+
+                if ($existing && $existing->getId()) {
+                    $existing
+                        ->setData(LocalDescription::fields_META_TITLE, $metaTitle)
+                        ->setData(LocalDescription::fields_META_DESCRIPTION, $metaDescription)
+                        ->setData(LocalDescription::fields_META_KEYWORDS, $metaKeywords)
+                        ->save();
+                } else {
+                    $newLocal = clone $this->localDescriptionModel;
+                    $newLocal->clearData()
+                        ->setData(LocalDescription::fields_ID, $pageId)
+                        ->setData('local_code', $locale)
+                        ->setData(LocalDescription::fields_NAME, $page->getData(PageModel::fields_NAME))
+                        ->setData(LocalDescription::fields_TITLE, $page->getData(PageModel::fields_TITLE))
+                        ->setData(LocalDescription::fields_CONTENT, $page->getData(PageModel::fields_CONTENT))
+                        ->setData(LocalDescription::fields_META_TITLE, $metaTitle)
+                        ->setData(LocalDescription::fields_META_DESCRIPTION, $metaDescription)
+                        ->setData(LocalDescription::fields_META_KEYWORDS, $metaKeywords)
+                        ->save(true);
+                }
+            } else {
+                // 默认语言或未指定语言：直接更新页面主表 SEO 字段
+                $page
+                    ->setData(PageModel::fields_META_TITLE, $metaTitle)
+                    ->setData(PageModel::fields_META_DESCRIPTION, $metaDescription)
+                    ->setData(PageModel::fields_META_KEYWORDS, $metaKeywords)
+                    ->save();
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('SEO 配置已保存'),
+                'data' => [
+                    'page_id' => $pageId,
+                    'locale' => $locale,
+                    'scope' => $isTranslationScope ? 'translation' : 'page',
+                    'meta_title' => $metaTitle,
+                    'meta_description' => $metaDescription,
+                    'meta_keywords' => $metaKeywords,
+                ],
+            ]);
+        } catch (\Exception $exception) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit_post', '编辑页面请求', '', '编辑页面请求')]
@@ -516,6 +847,13 @@ class Page extends BackendController
                 throw new \Exception(__('页面不存在！'));
             }
             
+            // 权限校验：编辑时也要验证站点归属
+            $pageWebsiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+            $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+            if (!empty($accessibleWebsiteIds) && $pageWebsiteId > 0 && !in_array($pageWebsiteId, $accessibleWebsiteIds, true)) {
+                throw new \Exception(__('您没有权限编辑该页面所属的站点。'));
+            }
+            
             // 检查当前页面是否有父页面，如果有则强制继承父页面配置
             $currentParentId = $page->getData(PageModel::fields_PARENT_ID);
             
@@ -528,7 +866,7 @@ class Page extends BackendController
                         $childPage->setData(PageModel::fields_PARENT_ID, $currentParentId);
                         $childPage->save();
                     }
-                    $this->getMessageManager()->addSuccess(
+                    MessageManager::success(
                         __('已将 %{1} 个子页面提升到父级页面', count($currentChildPages))
                     );
                 }
@@ -560,7 +898,7 @@ class Page extends BackendController
                         $selectedLocales[] = $defaultLocale;
                     }
                     
-                    $this->getMessageManager()->addSuccess(__('子页面配置已从父页面继承'));
+                    MessageManager::success(__('子页面配置已从父页面继承'));
                 }
             } else {
                 // 非子页面，正常处理语言设置
@@ -642,14 +980,14 @@ class Page extends BackendController
                                 $childPage->setData(PageModel::fields_PARENT_ID, $grandParentId);
                                 $childPage->save();
                             }
-                            $this->getMessageManager()->addSuccess(
+                            MessageManager::success(
                                 __('已将 %{1} 个子页面提升到父级页面', count($currentChildPages))
                             );
                         }
                         
                         // 3. 将当前页面的parent_id也调整为顶级页面
                         $newParentId = $grandParentId;
-                        $this->getMessageManager()->addWarning(
+                        MessageManager::warning(
                             __('子页面不能分配给子页面，已自动调整为顶级页面：%{1}', $newParentId)
                         );
                     }
@@ -678,8 +1016,21 @@ class Page extends BackendController
                 PageModel::fields_META_DESCRIPTION => $data['meta_description'] ?? '',
                 PageModel::fields_META_KEYWORDS => $data['meta_keywords'] ?? '',
                 PageModel::fields_REDIRECT_URL => $data['redirect_url'] ?? '',
+                PageModel::fields_HEADER_CUSTOM_CODE => $data['header_custom_code'] ?? '',
+                PageModel::fields_FOOTER_CUSTOM_CODE => $data['footer_custom_code'] ?? '',
                 PageModel::fields_STATUS => $data['status'] ?? PageModel::STATUS_DRAFT,
             ];
+            
+            // 关联站点：仅允许设置为当前用户可访问的站点
+            $websiteId = (int)($data['website_id'] ?? 0);
+            if ($websiteId > 0) {
+                if (!empty($accessibleWebsiteIds) && in_array($websiteId, $accessibleWebsiteIds, true)) {
+                    $updateData[PageModel::fields_WEBSITE_ID] = $websiteId;
+                } elseif (empty($accessibleWebsiteIds)) {
+                    // 超管或未限制站点时，允许自由设置
+                    $updateData[PageModel::fields_WEBSITE_ID] = $websiteId;
+                }
+            }
             
             // CTA 事件名称
             $updateData[PageModel::fields_CTA_EVENT_NAME] = $ctaEventName;
@@ -765,7 +1116,7 @@ class Page extends BackendController
                 }
             }
             
-            $this->getMessageManager()->addSuccess(__('页面更新成功！'));
+            MessageManager::success(__('页面更新成功！'));
             
             // 检查是否为AJAX请求
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
@@ -788,12 +1139,12 @@ class Page extends BackendController
                 $errorMessage = __('数据重复，请检查页面句柄是否已被使用');
             }
             
-            $this->getMessageManager()->addWarning(__('页面更新失败！'));
+            MessageManager::warning(__('页面更新失败！'));
             if (DEV) {
-                $this->getMessageManager()->addException($exception);
-                $this->getMessageManager()->addError('详细错误: ' . $errorMessage);
+                MessageManager::exception($exception);
+                MessageManager::error('详细错误: ' . $errorMessage);
             } else {
-                $this->getMessageManager()->addError($errorMessage);
+                MessageManager::error($errorMessage);
             }
             
             // 检查是否为AJAX请求
@@ -816,7 +1167,7 @@ class Page extends BackendController
     public function postPublish()
     {
         // 功能建设中
-        $this->getMessageManager()->addWarning(__('功能建设中，敬请期待！'));
+        MessageManager::warning(__('功能建设中，敬请期待！'));
         $this->redirect('*/backend/page/index');
     }
 
@@ -849,11 +1200,11 @@ class Page extends BackendController
                 ->delete()
                 ->fetch();
             
-            $this->getMessageManager()->addSuccess(__('页面删除成功！'));
+            MessageManager::success(__('页面删除成功！'));
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('页面删除失败！'));
+            MessageManager::warning(__('页面删除失败！'));
             if (DEV) {
-                $this->getMessageManager()->addException($exception);
+                MessageManager::exception($exception);
             }
         }
         
@@ -867,7 +1218,7 @@ class Page extends BackendController
         $locale = $this->request->getGet('locale');
         
         if (!$pageId || !$locale) {
-            $this->getMessageManager()->addError(__('参数错误！'));
+            MessageManager::error(__('参数错误！'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -876,7 +1227,7 @@ class Page extends BackendController
         $page->clear()->load($pageId);
         
         if (!$page->getId()) {
-            $this->getMessageManager()->addError(__('页面不存在！'));
+            MessageManager::error(__('页面不存在！'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -928,12 +1279,12 @@ class Page extends BackendController
                 ->setData(LocalDescription::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
                 ->save(true);
             
-            $this->getMessageManager()->addSuccess(__('翻译保存成功！'));
+            MessageManager::success(__('翻译保存成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
-            $this->getMessageManager()->addWarning(__('翻译保存失败！'));
+            MessageManager::warning(__('翻译保存失败！'));
             if (DEV) {
-                $this->getMessageManager()->addException($exception);
+                MessageManager::exception($exception);
             }
             $this->redirect('*/backend/page/translate', [
                 'id' => $this->request->getGet('id'),
@@ -973,6 +1324,7 @@ class Page extends BackendController
                     'description' => $style->getData(Style::fields_DESCRIPTION),
                     'path' => $style->getData(Style::fields_PATH),
                     'preview_image' => $style->getData(Style::fields_PREVIEW_IMAGE),
+                    'supported_types' => $style->getSupportedTypes(),
                 ];
             }
             
@@ -1279,7 +1631,7 @@ class Page extends BackendController
         $locale = $this->request->getGet('locale', State::getLang());
         
         if (!$pageId) {
-            $this->getMessageManager()->addError(__('页面ID不能为空！'));
+            MessageManager::error(__('页面ID不能为空！'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -1289,7 +1641,7 @@ class Page extends BackendController
         $page->clear()->load($pageId);
         
         if (!$page->getId()) {
-            $this->getMessageManager()->addError(__('页面不存在！'));
+            MessageManager::error(__('页面不存在！'));
             $this->redirect('*/backend/page/index');
             return;
         }
@@ -2037,7 +2389,7 @@ class Page extends BackendController
             $pageId = (int)$this->request->getGet('id');
             
             if (!$pageId) {
-                $this->getMessageManager()->addError(__('页面ID不能为空'));
+                MessageManager::error(__('页面ID不能为空'));
                 $this->redirect('*/backend/page/index');
                 return;
             }
@@ -2047,7 +2399,7 @@ class Page extends BackendController
             $page->load($pageId);
             
             if (!$page->getId()) {
-                $this->getMessageManager()->addError(__('页面不存在'));
+                MessageManager::error(__('页面不存在'));
                 $this->redirect('*/backend/page/index');
                 return;
             }
@@ -2057,13 +2409,13 @@ class Page extends BackendController
             $parentId = $page->getData(PageModel::fields_PARENT_ID);
             
             if ($pageType !== PageModel::TYPE_HOME) {
-                $this->getMessageManager()->addError(__('只有首页类型的页面可以导出'));
+                MessageManager::error(__('只有首页类型的页面可以导出'));
                 $this->redirect('*/backend/page/index');
                 return;
             }
             
             if (!empty($parentId) && $parentId != 0) {
-                $this->getMessageManager()->addError(__('只有顶级页面可以导出'));
+                MessageManager::error(__('只有顶级页面可以导出'));
                 $this->redirect('*/backend/page/index');
                 return;
             }
@@ -2215,7 +2567,7 @@ class Page extends BackendController
                 exit;
             }
             
-            $this->getMessageManager()->addError(__('导出失败：%1', $e->getMessage()));
+            MessageManager::error(__('导出失败：%1', $e->getMessage()));
             $this->redirect('*/backend/page/index');
         }
     }
