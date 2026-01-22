@@ -74,6 +74,23 @@ function syncFile(filePath) {
 function syncToRemote(filePath, remotePath) {
     return new Promise((resolve, reject) => {
         const localPath = mapping.local_path;
+
+        // 如果指定了文件路径，且文件大于 1MB，则跳过同步，避免大文件影响同步效率
+        if (filePath) {
+            try {
+                const stat = fs.statSync(filePath);
+                const maxSizeBytes = 1 * 1024 * 1024; // 1MB
+                if (stat.isFile() && stat.size > maxSizeBytes) {
+                    const sizeMb = (stat.size / 1024 / 1024).toFixed(2);
+                    log(`跳过大文件同步(>${1}MB): ${filePath} (${sizeMb} MB)`);
+                    resolve();
+                    return;
+                }
+            } catch (e) {
+                // 获取文件信息失败时，记录日志但不中断整体流程
+                log(`检查文件大小失败: ${filePath} - ${e.message}`);
+            }
+        }
         
         // 构建rsync命令
         const rsyncArgs = [

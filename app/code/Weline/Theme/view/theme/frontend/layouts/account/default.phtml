@@ -34,6 +34,13 @@
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     @template(Weline_Frontend::templates/public/header.phtml)
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+
+    <!-- 个人中心布局的面包屑导航区域 -->
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
     
     <div class="account-dashboard <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-dashboard" data-layout="account_dashboard">
         <if condition="meta.sidebar">

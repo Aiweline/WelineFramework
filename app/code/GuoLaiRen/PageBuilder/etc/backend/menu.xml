@@ -39,5 +39,23 @@
          icon="mdi mdi-palette" 
          order="30"/>
     
+    <!-- 站点分配子菜单（用于管理站点与后台用户一对一关系） -->
+    <add source="GuoLaiRen_PageBuilder::website_assignment" 
+         name="website_assignment" 
+         title="站点分配" 
+         action="pagebuilder/backend/website/index"
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-shield-account" 
+         order="40"/>
+    
+    <!-- 配置子菜单 -->
+    <add source="GuoLaiRen_PageBuilder::config" 
+         name="config" 
+         title="配置" 
+         action="pagebuilder/backend/config/index"
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-cog" 
+         order="50"/>
+    
 </menus>
 

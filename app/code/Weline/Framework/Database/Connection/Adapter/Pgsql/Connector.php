@@ -16,7 +16,6 @@ namespace Weline\Framework\Database\Connection\Adapter\Pgsql;
 
 use PDO;
 use PDOException;
-use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlDialectAdapter;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlIdentifierFormatter;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlTableNameStrategy;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Alter;
@@ -44,8 +43,7 @@ final class Connector extends Query implements ConnectorInterface
         );
         parent::__construct(
             $identifierFormatter,
-            $tableStrategy,
-            new PgsqlDialectAdapter()
+            $tableStrategy
         );
         $this->db_name = $this->configProvider->getDatabase() ?: 'public';
     }

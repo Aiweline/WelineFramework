@@ -95,11 +95,12 @@ class Local implements \Weline\Taglib\TaglibInterface
             $submitText = __('提交');
             return match ($tag_key) {
                 'tag' => <<<TAG
-                    <a class='d-flex align-items-center link-info gap-1' style='cursor: pointer'
+                    <a class='d-flex align-items-center link-info gap-1 local-translation-link' style='cursor: pointer'
                         data-bs-toggle='offcanvas'
                         data-bs-target='#{$idName}' 
                         aria-controls='{$idName}'
-                        data-href='{$action}&value={$name}&id={$parserId}'>
+                        data-href='{$action}&value={$name}&id={$parserId}'
+                        data-i18n-local-translation-link>
                         <span>{$name}</span>
                         <i class='ri-translate'></i>
                     </a>

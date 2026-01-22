@@ -102,5 +102,20 @@ interface HookInterface
     const CHECKOUT_BACKEND_ORDER_LIST_FILTERS = 'Weline_Checkout::backend::order::list::filters';
     const CHECKOUT_BACKEND_ORDER_VIEW_BEFORE = 'Weline_Checkout::backend::order::view::before';
     const CHECKOUT_BACKEND_ORDER_VIEW_AFTER = 'Weline_Checkout::backend::order::view::after';
+
+    // ==================== Admin Backend Dashboard ====================
+    /**
+     * 后台首页顶部统计卡片区域
+     *
+     * 命名格式：Weline_Admin::backend::layouts::dashboard::top-statistics
+     */
+    const ADMIN_BACKEND_DASHBOARD_TOP_STATISTICS = 'Weline_Admin::backend::layouts::dashboard::top-statistics';
+
+    /**
+     * 后台首页主要概览区域
+     *
+     * 命名格式：Weline_Admin::backend::layouts::dashboard::main-overview
+     */
+    const ADMIN_BACKEND_DASHBOARD_MAIN_OVERVIEW = 'Weline_Admin::backend::layouts::dashboard::main-overview';
 }
 

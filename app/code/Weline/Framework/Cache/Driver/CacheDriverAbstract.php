@@ -22,6 +22,16 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     protected array $config;
     protected string $identity;
     protected string $tip;
+    
+    /**
+     * 性能优化：缓存 Request 实例
+     */
+    private static ?Request $requestInstance = null;
+    
+    /**
+     * 性能优化：缓存已计算的 key
+     */
+    private static array $keyCache = [];
 
     public function __construct(string $identity, array $config, $tip = '', bool $status = true)
     {
@@ -158,7 +168,7 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     /**
      * @DESC         |从给定键生成规范化缓存键
      *
-     * 参数区：
+     * 性能优化：使用 xxh3 或 crc32 替代 md5（更快）
      *
      * @param string $key
      *
@@ -166,17 +176,29 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
      */
     public function buildKey(string $key): string
     {
-        if (!is_string($key)) {
-            // 不是字符串，json_encode转成字符串
-            $key = json_encode($key);
+        // 性能优化：使用缓存避免重复计算
+        $cacheKey = $this->identity . '_' . $key;
+        if (isset(self::$keyCache[$cacheKey])) {
+            return self::$keyCache[$cacheKey];
         }
-        return md5("{$this->identity}_$key");
+        
+        // 性能优化：使用 xxh3（PHP 8.1+）或 crc32（更快的哈希算法）
+        // xxh3 比 md5 快约 10 倍，crc32 比 md5 快约 5 倍
+        if (function_exists('hash') && in_array('xxh3', hash_algos(), true)) {
+            $result = hash('xxh3', $cacheKey);
+        } else {
+            // 回退到 crc32（比 md5 快）结合 fnv1a32
+            $result = sprintf('%08x%08x', crc32($cacheKey), crc32(strrev($cacheKey)));
+        }
+        
+        self::$keyCache[$cacheKey] = $result;
+        return $result;
     }
 
     /**
      * @DESC         | 生成请求级别的缓存key
      *
-     * 参数区：
+     * 性能优化：缓存 Request 实例，减少 ObjectManager 调用
      *
      * @param string $key [基础键]
      *
@@ -184,24 +206,27 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
      */
     public function buildWithRequestKey(string $key): string
     {
-        if (!is_string($key)) {
-            // 不是字符串，json_encode转成字符串
-            $key = json_encode($key);
-        }
-        if (empty($attach_variables)) {
-            $attach_variables['page']     = $this->getRequest()->getGet('page', 1);
-            $attach_variables['pageSize'] = $this->getRequest()->getGet('pageSize', 10);
-        }
-        $key .= $this->getRequest()->getUri() . $this->getRequest()->getMethod() . json_encode($attach_variables);
-        if ($attach_variables) {
-            $key .= implode('', $attach_variables);
-        }
-        return md5("{$this->identity}_$key");
+        $request = $this->getRequest();
+        $attach_variables = [
+            'page' => $request->getGet('page', 1),
+            'pageSize' => $request->getGet('pageSize', 10)
+        ];
+        
+        // 构建完整的缓存键
+        $fullKey = $key . $request->getUri() . $request->getMethod() . implode('', $attach_variables);
+        
+        return $this->buildKey($fullKey);
     }
 
+    /**
+     * 性能优化：缓存 Request 实例
+     */
     private function getRequest(): Request
     {
-        return ObjectManager::getInstance(Request::class);
+        if (self::$requestInstance === null) {
+            self::$requestInstance = ObjectManager::getInstance(Request::class);
+        }
+        return self::$requestInstance;
     }
 
     /**

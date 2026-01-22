@@ -34,6 +34,16 @@ class EventsManager
      * @var EventRegistry
      */
     private EventRegistry $eventRegistry;
+    
+    /**
+     * 性能优化：缓存事件观察者查找结果
+     */
+    private array $observerCache = [];
+    
+    /**
+     * 性能优化：缓存模块状态检查结果
+     */
+    private static array $moduleStatusCache = [];
 
     /**
      * 当前正在执行的事件名栈（支持事件嵌套）
@@ -100,6 +110,11 @@ class EventsManager
 
     public function getEventObservers(string $eventName)
     {
+        // 性能优化：检查缓存
+        if (isset($this->observerCache[$eventName])) {
+            return $this->observerCache[$eventName];
+        }
+        
         // 优先从 generated/events.php 读取观察者（性能优化）
         $registry = $this->eventRegistry->getRegistry();
         
@@ -121,21 +136,28 @@ class EventsManager
             
             // 如果还没有找到，检查是否启用事件扫描回退机制
             if (empty($observers)) {
-                $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
+                static $scanEnabled = null;
+                if ($scanEnabled === null) {
+                    $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
+                }
                 if ($scanEnabled) {
-                    // 如果 generated/events.php 中没有观察者信息，回退到扫描方式（兼容旧版本）
                     $evenObserverLists = $this->scanEvents();
                     $observers = $evenObserverLists[$eventName] ?? [];
                 }
             }
         }
         
-        // 过滤掉模块被禁用的观察者
-        return $this->filterActiveObservers($observers);
+        // 过滤掉模块被禁用的观察者并缓存结果
+        $filteredObservers = $this->filterActiveObservers($observers);
+        $this->observerCache[$eventName] = $filteredObservers;
+        
+        return $filteredObservers;
     }
     
     /**
      * 过滤掉模块被禁用的观察者
+     * 
+     * 性能优化：缓存模块状态检查结果
      * 
      * @param array $observers 观察者列表
      * @return array 过滤后的观察者列表
@@ -146,7 +168,11 @@ class EventsManager
             return [];
         }
         
-        $env = Env::getInstance();
+        static $env = null;
+        if ($env === null) {
+            $env = Env::getInstance();
+        }
+        
         $activeObservers = [];
         
         foreach ($observers as $observer) {
@@ -161,12 +187,15 @@ class EventsManager
                 // 如果注册表中已有module_status字段，直接使用
                 if (isset($observer['module_status'])) {
                     if (!$observer['module_status']) {
-                        continue; // 模块被禁用，跳过
+                        continue;
                     }
                 } else {
-                    // 兼容旧版本：运行时检查模块状态
-                    if (!$env->getModuleStatus($moduleName)) {
-                        continue; // 模块被禁用，跳过
+                    // 性能优化：缓存模块状态检查结果
+                    if (!isset(self::$moduleStatusCache[$moduleName])) {
+                        self::$moduleStatusCache[$moduleName] = $env->getModuleStatus($moduleName);
+                    }
+                    if (!self::$moduleStatusCache[$moduleName]) {
+                        continue;
                     }
                 }
             }

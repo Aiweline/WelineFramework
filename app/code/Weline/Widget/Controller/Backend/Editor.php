@@ -14,7 +14,7 @@ namespace Weline\Widget\Controller\Backend;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Model\Page;
-use Weline\Widget\Service\WidgetScanner;
+use Weline\Widget\Service\WidgetData;
 
 /**
  * 可视化编辑器控制器
@@ -23,14 +23,14 @@ use Weline\Widget\Service\WidgetScanner;
 class Editor extends BackendController
 {
     private Page $pageModel;
-    private WidgetScanner $widgetScanner;
+    private WidgetData $widgetData;
 
     public function __construct(
         Page $pageModel,
-        WidgetScanner $widgetScanner
+        WidgetData $widgetData
     ) {
         $this->pageModel = $pageModel;
-        $this->widgetScanner = $widgetScanner;
+        $this->widgetData = $widgetData;
     }
 
     /**
@@ -51,8 +51,8 @@ class Editor extends BackendController
             }
         }
 
-        // 获取所有可用部件
-        $widgets = $this->widgetScanner->scanAllWidgets();
+        // 从注册表读取所有可用部件（运行时只读取，不扫描）
+        $widgets = $this->widgetData->getAllWidgets();
         
         // 按类型分组
         $widgetsByType = [];
@@ -63,7 +63,7 @@ class Editor extends BackendController
         $this->assign('page', $page);
         $this->assign('widgets', $widgets);
         $this->assign('widgetsByType', $widgetsByType);
-        $this->assign('allowedTypes', $this->widgetScanner->getAllowedTypes());
+        $this->assign('allowedTypes', $this->widgetData->getAllowedTypes());
         $this->assign('page_title', __('可视化编辑器'));
         $this->assign('breadcrumb_parent', __('内容管理'));
         $this->assign('breadcrumb_current', __('可视化编辑器'));
@@ -204,7 +204,7 @@ class Editor extends BackendController
     public function getWidgets()
     {
         try {
-            $widgets = $this->widgetScanner->scanAllWidgets();
+            $widgets = $this->widgetData->getAllWidgets();
             
             // 格式化输出
             $formatted = [];

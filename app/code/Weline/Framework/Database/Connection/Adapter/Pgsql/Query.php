@@ -20,9 +20,32 @@ use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Manager\ObjectManager;
 
-abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
+/**
+ * PostgreSQL 查询构建器
+ * 
+ * 继承自 QueryAst 的方法：
+ * @method void reorderWhereByIndexes() 重新排序 where 条件（按索引优化）
+ * @method void buildAst(string $action) 构建 AST 结构
+ * @method string normalizeFieldName(string $field) 规范化字段名
+ * 
+ * @see \Weline\Framework\Database\Connection\Api\Sql\QueryAst
+ */
+abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\QueryAst
 {
     use SqlTrait;
+
+    /**
+     * 规范化字段名（继承自 QueryAst）
+     * 移除引号并转换为小写
+     * 
+     * @param string $field 字段名
+     * @return string 规范化后的字段名
+     */
+    protected function normalizeFieldName(string $field): string
+    {
+        // 调用父类方法
+        return parent::normalizeFieldName($field);
+    }
 
     // 联合主键 设置联合主键可以提升查询效率
     public array $_unit_primary_keys = [];
@@ -44,26 +67,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public array $order = [];
     public string $group_by = '';
     public string $having = '';
-
-    /**
-     * 小型 AST，用来描述当前 Query 的结构，方便方言化编译。
-     * 结构类似：
-     * [
-     *   'action' => 'select'|'insert'|'update'|'delete',
-     *   'from'   => ['table' => 'm_demo', 'alias' => 'main_table'],
-     *   'select' => ['fields' => 'main_table.*'],
-     *   'joins'  => [...],
-     *   'where'  => [...],
-     *   'group'  => '...',
-     *   'having' => '...',
-     *   'order'  => [...],
-     *   'limit'  => ' LIMIT ... OFFSET ...',
-     *   'extra'  => $this->additional_sql,
-     *   'insert' => $this->insert,
-     *   'update' => ['single' => $this->single_updates, 'batch' => $this->updates],
-     * ]
-     */
-    protected array $ast = [];
 
     public ?\PDOStatement $PDOStatement = null;
     public string $sql = '';
@@ -549,9 +552,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     /**
      * 🔧 重写：完全按照 PostgreSQL 语法构建 SQL（方言逻辑集中在本类）
      * 先构建一个简单 AST，再按 PgSQL 规则编译成 SQL。
-     * 使用 private 确保覆盖 trait 中的 private prepareSql 方法
+     * 实现 QueryAst 的抽象方法 prepareSql
      */
-    private function prepareSql(string $action): void
+    protected function prepareSql(string $action): void
     {
         if ($this->table === '') {
             throw new DbException(__('没有指定table表名！'));
@@ -587,33 +590,63 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
 
     /**
-     * 构建当前查询的小型 AST 结构，尽量保持与属性一一对应。
+     * 获取字段定义（PostgreSQL 实现）
      */
-    protected function buildAst(string $action): void
+    public function getColumnDefinition(string $tableName, string $fieldName): ?array
     {
-        $this->ast = [
-            'action' => $action,
-            'from'   => [
-                'table' => $this->table,
-                'alias' => $this->table_alias,
-            ],
-            'select' => [
-                'fields' => $this->fields,
-            ],
-            'joins'  => $this->joins,
-            'where'  => $this->wheres,
-            'group'  => $this->group_by,
-            'having' => $this->having,
-            'order'  => $this->order,
-            'limit'  => $this->limit,
-            'extra'  => $this->additional_sql,
-            'insert' => $this->insert,
-            'update' => [
-                'single' => $this->single_updates,
-                'batch'  => $this->updates,
-            ],
-        ];
+        $configProvider = $this->connection->getConfigProvider();
+        $dbName = $configProvider->getDatabase();
+
+        // 默认 schema 为 public
+        $schema = 'public';
+        $table = $tableName;
+
+        // 支持 "schema.table" 或 "db.schema.table" 格式
+        if (str_contains($tableName, '.')) {
+            $parts = explode('.', $tableName, 3);
+            if (count($parts) === 3) {
+                // 可能是 db.schema.table
+                [$dbPart, $schemaPart, $tablePart] = $parts;
+                if ($dbPart === $dbName) {
+                    $schema = $schemaPart;
+                    $table = $tablePart;
+                } else {
+                    // db 不匹配时，认为前两段是 schema.table
+                    $schema = $dbPart;
+                    $table = $schemaPart;
+                }
+            } else {
+                // schema.table
+                [$schemaPart, $tablePart] = $parts;
+                if ($schemaPart === $dbName) {
+                    $schema = 'public';
+                    $table = $tablePart;
+                } else {
+                    $schema = $schemaPart;
+                    $table = $tablePart;
+                }
+            }
+        }
+
+        $sql = "SELECT * FROM information_schema.columns 
+                WHERE table_schema = :schema 
+                  AND table_name = :table 
+                  AND column_name = :column";
+
+        $pdo = $this->connection->getLink();
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':schema' => $schema,
+            ':table' => $table,
+            ':column' => $fieldName,
+        ]);
+
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $this->reset();
+
+        return $row ?: null;
     }
+
 
     /**
      * 将 AST 编译成 PostgreSQL SQL。
@@ -623,8 +656,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         $action = $this->ast['action'] ?? 'select';
 
-        // 格式化表名（使用 PostgreSQL 双引号）
-        $table = $this->formatTableNameForPgsql($this->ast['from']['table'] ?? $this->table);
+        // 🔧 处理 FROM 子句：可能是表名或子查询
+        $fromInfo = $this->ast['from'] ?? [];
+        $isSubquery = $fromInfo['is_subquery'] ?? false;
+        
+        if ($isSubquery && isset($fromInfo['subquery_id'])) {
+            // FROM 子句是子查询
+            $subqueryId = $fromInfo['subquery_id'];
+            $table = $this->compileSubquery($subqueryId);
+        } else {
+            // FROM 子句是普通表
+            $table = $this->formatTableNameForPgsql($this->ast['from']['table'] ?? $this->table);
+        }
+        
         $aliasName = $this->ast['from']['alias'] ?? $this->table_alias;
         $alias = $aliasName ? 'AS "' . $aliasName . '"' : '';
 
@@ -632,8 +676,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $joins   = $this->buildJoinsForPgsql();
         $wheres  = $this->buildWheresForPgsql();
         $order   = $this->buildOrderForPgsql();
-        $groupBy = $this->ast['group'] ? 'GROUP BY ' . $this->normalizeSql($this->ast['group']) : '';
-        $having  = $this->ast['having'] ? 'HAVING ' . $this->normalizeSql($this->ast['having']) : '';
+        $groupBy = isset($this->ast['group']) && $this->ast['group'] ? 'GROUP BY ' . $this->normalizeSql($this->ast['group']) : '';
+        $having  = isset($this->ast['having']) && $this->ast['having'] ? 'HAVING ' . $this->normalizeSql($this->ast['having']) : '';
         $extra   = $this->ast['extra'] ?? $this->additional_sql;
 
         switch ($action) {
@@ -652,47 +696,64 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 return "SELECT {$fields} FROM {$table} {$alias} {$joins} {$wheres} {$groupBy} {$having} {$extra} {$order} {$this->limit}";
         }
     }
-
+    
     /**
-     * 重新排序 where 条件（按索引优化）
+     * 编译子查询 AST 为 PostgreSQL SQL
+     * 
+     * @param string $subqueryId 子查询标识
+     * @return string 编译后的子查询 SQL（已用括号包裹）
      */
-    protected function reorderWhereByIndexes(): void
+    protected function compileSubquery(string $subqueryId): string
     {
-        if (empty($this->_index_sort_keys)) {
-            return;
+        if (!isset($this->ast['subqueries'][$subqueryId])) {
+            throw new DbException(__('子查询 %{1} 不存在', [$subqueryId]));
         }
-        foreach ($this->_index_sort_keys as &$index_sort_key) {
-            $index_sort_key = $this->normalizeFieldName($index_sort_key);
+        
+        $subqueryAst = $this->ast['subqueries'][$subqueryId];
+        
+        // 创建临时查询对象来编译子查询 AST
+        // 注意：这里需要创建一个新的查询实例，但使用相同的连接和配置
+        $tempQuery = clone $this;
+        $tempQuery->ast = $subqueryAst;
+        // 恢复子查询的属性（从 AST 中恢复）
+        if (isset($subqueryAst['from']['table'])) {
+            $tempQuery->table = $subqueryAst['from']['table'];
         }
-        $_index_sort_keys_wheres = [];
-        foreach ($this->wheres as $where_key => $where) {
-            $where_field = $where[0];
-            if (str_contains($where_field, '.')) {
-                $where_field_arr = explode('.', $where_field);
-                $where_field = array_pop($where_field_arr);
-            }
-            $where_field = $this->normalizeFieldName($where_field);
-            if (in_array($where_field, $this->_index_sort_keys, true)) {
-                $_index_sort_keys_wheres[$where_field][] = $where;
-                unset($this->wheres[$where_key]);
-            }
+        if (isset($subqueryAst['from']['alias'])) {
+            $tempQuery->table_alias = $subqueryAst['from']['alias'];
         }
-        if ($_index_sort_keys_wheres) {
-            foreach (array_reverse($this->_index_sort_keys) as $filed_key) {
-                if (isset($_index_sort_keys_wheres[$filed_key])) {
-                    array_unshift($this->wheres, ...$_index_sort_keys_wheres[$filed_key]);
-                }
-            }
+        if (isset($subqueryAst['select']['fields'])) {
+            $tempQuery->fields = $subqueryAst['select']['fields'];
         }
+        if (isset($subqueryAst['where'])) {
+            $tempQuery->wheres = $subqueryAst['where'];
+        }
+        if (isset($subqueryAst['joins'])) {
+            $tempQuery->joins = $subqueryAst['joins'];
+        }
+        if (isset($subqueryAst['order'])) {
+            $tempQuery->order = $subqueryAst['order'];
+        }
+        if (isset($subqueryAst['group'])) {
+            $tempQuery->group_by = $subqueryAst['group'];
+        }
+        if (isset($subqueryAst['having'])) {
+            $tempQuery->having = $subqueryAst['having'];
+        }
+        if (isset($subqueryAst['limit'])) {
+            $tempQuery->limit = $subqueryAst['limit'];
+        }
+        if (isset($subqueryAst['extra'])) {
+            $tempQuery->additional_sql = $subqueryAst['extra'];
+        }
+        
+        // 编译子查询 SQL
+        $subquerySql = $tempQuery->compileAstToPgsqlSql();
+        
+        // 用括号包裹子查询
+        return '(' . $subquerySql . ')';
     }
 
-    /**
-     * 规范化字段名（移除引号，统一格式）
-     */
-    protected function normalizeFieldName(string $field): string
-    {
-        return strtolower(trim($field, '`"'));
-    }
 
     /**
      * 格式化表名（PostgreSQL 使用双引号）
@@ -771,18 +832,24 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     /**
      * 格式化字段表达式（处理 table.field 格式）
-     * 🔧 修复：PostgreSQL 支持 "alias".* 但不支持 "alias"."*"
+     * AST 中的字段名是干净的操作结构，不包含方言特定的引号
+     * 此方法负责将 AST 字段名转换为 PostgreSQL 方言格式
+     * 
+     * @param string $field AST 中的字段名（应该是干净的，无引号）
+     * @return string PostgreSQL 格式的字段表达式
      */
     protected function formatFieldExpression(string $field): string
     {
+        // 清理输入：AST 理论上不应该有引号，但为了兼容性，先清理可能存在的引号
         $field = trim($field);
+        $field = str_replace(['`', '"'], '', $field); // 清理可能存在的引号（兼容性处理）
         
-        // 🔧 修复：特殊处理 alias.* 的情况（PostgreSQL 语法）
+        // 1. 处理 alias.* 的情况（PostgreSQL 语法）
         // PostgreSQL 支持 alias.* 或 "alias".*，但不支持 "alias"."*"
         if (preg_match('/^([^.]*?)\.\*$/', $field, $matches)) {
-            $alias = trim($matches[1], '`"');
+            $alias = trim($matches[1]);
 
-            // 🔧 兼容框架占位别名 main_table：如果实际主表别名不是 main_table，则将其替换为真实别名
+            // 兼容框架占位别名 main_table：如果实际主表别名不是 main_table，则将其替换为真实别名
             if ($alias === 'main_table' && !empty($this->table_alias) && $this->table_alias !== 'main_table') {
                 $alias = $this->table_alias;
             }
@@ -803,14 +870,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '*';
         }
         
-        // 如果包含点号，说明是限定名（table.field 或 alias.field 格式）
+        // 2. 处理函数调用（如 count(*), sum(field), max(field) 等）
+        // 函数调用不应该被引号括起来，直接返回
+        if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(/i', $field)) {
+            return $field;
+        }
+        
+        // 3. 处理限定名（table.field 或 alias.field 格式）
         if (str_contains($field, '.')) {
-            // 🔧 修复：统一去掉内部的 MySQL 风格引号（`table`.`field`、`table.field`、"table"."field" 等）
-            // 然后再按点拆分并用 PostgreSQL 风格的双引号包裹
-            $field = str_replace(['`', '"'], '', $field);
             $parts = explode('.', $field);
 
-            // 🔧 同样处理 main_table.xxx 这种占位别名，替换为真实主表别名
+            // 处理 main_table.xxx 这种占位别名，替换为真实主表别名
             if (!empty($this->table_alias) && $this->table_alias !== 'main_table' && isset($parts[0]) && $parts[0] === 'main_table') {
                 $parts[0] = $this->table_alias;
             }
@@ -819,11 +889,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (count($parts) >= 2 && $parts[0] === $dbName) {
                 $parts[0] = 'public';
             }
+            // 按照 PostgreSQL 规则格式化：每个部分用双引号包裹
             return '"' . implode('"."', $parts) . '"';
         }
         
-        // 普通字段名：去掉首尾引号后再包一层 PostgreSQL 风格双引号
-        $field = trim($field, '`"');
+        // 4. 普通字段名：按照 PostgreSQL 规则用双引号包裹
         return '"' . $field . '"';
     }
 
@@ -1000,6 +1070,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         $normalized_field = 'p' . $normalized_field;
                     }
                     $param = ':' . $normalized_field . '_' . $key;
+                    
+                    // 🔧 处理子查询：如果 where[2] 是数组且包含 is_subquery 标记
+                    if (is_array($where[2]) && isset($where[2]['is_subquery']) && $where[2]['is_subquery']) {
+                        $subqueryId = $where[2]['subquery_id'] ?? '';
+                        if ($subqueryId) {
+                            $subquerySql = $this->compileSubquery($subqueryId);
+                            $wheres .= $field . ' ' . $where[1] . ' ' . $subquerySql;
+                            if (!$isLast) {
+                                $wheres .= ' ' . $currentLogic;
+                            }
+                            break;
+                        }
+                    }
                     
                     $skip_implode = false;
                     switch (strtolower($where[1])) {
@@ -2270,8 +2353,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 // 单个命令，但在 prepare 时可能失败（作为备用检测）
                 // 在父类调用 prepare 之前，先尝试 prepare 看看是否会失败
+                
                 try {
-                            $testStmt = $this->preparePgsql($this->sql);
+                    $testStmt = $this->preparePgsql($this->sql);
                     if ($testStmt === false) {
                         $errorInfo = $this->getLink()->errorInfo();
                         if (($errorInfo[0] ?? '') === '42601' && 
@@ -2519,7 +2603,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 // 单个命令，正常执行
                 try {
-                    Env::log_info('pgsql_query', $this->sql);
                     $this->PDOStatement = $this->preparePgsql($this->sql);
                     $this->PDOStatement->execute($this->bound_values);
                 } catch (\PDOException $e) {
@@ -2543,25 +2626,14 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         // 🔧 修复：PostgreSQL 不支持 nextRowset()，只获取第一个结果集
         $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
-        
         $this->batch = false;
-        $data = [];
-        if ($model_class) {
-            // 确保 $origin_data 是数组或对象，而不是字符串
-            if (is_array($origin_data) || is_object($origin_data)) {
-                foreach ($origin_data as $origin_datum) {
-                    $data[] = ObjectManager::make($model_class, ['data' => $origin_datum], '__construct');
-                }
-            } else {
-                $data = $origin_data;
-            }
-        } else {
-            $data = $origin_data;
-        }
+        // 🔧 修复：延迟对象创建，先保持原始数组，根据 fetch_type 决定如何处理
+        $data = is_array($origin_data) ? $origin_data : [];
         
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
+                // 有 $this->find_fields 则返回数组
                 if ($this->find_fields) {
                     if ($result) {
                         if (str_contains($this->find_fields, ',')) {
@@ -2578,8 +2650,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     $this->find_fields = '';
                     break;
                 }
-                if ($model_class && empty($result)) {
-                    $result = ObjectManager::make($model_class, ['data' => []], '__construct');
+                // 只有在没有 find_fields 且需要模型对象时，才转换为模型对象
+                if ($model_class) {
+                    if (empty($result)) {
+                        $result = ObjectManager::make($model_class, ['data' => []]);
+                    } elseif (is_array($result)) {
+                        $result = ObjectManager::make($model_class,['data' => $result]);
+                    }
                 }
                 break;
             case 'insert':
@@ -2612,7 +2689,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             case 'pagination':
             case 'query':
             case 'select':
-                $result = $data;
+                // 只有在需要模型对象时才转换，否则直接返回数组
+                if ($model_class && !empty($data)) {
+                    $result = [];
+                    foreach ($data as $datum) {
+                        if (is_array($datum)) {
+                            $result[] = ObjectManager::make($model_class, ['data' => $datum], '__construct');
+                        } else {
+                            $result[] = $datum;
+                        }
+                    }
+                } else {
+                    $result = $data;
+                }
                 break;
             case 'delete':
             case 'update':
@@ -2660,7 +2749,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             Debug::target('fetch', $msg);
         }
         
-        $this->reset();
+        $this->reset();        
         return $result;
     }
     
@@ -2813,25 +2902,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     unset($this->_fallback_data);
                     $this->bound_values = []; // 清除旧的参数绑定，让 buildInsert 重新生成
                     
-                    // 使用父类的 buildInsert 逻辑重新构建 SQL
-                    // 直接使用父类的 buildInsert
-                    $parentAdapter = new \Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter();
-                    $reflection = new \ReflectionClass($parentAdapter);
-                    $method = $reflection->getMethod('buildInsert');
-                    $method->setAccessible(true);
-                    $sql = $method->invoke($parentAdapter, $this);
+                    // 清除 exist_update_sql，让它构建普通的 INSERT 语句（不使用 ON CONFLICT）
+                    $this->exist_update_sql = '';
                     
-                    // 重新准备 SQL
-                    $this->sql = $sql;
-                    if (!empty($sql)) {
-                        try {
-                            $this->PDOStatement = $this->preparePgsql($sql);
-                        } catch (\Throwable $e2) {
-                            $this->PDOStatement = null;
-                        }
-                    } else {
-                        $this->PDOStatement = null;
-                    }
+                    // 重新构建 SQL（使用自己的 prepareSql 方法，但这次不使用 ON CONFLICT）
+                    $this->prepareSql('insert');
                     
                     // 重新执行
                     return parent::fetch($model_class);

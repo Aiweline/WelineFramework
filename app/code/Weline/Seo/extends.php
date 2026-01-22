@@ -24,6 +24,13 @@ return [
             'description' => 'SEO Feed 提供扩展点，允许其他模块向 SEO 模块上报 SEO 信息',
             'required' => true, // 是否必须实现接口
             'multiple' => true  // 是否允许多个实现
+        ],
+        'SitemapProvider' => [
+            'path' => 'extends/module/Weline_Seo/SitemapProvider',
+            'interface' => 'Weline\Seo\Interface\SitemapProviderInterface',
+            'description' => 'Sitemap 提供扩展点，允许其他模块生成 Sitemap 并向 SEO 模块上报 URL',
+            'required' => false,
+            'multiple' => true
         ]
         // 可以定义多个扩展点目录
     ]

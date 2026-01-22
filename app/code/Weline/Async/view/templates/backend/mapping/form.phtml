@@ -74,7 +74,10 @@ $saveUrl = $this->getBackendUrl('async/backend/mapping/save');
                                         <input type="text" name="local_path" class="form-control" 
                                                value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_LOCAL_PATH) : '') ?>" 
                                                placeholder="/path/to/local/directory" required>
-                                        <small class="form-text text-muted"><?= __('本地目录的完整路径') ?></small>
+                                        <small class="form-text text-muted d-block mb-1"><?= __('本地目录的完整路径') ?></small>
+                                        <small class="form-text text-muted text-warning">
+                                            <?= __('提示：如果本地路径在框架根目录(BP)内，会自动排除 var 与 vendor 目录；单个文件大于 1MB 将不会同步，只会在异步日志中记录。') ?>
+                                        </small>
                                     </div>
 
                                     <div class="mb-3">

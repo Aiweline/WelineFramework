@@ -17,14 +17,264 @@
     <link href='@static(Weline_Frontend::assets/css/icons.min.css)' rel='stylesheet' type='text/css'/>
     <!-- App Css-->
     <link href='@static(Weline_Frontend::assets/css/app.min.css)' id='app-style' rel='stylesheet' type='text/css'/>
+    <!-- Font Awesome图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- 加载i18n.js以支持语言切换 -->
+    <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
+    <style>
+        /* 维护页 Logo 自适应：PC 最大高度 200，手机再收缩一点 */
+        .auth-logo {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* PC 端（含平板横屏等大屏）最大高度 200px */
+        @media (min-width: 769px) {
+            .auth-logo {
+                max-height: 200px;
+            }
+        }
+
+        /* 手机端再缩小一些，避免过大占屏 */
+        @media (max-width: 768px) {
+            .auth-logo {
+                max-height: 120px;
+            }
+        }
+
+        /* 版心容器 - 用于右上角hook定位 */
+        .maintenance-wrapper {
+            max-width: 1140px;
+            margin: 0 auto;
+            position: relative;
+            width: 100%;
+            min-height: 1px; /* 确保容器有最小高度 */
+        }
+        
+        /* 右上角语言选择器容器 - 固定定位 */
+        .maintenance-header {
+            position: fixed;
+            top: 20px;
+            right: 40px;
+            z-index: 9999; /* 保证在页面所有内容之上 */
+        }
+        
+        /* 语言选择器样式 - Bootstrap适配 */
+        .maintenance-language-switcher {
+            position: relative;
+        }
+        
+        .maintenance-language-switcher .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            color: #212529;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover {
+            background: #f8f9fa;
+            border-color: #0d6efd;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-1 {
+            display: none;
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-2 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .maintenance-language-switcher .language-switcher .current-language {
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .maintenance-language-switcher .language-options {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 10000; /* 高于其他内容，避免被遮挡 */
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover .language-options,
+        .maintenance-language-switcher .language-switcher:focus .language-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .maintenance-language-switcher .language-option {
+            display: block;
+            padding: 10px 16px;
+            color: #212529;
+            text-decoration: none;
+            transition: background 0.2s ease;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .maintenance-language-switcher .language-option:last-child {
+            border-bottom: none;
+        }
+        
+        .maintenance-language-switcher .language-option:hover {
+            background: #f8f9fa;
+        }
+        
+        .maintenance-language-switcher .language-option.active {
+            background: #e7f1ff;
+            color: #0d6efd;
+        }
+        
+        .maintenance-language-switcher .language-option .fas.fa-check {
+            float: right;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .maintenance-language-switcher .language-option.active .fas.fa-check {
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .maintenance-header {
+                top: 10px;
+                right: 20px; /* 往版心内侧一点，避免贴边 */
+            }
+            .maintenance-language-switcher .language-switcher {
+                padding: 6px 12px;
+                font-size: 0.75rem;
+            }
+            /* 手机端下拉列表向左展开，避免被屏幕边缘遮挡 */
+            .maintenance-language-switcher .language-options {
+                left: 0;
+                right: auto;
+                transform: translate(-100%, -10px); /* 向左偏移100%，向上偏移10px */
+                max-width: calc(100vw - 40px);
+                min-width: 180px;
+            }
+            
+            /* 手机端展开时的动画效果 */
+            .maintenance-language-switcher .language-switcher:hover .language-options,
+            .maintenance-language-switcher .language-switcher:focus .language-options {
+                transform: translate(-100%, 0); /* 向左偏移100%，垂直方向归位 */
+            }
+        }
+    </style>
 
 </head>
 
 <body>
 
 <div class='py-5'>
+    <!-- 版心容器 -->
+    <div class='maintenance-wrapper'>
+        <!-- 右上角语言选择器Hook -->
+        <div class='maintenance-header'>
+            <div class='maintenance-language-switcher'>
+                <?php
+                // 尝试渲染hook - 使用 try-catch 避免报错
+                try {
+                    $hookContent = '';
+                    if (isset($this) && is_object($this) && method_exists($this, 'getHook')) {
+                        $hookContent = $this->getHook('header-language-switcher') ?? '';
+                    }
+                    
+                    if (!empty(trim($hookContent))) {
+                        echo $hookContent;
+                    } else {
+                        // 如果没有hook实现，显示简单的语言选择器
+                        $currentLang = 'zh_Hans_CN';
+                        try {
+                            if (class_exists('\Weline\Framework\App\State')) {
+                                $currentLang = \Weline\Framework\App\State::getLang() ?? 'zh_Hans_CN';
+                            }
+                        } catch (\Exception $e) {
+                            // 忽略错误，使用默认值
+                        }
+                        
+                        $langParts = explode('_', $currentLang);
+                        $langDisplay = strtoupper($langParts[0] ?? 'ZH');
+                        if ($langDisplay === 'ZH' && isset($langParts[1]) && $langParts[1] === 'Hant') {
+                            $langDisplay = 'TW';
+                        }
+                        ?>
+                        <div class="language-switcher" role="button" tabindex="0">
+                            <span class="action-line-2">
+                                <i class="fas fa-globe" aria-hidden="true"></i>
+                                <span class="current-language"><?= htmlspecialchars($langDisplay) ?></span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </span>
+                            <div class="language-options" role="menu">
+                                <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
+                                    <span>简体中文</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
+                                    <span>English</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                                <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
+                                    <span>繁體中文</span>
+                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <?php
+                    }
+                } catch (\Exception $e) {
+                    // 如果所有方法都失败，显示最简单的语言选择器
+                    ?>
+                    <div class="language-switcher" role="button" tabindex="0">
+                        <span class="action-line-2">
+                            <i class="fas fa-globe" aria-hidden="true"></i>
+                            <span class="current-language">ZH</span>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </span>
+                        <div class="language-options" role="menu">
+                            <a href="?lang=zh_Hans_CN" class="language-option active" data-lang="zh_Hans_CN">
+                                <span>简体中文</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                            <a href="?lang=en_US" class="language-option" data-lang="en_US">
+                                <span>English</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                            <a href="?lang=zh_Hant_TW" class="language-option" data-lang="zh_Hant_TW">
+                                <span>繁體中文</span>
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <?php
+                }
+                ?>
+            </div>
+        </div>
 
-    <div class='container'>
+        <div class='container'>
         <div class='row justify-content-center'>
             <div class='col-md-8 col-lg-6 col-xl-5'>
                 <div class='text-center mt-sm-5 mb-4'>
@@ -116,8 +366,11 @@
         </div>
         <!-- end row -->
 
+        </div>
+        <!-- end container -->
+
     </div>
-    <!-- end container -->
+    <!-- end maintenance-wrapper -->
 
 </div>
 <!-- end auth-page -->
