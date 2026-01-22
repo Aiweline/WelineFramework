@@ -1,0 +1,217 @@
+<?php
+/**
+ * TPMST 组件 - 常见问题 (FAQ)
+ * FAQ折叠面板，支持问答展开收起
+ * 
+ * @component_start
+ * name => 常见问题
+ * name_en => FAQ
+ * description => FAQ折叠面板组件，支持问答的展开和收起交互
+ * category => content
+ * type => section
+ * sort_order => 60
+ * compatible_styles => *
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:faq => FAQ设置
+ * faq.title => FAQ标题:text:FAQs
+ * faq.display => 显示FAQ:select:yes|yes,no
+ * faq.bg_color => 背景颜色:color:#0f0f1e
+ * faq.question_1 => 问题1:text:What is Teen Patti Master?
+ * faq.answer_1 => 答案1:textarea:Teen Patti Master is India's best online card game...
+ * faq.question_2 => 问题2:text:How to Download?
+ * faq.answer_2 => 答案2:textarea:To get the APK, go to a reliable website...
+ * faq.question_3 => 问题3:text:Is it Safe to Play?
+ * faq.answer_3 => 答案3:textarea:Yes, it is designed to be secure...
+ * faq.question_4 => 问题4:text:How to Win Real Cash?
+ * faq.answer_4 => 答案4:textarea:Win real money by mastering strategies...
+ * faq.question_5 => 问题5:text:What are the Game Variants?
+ * faq.answer_5 => 答案5:textarea:Includes variants such as AK47, Muflis...
+ * 
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$componentConfig = $this->getData('component_config') ?? [];
+$styleSettings = $componentConfig ?: ($this->getData('style') ?: $this->getData('style_settings') ?: []);
+$colors = $this->getData('colors') ?? [];
+
+// 辅助函数
+if (!function_exists('tpmst_faq_getConfig')) {
+    function tpmst_faq_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        return ($value === '' && $default !== '') ? $default : $value;
+    }
+}
+
+// 显示控制
+$displayRaw = tpmst_faq_getConfig($styleSettings, 'faq.display', 'yes');
+$display = in_array($displayRaw, ['yes', true, 'true', 1, '1'], true);
+
+if (!$display) {
+    return;
+}
+
+// 配置
+$title = tpmst_faq_getConfig($styleSettings, 'faq.title', '') ?: tpmst_faq_getConfig($styleSettings, 'texts.faq_title', 'FAQs');
+$bgColor = $colors['faq_bg'] ?? tpmst_faq_getConfig($styleSettings, 'faq.bg_color', '#0f0f1e');
+
+// FAQ 列表
+$faqItems = [];
+for ($i = 1; $i <= 10; $i++) {
+    $question = tpmst_faq_getConfig($styleSettings, "faq.question_{$i}", '') ?: tpmst_faq_getConfig($styleSettings, "texts.faq_question_{$i}", '');
+    $answer = tpmst_faq_getConfig($styleSettings, "faq.answer_{$i}", '') ?: tpmst_faq_getConfig($styleSettings, "texts.faq_answer_{$i}", '');
+    
+    if (!empty($question) && !empty($answer)) {
+        $faqItems[] = [
+            'question' => $question,
+            'answer' => $answer,
+        ];
+    }
+}
+
+// 默认FAQ（如果没有配置）
+if (empty($faqItems)) {
+    $faqItems = [
+        [
+            'question' => 'What is Teen Patti Master?',
+            'answer' => 'Teen Patti Master is India\'s best online card game, which combines strategy and luck for real cash prizes.',
+        ],
+        [
+            'question' => 'How to Download Teen Patti Master APK?',
+            'answer' => 'To get the APK, go to a reliable website and select the download option for the most recent version.',
+        ],
+        [
+            'question' => 'Is Teen Patti Master Safe to Play?',
+            'answer' => 'Yes, Teen Patti Master is designed to be secure, with features like SSL encryption to protect data.',
+        ],
+    ];
+}
+
+// 颜色
+$headingColor = $colors['heading_color'] ?? '#ffd700';
+$textColor = $colors['text_color'] ?? '#ffffff';
+
+$componentId = 'tpmst-faq-' . uniqid();
+?>
+
+<!-- TPMST 组件: 常见问题 -->
+<section class="tpmst-component tpmst-component-faq" id="<?= $componentId ?>" style="background: <?= htmlspecialchars($bgColor) ?>;">
+    <div class="tpmst-faq-container">
+        <h2 class="tpmst-faq-title"><?= htmlspecialchars($title) ?></h2>
+        
+        <div class="tpmst-faq-list">
+            <?php foreach ($faqItems as $index => $item): ?>
+            <div class="tpmst-faq-item" data-faq-index="<?= $index ?>">
+                <div class="tpmst-faq-question">
+                    <span><?= htmlspecialchars($item['question']) ?></span>
+                    <span class="tpmst-faq-icon">+</span>
+                </div>
+                <div class="tpmst-faq-answer">
+                    <?= nl2br(htmlspecialchars($item['answer'])) ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    padding: clamp(40px, 8vw, 90px) 15px;
+    width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-faq-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .tpmst-faq-title {
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 700;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    text-align: center;
+    margin-bottom: clamp(30px, 5vw, 50px);
+}
+
+#<?= $componentId ?> .tpmst-faq-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#<?= $componentId ?> .tpmst-faq-question {
+    padding: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: clamp(14px, 3vw, 16px);
+    transition: background-color 0.3s ease;
+}
+
+#<?= $componentId ?> .tpmst-faq-question:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+#<?= $componentId ?> .tpmst-faq-icon {
+    font-size: 24px;
+    font-weight: 300;
+    transition: transform 0.3s ease;
+}
+
+#<?= $componentId ?> .tpmst-faq-item.active .tpmst-faq-icon {
+    transform: rotate(45deg);
+}
+
+#<?= $componentId ?> .tpmst-faq-answer {
+    padding: 0 20px;
+    max-height: 0;
+    overflow: hidden;
+    color: <?= htmlspecialchars($textColor) ?>;
+    line-height: 1.8;
+    font-size: clamp(13px, 2.5vw, 15px);
+    transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+#<?= $componentId ?> .tpmst-faq-item.active .tpmst-faq-answer {
+    padding: 0 20px 20px;
+    max-height: 500px;
+}
+</style>
+
+<script>
+(function() {
+    const componentId = '<?= $componentId ?>';
+    const component = document.getElementById(componentId);
+    if (!component) return;
+    
+    const faqItems = component.querySelectorAll('.tpmst-faq-item');
+    
+    faqItems.forEach(item => {
+        const question = item.querySelector('.tpmst-faq-question');
+        
+        question.addEventListener('click', function() {
+            const isActive = item.classList.contains('active');
+            
+            // 关闭其他FAQ项（可选：手风琴模式）
+            faqItems.forEach(otherItem => {
+                if (otherItem !== item) {
+                    otherItem.classList.remove('active');
+                }
+            });
+            
+            // 切换当前FAQ项
+            item.classList.toggle('active');
+        });
+    });
+})();
+</script>

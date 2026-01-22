@@ -1,0 +1,136 @@
+<?php
+/**
+ * 页脚邮件订阅部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('订阅我们的邮件');
+$description = $this->getData('description') ?? __('获取最新的优惠信息和新品资讯');
+$placeholder = $this->getData('placeholder') ?? __('请输入您的邮箱地址');
+$buttonText = $this->getData('button_text') ?? __('订阅');
+$layout = $this->getData('layout') ?? 'horizontal';
+
+$widgetId = 'footer-newsletter-' . uniqid();
+?>
+
+<div class="widget-footer-newsletter layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
+    <div class="newsletter-content">
+        <?php if ($title): ?>
+            <h3 class="newsletter-title"><?= htmlspecialchars($title) ?></h3>
+        <?php endif; ?>
+        
+        <?php if ($description): ?>
+            <p class="newsletter-description"><?= htmlspecialchars($description) ?></p>
+        <?php endif; ?>
+    </div>
+    
+    <form class="newsletter-form" action="/newsletter/subscribe" method="post">
+        <div class="form-group">
+            <input type="email" 
+                   name="email" 
+                   class="newsletter-input" 
+                   placeholder="<?= htmlspecialchars($placeholder) ?>"
+                   required>
+            <button type="submit" class="newsletter-button">
+                <?= htmlspecialchars($buttonText) ?>
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+.widget-footer-newsletter {
+    padding: 30px 0;
+}
+
+/* 水平布局 */
+.widget-footer-newsletter.layout-horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 40px;
+}
+
+.widget-footer-newsletter.layout-horizontal .newsletter-content {
+    flex: 1;
+}
+
+.widget-footer-newsletter.layout-horizontal .newsletter-form {
+    flex: 0 0 450px;
+}
+
+/* 垂直布局 */
+.widget-footer-newsletter.layout-vertical {
+    text-align: center;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.widget-footer-newsletter.layout-vertical .newsletter-content {
+    margin-bottom: 20px;
+}
+
+.widget-footer-newsletter .newsletter-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #fff;
+}
+
+.widget-footer-newsletter .newsletter-description {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    margin: 0;
+}
+
+.widget-footer-newsletter .form-group {
+    display: flex;
+    gap: 10px;
+}
+
+.widget-footer-newsletter.layout-vertical .form-group {
+    flex-direction: column;
+}
+
+.widget-footer-newsletter .newsletter-input {
+    flex: 1;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.widget-footer-newsletter .newsletter-button {
+    padding: 14px 30px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.widget-footer-newsletter .newsletter-button:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+@media (max-width: 768px) {
+    .widget-footer-newsletter.layout-horizontal {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .widget-footer-newsletter.layout-horizontal .newsletter-form {
+        flex: none;
+        width: 100%;
+    }
+    
+    .widget-footer-newsletter .form-group {
+        flex-direction: column;
+    }
+}
+</style>

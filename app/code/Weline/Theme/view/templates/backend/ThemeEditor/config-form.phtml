@@ -1,0 +1,189 @@
+<?php
+/**
+ * 部件配置表单
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $widget
+ * @var array $params
+ */
+
+$widget = $this->getData('widget');
+$params = $this->getData('params') ?? [];
+$config = $widget['config'] ?? [];
+
+if (!$widget) return;
+
+$widgetName = $widget['meta']['name'] ?? $widget['widget_code'];
+$widgetDesc = $widget['meta']['description'] ?? '';
+$widgetType = $widget['widget_type'] ?? 'content';
+
+// 获取部件图标
+$typeIcons = [
+    'header' => 'ri-layout-top-line',
+    'footer' => 'ri-layout-bottom-line',
+    'sidebar' => 'ri-layout-left-line',
+    'banner' => 'ri-image-line',
+    'carousel' => 'ri-slideshow-line',
+    'product' => 'ri-shopping-bag-line',
+    'category' => 'ri-folder-line',
+    'navigation' => 'ri-menu-line',
+    'search' => 'ri-search-line',
+    'social' => 'ri-share-line',
+    'newsletter' => 'ri-mail-line',
+    'content' => 'ri-file-text-line',
+];
+$icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
+?>
+
+<div class="config-widget-header">
+    <div class="config-widget-icon">
+        <i class="<?= $icon ?>"></i>
+    </div>
+    <div class="config-widget-info">
+        <h4><?= htmlspecialchars($widgetName) ?></h4>
+        <p><?= htmlspecialchars($widgetDesc) ?></p>
+    </div>
+</div>
+
+<form class="config-form" id="widgetConfigForm" data-layout-id="<?= $widget['layout_id'] ?? '' ?>">
+    <?php if (empty($params)): ?>
+        <p class="text-muted"><?= __('该部件暂无可配置参数') ?></p>
+    <?php else: ?>
+        <?php foreach ($params as $key => $param): 
+            $type = $param['type'] ?? 'string';
+            $label = $param['label'] ?? $key;
+            $default = $param['default'] ?? '';
+            $value = $config[$key] ?? $default;
+            $required = $param['required'] ?? false;
+            $description = $param['description'] ?? '';
+            $placeholder = $param['placeholder'] ?? '';
+            $options = $param['options'] ?? [];
+        ?>
+            <div class="form-group">
+                <label for="config_<?= $key ?>">
+                    <?= htmlspecialchars($label) ?>
+                    <?php if ($required): ?>
+                        <span class="text-danger">*</span>
+                    <?php endif; ?>
+                </label>
+                
+                <?php if ($type === 'string'): ?>
+                    <input type="text" 
+                           class="form-control" 
+                           id="config_<?= $key ?>" 
+                           name="<?= $key ?>"
+                           value="<?= htmlspecialchars($value) ?>"
+                           placeholder="<?= htmlspecialchars($placeholder) ?>"
+                           <?= $required ? 'required' : '' ?>>
+                
+                <?php elseif ($type === 'number'): ?>
+                    <input type="number" 
+                           class="form-control" 
+                           id="config_<?= $key ?>" 
+                           name="<?= $key ?>"
+                           value="<?= htmlspecialchars($value) ?>"
+                           placeholder="<?= htmlspecialchars($placeholder) ?>"
+                           <?= $required ? 'required' : '' ?>>
+                
+                <?php elseif ($type === 'boolean'): ?>
+                    <div class="form-check">
+                        <input type="checkbox" 
+                               class="form-check-input" 
+                               id="config_<?= $key ?>" 
+                               name="<?= $key ?>"
+                               value="1"
+                               <?= $value ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="config_<?= $key ?>"><?= __('启用') ?></label>
+                    </div>
+                
+                <?php elseif ($type === 'select'): ?>
+                    <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
+                        <option value=""><?= __('-- 请选择 --') ?></option>
+                        <?php foreach ($options as $optValue => $optLabel): ?>
+                            <option value="<?= htmlspecialchars($optValue) ?>" <?= $value == $optValue ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($optLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                
+                <?php elseif ($type === 'url'): ?>
+                    <input type="url" 
+                           class="form-control" 
+                           id="config_<?= $key ?>" 
+                           name="<?= $key ?>"
+                           value="<?= htmlspecialchars($value) ?>"
+                           placeholder="<?= htmlspecialchars($placeholder ?: 'https://') ?>"
+                           <?= $required ? 'required' : '' ?>>
+                
+                <?php elseif ($type === 'image'): ?>
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control" 
+                               id="config_<?= $key ?>" 
+                               name="<?= $key ?>"
+                               value="<?= htmlspecialchars($value) ?>"
+                               placeholder="<?= __('图片URL或点击选择') ?>">
+                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_<?= $key ?>">
+                            <i class="ri-image-line"></i>
+                        </button>
+                    </div>
+                    <?php if ($value): ?>
+                        <div class="mt-2">
+                            <img src="<?= htmlspecialchars($value) ?>" class="img-thumbnail" style="max-height: 80px;">
+                        </div>
+                    <?php endif; ?>
+                
+                <?php elseif ($type === 'color'): ?>
+                    <div class="input-group">
+                        <input type="color" 
+                               class="form-control form-control-color" 
+                               id="config_<?= $key ?>_picker" 
+                               value="<?= htmlspecialchars($value ?: '#000000') ?>"
+                               style="width: 50px;">
+                        <input type="text" 
+                               class="form-control" 
+                               id="config_<?= $key ?>" 
+                               name="<?= $key ?>"
+                               value="<?= htmlspecialchars($value) ?>"
+                               placeholder="#000000">
+                    </div>
+                
+                <?php elseif ($type === 'textarea'): ?>
+                    <textarea class="form-control" 
+                              id="config_<?= $key ?>" 
+                              name="<?= $key ?>"
+                              rows="4"
+                              placeholder="<?= htmlspecialchars($placeholder) ?>"
+                              <?= $required ? 'required' : '' ?>><?= htmlspecialchars($value) ?></textarea>
+                
+                <?php elseif ($type === 'array'): ?>
+                    <textarea class="form-control" 
+                              id="config_<?= $key ?>" 
+                              name="<?= $key ?>"
+                              rows="4"
+                              placeholder="<?= __('JSON格式数组') ?>"
+                              <?= $required ? 'required' : '' ?>><?= is_array($value) ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : htmlspecialchars($value) ?></textarea>
+                    <small class="form-text"><?= __('请使用JSON格式输入') ?></small>
+                
+                <?php else: ?>
+                    <input type="text" 
+                           class="form-control" 
+                           id="config_<?= $key ?>" 
+                           name="<?= $key ?>"
+                           value="<?= htmlspecialchars($value) ?>"
+                           <?= $required ? 'required' : '' ?>>
+                <?php endif; ?>
+                
+                <?php if ($description): ?>
+                    <small class="form-text"><?= htmlspecialchars($description) ?></small>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+    
+    <div class="form-group mt-3">
+        <button type="submit" class="btn btn-primary btn-sm">
+            <i class="ri-save-line"></i> <?= __('保存配置') ?>
+        </button>
+    </div>
+</form>

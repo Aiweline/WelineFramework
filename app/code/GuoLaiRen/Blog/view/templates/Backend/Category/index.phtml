@@ -9,6 +9,29 @@
 
 use GuoLaiRen\Blog\Model\Category;
 ?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('博客分类管理') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('') ?>"><?= __('首页') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('博客分类') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
 
 <div class="row">
     <div class="col-12">
@@ -32,23 +55,23 @@ use GuoLaiRen\Blog\Model\Category;
                 </div>
             </div>
             <div class="card-body">
-                <if condition="empty($categories)">
+                <?php if (empty($categories)): ?>
                     <div class="alert alert-info mb-0">
                         <i class="mdi mdi-information-outline"></i>
-                        <lang>暂无分类，请点击右上角按钮创建</lang>
+                        <?= __('暂无分类，请点击右上角按钮创建') ?>
                     </div>
-                    <else/>
+                <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-hover table-centered mb-0">
                             <thead>
                                 <tr>
                                     <th width="60">ID</th>
-                                    <th><lang>分类名称</lang></th>
-                                    <th><lang>URL别名</lang></th>
-                                    <th width="80"><lang>文章数</lang></th>
-                                    <th width="80"><lang>排序</lang></th>
-                                    <th width="80"><lang>状态</lang></th>
-                                    <th width="150"><lang>操作</lang></th>
+                                    <th><?= __('分类名称') ?></th>
+                                    <th><?= __('URL别名') ?></th>
+                                    <th width="80"><?= __('文章数') ?></th>
+                                    <th width="80"><?= __('排序') ?></th>
+                                    <th width="80"><?= __('状态') ?></th>
+                                    <th width="150"><?= __('操作') ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -77,9 +100,9 @@ use GuoLaiRen\Blog\Model\Category;
                                         <td><?= (int)$category->getData(Category::fields_SORT_ORDER) ?></td>
                                         <td>
                                             <?php if ($category->getData(Category::fields_STATUS) == Category::STATUS_ENABLED): ?>
-                                                <span class="badge bg-success"><lang>启用</lang></span>
+                                                <span class="badge bg-success"><?= __('启用') ?></span>
                                             <?php else: ?>
-                                                <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                                <span class="badge bg-secondary"><?= __('禁用') ?></span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
@@ -105,8 +128,10 @@ use GuoLaiRen\Blog\Model\Category;
                             <?= $pagination ?>
                         </div>
                     <?php endif; ?>
-                </if>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

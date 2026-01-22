@@ -1,0 +1,160 @@
+<?php
+/**
+ * Header 货币切换部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - show_symbol: 显示货币符号
+ * - show_code: 显示货币代码
+ */
+
+$showSymbol = (bool)($this->getData('show_symbol') ?? true);
+$showCode = (bool)($this->getData('show_code') ?? true);
+
+// 示例货币列表（实际应从系统配置获取）
+$currencies = [
+    ['code' => 'CNY', 'symbol' => '¥', 'name' => '人民币', 'active' => true],
+    ['code' => 'USD', 'symbol' => '$', 'name' => '美元', 'active' => false],
+    ['code' => 'EUR', 'symbol' => '€', 'name' => '欧元', 'active' => false],
+    ['code' => 'JPY', 'symbol' => '¥', 'name' => '日元', 'active' => false],
+    ['code' => 'GBP', 'symbol' => '£', 'name' => '英镑', 'active' => false],
+];
+
+$currentCurrency = array_filter($currencies, fn($c) => $c['active']);
+$currentCurrency = reset($currentCurrency) ?: $currencies[0];
+?>
+
+<div class="widget-currency-switcher">
+    <div class="currency-dropdown">
+        <button class="currency-current" type="button">
+            <?php if ($showSymbol): ?>
+                <span class="currency-symbol"><?= htmlspecialchars($currentCurrency['symbol']) ?></span>
+            <?php endif; ?>
+            <?php if ($showCode): ?>
+                <span class="currency-code"><?= htmlspecialchars($currentCurrency['code']) ?></span>
+            <?php endif; ?>
+            <i class="ri-arrow-down-s-line"></i>
+        </button>
+        
+        <ul class="currency-list">
+            <?php foreach ($currencies as $currency): ?>
+                <li class="<?= $currency['active'] ? 'active' : '' ?>">
+                    <a href="?currency=<?= htmlspecialchars($currency['code']) ?>">
+                        <span class="currency-symbol"><?= htmlspecialchars($currency['symbol']) ?></span>
+                        <span class="currency-info">
+                            <span class="currency-code"><?= htmlspecialchars($currency['code']) ?></span>
+                            <span class="currency-name"><?= htmlspecialchars($currency['name']) ?></span>
+                        </span>
+                        <?php if ($currency['active']): ?>
+                            <i class="ri-check-line"></i>
+                        <?php endif; ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</div>
+
+<style>
+.widget-currency-switcher {
+    position: relative;
+}
+
+.widget-currency-switcher .currency-dropdown {
+    position: relative;
+}
+
+.widget-currency-switcher .currency-current {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: none;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.widget-currency-switcher .currency-current:hover {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-currency-switcher .currency-symbol {
+    font-weight: 600;
+}
+
+.widget-currency-switcher .currency-code {
+    font-size: 13px;
+}
+
+.widget-currency-switcher .currency-list {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 180px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    list-style: none;
+    margin: 5px 0 0;
+    padding: 8px 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 1000;
+}
+
+.widget-currency-switcher .currency-dropdown:hover .currency-list {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.widget-currency-switcher .currency-list li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    color: var(--text-color, #333);
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.widget-currency-switcher .currency-list li a:hover {
+    background-color: #f5f5f5;
+}
+
+.widget-currency-switcher .currency-list li.active a {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-currency-switcher .currency-list .currency-symbol {
+    width: 20px;
+    text-align: center;
+    font-size: 16px;
+}
+
+.widget-currency-switcher .currency-list .currency-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.widget-currency-switcher .currency-list .currency-code {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.widget-currency-switcher .currency-list .currency-name {
+    font-size: 11px;
+    color: #666;
+}
+
+.widget-currency-switcher .currency-list li a i {
+    color: var(--primary-color, #007bff);
+}
+</style>

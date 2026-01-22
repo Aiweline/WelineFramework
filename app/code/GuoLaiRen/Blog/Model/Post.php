@@ -20,6 +20,7 @@ class Post extends Model
 
     // 字段定义
     public const fields_ID           = 'post_id';
+    public const fields_SITE_ID      = 'site_id';
     public const fields_CATEGORY_ID  = 'category_id';
     public const fields_TITLE        = 'title';
     public const fields_SLUG         = 'slug';
@@ -132,6 +133,13 @@ class Post extends Model
                 '文章ID'
             )
             ->addColumn(
+                self::fields_SITE_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '所属站点ID'
+            )
+            ->addColumn(
                 self::fields_CATEGORY_ID,
                 TableInterface::column_type_INTEGER,
                 0,
@@ -231,6 +239,12 @@ class Post extends Model
             )
             ->addIndex(
                 TableInterface::index_type_KEY,
+                'idx_site_id',
+                [self::fields_SITE_ID],
+                '站点索引'
+            )
+            ->addIndex(
+                TableInterface::index_type_KEY,
                 'idx_category_id',
                 [self::fields_CATEGORY_ID],
                 '分类索引'
@@ -263,6 +277,23 @@ class Post extends Model
     {
         if (!$setup->tableExist()) {
             return;
+        }
+        
+        // 添加 site_id 字段
+        if (!$setup->hasField(self::fields_SITE_ID)) {
+            $setup->alterTable()->addColumn(
+                self::fields_SITE_ID,
+                self::fields_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '所属站点ID'
+            )->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_site_id',
+                [self::fields_SITE_ID],
+                '站点索引'
+            )->alter();
         }
         
         // 添加 category_id 字段

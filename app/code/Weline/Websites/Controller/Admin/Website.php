@@ -322,6 +322,82 @@ class Website extends BackendController
         return $this->fetch('form');
     }
 
+    /**
+     * 快速创建站点（AJAX接口）
+     * 用于一键建站等场景的快速创建
+     */
+    #[Acl('Weline_Websites::website_quick_save', '快速创建站点', '', '快速创建站点')]
+    public function quickSave()
+    {
+        try {
+            $name = trim($this->request->getPost('name', ''));
+            $code = trim($this->request->getPost('code', ''));
+            $url = trim($this->request->getPost('url', ''));
+            $defaultTimezone = $this->request->getPost('default_timezone', 'Asia/Shanghai');
+            
+            // 验证必填字段
+            if (empty($name)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点名称不能为空'),
+                ]);
+            }
+            
+            if (empty($code)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点代码不能为空'),
+                ]);
+            }
+            
+            if (empty($url)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点URL不能为空'),
+                ]);
+            }
+            
+            // 检查code是否已存在
+            $existingWebsite = clone $this->website;
+            $existingWebsite->clear()
+                ->where(\Weline\Websites\Model\Website::fields_CODE, $code)
+                ->find()
+                ->fetch();
+            
+            if ($existingWebsite->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点代码已存在'),
+                ]);
+            }
+            
+            // 创建站点
+            $newWebsite = clone $this->website;
+            $newWebsite->clearData()
+                ->setData(\Weline\Websites\Model\Website::fields_NAME, $name)
+                ->setData(\Weline\Websites\Model\Website::fields_CODE, $code)
+                ->setData(\Weline\Websites\Model\Website::fields_URL, rtrim($url, '/'))
+                ->setData(\Weline\Websites\Model\Website::fields_DEFAULT_TIMEZONE, $defaultTimezone)
+                ->save(true);
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('站点创建成功'),
+                'website' => [
+                    'website_id' => $newWebsite->getId(),
+                    'name' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_NAME),
+                    'code' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_CODE),
+                    'url' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_URL),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('创建失败：') . $e->getMessage(),
+            ]);
+        }
+    }
+
     #[Acl('Weline_Websites::website_delete', '删除网站', 'mdi mdi-delete', '网站管理')]
     public function deleteDelete(): string
     {

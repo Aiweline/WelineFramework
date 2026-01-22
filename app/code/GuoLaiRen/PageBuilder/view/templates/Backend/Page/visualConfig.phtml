@@ -164,9 +164,10 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
     display: none;
 }
 
-/* 右侧预览面板 */
+/* 中间预览面板 */
 .preview-panel {
     flex: 1;
+    min-width: 0; /* 防止 flex 子项溢出 */
     background: #ecf0f1;
     display: flex;
     flex-direction: column;
@@ -174,6 +175,11 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
     justify-content: center;
     position: relative;
     overflow: auto;
+}
+
+/* 右侧组件面板 - 与 component_panel.phtml 中的样式配合 */
+.visual-content > .component-panel {
+    flex-shrink: 0;
 }
 
 .preview-container {
@@ -258,6 +264,11 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
             <!-- 刷新预览 -->
             <button type="button" class="btn btn-sm btn-info" onclick="refreshPreview()">
                 <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
+            </button>
+            
+            <!-- 组件面板切换 -->
+            <button type="button" class="btn btn-sm btn-primary" onclick="toggleComponentPanel()" id="toggleComponentBtn" title="<?= __('组件库') ?>">
+                <i class="mdi mdi-puzzle"></i> <?= __('组件') ?>
             </button>
         </div>
     </div>
@@ -556,7 +567,7 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
             </div>
         </div>
         
-        <!-- 右侧预览面板 -->
+        <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
                 <iframe id="previewIframe" 
@@ -571,6 +582,13 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                 </div>
             </div>
         </div>
+        
+        <!-- 右侧组件面板 -->
+        <?php 
+        $this->assign('style_code', $page ? $page->getData('style') : 'default');
+        $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
+        ?>
+        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
 </div>
 
