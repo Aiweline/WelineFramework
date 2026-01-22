@@ -1,0 +1,107 @@
+<?php
+/**
+ * 后台首页主要概览区域 Hook 实现
+ *
+ * Hook 名称：Weline_Admin::backend::layouts::dashboard::main-overview
+ *
+ * 功能：
+ * - 在 Admin 后台首页中部展示像素统计的趋势与热门事件摘要
+ *
+ * @hook-priority 150
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+use Weline\Visitor\Service\PixelStatisticsService;
+
+try {
+    $overview   = PixelStatisticsService::getGlobalDashboardOverview(7, 5);
+    $trends     = $overview['trends']      ?? [];
+    $topEvents  = $overview['top_events']  ?? [];
+} catch (\Throwable $e) {
+    // 失败时直接回退到默认实现
+    return;
+}
+?>
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-grow-1">
+                        <h5 class="card-title mb-0">
+                            <lang>最近 7 天像素趋势</lang>
+                        </h5>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <span class="badge bg-soft-primary text-primary font-size-12">
+                            <lang>像素统计</lang>
+                        </span>
+                    </div>
+                </div>
+
+                <?php if (!empty($trends)): ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th><lang>日期</lang></th>
+                                <th class="text-end"><lang>事件数</lang></th>
+                                <th class="text-end"><lang>价值</lang></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($trends as $row): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($row['date'] ?? '') ?></td>
+                                    <td class="text-end"><?= number_format((int)($row['count'] ?? 0)) ?></td>
+                                    <td class="text-end"><?= number_format((float)($row['value'] ?? 0), 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <p class="text-muted mb-0">
+                        <lang>暂无像素趋势数据。</lang>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-grow-1">
+                        <h5 class="card-title mb-0">
+                            <lang>热门事件 Top 5</lang>
+                        </h5>
+                    </div>
+                </div>
+
+                <?php if (!empty($topEvents)): ?>
+                    <ul class="list-group list-group-flush">
+                        <?php foreach ($topEvents as $eventName => $count): ?>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <span class="text-truncate" title="<?= htmlspecialchars($eventName) ?>">
+                                    <?= htmlspecialchars($eventName) ?>
+                                </span>
+                                <span class="badge bg-primary rounded-pill">
+                                    <?= number_format((int)$count) ?>
+                                </span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php else: ?>
+                    <p class="text-muted mb-0">
+                        <lang>暂无事件统计数据。</lang>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>

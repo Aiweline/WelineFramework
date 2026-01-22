@@ -1,0 +1,236 @@
+<?php
+/**
+ * 布局：Cookie 政策页面
+ *
+ * 仅用于展示 Cookie / 本地存储 相关政策条款
+ * 字段
+ * @meta.name {default="Cookie 政策页面",name="Cookie 政策页面",description="用于展示网站 Cookie 使用说明及用户选择权"}
+ * @meta.description {default="说明我们如何使用 Cookie 以及用户如何管理 Cookie",name="Cookie 政策说明",description="用于展示网站 Cookie、LocalStorage 等技术的使用目的、类型和管理方式"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="Cookie 政策",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.cookie::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.cookie::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-policy-page weline-cookie-policy">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+
+            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> cookie-policy" id="cookie-policy-main" data-layout="policy-cookie">
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <div class="policy-default-content">
+                        <div class="container">
+                            <section class="policy-header">
+                                <h1 class="policy-title">
+                                    <if condition="meta.title">
+                                        {{meta.title}}
+                                    <else/>
+                                        <lang>Cookie 政策</lang>
+                                    </if>
+                                </h1>
+                                <p class="policy-description">
+                                    <lang>本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>一、什么是 Cookie？</lang></h2>
+                                <p class="section-text">
+                                    <lang>Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>二、我们如何使用 Cookie？</lang></h2>
+                                <p class="section-text">
+                                    <lang>我们使用 Cookie 和类似技术（如 LocalStorage、SessionStorage 等），主要用于以下目的：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）身份识别与登录状态维护：用于识别您的账户身份，保持登录状态，避免频繁重复登录。</lang></li>
+                                    <li><lang>（2）偏好设置记忆：记录您的语言、地区、显示设置等偏好，提升浏览体验。</lang></li>
+                                    <li><lang>（3）安全与风控：用于识别异常登录、保障交易安全、防范欺诈行为。</lang></li>
+                                    <li><lang>（4）统计与分析：用于了解网站访问量、来源渠道、使用习惯，以便优化产品和服务。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>三、我们使用的 Cookie 类型</lang></h2>
+                                <p class="section-text">
+                                    <lang>根据用途不同，我们可能会使用以下类型的 Cookie：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）严格必要类 Cookie：用于实现网站基本功能，例如账号登录、购物车、订单结算等。若缺少此类 Cookie，网站功能将无法正常运行。</lang></li>
+                                    <li><lang>（2）功能性 Cookie：用于记住您的偏好设置，如语言、地区等，以便为您提供更加个性化的服务。</lang></li>
+                                    <li><lang>（3）统计与性能 Cookie：用于收集网站访问数据，帮助我们了解网站性能并进行改进。</lang></li>
+                                    <li><lang>（4）营销与广告 Cookie（如有）：用于向您展示更匹配您兴趣的内容或广告。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>四、第三方 Cookie</lang></h2>
+                                <p class="section-text">
+                                    <lang>在某些情况下，我们可能会使用第三方提供的服务（例如统计分析工具、支付服务、社交媒体插件等），这些第三方也可能在您的设备上设置或读取 Cookie。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>第三方 Cookie 的使用受其各自的隐私政策约束，我们建议您查阅相关第三方的隐私政策以了解详细信息。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>五、您如何管理 Cookie？</lang></h2>
+                                <p class="section-text">
+                                    <lang>您可以通过以下方式管理或删除 Cookie：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）浏览器设置：大多数浏览器均提供禁用或删除 Cookie 的选项，您可以在“设置”“隐私”或“安全”等菜单中进行管理。</lang></li>
+                                    <li><lang>（2）清除浏览数据：您可以在浏览器中清除缓存和 Cookie，以删除已存储的 Cookie。</lang></li>
+                                    <li><lang>（3）选择退出部分第三方服务：部分第三方提供 Cookie 选择退订机制，具体以第三方说明为准。</lang></li>
+                                </ul>
+                                <p class="section-text">
+                                    <lang>请注意，如您禁用或删除 Cookie，可能会导致本网站部分功能无法正常使用或体验下降。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>六、Cookie 政策的更新</lang></h2>
+                                <p class="section-text">
+                                    <lang>我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。</lang>
+                                </p>
+                            </section>
+                        </div>
+                    </div>
+                </if>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::policy.cookie::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .cookie-policy.policy-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+
+    .policy-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .policy-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+
+    .policy-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+
+    .policy-section {
+        margin-top: 1.75rem;
+    }
+
+    .policy-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-list {
+        margin: 0.75rem 0;
+        padding-left: 1.5rem;
+        list-style-type: decimal;
+    }
+
+    .policy-list li {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .cookie-policy.policy-main {
+            padding: 1.5rem 0;
+        }
+
+        .policy-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+
+        .policy-title {
+            font-size: 1.6rem;
+        }
+
+        .policy-section .section-title {
+            font-size: 1.1rem;
+        }
+
+        .policy-list {
+            padding-left: 1.25rem;
+        }
+
+        .policy-list li {
+            font-size: 0.9rem;
+        }
+    }
+    </style>
+</body>
+</html>
+

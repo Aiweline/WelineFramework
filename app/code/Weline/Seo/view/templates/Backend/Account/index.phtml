@@ -1,0 +1,102 @@
+<?php
+/**
+ * SEO 账户列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var array $accounts */
+$accounts = $accounts ?? [];
+$scope = $scope ?? '';
+$module = $module ?? '';
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
+                <a href="<?= $this->getBackendUrl('seo/backend/account/form', ['scope' => $scope, 'module' => $module]) ?>"
+                   class="btn btn-primary">
+                    <i class="mdi mdi-plus-circle-outline me-1"></i>
+                    <lang>新增账户</lang>
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th><lang>ID</lang></th>
+                            <th><lang>名称</lang></th>
+                            <th><lang>供应商</lang></th>
+                            <th><lang>Scope</lang></th>
+                            <th><lang>模块</lang></th>
+                            <th><lang>启用</lang></th>
+                            <th><lang>URL定时推送</lang></th>
+                            <th><lang>Sitemap定时提交</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($accounts)): ?>
+                            <tr>
+                                <td colspan="9" class="text-center text-muted">
+                                    <lang>暂无账户</lang>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($accounts as $account): ?>
+                                <tr>
+                                    <td><?= (int)($account['account_id'] ?? 0) ?></td>
+                                    <td><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td><?= htmlspecialchars((string)($account['module'] ?? ''), ENT_QUOTES) ?></td>
+                                    <td>
+                                        <?php if ((int)($account['is_active'] ?? 0) === 1): ?>
+                                            <span class="badge bg-success"><lang>启用</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($account['enable_cron_push_urls'] ?? 0) === 1): ?>
+                                            <span class="badge bg-success"><lang>开启</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>关闭</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($account['enable_cron_sitemap'] ?? 0) === 1): ?>
+                                            <span class="badge bg-success"><lang>开启</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>关闭</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a href="<?= $this->getBackendUrl('seo/backend/account/form', [
+                                            'id' => (int)($account['account_id'] ?? 0),
+                                            'scope' => $scope,
+                                            'module' => $module
+                                        ]) ?>"
+                                           class="btn btn-sm btn-outline-primary">
+                                            <lang>编辑</lang>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

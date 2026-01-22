@@ -1,0 +1,272 @@
+<?php
+/**
+ * 布局：隐私政策页面
+ *
+ * 用于展示网站隐私政策和个人信息保护说明
+ * 字段
+ * @meta.name {default="隐私政策页面",name="隐私政策页面",description="用于展示网站隐私政策和个人信息保护说明"}
+ * @meta.description {default="说明我们如何收集、使用、保护您的个人信息",name="隐私政策说明",description="用于展示网站隐私政策、个人信息收集使用规则、用户权利等内容"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="隐私政策",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.privacy::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.privacy::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-policy-page weline-privacy-policy">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+
+            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> privacy-policy" id="privacy-policy-main" data-layout="policy-privacy">
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <div class="policy-default-content">
+                        <div class="container">
+                            <section class="policy-header">
+                                <h1 class="policy-title">
+                                    <if condition="meta.title">
+                                        {{meta.title}}
+                                    <else/>
+                                        <lang>隐私政策</lang>
+                                    </if>
+                                </h1>
+                                <p class="policy-description">
+                                    <lang>我们非常重视您的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本政策，以了解我们对您个人信息的处理方式。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>一、信息收集</lang></h2>
+                                <p class="section-text">
+                                    <lang>1.1 我们会在合法、正当、必要的前提下收集您的个人信息。我们可能收集的信息包括：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）账户信息：用户名、密码、邮箱地址、手机号码、实名认证信息等；</lang></li>
+                                    <li><lang>（2）交易信息：订单信息、支付信息、收货地址、发票信息等；</lang></li>
+                                    <li><lang>（3）设备信息：设备型号、操作系统、浏览器类型、IP地址、设备标识符等；</lang></li>
+                                    <li><lang>（4）日志信息：访问时间、访问页面、搜索关键词、点击记录等；</lang></li>
+                                    <li><lang>（5）位置信息：在您授权的情况下，我们可能收集您的地理位置信息；</lang></li>
+                                    <li><lang>（6）其他信息：您主动提供的其他个人信息。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>二、信息使用</lang></h2>
+                                <p class="section-text">
+                                    <lang>2.1 我们收集信息的目的包括：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）提供、维护和改进服务：处理您的订单、提供客户支持、优化用户体验；</lang></li>
+                                    <li><lang>（2）身份验证与安全：验证您的身份、保障账户安全、防范欺诈行为；</lang></li>
+                                    <li><lang>（3）个性化服务：根据您的偏好提供个性化内容和推荐；</lang></li>
+                                    <li><lang>（4）营销与推广：向您发送促销信息、活动通知（您可随时退订）；</lang></li>
+                                    <li><lang>（5）数据分析：进行统计分析，改进产品和服务质量；</lang></li>
+                                    <li><lang>（6）法律合规：遵守法律法规要求，配合监管机构调查。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>三、信息共享与披露</lang></h2>
+                                <p class="section-text">
+                                    <lang>3.1 我们不会向第三方出售、出租或以其他方式披露您的个人信息，除非：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）获得您的明确同意；</lang></li>
+                                    <li><lang>（2）法律法规规定或司法机关、行政机关依法要求提供；</lang></li>
+                                    <li><lang>（3）为履行服务协议或提供服务所必需，向我们的关联公司、合作伙伴或服务提供商共享（我们要求其承担保密义务）；</lang></li>
+                                    <li><lang>（4）在紧急情况下，为保护用户或公众的生命、财产安全；</lang></li>
+                                    <li><lang>（5）其他符合法律法规规定的情形。</lang></li>
+                                </ul>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>四、信息存储与安全</lang></h2>
+                                <p class="section-text">
+                                    <lang>4.1 我们采用行业标准的安全措施保护您的个人信息，包括但不限于数据加密、访问控制、安全审计等。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.2 您的个人信息将存储在中华人民共和国境内。如需跨境传输，我们将依法进行安全评估并获得您的同意。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.3 我们仅在实现本政策所述目的所必需的期间内保留您的个人信息。超出保留期限后，我们将删除或匿名化处理您的个人信息。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>五、您的权利</lang></h2>
+                                <p class="section-text">
+                                    <lang>根据相关法律法规，您享有以下权利：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）查询权：您有权查询我们收集的您的个人信息；</lang></li>
+                                    <li><lang>（2）更正权：您有权要求我们更正不准确的个人信息；</lang></li>
+                                    <li><lang>（3）删除权：在符合法律法规规定的情况下，您有权要求我们删除您的个人信息；</lang></li>
+                                    <li><lang>（4）撤回同意权：您有权撤回对个人信息处理的同意；</lang></li>
+                                    <li><lang>（5）复制权：您有权获取您的个人信息副本；</lang></li>
+                                    <li><lang>（6）投诉举报权：您有权向相关监管部门投诉举报我们的个人信息处理行为。</lang></li>
+                                </ul>
+                                <p class="section-text">
+                                    <lang>您可以通过账户设置或联系我们行使上述权利。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>六、未成年人保护</lang></h2>
+                                <p class="section-text">
+                                    <lang>6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得您的父母或监护人同意后使用我们的服务。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.2 如果我们发现自己在未事先获得可证实的父母或监护人同意的情况下收集了未成年人的个人信息，我们会设法尽快删除相关数据。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>七、政策更新</lang></h2>
+                                <p class="section-text">
+                                    <lang>7.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>八、联系我们</lang></h2>
+                                <p class="section-text">
+                                    <lang>如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站提供的联系方式与我们联系。我们将在合理期限内回复您的请求。</lang>
+                                </p>
+                            </section>
+                        </div>
+                    </div>
+                </if>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::policy.privacy::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .privacy-policy.policy-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+
+    .policy-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .policy-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+
+    .policy-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+
+    .policy-section {
+        margin-top: 1.75rem;
+    }
+
+    .policy-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-list {
+        margin: 0.75rem 0;
+        padding-left: 1.5rem;
+        list-style-type: decimal;
+    }
+
+    .policy-list li {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .privacy-policy.policy-main {
+            padding: 1.5rem 0;
+        }
+
+        .policy-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+
+        .policy-title {
+            font-size: 1.6rem;
+        }
+
+        .policy-section .section-title {
+            font-size: 1.1rem;
+        }
+
+        .policy-list {
+            padding-left: 1.25rem;
+        }
+
+        .policy-list li {
+            font-size: 0.9rem;
+        }
+    }
+    </style>
+</body>
+</html>

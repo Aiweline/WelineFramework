@@ -1,0 +1,201 @@
+<?php
+/**
+ * 宝塔服务器表单
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+/** @var \Weline\Bt_Center\Model\BtServer $server */
+$server = $server ?? null;
+/** @var array $platformOptions */
+$platformOptions = $platformOptions ?? [];
+
+$id = $server ? (int)$server->getId() : 0;
+$name = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_NAME) : '';
+$platform = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PLATFORM) : '';
+$externalUrl = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_EXTERNAL_URL) : '';
+$internalUrl = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_INTERNAL_URL) : '';
+$username = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_USERNAME) : '';
+$password = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PASSWORD) : '';
+$port = $server ? (int)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PORT) : 8888;
+$description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_DESCRIPTION) : '';
+?>
+
+@template(Weline_Admin::common/head.phtml)
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <?php if ($id): ?>
+                        <lang>编辑宝塔服务器</lang> #<?= $id ?>
+                    <?php else: ?>
+                        <lang>新增宝塔服务器</lang>
+                    <?php endif; ?>
+                </h4>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form id="btServerForm" onsubmit="saveBtServer(event)">
+                    <input type="hidden" name="id" value="<?= $id ?>">
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>服务器名称</lang> <span class="text-danger">*</span></label>
+                        <input type="text"
+                               name="name"
+                               class="form-control"
+                               value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
+                               placeholder="<lang>请输入服务器名称或标识</lang>"
+                               required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>云平台</lang> <span class="text-danger">*</span></label>
+                        <select name="platform" class="form-select" required>
+                            <option value=""><lang>请选择云平台</lang></option>
+                            <?php foreach ($platformOptions as $key => $label): ?>
+                                <option value="<?= htmlspecialchars($key, ENT_QUOTES) ?>" <?= $platform === $key ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($label, ENT_QUOTES) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>外网IPv4面板地址</lang> <span class="text-danger">*</span></label>
+                        <input type="url"
+                               name="external_url"
+                               class="form-control"
+                               value="<?= htmlspecialchars($externalUrl, ENT_QUOTES) ?>"
+                               placeholder="https://3.7.199.83:22248/f9a64fa7"
+                               required>
+                        <div class="form-text">
+                            <lang>例如：https://3.7.199.83:22248/f9a64fa7</lang>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>内网面板地址</lang></label>
+                        <input type="url"
+                               name="internal_url"
+                               class="form-control"
+                               value="<?= htmlspecialchars($internalUrl, ENT_QUOTES) ?>"
+                               placeholder="https://172.31.37.148:22248/f9a64fa7">
+                        <div class="form-text">
+                            <lang>例如：https://172.31.37.148:22248/f9a64fa7</lang>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><lang>用户名</lang> <span class="text-danger">*</span></label>
+                            <input type="text"
+                                   name="username"
+                                   class="form-control"
+                                   value="<?= htmlspecialchars($username, ENT_QUOTES) ?>"
+                                   required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><lang>密码</lang> <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="password"
+                                       name="password"
+                                       id="password"
+                                       class="form-control"
+                                       value="<?= htmlspecialchars($password, ENT_QUOTES) ?>"
+                                       required>
+                                <button type="button" class="btn btn-outline-secondary" onclick="togglePassword()">
+                                    <i class="mdi mdi-eye" id="passwordToggleIcon"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>端口</lang></label>
+                        <input type="number"
+                               name="port"
+                               class="form-control"
+                               value="<?= $port ?>"
+                               placeholder="8888"
+                               min="1"
+                               max="65535">
+                        <div class="form-text">
+                            <lang>默认端口：8888，如果使用自定义端口请填写</lang>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><lang>备注描述</lang></label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="<lang>请输入备注信息</lang>"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-1"></i>
+                            <lang>保存</lang>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>"
+                           class="btn btn-secondary ms-2">
+                            <lang>返回列表</lang>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.getElementById('passwordToggleIcon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('mdi-eye');
+        toggleIcon.classList.add('mdi-eye-off');
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('mdi-eye-off');
+        toggleIcon.classList.add('mdi-eye');
+    }
+}
+
+function saveBtServer(event) {
+    event.preventDefault();
+    const form = document.getElementById('btServerForm');
+    const formData = new FormData(form);
+
+    const data = {};
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+
+    fetch('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+        .then(response => response.json())
+        .then(resp => {
+            if (resp.success) {
+                showPageMessage('success', resp.message);
+                setTimeout(() => {
+                    window.location.href = '<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>';
+                }, 800);
+            } else {
+                showPageMessage('error', resp.message || '保存失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showPageMessage('error', '请求失败');
+        });
+}
+</script>

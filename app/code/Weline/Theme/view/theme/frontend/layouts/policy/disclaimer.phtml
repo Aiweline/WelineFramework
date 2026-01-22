@@ -1,0 +1,259 @@
+<?php
+/**
+ * 布局：免责声明页面
+ *
+ * 用于展示网站免责声明和责任限制
+ * 字段
+ * @meta.name {default="免责声明页面",name="免责声明页面",description="用于展示网站免责声明和责任限制"}
+ * @meta.description {default="说明网站的责任限制和免责情形",name="免责声明说明",description="用于展示网站免责声明、责任限制、风险提示等内容"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="免责声明",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-policy-page weline-disclaimer">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+
+            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> disclaimer" id="disclaimer-main" data-layout="policy-disclaimer">
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <div class="policy-default-content">
+                        <div class="container">
+                            <section class="policy-header">
+                                <h1 class="policy-title">
+                                    <if condition="meta.title">
+                                        {{meta.title}}
+                                    <else/>
+                                        <lang>免责声明</lang>
+                                    </if>
+                                </h1>
+                                <p class="policy-description">
+                                    <lang>本免责声明说明了本网站在提供服务过程中的责任限制和免责情形。请您在使用本网站服务前仔细阅读本声明。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>一、服务中断与数据丢失</lang></h2>
+                                <p class="section-text">
+                                    <lang>1.1 本网站不对因以下原因导致的服务中断或数据丢失承担责任：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）不可抗力因素，如自然灾害、战争、罢工、政府行为等；</lang></li>
+                                    <li><lang>（2）网络故障、系统维护、升级、故障等原因；</lang></li>
+                                    <li><lang>（3）黑客攻击、病毒入侵、恶意程序等安全威胁；</lang></li>
+                                    <li><lang>（4）用户操作不当或违反使用规范；</lang></li>
+                                    <li><lang>（5）其他超出我们合理控制范围的原因。</lang></li>
+                                </ul>
+                                <p class="section-text">
+                                    <lang>1.2 我们将尽力保障服务的稳定性和数据安全，但不对服务的绝对连续性、无中断性做出保证。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>二、信息内容免责</lang></h2>
+                                <p class="section-text">
+                                    <lang>2.1 本网站不对用户发布的信息的真实性、准确性、完整性、合法性负责。用户应自行判断并承担相应风险。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>2.2 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。商品的实际质量、性能、规格等以实物为准。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>2.3 本网站可能包含第三方提供的内容或链接，我们不对第三方内容或链接的准确性、合法性、安全性负责。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>三、交易风险免责</lang></h2>
+                                <p class="section-text">
+                                    <lang>3.1 本网站仅为交易双方提供信息发布和交易撮合服务，不对交易双方之间的交易行为承担责任。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.2 交易双方应自行承担交易风险，包括但不限于商品质量、交付、支付等风险。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.3 如发生交易纠纷，交易双方应自行协商解决。本网站可提供必要的协助，但不承担任何责任。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>四、第三方服务免责</lang></h2>
+                                <p class="section-text">
+                                    <lang>4.1 本网站可能使用第三方提供的服务（如支付服务、物流服务、数据分析服务等），我们不对第三方服务的质量、安全性、可靠性负责。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.2 如因第三方服务导致的问题或损失，您应直接与第三方协商解决，我们可提供必要的协助。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>五、责任限制</lang></h2>
+                                <p class="section-text">
+                                    <lang>5.1 在法律允许的范围内，我们对因使用或无法使用本网站服务而产生的任何直接、间接、偶然、特殊或后果性损失不承担责任。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.2 我们的责任总额不超过您因使用本网站服务而向我们支付的费用总额。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.3 本免责声明不影响法律法规规定的强制性责任，也不影响因我们的故意或重大过失导致的责任。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>六、用户行为免责</lang></h2>
+                                <p class="section-text">
+                                    <lang>6.1 如因用户违反法律法规、本网站服务条款或使用规范导致的问题或损失，由用户自行承担责任。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.2 如因用户提供虚假信息、恶意操作、侵犯他人权益等行为导致的问题或损失，由用户自行承担责任，我们保留追究法律责任的权利。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>七、其他</lang></h2>
+                                <p class="section-text">
+                                    <lang>7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。</lang>
+                                </p>
+                            </section>
+                        </div>
+                    </div>
+                </if>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .disclaimer.policy-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+
+    .policy-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .policy-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+
+    .policy-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+
+    .policy-section {
+        margin-top: 1.75rem;
+    }
+
+    .policy-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-list {
+        margin: 0.75rem 0;
+        padding-left: 1.5rem;
+        list-style-type: decimal;
+    }
+
+    .policy-list li {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .disclaimer.policy-main {
+            padding: 1.5rem 0;
+        }
+
+        .policy-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+
+        .policy-title {
+            font-size: 1.6rem;
+        }
+
+        .policy-section .section-title {
+            font-size: 1.1rem;
+        }
+
+        .policy-list {
+            padding-left: 1.25rem;
+        }
+
+        .policy-list li {
+            font-size: 0.9rem;
+        }
+    }
+    </style>
+</body>
+</html>
