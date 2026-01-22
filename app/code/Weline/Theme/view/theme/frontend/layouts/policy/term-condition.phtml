@@ -1,0 +1,281 @@
+<?php
+/**
+ * 布局：服务条款页面
+ *
+ * 用于展示网站服务条款和使用协议
+ * 字段
+ * @meta.name {default="服务条款页面",name="服务条款页面",description="用于展示网站服务条款和使用协议"}
+ * @meta.description {default="说明用户使用本网站服务的条款和条件",name="服务条款说明",description="用于展示网站服务条款、用户协议、使用规则等内容"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="服务条款",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.term-condition::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::policy.term-condition::body-start</w:hook>
+
+    <div class="weline-page-wrapper weline-policy-page weline-term-condition">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+
+            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> term-condition" id="term-condition-main" data-layout="policy-term-condition">
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <div class="policy-default-content">
+                        <div class="container">
+                            <section class="policy-header">
+                                <h1 class="policy-title">
+                                    <if condition="meta.title">
+                                        {{meta.title}}
+                                    <else/>
+                                        <lang>服务条款</lang>
+                                    </if>
+                                </h1>
+                                <p class="policy-description">
+                                    <lang>欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>一、服务说明</lang></h2>
+                                <p class="section-text">
+                                    <lang>1.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务、信息发布等。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>1.2 我们有权根据业务发展需要，调整、变更或终止部分或全部服务，无需事先通知您。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>1.3 您理解并同意，本网站可能因系统维护、升级等原因暂停服务，我们将尽力减少对您的影响。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>二、用户账户</lang></h2>
+                                <p class="section-text">
+                                    <lang>2.1 您需要注册账户才能使用本网站的某些服务。注册时，您应提供真实、准确、完整的个人信息。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>2.2 您有责任妥善保管账户信息，不得将账户出借、转让或授权他人使用。因您保管不当导致的损失，由您自行承担。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>2.3 如发现账户被盗用或存在安全风险，您应立即通知我们，我们将协助您采取相应措施。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>三、使用规范</lang></h2>
+                                <p class="section-text">
+                                    <lang>3.1 您在使用本网站服务时，应遵守相关法律法规，不得利用本网站从事违法违规活动。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>3.2 您不得从事以下行为：</lang>
+                                </p>
+                                <ul class="policy-list">
+                                    <li><lang>（1）发布违法、虚假、侵权、骚扰、威胁、诽谤、色情、暴力等不当内容；</lang></li>
+                                    <li><lang>（2）侵犯他人知识产权、隐私权、名誉权等合法权益；</lang></li>
+                                    <li><lang>（3）干扰、破坏本网站的正常运行或安全；</lang></li>
+                                    <li><lang>（4）利用技术手段恶意注册、刷单、作弊等；</lang></li>
+                                    <li><lang>（5）其他违反法律法规或本条款的行为。</lang></li>
+                                </ul>
+                                <p class="section-text">
+                                    <lang>3.3 如您违反上述规定，我们有权立即终止向您提供服务，并保留追究法律责任的权利。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>四、商品与交易</lang></h2>
+                                <p class="section-text">
+                                    <lang>4.1 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.2 商品价格、库存等信息可能随时变动，以实际下单时的信息为准。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.3 您在下单时，应仔细核对商品信息、价格、数量等，确认无误后再提交订单。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>4.4 订单提交成功后，您应按照约定支付款项。如未在规定时间内支付，订单可能被自动取消。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>五、知识产权</lang></h2>
+                                <p class="section-text">
+                                    <lang>5.1 本网站的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、版面设计等，均受知识产权法律法规保护。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.2 本网站的所有知识产权归我们或相关权利人所有，未经授权，任何人不得复制、传播、展示、镜像、上传、下载或以其他方式使用。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>5.3 您在使用本网站服务时上传、发布的内容，您应保证拥有相应的知识产权或已获得合法授权。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>六、免责声明</lang></h2>
+                                <p class="section-text">
+                                    <lang>6.1 本网站不对因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失承担责任。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.2 本网站不对用户发布的信息的真实性、准确性、完整性负责，用户应自行判断并承担相应风险。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>6.3 本网站不对第三方网站的内容、服务或链接负责，您访问第三方网站的风险由您自行承担。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>七、争议解决</lang></h2>
+                                <p class="section-text">
+                                    <lang>7.1 因本条款引起的或与本条款有关的任何争议，双方应友好协商解决。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>7.2 如协商不成，任何一方均可向本网站所在地有管辖权的人民法院提起诉讼。</lang>
+                                </p>
+                            </section>
+
+                            <section class="policy-section">
+                                <h2 class="section-title"><lang>八、其他</lang></h2>
+                                <p class="section-text">
+                                    <lang>8.1 本条款自发布之日起生效，并持续有效，直至被修订或终止。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>8.2 如本条款的任何条款被认定为无效或不可执行，不影响其他条款的效力。</lang>
+                                </p>
+                                <p class="section-text">
+                                    <lang>8.3 我们保留对本条款的最终解释权，并有权根据法律法规和业务发展需要对本条款进行修订。</lang>
+                                </p>
+                            </section>
+                        </div>
+                    </div>
+                </if>
+            </main>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
+    <w:hook>Weline_Theme::frontend::layouts::policy.term-condition::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+    <style>
+    .term-condition.policy-main {
+        width: 100%;
+        flex: 1;
+        padding: 2rem 0;
+    }
+
+    .policy-default-content {
+        width: 100%;
+        padding: 2rem 0 3rem;
+    }
+
+    .policy-header {
+        text-align: left;
+        margin-bottom: 2rem;
+    }
+
+    .policy-title {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-description {
+        font-size: 0.95rem;
+        color: var(--color-text-secondary, #565959);
+        margin: 0;
+    }
+
+    .policy-section {
+        margin-top: 1.75rem;
+    }
+
+    .policy-section .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-section .section-text {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .policy-list {
+        margin: 0.75rem 0;
+        padding-left: 1.5rem;
+        list-style-type: decimal;
+    }
+
+    .policy-list li {
+        font-size: 0.95rem;
+        color: var(--color-text-muted, #333);
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .term-condition.policy-main {
+            padding: 1.5rem 0;
+        }
+
+        .policy-default-content {
+            padding: 1.5rem 0 2rem;
+        }
+
+        .policy-title {
+            font-size: 1.6rem;
+        }
+
+        .policy-section .section-title {
+            font-size: 1.1rem;
+        }
+
+        .policy-list {
+            padding-left: 1.25rem;
+        }
+
+        .policy-list li {
+            font-size: 0.9rem;
+        }
+    }
+    </style>
+</body>
+</html>

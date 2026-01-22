@@ -1,0 +1,91 @@
+<?php
+/**
+ * 博客文章列表模板
+ *
+ * 变量：
+ * - $posts         array 每篇文章的数据
+ * - $current_page  int   当前页码
+ * - $has_more      bool  是否可能还有下一页
+ */
+?>
+
+<div class="container my-5">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <lang>博客</lang>
+            </h1>
+
+            <if condition="empty($posts)">
+                <div class="alert alert-info">
+                    <i class="mdi mdi-information-outline"></i>
+                    <lang>暂时还没有博客文章，稍后再来看看吧～</lang>
+                </div>
+                <else/>
+                <div class="row">
+                    <?php foreach ($posts as $post): ?>
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card h-100">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <img src="<?= htmlspecialchars($post['cover_image'] ?? '') ?>" 
+                                         class="card-img-top" 
+                                         alt="<?= htmlspecialchars($post['title'] ?? '') ?>"
+                                         style="height: 200px; object-fit: cover;">
+                                <?php endif; ?>
+                                <div class="card-body d-flex flex-column">
+                                    <h5 class="card-title">
+                                        <a href="<?= htmlspecialchars($post['url'] ?? '') ?>" 
+                                           class="text-decoration-none">
+                                            <?= htmlspecialchars($post['title'] ?? '') ?>
+                                        </a>
+                                    </h5>
+                                    <?php if (!empty($post['summary'])): ?>
+                                        <p class="card-text text-muted flex-grow-1">
+                                            <?= htmlspecialchars(mb_substr($post['summary'], 0, 100)) ?><?= mb_strlen($post['summary']) > 100 ? '...' : '' ?>
+                                        </p>
+                                    <?php endif; ?>
+                                    <div class="mt-auto">
+                                        <?php if (!empty($post['published_at'])): ?>
+                                            <small class="text-muted">
+                                                <i class="mdi mdi-clock-outline"></i>
+                                                <?= htmlspecialchars($post['published_at'] ?? '') ?>
+                                            </small>
+                                        <?php endif; ?>
+                                        <div class="mt-2">
+                                            <a href="<?= htmlspecialchars($post['url'] ?? '') ?>" 
+                                               class="btn btn-sm btn-primary">
+                                                <lang>阅读更多</lang>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <div>
+                        <?php if ($current_page > 1): ?>
+                            <a href="?page=<?= $current_page - 1 ?>" class="btn btn-outline-secondary">
+                                <lang>上一页</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <span class="text-muted">
+                            <lang args="['page' => $current_page]">当前第 %{page} 页</lang>
+                        </span>
+                    </div>
+                    <div class="text-end">
+                        <?php if (!empty($has_more)): ?>
+                            <a href="?page=<?= $current_page + 1 ?>" class="btn btn-outline-primary">
+                                <lang>下一页</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </if>
+        </div>
+    </div>
+</div>
