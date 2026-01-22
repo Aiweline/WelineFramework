@@ -15,7 +15,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
 use Weline\Taglib\TaglibInterface;
-use Weline\Widget\Service\WidgetScanner;
+use Weline\Widget\Service\WidgetData;
+use Weline\Widget\Service\WidgetRegistry;
 
 /**
  * w:widget 标签实现
@@ -28,6 +29,17 @@ use Weline\Widget\Service\WidgetScanner;
  */
 class Widget implements TaglibInterface
 {
+    /**
+     * 静态缓存 WidgetData 实例，避免每次调用都通过 ObjectManager 获取
+     */
+    private static ?WidgetData $widgetDataInstance = null;
+    
+    /**
+     * Widget 渲染结果缓存（仅在同一请求内有效）
+     * Key: md5(type + name + serialized params)
+     */
+    private static array $renderCache = [];
+    
     /**
      * 标签名称
      */
@@ -110,18 +122,22 @@ class Widget implements TaglibInterface
             }
 
             try {
-                // 扫描部件配置
-                /** @var WidgetScanner $scanner */
-                $scanner = ObjectManager::getInstance(WidgetScanner::class);
-                $widget = $scanner->scanWidget($type, $name);
+                // 运行时只从注册表读取，不执行扫描
+                if (self::$widgetDataInstance === null) {
+                    self::$widgetDataInstance = ObjectManager::getInstance(WidgetData::class);
+                }
+                $widgetData = self::$widgetDataInstance;
+                
+                // 验证部件类型
+                if (!$widgetData->isValidType($type)) {
+                    return "<!-- Widget 错误: 无效的部件类型 {$type} -->";
+                }
+                
+                // 从注册表获取部件配置
+                $widget = $widgetData->getWidget($type, $name);
 
                 if (!$widget) {
                     return "<!-- Widget 错误: 未找到部件 {$type}/{$name} -->";
-                }
-
-                // 验证部件类型
-                if (!$scanner->isValidType($type)) {
-                    return "<!-- Widget 错误: 无效的部件类型 {$type} -->";
                 }
 
                 // 合并默认参数
@@ -159,6 +175,26 @@ class Widget implements TaglibInterface
      */
     private static function renderWidget(array $widget, array $params, string $blockClass = '', string $template = ''): string
     {
+        // 生成缓存键（仅对模板渲染使用缓存，Block 类可能有动态内容）
+        $cacheKey = null;
+        $useCache = empty($blockClass) && empty($widget['block_class'] ?? '');
+        
+        if ($useCache) {
+            $type = $widget['type'] ?? '';
+            $name = $widget['code'] ?? $widget['name'] ?? '';
+            $templatePath = $template ?: ($widget['template'] ?? '');
+            if (empty($templatePath) && !empty($widget['path'])) {
+                $module = $widget['module'] ?? '';
+                $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
+            }
+            $cacheKey = md5($type . '|' . $name . '|' . $templatePath . '|' . serialize($params));
+            
+            // 检查缓存
+            if (isset(self::$renderCache[$cacheKey])) {
+                return self::$renderCache[$cacheKey];
+            }
+        }
+        
         // 优先使用覆盖的 Block 类
         if (!empty($blockClass)) {
             return self::renderBlock($blockClass, $params);
@@ -172,13 +208,21 @@ class Widget implements TaglibInterface
 
         // 使用覆盖的模板
         if (!empty($template)) {
-            return self::renderTemplate($template, $params);
+            $result = self::renderTemplate($template, $params);
+            if ($cacheKey !== null) {
+                self::$renderCache[$cacheKey] = $result;
+            }
+            return $result;
         }
 
         // 使用部件配置中的模板
         $widgetTemplate = $widget['template'] ?? '';
         if (!empty($widgetTemplate)) {
-            return self::renderTemplate($widgetTemplate, $params);
+            $result = self::renderTemplate($widgetTemplate, $params);
+            if ($cacheKey !== null) {
+                self::$renderCache[$cacheKey] = $result;
+            }
+            return $result;
         }
 
         // 尝试查找默认模板
@@ -189,9 +233,13 @@ class Widget implements TaglibInterface
                 // 构建模板路径
                 $module = $widget['module'] ?? '';
                 $type = $widget['type'] ?? '';
-                $name = $widget['widget_name'] ?? '';
+                $name = $widget['code'] ?? '';
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
-                return self::renderTemplate($templatePath, $params);
+                $result = self::renderTemplate($templatePath, $params);
+                if ($cacheKey !== null) {
+                    self::$renderCache[$cacheKey] = $result;
+                }
+                return $result;
             }
         }
 
@@ -242,19 +290,39 @@ class Widget implements TaglibInterface
      */
     private static function renderTemplate(string $templatePath, array $params): string
     {
+        // 递归保护：防止无限递归
+        static $renderDepth = 0;
+        static $maxDepth = 10;
+        static $renderingTemplates = []; // 跟踪正在渲染的模板，防止循环引用
+        
+        if ($renderDepth >= $maxDepth) {
+            error_log("Widget 模板渲染递归深度超限: {$templatePath}");
+            return '<!-- Widget 错误: 模板渲染递归深度超限 -->';
+        }
+        
+        // 检查循环引用
+        $templateKey = md5($templatePath . serialize($params));
+        if (isset($renderingTemplates[$templateKey])) {
+            error_log("Widget 模板渲染检测到循环引用: {$templatePath}");
+            return '<!-- Widget 错误: 模板渲染循环引用 -->';
+        }
+        
         try {
+            $renderDepth++;
+            $renderingTemplates[$templateKey] = true;
+            
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
-            // 传递参数到模板
-            foreach ($params as $key => $value) {
-                $template->assign($key, $value);
-            }
-
-            // 渲染模板
-            $result = $template->fetch($templatePath);
+            // 直接使用 fetchHtml 传递参数，避免先 assign 再 fetch 的开销
+            $result = $template->fetchHtml($templatePath, $params);
+            
+            $renderDepth--;
+            unset($renderingTemplates[$templateKey]);
             return is_string($result) ? $result : '';
         } catch (\Exception $e) {
+            $renderDepth--;
+            unset($renderingTemplates[$templateKey]);
             error_log("Widget 模板渲染错误: " . $e->getMessage());
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         }

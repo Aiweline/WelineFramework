@@ -1,7 +1,7 @@
 <?php
 /**
  * 片段：Breadcrumb
- * 
+ *
  * 面包屑导航
  * 字段
  * @meta.name {default="Breadcrumb面包屑片段",name="Breadcrumb面包屑片段",description="Breadcrumb面包屑片段，用于描述片段的名称"}
@@ -17,32 +17,119 @@ foreach ($metaParams as $key => $value) {
     $this->setData("meta.{$key}", $value);
 }
 
+// 1. meta 配置优先（一般不配置，仅作为主题预置）
 $items = $this->getData("meta.items") ?? [];
-$separator = $this->getData("meta.separator") ?? '/';
-$class = $this->getData("meta.class") ?? '';
 
-// 构建CSS类
+// 2. 兜底：如果没有 meta.items，则使用一组默认示例数据
+if (empty($items) || !is_array($items)) {
+    $items = [
+        ['text' => (string)__('首页'), 'url' => '/'],
+        ['text' => (string)__('示例分类'), 'url' => '/catalog/category/example'],
+        ['text' => (string)__('当前页面'), 'url' => ''],
+    ];
+}
+
+$separator = $this->getData("meta.separator") ?? $this->getData("separator") ?? '/';
+$class = $this->getData("meta.class") ?? '';
+if(DEV){
+    $block_class = $this->getData("class") ?? '';
+} else {
+    $block_class = '';
+}
+// 构建CSS类（外层容器使用主题版心，与 header/footer 保持一致）
 $breadcrumbClass = 'breadcrumb';
 if ($class) {
     $breadcrumbClass .= ' ' . htmlspecialchars($class);
 }
 ?>
-<nav class="<?= $breadcrumbClass ?>" aria-label="breadcrumb">
-    <ol class="breadcrumb-list">
-        <?php foreach ($items as $index => $item): ?>
-            <li class="breadcrumb-item <?= empty($item['url']) ? 'active' : '' ?>">
-                <?php if (!empty($item['url'])): ?>
-                    <a href="<?= htmlspecialchars($item['url']) ?>">
-                        <?= htmlspecialchars($item['text'] ?? '') ?>
-                    </a>
-                <?php else: ?>
-                    <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+<nav class="{{breadcrumbClass}}" data-block-class="{{block_class}}" data-breadcrumb="breadcrumb" aria-label="breadcrumb">
+    <div class="header-container breadcrumb-inner">
+        <w:hook>Weline_Theme::frontend::partials::breadcrumb::items<else/>
+        <ol class="breadcrumb-list">
+            <?php foreach ($items as $index => $item): ?>
+                <li class="breadcrumb-item <?= empty($item['url']) ? 'active' : '' ?>">
+                    <?php if (!empty($item['url'])): ?>
+                        <a href="<?= htmlspecialchars($item['url']) ?>">
+                            <?= htmlspecialchars($item['text'] ?? '') ?>
+                        </a>
+                    <?php else: ?>
+                        <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+                    <?php endif; ?>
+                </li>
+                <?php if ($index < count($items) - 1): ?>
+                    <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>
                 <?php endif; ?>
-            </li>
-            <?php if ($index < count($items) - 1): ?>
-                <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </ol>
+            <?php endforeach; ?>
+        </ol>
+        </w:hook>
+    </div>
 </nav>
+
+<style>
+.breadcrumb {
+    width: 100%;
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0;
+    background-color: var(--color-bg-secondary, #f3f4f6);
+}
+
+.breadcrumb-inner {
+    /* 复用 header-container 的版心宽度，仅做内边距和文字样式 */
+    padding: 0 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.breadcrumb-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.breadcrumb-item {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+.breadcrumb-item a {
+    color: var(--color-link, #007185);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--color-link-hover, #c45500);
+    text-decoration: underline;
+}
+
+.breadcrumb-item span {
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.breadcrumb-item.active span {
+    font-weight: 500;
+    color: var(--color-text-primary, #111827);
+}
+
+.breadcrumb-separator {
+    margin: 0 0.35rem;
+    color: var(--color-border-light, #d1d5db);
+}
+
+@media (max-width: 768px) {
+    .breadcrumb {
+        padding: 0.35rem 0;
+        margin-bottom: 0.5rem;
+    }
+
+    .breadcrumb-inner {
+        padding: 0 0.75rem;
+        font-size: 0.8rem;
+    }
+}
+</style>
 

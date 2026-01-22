@@ -292,6 +292,8 @@ class Preview extends BackendController
      * 完整预览（头部+内容+页脚）
      * 组合 style/{styleCode}/header.phtml、content.phtml、footer.phtml 三个模板
      * 支持临时切换样式（用于样式选择器预览）
+     * 
+     * 【重要】此方法的渲染逻辑必须与前端 Page.php::view() 保持一致
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '页面预览', '', '页面预览')]
     public function full()
@@ -317,19 +319,92 @@ class Preview extends BackendController
         // 获取样式代码：优先使用临时样式代码，否则使用页面配置的样式
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
-        // 如果使用临时样式，获取该样式的默认配置
-        if ($tempStyleCode && $tempStyleCode !== $page->getData('style')) {
-            // 临时样式：使用模板默认值
-            $currentStyleSettings = $this->getTemplateDefaults($tempStyleCode);
-        } else {
-            // 当前样式：使用页面配置
-            $currentStyleSettings = $this->extractStyleSettings($page, $styleCode, $locale);
+        // 获取当前语言（从Cookie或URL参数）
+        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
+        
+        // 加载样式模型获取默认配置
+        $style = clone $this->styleModel;
+        $style->clear()
+            ->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)
+            ->find()
+            ->fetch();
+        
+        // 解析样式配置
+        $styleConfigs = [];
+        if ($style->getId()) {
+            $parsed = $style->parseStyleConfig();
+            $styleConfigs = $parsed['configs'] ?? [];
+        }
+        
+        // 构建最终配置（与前端 Page.php::view() 逻辑保持一致）
+        $finalSettings = [];
+        
+        // 第一步：使用模板默认配置值（最低优先级）
+        foreach ($styleConfigs as $key => $config) {
+            if (isset($config['default'])) {
+                $finalSettings[$key] = $config['default'];
+            }
+        }
+        
+        // 第二步：用页面保存的配置覆盖（中等优先级）
+        // 如果使用临时样式，跳过页面配置（只使用模板默认值）
+        if (!$tempStyleCode || $tempStyleCode === $page->getData('style')) {
+            $allStyleSettings = $page->getStyleSetting();
+            $pageStyleSettings = [];
+            if ($styleCode && isset($allStyleSettings[$styleCode])) {
+                $rawSettings = $allStyleSettings[$styleCode];
+                // 清理可能存在的三层结构，只保留标量值
+                foreach ($rawSettings as $key => $value) {
+                    if (!is_array($value)) {
+                        $pageStyleSettings[$key] = $value;
+                    }
+                }
+            }
+            // 注意：不再限制只覆盖样式定义中存在的配置项，确保所有页面配置都能生效
+            foreach ($pageStyleSettings as $key => $value) {
+                $finalSettings[$key] = $value;
+            }
+        }
+        
+        // 第三步：用翻译的配置覆盖（最高优先级）
+        // 从本地化描述中获取翻译的样式配置
+        $localizedContent = null;
+        if ($currentLocale) {
+            $localDesc = clone $this->localDescriptionModel;
+            $localDesc->clear()
+                ->where(\GuoLaiRen\PageBuilder\Model\Page\LocalDescription::fields_ID, $page->getId())
+                ->where('local_code', $currentLocale)
+                ->find()
+                ->fetch();
+            
+            if ($localDesc->getId()) {
+                $localizedContent = [
+                    'content' => $localDesc->getData('content'),
+                    'config' => $localDesc->getData('config')
+                ];
+            }
+        }
+        
+        if ($localizedContent && !empty($localizedContent['config'])) {
+            $translatedConfig = is_string($localizedContent['config']) 
+                ? json_decode($localizedContent['config'] ?? '', true) 
+                : $localizedContent['config'];
+            
+            // 检查是否有 style_config 节点
+            if (isset($translatedConfig['style_config']) && is_array($translatedConfig['style_config'])) {
+                foreach ($translatedConfig['style_config'] as $key => $value) {
+                    // 覆盖配置（不限制只覆盖样式定义中存在的配置项）
+                    $finalSettings[$key] = $value;
+                }
+            }
         }
 
-        // 设置模板变量
+        // 设置模板变量（传递两个变量名以兼容不同模板）
         $this->assign('page', $page);
-        $this->assign('style_settings', $currentStyleSettings);
+        $this->assign('style_settings', $finalSettings);
+        $this->assign('style', $finalSettings);
         $this->assign('is_preview', true); // 标记为预览模式
+        $this->assign('current_locale', $currentLocale);
         
         // 组合渲染 header、content、footer 三个模板
         // 使用模块路径格式：GuoLaiRen_PageBuilder::templates/style/{styleCode}/header.phtml
@@ -339,11 +414,51 @@ class Preview extends BackendController
         $headerHtml = $this->fetch("{$stylePath}/header.phtml");
         
         // 渲染 content
-        // 预览模式下：始终使用样式模板的 content.phtml（忽略页面自定义 content）
-        $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+        // 如果页面有自定义内容，使用自定义内容替代 content.phtml
+        // 优先使用翻译后的内容，如果没有则使用默认内容
+        $customContent = '';
+        if ($localizedContent && !empty($localizedContent['content'])) {
+            // 使用翻译后的自定义内容
+            $customContent = $localizedContent['content'];
+        } else {
+            // 使用默认语言的自定义内容
+            $customContent = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_CONTENT);
+        }
+        
+        if (!empty($customContent)) {
+            // 使用自定义内容（已翻译或默认）
+            $contentHtml = $customContent;
+        } else {
+            // 使用样式模板的 content.phtml
+            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+        }
         
         // 渲染 footer
         $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
+        
+        // 获取Header和Footer自定义代码
+        $headerCustomCode = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_HEADER_CUSTOM_CODE) ?? '';
+        $footerCustomCode = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_FOOTER_CUSTOM_CODE) ?? '';
+        
+        // 在header的</head>标签前插入Header自定义代码
+        if (!empty($headerCustomCode)) {
+            $headerHtml = preg_replace(
+                '/(<\/head>)/i',
+                $headerCustomCode . "\n    $1",
+                $headerHtml,
+                1
+            );
+        }
+        
+        // 在footer的</body>标签前插入Footer自定义代码
+        if (!empty($footerCustomCode)) {
+            $footerHtml = preg_replace(
+                '/(<\/body>)/i',
+                "\n    " . $footerCustomCode . "\n$1",
+                $footerHtml,
+                1
+            );
+        }
         
         // 输出组合后的完整页面
         // 在预览模式下，强制在地址栏附加 preview=1 并设置全局预览标记，避免触发统计

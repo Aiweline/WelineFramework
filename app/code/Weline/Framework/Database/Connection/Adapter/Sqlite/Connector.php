@@ -20,7 +20,6 @@ use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifier
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
-use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
@@ -40,8 +39,7 @@ final class Connector extends Query implements ConnectorInterface
         );
         parent::__construct(
             $identifierFormatter,
-            $tableStrategy,
-            new GenericDialectAdapter()
+            $tableStrategy
         );
         $this->db_name = $this->configProvider->getDatabase();
     }

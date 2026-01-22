@@ -214,6 +214,14 @@
                                             
                                             <div class="border-end mx-1" style="height: 28px;"></div>
                                             
+                                            <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
+                                                <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
+                                                        onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
+                                                        style="min-width: 70px; white-space: nowrap;"
+                                                        title="<?= __('发布页面') ?>">
+                                                    <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
+                                                </button>
+                                            </acl>
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_create">
                                                 <a class='btn btn-sm btn-success d-inline-flex align-items-center' 
                                                    href="<?= $this->getBackendUrl('*/backend/page/create') ?>?parent_id=<?= $page->getId() ?>"
@@ -245,14 +253,6 @@
                                                         <i class="mdi mdi-download me-1"></i><?= __('导出') ?>
                                                     </button>
                                                 <?php endif; ?>
-                                            </acl>
-                                            <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
-                                                <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
-                                                        onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
-                                                        style="min-width: 70px; white-space: nowrap;"
-                                                        title="<?= __('发布页面') ?>">
-                                                    <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
-                                                </button>
                                             </acl>
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_delete">
                                                 <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"

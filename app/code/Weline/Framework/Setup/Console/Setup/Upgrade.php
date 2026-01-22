@@ -37,6 +37,7 @@ use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
+use Weline\Framework\Registry\Service\RegistryUpdateService;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
 {
@@ -51,6 +52,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @var string
      */
     private string $recollectFlagFile = '';
+    
+    /**
+     * 记录本次升级是否已经收集过注册表（避免重复收集）
+     * 遵循SOLID原则：通过状态标志控制流程，避免重复操作
+     * @var bool
+     */
+    private bool $registryCollectedInThisRun = false;
 
     function __construct(
         private Printing $printing
@@ -130,7 +138,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 throw $e;
             }
             // 其他异常也抛出
-            throw new Exception(__('执行 composer dump-autoload 时发生错误: %{1}', [$e->getMessage()]), 0, $e);
+            throw new Exception(__('执行 composer dump-autoload 时发生错误: %{1}', [$e->getMessage()]));
         } finally {
             // 恢复原始工作目录
             if (isset($originalCwd) && $originalCwd) {
@@ -301,17 +309,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             exit(1);
         }
         
-        // 2. 创建标识符文件，标记需要再次收集（升级过程中可能有新模块安装）
+        // 2. 启用延迟注册表更新模式（优化：避免每个模块注册时都触发完整的注册表更新）
+        // 遵循SOLID原则：单一职责 - 注册表更新由顶层统一管理
+        Handle::setDeferRegistryUpdate(true);
+        $this->printing->note(__('已启用延迟注册表更新模式（批量优化）'));
+        
+        // 3. 创建标识符文件，标记需要再次收集（升级过程中可能有新模块安装）
         $this->createRecollectFlag();
         
-        // 3. 运行 composer dump-autoload（必须在注册表收集之前）
+        // 4. 运行 composer dump-autoload（必须在注册表收集之前）
         $this->runComposerDump();
         
-        // 4. 收集框架注册表（必须在升级前完成，确保系统可用）
+        // 5. 收集框架注册表（必须在升级前完成，确保系统可用）
         $this->printing->note(__('正在准备系统环境...'));
         $this->collectFrameworkRegistries();
         
-        // 5. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
+        // 6. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
     }
     
@@ -337,7 +350,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 规则管理器本身的错误（如找不到规则类等），也停止升级
             // 确保规则系统正常工作
             $this->printing->error(__('框架约束规则系统错误：%{1}', [$e->getMessage()]));
-            throw new Exception(__('框架约束规则系统错误，无法继续升级。请检查规则系统配置。'), 0, $e);
+            throw new Exception(__('框架约束规则系统错误，无法继续升级。请检查规则系统配置。'));
         }
     }
     
@@ -393,7 +406,150 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function completeUpgrade(): void
     {
+        // 生成优化缓存（类映射和 PSR-4 映射）
+        $this->generateOptimizationCache();
+        
         $this->printing->success(__('系统升级完成！'));
+    }
+    
+    /**
+     * 生成优化缓存：类映射和 PSR-4 映射
+     * 这些缓存在运行时只读取，不更新，以提高性能
+     * 
+     * @return void
+     */
+    private function generateOptimizationCache(): void
+    {
+        $this->printing->note(__('正在生成优化缓存...'));
+        
+        // 1. 生成类映射缓存
+        $this->generateClassmapCache();
+        
+        // 2. 生成 PSR-4 映射缓存
+        $this->generatePsr4Cache();
+        
+        $this->printing->success(__('✓ 优化缓存生成完成。'));
+    }
+    
+    /**
+     * 生成类映射缓存
+     * 扫描 app/code 和 generated/code 目录，生成类名到文件路径的映射
+     * 
+     * @return void
+     */
+    private function generateClassmapCache(): void
+    {
+        $classMap = [];
+        $directories = [
+            APP_CODE_PATH,
+            BP . 'generated' . DS . 'code' . DS,
+        ];
+        
+        foreach ($directories as $baseDir) {
+            if (!is_dir($baseDir)) {
+                continue;
+            }
+            
+            $this->scanDirectoryForClasses($baseDir, $baseDir, $classMap);
+        }
+        
+        // 保存类映射缓存
+        $classMapFile = BP . 'generated' . DS . 'classmap.php';
+        $content = '<?php' . PHP_EOL;
+        $content .= '// 类映射缓存 - 由 setup:upgrade 自动生成' . PHP_EOL;
+        $content .= '// 生成时间: ' . date('Y-m-d H:i:s') . PHP_EOL;
+        $content .= 'return ' . var_export($classMap, true) . ';' . PHP_EOL;
+        
+        file_put_contents($classMapFile, $content, LOCK_EX);
+        
+        $this->printing->note(__('  - 类映射缓存已生成，共 %1 个类', [count($classMap)]));
+    }
+    
+    /**
+     * 递归扫描目录查找 PHP 类文件
+     * 
+     * @param string $dir 当前扫描目录
+     * @param string $baseDir 基础目录（用于计算命名空间）
+     * @param array $classMap 类映射数组（引用）
+     * @return void
+     */
+    private function scanDirectoryForClasses(string $dir, string $baseDir, array &$classMap): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        
+        $files = scandir($dir);
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            
+            $path = $dir . $file;
+            
+            if (is_dir($path)) {
+                $this->scanDirectoryForClasses($path . DS, $baseDir, $classMap);
+            } elseif (str_ends_with($file, '.php')) {
+                // 从文件路径推断类名
+                $relativePath = str_replace($baseDir, '', $path);
+                $className = str_replace([DS, '.php'], ['\\', ''], $relativePath);
+                
+                // 验证类名是否有效（只包含有效字符）
+                if (preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $className)) {
+                    $classMap[$className] = $path;
+                }
+            }
+        }
+    }
+    
+    /**
+     * 生成 PSR-4 映射缓存
+     * 
+     * @return void
+     */
+    private function generatePsr4Cache(): void
+    {
+        // 加载 Composer 的 autoload
+        $autoloader = VENDOR_PATH . 'autoload.php';
+        if (!is_file($autoloader)) {
+            $this->printing->warning(__('  - 跳过 PSR-4 缓存生成：Composer autoload 未找到'));
+            return;
+        }
+        
+        $composerLoader = require $autoloader;
+        $psr4Map = $composerLoader->getPrefixesPsr4();
+        $modifiedPsr4 = [];
+        
+        foreach ($psr4Map as $prefix => $paths) {
+            $relativePath = str_replace('\\', DS, trim($prefix, '\\'));
+            $appCodePath = APP_CODE_PATH . $relativePath . DS;
+            
+            if (is_dir($appCodePath)) {
+                // 移除已存在的 app/code 路径
+                $paths = array_filter($paths, function($path) use ($appCodePath) {
+                    $normalizedPath = rtrim($path, DS) . DS;
+                    return $normalizedPath !== $appCodePath;
+                });
+                // 将 app/code 路径添加到最前面
+                array_unshift($paths, $appCodePath);
+                $modifiedPsr4[$prefix] = array_values($paths);
+            }
+        }
+        
+        // 保存 PSR-4 映射缓存
+        if (!empty($modifiedPsr4)) {
+            $psr4CacheFile = BP . 'generated' . DS . 'psr4_map.php';
+            $content = '<?php' . PHP_EOL;
+            $content .= '// PSR-4 映射缓存 - 由 setup:upgrade 自动生成' . PHP_EOL;
+            $content .= '// 生成时间: ' . date('Y-m-d H:i:s') . PHP_EOL;
+            $content .= 'return ' . var_export($modifiedPsr4, true) . ';' . PHP_EOL;
+            
+            file_put_contents($psr4CacheFile, $content, LOCK_EX);
+            
+            $this->printing->note(__('  - PSR-4 映射缓存已生成，共 %1 个命名空间', [count($modifiedPsr4)]));
+        } else {
+            $this->printing->note(__('  - 跳过 PSR-4 缓存生成：没有需要优化的映射'));
+        }
     }
     
     /**
@@ -406,14 +562,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function cleanupUpgrade($lockHandle, string $lockFile, bool $maintenanceEnabled): void
     {
-        // 释放锁
+        // 1. 禁用延迟注册表更新模式（无论升级是否成功，都要恢复正常模式）
+        // 遵循SOLID原则：确保状态在 finally 块中被正确清理
+        if (Handle::isDeferRegistryUpdate()) {
+            Handle::setDeferRegistryUpdate(false);
+            $this->printing->note(__('已禁用延迟注册表更新模式'));
+        }
+        
+        // 2. 释放锁
         $this->releaseLock($lockHandle, $lockFile);
         
         // 注意：标识符文件的清理在 checkAndRecollectIfNeeded() 中完成
         // 如果标识符文件在 cleanupUpgrade 时还存在，说明可能发生了异常
         // 这种情况下，标识符文件会保留到下次运行，以便检测到需要再次收集
         
-        // 关闭维护模式
+        // 3. 关闭维护模式
         if ($maintenanceEnabled) {
             try {
                 $result = Env::getInstance()->setConfig('maintenance', false);
@@ -431,17 +594,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     
     /**
      * 收集所有框架自带的注册表信息
-     * 顺序：Extends -> 插件 -> 事件 -> Hook
+     * 顺序：Extends -> 插件 -> 事件 -> Hook -> Tag
      * 系统更新前必须运行，更新后如果有模块安装或升级也要再次运行
      * 
+     * 优化：统一管理所有注册表收集，包括 Tag 注册表
+     * 遵循SOLID原则：单一职责 - 本方法负责所有注册表的收集
+     * 
+     * @param bool $includeTag 是否包含 Tag 注册表收集（默认true）
      * @return void
      */
-    private function collectFrameworkRegistries(): void
+    private function collectFrameworkRegistries(bool $includeTag = true): void
     {
         // 使用统一服务更新所有注册表
         try {
-            /** @var \Weline\Framework\Registry\Service\RegistryUpdateService $registryService */
-            $registryService = ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class);
+            /** @var RegistryUpdateService $registryService */
+            $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
             $this->printing->note(__('正在更新所有注册表...'));
             // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
             $ok = $registryService->updateAllRegistries(false, false);
@@ -467,16 +634,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
         
         // 收集 Tag 注册表（Tag 不是框架自带的，需要单独收集）
-        try {
-            $this->printing->note(__('收集标签注册表...'));
-            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
-            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-            $taglibCollect->execute([], []);
-            $this->printing->success(__('✓ 标签注册表已收集完成。'));
-        } catch (\Exception $e) {
-            // 标签收集失败不影响系统更新，只记录警告
-            \Weline\Framework\App\Env::log_warning('registry_update.log', __('标签注册表收集失败: %{1}', [$e->getMessage()]));
-            $this->printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
+        if ($includeTag) {
+            try {
+                $this->printing->note(__('收集标签注册表...'));
+                /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
+                $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
+                $taglibCollect->execute([], []);
+                $this->printing->success(__('✓ 标签注册表已收集完成。'));
+            } catch (\Exception $e) {
+                // 标签收集失败不影响系统更新，只记录警告
+                \Weline\Framework\App\Env::log_warning('registry_update.log', __('标签注册表收集失败: %{1}', [$e->getMessage()]));
+                $this->printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
+            }
         }
     }
     
@@ -484,24 +653,27 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * 在模块安装或升级后重新收集注册表信息
      * 包括：框架注册表（Extends、插件、事件、Hook）和其他注册表（Tag）
      * 
+     * 优化：使用 registryCollectedInThisRun 标志避免重复收集
+     * 遵循SOLID原则：单一职责 - 本方法只负责触发收集，不重复执行
+     * 
+     * @param bool $force 是否强制收集（忽略已收集标志）
      * @return void
      */
-    private function recollectRegistryAfterModuleChange(): void
+    private function recollectRegistryAfterModuleChange(bool $force = false): void
     {
-        // 重新收集框架注册表（Extends、插件、事件、Hook）
-        $this->printing->note(__('检测到模块安装或升级，正在重新收集框架注册表信息...'));
-        $this->collectFrameworkRegistries();
-        
-        // 收集 Tag 注册表（Tag 不是框架自带的，需要单独收集）
-        try {
-            $this->printing->note(__('重新收集标签注册表...'));
-            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
-            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-            $taglibCollect->execute([], []);
-            $this->printing->success(__('✓ 标签注册表已重新收集完成。'));
-        } catch (\Exception $e) {
-            $this->printing->warning(__('标签注册表重新收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
+        // 优化：如果本次升级已经收集过注册表，且不是强制收集，则跳过
+        if ($this->registryCollectedInThisRun && !$force) {
+            $this->printing->note(__('注册表已在本次升级中收集过，跳过重复收集'));
+            return;
         }
+        
+        // 重新收集所有注册表（包括框架注册表和 Tag 注册表）
+        // 优化：collectFrameworkRegistries 已统一管理所有注册表的收集
+        $this->printing->note(__('检测到模块安装或升级，正在重新收集所有注册表信息...'));
+        $this->collectFrameworkRegistries(true);
+        
+        // 标记本次升级已经收集过注册表
+        $this->registryCollectedInThisRun = true;
     }
     
     /**
@@ -516,7 +688,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade_before');
+        // 传递模块过滤信息，便于观察者按需执行（例如菜单、Widget 等）
+        $beforeEventData = ['modules' => $argsModule ?? []];
+        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade_before', $beforeEventData);
         $appoint = false;
         // 支持 --module 和 -m 两种写法，以及位置参数
         $argsModule = $args['module'] ?? $args['m'] ?? [];
@@ -796,15 +970,36 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
         }
-        /**@var Handle $module_handle */
-        $module_handle = ObjectManager::getInstance(Handle::class);
-        $modules = $module_handle->getModules();
-        
+
         // ========== 使用阶段更新管理器统一管理所有更新 ==========
         // 检查是否指定了部分更新模式
         $doModel = isset($args['model']);
         $doRoute = isset($args['route']);
         $isRouteOnly = $doRoute && !$doModel;
+
+        // 仅更新路由模式（可能带 --module）：使用专用 RouteUpdateService，避免与通用阶段管理逻辑冲突
+        if ($isRouteOnly) {
+            /** @var \Weline\Framework\Router\Service\RouteUpdateService $routeService */
+            $routeService = ObjectManager::getInstance(\Weline\Framework\Router\Service\RouteUpdateService::class);
+
+            // 从参数中解析需要刷新的模块列表（--module 或 -m）
+            $routeModules = $args['module'] ?? $args['m'] ?? [];
+            if (is_string($routeModules)) {
+                $routeModules = explode(' ', $routeModules);
+            }
+            $routeModules = array_values(array_filter(array_map('trim', (array)$routeModules)));
+
+            $this->printing->note(__('进入仅更新路由模式，使用 RouteUpdateService 处理路由更新...'), '系统');
+            $routeService->updateRoutes($routeModules);
+            $this->printing->success(__('✓ 路由更新完成（仅路由模式）'));
+
+            // 路由已完成更新，不再进入后续阶段管理器逻辑，直接结束当前方法
+            return;
+        }
+
+        /**@var Handle $module_handle */
+        $module_handle = ObjectManager::getInstance(Handle::class);
+        $modules = $module_handle->getModules();
         
         $stageNumber = 1;
         $this->printing->note($stageNumber . '、初始化阶段更新管理器...', '系统');
@@ -923,7 +1118,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
                 // 回滚已准备的路由阶段
                 $routeStage->rollback();
-                throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
+                throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
             }
         }
         
@@ -1196,8 +1391,51 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->note($stageNumber . '、触发模块升级后事件...', '系统');
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        // 将本次参与升级的模块名称传递给事件，便于观察者按模块增量处理
+        $eventModules = $args['module'] ?? $args['m'] ?? [];
+        if (is_string($eventModules)) {
+            $eventModules = explode(' ', $eventModules);
+        }
         
-        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade');
+        // 区分启用和禁用的模块
+        $enabledModules = [];
+        $disabledModules = [];
+        $env = Env::getInstance();
+        
+        if (empty($eventModules)) {
+            // 如果没有指定模块，获取所有模块并分类
+            $allModules = $env->getModuleList();
+            foreach ($allModules as $moduleName => $moduleConfig) {
+                if (!empty($moduleConfig['status'])) {
+                    $enabledModules[] = $moduleName;
+                } else {
+                    $disabledModules[] = $moduleName;
+                }
+            }
+        } else {
+            // 如果指定了模块，检查每个模块的状态
+            foreach ($eventModules as $moduleName) {
+                if ($env->getModuleStatus($moduleName)) {
+                    $enabledModules[] = $moduleName;
+                } else {
+                    $disabledModules[] = $moduleName;
+                }
+            }
+        }
+        
+        // 先处理启用的模块（正常更新）
+        if (!empty($enabledModules)) {
+            $this->printing->note(__('处理已启用模块的升级后事件：%{1}', [implode(', ', $enabledModules)]));
+            $moduleEventData = ['modules' => $enabledModules];
+            $eventsManager->dispatch('Weline_Framework_Module::module_upgrade', $moduleEventData);
+        }
+        
+        // 最后处理禁用的模块（仅做清理，不收集菜单等）
+        if (!empty($disabledModules)) {
+            $this->printing->note(__('跳过已禁用模块的菜单收集：%{1}', [implode(', ', $disabledModules)]));
+            // 禁用的模块不触发菜单收集等操作，但可以触发其他清理操作
+            // 如果需要，可以在这里添加禁用模块的特殊处理逻辑
+        }
         
         // 生成 modules.json 用于 E2E 测试用例收集
         $stageNumber++;

@@ -26,6 +26,15 @@
          parent="Weline_Seo::seo_management"
          icon="mdi mdi-file-chart-outline"
          order="20"/>
+
+    <!-- SEO 账户管理 -->
+    <add source="Weline_Seo::seo_account"
+         name="seo_account"
+         title="SEO账户"
+         action="seo/backend/account/index"
+         parent="Weline_Seo::seo_management"
+         icon="mdi mdi-account-key"
+         order="30"/>
 </menus>
 
 

@@ -34,10 +34,31 @@ $currentLocale = $this->getData('current_locale');
     
     <!-- Hreflang for multilingual SEO -->
     <?php if (!empty($seo['hreflangs'])): ?>
-        <?php foreach ($seo['hreflangs'] as $hreflang): ?>
-            <link rel="alternate" hreflang="<?= htmlspecialchars($hreflang['locale'] ?? '') ?>" href="<?= htmlspecialchars($hreflang['url'] ?? '') ?>" />
+        <?php 
+        $i18nEnabled = $seo['i18n_enabled'] ?? '0';
+        foreach ($seo['hreflangs'] as $hreflang): 
+        ?>
+            <link rel="alternate" 
+                  hreflang="<?= htmlspecialchars($hreflang['locale'] ?? '') ?>" 
+                  href="<?= htmlspecialchars($hreflang['url'] ?? '') ?>" 
+                  data-i18n-enabled="<?= htmlspecialchars($i18nEnabled) ?>" 
+                  class="hreflang-link" />
         <?php endforeach; ?>
     <?php endif; ?>
+    
+    <!-- CSS控制hreflang标签显示 -->
+    <style>
+        /* 当多语言功能关闭时，隐藏所有hreflang标签 */
+        link.hreflang-link[data-i18n-enabled="0"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        /* 当多语言功能开启时，正常显示 */
+        link.hreflang-link[data-i18n-enabled="1"] {
+            display: inline !important;
+            visibility: visible !important;
+        }
+    </style>
     
     <!-- Google Tag Manager -->
     <?php if ($page && $page->getData('gtm_id')): ?>
@@ -222,6 +243,14 @@ $currentLocale = $this->getData('current_locale');
             }
         }
     </style>
+    
+    <!-- Header 自定义代码 -->
+    <?php 
+    $headerCustomCode = $page ? $page->getData('header_custom_code') : '';
+    if (!empty($headerCustomCode)): 
+    ?>
+        <?= $headerCustomCode ?>
+    <?php endif; ?>
 </head>
 <body>
     <!-- Google Tag Manager (noscript) -->
@@ -288,5 +317,13 @@ $currentLocale = $this->getData('current_locale');
             </div>
         <?php endif; ?>
     </div>
+    
+    <!-- Footer 自定义代码 -->
+    <?php 
+    $footerCustomCode = $page ? $page->getData('footer_custom_code') : '';
+    if (!empty($footerCustomCode)): 
+    ?>
+        <?= $footerCustomCode ?>
+    <?php endif; ?>
 </body>
 </html>

@@ -13,6 +13,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Model\SystemConfig;
 
 class PageHelper
 {
@@ -204,11 +205,16 @@ class PageHelper
         $currentLocale = Cookie::getLang();
         $content = $this->getLocalizedContent($page, $currentLocale);
         
-        // 获取所有已翻译的语言
-        $translatedLocales = $this->getTranslatedLocales($page);
+        // 检查多语言功能是否开启
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         
-        // 构建hreflang数据
+        // 获取所有已翻译的语言（始终生成，但通过CSS控制显示）
+        $translatedLocales = $this->getTranslatedLocales($page);
         $hreflangs = [];
+        
         foreach ($translatedLocales as $locale) {
             $hreflangs[$locale] = [
                 'locale' => $locale,
@@ -221,6 +227,7 @@ class PageHelper
             'description' => $content['meta_description'],
             'keywords' => $content['meta_keywords'],
             'hreflangs' => $hreflangs,
+            'i18n_enabled' => $i18nEnabled, // 传递多语言配置状态
             'og_title' => $content['meta_title'] ?: $content['title'],
             'og_description' => $content['meta_description'],
         ];

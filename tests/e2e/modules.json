@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-01-20T20:00:17+08:00",
+    "generated_at": "2026-01-22T19:11:26+08:00",
     "modules": {
         "Weline_Framework": {
             "name": "Weline_Framework",
@@ -981,7 +981,7 @@
             "name": "Weline_Cms",
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Cms",
             "test_path": null,
-            "status": true,
+            "status": false,
             "version": "1.0.7",
             "has_tests": false
         },
@@ -990,7 +990,31 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder",
             "test_path": null,
             "status": true,
-            "version": "1.0.7",
+            "version": "1.0.15",
+            "has_tests": false
+        },
+        "GuoLaiRen_Blog": {
+            "name": "GuoLaiRen_Blog",
+            "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/Blog",
+            "test_path": null,
+            "status": true,
+            "version": "1.0.0",
+            "has_tests": false
+        },
+        "Weline_Bt_Center": {
+            "name": "Weline_Bt_Center",
+            "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Bt_Center",
+            "test_path": null,
+            "status": true,
+            "version": "1.0.0",
+            "has_tests": false
+        },
+        "Aws_Domains": {
+            "name": "Aws_Domains",
+            "base_path": "E:/WelineFramework/DEV-workspace/app/code/Aws/Domains",
+            "test_path": null,
+            "status": true,
+            "version": "1.0.0",
             "has_tests": false
         }
     }

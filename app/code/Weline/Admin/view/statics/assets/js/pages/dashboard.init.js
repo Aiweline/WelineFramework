@@ -50,8 +50,11 @@ var radialoptions = {
     }
 };
 
-var radialchart = new ApexCharts(document.querySelector("#radialchart-2"), radialoptions);
-radialchart.render();
+var radialchart2El = document.querySelector("#radialchart-2");
+if (radialchart2El) {
+    var radialchart = new ApexCharts(radialchart2El, radialoptions);
+    radialchart.render();
+}
 
 
 // Radialchart 3
@@ -96,8 +99,11 @@ var radialoptions = {
     }
 };
 
-var radialchart = new ApexCharts(document.querySelector("#radialchart-3"), radialoptions);
-radialchart.render();
+var radialchart3El = document.querySelector("#radialchart-3");
+if (radialchart3El) {
+    var radialchart = new ApexCharts(radialchart3El, radialoptions);
+    radialchart.render();
+}
 
 
 // Mixed Chart
@@ -158,8 +164,11 @@ var options = {
 
 };
 
-var chart = new ApexCharts(document.querySelector("#mixed-chart"), options);
-chart.render();
+var mixedChartEl = document.querySelector("#mixed-chart");
+if (mixedChartEl) {
+    var chart = new ApexCharts(mixedChartEl, options);
+    chart.render();
+}
 
 
 // Social Source
@@ -205,8 +214,11 @@ var options = {
 
 }
 
-var chart = new ApexCharts(document.querySelector("#radialBar-chart"), options);
-chart.render();
+var radialBarChartEl = document.querySelector("#radialBar-chart");
+if (radialBarChartEl) {
+    var chart = new ApexCharts(radialBarChartEl, options);
+    chart.render();
+}
 
 
 // usa map
@@ -231,3 +243,71 @@ $('#usa').vectorMap({
     }
 
 });
+
+// Dashboard Tab 切换初始化
+(function() {
+    'use strict';
+    
+    // 等待 DOM 加载完成
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDashboardTabs);
+    } else {
+        initDashboardTabs();
+    }
+    
+    function initDashboardTabs() {
+        // 获取所有 Tab 按钮
+        var tabButtons = document.querySelectorAll('.dashboard-tab[data-bs-toggle="tab"]');
+        
+        if (tabButtons.length === 0) {
+            return;
+        }
+        
+        // 为每个 Tab 按钮添加点击事件
+        tabButtons.forEach(function(tabButton) {
+            tabButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                var targetId = this.getAttribute('data-bs-target');
+                if (!targetId) {
+                    return;
+                }
+                
+                // 移除所有 Tab 的 active 状态
+                tabButtons.forEach(function(tab) {
+                    tab.classList.remove('active');
+                    tab.setAttribute('aria-selected', 'false');
+                });
+                
+                // 添加当前 Tab 的 active 状态
+                this.classList.add('active');
+                this.setAttribute('aria-selected', 'true');
+                
+                // 隐藏所有 Tab 内容
+                var allTabPanes = document.querySelectorAll('.tab-pane');
+                allTabPanes.forEach(function(pane) {
+                    pane.classList.remove('active', 'show');
+                });
+                
+                // 显示目标 Tab 内容
+                var targetPane = document.querySelector(targetId);
+                if (targetPane) {
+                    targetPane.classList.add('active', 'show');
+                }
+            });
+        });
+        
+        // 确保初始状态正确
+        var activeTab = document.querySelector('.dashboard-tab.active');
+        if (activeTab) {
+            activeTab.setAttribute('aria-selected', 'true');
+            var activeTarget = activeTab.getAttribute('data-bs-target');
+            if (activeTarget) {
+                var activePane = document.querySelector(activeTarget);
+                if (activePane) {
+                    activePane.classList.add('active', 'show');
+                }
+            }
+        }
+    }
+})();

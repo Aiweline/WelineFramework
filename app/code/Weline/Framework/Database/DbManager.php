@@ -57,6 +57,29 @@ class DbManager
     }
 
     /**
+     * @DESC         |反序列化时执行函数： 确保配置提供者不为空
+     *
+     * 参数区：
+     *
+     * @return void
+     * @throws \Exception
+     */
+    public function __wakeup(): void
+    {
+        // 如果反序列化后 configProvider 为 null，尝试重新创建
+        if (!isset($this->configProvider) || $this->configProvider === null) {
+            try {
+                $this->configProvider = new ConfigProvider();
+            } catch (\Throwable $e) {
+                throw new \Exception(__('数据库配置提供者无法初始化：%1', $e->getMessage()));
+            }
+        }
+        // 重置连接，因为连接对象可能无法正确序列化
+        $this->defaultConnectionFactory = null;
+        $this->connections = [];
+    }
+
+    /**
      * @DESC         |设置数据库配置
      *
      * 参数区：
@@ -117,6 +140,16 @@ class DbManager
         
         // 确定要使用的配置：如果不提供配置类，使用默认的配置链接
         $targetConfigProvider = $configProvider ?? $this->configProvider;
+        
+        // 确保配置提供者不为 null
+        if ($targetConfigProvider === null) {
+            try {
+                $targetConfigProvider = new ConfigProvider();
+                $this->configProvider = $targetConfigProvider;
+            } catch (\Throwable $e) {
+                throw new LinkException(__('数据库配置提供者无法初始化：%1', $e->getMessage()));
+            }
+        }
         
         // 如果已有连接，检查是否需要更新
         if ($connection) {

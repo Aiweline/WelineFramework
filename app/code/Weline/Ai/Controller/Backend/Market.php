@@ -69,7 +69,7 @@ class Market extends BackendController
             ->where(AiAssistant::fields_STATUS, 'active')
             ->where(AiAssistant::fields_AUDIT_STATUS, 'approved'); // 只显示审核通过的
 
-        // 分类筛选
+        // 分类筛选 
         if ($category) {
             $select->where(AiAssistant::fields_CATEGORY, $category);
         }

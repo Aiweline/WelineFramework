@@ -45,14 +45,37 @@ class TagParser implements \Weline\Framework\Event\ObserverInterface
                     $tagData['callback'] = $tagClass::callback();
                 }
             }
+            
+            // 检查是否有 parent() 方法，设置依赖关系
+            if (isset($tagData['class'])) {
+                $tagClass = $tagData['class'];
+                if (class_exists($tagClass) && method_exists($tagClass, 'parent')) {
+                    $parentTag = $tagClass::parent();
+                    if ($parentTag) {
+                        $tagData['parent'] = $parentTag;
+                    }
+                }
+            }
         }
         unset($tagData); // 解除引用
         
+        // 如果存在 widget 标签，让 hook 标签依赖于 widget（确保 widget 在 hook 之前处理）
+        // 这样 widget 内部的前中后周期 hook 才能正常工作
+        if (isset($tags['widget'])) {
+            // 为框架内置的 hook 标签添加 parent 依赖
+            if (isset($frameworkTags['hook']) && !isset($frameworkTags['hook']['parent'])) {
+                $frameworkTags['hook']['parent'] = 'widget';
+            }
+        }
+        
+        // 合并框架标签和自定义标签，然后进行依赖排序
+        $allTags = array_merge($frameworkTags, $tags);
+        
         // 对标签进行依赖排序
-        $sortedTags = $this->sortTagsByDependencies($tags);
+        $sortedTags = $this->sortTagsByDependencies($allTags);
         
         if ($sortedTags) {
-            $event->getData('data')->setData('tags', array_merge($frameworkTags, $sortedTags));
+            $event->getData('data')->setData('tags', $sortedTags);
         }
     }
 

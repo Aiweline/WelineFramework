@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -20,6 +21,33 @@ use Weline\Hook\HookData;
 
 class Taglib
 {
+    // PHP 标签常量，避免在回调函数中重复定义
+    private const PHP_OPEN_TAG = '<' . '?';
+    private const PHP_CLOSE_TAG = '?' . '>';
+    private const PHP_ECHO_TAG = '<' . '?' . '=';
+    
+    private const STAGE_COMPILE_TIME = 'COMPILE_TIME';
+    private const STAGE_RUNTIME = 'RUNTIME';
+    private const HTML_VOID_TAGS = [
+        'area', 'base', 'br', 'col', 'embed', 'hr', 'img',
+        'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
+    ];
+    
+    /**
+     * 性能优化：缓存变量解析结果
+     */
+    private static array $varParserCache = [];
+    
+    /**
+     * 性能优化：缓存 Hook 检查结果
+     */
+    private static array $hookCheckCache = [];
+    
+    /**
+     * 性能优化：缓存编译后的正则表达式
+     */
+    private static array $compiledRegexCache = [];
+    
     public const operators_symbols = [
         # 比较
         '>',
@@ -121,33 +149,36 @@ class Taglib
 
     public function varParser(string $name): string
     {
+        // 性能优化：检查缓存
+        if (isset(self::$varParserCache[$name])) {
+            return self::$varParserCache[$name];
+        }
+        
         $name_str = '';
         # 处理过滤器
-        list($name, $default) = $this->checkFilter($name);
+        list($originalName, $default) = $this->checkFilter($name);
         # 去除空白以及空格
-        $name = $this->checkVar($name);
-
+        $originalName = $this->checkVar($originalName);
 
         # 处理转行变量
-        //        $name = str_replace('    ', '', $name);
-        $name = preg_replace('/ {4,}/', '', $name);
+        $originalName = preg_replace('/ {4,}/', '', $originalName);
 
         # 单双引号包含的字符串不解析
-        $exclude_names = w_get_string_between_quotes($name);
+        $exclude_names = w_get_string_between_quotes($originalName);
 
         foreach ($exclude_names as $key => $exclude_name) {
-            $name = str_replace($exclude_name, 'w_var_str' . $key, $name);
+            $originalName = str_replace($exclude_name, 'w_var_str' . $key, $originalName);
         }
 
-        $pattern = '/(?<![\-\>()\s])\s*([><=!]={1,3}+|&&|\|\|)\s*(?![()\s])/';
-        $name = preg_replace($pattern, ' $1 ', $name);
+        // 性能优化：缓存编译后的正则表达式
+        static $operatorPattern = '/(?<![\-\>()\s])\s*([><=!]={1,3}+|&&|\|\|)\s*(?![()\s])/';
+        $originalName = preg_replace($operatorPattern, ' $1 ', $originalName);
 
-        //        $name = $newString;
-        //        d($name);
         foreach ($exclude_names as $key => $exclude_name) {
-            $name = str_replace('w_var_str' . $key, $exclude_name, $name);
+            $originalName = str_replace('w_var_str' . $key, $exclude_name, $originalName);
         }
-        $names = explode(' ', $name);
+        
+        $names = explode(' ', $originalName);
         foreach ($names as $name_key => $var) {
             # 排除字符串
             if (!str_contains($var, '"') && !str_contains($var, '\'')) {
@@ -155,10 +186,8 @@ class Taglib
             }
             $pieces = explode('.', $var);
             $has_piece = false;
-            if (count($pieces) > 1) {
-                //                if (PROD) {
-                //                    $name_str .= '(';
-                //                }
+            $pieceCount = count($pieces);
+            if ($pieceCount > 1) {
                 $name_str .= '(';
                 $has_piece = true;
             }
@@ -185,7 +214,215 @@ class Taglib
             }
         }
 
+        // 缓存结果
+        self::$varParserCache[$name] = $name_str;
+        
         return $name_str;
+    }
+
+
+    /**
+     * 使用 PHP tokenizer 统一解析 PHP 代码片段，提取纯表达式
+     * 这是一个静态方法，供所有 Taglib callback 使用，避免重复解析
+     * 
+     * @param string $value 属性值（可能是 PHP 代码片段，如 PHP_ECHO_TAG 包裹的表达式，或普通字符串）
+     * @return array ['is_php' => bool, 'expression' => string] 
+     *               - is_php: 是否是 PHP 代码片段
+     *               - expression: 如果是 PHP 代码，返回提取的纯表达式；否则返回原值
+     */
+    public static function parsePhpCodeToken(string $value): array
+    {
+        // 检查是否以 PHP 短标签开始（PHP_ECHO_TAG 或 PHP_OPEN_TAG）
+        if (strpos($value, self::PHP_ECHO_TAG) !== 0 && strpos($value, self::PHP_OPEN_TAG) !== 0) {
+            return ['is_php' => false, 'expression' => $value];
+        }
+        
+        // 尝试使用 tokenizer 解析
+        try {
+            // 移除 PHP 标签，获取纯代码
+            $code = $value;
+            
+            // 移除开头的 PHP_ECHO_TAG 或 PHP_OPEN_TAG
+            if (strpos($code, self::PHP_ECHO_TAG) === 0) {
+                $code = substr($code, 3);
+            } elseif (strpos($code, self::PHP_OPEN_TAG) === 0) {
+                $code = substr($code, 2);
+            }
+            
+            // 移除结尾的 PHP_CLOSE_TAG 和可能的分号
+            // 先移除尾随空白
+            $code = rtrim($code);
+            $codeLen = strlen($code);
+            
+            // 使用正则表达式更准确地移除 PHP_CLOSE_TAG 和可能的分号
+            // 匹配模式：可能的分号 + PHP_CLOSE_TAG 或单独的 PHP_CLOSE_TAG
+            $code = preg_replace('/;?\s*' . preg_quote(self::PHP_CLOSE_TAG, '/') . '\s*$/', '', $code);
+            $code = rtrim($code);
+            
+            // 再次检查并移除可能残留的分号
+            if (substr($code, -1) === ';') {
+                $code = substr($code, 0, -1);
+                $code = rtrim($code);
+            }
+            
+            $code = trim($code);
+            
+            // 如果代码为空，不是有效的 PHP 代码
+            if (empty($code)) {
+                return ['is_php' => false, 'expression' => $value];
+            }
+            
+            // 尝试 tokenize 来验证是否是有效的 PHP 代码
+            // 包装在 PHP_OPEN_TAG . 'php' 和 PHP_CLOSE_TAG 中以便 tokenize
+            $wrappedCode = self::PHP_OPEN_TAG . 'php ' . $code . ' ' . self::PHP_CLOSE_TAG;
+            $tokens = @token_get_all($wrappedCode);
+            
+            // 检查是否包含有效的 PHP tokens（不仅仅是字符串）
+            $hasValidPhpTokens = false;
+            foreach ($tokens as $token) {
+                if (is_array($token)) {
+                    $tokenType = $token[0];
+                    // 跳过 T_OPEN_TAG, T_CLOSE_TAG, T_WHITESPACE
+                    if (!in_array($tokenType, [T_OPEN_TAG, T_CLOSE_TAG, T_WHITESPACE])) {
+                        $hasValidPhpTokens = true;
+                        break;
+                    }
+                }
+            }
+            
+            if ($hasValidPhpTokens) {
+                // 移除可能的外层括号（如果整个表达式被括号包裹）
+                $code = preg_replace('/^\((.*)\)$/', '$1', $code);
+                return ['is_php' => true, 'expression' => trim($code)];
+            }
+        } catch (\Throwable $e) {
+            // 如果解析失败，当作普通字符串处理
+        }
+        
+        return ['is_php' => false, 'expression' => $value];
+    }
+
+    /**
+     * 使用 tokenizer 解析 HTML 标签属性
+     * 可以准确识别包含 PHP 代码的属性值边界
+     * 
+     * @param string $rawAttributes 原始属性字符串
+     * @return array 解析后的属性数组 [attrName => attrValue]
+     */
+    private function parseAttributesWithTokenizer(string $rawAttributes): array
+    {
+        $attributes = [];
+        $length = strlen($rawAttributes);
+        $i = 0;
+        
+        while ($i < $length) {
+            // 跳过空白字符
+            while ($i < $length && preg_match('/\s/', $rawAttributes[$i])) {
+                $i++;
+            }
+            
+            if ($i >= $length) {
+                break;
+            }
+            
+            // 匹配属性名
+            if (!preg_match('/^(\S+?)=/', substr($rawAttributes, $i), $nameMatch)) {
+                $i++;
+                continue;
+            }
+            
+            $attrName = trim($nameMatch[1]);
+            $i += strlen($nameMatch[0]);
+            
+            // 跳过等号后的空白
+            while ($i < $length && preg_match('/\s/', $rawAttributes[$i])) {
+                $i++;
+            }
+            
+            if ($i >= $length) {
+                break;
+            }
+            
+            // 检测引号类型
+            $quote = $rawAttributes[$i];
+            if ($quote !== '"' && $quote !== "'") {
+                $i++;
+                continue;
+            }
+            
+            $i++; // 跳过开始引号
+            $valueStart = $i;
+            
+            // 先检查属性值是否以 PHP 代码开始，如果是，需要特殊处理
+            $peekAhead = substr($rawAttributes, $i, 10); // 向前查看最多10个字符
+            $isPhpValue = (strpos($peekAhead, self::PHP_ECHO_TAG) === 0 || strpos($peekAhead, self::PHP_OPEN_TAG) === 0);
+            
+            $value = '';
+            $inPhpTag = false;
+            $phpTagDepth = 0;
+            
+            // 使用状态机解析属性值，识别 PHP 标签
+            while ($i < $length) {
+                $char = $rawAttributes[$i];
+                $nextChar = ($i + 1 < $length) ? $rawAttributes[$i + 1] : '';
+                $nextNextChar = ($i + 2 < $length) ? $rawAttributes[$i + 2] : '';
+                
+                // 检测 PHP 开始标签（PHP_OPEN_TAG 或 PHP_ECHO_TAG）
+                if ($char === '<' && $nextChar === '?') {
+                    if ($nextNextChar === '=') {
+                        $value .= self::PHP_ECHO_TAG;
+                        $i += 3;
+                    } else {
+                        $value .= self::PHP_OPEN_TAG;
+                        $i += 2;
+                    }
+                    $inPhpTag = true;
+                    $phpTagDepth = 1;
+                    continue;
+                }
+                
+                // 检测 PHP 结束标签（必须在 PHP 标签内）
+                // 必须精确匹配 PHP_CLOSE_TAG，不能只是 ? 或 >
+                if ($inPhpTag && $char === '?' && $nextChar === '>') {
+                    $value .= self::PHP_CLOSE_TAG; // 添加完整的 PHP_CLOSE_TAG
+                    $i += 2; // 跳过 ? 和 > 两个字符
+                    $phpTagDepth--;
+                    if ($phpTagDepth === 0) {
+                        $inPhpTag = false;
+                        // PHP 标签已结束，继续查找结束引号
+                        continue;
+                    }
+                    continue;
+                }
+                
+                // 在 PHP 标签内，如果遇到单独的 ? 但下一个不是 >，也要保留
+                // 这确保不会误判 PHP 结束标签
+                
+                // 检测结束引号（不在 PHP 标签内时）
+                if (!$inPhpTag && $char === $quote) {
+                    // 检查是否是转义的引号
+                    if ($i > 0 && $rawAttributes[$i - 1] === '\\') {
+                        $value .= $char;
+                        $i++;
+                        continue;
+                    }
+                    // 找到结束引号
+                    $i++; // 跳过结束引号
+                    break;
+                }
+                
+                // 在 PHP 标签内时，所有字符都要保留（包括 ? 和 >，除非是完整的 PHP_CLOSE_TAG）
+                // 如果当前是 ? 但下一个不是 >，或者当前是 > 但上一个不是 ?，都要保留
+                $value .= $char;
+                $i++;
+            }
+            
+            if (!empty($attrName) && !empty($value)) {
+                $attributes[$attrName] = $value;
+            }
+        }
+        
+        return $attributes;
     }
 
     /**
@@ -208,9 +445,9 @@ class Taglib
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
                         return match ($tag_key) {
-                            'tag-start' => '<?php ',
-                            'tag-end' => '?>',
-                            default => "<?php {$tag_data[1]} ?>"
+                            'tag-start' => self::PHP_OPEN_TAG . 'php ',
+                            'tag-end' => self::PHP_CLOSE_TAG,
+                            default => self::PHP_OPEN_TAG . 'php ' . ($tag_data[1] ?? '') . ' ' . self::PHP_CLOSE_TAG
                         };
                     }
             ],
@@ -220,9 +457,9 @@ class Taglib
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
                         return match ($tag_key) {
-                            'tag-start' => '<?php include(',
-                            'tag-end' => ');?>',
-                            default => "<?php include({$tag_data[1]});?>"
+                            'tag-start' => self::PHP_OPEN_TAG . 'php include(',
+                            'tag-end' => ');' . self::PHP_CLOSE_TAG,
+                            default => self::PHP_OPEN_TAG . 'php include(' . ($tag_data[1] ?? '') . ');' . self::PHP_CLOSE_TAG
                         };
                     }
             ],
@@ -234,10 +471,10 @@ class Taglib
                             case '@tag()':
                             case '@tag{}':
                                 $var_name = $this->varParser($tag_data[1]);
-                                return "<?=$var_name?>";
+                                return self::PHP_OPEN_TAG . '=' . $var_name . self::PHP_CLOSE_TAG;
                             default:
                                 $var_name = $this->varParser($this->checkVar($tag_data[2]));
-                                return "<?=$var_name?>";
+                                return self::PHP_OPEN_TAG . '=' . $var_name . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -253,14 +490,14 @@ class Taglib
                                     $var_name .= '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=p({$var_name})?>";
+                                return self::PHP_OPEN_TAG . '=p(' . $var_name . ')' . self::PHP_CLOSE_TAG;
                             default:
                                 $var_name = $tag_data[2];
                                 if (!str_starts_with($var_name, '$')) {
                                     $var_name = '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=p({$var_name})?>";
+                                return self::PHP_OPEN_TAG . '=p(' . $var_name . ')' . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -279,14 +516,14 @@ class Taglib
                                     $var_name .= '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=dd({$var_name})?>";
+                                return self::PHP_OPEN_TAG . '=dd(' . $var_name . ')' . self::PHP_CLOSE_TAG;
                             default:
                                 $var_name = $tag_data[2];
                                 if (!str_starts_with($var_name, '$')) {
                                     $var_name = '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=dd({$var_name})?>";
+                                return self::PHP_OPEN_TAG . '=dd(' . $var_name . ')' . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -305,14 +542,14 @@ class Taglib
                                     $var_name .= '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=$var_name?count({$var_name}):0?>";
+                                return self::PHP_OPEN_TAG . '=' . $var_name . '?count(' . $var_name . '):0' . self::PHP_CLOSE_TAG;
                             default:
                                 $var_name = $tag_data[2];
                                 if (!str_starts_with($var_name, '$')) {
                                     $var_name = '$' . $var_name;
                                 }
                                 $var_name = $this->varParser($var_name);
-                                return "<?=$var_name?count({$var_name}):0?>";
+                                return self::PHP_OPEN_TAG . '=' . $var_name . '?count(' . $var_name . '):0' . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -347,7 +584,7 @@ class Taglib
                                 
                                 // 检查是否包含 HTML 标签或 PHP 代码
                                 $html_pos = strpos($content, '<');
-                                $php_pos = strpos($content, '<?');
+                                $php_pos = strpos($content, self::PHP_OPEN_TAG);
                                 
                                 if ($html_pos === false && $php_pos === false) {
                                     // 没有 HTML 标签和 PHP 代码，直接作为 hook 名称处理
@@ -379,12 +616,12 @@ class Taglib
                             }
                             
                             // 统一清理 hook 名称，移除可能混入的 PHP 代码标签和 HTML 标签
-                            $hook_name = preg_replace('/<\?php\s*else\s*:?\s*\?>/i', '', $hook_name);
-                            $hook_name = preg_replace('/<\?=\s*else\s*\?>/i', '', $hook_name);
+                            $hook_name = preg_replace('/<\?php\s*else\s*:?\s*' . self::PHP_CLOSE_TAG . '/i', '', $hook_name);
+                            $hook_name = preg_replace('/<\?=\s*else\s*' . self::PHP_CLOSE_TAG . '/i', '', $hook_name);
                             // 移除可能混入的 HTML 标签（防止 else 内容被错误包含）
                             $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
                             // 移除可能混入的 PHP 代码
-                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
+                            $hook_name = preg_replace('/<\?[^?]+' . self::PHP_CLOSE_TAG . '/', '', $hook_name);
                             // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
                             $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
                             $hook_name = trim($hook_name);
@@ -507,14 +744,14 @@ class Taglib
                                             $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
                                             $hook_comment .= "-->\n";
                                             
-                                            return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
+                                            return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
                                         }
                                     } catch (\Throwable $e) {
                                         // 如果获取文件列表失败，继续执行但不添加注释
                                     }
                                 }
                                 
-                                return "<?=\$this->getHook('" . $hook_name . "')?>";
+                                return self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
                             } else {
                                 // hook 不存在或没有实现文件，返回 else 内容
                                 // 注意：<else/> 在 hook 标签中只用作切分，不需要转换为 PHP else
@@ -661,12 +898,12 @@ class Taglib
                             $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
                             $hook_comment .= "-->\n";
                             
-                            return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
+                            return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
                         }
                         
                         // 始终生成 PHP 代码，让运行时处理 hook 文件查找
                         // 即使编译时没有找到文件，运行时可能能找到（因为缓存可能已更新）
-                        return "<?=\$this->getHook('" . $hook_name . "')?>";
+                        return self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -686,14 +923,14 @@ class Taglib
                             }
                             if (1 === count($content_arr)) {
                                 $condition = $this->varParser($content_arr[0][0]);
-                                $result = "<?php if({$condition}):echo {$content_arr[0][1]};endif;?>";
+                                $result = self::PHP_OPEN_TAG . 'php if(' . $condition . '):echo ' . $content_arr[0][1] . ';endif;' . self::PHP_CLOSE_TAG;
                             } else {
                                 foreach ($content_arr as $key => $data) {
                                     // 统一转成数组，避免在 count() / 下标访问时出现字符串类型
                                     $dataArray = (array)$data;
                                     if (0 === $key) {
                                         $condition = $this->varParser($dataArray[0]);
-                                        $result = "<?php if($condition):echo " . $dataArray[1] . ';';
+                                        $result = self::PHP_OPEN_TAG . 'php if(' . $condition . '):echo ' . $dataArray[1] . ';';
                                     } else {
                                         if (count($dataArray) > 1) {
                                             $condition = $this->varParser($dataArray[0]);
@@ -703,7 +940,7 @@ class Taglib
                                         }
                                     }
                                     if (end($content_arr) === $data) {
-                                        $result .= ' endif;?>';
+                                        $result .= ' endif;' . self::PHP_CLOSE_TAG;
                                     }
                                 }
                             }
@@ -721,13 +958,13 @@ class Taglib
                                     }
                                 }
                                 $condition = $this->varParser($attributes['condition']);
-                                $result = "<?php if({$condition}):?>";
+                                $result = self::PHP_OPEN_TAG . 'php if(' . $condition . '):' . self::PHP_CLOSE_TAG;
                                 break;
                             }
                             $result = $tag_data[0];
                             break;
                         case 'tag-end':
-                            $result = '<?php endif;?>';
+                            $result = self::PHP_OPEN_TAG . 'php endif;' . self::PHP_CLOSE_TAG;
                             break;
                         default:
                     }
@@ -748,7 +985,7 @@ class Taglib
                                 throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                             case 'tag-self-close-with-attrs':
                                 $condition = $this->varParser($this->checkVar($attributes['condition']));
-                                $result = "<?php elseif({$condition}):?>";
+                                $result = self::PHP_OPEN_TAG . 'php elseif(' . $condition . '):' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                         }
@@ -767,7 +1004,7 @@ class Taglib
                                 throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                             // <else/>
                             case 'tag-self-close':
-                                $result = '<?php else:?>';
+                                $result = self::PHP_OPEN_TAG . 'php else:' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                         }
@@ -783,16 +1020,16 @@ class Taglib
                         case '@tag()':
                             $content_arr = explode('|', $tag_data[1]);
                             $name = $this->varParser($this->checkVar($content_arr[0]));
-                            return "<?php if(empty({$name}))echo '" . $template->tmp_replace(trim($content_arr[1] ?? '')) . "'?>";
+                            return self::PHP_OPEN_TAG . 'php if(empty(' . $name . '))echo \'' . $template->tmp_replace(trim($content_arr[1] ?? '')) . '\'' . self::PHP_CLOSE_TAG;
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
                                 throw new TemplateException(__("empty标签需要设置name属性:[{$template_html}] 例如：%{1}", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
-                            return '<?php if(empty(' . $name . ')): ?>';
+                            return self::PHP_OPEN_TAG . 'php if(empty(' . $name . ')): ' . self::PHP_CLOSE_TAG;
                         case 'tag-end':
-                            return '<?php endif; ?>';
+                            return self::PHP_OPEN_TAG . 'php endif; ' . self::PHP_CLOSE_TAG;
                         default:
                             return '';
                     }
@@ -808,16 +1045,16 @@ class Taglib
                         case '@tag()':
                             $content_arr = explode('|', $tag_data[1]);
                             $name = $this->varParser($this->checkVar($content_arr[0]));
-                            return "<?php if(!empty({$name}))echo '" . $template->tmp_replace(trim($content_arr[1] ?? '')) . "'?>";
+                            return self::PHP_OPEN_TAG . 'php if(!empty(' . $name . '))echo \'' . $template->tmp_replace(trim($content_arr[1] ?? '')) . '\'' . self::PHP_CLOSE_TAG;
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
                                 throw new TemplateException(__("empty标签需要设置name属性:[$template_html]例如：%{1}", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
-                            return '<?php if(!empty(' . $name . ') ): ?>';
+                            return self::PHP_OPEN_TAG . 'php if(!empty(' . $name . ') ): ' . self::PHP_CLOSE_TAG;
                         case 'tag-end':
-                            return '<?php endif; ?>';
+                            return self::PHP_OPEN_TAG . 'php endif; ' . self::PHP_CLOSE_TAG;
                         default:
                             return '';
                     }
@@ -837,7 +1074,7 @@ class Taglib
                             }
                             if (1 === count($content_arr)) {
                                 $name = $this->varParser($content_arr[0][0]);
-                                $result = "<?php if(!empty({$name})):echo {$content_arr[0][1]};endif;?>";
+                                $result = self::PHP_OPEN_TAG . 'php if(!empty(' . $name . ')):echo ' . $content_arr[0][1] . ';endif;' . self::PHP_CLOSE_TAG;
                             } else {
                                 $result = '';
                                 foreach ($content_arr as $key => $data) {
@@ -845,33 +1082,33 @@ class Taglib
                                     $dataArray = (array)$data;
                                     if (0 === $key) {
                                         $name = $this->varParser($dataArray[0]);
-                                        $result = "<?php if(!empty($name)):echo " . $dataArray[1] . ';';
+                                        $result = self::PHP_OPEN_TAG . 'php if(!empty(' . $name . ')):echo ' . $dataArray[1] . ';';
                                     } else {
                                         if (count($dataArray) > 1) {
                                             $name = $this->varParser($dataArray[0]);
-                                            $result .= " elseif(!empty($name)):echo " . $dataArray[1] . ';';
+                                            $result .= ' elseif(!empty(' . $name . ')):echo ' . $dataArray[1] . ';';
                                         } else {
                                             $result .= ' else: echo ' . $dataArray[0] . ';';
                                         }
                                     }
                                     if (end($content_arr) === $data) {
-                                        $result .= ' endif;?>';
+                                        $result .= ' endif;' . self::PHP_CLOSE_TAG;
                                     }
                                 }
                             }
                             return $result;
                         //                            $content_arr = explode('|', $tag_data[1]);
                         //                            $name        = $this->varParser($this->checkVar($content_arr[0]));
-                        /*                            return "<?php if(!empty({$name}))echo '" . $template->tmp_replace(trim($content_arr[1] ?? '')) . "'?>";*/
+                        /*                            return $phpOpen . 'php if(!empty(' . $name . '))echo \'' . $template->tmp_replace(trim($content_arr[1] ?? '')) . '\'' . $phpClose;*/
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
                                 throw new TemplateException(__("has标签需要设置name属性:[$template_html]例如：%{1}", htmlentities('<has name="catalogs"><li>有数据</li><else/>没数据</has>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
-                            return '<?php if(!empty(' . $name . ') ): ?>';
+                            return self::PHP_OPEN_TAG . 'php if(!empty(' . $name . ') ): ' . self::PHP_CLOSE_TAG;
                         case 'tag-end':
-                            return '<?php endif; ?>';
+                            return self::PHP_OPEN_TAG . 'php endif; ' . self::PHP_CLOSE_TAG;
                         default:
                             return '';
                     }
@@ -889,7 +1126,7 @@ class Taglib
                             case 'tag':
                                 $data = explode('|', $tag_data[2]);
                                 $data = array_merge($data, $attributes);
-                                $result = '<?php echo framework_view_process_block(' . w_var_export($data, true) . ');?>';
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // @block{Weline\Admin\Block\Demo|Weline_Admin::block/demo.phtml}
                             case '@tag{}':
@@ -904,7 +1141,7 @@ class Taglib
                                         )
                                     );
                                 }
-                                $result = '<?php echo framework_view_process_block(' . w_var_export($data, true) . ');?>';
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // <block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml'/>
                             case 'tag-self-close-with-attrs':
@@ -923,7 +1160,7 @@ class Taglib
                                     }
                                 }
                                 $vars_string .= ']';
-                                $result = '<?php echo framework_view_process_block(' . w_var_export($attributes, true) . ',$vars=' . $vars_string . ');?>';
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($attributes, true) . ',$vars=' . $vars_string . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                         }
@@ -941,13 +1178,13 @@ class Taglib
                         case '@tag()':
                             $content_arr = explode('|', $tag_data[1]);
                             $foreach_str = $this->varParser($this->checkVar($content_arr[0]));
-                            return "<?php
-                        foreach({$foreach_str}){
-                        ?>
-                            {$template->tmp_replace($content_arr[1] ?? '')}
-                            <?php
+                            return self::PHP_OPEN_TAG . 'php
+                        foreach(' . $foreach_str . '){
+                        ' . self::PHP_CLOSE_TAG . '
+                            ' . $template->tmp_replace($content_arr[1] ?? '') . '
+                            ' . self::PHP_OPEN_TAG . 'php
                         }
-                        ?>";
+                        ' . self::PHP_CLOSE_TAG;
                         case 'tag-self-close-with-attrs':
                             $template_html = htmlentities($tag_data[0]);
                             throw new TemplateException(__("foreach没有自闭合标签:[{$template_html}]。示例：%{1}", htmlentities('<foreach name="catalogs" key="key" item="v"><li><var>name</var></li></foreach>')));
@@ -964,9 +1201,9 @@ class Taglib
                             }
                             $vars = $this->varParser($this->checkVar($attributes['name']));
                             $k_i = isset($attributes['key']) ? $attributes['key'] . ' => ' . $attributes['item'] : $attributes['item'];
-                            return "<?php foreach($vars as $k_i):?>";
+                            return self::PHP_OPEN_TAG . 'php foreach(' . $vars . ' as ' . $k_i . '):' . self::PHP_CLOSE_TAG;
                         case 'tag-end':
-                            return '<?php endforeach;?>';
+                            return self::PHP_OPEN_TAG . 'php endforeach;' . self::PHP_CLOSE_TAG;
                         default:
                             return '';
                     }
@@ -1044,10 +1281,28 @@ class Taglib
                                 $word = trim($word, '\'"');
                                 
                                 // 返回带参数的 PHP 代码
-                                return "<?=__('" . addslashes($word) . "', {$args_code})?>";
+                                return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $args_code . ')' . self::PHP_CLOSE_TAG;
                             } else {
-                                // 无参数，直接翻译
-                                $word = trim($content, '\'"');
+                                // 无参数处理
+                                $word = trim($content);
+                                
+                                // 如果是引号包裹的字符串，直接编译期翻译
+                                if (preg_match('/^([\'"])(.*)\1$/', $word, $matches)) {
+                                    return __($matches[2]);
+                                }
+                                
+                                // 检查是否是 PHP 变量或表达式（以 $ 开头，或包含 -> 或 ::）
+                                $isPhpExpression = preg_match('/^\$/', $word) || 
+                                                   strpos($word, '->') !== false || 
+                                                   strpos($word, '::') !== false ||
+                                                   preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(/', $word); // 函数调用
+                                
+                                if ($isPhpExpression) {
+                                    // PHP 表达式，运行期执行
+                                    return self::PHP_OPEN_TAG . '=__(' . $content . ')' . self::PHP_CLOSE_TAG;
+                                }
+                                
+                                // 普通文本字符串（可能包含空格、中文等），编译期翻译
                                 return __($word);
                             }
                         }
@@ -1063,7 +1318,7 @@ class Taglib
                         if (isset($attributes['args']) && !empty($attributes['args'])) {
                             // 如果有 args 属性，传递给 __() 函数
                             $args_code = $attributes['args'];
-                            return "<?=__('" . addslashes($word) . "', {$args_code})?>";
+                            return self::PHP_OPEN_TAG . '=__(\'' . addslashes($word) . '\', ' . $args_code . ')' . self::PHP_CLOSE_TAG;
                         } else {
                             // 没有 args 属性，直接调用 __() 函数
                             return __($word);
@@ -1084,20 +1339,20 @@ class Taglib
                                 $var = trim($var, "'\"");
                                 $var = str_replace(' ', '', $var);
                                 if (isset($data[1]) && $arr_str = $data[1]) {
-                                    $result .= "<?=\$this->getUrl('{$var}',{$arr_str})?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getUrl(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    $result .= "<?=\$this->getUrl('{$var}')?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getUrl(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
                                 break;
                             case  'tag-start':
-                                $result .= "<?=\$this->getUrl(";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getUrl(';
                                 break;
                             case 'tag-end':
-                                $result .= ')?>';
+                                $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= "<?=\$this->getUrl({$data})?>";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                         };
                         return $result;
                     }
@@ -1116,20 +1371,20 @@ class Taglib
                                 $var = trim($var, "'\"");
                                 $var = str_replace(' ', '', $var);
                                 if (isset($data[1]) && $arr_str = $data[1]) {
-                                    $result .= "<?=\$this->getFrontendUrl('{$var}',{$arr_str})?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    $result .= "<?=\$this->getFrontendUrl('{$var}')?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
                                 break;
                             case  'tag-start':
-                                $result .= "<?=\$this->getFrontendUrl(";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(';
                                 break;
                             case 'tag-end':
-                                $result .= ')?>';
+                                $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= "<?=\$this->getFrontendUrl({$data})?>";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                         };
                         return $result;
                     }
@@ -1148,20 +1403,20 @@ class Taglib
                                 $var = trim($var, "'\"");
                                 $var = str_replace(' ', '', $var);
                                 if (isset($data[1]) && $arr_str = $data[1]) {
-                                    $result .= "<?=\$this->getApi('{$var}',{$arr_str})?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getApi(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    $result .= "<?=\$this->getApi('{$var}')?>";
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getApi(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
                                 break;
                             case  'tag-start':
-                                $result .= "<?=\$this->getApi(";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getApi(';
                                 break;
                             case 'tag-end':
-                                $result .= ')?>';
+                                $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= "<?=\$this->getApi({$data})?>";
+                                $result .= self::PHP_OPEN_TAG . '=$this->getApi(' . $data . ')' . self::PHP_CLOSE_TAG;
                         };
                         return $result;
                     }
@@ -1176,21 +1431,21 @@ class Taglib
                             case 'tag':
                                 $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendUrl({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendUrl({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
-                                return "<?=\$this->getBackendUrl(";
+                                return self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
                             case 'tag-end':
-                                return ')?>';
+                                return ')' . self::PHP_CLOSE_TAG;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendUrl({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendUrl({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }
@@ -1205,21 +1460,21 @@ class Taglib
                             case 'tag':
                                 $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendUrl({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendUrl({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
-                                return "<?=\$this->getBackendUrl(";
+                                return self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
                             case 'tag-end':
-                                return ')?>';
+                                return ')' . self::PHP_CLOSE_TAG;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendUrl({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendUrl({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }
@@ -1234,21 +1489,21 @@ class Taglib
                             case 'tag':
                                 $data = $this->varParser(str_replace(' ', '', $tag_data[2]));
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendApi({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendApi({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                             // no break
                             case 'tag-start':
-                                return "<?=\$this->getBackendApi(";
+                                return self::PHP_OPEN_TAG . '=$this->getBackendApi(';
                             case 'tag-end':
-                                return ')?>';
+                                return ')' . self::PHP_CLOSE_TAG;
                             default:
                                 $data = str_replace(' ', '', $tag_data[1]);
                                 if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return "<?=\$this->getBackendApi({$data})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return "<?=\$this->getBackendApi({$this->varParser($data)})?>";
+                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
                                 }
                         }
                     }
@@ -1263,23 +1518,21 @@ class Taglib
                                 $str_arr = explode('|', $string);
                                 $str_var = $this->varParser($this->checkVar(array_shift($str_arr)));
                                 $str_len = intval(array_shift($str_arr));
-
-                                return "<?php if(!empty({$str_var})&&$str_len>0 && strlen({$str_var})>{$str_len}){
-                                    echo mb_substr({$str_var},0,{$str_len},'UTF8').'...';
+                                return self::PHP_OPEN_TAG . 'php if(!empty(' . $str_var . ')&&' . $str_len . '>0 && strlen(' . $str_var . ')>' . $str_len . '){
+                                    echo mb_substr(' . $str_var . ',0,' . $str_len . ',\'UTF8\').\'...\';
                                 }else{
-                                echo {$str_var};
-                                }?>";
+                                echo ' . $str_var . ';
+                                }' . self::PHP_CLOSE_TAG;
                             default:
                                 $string = $tag_data[1];
                                 $str_arr = explode('|', $string);
                                 $str_var = $this->checkVar(array_shift($str_arr));
                                 $str_len = intval(array_shift($str_arr));
-
-                                return "<?php if($str_len>0 && strlen({$str_var})>{$str_len}){
-                                    echo mb_substr({$str_var},0,{$str_len},'UTF8').'...';
+                                return self::PHP_OPEN_TAG . 'php if(' . $str_len . '>0 && strlen(' . $str_var . ')>' . $str_len . '){
+                                    echo mb_substr(' . $str_var . ',0,' . $str_len . ',\'UTF8\').\'...\';
                                 }else{
-                                echo {$str_var};
-                                }?>";
+                                echo ' . $str_var . ';
+                                }' . self::PHP_CLOSE_TAG;
                         }
                     }
             ],
@@ -1352,127 +1605,1323 @@ class Taglib
         return $tags;
     }
 
-    public function tagReplace(Template &$template, string &$content, string &$fileName = ''): array|string
+    private function removeHtmlComments(string $content): string
     {
-        // 替换{{key}}标签
-        preg_match_all('/\{\{([\s\S]*?)\}\}/', $content, $matches, PREG_SET_ORDER);
-        foreach ($matches as $key => $value) {
-            $content = str_replace($value[0], "<?={$this->varParser(trim($value[1]))};?>", $content);
-        }
-        
-        // 非开发环境清除所有注释
-        if (PROD) {
-            preg_match_all('/\<!--([\s\S]*?)-->/', $content, $matches, PREG_SET_ORDER);
-            foreach ($matches as $key => $value) {
-                $content = str_replace($value[0], '', $content);
-            }
-        }
-        
-        // 系统自带的标签
-        $tags = $this->getTags($template, $fileName, $content);
-        
-        // 直接按getTags返回的顺序处理标签
-        $totalTagProcessTime = 0;
-        $tagCount = 0;
-        foreach ($tags as $tag => $tag_configs) {
-            $tag_patterns = [
-                'tag-self-close-with-attrs' => '/<' . $tag . '([\s\S]*?)\/>/m',
-                'tag' => '/<' . $tag . '([\s\S]*?)>([\s\S]*?)<\/' . $tag . '>/m',
-                'tag-start' => '/<' . $tag . '([\s\S]*?)>/m',
-                'tag-end' => '/<\/' . $tag . '>/m',
-                'tag-self-close' => '/<' . $tag . '\s*\/>/m',
-                '@tag()' => '/\@' . $tag . '\(([\s\S]*?)\)/m',
-                '@tag{}' => '/\@' . $tag . '\{([\s\S]*?)\}/m',
-            ];
-            
-            # 检测标签所需要的元素，不需要的就跳过
-            foreach ($tag_patterns as $tag_key => $tag_pattern) {
-                if (str_starts_with($tag_key, 'tag') && !isset($tag_configs[$tag_key])) {
-                    unset($tag_patterns[$tag_key]);
+        $result = '';
+        $len = strlen($content);
+        $i = 0;
+        while ($i < $len) {
+            if ($content[$i] === '<' && substr($content, $i, 4) === '<!--') {
+                $end = strpos($content, '-->', $i + 4);
+                if ($end === false) {
+                    break;
                 }
+                $i = $end + 3;
+                continue;
             }
-            
-            # 匹配标签所需处理的tag
-            $tag_config_patterns = [];
-            foreach ($tag_configs as $config_name => $tag_config) {
-                if (str_starts_with($config_name, 'tag') && $tag_config) {
-                    $tag_config_patterns[$config_name] = $tag_patterns[$config_name];
-                }
-            }
-            # 默认匹配@tag()和@tag{}
-            $tag_config_patterns['@tag()'] = $tag_patterns['@tag()'];
-            $tag_config_patterns['@tag{}'] = $tag_patterns['@tag{}'];
+            $result .= $content[$i];
+            $i++;
+        }
+        return $result;
+    }
 
-            $tagMatchCount = 0;
-            $tagCallbackTime = 0;
-            foreach ($tag_config_patterns as $tag_key => $tag_pattern) {
-                preg_match_all($tag_pattern, $content, $customTags, PREG_SET_ORDER);
-                $tagMatchCount += count($customTags);
+    private function advancePosition(string $text, int &$line, int &$column): void
+    {
+        $length = strlen($text);
+        for ($i = 0; $i < $length; $i++) {
+            if ($text[$i] === "\n") {
+                $line++;
+                $column = 1;
+            } else {
+                $column++;
+            }
+        }
+    }
+
+    /**
+     * 使用 PHP tokenizer 查找 PHP 块的真正结束位置
+     * 正确处理字符串和注释中的 PHP_CLOSE_TAG 序列
+     * 
+     * @param string $content 完整模板内容
+     * @param int $start PHP 块开始位置（指向 '<'）
+     * @return int|false PHP_CLOSE_TAG 中第一个字符的位置，或 false 表示未找到
+     */
+    private function findPhpBlockEnd(string $content, int $start): int|false
+    {
+        // 从 PHP 块开始位置提取剩余内容进行 tokenize
+        $phpContent = substr($content, $start);
+        
+        // 使用 PHP tokenizer 解析
+        $tokens = @token_get_all($phpContent);
+        
+        $position = 0;
+        foreach ($tokens as $token) {
+            if (is_array($token)) {
+                // [token_id, text, line]
+                $tokenText = $token[1];
+                $tokenId = $token[0];
                 
-                foreach ($customTags as $customTag) {
-                    
-                    $format_function = $tag_configs['callback'];
-                    if (isset($customTag[1])) {
-                        if ($tag_key == 'tag' or $tag_key == 'tag-self-close-with-attrs' or $tag_key == 'tag-start') {
-                            // 替换操作符
-                            foreach (self::operators_symbols_to_lang as $operator => $symbol) {
-                                if (str_contains($customTag[1], $operator)) {
-                                    $customTag[1] = str_replace($operator, ' ' . $symbol . ' ', $customTag[1]);
-                                }
-                            }
-                        }
-                        // 移除换行符和制表符，确保多行属性能正确解析
-                        $customTag[1] = str_replace(PHP_EOL, ' ', $customTag[1]);
-                        $customTag[1] = str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $customTag[1]);
-                    }
+                // T_CLOSE_TAG 是 PHP 关闭标签
+                if ($tokenId === T_CLOSE_TAG) {
+                    // 返回 PHP_CLOSE_TAG 中第一个字符的绝对位置
+                    return $start + $position;
+                }
+                
+                $position += strlen($tokenText);
+            } else {
+                // 单字符 token
+                $position += strlen($token);
+            }
+        }
+        
+        // 没有找到关闭标签
+        return false;
+    }
 
-                    $rawAttributes = $customTag[1] ?? '';
-                    # 如果有属性接下来的字母就不会和标签紧贴着，而如果没有属性那么应该是>括号和标签紧贴着，如果都不是说明并非tag标签
-                    if ($rawAttributes && ('tag' === $tag_key || 'tar-start' === $tag_key || 'tag-self-close-with-attrs' === $tag_key || 'tag-self-close' === $tag_key) && !str_starts_with($rawAttributes, ' ')) {
+    /**
+     * @return AstToken[]
+     * @throws TemplateException
+     */
+    private function tokenizeTemplate(string $content): array
+    {
+        $tokens = [];
+        $len = strlen($content);
+        $i = 0;
+        $line = 1;
+        $column = 1;
+        $buffer = '';
+        $bufferLine = 1;
+        $bufferColumn = 1;
+
+        $flushText = function () use (&$buffer, &$tokens, &$bufferLine, &$bufferColumn) {
+            if ($buffer !== '') {
+                $tokens[] = new AstToken('TEXT', $buffer, $bufferLine, $bufferColumn);
+                $buffer = '';
+            }
+        };
+
+        while ($i < $len) {
+            $char = $content[$i];
+            $next = $i + 1 < $len ? $content[$i + 1] : '';
+
+            if ($char === '<' && $next === '?') {
+                $flushText();
+                $startLine = $line;
+                $startColumn = $column;
+                $end = $this->findPhpBlockEnd($content, $i);
+                if ($end === false) {
+                    // 没有找到闭合，整个剩余内容作为 PHP 块
+                    $phpBlock = substr($content, $i);
+                    $tokens[] = new AstToken('PHP_BLOCK', $phpBlock, $startLine, $startColumn);
+                    $this->advancePosition($phpBlock, $line, $column);
+                    break;
+                }
+                $phpBlock = substr($content, $i, $end - $i + 2);
+                $tokens[] = new AstToken('PHP_BLOCK', $phpBlock, $startLine, $startColumn);
+                $this->advancePosition($phpBlock, $line, $column);
+                $i = $end + 2;
+                continue;
+            }
+
+            if ($char === '@') {
+                $tagToken = $this->tryParseInlineTagToken($content, $i, $line, $column);
+                if ($tagToken instanceof AstToken) {
+                    $flushText();
+                    $tokens[] = $tagToken;
+                    $raw = $tagToken->value;
+                    $this->advancePosition($raw, $line, $column);
+                    $i += strlen($raw);
+                    continue;
+                }
+            }
+
+            if ($char === '<' && $next !== '?') {
+                if (substr($content, $i, 4) === '<!--') {
+                    $flushText();
+                    $startLine = $line;
+                    $startColumn = $column;
+                    $end = strpos($content, '-->', $i + 4);
+                    if ($end === false) {
+                        $comment = substr($content, $i);
+                        $tokens[] = new AstToken('TEXT', $comment, $startLine, $startColumn);
+                        $this->advancePosition($comment, $line, $column);
+                        break;
+                    }
+                    $comment = substr($content, $i, $end - $i + 3);
+                    $tokens[] = new AstToken('TEXT', $comment, $startLine, $startColumn);
+                    $this->advancePosition($comment, $line, $column);
+                    $i = $end + 3;
+                    continue;
+                }
+
+                $flushText();
+                $startLine = $line;
+                $startColumn = $column;
+                if ($next === '/') {
+                    $nameStart = $i + 2;
+                    $nameEnd = $nameStart;
+                    while ($nameEnd < $len && preg_match('/[A-Za-z0-9:_-]/', $content[$nameEnd])) {
+                        $nameEnd++;
+                    }
+                    $tagName = substr($content, $nameStart, $nameEnd - $nameStart);
+                    
+                    // 验证这是一个有效的闭合标签：标签名后应直接跟 > 或只有空白后跟 >
+                    // 如果标签名后面是其他字符（如 , 在 JavaScript 正则中 /</g, ），则不是有效闭合标签
+                    $afterName = $nameEnd < $len ? $content[$nameEnd] : '';
+                    $isValidClose = false;
+                    if ($afterName === '>') {
+                        $isValidClose = true;
+                    } elseif (ctype_space($afterName)) {
+                        // 跳过空白找 >
+                        $checkPos = $nameEnd;
+                        while ($checkPos < $len && ctype_space($content[$checkPos])) {
+                            $checkPos++;
+                        }
+                        if ($checkPos < $len && $content[$checkPos] === '>') {
+                            $isValidClose = true;
+                        }
+                    }
+                    
+                    if (!$isValidClose || $tagName === '') {
+                        // 不是有效的闭合标签，把 < 当作普通文本
+                        $bufferLine = $line;
+                        $bufferColumn = $column;
+                        $buffer .= $char;
+                        $this->advancePosition($char, $line, $column);
+                        $i++;
                         continue;
                     }
+                    
+                    $end = strpos($content, '>', $nameEnd);
+                    if ($end === false) {
+                        throw new TemplateException(__('Tag close not found.'));
+                    }
+                    $raw = substr($content, $i, $end - $i + 1);
+                    $tokens[] = new AstToken('TAG_CLOSE', $tagName, $startLine, $startColumn, ['raw' => $raw]);
+                    $this->advancePosition($raw, $line, $column);
+                    $i = $end + 1;
+                    continue;
+                }
 
-                    if (isset($customTag[2])) {
-                        $customTag[2] = str_replace(PHP_EOL, '', $customTag[2]);
-                        $customTag[2] = str_replace(array("\r\n", "\r", "\n", "\t"), '', $customTag[2]);
-                    }
-                    # 标签支持匹配->
-                    $customTag[1] = $rawAttributes;
-                    $formatedAttributes = array();
-                    # 兼容：属性值单双引号
-                    preg_match_all("/(\S*?)='([\s\S]*?)'/", $rawAttributes, $attributes, PREG_SET_ORDER);
-                    foreach ($attributes as $attribute) {
-                        if (isset($attribute[2])) {
-                            $attr = trim($attribute[1]);
-                            $formatedAttributes[$attr] = trim($attribute[2]);
-                        }
-                    }
-                    preg_match_all('/(\S*?)="([\s\S]*?)"/', $rawAttributes, $attributes, PREG_SET_ORDER);
-                    foreach ($attributes as $attribute) {
-                        if (isset($attribute[2])) {
-                            $attr = trim($attribute[1]);
-                            $formatedAttributes[$attr] = trim($attribute[2]);
-                        }
-                    }
+                $nameStart = $i + 1;
+                $nameEnd = $nameStart;
+                while ($nameEnd < $len && preg_match('/[A-Za-z0-9:_-]/', $content[$nameEnd])) {
+                    $nameEnd++;
+                }
+                $tagName = substr($content, $nameStart, $nameEnd - $nameStart);
+                if ($tagName === '') {
+                    $bufferLine = $line;
+                    $bufferColumn = $column;
+                    $buffer .= $char;
+                    $this->advancePosition($char, $line, $column);
+                    $i++;
+                    continue;
+                }
 
-                    # 验证标签属性
-                    $attrs = $tag_configs['attr'] ?? [];
-                    if ($attrs && ('tar-start' === $tag_key || 'tag-self-close-with-attrs' === $tag_key || 'tag' === $tag_key)) {
-                        $attributes_keys = array_keys($formatedAttributes);
-                        foreach ($attrs as $attr => $required) {
-                            if ($required && !in_array($attr, $attributes_keys)) {
-                                $provide_attr = implode(',', $attributes_keys);
-                                $template_html = htmlentities($attr);
-                                throw new TemplateException(__("代码：[{$template_html}] %{1}:标签必须设置属性%{2}, 提供的属性：%{3} 文件：%{4}", [$tag, $attr, $provide_attr, $fileName]));
-                            }
+                $attrStart = $nameEnd;
+                $inQuote = false;
+                $quoteChar = '';
+                $inPhp = false;
+                $pos = $attrStart;
+                $selfClosing = false;
+                $voidTag = in_array(strtolower($tagName), self::HTML_VOID_TAGS, true);
+                while ($pos < $len) {
+                    $c = $content[$pos];
+                    $n = $pos + 1 < $len ? $content[$pos + 1] : '';
+                    if (!$inQuote && !$inPhp && $c === '/' && $n === '>') {
+                        $selfClosing = true;
+                        break;
+                    }
+                    if (!$inQuote && !$inPhp && $c === '>') {
+                        break;
+                    }
+                    if (!$inQuote && $c === '<' && $n === '?') {
+                        $inPhp = true;
+                        $pos += 2;
+                        continue;
+                    }
+                    if ($inPhp && $c === '?' && $n === '>') {
+                        $inPhp = false;
+                        $pos += 2;
+                        continue;
+                    }
+                    if (!$inPhp && ($c === '"' || $c === "'")) {
+                        if (!$inQuote) {
+                            $inQuote = true;
+                            $quoteChar = $c;
+                        } elseif ($quoteChar === $c) {
+                            $inQuote = false;
+                            $quoteChar = '';
                         }
                     }
-                    $result = $format_function($tag_key, $tag_configs, $customTag, $formatedAttributes);
-                    $content = str_replace($customTag[0], $result, $content);
+                    $pos++;
+                }
+                if ($pos >= $len) {
+                    throw new TemplateException(__('Tag close not found.'));
+                }
+                $attrEnd = $pos;
+                $rawAttributes = substr($content, $attrStart, $attrEnd - $attrStart);
+                if ($voidTag && !$selfClosing) {
+                    $selfClosing = true;
+                }
+                $end = $selfClosing && $content[$pos] === '/' ? $pos + 1 : $pos;
+                $raw = substr($content, $i, $end - $i + 1);
+                $tokens[] = new AstToken('TAG_OPEN', $tagName, $startLine, $startColumn, [
+                    'raw' => $raw,
+                    'rawAttributes' => $rawAttributes,
+                    'selfClosing' => $selfClosing,
+                ]);
+                if ($selfClosing) {
+                    $tokens[] = new AstToken('TAG_SELF_CLOSE', '/>', $startLine, $startColumn);
+                }
+                $this->advancePosition(substr($content, $i, $end - $i + 1), $line, $column);
+                $i = $end + 1;
+                continue;
+            }
+
+            if ($buffer === '') {
+                $bufferLine = $line;
+                $bufferColumn = $column;
+            }
+            $buffer .= $char;
+            $this->advancePosition($char, $line, $column);
+            $i++;
+        }
+        $flushText();
+        $tokens[] = new AstToken('EOF', '', $line, $column);
+        return $tokens;
+    }
+
+    private function tryParseInlineTagToken(string $content, int $offset, int $line, int $column): ?AstToken
+    {
+        $len = strlen($content);
+        $pos = $offset + 1;
+        $name = '';
+        while ($pos < $len && preg_match('/[A-Za-z0-9:_-]/', $content[$pos])) {
+            $name .= $content[$pos];
+            $pos++;
+        }
+        if ($name === '') {
+            return null;
+        }
+        $brace = $pos < $len ? $content[$pos] : '';
+        if ($brace !== '(' && $brace !== '{') {
+            return null;
+        }
+        $close = $brace === '(' ? ')' : '}';
+        $pos++;
+        $depth = 1;
+        $valueStart = $pos;
+        $inString = false;
+        $stringChar = '';
+        while ($pos < $len) {
+            $char = $content[$pos];
+            // 处理字符串内的内容（不计算括号深度）
+            if ($inString) {
+                if ($char === $stringChar && ($pos === 0 || $content[$pos - 1] !== '\\')) {
+                    $inString = false;
+                }
+                $pos++;
+                continue;
+            }
+            // 检测字符串开始
+            if ($char === '"' || $char === "'") {
+                $inString = true;
+                $stringChar = $char;
+                $pos++;
+                continue;
+            }
+            // 处理嵌套括号
+            if ($char === $brace) {
+                $depth++;
+            } elseif ($char === $close) {
+                $depth--;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+            $pos++;
+        }
+        if ($pos >= $len) {
+            return null;
+        }
+        $value = substr($content, $valueStart, $pos - $valueStart);
+        $raw = substr($content, $offset, $pos - $offset + 1);
+        return new AstToken('EXPR', $raw, $line, $column, [
+            'name' => $name,
+            'inlineKey' => $brace === '(' ? '@tag()' : '@tag{}',
+            'value' => $value,
+            'raw' => $raw,
+        ]);
+    }
+
+    private function parseTextNodes(string $text, int $line): array
+    {
+        $nodes = [];
+        $len = strlen($text);
+        $i = 0;
+        $buffer = '';
+        while ($i < $len) {
+            if ($text[$i] === '{' && $i + 1 < $len && $text[$i + 1] === '{') {
+                if ($buffer !== '') {
+                    $nodes[] = new TextNode($line, $buffer);
+                    $buffer = '';
+                }
+                $end = strpos($text, '}}', $i + 2);
+                if ($end === false) {
+                    $buffer .= '{{';
+                    $i += 2;
+                    continue;
+                }
+                $varPath = substr($text, $i + 2, $end - $i - 2);
+                $parsedValue = $this->varParser(trim($varPath));
+                $raw = self::PHP_ECHO_TAG . $parsedValue . ';' . self::PHP_CLOSE_TAG;
+                $nodes[] = new PhpNode($line, $raw, trim($parsedValue));
+                $i = $end + 2;
+                continue;
+            }
+            $buffer .= $text[$i];
+            $i++;
+        }
+        if ($buffer !== '') {
+            $nodes[] = new TextNode($line, $buffer);
+        }
+        return $nodes;
+    }
+
+    /**
+     * 解析文本中的内联标签（@tag() 和 @tag{} 格式）
+     * 用于处理非框架 HTML 标签中可能包含的内联标签
+     */
+    private function parseTextWithInlineTags(string $text, int $line): array
+    {
+        $nodes = [];
+        $len = strlen($text);
+        $i = 0;
+        $buffer = '';
+        
+        while ($i < $len) {
+            if ($text[$i] === '@') {
+                $tagToken = $this->tryParseInlineTagToken($text, $i, $line, 1);
+                if ($tagToken instanceof AstToken) {
+                    if ($buffer !== '') {
+                        // 递归处理 buffer 中可能的 {{}} 变量
+                        $nodes = array_merge($nodes, $this->parseTextNodes($buffer, $line));
+                        $buffer = '';
+                    }
+                    // 创建内联标签节点
+                    $tag = new TagNode($line, $tagToken->meta['name'] ?? '', []);
+                    $tag->tagKey = $tagToken->meta['inlineKey'] ?? '@tag()';
+                    $tag->inlineContent = $tagToken->meta['value'] ?? '';
+                    $tag->raw = $tagToken->meta['raw'] ?? $tagToken->value;
+                    $nodes[] = $tag;
+                    $i += strlen($tagToken->value);
+                    continue;
+                }
+            }
+            $buffer .= $text[$i];
+            $i++;
+        }
+        
+        if ($buffer !== '') {
+            // 递归处理 buffer 中可能的 {{}} 变量
+            $nodes = array_merge($nodes, $this->parseTextNodes($buffer, $line));
+        }
+        
+        return $nodes;
+    }
+    
+    /**
+     * 解析非框架标签的完整标记，处理其属性值中可能包含的框架标签
+     * 例如：<input placeholder="<lang>搜索商品...</lang>">
+     */
+    private function parseNonFrameworkTagMarkup(string $markup, int $line, array $frameworkTags): array
+    {
+        // 解析标签的属性
+        if (!preg_match('/^<([A-Za-z0-9:_-]+)(.*)$/s', $markup, $tagMatch)) {
+            // 不是有效的标签格式，直接返回文本节点
+            return [new TextNode($line, $markup)];
+        }
+        
+        $tagName = $tagMatch[1];
+        $rest = $tagMatch[2];
+        
+        // 检查是否自闭合
+        $selfClosing = false;
+        if (preg_match('/\/>$/', $rest)) {
+            $selfClosing = true;
+            $attrPart = preg_replace('/\s*\/>$/', '', $rest);
+        } elseif (preg_match('/>$/', $rest)) {
+            $attrPart = preg_replace('/\s*>$/', '', $rest);
+        } else {
+            // 格式不对，直接返回
+            return [new TextNode($line, $markup)];
+        }
+        
+        // 解析属性
+        $attrPart = trim($attrPart);
+        if ($attrPart === '') {
+            // 没有属性，直接返回原标记
+            return $this->parseTextWithInlineTags($markup, $line);
+        }
+        
+        // 使用属性解析器解析属性
+        $attrMap = $this->parseAttributesWithTokenizer($attrPart);
+        
+        // 检查是否有属性值包含框架标签
+        $hasFrameworkTagInAttr = false;
+        foreach ($attrMap as $attrValue) {
+            if (strpos($attrValue, '<') !== false && strpos($attrValue, '>') !== false) {
+                // 检查是否包含框架标签
+                foreach ($frameworkTags as $ftName => $ftConfig) {
+                    if (strpos($attrValue, '<' . $ftName) !== false || strpos($attrValue, '<' . $ftName . '>') !== false) {
+                        $hasFrameworkTagInAttr = true;
+                        break 2;
+                    }
                 }
             }
         }
         
+        if (!$hasFrameworkTagInAttr) {
+            // 没有框架标签在属性值中，使用原来的处理方式
+            return $this->parseTextWithInlineTags($markup, $line);
+        }
+        
+        // 有框架标签在属性值中，需要特殊处理
+        // 构建新的标记，编译属性值中的标签
+        $result = [];
+        $result[] = new TextNode($line, '<' . $tagName);
+        
+        foreach ($attrMap as $attrName => $attrValue) {
+            // 检查属性值是否包含框架标签
+            $hasTag = false;
+            foreach ($frameworkTags as $ftName => $ftConfig) {
+                if (strpos($attrValue, '<' . $ftName) !== false) {
+                    $hasTag = true;
+                    break;
+                }
+            }
+            
+            if ($hasTag) {
+                // 属性值包含框架标签，解析并编译
+                $attrNodes = $this->parseAttributeValueNodes($attrValue, $line, $frameworkTags);
+                $result[] = new TextNode($line, ' ' . $attrName . '="');
+                $result = array_merge($result, $attrNodes);
+                $result[] = new TextNode($line, '"');
+            } else {
+                // 普通属性值
+                $result[] = new TextNode($line, ' ' . $attrName . '="' . $attrValue . '"');
+            }
+        }
+        
+        $result[] = new TextNode($line, $selfClosing ? '/>' : '>');
+        
+        return $result;
+    }
+
+    private function parseAttributeValueNodes(string $value, int $line, array $frameworkTags = []): array
+    {
+        $nodes = [];
+        $segments = $this->splitPhpBlocks($value);
+        foreach ($segments as $segment) {
+            if ($segment['type'] === 'php') {
+                $parsed = self::parsePhpCodeToken($segment['value']);
+                $nodes[] = new PhpNode($line, $segment['value'], $parsed['expression']);
+            } else {
+                // 检查是否包含标签（<tag>...</tag> 格式）
+                $text = $segment['value'];
+                if (!empty($frameworkTags) && strpos($text, '<') !== false && strpos($text, '>') !== false) {
+                    // 尝试解析属性值中的标签
+                    $nodes = array_merge($nodes, $this->parseAttributeValueWithTags($text, $line, $frameworkTags));
+                } else {
+                    $nodes = array_merge($nodes, $this->parseTextNodes($text, $line));
+                }
+            }
+        }
+        return $nodes;
+    }
+    
+    /**
+     * 解析属性值中的标签
+     * 例如：placeholder="<lang>搜索商品...</lang>"
+     */
+    private function parseAttributeValueWithTags(string $text, int $line, array $frameworkTags): array
+    {
+        $nodes = [];
+        $len = strlen($text);
+        $i = 0;
+        $buffer = '';
+        
+        while ($i < $len) {
+            // 检测标签开始
+            if ($text[$i] === '<' && $i + 1 < $len && $text[$i + 1] !== '?' && $text[$i + 1] !== '!') {
+                // 可能是标签，尝试解析
+                $tagMatch = $this->tryParseTagInAttributeValue($text, $i, $line, $frameworkTags);
+                if ($tagMatch !== null) {
+                    // 先保存之前的文本
+                    if ($buffer !== '') {
+                        $nodes = array_merge($nodes, $this->parseTextNodes($buffer, $line));
+                        $buffer = '';
+                    }
+                    // 添加解析到的标签节点
+                    $nodes[] = $tagMatch['node'];
+                    $i = $tagMatch['endPos'];
+                    continue;
+                }
+            }
+            
+            // 检测 {{variable}} 变量
+            if ($text[$i] === '{' && $i + 1 < $len && $text[$i + 1] === '{') {
+                if ($buffer !== '') {
+                    $nodes[] = new TextNode($line, $buffer);
+                    $buffer = '';
+                }
+                $end = strpos($text, '}}', $i + 2);
+                if ($end === false) {
+                    $buffer .= '{{';
+                    $i += 2;
+                    continue;
+                }
+                $varPath = substr($text, $i + 2, $end - $i - 2);
+                $parsedValue = $this->varParser(trim($varPath));
+                $raw = self::PHP_ECHO_TAG . $parsedValue . ';' . self::PHP_CLOSE_TAG;
+                $nodes[] = new PhpNode($line, $raw, trim($parsedValue));
+                $i = $end + 2;
+                continue;
+            }
+            
+            $buffer .= $text[$i];
+            $i++;
+        }
+        
+        if ($buffer !== '') {
+            $nodes[] = new TextNode($line, $buffer);
+        }
+        
+        return $nodes;
+    }
+    
+    /**
+     * 尝试解析属性值中的标签
+     */
+    private function tryParseTagInAttributeValue(string $text, int $offset, int $line, array $frameworkTags): ?array
+    {
+        $len = strlen($text);
+        $pos = $offset + 1;
+        
+        // 检查是否是闭合标签
+        $isCloseTag = ($pos < $len && $text[$pos] === '/');
+        if ($isCloseTag) {
+            return null; // 闭合标签不单独处理
+        }
+        
+        // 读取标签名
+        $nameStart = $pos;
+        while ($pos < $len && preg_match('/[A-Za-z0-9:_-]/', $text[$pos])) {
+            $pos++;
+        }
+        $tagName = substr($text, $nameStart, $pos - $nameStart);
+        
+        if ($tagName === '' || !isset($frameworkTags[$tagName])) {
+            return null; // 不是框架标签
+        }
+        
+        // 跳过空白
+        while ($pos < $len && ctype_space($text[$pos])) {
+            $pos++;
+        }
+        
+        // 读取属性（如果有）
+        $attrStart = $pos;
+        $selfClosing = false;
+        while ($pos < $len) {
+            if ($text[$pos] === '/' && $pos + 1 < $len && $text[$pos + 1] === '>') {
+                $selfClosing = true;
+                $pos += 2;
+                break;
+            }
+            if ($text[$pos] === '>') {
+                $pos++;
+                break;
+            }
+            $pos++;
+        }
+        
+        $rawAttributes = trim(substr($text, $attrStart, $pos - $attrStart - ($selfClosing ? 2 : 1)));
+        
+        if ($selfClosing) {
+            // 自闭合标签
+            $tag = new TagNode($line, $tagName, []);
+            $tag->selfClosing = true;
+            $tag->rawAttributes = $rawAttributes;
+            return ['node' => $tag, 'endPos' => $pos];
+        }
+        
+        // 非自闭合标签，需要找到闭合标签
+        $closeTag = '</' . $tagName . '>';
+        $closePos = strpos($text, $closeTag, $pos);
+        if ($closePos === false) {
+            return null; // 找不到闭合标签
+        }
+        
+        $content = substr($text, $pos, $closePos - $pos);
+        $endPos = $closePos + strlen($closeTag);
+        
+        // 创建标签节点
+        $tag = new TagNode($line, $tagName, []);
+        $tag->selfClosing = false;
+        $tag->rawAttributes = $rawAttributes;
+        // 递归解析内容中的标签
+        $tag->children = $this->parseAttributeValueWithTags($content, $line, $frameworkTags);
+        
+        return ['node' => $tag, 'endPos' => $endPos];
+    }
+
+    private function splitPhpBlocks(string $text): array
+    {
+        $result = [];
+        $len = strlen($text);
+        $i = 0;
+        $buffer = '';
+        while ($i < $len) {
+            if ($text[$i] === '<' && $i + 1 < $len && $text[$i + 1] === '?') {
+                if ($buffer !== '') {
+                    $result[] = ['type' => 'text', 'value' => $buffer];
+                    $buffer = '';
+                }
+                $end = strpos($text, self::PHP_CLOSE_TAG, $i + 2);
+                if ($end === false) {
+                    $buffer .= substr($text, $i);
+                    break;
+                }
+                $php = substr($text, $i, $end - $i + 2);
+                $result[] = ['type' => 'php', 'value' => $php];
+                $i = $end + 2;
+                continue;
+            }
+            $buffer .= $text[$i];
+            $i++;
+        }
+        if ($buffer !== '') {
+            $result[] = ['type' => 'text', 'value' => $buffer];
+        }
+        return $result;
+    }
+
+    /**
+     * @param AstToken[] $tokens
+     * @param array $frameworkTags 框架标签名称列表，用于区分框架标签和 HTML 标签
+     * @return ProgramNode
+     */
+    private function parseTokensToAst(array $tokens, array $frameworkTags = []): ProgramNode
+    {
+        $root = new ProgramNode(1);
+        $stack = [$root];
+        
+        foreach ($tokens as $token) {
+            $current = $stack[count($stack) - 1];
+            switch ($token->type) {
+                case 'TEXT':
+                    foreach ($this->parseTextNodes($token->value, $token->line) as $node) {
+                        $current->children[] = $node;
+                    }
+                    break;
+                case 'PHP_BLOCK':
+                    $current->children[] = new PhpNode($token->line, $token->value, null);
+                    break;
+                case 'EXPR':
+                    $tag = new TagNode($token->line, $token->meta['name'] ?? '', []);
+                    $tag->tagKey = $token->meta['inlineKey'] ?? '@tag()';
+                    $tag->inlineContent = $token->meta['value'] ?? '';
+                    $tag->raw = $token->meta['raw'] ?? $token->value;
+                    $current->children[] = $tag;
+                    break;
+                case 'TAG_OPEN':
+                    $tagName = $token->value;
+                    $rawAttributes = $token->meta['rawAttributes'] ?? '';
+                    $rawMarkup = $token->meta['raw'] ?? '';
+                    $selfClosing = (bool)($token->meta['selfClosing'] ?? false);
+                    
+                    // 判断是否为框架标签（需要严格嵌套）
+                    $isFrameworkTag = isset($frameworkTags[$tagName]) || isset($frameworkTags['w:' . $tagName]);
+                    
+                    if (!$isFrameworkTag) {
+                        // 非框架标签：解析其中可能存在的内联标签（如 @static()）和属性值中的框架标签
+                        $parsedNodes = $this->parseNonFrameworkTagMarkup($rawMarkup, $token->line, $frameworkTags);
+                        foreach ($parsedNodes as $pnode) {
+                            $current->children[] = $pnode;
+                        }
+                        break;
+                    }
+                    
+                    // 框架标签：创建 TagNode
+                    $attrMap = $this->parseAttributesWithTokenizer($rawAttributes);
+                    $attrNodes = [];
+                    foreach ($attrMap as $name => $value) {
+                        $attrNodes[] = new AttrNode($token->line, $name, $this->parseAttributeValueNodes($value, $token->line, $frameworkTags));
+                    }
+                    $tag = new TagNode($token->line, $tagName, $attrNodes);
+                    $tag->selfClosing = $selfClosing;
+                    $tag->rawAttributes = $rawAttributes;
+                    $tag->raw = $rawMarkup;
+                    
+                    if ($selfClosing) {
+                        $current->children[] = $tag;
+                    } else {
+                        $stack[] = $tag;
+                    }
+                    break;
+                case 'TAG_CLOSE':
+                    $name = $token->value;
+                    $isFrameworkTag = isset($frameworkTags[$name]) || isset($frameworkTags['w:' . $name]);
+                    
+                    if (!$isFrameworkTag) {
+                        // 非框架标签的闭合标签，直接作为文本输出（无需解析内联标签）
+                        $current->children[] = new TextNode($token->line, '</' . $name . '>');
+                        break;
+                    }
+                    
+                    // 框架标签：在栈中查找匹配的开标签
+                    $foundIndex = -1;
+                    for ($i = count($stack) - 1; $i >= 1; $i--) {
+                        if ($stack[$i] instanceof TagNode && $stack[$i]->name === $name) {
+                            $foundIndex = $i;
+                            break;
+                        }
+                    }
+                    
+                    if ($foundIndex === -1) {
+                        // 未找到匹配的开标签，作为文本输出
+                        $current->children[] = new TextNode($token->line, '</' . $name . '>');
+                        break;
+                    }
+                    
+                    // 自动闭合中间的所有标签
+                    while (count($stack) > $foundIndex) {
+                        $closed = array_pop($stack);
+                        if ($closed instanceof TagNode) {
+                            $parent = $stack[count($stack) - 1];
+                            $parent->children[] = $closed;
+                        }
+                    }
+                    break;
+                case 'EOF':
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        // 自动闭合所有未闭合的标签（宽松模式）
+        while (count($stack) > 1) {
+            $unclosed = array_pop($stack);
+            if ($unclosed instanceof TagNode) {
+                $parent = $stack[count($stack) - 1];
+                $parent->children[] = $unclosed;
+            }
+        }
+        
+        return $root;
+    }
+
+    private function buildAttributesFromRaw(string $rawAttributes): array
+    {
+        $formatedAttributes = $this->parseAttributesWithTokenizer($rawAttributes);
+        foreach ($formatedAttributes as $key => $value) {
+            if ($value === '') {
+                continue;
+            }
+            $nodes = $this->parseAttributeValueNodes($value, 0);
+            $stringValue = $this->buildStringFromNodes($nodes);
+            $formatedAttributes[$key] = $stringValue;
+        }
+
+        foreach ($formatedAttributes as $key => $value) {
+            if ($value === '') {
+                continue;
+            }
+            $parsed = self::parsePhpCodeToken($value);
+            if ($parsed['is_php']) {
+                $formatedAttributes[$key] = $parsed['expression'];
+                $formatedAttributes['__php_' . $key] = $value;
+            }
+        }
+        return $formatedAttributes;
+    }
+
+    private function buildStringFromNodes(array $nodes): string
+    {
+        $result = '';
+        foreach ($nodes as $node) {
+            if ($node instanceof TextNode) {
+                $result .= $node->value;
+            } elseif ($node instanceof PhpNode) {
+                $result .= $node->code;
+            } elseif ($node instanceof TagNode) {
+                $result .= $this->buildOriginalTagMarkup($node);
+            }
+        }
+        return $result;
+    }
+
+    private function isNodesDynamic(array $nodes): bool
+    {
+        foreach ($nodes as $node) {
+            if ($node instanceof PhpNode) {
+                return true;
+            }
+            if ($node instanceof TagNode) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function isAttributesDynamic(array $attributes): bool
+    {
+        foreach ($attributes as $attr) {
+            if (!$attr instanceof AttrNode) {
+                continue;
+            }
+            if ($this->isNodesDynamic($attr->value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function isInlineContentDynamic(?string $content): bool
+    {
+        if ($content === null) {
+            return false;
+        }
+        $trimmed = trim($content);
+        if ($trimmed === '') {
+            return false;
+        }
+        if (str_contains($trimmed, '<' . '?') || str_contains($trimmed, '{{')) {
+            return true;
+        }
+        if (preg_match('/^([\'"])(.*)\1$/', $trimmed)) {
+            return false;
+        }
+        // 静态路径字符：字母、数字、下划线、点、冒号、短横线、斜杠
+        if (preg_match('/^[A-Za-z0-9_.:\-\/]+$/', $trimmed)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 控制流标签 - 这些标签不应该被作为独立框架标签处理，
+     * 而是输出为原始 HTML 标记，由父标签（如 hook, if）在其内容中解析处理
+     */
+    private const PASSTHROUGH_TAGS = ['else', 'elseif', 'w:else', 'w:elseif'];
+
+    private function determineTagStage(TagNode $node): string
+    {
+        $compileCandidates = [
+            'css', 'js', 'url', 'frontend-url', 'backend-url', 'backend-api', 'api',
+            'template', 'include', 'static', 'theme:css', 'theme:js', 'theme:template'
+        ];
+        $hasDynamicAttrs = $this->isAttributesDynamic($node->attributes);
+        $hasDynamicChildren = $this->isNodesDynamic($node->children);
+        $hasDynamicInline = ($node->tagKey === '@tag()' || $node->tagKey === '@tag{}')
+            ? $this->isInlineContentDynamic($node->inlineContent)
+            : false;
+        $isDynamic = $hasDynamicAttrs || $hasDynamicChildren || $hasDynamicInline;
+
+        if ($node->name === 'lang') {
+            return $isDynamic ? self::STAGE_RUNTIME : self::STAGE_COMPILE_TIME;
+        }
+
+        if (in_array($node->name, $compileCandidates, true)) {
+            return $isDynamic ? self::STAGE_RUNTIME : self::STAGE_COMPILE_TIME;
+        }
+
+        return self::STAGE_COMPILE_TIME;
+    }
+
+    private function compileAst(ProgramNode $root, array $tags, Template $template, string $fileName): ProgramNode
+    {
+        $root->children = $this->compileNodes($root->children, $tags, $template, $fileName);
+        return $root;
+    }
+
+    private function compileNodes(array $nodes, array $tags, Template $template, string $fileName): array
+    {
+        $result = [];
+        foreach ($nodes as $node) {
+            if ($node instanceof TagNode) {
+                // 控制流标签（else, elseif）直接输出为原始标记，不作为框架标签处理
+                if (in_array($node->name, self::PASSTHROUGH_TAGS, true)) {
+                    $result[] = new TextNode($node->line, $this->buildOriginalTagMarkup($node));
+                    continue;
+                }
+                
+                // 编译属性值中的标签节点
+                foreach ($node->attributes as $attr) {
+                    if ($attr instanceof AttrNode && is_array($attr->value)) {
+                        $attr->value = $this->compileAttributeValueNodes($attr->value, $tags, $template, $fileName);
+                    }
+                }
+                
+                $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
+                if (isset($tags[$node->name])) {
+                    $node->executionStage = $this->determineTagStage($node);
+                    if ($node->executionStage === self::STAGE_COMPILE_TIME) {
+                        $rendered = $this->renderTagNode($node, $tags, $template, $fileName);
+                        $result = array_merge($result, $this->compileStringToNodes($rendered, $tags, $template, $fileName));
+                        continue;
+                    }
+                }
+            }
+            $result[] = $node;
+        }
+        return $result;
+    }
+    
+    /**
+     * 编译属性值中的节点（递归处理标签节点）
+     */
+    private function compileAttributeValueNodes(array $nodes, array $tags, Template $template, string $fileName): array
+    {
+        $result = [];
+        foreach ($nodes as $node) {
+            if ($node instanceof TagNode) {
+                // 递归编译属性值中的标签的属性
+                foreach ($node->attributes as $attr) {
+                    if ($attr instanceof AttrNode && is_array($attr->value)) {
+                        $attr->value = $this->compileAttributeValueNodes($attr->value, $tags, $template, $fileName);
+                    }
+                }
+                // 递归编译子节点
+                $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
+                
+                if (isset($tags[$node->name])) {
+                    $node->executionStage = $this->determineTagStage($node);
+                    if ($node->executionStage === self::STAGE_COMPILE_TIME) {
+                        // 编译期执行的标签，将其渲染结果转换为节点
+                        $rendered = $this->renderTagNode($node, $tags, $template, $fileName);
+                        // 渲染结果直接作为文本节点
+                        if ($rendered !== '') {
+                            $result[] = new TextNode($node->line, $rendered);
+                        }
+                        continue;
+                    }
+                }
+            }
+            $result[] = $node;
+        }
+        return $result;
+    }
+
+    private function compileStringToNodes(string $content, array $tags, Template $template, string $fileName): array
+    {
+        if ($content === '') {
+            return [];
+        }
+        $tokens = $this->tokenizeTemplate($content);
+        $ast = $this->parseTokensToAst($tokens, $tags);
+        $ast = $this->compileAst($ast, $tags, $template, $fileName);
+        $ast = $this->optimizeAst($ast);
+        return $ast->children;
+    }
+
+    private function optimizeAst(ProgramNode $root): ProgramNode
+    {
+        $optimized = [];
+        foreach ($root->children as $node) {
+            if ($node instanceof TextNode && $node->value === '') {
+                continue;
+            }
+            if ($node instanceof TextNode && !empty($optimized)) {
+                $last = $optimized[count($optimized) - 1];
+                if ($last instanceof TextNode) {
+                    $last->value .= $node->value;
+                    continue;
+                }
+            }
+            $optimized[] = $node;
+        }
+        $root->children = $optimized;
+        return $root;
+    }
+
+    private function resolveTagKey(TagNode $node, array $tagConfig): string
+    {
+        if ($node->tagKey) {
+            return $node->tagKey;
+        }
+        if ($node->selfClosing) {
+            if (!empty($tagConfig['tag-self-close-with-attrs']) && trim($node->rawAttributes ?? '') !== '') {
+                return 'tag-self-close-with-attrs';
+            }
+            if (!empty($tagConfig['tag-self-close'])) {
+                return 'tag-self-close';
+            }
+        }
+        if (!empty($tagConfig['tag'])) {
+            return 'tag';
+        }
+        if (!empty($tagConfig['tag-start']) && !empty($tagConfig['tag-end'])) {
+            return 'tag-start';
+        }
+        return 'tag';
+    }
+
+    private function renderTagNode(TagNode $node, array $tags, Template $template, string $fileName): string
+    {
+        $config = $tags[$node->name] ?? null;
+        if ($config === null) {
+            return $this->buildOriginalTagMarkup($node);
+        }
+        $tagKey = $this->resolveTagKey($node, $config);
+        $rawAttributes = $node->rawAttributes ?? '';
+        $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
+        $tagData = $this->buildTagData($node, $content);
+        $attributes = $this->buildAttributesFromRaw($rawAttributes);
+
+        if ($tagKey === 'tag-start' && !empty($config['tag-end'])) {
+            $start = $config['callback']('tag-start', $config, $tagData, $attributes);
+            $end = $config['callback']('tag-end', $config, $tagData, $attributes);
+            return $start . $content . $end;
+        }
+
+        return $config['callback']($tagKey, $config, $tagData, $attributes);
+    }
+
+    private function buildTagData(TagNode $node, string $content): array
+    {
+        if ($node->tagKey && ($node->tagKey === '@tag()' || $node->tagKey === '@tag{}')) {
+            return [$node->raw ?? '', $node->inlineContent ?? ''];
+        }
+        return [$node->raw ?? $this->buildOriginalTagMarkup($node), $node->rawAttributes ?? '', $content];
+    }
+
+    private function buildOriginalTagMarkup(TagNode $node): string
+    {
+        $attrs = $node->rawAttributes ?? '';
+        if ($node->selfClosing) {
+            return '<' . $node->name . $attrs . '/>';
+        }
+        $content = $this->buildStringFromNodes($node->children);
+        return '<' . $node->name . $attrs . '>' . $content . '</' . $node->name . '>';
+    }
+
+    private function generatePhpFromAst(ProgramNode $root, array $tags, Template $template, string $fileName): string
+    {
+        return $this->generatePhpFromNodes($root->children, $tags, $template, $fileName);
+    }
+
+    private function generatePhpFromNodes(array $nodes, array $tags, Template $template, string $fileName): string
+    {
+        $output = '';
+        foreach ($nodes as $node) {
+            if ($node instanceof TextNode) {
+                $output .= $node->value;
+            } elseif ($node instanceof PhpNode) {
+                $output .= $node->code;
+            } elseif ($node instanceof TagNode) {
+                $config = $tags[$node->name] ?? null;
+                if ($config === null) {
+                    $output .= $this->buildOriginalTagMarkup($node);
+                    continue;
+                }
+                $tagKey = $this->resolveTagKey($node, $config);
+                $attrsExpr = $this->buildRuntimeAttributesExpression($node->attributes);
+                $contentExpr = $this->buildChildrenBufferExpression($node->children, $tags, $template, $fileName);
+                $rawAttrs = addslashes($node->rawAttributes ?? '');
+                $inlineContent = addslashes($node->inlineContent ?? '');
+                $output .= self::PHP_OPEN_TAG . 'php echo $this->getTaglib()->renderRuntimeTag($this, \'' .
+                    addslashes($node->name) . '\', \'' . $tagKey . '\', ' . $attrsExpr . ', ' . $contentExpr .
+                    ', ' . var_export($fileName, true) . ', \'' . $rawAttrs . '\', \'' . $inlineContent . '\');' .
+                    self::PHP_CLOSE_TAG;
+            }
+        }
+        return $output;
+    }
+
+    private function buildRuntimeAttributesExpression(array $attributes): string
+    {
+        if (empty($attributes)) {
+            return '[]';
+        }
+        $parts = [];
+        foreach ($attributes as $attr) {
+            if (!$attr instanceof AttrNode) {
+                continue;
+            }
+            $expr = $this->buildNodesExpression($attr->value);
+            $parts[] = '\'' . addslashes($attr->name) . '\' => ' . $expr;
+        }
+        return '[' . implode(', ', $parts) . ']';
+    }
+
+    private function buildNodesExpression($nodes): string
+    {
+        if ($nodes instanceof AstNode) {
+            $nodes = [$nodes];
+        }
+        $parts = [];
+        foreach ($nodes as $node) {
+            if ($node instanceof TextNode) {
+                $parts[] = '\'' . addslashes($node->value) . '\'';
+            } elseif ($node instanceof PhpNode) {
+                $parts[] = $node->expression !== null ? '(' . $node->expression . ')' : '\'\'';
+            }
+        }
+        if (empty($parts)) {
+            return '\'\'';
+        }
+        return implode(' . ', $parts);
+    }
+
+    private function buildChildrenBufferExpression(array $children, array $tags, Template $template, string $fileName): string
+    {
+        $childPhp = $this->generatePhpFromNodes($children, $tags, $template, $fileName);
+        return '(function(){ ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })()';
+    }
+
+    public function renderRuntimeTag(
+        Template $template,
+        string $tagName,
+        string $tagKey,
+        array $attributes,
+        string $content = '',
+        string $fileName = '',
+        string $rawAttributes = '',
+        string $inlineContent = ''
+    ): string {
+        $tags = $this->getTags($template, $fileName, $content);
+        $config = $tags[$tagName] ?? null;
+        if ($config === null) {
+            return $content;
+        }
+        $tagData = ($tagKey === '@tag()' || $tagKey === '@tag{}')
+            ? [$inlineContent, $inlineContent]
+            : [$this->buildRuntimeRawTag($tagName, $rawAttributes, $content, $tagKey), $rawAttributes, $content];
+
+        return $config['callback']($tagKey, $config, $tagData, $attributes);
+    }
+
+    private function buildRuntimeRawTag(string $tagName, string $rawAttributes, string $content, string $tagKey): string
+    {
+        if ($tagKey === 'tag-self-close' || $tagKey === 'tag-self-close-with-attrs') {
+            return '<' . $tagName . $rawAttributes . '/>';
+        }
+        return '<' . $tagName . $rawAttributes . '>' . $content . '</' . $tagName . '>';
+    }
+
+    public function tagReplace(Template &$template, string &$content, string &$fileName = ''): array|string
+    {
+        if (PROD) {
+            $content = $this->removeHtmlComments($content);
+        }
+
+        $tags = $this->getTags($template, $fileName, $content);
+        $tokens = $this->tokenizeTemplate($content);
+        $ast = $this->parseTokensToAst($tokens, $tags);
+        $ast = $this->compileAst($ast, $tags, $template, $fileName);
+        $ast = $this->optimizeAst($ast);
+        $content = $this->generatePhpFromAst($ast, $tags, $template, $fileName);
+
         return $content;
+    }
+}
+
+class AstToken
+{
+    public string $type;
+    public string $value;
+    public int $line;
+    public int $column;
+    public array $meta;
+
+    public function __construct(string $type, string $value, int $line, int $column, array $meta = [])
+    {
+        $this->type = $type;
+        $this->value = $value;
+        $this->line = $line;
+        $this->column = $column;
+        $this->meta = $meta;
+    }
+}
+
+abstract class AstNode
+{
+    public int $line;
+
+    public function __construct(int $line)
+    {
+        $this->line = $line;
+    }
+}
+
+class ProgramNode extends AstNode
+{
+    public array $children = [];
+}
+
+class FragmentNode extends AstNode
+{
+    public array $children = [];
+}
+
+class TextNode extends AstNode
+{
+    public string $value;
+
+    public function __construct(int $line, string $value)
+    {
+        parent::__construct($line);
+        $this->value = $value;
+    }
+}
+
+class PhpNode extends AstNode
+{
+    public string $code;
+    public ?string $expression;
+
+    public function __construct(int $line, string $code, ?string $expression)
+    {
+        parent::__construct($line);
+        $this->code = $code;
+        $this->expression = $expression;
+    }
+}
+
+class TagNode extends AstNode
+{
+    public string $name;
+    public array $attributes = [];
+    public array $children = [];
+    public bool $selfClosing = false;
+    public ?string $tagKey = null;
+    public ?string $rawAttributes = null;
+    public ?string $inlineContent = null;
+    public ?string $executionStage = null;
+    public $handler = null;
+    public ?string $raw = null;
+
+    public function __construct(int $line, string $name, array $attributes)
+    {
+        parent::__construct($line);
+        $this->name = $name;
+        $this->attributes = $attributes;
+    }
+}
+
+class AttrNode extends AstNode
+{
+    public string $name;
+    public array $value;
+
+    public function __construct(int $line, string $name, array $value)
+    {
+        parent::__construct($line);
+        $this->name = $name;
+        $this->value = $value;
     }
 }

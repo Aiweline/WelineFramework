@@ -13,7 +13,7 @@ namespace Weline\Widget\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Widget\Service\WidgetScanner;
+use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Taglib\Widget;
 
 /**
@@ -55,8 +55,8 @@ class Preview extends BackendController
                 }
             }
 
-            // 获取部件配置
-            $widget = $this->widgetScanner->scanWidget($type, $name);
+            // 从注册表读取部件配置（运行时只读取，不扫描）
+            $widget = $this->widgetData->getWidget($type, $name);
             if (!$widget) {
                 return $this->fetchJson([
                     'success' => false,

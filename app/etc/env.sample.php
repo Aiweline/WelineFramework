@@ -164,6 +164,28 @@ return [
         // ],
     ],
     
+    // 备份数据库配置（可选）
+    // 用途：字段/表结构备份、卸载备份等数据写入此库，避免污染主业务库。
+    // 不配置时，所有备份数据将写入主库（db）。
+    'backup_db' => [
+        // 和主 db 配置结构一致：default/master/slaves
+        // 默认示例：单独的 MySQL 备份库
+        // 'default' => 'mysql',
+        // 'master' => [
+        //     'type' => 'mysql',
+        //     'hostname' => 'localhost',
+        //     'database' => 'weline_backup',   // 备份库库名
+        //     'username' => 'weline_backup',   // 备份库用户名
+        //     'password' => 'weline_backup',   // 备份库密码
+        //     'hostport' => '3306',
+        //     'prefix' => 'bak_',              // 建议使用独立前缀
+        //     'charset' => 'utf8mb4',
+        //     'collate' => 'utf8mb4_general_ci',
+        //     'persistent' => true,
+        //     'pool_size' => 5,
+        // ],
+        // 'slaves' => [],
+    ],
     
     // 沙盒数据库配置（用于测试环境）
     'sandbox_db' => [
