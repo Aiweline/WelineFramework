@@ -1,0 +1,51 @@
+<?php
+/**
+ * Header Logo 部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - logo_image: Logo图片URL
+ * - logo_text: Logo文字（图片不存在时显示）
+ * - logo_link: Logo链接
+ * - logo_height: Logo高度(px)
+ */
+
+$logoImage = $this->getData('logo_image') ?? '';
+$logoText = $this->getData('logo_text') ?? 'WeShop';
+$logoLink = $this->getData('logo_link') ?? '/';
+$logoHeight = (int)($this->getData('logo_height') ?? 40);
+?>
+<div class="widget-header-logo">
+    <a href="<?= htmlspecialchars($logoLink) ?>" class="logo-link" title="<?= htmlspecialchars($logoText) ?>">
+        <?php if ($logoImage): ?>
+            <img src="<?= htmlspecialchars($logoImage) ?>" 
+                 alt="<?= htmlspecialchars($logoText) ?>" 
+                 class="logo-image"
+                 style="height: <?= $logoHeight ?>px; width: auto;">
+        <?php else: ?>
+            <span class="logo-text"><?= htmlspecialchars($logoText) ?></span>
+        <?php endif; ?>
+    </a>
+</div>
+
+<style>
+.widget-header-logo {
+    display: flex;
+    align-items: center;
+}
+.widget-header-logo .logo-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+.widget-header-logo .logo-image {
+    max-width: 200px;
+    object-fit: contain;
+}
+.widget-header-logo .logo-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color, #333);
+}
+</style>

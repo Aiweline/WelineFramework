@@ -1,0 +1,114 @@
+<?php
+/**
+ * 面包屑导航部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$showHome = (bool)($this->getData('show_home') ?? true);
+$homeText = $this->getData('home_text') ?? __('首页');
+$homeIcon = (bool)($this->getData('home_icon') ?? true);
+$separator = $this->getData('separator') ?? '/';
+$showCurrent = (bool)($this->getData('show_current') ?? true);
+
+// 面包屑数据（应从系统获取）
+$breadcrumbs = $this->getData('breadcrumbs') ?? [];
+
+// 示例数据
+if (empty($breadcrumbs)) {
+    $breadcrumbs = [
+        ['label' => __('分类'), 'url' => '/category'],
+        ['label' => __('电子产品'), 'url' => '/category/electronics'],
+        ['label' => __('手机'), 'url' => ''], // 当前页面
+    ];
+}
+
+$widgetId = 'breadcrumb-' . uniqid();
+?>
+
+<nav class="widget-breadcrumb" id="<?= $widgetId ?>" aria-label="<?= __('面包屑导航') ?>">
+    <ol class="breadcrumb-list">
+        <?php if ($showHome): ?>
+            <li class="breadcrumb-item">
+                <a href="/" class="breadcrumb-link">
+                    <?php if ($homeIcon): ?>
+                        <i class="ri-home-line"></i>
+                    <?php endif; ?>
+                    <span><?= htmlspecialchars($homeText) ?></span>
+                </a>
+                <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>
+            </li>
+        <?php endif; ?>
+        
+        <?php foreach ($breadcrumbs as $index => $crumb): 
+            $isLast = ($index === count($breadcrumbs) - 1);
+            $hasUrl = !empty($crumb['url']);
+        ?>
+            <?php if ($isLast && !$showCurrent) continue; ?>
+            
+            <li class="breadcrumb-item <?= $isLast ? 'active' : '' ?>">
+                <?php if ($hasUrl && !$isLast): ?>
+                    <a href="<?= htmlspecialchars($crumb['url']) ?>" class="breadcrumb-link">
+                        <?= htmlspecialchars($crumb['label']) ?>
+                    </a>
+                    <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>
+                <?php else: ?>
+                    <span class="breadcrumb-current" aria-current="page">
+                        <?= htmlspecialchars($crumb['label']) ?>
+                    </span>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ol>
+</nav>
+
+<style>
+.widget-breadcrumb {
+    padding: 15px 0;
+}
+
+.widget-breadcrumb .breadcrumb-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+}
+
+.widget-breadcrumb .breadcrumb-item {
+    display: flex;
+    align-items: center;
+}
+
+.widget-breadcrumb .breadcrumb-link {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #666;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.widget-breadcrumb .breadcrumb-link:hover {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-breadcrumb .breadcrumb-link i {
+    font-size: 16px;
+}
+
+.widget-breadcrumb .breadcrumb-separator {
+    margin: 0 10px;
+    color: #ccc;
+}
+
+.widget-breadcrumb .breadcrumb-current {
+    color: #999;
+}
+
+.widget-breadcrumb .breadcrumb-item.active {
+    font-weight: 500;
+}
+</style>

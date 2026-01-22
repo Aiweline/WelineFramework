@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-01-22T19:11:26+08:00",
+    "generated_at": "2026-01-22T23:41:12+08:00",
     "modules": {
         "Weline_Framework": {
             "name": "Weline_Framework",
@@ -190,7 +190,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme",
             "test_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme//test/e2e",
             "status": true,
-            "version": "1.0.1",
+            "version": "1.0.2",
             "has_tests": true
         },
         "Weline_ThemeFancy": {

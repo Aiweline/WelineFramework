@@ -1,0 +1,321 @@
+<?php
+/**
+ * TPMST 深色头部组件 - Dark Header Component
+ * 
+ * 深色背景的现代头部，包含 Logo、导航和渐变按钮
+ * 
+ * @component_start
+ * code: header-dark
+ * name: 深色头部
+ * name_en: Dark Header
+ * region: header
+ * category: header
+ * @component_end
+ * 
+ * @fields_start
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.url => Logo地址:textarea:|留空使用默认
+ * logo.width => Logo宽度:text:160px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.items => 导航项:textarea:Home#home,About#about,Games#games,FAQ#faq|格式: 名称#链接
+ * 
+ * group:button => 按钮设置
+ * button.display => 显示按钮:select:yes|yes,no
+ * button.text => 按钮文字:text:Download Now
+ * button.url => 按钮链接:text:#download
+ * 
+ * group:style => 样式设置
+ * style.background => 背景色:color:#1a1a2e
+ * style.nav_color => 导航文字色:color:#ffffff
+ * style.accent_color => 强调色:color:#e94560
+ * style.height => 头部高度:text:70px
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
+
+// 生成唯一组件ID
+$componentId = 'tpmst-header-dark-' . uniqid();
+
+// 获取样式配置
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$page = $this->getData('page');
+
+// Logo 配置
+$showLogo = ($styleSettings['header-dark.logo.display'] ?? $styleSettings['logo.display'] ?? 'yes') === 'yes';
+$logoUrl = $styleSettings['header-dark.logo.url'] ?? $styleSettings['logo.url'] ?? '';
+$logoWidth = $styleSettings['header-dark.logo.width'] ?? '160px';
+
+// 如果没有配置 Logo，使用默认
+if (empty($logoUrl)) {
+    $logoUrl = $this->getStaticUrl('GuoLaiRen_PageBuilder::style/tpmst/asset/img/logo/logo.avif');
+}
+
+// 导航配置
+$showNav = ($styleSettings['header-dark.navigation.display'] ?? 'yes') === 'yes';
+$navItemsRaw = $styleSettings['header-dark.navigation.items'] ?? 'Home#home,About#about,Games#games,FAQ#faq';
+$navItems = [];
+if (!empty($navItemsRaw)) {
+    foreach (explode(',', $navItemsRaw) as $item) {
+        $parts = explode('#', trim($item));
+        if (count($parts) >= 2) {
+            $navItems[] = ['text' => trim($parts[0]), 'href' => '#' . trim($parts[1])];
+        }
+    }
+}
+
+// 按钮配置
+$showButton = ($styleSettings['header-dark.button.display'] ?? 'yes') === 'yes';
+$buttonText = $styleSettings['header-dark.button.text'] ?? 'Download Now';
+$buttonUrl = $styleSettings['header-dark.button.url'] ?? '#download';
+
+// 样式配置
+$bgColor = $styleSettings['header-dark.style.background'] ?? '#1a1a2e';
+$navColor = $styleSettings['header-dark.style.nav_color'] ?? '#ffffff';
+$accentColor = $styleSettings['header-dark.style.accent_color'] ?? '#e94560';
+$headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
+?>
+
+<!-- 深色头部组件 -->
+<header id="<?= $componentId ?>" class="tpmst-header-dark-component">
+    <div class="header-inner">
+        <?php if ($showLogo): ?>
+        <div class="header-logo">
+            <a href="/">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo" style="width: <?= htmlspecialchars($logoWidth) ?>">
+            </a>
+        </div>
+        <?php endif; ?>
+        
+        <?php if ($showNav && !empty($navItems)): ?>
+        <nav class="header-nav">
+            <ul>
+                <?php foreach ($navItems as $item): ?>
+                <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+        
+        <?php if ($showButton): ?>
+        <div class="header-action">
+            <a href="<?= htmlspecialchars($buttonUrl) ?>" class="btn-download">
+                <span class="btn-icon">⬇</span>
+                <span class="btn-text"><?= htmlspecialchars($buttonText) ?></span>
+            </a>
+        </div>
+        <?php endif; ?>
+        
+        <button class="mobile-menu-toggle" aria-label="Toggle Menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </div>
+</header>
+
+<style id="<?= $componentId ?>-styles">
+/* ============================================
+   深色头部组件样式 - Dark Header Styles
+   组件ID: <?= $componentId ?>
+
+   ============================================ */
+
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    height: <?= htmlspecialchars($headerHeight) ?>;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?> .header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+
+#<?= $componentId ?> .header-logo a {
+    display: flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .header-logo img {
+    height: auto;
+    transition: transform 0.3s ease;
+}
+
+#<?= $componentId ?> .header-logo a:hover img {
+    transform: scale(1.05);
+}
+
+#<?= $componentId ?> .header-nav ul {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 30px;
+}
+
+#<?= $componentId ?> .header-nav a {
+    color: <?= htmlspecialchars($navColor) ?>;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    position: relative;
+    padding: 5px 0;
+    transition: color 0.3s ease;
+}
+
+#<?= $componentId ?> .header-nav a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: <?= htmlspecialchars($accentColor) ?>;
+    transition: width 0.3s ease;
+}
+
+#<?= $componentId ?> .header-nav a:hover {
+    color: <?= htmlspecialchars($accentColor) ?>;
+}
+
+#<?= $componentId ?> .header-nav a:hover::after {
+    width: 100%;
+}
+
+#<?= $componentId ?> .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($accentColor) ?>, #ff6b6b);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+}
+
+#<?= $componentId ?> .btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
+}
+
+#<?= $componentId ?> .btn-icon {
+    font-size: 16px;
+}
+
+#<?= $componentId ?> .mobile-menu-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 28px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+#<?= $componentId ?> .mobile-menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background: <?= htmlspecialchars($navColor) ?>;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    #<?= $componentId ?> .header-nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: <?= htmlspecialchars($bgColor) ?>;
+        padding: 20px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    #<?= $componentId ?> .header-nav.active {
+        display: block;
+    }
+    
+    #<?= $componentId ?> .header-nav ul {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    #<?= $componentId ?> .header-nav a {
+        font-size: 16px;
+    }
+    
+    #<?= $componentId ?> .mobile-menu-toggle {
+        display: flex;
+    }
+    
+    #<?= $componentId ?> .btn-download {
+        padding: 10px 16px;
+        font-size: 12px;
+    }
+}
+</style>
+
+<script id="<?= $componentId ?>-scripts">
+(function() {
+    'use strict';
+    
+    var component = document.getElementById('<?= $componentId ?>');
+    if (!component) return;
+    
+    var menuToggle = component.querySelector('.mobile-menu-toggle');
+    var nav = component.querySelector('.header-nav');
+    
+    if (menuToggle && nav) {
+        menuToggle.addEventListener('click', function() {
+            nav.classList.toggle('active');
+            
+            // 汉堡菜单动画
+            var spans = menuToggle.querySelectorAll('span');
+            if (nav.classList.contains('active')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(5px, -5px)';
+            } else {
+                spans[0].style.transform = '';
+                spans[1].style.opacity = '';
+                spans[2].style.transform = '';
+            }
+        });
+    }
+    
+    // 滚动时添加阴影效果
+    var lastScroll = 0;
+    window.addEventListener('scroll', function() {
+        var currentScroll = window.pageYOffset;
+        if (currentScroll > 50) {
+            component.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.4)';
+        } else {
+            component.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.3)';
+        }
+        lastScroll = currentScroll;
+    });
+})();
+</script>

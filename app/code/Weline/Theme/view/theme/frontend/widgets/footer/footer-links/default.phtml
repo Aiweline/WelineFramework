@@ -1,0 +1,128 @@
+<?php
+/**
+ * 页脚链接部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$linkGroups = $this->getData('link_groups') ?? [];
+$columns = $this->getData('columns') ?? '4';
+
+// 示例链接分组
+if (empty($linkGroups)) {
+    $linkGroups = [
+        [
+            'title' => __('关于我们'),
+            'links' => [
+                ['label' => __('公司简介'), 'url' => '/about'],
+                ['label' => __('联系我们'), 'url' => '/contact'],
+                ['label' => __('加入我们'), 'url' => '/careers'],
+                ['label' => __('新闻中心'), 'url' => '/news'],
+            ],
+        ],
+        [
+            'title' => __('客户服务'),
+            'links' => [
+                ['label' => __('帮助中心'), 'url' => '/help'],
+                ['label' => __('配送说明'), 'url' => '/shipping'],
+                ['label' => __('退换政策'), 'url' => '/returns'],
+                ['label' => __('常见问题'), 'url' => '/faq'],
+            ],
+        ],
+        [
+            'title' => __('购物指南'),
+            'links' => [
+                ['label' => __('如何购物'), 'url' => '/guide/shopping'],
+                ['label' => __('支付方式'), 'url' => '/guide/payment'],
+                ['label' => __('配送方式'), 'url' => '/guide/delivery'],
+                ['label' => __('售后服务'), 'url' => '/guide/service'],
+            ],
+        ],
+        [
+            'title' => __('法律条款'),
+            'links' => [
+                ['label' => __('隐私政策'), 'url' => '/privacy'],
+                ['label' => __('使用条款'), 'url' => '/terms'],
+                ['label' => __('Cookie政策'), 'url' => '/cookies'],
+                ['label' => __('免责声明'), 'url' => '/disclaimer'],
+            ],
+        ],
+    ];
+}
+
+$widgetId = 'footer-links-' . uniqid();
+?>
+
+<div class="widget-footer-links columns-<?= htmlspecialchars($columns) ?>" id="<?= $widgetId ?>">
+    <?php foreach ($linkGroups as $group): ?>
+        <div class="link-group">
+            <?php if (!empty($group['title'])): ?>
+                <h4 class="group-title"><?= htmlspecialchars($group['title']) ?></h4>
+            <?php endif; ?>
+            
+            <?php if (!empty($group['links'])): ?>
+                <ul class="group-links">
+                    <?php foreach ($group['links'] as $link): ?>
+                        <li>
+                            <a href="<?= htmlspecialchars($link['url'] ?? '#') ?>">
+                                <?= htmlspecialchars($link['label']) ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+</div>
+
+<style>
+.widget-footer-links {
+    display: grid;
+    gap: 30px;
+}
+
+.widget-footer-links.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-footer-links.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.widget-footer-links.columns-4 { grid-template-columns: repeat(4, 1fr); }
+
+.widget-footer-links .group-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 20px;
+    color: #fff;
+}
+
+.widget-footer-links .group-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.widget-footer-links .group-links li {
+    margin-bottom: 12px;
+}
+
+.widget-footer-links .group-links a {
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.widget-footer-links .group-links a:hover {
+    color: #fff;
+    padding-left: 5px;
+}
+
+@media (max-width: 992px) {
+    .widget-footer-links.columns-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .widget-footer-links {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>

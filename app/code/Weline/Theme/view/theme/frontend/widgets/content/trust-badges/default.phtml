@@ -1,0 +1,187 @@
+<?php
+/**
+ * 信任徽章部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? '';
+$badges = $this->getData('badges') ?? [];
+$presetBadges = $this->getData('preset_badges') ?? ['secure-payment', 'money-back', 'free-shipping', '24-7-support'];
+$columns = $this->getData('columns') ?? '4';
+$style = $this->getData('style') ?? 'icon-text';
+
+// 预设徽章配置
+$presetConfig = [
+    'secure-payment' => ['icon' => 'ri-shield-check-line', 'title' => __('安全支付'), 'description' => __('SSL加密保护')],
+    'money-back'     => ['icon' => 'ri-refund-2-line', 'title' => __('无忧退款'), 'description' => __('30天无理由退货')],
+    'free-shipping'  => ['icon' => 'ri-truck-line', 'title' => __('免费配送'), 'description' => __('满额包邮')],
+    '24-7-support'   => ['icon' => 'ri-customer-service-2-line', 'title' => __('全天候客服'), 'description' => __('7×24小时在线')],
+    'ssl-secure'     => ['icon' => 'ri-lock-line', 'title' => __('SSL安全'), 'description' => __('数据加密传输')],
+    'verified-seller'=> ['icon' => 'ri-verified-badge-line', 'title' => __('认证商家'), 'description' => __('正品保证')],
+];
+
+// 合并预设和自定义徽章
+$allBadges = [];
+foreach ($presetBadges as $preset) {
+    if (isset($presetConfig[$preset])) {
+        $allBadges[] = $presetConfig[$preset];
+    }
+}
+$allBadges = array_merge($allBadges, $badges);
+
+$widgetId = 'trust-badges-' . uniqid();
+?>
+
+<div class="widget-trust-badges style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>">
+    <?php if ($title): ?>
+        <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
+    <?php endif; ?>
+    
+    <div class="badges-grid columns-<?= htmlspecialchars($columns) ?>">
+        <?php foreach ($allBadges as $badge): ?>
+            <div class="badge-item">
+                <div class="badge-icon">
+                    <i class="<?= htmlspecialchars($badge['icon'] ?? 'ri-checkbox-circle-line') ?>"></i>
+                </div>
+                
+                <?php if ($style !== 'icon-only'): ?>
+                    <div class="badge-content">
+                        <h4 class="badge-title"><?= htmlspecialchars($badge['title'] ?? '') ?></h4>
+                        <?php if ($style === 'card' && !empty($badge['description'])): ?>
+                            <p class="badge-description"><?= htmlspecialchars($badge['description']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.widget-trust-badges {
+    padding: 30px 0;
+}
+
+.widget-trust-badges .widget-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 20px;
+    text-align: center;
+}
+
+.widget-trust-badges .badges-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.widget-trust-badges .badges-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-trust-badges .badges-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.widget-trust-badges .badges-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.widget-trust-badges .badges-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+
+/* 仅图标样式 */
+.widget-trust-badges.style-icon-only .badge-item {
+    display: flex;
+    justify-content: center;
+}
+
+.widget-trust-badges.style-icon-only .badge-icon {
+    width: 60px;
+    height: 60px;
+    background: #f5f5f5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.widget-trust-badges.style-icon-only .badge-icon i {
+    font-size: 28px;
+    color: var(--primary-color, #007bff);
+}
+
+/* 图标+文字样式 */
+.widget-trust-badges.style-icon-text .badge-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.widget-trust-badges.style-icon-text .badge-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.widget-trust-badges.style-icon-text .badge-icon i {
+    font-size: 24px;
+    color: #fff;
+}
+
+.widget-trust-badges.style-icon-text .badge-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* 卡片样式 */
+.widget-trust-badges.style-card .badge-item {
+    background: #fff;
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s;
+}
+
+.widget-trust-badges.style-card .badge-item:hover {
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transform: translateY(-3px);
+}
+
+.widget-trust-badges.style-card .badge-icon {
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+}
+
+.widget-trust-badges.style-card .badge-icon i {
+    font-size: 32px;
+    color: var(--primary-color, #007bff);
+}
+
+.widget-trust-badges.style-card .badge-title {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.widget-trust-badges.style-card .badge-description {
+    margin: 0;
+    font-size: 13px;
+    color: #666;
+}
+
+@media (max-width: 768px) {
+    .widget-trust-badges .badges-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .widget-trust-badges .badges-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>

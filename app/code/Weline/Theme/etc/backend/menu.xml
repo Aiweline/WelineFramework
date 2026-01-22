@@ -16,5 +16,10 @@
     <add source="Weline_Theme::theme_edit" name="theme_edit" title="主题配置" 
          action="theme/backend/config/layout/edit" parent="Weline_Theme::theme_management"
          icon="mdi mdi-cog-outline" order="20"/>
+    
+    <!--主题可视化编辑器-->
+    <add source="Weline_Theme::theme_visual_editor" name="theme_visual_editor" title="可视化编辑" 
+         action="theme/backend/theme-editor" parent="Weline_Theme::theme_management"
+         icon="mdi mdi-palette-swatch" order="15"/>
 </menus>
 
