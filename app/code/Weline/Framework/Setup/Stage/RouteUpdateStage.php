@@ -76,38 +76,62 @@ class RouteUpdateStage extends AbstractStage
         if ($this->prepared) {
             return;
         }
-        
-        // 启用批量模式（只在首次准备时启用）
-        // 注意：如果批量模式已经启用，不要再次调用 enableBatchMode()，因为会清空已收集的路由
-        if (!$this->routerHelper->isBatchMode()) {
-            $this->routerHelper->enableBatchMode();
-        } else {
-            // 批量模式已经启用，说明路由可能已经在注册过程中被收集
-            // 这种情况下，我们需要确保不会丢失已收集的路由
-            // 从批量缓存中读取现有路由并备份
-            foreach ($this->routerFilePaths as $path) {
-                $routers = $this->routerHelper->getBatchRouters($path);
-                if (!empty($routers)) {
-                    // 如果批量缓存中已有路由，说明路由已经在注册过程中被收集
-                    // 将这些路由也备份到 originalRouteData 中（作为当前状态）
-                    if (!isset($this->originalRouteData[$path])) {
-                        $this->originalRouteData[$path] = $routers;
-                    }
-                }
-            }
-        }
-        
-        // 备份原始路由数据（从文件读取）
-        $this->backupOriginalRoutes();
-        
         // 如果指定了需要清除的模块，记录它们
         if (isset($context['modules_to_clear']) && is_array($context['modules_to_clear'])) {
             $this->modulesToClear = $context['modules_to_clear'];
         }
-        
-        // 清除指定模块的旧路由（在内存中操作）
-        if (!empty($this->modulesToClear)) {
-            $this->clearModuleRoutersInMemory();
+
+        $isPartial = !empty($this->modulesToClear);
+
+        if ($isPartial) {
+            // 增量模式：确保不处于批量模式，避免仅写入内存不落盘
+            if ($this->routerHelper->isBatchMode()) {
+                // 将当前批量缓存（如果有）先落盘并退出批量模式
+                $this->routerHelper->flushBatchRouters();
+            }
+
+            // 增量模式：不启用批量模式，避免覆盖整个路由文件
+            // 先备份原始路由数据，便于出现异常时回滚
+            $this->backupOriginalRoutes();
+
+            // 直接在文件层面清理指定模块的旧路由
+            foreach ($this->routerFilePaths as $path) {
+                try {
+                    $this->routerHelper->clearModuleRouters($path, $this->modulesToClear);
+                } catch (\Exception $e) {
+                    // 清理失败时记录错误，但不中断整个升级流程，由上层统一处理
+                    $this->addError(__('清理模块 %{1} 路由失败：%{2}', [implode(', ', $this->modulesToClear), $e->getMessage()]));
+                }
+            }
+        } else {
+            // 全量模式：启用批量模式，收集所有模块路由后一次性写入
+            // 启用批量模式（只在首次准备时启用）
+            // 注意：如果批量模式已经启用，不要再次调用 enableBatchMode()，因为会清空已收集的路由
+            if (!$this->routerHelper->isBatchMode()) {
+                $this->routerHelper->enableBatchMode();
+            } else {
+                // 批量模式已经启用，说明路由可能已经在注册过程中被收集
+                // 这种情况下，我们需要确保不会丢失已收集的路由
+                // 从批量缓存中读取现有路由并备份
+                foreach ($this->routerFilePaths as $path) {
+                    $routers = $this->routerHelper->getBatchRouters($path);
+                    if (!empty($routers)) {
+                        // 如果批量缓存中已有路由，说明路由已经在注册过程中被收集
+                        // 将这些路由也备份到 originalRouteData 中（作为当前状态）
+                        if (!isset($this->originalRouteData[$path])) {
+                            $this->originalRouteData[$path] = $routers;
+                        }
+                    }
+                }
+            }
+
+            // 备份原始路由数据（从文件读取）
+            $this->backupOriginalRoutes();
+
+            // 清除指定模块的旧路由（在内存中操作）
+            if (!empty($this->modulesToClear)) {
+                $this->clearModuleRoutersInMemory();
+            }
         }
         
         $this->prepared = true;
@@ -229,42 +253,29 @@ class RouteUpdateStage extends AbstractStage
         }
         
         try {
+            $isPartial = !empty($this->modulesToClear);
+
+            // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush
+            if ($isPartial) {
+                $this->committed = true;
+                $this->clearErrors();
+                return;
+            }
+
+            // 全量模式：使用批量模式一次性写入所有路由文件
             // 检查批量模式是否启用
             if (!$this->routerHelper->isBatchMode()) {
                 throw new Exception(__('批量模式未启用，无法提交路由更新'));
             }
             
-            // 使用反射直接访问 batchRouters 属性，获取实际收集的路由数据
-            // 注意：getBatchRouters() 在批量模式下会返回空数组（如果批量缓存中没有），
-            // 所以我们需要直接访问属性来检查是否有路由数据
-            $hasRouters = false;
-            $batchRouters = [];
-            try {
-                $reflection = new \ReflectionClass($this->routerHelper);
-                $property = $reflection->getProperty('batchRouters');
-                $property->setAccessible(true);
-                $batchRouters = $property->getValue($this->routerHelper);
-                
-                foreach ($batchRouters as $path => $routers) {
-                    if (!empty($routers) && is_array($routers)) {
-                        $hasRouters = true;
-                        break;
-                    }
-                }
-            } catch (\ReflectionException $e) {
-                // 反射失败，记录警告但继续执行
-                // 这种情况下，flushBatchRouters() 会处理空路由的情况
-            }
-            
             // 一次性写入所有路由文件
-            // flushBatchRouters() 会写入所有批量缓存中的路由，即使某些文件是空的
             $this->routerHelper->flushBatchRouters();
             
             $this->committed = true;
             $this->clearErrors();
         } catch (\Exception $e) {
             $this->addError(__('路由文件写入失败：%{1}', [$e->getMessage()]));
-            throw new Exception(__('路由文件写入失败：%{1}', [$e->getMessage()]), 0, $e);
+            throw new Exception(__('路由文件写入失败：%{1}', [$e->getMessage()]));
         }
     }
     

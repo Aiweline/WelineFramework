@@ -26,6 +26,10 @@ WelineFramework,WelineFramework
 关键参数ID不存在！,"Key parameter ID does not exist!"
 系统消息通知,"System Notification"
 "用于跨模块发送系统消息通知，由 Weline_Admin 模块监听并写入消息中心。任何模块都可以触发此事件来发送系统消息给管理员。","Used for cross-module system message notifications, monitored by Weline_Admin module and written to the message center. Any module can trigger this event to send system messages to administrators."
+后台首页顶部统计卡片,后台首页顶部统计卡片
+在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。,在后台首页顶部区域渲染统计卡片，例如访客数、事件数、站点数等。
+后台首页主要概览,后台首页主要概览
+在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。,在后台首页主要内容区域渲染核心数据概览，例如趋势、热门事件等。
 记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
 用户不存在！,"User does not exist!"
 系统消息数据格式错误,"System message data format error"
@@ -105,6 +109,12 @@ ID,ID
 激活,Activate
 禁用,Disable
 超级管理员,"Super Administrator"
+搜索菜单,"Search Menu"
+搜索菜单...,"Search Menu..."
+常用菜单,"Frequently Used Menus"
+搜索结果,"Search Results"
+最近访问,"Recently Visited"
+访问最多,"Most Visited"
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -119,6 +129,7 @@ ID,ID
 选择布局预设,"Select Layout Preset"
 默认布局,"Default Layout"
 浅色侧边栏,"Light Sidebar"
+深色菜单,深色菜单
 图标侧边栏,"Icon Sidebar"
 紧凑侧边栏,"Compact Sidebar"
 水平布局,"Horizontal Layout"
@@ -133,11 +144,12 @@ ID,ID
 RTL模式,"RTL Mode"
 面板,Dashboard
 后台,Backend
+概览,Overview
+像素,像素
 每分钟浏览者,"Visitors Per Minute"
 环比,Month-over-Month
 跳出率,"Bounce Rate"
 新浏览者,"New Visitors"
-概览,Overview
 全部,All
 1月,January
 半年,"Half Year"
@@ -212,12 +224,6 @@ Icon图标,Icon
 插件类,"Plugin Class"
 插件配置文件：,"Plugin Configuration File:"
 插件名：,"Plugin Name:"
-搜索菜单,"Search Menu"
-搜索菜单...,"Search Menu..."
-常用菜单,"Frequently Used Menus"
-搜索结果,"Search Results"
-最近访问,"Recently Visited"
-访问最多,"Most Visited"
 用户不存在,"User does not exist"
 用户名不能为空,"Username cannot be empty"
 用户名长度必须在3-50字符之间,"Username length must be between 3-50 characters"

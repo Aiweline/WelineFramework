@@ -32,60 +32,66 @@ class UpgradeDefaultAttribute implements ObserverInterface
         }
         $eavEntityModel = ObjectManager::getInstance(EavEntity::class);
         foreach ($eavs as $eav) {
-            # 检测类是否可以实例化
-            $eavEntityReflectionInstance = ObjectManager::getReflectionInstance($eav);
-            if (!$eavEntityReflectionInstance->isInstantiable()) {
-                continue;
-            }
-            // 跳过静态类
-            if (ObjectManager::isStaticClass($eav)) {
-                continue;
-            }
-            /**@var \Weline\Eav\EavInterface $eavEntity */
-            $eavEntity = ObjectManager::getInstance($eav);
-            if ($eavEntity instanceof EavInterface) {
-                $eavEntityModel->reset()
-                    ->setData(
-                        [
-                            EavEntity::fields_ID => $eavEntity->getEavEntityId(),
-                            EavEntity::fields_code => $eavEntity->getEntityCode(),
-                            EavEntity::fields_class => $eav,
-                            EavEntity::fields_name => $eavEntity->getEntityName(),
-                            EavEntity::fields_is_system => 1,
-                            EavEntity::fields_eav_entity_id_field_type => $eavEntity->getEntityFieldIdType(),
-                            EavEntity::fields_eav_entity_id_field_length => $eavEntity->getEntityFieldIdLength(),
-                        ]
-                    )
-                    ->forceCheck(true, EavEntity::fields_code)
-                    ->save();
-                # 检查属性集和属性组，没有则为实体创建默认属性集和默认属性组
-                #--属性集
-                $attributeSet = $eavEntity->getAttributeSets();
-                if (empty($attributeSet)) {
-                    /**@var Set $eavAttributeSet */
-                    $eavAttributeSet = ObjectManager::make(Set::class);
-                    $eavAttributeSet->reset()->clearData()
-                        ->insert([
-                            'eav_entity_id' => $eavEntity->getEavEntityId(),
-                            'name' => '默认属性集',
-                            'code' => 'default',
-                        ])->fetch();
+            try {
+                # 检测类是否可以实例化
+                $eavEntityReflectionInstance = ObjectManager::getReflectionInstance($eav);
+                if (!$eavEntityReflectionInstance->isInstantiable()) {
+                    continue;
                 }
-                # --属性组
-                $attributeGroup = $eavEntity->getAttributeGroups();
-                if (empty($attributeGroup)) {
-                    # 获取默认属性集
-                    $attributeSet = $eavEntity->getAttributeSet('default');
-                    /**@var Group $eavAttributeGroup */
-                    $eavAttributeGroup = ObjectManager::make(Group::class);
-                    $eavAttributeGroup->reset()->clearData()
-                        ->insert([
-                            'set_id' => $attributeSet->getId(),
-                            'eav_entity_id' => $eavEntity->getEavEntityId(),
-                            'name' => '默认属性组',
-                            'code' => 'default',
-                        ])->fetch();
+                // 跳过静态类
+                if (ObjectManager::isStaticClass($eav)) {
+                    continue;
                 }
+                /**@var \Weline\Eav\EavInterface $eavEntity */
+                $eavEntity = ObjectManager::getInstance($eav);
+                if ($eavEntity instanceof EavInterface) {
+                    $eavEntityModel->reset()
+                        ->setData(
+                            [
+                                EavEntity::fields_ID => $eavEntity->getEavEntityId(),
+                                EavEntity::fields_code => $eavEntity->getEntityCode(),
+                                EavEntity::fields_class => $eav,
+                                EavEntity::fields_name => $eavEntity->getEntityName(),
+                                EavEntity::fields_is_system => 1,
+                                EavEntity::fields_eav_entity_id_field_type => $eavEntity->getEntityFieldIdType(),
+                                EavEntity::fields_eav_entity_id_field_length => $eavEntity->getEntityFieldIdLength(),
+                            ]
+                        )
+                        ->forceCheck(true, EavEntity::fields_code)
+                        ->save();
+                    # 检查属性集和属性组，没有则为实体创建默认属性集和默认属性组
+                    #--属性集
+                    $attributeSet = $eavEntity->getAttributeSets();
+                    if (empty($attributeSet)) {
+                        /**@var Set $eavAttributeSet */
+                        $eavAttributeSet = ObjectManager::make(Set::class);
+                        $eavAttributeSet->reset()->clearData()
+                            ->insert([
+                                'eav_entity_id' => $eavEntity->getEavEntityId(),
+                                'name' => '默认属性集',
+                                'code' => 'default',
+                            ])->fetch();
+                    }
+                    # --属性组
+                    $attributeGroup = $eavEntity->getAttributeGroups();
+                    if (empty($attributeGroup)) {
+                        # 获取默认属性集
+                        $attributeSet = $eavEntity->getAttributeSet('default');
+                        /**@var Group $eavAttributeGroup */
+                        $eavAttributeGroup = ObjectManager::make(Group::class);
+                        $eavAttributeGroup->reset()->clearData()
+                            ->insert([
+                                'set_id' => $attributeSet->getId(),
+                                'eav_entity_id' => $eavEntity->getEavEntityId(),
+                                'name' => '默认属性组',
+                                'code' => 'default',
+                            ])->fetch();
+                    }
+                }
+            } catch (\Throwable $e) {
+                // 如果类不存在或无法实例化，跳过（可能是命名空间转换问题，如 Weline_Bt_Center -> Weline\Bt\Center）
+                // 或者类不是 EAV 实体，静默跳过
+                continue;
             }
         }
     }

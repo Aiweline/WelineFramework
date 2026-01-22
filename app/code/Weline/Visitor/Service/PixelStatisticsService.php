@@ -312,5 +312,90 @@ class PixelStatisticsService
     {
         PixelStatisticsCache::clearWebsiteCache($websiteId);
     }
+
+    /**
+     * 获取全站 Dashboard 概览数据（聚合所有站点）
+     *
+     * 该方法主要用于后台首页面板等场景，一次性返回：
+     * - 聚合统计指标（总记录数 / 已处理 / 未处理 / 总价值 / 事件类型数）
+     * - 各站点摘要
+     * - 最近 N 天的聚合趋势
+     * - 全站热门事件 Top N
+     * - 第一个站点的实时数据快照
+     *
+     * @param int $days 趋势天数
+     * @param int $topEventLimit 热门事件数量
+     * @return array{
+     *     stats: array,
+     *     website_stats: array,
+     *     website_ids: array,
+     *     trends: array,
+     *     top_events: array,
+     *     realtime_data: array
+     * }
+     * @throws \Exception
+     */
+    public static function getGlobalDashboardOverview(int $days = 7, int $topEventLimit = 10): array
+    {
+        $websiteIds = Pixel::getAllWebsiteIds();
+
+        $stats        = [];
+        $websiteStats = [];
+        $totalValue   = 0.0;
+        $allEvents    = [];
+
+        foreach ($websiteIds as $websiteId) {
+            $summary = Pixel::getWebsiteSummary((int)$websiteId);
+            $websiteStats[$websiteId] = $summary;
+
+            $stats['total_count']   = ($stats['total_count'] ?? 0) + ($summary['total_count'] ?? 0);
+            $stats['un_deal_count'] = ($stats['un_deal_count'] ?? 0) + ($summary['un_deal_count'] ?? 0);
+            $stats['dealed_count']  = ($stats['dealed_count'] ?? 0) + ($summary['dealed_count'] ?? 0);
+
+            // 累计总价值
+            $pixels = Pixel::getPixelsByWebsiteId((int)$websiteId);
+            foreach ($pixels as $pixel) {
+                $totalValue += (float)($pixel[Pixel::fields_VALUE] ?? 0);
+            }
+
+            // 收集所有事件及数量
+            foreach ($summary['event_list'] ?? [] as $event) {
+                if (!isset($allEvents[$event])) {
+                    $allEvents[$event] = 0;
+                }
+                $allEvents[$event] += (int)($summary['events'][$event] ?? 0);
+            }
+        }
+
+        // 热门事件 Top N
+        arsort($allEvents);
+        $topEvents = array_slice($allEvents, 0, $topEventLimit, true);
+
+        // 最近 N 天趋势（聚合所有站点）
+        $trends = self::getTrends(null, $days);
+
+        // 第一个站点的实时数据（可选）
+        $realtimeData = [];
+        if (!empty($websiteIds)) {
+            try {
+                $firstWebsiteId = (int)($websiteIds[0]);
+                $realtimeData   = self::getRealtimeData($firstWebsiteId, 10, 24);
+            } catch (\Throwable $e) {
+                // 实时数据失败不影响整体概览，静默忽略
+            }
+        }
+
+        $stats['total_value']  = $totalValue;
+        $stats['event_types']  = count($allEvents);
+
+        return [
+            'stats'         => $stats,
+            'website_stats' => $websiteStats,
+            'website_ids'   => $websiteIds,
+            'trends'        => $trends,
+            'top_events'    => $topEvents,
+            'realtime_data' => $realtimeData,
+        ];
+    }
 }
 
