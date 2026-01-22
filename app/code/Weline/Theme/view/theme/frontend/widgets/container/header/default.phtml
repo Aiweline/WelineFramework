@@ -1,0 +1,183 @@
+<?php
+/**
+ * Header 容器部件模板
+ * 
+ * 定义头部布局和内部插槽位置
+ * 子部件会自动渲染到对应的插槽中
+ * 
+ * @var array $config 部件配置
+ * @var array $children 子部件（按插槽分组）
+ */
+
+$sticky = $config['sticky'] ?? true;
+$bgColor = $config['bg_color'] ?? '#ffffff';
+$shadow = $config['shadow'] ?? true;
+
+// 子部件数据（由渲染器注入）
+$children = $children ?? [];
+?>
+<header class="widget-header-container <?= $sticky ? 'sticky-top' : '' ?>" 
+        style="background-color: <?= htmlspecialchars($bgColor) ?>; <?= $shadow ? 'box-shadow: 0 2px 10px rgba(0,0,0,0.1);' : '' ?>">
+    
+    <!-- 头部主体区域 -->
+    <div class="header-main">
+        <div class="header-container">
+            
+            <!-- Logo 插槽 (左侧) -->
+            <div class="header-slot slot-logo" data-slot="logo" data-accept="logo">
+                <?php if (!empty($children['logo'])): ?>
+                    <?php foreach ($children['logo'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-image-line"></i>
+                        <span>Logo</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 搜索框插槽 (中间) -->
+            <div class="header-slot slot-search" data-slot="search" data-accept="header-search">
+                <?php if (!empty($children['search'])): ?>
+                    <?php foreach ($children['search'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-search-line"></i>
+                        <span>搜索框</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 用户区域插槽 (右侧) -->
+            <div class="header-slot slot-user-area" data-slot="user-area" data-accept="account,mini-cart-icon,wishlist-icon,language-switcher,currency-switcher">
+                <?php if (!empty($children['user-area'])): ?>
+                    <?php foreach ($children['user-area'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-user-line"></i>
+                        <span>用户区域</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- 导航菜单插槽 (底部) -->
+    <div class="header-nav">
+        <div class="header-container">
+            <div class="header-slot slot-navigation" data-slot="navigation" data-accept="main-nav">
+                <?php if (!empty($children['navigation'])): ?>
+                    <?php foreach ($children['navigation'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder">
+                        <i class="ri-menu-line"></i>
+                        <span>导航菜单</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+</header>
+
+<style>
+.widget-header-container {
+    width: 100%;
+    z-index: 100;
+}
+
+.header-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.header-main {
+    padding: 15px 0;
+}
+
+.header-main .header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 30px;
+}
+
+.header-nav {
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    padding: 10px 0;
+}
+
+/* 插槽样式 */
+.header-slot {
+    position: relative;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+}
+
+.slot-logo {
+    flex-shrink: 0;
+    min-width: 120px;
+}
+
+.slot-search {
+    flex: 1;
+    max-width: 500px;
+}
+
+.slot-user-area {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.slot-navigation {
+    width: 100%;
+}
+
+/* 插槽占位符 */
+.slot-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    border: 2px dashed #ddd;
+    border-radius: 6px;
+    color: #999;
+    font-size: 13px;
+    background: rgba(0,0,0,0.02);
+}
+
+.slot-placeholder i {
+    font-size: 18px;
+}
+
+/* 编辑模式下高亮插槽 */
+.header-slot[data-slot]:hover {
+    outline: 2px dashed #007bff;
+    outline-offset: 2px;
+}
+
+.slot-widget {
+    position: relative;
+}
+</style>

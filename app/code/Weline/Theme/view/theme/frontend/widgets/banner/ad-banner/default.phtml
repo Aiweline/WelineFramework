@@ -1,0 +1,82 @@
+<?php
+/**
+ * 广告横幅部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - image: 广告图片
+ * - link: 链接地址
+ * - alt_text: 替代文字
+ * - open_new_tab: 新窗口打开
+ * - border_radius: 圆角大小
+ */
+
+$image = $this->getData('image') ?? '';
+$link = $this->getData('link') ?? '';
+$altText = $this->getData('alt_text') ?? __('广告');
+$openNewTab = (bool)($this->getData('open_new_tab') ?? false);
+$borderRadius = $this->getData('border_radius') ?? '8px';
+
+// 示例图片
+if (empty($image)) {
+    $image = '/images/banners/ad-placeholder.jpg';
+}
+?>
+
+<div class="widget-ad-banner" style="border-radius: <?= htmlspecialchars($borderRadius) ?>;">
+    <?php if ($link): ?>
+        <a href="<?= htmlspecialchars($link) ?>" 
+           class="ad-link"
+           <?= $openNewTab ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>
+    <?php endif; ?>
+    
+    <img src="<?= htmlspecialchars($image) ?>" 
+         alt="<?= htmlspecialchars($altText) ?>" 
+         class="ad-image"
+         loading="lazy">
+    
+    <span class="ad-label"><?= __('广告') ?></span>
+    
+    <?php if ($link): ?>
+        </a>
+    <?php endif; ?>
+</div>
+
+<style>
+.widget-ad-banner {
+    position: relative;
+    overflow: hidden;
+    display: block;
+    width: 100%;
+}
+
+.widget-ad-banner .ad-link {
+    display: block;
+    text-decoration: none;
+}
+
+.widget-ad-banner .ad-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.widget-ad-banner:hover .ad-image {
+    transform: scale(1.02);
+}
+
+.widget-ad-banner .ad-label {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+</style>

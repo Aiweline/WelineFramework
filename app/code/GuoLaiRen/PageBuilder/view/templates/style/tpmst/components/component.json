@@ -1,0 +1,268 @@
+{
+    "template": "tpmst",
+    "name": "Teen Patti Master",
+    "description": "Teen Patti Master 游戏落地页模板组件库",
+    "version": "2.0.0",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "description": "页面顶部区域，包含导航、Logo等",
+            "multiple": false,
+            "required": true,
+            "accepts": ["header"],
+            "default_component": "header-nav"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "description": "页面主要内容区域，可包含多个组件",
+            "multiple": true,
+            "required": false,
+            "accepts": ["content", "widget"],
+            "default_components": ["slider", "advantages", "games", "testimonials", "faq"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "description": "页面底部区域，包含版权、链接等",
+            "multiple": false,
+            "required": true,
+            "accepts": ["footer"],
+            "default_component": "footer-links"
+        }
+    },
+    "components": {
+        "header-nav": {
+            "name": "导航头部（Logo居中）",
+            "name_en": "Navigation Header (Logo Centered)",
+            "description": "Logo居中布局，包含导航菜单、下载按钮和Banner",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "thumbnail": "asset/img/logo-icon-128.avif",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "banner", "color_scheme", "pixel"],
+            "file": "header/nav.phtml"
+        },
+        "header-simple": {
+            "name": "简洁头部",
+            "name_en": "Simple Header",
+            "description": "只包含Logo的简洁头部",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "sort_order": 2,
+            "compatible_styles": ["*"],
+            "config_groups": ["header"],
+            "file": "header/simple.phtml"
+        },
+        "header-dark": {
+            "name": "深色头部",
+            "name_en": "Dark Header",
+            "description": "深色背景的现代头部，带渐变下载按钮",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "thumbnail": "asset/img/logo-icon-128.avif",
+            "sort_order": 3,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "navigation", "button", "style"],
+            "file": "header/dark.phtml"
+        },
+        "slider": {
+            "name": "轮播横幅",
+            "name_en": "Banner Slider",
+            "description": "首屏轮播Banner，支持多图轮播和自动播放",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "thumbnail": "asset/img/banner-03.webp",
+            "sort_order": 10,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["slider"],
+            "file": "content/slider.phtml"
+        },
+        "advantages": {
+            "name": "优势展示",
+            "name_en": "Advantages Section",
+            "description": "展示产品/应用的核心优势，三列卡片布局",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "thumbnail": "asset/img/our-advantages/icon01.webp",
+            "sort_order": 20,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["advantages", "texts"],
+            "file": "content/advantages.phtml"
+        },
+        "games": {
+            "name": "游戏介绍",
+            "name_en": "Games Showcase",
+            "description": "游戏/产品介绍卡片，支持图片和描述",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "thumbnail": "asset/img/game/game-i1.webp",
+            "sort_order": 30,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["games", "texts"],
+            "file": "content/games.phtml"
+        },
+        "app-info": {
+            "name": "应用信息",
+            "name_en": "App Info",
+            "description": "应用基本信息展示，包含名称、版本、大小等",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 35,
+            "compatible_styles": ["*"],
+            "config_groups": ["app_info", "texts"],
+            "file": "content/app-info.phtml"
+        },
+        "testimonials": {
+            "name": "用户评价",
+            "name_en": "Testimonials",
+            "description": "用户评价展示，支持头像、评分和内容",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 40,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["testimonials", "texts"],
+            "file": "content/testimonials.phtml"
+        },
+        "faq": {
+            "name": "常见问题",
+            "name_en": "FAQ",
+            "description": "FAQ折叠面板，支持问答展开收起",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 50,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["faq", "texts"],
+            "file": "content/faq.phtml"
+        },
+        "blog-content": {
+            "name": "博客内容",
+            "name_en": "Blog Content",
+            "description": "详细的博客文章内容区域",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 60,
+            "compatible_styles": ["tpmst"],
+            "config_groups": ["texts"],
+            "file": "content/blog.phtml"
+        },
+        "strategy": {
+            "name": "策略介绍",
+            "name_en": "Strategy Section",
+            "description": "游戏策略和技巧介绍区域",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 55,
+            "compatible_styles": ["tpmst"],
+            "config_groups": ["texts"],
+            "file": "content/strategy.phtml"
+        },
+        "hindi-content": {
+            "name": "印地语内容",
+            "name_en": "Hindi Content",
+            "description": "印地语本地化内容区域",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 65,
+            "compatible_styles": ["tpmst"],
+            "config_groups": ["texts"],
+            "file": "content/hindi.phtml"
+        },
+        "disclaimer": {
+            "name": "免责声明",
+            "name_en": "Disclaimer",
+            "description": "底部免责声明文字区域",
+            "region": "content",
+            "category": "widget",
+            "type": "widget",
+            "sort_order": 70,
+            "compatible_styles": ["*"],
+            "config_groups": ["texts"],
+            "file": "content/disclaimer.phtml"
+        },
+        "floating-download": {
+            "name": "浮动下载按钮",
+            "name_en": "Floating Download Button",
+            "description": "页面右侧/底部浮动下载按钮",
+            "region": "content",
+            "category": "widget",
+            "type": "widget",
+            "sort_order": 80,
+            "compatible_styles": ["tpmst"],
+            "config_groups": [],
+            "file": "content/floating-download.phtml"
+        },
+        "mobile-nav": {
+            "name": "移动端导航",
+            "name_en": "Mobile Navigation",
+            "description": "移动端底部导航栏",
+            "region": "content",
+            "category": "widget",
+            "type": "widget",
+            "sort_order": 75,
+            "compatible_styles": ["tpmst"],
+            "config_groups": ["texts"],
+            "file": "content/mobile-nav.phtml"
+        },
+        "footer-links": {
+            "name": "链接底部",
+            "name_en": "Footer with Links",
+            "description": "包含链接、版权信息的底部组件",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["style", "layout", "content", "typography"],
+            "file": "footer/links.phtml"
+        },
+        "footer-simple": {
+            "name": "简洁底部",
+            "name_en": "Simple Footer",
+            "description": "只包含版权信息的简洁底部",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "sort_order": 2,
+            "compatible_styles": ["*"],
+            "config_groups": ["content"],
+            "file": "footer/simple.phtml"
+        }
+    },
+    "nav_config": {
+        "description": "导航可使用子页面配置",
+        "use_subpages": true,
+        "subpage_types": ["link", "anchor", "page"],
+        "default_items": [
+            {"text": "Home", "href": "#home", "type": "anchor"},
+            {"text": "About", "href": "#about", "type": "anchor"},
+            {"text": "Blog", "href": "#blog", "type": "anchor"},
+            {"text": "FAQs", "href": "#faqs", "type": "anchor"}
+        ]
+    },
+    "config_inheritance": {
+        "description": "组件可以继承模板的配置项",
+        "shared_configs": ["styles", "texts", "color_scheme"]
+    }
+}

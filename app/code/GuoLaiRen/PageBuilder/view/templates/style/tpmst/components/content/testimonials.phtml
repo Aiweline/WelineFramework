@@ -1,0 +1,185 @@
+<?php
+/**
+ * TPMST 用户评价组件 - Testimonials Component
+ * 
+ * @component_start
+ * code: testimonials
+ * name: 用户评价
+ * name_en: Testimonials
+ * description: 用户评价展示，支持头像、评分和内容
+ * category: content
+ * region: content
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:testimonials => 评价设置
+ * testimonials.display => 显示评价区域:select:yes|yes,no
+ * testimonials.title => 标题:text:Testimonials
+ * testimonials.bg_color => 背景颜色:color:#1a1a2e
+ * testimonials.avatar_1 => 评价1头像:textarea:|默认使用本地头像
+ * testimonials.avatar_2 => 评价2头像:textarea:|默认使用本地头像
+ * testimonials.avatar_3 => 评价3头像:textarea:|默认使用本地头像
+ * 
+ * group:texts => 评价内容
+ * texts.testimonial_1_name => 评价1姓名:text:Rajesh Kumar (Mumbai)
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:Best Teen Patti app I've used! I've been playing for 6 months and won ₹45,000 so far.
+ * texts.testimonial_2_name => 评价2姓名:text:Priya Sharma (Delhi)
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:Fair game, genuine payments. After winning ₹8,000 in my first month, I'm hooked!
+ * texts.testimonial_3_name => 评价3姓名:text:Amit Patel (Ahmedabad)
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_3_content => 评价3内容:textarea:Love the game variety. Won ₹12K last week in a tournament.
+ * 
+ * @fields_end
+ */
+
+$componentId = 'tpmst-testimonials-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('testimonials.display', 'yes') !== 'no';
+if (!$display) return;
+
+$title = $getConfig('testimonials.title', 'Testimonials');
+$bgColor = $getConfig('testimonials.bg_color', '#1a1a2e');
+
+$defaultAvatar1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Rajesh-Kumar-1.avif');
+$defaultAvatar2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Priya-Sharma-2.avif');
+$defaultAvatar3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Amit-Patel-3.avif');
+
+$avatar1 = $getConfig('testimonials.avatar_1', '') ?: $defaultAvatar1;
+$avatar2 = $getConfig('testimonials.avatar_2', '') ?: $defaultAvatar2;
+$avatar3 = $getConfig('testimonials.avatar_3', '') ?: $defaultAvatar3;
+
+$name1 = $getConfig('texts.testimonial_1_name', 'Rajesh Kumar (Mumbai)');
+$rating1 = $getConfig('texts.testimonial_1_rating', '⭐⭐⭐⭐⭐');
+$content1 = $getConfig('texts.testimonial_1_content', "Best Teen Patti app I've used! I've been playing for 6 months and won ₹45,000 so far.");
+
+$name2 = $getConfig('texts.testimonial_2_name', 'Priya Sharma (Delhi)');
+$rating2 = $getConfig('texts.testimonial_2_rating', '⭐⭐⭐⭐⭐');
+$content2 = $getConfig('texts.testimonial_2_content', "Fair game, genuine payments. After winning ₹8,000 in my first month, I'm hooked!");
+
+$name3 = $getConfig('texts.testimonial_3_name', 'Amit Patel (Ahmedabad)');
+$rating3 = $getConfig('texts.testimonial_3_rating', '⭐⭐⭐⭐☆');
+$content3 = $getConfig('texts.testimonial_3_content', 'Love the game variety. Won ₹12K last week in a tournament.');
+?>
+<!-- TPMST Testimonials Component Start: <?= $componentId ?> -->
+<style>
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    padding: 60px 20px;
+}
+
+#<?= $componentId ?> .tpmst-test-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .tpmst-test-title {
+    text-align: center;
+    font-size: clamp(24px, 5vw, 36px);
+    color: #ffd700;
+    margin-bottom: 40px;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .tpmst-test-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+#<?= $componentId ?> .tpmst-test-card {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 25px;
+    border-left: 4px solid #ff6b35;
+}
+
+#<?= $componentId ?> .tpmst-test-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+#<?= $componentId ?> .tpmst-test-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .tpmst-test-name {
+    font-weight: 600;
+    color: #ffd700;
+    font-size: 16px;
+}
+
+#<?= $componentId ?> .tpmst-test-rating {
+    color: #ffd700;
+    margin-top: 5px;
+}
+
+#<?= $componentId ?> .tpmst-test-content {
+    color: #ffffff;
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0.9;
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 40px 15px;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="tpmst-testimonials-component">
+    <div class="tpmst-test-container">
+        <h2 class="tpmst-test-title"><?= htmlspecialchars($title) ?></h2>
+        <div class="tpmst-test-grid">
+            <div class="tpmst-test-card">
+                <div class="tpmst-test-header">
+                    <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar1) ?>" alt="<?= htmlspecialchars($name1) ?>">
+                    <div>
+                        <div class="tpmst-test-name"><?= htmlspecialchars($name1) ?></div>
+                        <div class="tpmst-test-rating"><?= htmlspecialchars($rating1) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-test-content"><?= htmlspecialchars($content1) ?></p>
+            </div>
+            <div class="tpmst-test-card">
+                <div class="tpmst-test-header">
+                    <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar2) ?>" alt="<?= htmlspecialchars($name2) ?>">
+                    <div>
+                        <div class="tpmst-test-name"><?= htmlspecialchars($name2) ?></div>
+                        <div class="tpmst-test-rating"><?= htmlspecialchars($rating2) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-test-content"><?= htmlspecialchars($content2) ?></p>
+            </div>
+            <div class="tpmst-test-card">
+                <div class="tpmst-test-header">
+                    <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar3) ?>" alt="<?= htmlspecialchars($name3) ?>">
+                    <div>
+                        <div class="tpmst-test-name"><?= htmlspecialchars($name3) ?></div>
+                        <div class="tpmst-test-rating"><?= htmlspecialchars($rating3) ?></div>
+                    </div>
+                </div>
+                <p class="tpmst-test-content"><?= htmlspecialchars($content3) ?></p>
+            </div>
+        </div>
+    </div>
+</section>
+<!-- TPMST Testimonials Component End: <?= $componentId ?> -->

@@ -1,0 +1,463 @@
+<?php
+/**
+ * 主题预览页面 - 容器 + 插槽式布局
+ * 
+ * 支持容器型部件嵌套子部件的渲染
+ * 实现所见即所得的可视化编辑预览
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var int $theme_id
+ * @var string $page_type
+ * @var array $layout
+ * @var array $areas
+ */
+
+$theme_id = $this->getData('theme_id');
+$page_type = $this->getData('page_type');
+$layout = $this->getData('layout') ?: [];
+$areas = $this->getData('areas') ?: [];
+
+/**
+ * 获取区域内的所有部件
+ */
+function getAreaWidgets(array $layout, string $area): array {
+    return $layout[$area]['widgets'] ?? [];
+}
+
+/**
+ * 获取容器部件及其子部件
+ * 子部件根据其 slot 属性分组
+ */
+function getContainerWithChildren(array $areaWidgets): array {
+    $container = null;
+    $children = [];
+    
+    foreach ($areaWidgets as $widget) {
+        $isContainer = $widget['meta']['is_container'] ?? false;
+        
+        if ($isContainer) {
+            $container = $widget;
+        } else {
+            // 根据部件的 slot 属性分组
+            $slot = $widget['meta']['slot'] ?? 'default';
+            $children[$slot][] = $widget;
+        }
+    }
+    
+    return ['container' => $container, 'children' => $children];
+}
+
+/**
+ * 渲染单个部件
+ */
+function renderWidget($template, array $widget, array $children = []): string {
+    $widgetTemplate = $widget['meta']['template'] ?? '';
+    $config = $widget['config'] ?? [];
+    $widgetCode = $widget['widget_code'] ?? '';
+    $layoutId = $widget['layout_id'] ?? 0;
+    
+    if (!$widgetTemplate) {
+        return renderWidgetPlaceholder($widget);
+    }
+    
+    try {
+        // 为容器部件注入子部件数据
+        $isContainer = $widget['meta']['is_container'] ?? false;
+        if ($isContainer && !empty($children)) {
+            // 渲染子部件的 HTML
+            $childrenHtml = [];
+            foreach ($children as $slot => $slotWidgets) {
+                $childrenHtml[$slot] = [];
+                foreach ($slotWidgets as $child) {
+                    $childHtml = renderWidget($template, $child);
+                    $childrenHtml[$slot][] = [
+                        'code' => $child['widget_code'],
+                        'html' => $childHtml,
+                    ];
+                }
+            }
+            $config['children'] = $childrenHtml;
+        }
+        
+        $html = $template->fetchTagHtml($widgetTemplate, $config);
+        
+        // 包装部件，添加编辑属性
+        return sprintf(
+            '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-config=\'%s\'>%s</div>',
+            $layoutId,
+            htmlspecialchars($widgetCode),
+            htmlspecialchars(json_encode($config)),
+            $html
+        );
+    } catch (\Exception $e) {
+        return sprintf(
+            '<div class="preview-widget widget-error" data-layout-id="%d" data-widget-code="%s">
+                <div class="widget-error-content">
+                    <i class="ri-error-warning-line"></i>
+                    <span>渲染错误: %s</span>
+                </div>
+            </div>',
+            $layoutId,
+            htmlspecialchars($widgetCode),
+            htmlspecialchars($e->getMessage())
+        );
+    }
+}
+
+/**
+ * 渲染占位符
+ */
+function renderWidgetPlaceholder(array $widget): string {
+    $name = $widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件';
+    $layoutId = $widget['layout_id'] ?? 0;
+    $widgetCode = $widget['widget_code'] ?? '';
+    
+    return sprintf(
+        '<div class="preview-widget widget-placeholder" data-layout-id="%d" data-widget-code="%s">
+            <div class="placeholder-content">
+                <i class="ri-widget-line"></i>
+                <span>%s</span>
+            </div>
+        </div>',
+        $layoutId,
+        htmlspecialchars($widgetCode),
+        htmlspecialchars($name)
+    );
+}
+
+/**
+ * 渲染空区域占位符
+ */
+function renderAreaPlaceholder(string $area, string $label): string {
+    return sprintf(
+        '<div class="area-placeholder" data-area="%s">
+            <div class="placeholder-content">
+                <i class="ri-add-circle-line"></i>
+                <span>%s - 拖拽部件到此处</span>
+            </div>
+        </div>',
+        htmlspecialchars($area),
+        htmlspecialchars($label)
+    );
+}
+?>
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= __('主题预览') ?></title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #fff;
+            min-height: 100vh;
+        }
+        
+        .theme-page { 
+            min-height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        
+        /* 区域样式 */
+        .theme-area {
+            position: relative;
+        }
+        
+        .theme-area-header { min-height: 80px; }
+        .theme-area-banner { min-height: 300px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .theme-area-content { flex: 1; min-height: 400px; padding: 40px 0; }
+        .theme-area-footer { min-height: 200px; background: #1a1a2e; color: #fff; }
+        
+        .area-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* 主内容布局 */
+        .main-layout {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .main-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        
+        .main-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        /* 预览部件样式 */
+        .preview-widget {
+            position: relative;
+            transition: outline 0.2s, box-shadow 0.2s;
+        }
+        
+        .preview-widget:hover {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+        }
+        
+        .preview-widget::after {
+            content: attr(data-widget-code);
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #007bff;
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 0 0 0 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+        
+        .preview-widget:hover::after {
+            opacity: 1;
+        }
+        
+        /* 部件占位符 */
+        .widget-placeholder,
+        .area-placeholder {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: rgba(0,0,0,0.02);
+        }
+        
+        .placeholder-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            color: #999;
+        }
+        
+        .placeholder-content i {
+            font-size: 32px;
+        }
+        
+        /* 部件错误 */
+        .widget-error {
+            background: #fff5f5;
+            border: 1px solid #ffccc7;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .widget-error-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #cf1322;
+        }
+        
+        /* 插槽样式 - 用于容器内部 */
+        .header-slot,
+        .footer-slot {
+            position: relative;
+            min-height: 40px;
+        }
+        
+        .slot-placeholder {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            color: #999;
+            font-size: 13px;
+            background: rgba(0,0,0,0.02);
+        }
+        
+        .slot-placeholder i {
+            font-size: 18px;
+        }
+        
+        /* 编辑模式 - 插槽高亮 */
+        [data-slot]:hover {
+            outline: 2px dashed #28a745;
+            outline-offset: 2px;
+        }
+        
+        /* 内容区部件间距 */
+        .content-widget-section {
+            margin-bottom: 40px;
+        }
+        
+        .content-widget-section:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-page page-<?= htmlspecialchars($page_type) ?>">
+        
+        <!-- ========== HEADER 区域 ========== -->
+        <section class="theme-area theme-area-header" data-area="header">
+            <?php
+            $headerWidgets = getAreaWidgets($layout, 'header');
+            if (!empty($headerWidgets)):
+                $headerData = getContainerWithChildren($headerWidgets);
+                if ($headerData['container']):
+                    // 渲染容器（包含子部件）
+                    echo renderWidget($this, $headerData['container'], $headerData['children']);
+                else:
+                    // 没有容器，直接渲染所有部件
+                    foreach ($headerWidgets as $widget):
+                        echo renderWidget($this, $widget);
+                    endforeach;
+                endif;
+            else:
+                echo renderAreaPlaceholder('header', 'Header');
+            endif;
+            ?>
+        </section>
+
+        <!-- ========== BANNER 区域 ========== -->
+        <section class="theme-area theme-area-banner" data-area="banner">
+            <div class="area-container">
+                <?php
+                $bannerWidgets = getAreaWidgets($layout, 'banner');
+                if (!empty($bannerWidgets)):
+                    foreach ($bannerWidgets as $widget):
+                        echo renderWidget($this, $widget);
+                    endforeach;
+                else:
+                    echo renderAreaPlaceholder('banner', 'Banner');
+                endif;
+                ?>
+            </div>
+        </section>
+
+        <!-- ========== CONTENT 区域 ========== -->
+        <section class="theme-area theme-area-content" data-area="content">
+            <div class="area-container">
+                <div class="main-layout">
+                    
+                    <!-- 左侧栏 -->
+                    <?php
+                    $leftWidgets = getAreaWidgets($layout, 'left_sidebar');
+                    if (!empty($leftWidgets)):
+                    ?>
+                    <aside class="main-sidebar" data-area="left_sidebar">
+                        <?php foreach ($leftWidgets as $widget): ?>
+                            <div class="sidebar-widget-section">
+                                <?= renderWidget($this, $widget) ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </aside>
+                    <?php endif; ?>
+                    
+                    <!-- 主内容 -->
+                    <main class="main-content">
+                        <?php
+                        $contentWidgets = getAreaWidgets($layout, 'content');
+                        if (!empty($contentWidgets)):
+                            foreach ($contentWidgets as $widget):
+                        ?>
+                            <div class="content-widget-section">
+                                <?= renderWidget($this, $widget) ?>
+                            </div>
+                        <?php 
+                            endforeach;
+                        else:
+                            echo renderAreaPlaceholder('content', 'Content');
+                        endif;
+                        ?>
+                    </main>
+                    
+                    <!-- 右侧栏 -->
+                    <?php
+                    $rightWidgets = getAreaWidgets($layout, 'right_sidebar');
+                    if (!empty($rightWidgets)):
+                    ?>
+                    <aside class="main-sidebar" data-area="right_sidebar">
+                        <?php foreach ($rightWidgets as $widget): ?>
+                            <div class="sidebar-widget-section">
+                                <?= renderWidget($this, $widget) ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </aside>
+                    <?php endif; ?>
+                    
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== FOOTER 区域 ========== -->
+        <section class="theme-area theme-area-footer" data-area="footer">
+            <?php
+            $footerWidgets = getAreaWidgets($layout, 'footer');
+            if (!empty($footerWidgets)):
+                $footerData = getContainerWithChildren($footerWidgets);
+                if ($footerData['container']):
+                    echo renderWidget($this, $footerData['container'], $footerData['children']);
+                else:
+                    echo '<div class="area-container">';
+                    foreach ($footerWidgets as $widget):
+                        echo renderWidget($this, $widget);
+                    endforeach;
+                    echo '</div>';
+                endif;
+            else:
+                echo '<div class="area-container">';
+                echo renderAreaPlaceholder('footer', 'Footer');
+                echo '</div>';
+            endif;
+            ?>
+        </section>
+        
+    </div>
+    
+    <script>
+    // 预览页面内的部件点击事件（通知父窗口）
+    document.querySelectorAll('.preview-widget').forEach(widget => {
+        widget.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const layoutId = this.dataset.layoutId;
+            const widgetCode = this.dataset.widgetCode;
+            const config = this.dataset.config;
+            
+            // 通知父窗口（编辑器）
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'widget-selected',
+                    layoutId: layoutId,
+                    widgetCode: widgetCode,
+                    config: config
+                }, '*');
+            }
+        });
+    });
+    
+    // 插槽点击事件（用于添加部件）
+    document.querySelectorAll('[data-slot]').forEach(slot => {
+        slot.addEventListener('click', function(e) {
+            if (e.target.closest('.preview-widget')) return;
+            
+            const slotName = this.dataset.slot;
+            const accept = this.dataset.accept;
+            
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'slot-clicked',
+                    slot: slotName,
+                    accept: accept
+                }, '*');
+            }
+        });
+    });
+    </script>
+</body>
+</html>

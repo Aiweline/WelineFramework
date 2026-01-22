@@ -1,0 +1,578 @@
+<?php
+/**
+ * 推荐产品部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 参数说明：
+ * - title: 标题
+ * - subtitle: 副标题
+ * - product_ids: 产品ID（逗号分隔）
+ * - limit: 显示数量
+ * - columns: 每行列数
+ * - show_price: 显示价格
+ * - show_rating: 显示评分
+ * - show_add_to_cart: 显示加购按钮
+ * - layout: 布局方式 (grid/carousel)
+ */
+
+$title = $this->getData('title') ?? __('推荐产品');
+$subtitle = $this->getData('subtitle') ?? __('为您精选的优质商品');
+$productIds = $this->getData('product_ids') ?? '';
+$limit = (int)($this->getData('limit') ?? 8);
+$columns = $this->getData('columns') ?? '4';
+$showPrice = (bool)($this->getData('show_price') ?? true);
+$showRating = (bool)($this->getData('show_rating') ?? true);
+$showAddToCart = (bool)($this->getData('show_add_to_cart') ?? true);
+$layout = $this->getData('layout') ?? 'grid';
+
+// 示例产品数据（实际应从产品服务获取）
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('示例产品 %d', $i),
+        'url' => '/product/' . $i,
+        'image' => '/images/products/product-' . $i . '.jpg',
+        'price' => rand(50, 500),
+        'original_price' => rand(50, 500) * 1.2,
+        'rating' => rand(35, 50) / 10,
+        'review_count' => rand(10, 500),
+        'is_new' => rand(0, 1),
+        'is_sale' => rand(0, 1),
+        'stock' => rand(0, 100),
+    ];
+}
+
+$widgetId = 'featured-products-' . uniqid();
+?>
+
+<div class="widget-featured-products widget-products" id="<?= $widgetId ?>">
+    <?php if ($title || $subtitle): ?>
+        <div class="widget-header">
+            <?php if ($title): ?>
+                <h2 class="widget-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
+    <div class="products-container layout-<?= htmlspecialchars($layout) ?>" 
+         data-columns="<?= htmlspecialchars($columns) ?>">
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-prev" type="button">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <div class="products-wrapper">
+            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+                <?php foreach ($products as $product): ?>
+                    <div class="product-card">
+                        <div class="product-image-wrapper">
+                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                                     class="product-image"
+                                     loading="lazy">
+                            </a>
+                            
+                            <!-- 标签 -->
+                            <div class="product-badges">
+                                <?php if ($product['is_new']): ?>
+                                    <span class="badge badge-new"><?= __('NEW') ?></span>
+                                <?php endif; ?>
+                                <?php if ($product['is_sale']): ?>
+                                    <span class="badge badge-sale"><?= __('SALE') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <!-- 快捷操作 -->
+                            <div class="product-actions">
+                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line"></i>
+                                </button>
+                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                <button class="action-btn btn-compare" title="<?= __('加入对比') ?>">
+                                    <i class="ri-arrow-left-right-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= htmlspecialchars($product['url']) ?>">
+                                    <?= htmlspecialchars($product['name']) ?>
+                                </a>
+                            </h3>
+                            
+                            <?php if ($showRating): ?>
+                                <div class="product-rating">
+                                    <div class="stars" style="--rating: <?= $product['rating'] ?>;">
+                                        <i class="ri-star-fill"></i>
+                                        <i class="ri-star-fill"></i>
+                                        <i class="ri-star-fill"></i>
+                                        <i class="ri-star-fill"></i>
+                                        <i class="ri-star-fill"></i>
+                                    </div>
+                                    <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if ($showPrice): ?>
+                                <div class="product-price">
+                                    <?php if ($product['original_price'] > $product['price']): ?>
+                                        <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                    <?php endif; ?>
+                                    <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if ($showAddToCart): ?>
+                                <div class="product-cart">
+                                    <?php if ($product['stock'] > 0): ?>
+                                        <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
+                                            <i class="ri-shopping-cart-line"></i>
+                                            <span><?= __('加入购物车') ?></span>
+                                        </button>
+                                    <?php else: ?>
+                                        <button class="btn-out-of-stock" disabled>
+                                            <span><?= __('暂时缺货') ?></span>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-next" type="button">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+/* 产品部件通用样式 */
+.widget-products {
+    padding: 40px 0;
+}
+
+.widget-products .widget-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.widget-products .widget-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--heading-color, #222);
+}
+
+.widget-products .widget-subtitle {
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+}
+
+/* 产品网格 */
+.widget-products .products-container {
+    position: relative;
+}
+
+.widget-products .products-wrapper {
+    overflow: hidden;
+}
+
+.widget-products .products-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.widget-products .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-products .products-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.widget-products .products-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.widget-products .products-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+.widget-products .products-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+
+/* 轮播布局 */
+.widget-products .layout-carousel .products-grid {
+    display: flex;
+    gap: 20px;
+    transition: transform 0.3s ease;
+}
+
+.widget-products .layout-carousel .product-card {
+    flex: 0 0 auto;
+    width: calc((100% - 60px) / 4);
+}
+
+/* 产品卡片 */
+.widget-products .product-card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+.widget-products .product-card:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    transform: translateY(-5px);
+}
+
+/* 产品图片 */
+.widget-products .product-image-wrapper {
+    position: relative;
+    padding-top: 100%;
+    overflow: hidden;
+}
+
+.widget-products .product-image-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-products .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.widget-products .product-card:hover .product-image {
+    transform: scale(1.08);
+}
+
+/* 产品标签 */
+.widget-products .product-badges {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    z-index: 2;
+}
+
+.widget-products .badge {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-radius: 4px;
+}
+
+.widget-products .badge-new {
+    background: var(--success-color, #28a745);
+    color: #fff;
+}
+
+.widget-products .badge-sale {
+    background: var(--danger-color, #dc3545);
+    color: #fff;
+}
+
+/* 快捷操作 */
+.widget-products .product-actions {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    transform: translateX(10px);
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+.widget-products .product-card:hover .product-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.widget-products .action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.widget-products .action-btn:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+.widget-products .action-btn i {
+    font-size: 16px;
+}
+
+/* 产品信息 */
+.widget-products .product-info {
+    padding: 15px;
+}
+
+.widget-products .product-name {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.widget-products .product-name a {
+    color: var(--text-color, #333);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.widget-products .product-name a:hover {
+    color: var(--primary-color, #007bff);
+}
+
+/* 评分 */
+.widget-products .product-rating {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.widget-products .stars {
+    position: relative;
+    display: inline-flex;
+    color: #ddd;
+}
+
+.widget-products .stars::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: calc(var(--rating) / 5 * 100%);
+    background: linear-gradient(90deg, #ffc107, #ffc107);
+    -webkit-background-clip: text;
+    background-clip: text;
+    overflow: hidden;
+}
+
+.widget-products .stars i {
+    font-size: 12px;
+}
+
+.widget-products .review-count {
+    font-size: 12px;
+    color: #999;
+}
+
+/* 价格 */
+.widget-products .product-price {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.widget-products .price-original {
+    font-size: 13px;
+    color: #999;
+    text-decoration: line-through;
+}
+
+.widget-products .price-current {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 加购按钮 */
+.widget-products .btn-add-to-cart {
+    width: 100%;
+    padding: 10px 15px;
+    border: none;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.widget-products .btn-add-to-cart:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+.widget-products .btn-out-of-stock {
+    width: 100%;
+    padding: 10px 15px;
+    border: none;
+    background: #e9ecef;
+    color: #6c757d;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: not-allowed;
+}
+
+/* 轮播箭头 */
+.widget-products .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    z-index: 10;
+    transition: all 0.3s;
+}
+
+.widget-products .carousel-arrow:hover {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+}
+
+.widget-products .carousel-arrow i {
+    font-size: 24px;
+}
+
+.widget-products .carousel-prev {
+    left: -22px;
+}
+
+.widget-products .carousel-next {
+    right: -22px;
+}
+
+/* 响应式 */
+@media (max-width: 1200px) {
+    .widget-products .products-grid.columns-5,
+    .widget-products .products-grid.columns-6 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 992px) {
+    .widget-products .products-grid.columns-4,
+    .widget-products .products-grid.columns-5,
+    .widget-products .products-grid.columns-6 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .widget-products .products-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .widget-products .widget-title {
+        font-size: 22px;
+    }
+    
+    .widget-products .carousel-arrow {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .widget-products .product-info {
+        padding: 10px;
+    }
+    
+    .widget-products .product-name {
+        font-size: 13px;
+    }
+    
+    .widget-products .price-current {
+        font-size: 16px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const layout = '<?= $layout ?>';
+    
+    if (layout === 'carousel') {
+        const wrapper = widget.querySelector('.products-grid');
+        const prevBtn = widget.querySelector('.carousel-prev');
+        const nextBtn = widget.querySelector('.carousel-next');
+        
+        if (!wrapper || !prevBtn || !nextBtn) return;
+        
+        const cards = wrapper.querySelectorAll('.product-card');
+        const cardWidth = cards[0]?.offsetWidth || 0;
+        const gap = 20;
+        let currentPosition = 0;
+        const maxPosition = Math.max(0, (cards.length - 4) * (cardWidth + gap));
+        
+        function updatePosition() {
+            wrapper.style.transform = 'translateX(-' + currentPosition + 'px)';
+        }
+        
+        prevBtn.addEventListener('click', function() {
+            currentPosition = Math.max(0, currentPosition - (cardWidth + gap));
+            updatePosition();
+        });
+        
+        nextBtn.addEventListener('click', function() {
+            currentPosition = Math.min(maxPosition, currentPosition + (cardWidth + gap));
+            updatePosition();
+        });
+    }
+    
+    // 加入购物车功能
+    widget.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            // 这里应该调用实际的加购API
+            console.log('Add to cart:', productId);
+            
+            // 显示添加动画
+            this.innerHTML = '<i class="ri-check-line"></i> <span><?= __('已添加') ?></span>';
+            this.style.background = 'var(--success-color, #28a745)';
+            
+            setTimeout(() => {
+                this.innerHTML = '<i class="ri-shopping-cart-line"></i> <span><?= __('加入购物车') ?></span>';
+                this.style.background = '';
+            }, 2000);
+        });
+    });
+})();
+</script>

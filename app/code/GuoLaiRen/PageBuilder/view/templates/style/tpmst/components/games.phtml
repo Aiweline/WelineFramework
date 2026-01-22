@@ -1,0 +1,208 @@
+<?php
+/**
+ * TPMST 组件 - 游戏介绍 (Games Showcase)
+ * 游戏/产品介绍卡片，支持图片和描述
+ * 
+ * @component_start
+ * name => 游戏介绍
+ * name_en => Games Showcase
+ * description => 游戏/产品介绍卡片组件，支持图文混排展示
+ * category => content
+ * type => section
+ * thumbnail => asset/img/game/game-i1.webp
+ * sort_order => 30
+ * compatible_styles => *
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:games => 游戏介绍设置
+ * games.title => 游戏区域标题:text:Multiples Game
+ * games.display => 显示游戏区域:select:yes|yes,no
+ * games.bg_color => 背景颜色:color:#0f0f1e
+ * games.image_1_desktop => 游戏1-桌面端图片:textarea:|默认使用本地game/game-i1.webp
+ * games.image_1_mobile => 游戏1-移动端图片:textarea:|默认使用本地game/game-i1-m.webp
+ * games.title_1 => 游戏1-标题:text:Teen Patti Master
+ * games.desc_1 => 游戏1-描述:textarea:A thrilling card game that combines strategy and luck.
+ * games.image_2 => 游戏2-图片:textarea:|默认使用本地game/game-i2.webp
+ * games.title_2 => 游戏2-标题:text:Rummy
+ * games.desc_2 => 游戏2-描述:textarea:A card game where players match cards into sets or runs.
+ * games.image_3 => 游戏3-图片:textarea:|默认使用本地game/game-i3.webp
+ * games.title_3 => 游戏3-标题:text:Slots
+ * games.desc_3 => 游戏3-描述:textarea:Games of chance where players spin reels with symbols.
+ * 
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$componentConfig = $this->getData('component_config') ?? [];
+$styleSettings = $componentConfig ?: ($this->getData('style') ?: $this->getData('style_settings') ?: []);
+$colors = $this->getData('colors') ?? [];
+
+// 辅助函数
+if (!function_exists('tpmst_games_getConfig')) {
+    function tpmst_games_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        return ($value === '' && $default !== '') ? $default : $value;
+    }
+}
+
+// 显示控制
+$displayRaw = tpmst_games_getConfig($styleSettings, 'games.display', 'yes');
+$display = in_array($displayRaw, ['yes', true, 'true', 1, '1'], true);
+
+if (!$display) {
+    return;
+}
+
+// 配置
+$title = tpmst_games_getConfig($styleSettings, 'games.title', '') ?: tpmst_games_getConfig($styleSettings, 'texts.games_title', 'Multiples Game');
+$bgColor = $colors['games_bg'] ?? tpmst_games_getConfig($styleSettings, 'games.bg_color', '#0f0f1e');
+
+// 默认图片
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1.webp');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1-m.webp');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i2.webp');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i3.webp');
+
+// 游戏列表
+$games = [
+    [
+        'image_desktop' => tpmst_games_getConfig($styleSettings, 'games.image_1_desktop', '') ?: $defaultImage1Desktop,
+        'image_mobile' => tpmst_games_getConfig($styleSettings, 'games.image_1_mobile', '') ?: $defaultImage1Mobile,
+        'title' => tpmst_games_getConfig($styleSettings, 'games.title_1', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_teen_patti', 'Teen Patti Master'),
+        'desc' => tpmst_games_getConfig($styleSettings, 'games.desc_1', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_teen_patti_desc', 'Teen Patti Master is a thrilling card game that combines strategy and luck. Players aim to create the best three-card hand.'),
+    ],
+    [
+        'image_desktop' => tpmst_games_getConfig($styleSettings, 'games.image_2', '') ?: $defaultImage2,
+        'image_mobile' => tpmst_games_getConfig($styleSettings, 'games.image_2', '') ?: $defaultImage2,
+        'title' => tpmst_games_getConfig($styleSettings, 'games.title_2', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_rummy', 'Rummy'),
+        'desc' => tpmst_games_getConfig($styleSettings, 'games.desc_2', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_rummy_desc', 'Rummy is a card game where players match cards into sets or runs, aiming to be the first to play all their cards.'),
+    ],
+    [
+        'image_desktop' => tpmst_games_getConfig($styleSettings, 'games.image_3', '') ?: $defaultImage3,
+        'image_mobile' => tpmst_games_getConfig($styleSettings, 'games.image_3', '') ?: $defaultImage3,
+        'title' => tpmst_games_getConfig($styleSettings, 'games.title_3', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_slots', 'Slots'),
+        'desc' => tpmst_games_getConfig($styleSettings, 'games.desc_3', '') ?: tpmst_games_getConfig($styleSettings, 'texts.game_slots_desc', 'Slots are games of chance where players spin reels with symbols, aiming to match combinations for potential wins.'),
+    ],
+];
+
+// 颜色
+$headingColor = $colors['heading_color'] ?? '#ffd700';
+$textColor = $colors['text_color'] ?? '#ffffff';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.05)';
+$cardBorder = $colors['card_border'] ?? 'rgba(255, 255, 255, 0.1)';
+
+$componentId = 'tpmst-games-' . uniqid();
+?>
+
+<!-- TPMST 组件: 游戏介绍 -->
+<section class="tpmst-component tpmst-component-games" id="<?= $componentId ?>" style="background: <?= htmlspecialchars($bgColor) ?>;">
+    <div class="tpmst-games-container">
+        <h2 class="tpmst-games-title"><?= htmlspecialchars($title) ?></h2>
+        
+        <div class="tpmst-games-grid">
+            <?php foreach ($games as $index => $game): ?>
+            <div class="tpmst-game-card">
+                <div class="tpmst-game-image">
+                    <picture>
+                        <?php if ($game['image_mobile'] !== $game['image_desktop']): ?>
+                        <source media="(max-width: 768px)" type="image/webp" srcset="<?= htmlspecialchars($game['image_mobile']) ?>">
+                        <?php endif; ?>
+                        <source media="(min-width: 769px)" type="image/webp" srcset="<?= htmlspecialchars($game['image_desktop']) ?>">
+                        <img src="<?= htmlspecialchars($game['image_mobile']) ?>" 
+                             alt="<?= htmlspecialchars($game['title']) ?>" 
+                             width="357" height="209"
+                             loading="lazy">
+                    </picture>
+                </div>
+                <div class="tpmst-game-content">
+                    <h3 class="tpmst-game-title"><?= htmlspecialchars($game['title']) ?></h3>
+                    <p class="tpmst-game-desc"><?= htmlspecialchars($game['desc']) ?></p>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    padding: clamp(40px, 8vw, 90px) 15px;
+    width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-games-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .tpmst-games-title {
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 700;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    text-align: center;
+    margin-bottom: clamp(30px, 5vw, 50px);
+}
+
+#<?= $componentId ?> .tpmst-games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+}
+
+#<?= $componentId ?> .tpmst-game-card {
+    background: <?= htmlspecialchars($cardBg) ?>;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid <?= htmlspecialchars($cardBorder) ?>;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#<?= $componentId ?> .tpmst-game-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?> .tpmst-game-image {
+    width: 100%;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .tpmst-game-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+#<?= $componentId ?> .tpmst-game-card:hover .tpmst-game-image img {
+    transform: scale(1.05);
+}
+
+#<?= $componentId ?> .tpmst-game-content {
+    padding: 20px;
+}
+
+#<?= $componentId ?> .tpmst-game-title {
+    font-size: clamp(18px, 3.5vw, 22px);
+    font-weight: 600;
+    color: <?= htmlspecialchars($headingColor) ?>;
+    margin-bottom: 12px;
+}
+
+#<?= $componentId ?> .tpmst-game-desc {
+    font-size: clamp(13px, 2.5vw, 15px);
+    line-height: 1.7;
+    color: <?= htmlspecialchars($textColor) ?>;
+    margin: 0;
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .tpmst-games-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+</style>

@@ -1,0 +1,145 @@
+<?php
+/**
+ * 猜你喜欢部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('猜你喜欢');
+$subtitle = $this->getData('subtitle') ?? __('根据您的浏览记录推荐');
+$limit = (int)($this->getData('limit') ?? 8);
+$columns = $this->getData('columns') ?? '4';
+$layout = $this->getData('layout') ?? 'grid';
+
+// 示例产品数据（实际应从推荐引擎获取）
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('推荐产品 %d', $i),
+        'url' => '/product/recommend-' . $i,
+        'image' => '/images/products/recommend-' . $i . '.jpg',
+        'price' => rand(50, 500),
+        'original_price' => rand(50, 500) * 1.2,
+        'rating' => rand(35, 50) / 10,
+        'review_count' => rand(10, 500),
+        'match_score' => rand(80, 99), // 匹配度
+    ];
+}
+
+$widgetId = 'you-may-like-' . uniqid();
+?>
+
+<div class="widget-you-may-like widget-products" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <?php if ($title): ?>
+            <h2 class="widget-title">
+                <i class="ri-magic-line" style="color: #9b59b6;"></i>
+                <?= htmlspecialchars($title) ?>
+            </h2>
+        <?php endif; ?>
+        <?php if ($subtitle): ?>
+            <p class="widget-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+        <?php endif; ?>
+    </div>
+    
+    <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-prev" type="button">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <div class="products-wrapper">
+            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+                <?php foreach ($products as $product): ?>
+                    <div class="product-card">
+                        <div class="product-image-wrapper">
+                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                                     class="product-image"
+                                     loading="lazy">
+                            </a>
+                            
+                            <div class="match-badge">
+                                <i class="ri-thumb-up-fill"></i>
+                                <?= $product['match_score'] ?>% <?= __('匹配') ?>
+                            </div>
+                            
+                            <div class="product-actions">
+                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line"></i>
+                                </button>
+                                <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= htmlspecialchars($product['url']) ?>">
+                                    <?= htmlspecialchars($product['name']) ?>
+                                </a>
+                            </h3>
+                            
+                            <div class="product-rating">
+                                <div class="stars">
+                                    <?php for ($s = 1; $s <= 5; $s++): ?>
+                                        <i class="ri-star-<?= $s <= floor($product['rating']) ? 'fill' : 'line' ?>"></i>
+                                    <?php endfor; ?>
+                                </div>
+                                <span class="review-count">(<?= $product['review_count'] ?>)</span>
+                            </div>
+                            
+                            <div class="product-price">
+                                <?php if ($product['original_price'] > $product['price']): ?>
+                                    <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+                                <?php endif; ?>
+                                <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                            </div>
+                            
+                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
+                                <i class="ri-shopping-cart-line"></i>
+                                <span><?= __('加入购物车') ?></span>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-next" type="button">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-you-may-like .match-badge {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(155, 89, 182, 0.9);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+}
+
+.widget-you-may-like .product-rating .stars i {
+    color: #ffc107;
+}
+
+.widget-you-may-like .product-rating .stars i.ri-star-line {
+    color: #ddd;
+}
+</style>

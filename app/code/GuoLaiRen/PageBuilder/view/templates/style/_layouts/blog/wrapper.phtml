@@ -1,0 +1,172 @@
+<?php
+/**
+ * 博客布局包装器
+ * 
+ * 此文件定义博客页面的整体结构。
+ * 当页面类型为 blog_list 或 blog_post 时，使用此布局。
+ * 
+ * 可用变量：
+ * - $page: Page 模型实例
+ * - $style: 样式配置数组
+ * - $layout_settings: 布局设置
+ * - $header_component: 头部组件（可选）
+ * - $footer_component: 底部组件（可选）
+ * - $sidebar_widgets: 侧边栏小部件列表
+ * - $content_components: 内容区组件列表
+ * 
+ * 博客数据：
+ * - $blog_posts: 博客文章列表
+ * - $blog_categories: 博客分类列表
+ * - $current_post: 当前文章（详情页）
+ * - $current_category: 当前分类
+ * - $pagination: 分页信息
+ * - $recent_posts: 最近文章
+ * - $all_tags: 所有标签
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+// 获取布局设置
+$layoutSettings = $layout_settings ?? [];
+$showSidebar = ($layoutSettings['sidebar.show'] ?? 'yes') === 'yes';
+$sidebarPosition = $layoutSettings['sidebar.position'] ?? 'right';
+$sidebarWidth = $layoutSettings['sidebar.width'] ?? '4';
+
+// 计算主内容区宽度
+$mainWidth = $showSidebar ? (12 - (int)$sidebarWidth) : 12;
+$mainOrderClass = ($showSidebar && $sidebarPosition === 'left') ? 'order-lg-2' : '';
+$sidebarOrderClass = ($showSidebar && $sidebarPosition === 'left') ? 'order-lg-1' : '';
+?>
+
+<div class="blog-layout">
+    <!-- 头部区域 -->
+    <div class="blog-layout-header" id="region-header" data-region="header" data-accepts="header">
+        <?php if (!empty($header_component)): ?>
+            <!-- 使用自定义头部组件 -->
+            <?= $header_component ?>
+        <?php else: ?>
+            <!-- 使用模板默认头部 -->
+            <?php if (!empty($style_code) && file_exists(BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$style_code}/header.phtml")): ?>
+                <template>style/<?= $style_code ?>/header.phtml</template>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+    
+    <!-- 主内容区域 -->
+    <div class="blog-layout-main">
+        <div class="container">
+            <div class="row">
+                <!-- 主内容 -->
+                <div class="col-lg-<?= $mainWidth ?> <?= $mainOrderClass ?>">
+                    <div class="blog-layout-content" id="region-content" data-region="content" data-accepts="content,section">
+                        <?php if (!empty($content_components)): ?>
+                            <!-- 使用自定义内容组件 -->
+                            <?php foreach ($content_components as $component): ?>
+                                <?= $component ?>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <!-- 使用博客默认内容模板 -->
+                            <?php
+                            // 根据页面类型选择对应的内容模板
+                            $pageType = $page ? $page->getData('type') : 'blog_list';
+                            $blogContentTemplate = match($pageType) {
+                                'blog_post' => 'style/blog/content.phtml',
+                                'blog_category' => 'style/blog/content.phtml',
+                                'blog_tag' => 'style/blog/content.phtml',
+                                default => 'style/blog/content.phtml',
+                            };
+                            ?>
+                            <template><?= $blogContentTemplate ?></template>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <?php if ($showSidebar): ?>
+                <!-- 侧边栏 -->
+                <div class="col-lg-<?= $sidebarWidth ?> <?= $sidebarOrderClass ?>">
+                    <aside class="blog-layout-sidebar" id="region-sidebar" data-region="sidebar" data-accepts="widget,sidebar">
+                        <?php if (!empty($sidebar_widgets)): ?>
+                            <!-- 使用自定义侧边栏组件 -->
+                            <?php foreach ($sidebar_widgets as $widget): ?>
+                                <div class="sidebar-widget">
+                                    <?= $widget ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <!-- 默认侧边栏小部件 -->
+                            <?php $this->renderDefaultSidebarWidgets($layoutSettings); ?>
+                        <?php endif; ?>
+                    </aside>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部区域 -->
+    <div class="blog-layout-footer" id="region-footer" data-region="footer" data-accepts="footer">
+        <?php if (!empty($footer_component)): ?>
+            <!-- 使用自定义底部组件 -->
+            <?= $footer_component ?>
+        <?php else: ?>
+            <!-- 使用模板默认底部 -->
+            <?php if (!empty($style_code) && file_exists(BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$style_code}/footer.phtml")): ?>
+                <template>style/<?= $style_code ?>/footer.phtml</template>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+/* 博客布局基础样式 */
+.blog-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.blog-layout-main {
+    flex: 1;
+    padding: 2rem 0;
+}
+
+.blog-layout-sidebar {
+    position: sticky;
+    top: 20px;
+}
+
+.sidebar-widget {
+    margin-bottom: 1.5rem;
+}
+
+/* 区域拖拽指示 */
+[data-region] {
+    position: relative;
+    min-height: 50px;
+}
+
+[data-region].drag-over::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px dashed #3498db;
+    background: rgba(52, 152, 219, 0.05);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* 空区域提示 */
+[data-region]:empty::after {
+    content: attr(data-region) ' 区域';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    border: 2px dashed #dee2e6;
+    border-radius: 4px;
+    color: #6c757d;
+    font-size: 14px;
+    text-transform: capitalize;
+}
+</style>

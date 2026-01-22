@@ -1,0 +1,1195 @@
+<?php
+/**
+ * 主题可视化编辑器
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var int $theme_id
+ * @var \Weline\Theme\Model\WelineTheme $theme
+ * @var array $themes
+ * @var string $page_type
+ * @var array $page_types
+ * @var array $areas
+ * @var array $layout
+ * @var array $available_widgets
+ */
+
+$theme_id = $this->getData('theme_id') ?: 0;
+$theme = $this->getData('theme');
+$themes = $this->getData('themes') ?: [];
+$page_type = $this->getData('page_type') ?: 'default';
+$page_types = $this->getData('page_types') ?: [];
+$areas = $this->getData('areas') ?: [];
+$layout = $this->getData('layout') ?: [];
+$available_widgets = $this->getData('available_widgets') ?: [];
+
+// 辅助函数 - 获取部件图标
+if (!function_exists('getWidgetIcon')) {
+    function getWidgetIcon($type) {
+        $icons = [
+            'header' => 'ri-layout-top-line',
+            'footer' => 'ri-layout-bottom-line',
+            'sidebar' => 'ri-layout-left-line',
+            'banner' => 'ri-image-line',
+            'carousel' => 'ri-slideshow-line',
+            'slider' => 'ri-slideshow-line',
+            'product' => 'ri-shopping-bag-line',
+            'category' => 'ri-folder-line',
+            'navigation' => 'ri-menu-line',
+            'search' => 'ri-search-line',
+            'breadcrumb' => 'ri-route-line',
+            'pagination' => 'ri-more-line',
+            'social' => 'ri-share-line',
+            'newsletter' => 'ri-mail-line',
+            'testimonial' => 'ri-chat-quote-line',
+            'faq' => 'ri-question-answer-line',
+            'video' => 'ri-video-line',
+            'content' => 'ri-file-text-line',
+        ];
+        return $icons[$type] ?? 'ri-widgets-line';
+    }
+}
+?>
+
+<div class="theme-editor-container" id="themeEditor" 
+     data-theme-id="<?= $theme_id ?>" 
+     data-page-type="<?= htmlspecialchars($page_type) ?>"
+     data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
+     data-api-save-widget="<?= $this->getUrl('theme/backend/theme-editor/save-widget') ?>"
+     data-api-update-config="<?= $this->getUrl('theme/backend/theme-editor/update-config') ?>"
+     data-api-delete-widget="<?= $this->getUrl('theme/backend/theme-editor/delete-widget') ?>"
+     data-api-widgets="<?= $this->getUrl('theme/backend/theme-editor/widgets') ?>"
+     data-api-publish="<?= $this->getUrl('theme/backend/theme-editor/publish') ?>"
+     data-api-preview="<?= $this->getUrl('theme/backend/theme-editor/preview') ?>"
+     data-api-render-widget="<?= $this->getUrl('theme/backend/theme-editor/render-widget') ?>"
+     data-api-widget-preview="<?= $this->getUrl('theme/backend/theme-editor/widget-preview') ?>">
+    <!-- 顶部工具栏 -->
+    <div class="editor-toolbar">
+        <div class="toolbar-left">
+            <h1 class="editor-title">
+                <i class="ri-palette-line"></i>
+                <?= __('主题编辑器') ?>
+            </h1>
+            
+            <div class="toolbar-selects">
+                <select id="themeSelect" class="form-select">
+                    <option value=""><?= __('-- 选择主题 --') ?></option>
+                    <?php foreach ($themes as $t): 
+                        // 支持数组和对象两种格式
+                        $tId = is_array($t) ? ($t['id'] ?? 0) : (is_object($t) ? $t->getId() : 0);
+                        $tName = is_array($t) ? ($t['name'] ?? '') : (is_object($t) ? $t->getName() : '');
+                        $tIsActive = is_array($t) ? ($t['is_active'] ?? false) : (is_object($t) ? $t->getIsActive() : false);
+                    ?>
+                        <option value="<?= $tId ?>" <?= $tId == $theme_id ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($tName) ?>
+                            <?= $tIsActive ? ' ✓' : '' ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                
+                <select id="pageTypeSelect" class="form-select">
+                    <?php foreach ($page_types as $code => $label): ?>
+                        <option value="<?= $code ?>" <?= $code === $page_type ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($label) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        
+        <div class="toolbar-right">
+            <button type="button" class="btn btn-outline-secondary" id="btnPreview">
+                <i class="ri-eye-line"></i> <?= __('预览') ?>
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="btnSave">
+                <i class="ri-save-line"></i> <?= __('保存') ?>
+            </button>
+            <button type="button" class="btn btn-primary" id="btnPublish">
+                <i class="ri-upload-cloud-line"></i> <?= __('发布') ?>
+            </button>
+        </div>
+    </div>
+
+    <!-- 主编辑区 -->
+    <div class="editor-main">
+        <!-- 左侧：配置面板 -->
+        <div class="editor-config-panel" id="configPanel">
+            <div class="panel-header">
+                <h3 class="panel-title"><?= __('部件配置') ?></h3>
+                <button type="button" class="panel-close" id="closeConfigPanel">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            
+            <div class="panel-content" id="configContent">
+                <div class="no-widget-selected">
+                    <i class="ri-cursor-line"></i>
+                    <p><?= __('点击预览区域中的部件进行配置') ?></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间：预览区域 - 使用 iframe 加载插槽式预览 -->
+        <div class="editor-preview-area">
+            <div class="preview-wrapper">
+                <!-- 预览工具栏 -->
+                <div class="preview-toolbar">
+                    <div class="preview-tabs">
+                        <button type="button" class="preview-tab active" data-view="preview"><?= __('实时预览') ?></button>
+                        <button type="button" class="preview-tab" data-view="structure"><?= __('结构视图') ?></button>
+                    </div>
+                    <div class="preview-actions">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="btnRefreshPreview" title="<?= __('刷新预览') ?>">
+                            <i class="ri-refresh-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="btnFullscreenPreview" title="<?= __('全屏预览') ?>">
+                            <i class="ri-fullscreen-line"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- iframe 实时预览（插槽式布局） -->
+                <div class="preview-view preview-view-preview active" id="previewViewPreview">
+                    <iframe id="previewFrame" 
+                            src="<?= $theme_id ? $this->getUrl('theme/backend/theme-editor/preview', ['theme_id' => $theme_id, 'page_type' => $page_type]) : 'about:blank' ?>"
+                            class="preview-iframe"></iframe>
+                    <div class="preview-loading" id="previewLoading">
+                        <div class="spinner-border text-light" role="status">
+                            <span class="visually-hidden"><?= __('加载中...') ?></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 结构视图（用于拖放操作） -->
+                <div class="preview-view preview-view-structure" id="previewViewStructure">
+                    <div class="structure-frame">
+                        <!-- Header 区域 -->
+                        <div class="preview-area area-header" data-area="header">
+                            <div class="area-label"><?= __('Header') ?></div>
+                            <div class="area-widgets" data-area="header">
+                                <?php if (!empty($layout['header']['widgets'])): ?>
+                                    <?php foreach ($layout['header']['widgets'] as $widget): ?>
+                                        <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <div class="area-placeholder"><?= __('拖拽 Header 部件到此处') ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- Banner 区域 -->
+                        <div class="preview-area area-banner" data-area="banner">
+                            <div class="area-label"><?= __('Banner') ?></div>
+                            <div class="area-widgets" data-area="banner">
+                                <?php if (!empty($layout['banner']['widgets'])): ?>
+                                    <?php foreach ($layout['banner']['widgets'] as $widget): ?>
+                                        <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <div class="area-placeholder"><?= __('拖拽 Banner 部件到此处') ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- 主内容区 -->
+                        <div class="preview-main-content">
+                            <!-- 左侧栏 -->
+                            <div class="preview-area area-left-sidebar" data-area="left_sidebar">
+                                <div class="area-label"><?= __('左侧栏') ?></div>
+                                <div class="area-widgets" data-area="left_sidebar">
+                                    <?php if (!empty($layout['left_sidebar']['widgets'])): ?>
+                                        <?php foreach ($layout['left_sidebar']['widgets'] as $widget): ?>
+                                            <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="area-placeholder"><?= __('拖拽侧栏部件') ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <!-- 内容区 -->
+                            <div class="preview-area area-content" data-area="content">
+                                <div class="area-label"><?= __('内容区') ?></div>
+                                <div class="area-widgets" data-area="content">
+                                    <?php if (!empty($layout['content']['widgets'])): ?>
+                                        <?php foreach ($layout['content']['widgets'] as $widget): ?>
+                                            <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="area-placeholder"><?= __('拖拽内容部件到此处') ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <!-- 右侧栏 -->
+                            <div class="preview-area area-right-sidebar" data-area="right_sidebar">
+                                <div class="area-label"><?= __('右侧栏') ?></div>
+                                <div class="area-widgets" data-area="right_sidebar">
+                                    <?php if (!empty($layout['right_sidebar']['widgets'])): ?>
+                                        <?php foreach ($layout['right_sidebar']['widgets'] as $widget): ?>
+                                            <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="area-placeholder"><?= __('拖拽侧栏部件') ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer 区域 -->
+                        <div class="preview-area area-footer" data-area="footer">
+                            <div class="area-label"><?= __('Footer') ?></div>
+                            <div class="area-widgets" data-area="footer">
+                                <?php if (!empty($layout['footer']['widgets'])): ?>
+                                    <?php foreach ($layout['footer']['widgets'] as $widget): ?>
+                                        <?= $this->fetchTagHtml('Weline_Theme::Backend/ThemeEditor/widget-item', ['widget' => $widget]) ?>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <div class="area-placeholder"><?= __('拖拽 Footer 部件到此处') ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：部件列表 -->
+        <div class="editor-widget-panel" id="widgetPanel">
+            <div class="panel-header">
+                <h3 class="panel-title"><?= __('部件库') ?></h3>
+                <div class="panel-search">
+                    <input type="text" id="widgetSearch" class="form-control form-control-sm" placeholder="<?= __('搜索部件...') ?>">
+                </div>
+            </div>
+            
+            <div class="panel-content">
+                <div class="widget-list" id="widgetList">
+                    <?php foreach ($available_widgets as $type => $group): 
+                        if (!is_array($group)) continue;
+                        $groupLabel = $group['label'] ?? $type;
+                        $groupWidgets = $group['widgets'] ?? [];
+                    ?>
+                        <div class="widget-group" data-type="<?= htmlspecialchars($type) ?>">
+                            <div class="widget-group-header" data-toggle="collapse">
+                                <i class="ri-arrow-down-s-line toggle-icon"></i>
+                                <span><?= htmlspecialchars($groupLabel) ?></span>
+                                <span class="widget-count"><?= count($groupWidgets) ?></span>
+                            </div>
+                            <div class="widget-group-content">
+                                <?php foreach ($groupWidgets as $widget): 
+                                    if (!is_array($widget)) continue;
+                                    $wCode = $widget['code'] ?? '';
+                                    $wModule = $widget['module'] ?? '';
+                                    $wType = $widget['type'] ?? '';
+                                    $wName = $widget['name'] ?? $wCode;
+                                    $wDesc = $widget['description'] ?? '';
+                                    $wPosition = $widget['position'] ?? [];
+                                    $wCompatible = $widget['compatible'] ?? false;
+                                ?>
+                                    <div class="widget-item draggable" 
+                                         draggable="true"
+                                         data-widget-code="<?= htmlspecialchars($wCode) ?>"
+                                         data-widget-module="<?= htmlspecialchars($wModule) ?>"
+                                         data-widget-type="<?= htmlspecialchars($wType) ?>"
+                                         data-widget-name="<?= htmlspecialchars($wName) ?>"
+                                         data-widget-position='<?= json_encode($wPosition) ?>'
+                                         data-widget-compatible="<?= $wCompatible ? '1' : '0' ?>">
+                                        <div class="widget-icon">
+                                            <i class="<?= getWidgetIcon($wType ?: 'content') ?>"></i>
+                                        </div>
+                                        <div class="widget-info">
+                                            <div class="widget-name"><?= htmlspecialchars($wName) ?></div>
+                                            <div class="widget-desc"><?= htmlspecialchars($wDesc) ?></div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 部件配置模态框 - 点击部件编辑按钮时弹出 -->
+<div class="modal fade" id="widgetConfigModal" tabindex="-1" aria-labelledby="widgetConfigModalLabel" aria-hidden="true" style="display: none;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content theme-modal-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="widgetConfigModalLabel">
+                    <i class="ri-settings-3-line"></i> <?= __('部件配置') ?>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="widgetConfigModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ========================================
+   主题编辑器 - 暗色主题样式
+   ======================================== */
+
+/* 颜色变量 */
+:root {
+    --te-bg-dark: #1a1a27;
+    --te-bg-card: #1e1e2d;
+    --te-bg-hover: #252531;
+    --te-bg-active: #2b2b40;
+    --te-border: #2e2e3e;
+    --te-border-light: #363645;
+    --te-text-primary: #ffffff;
+    --te-text-secondary: #a2a3b7;
+    --te-text-muted: #6c6c80;
+    --te-accent: #3699ff;
+    --te-accent-hover: #187de4;
+    --te-success: #1bc5bd;
+    --te-danger: #f64e60;
+    --te-warning: #ffa800;
+    --te-input-bg: #1b1b29;
+}
+body{
+    margin: 0;
+    padding: 0;
+    background-color: var(--te-bg-dark);
+}
+
+/* 编辑器容器 */
+.theme-editor-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 0px);
+    background: var(--te-bg-dark);
+    color: var(--te-text-primary);
+}
+
+/* 顶部工具栏 */
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--te-bg-card);
+    border-bottom: 1px solid var(--te-border);
+    flex-shrink: 0;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.editor-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--te-text-primary);
+}
+
+.editor-title i {
+    color: var(--te-accent);
+}
+
+.toolbar-selects {
+    display: flex;
+    gap: 10px;
+}
+
+.toolbar-selects .form-select {
+    min-width: 150px;
+    background-color: var(--te-input-bg);
+    border-color: var(--te-border);
+    color: var(--te-text-primary);
+}
+
+.toolbar-selects .form-select:focus {
+    border-color: var(--te-accent);
+    box-shadow: 0 0 0 0.2rem rgba(54, 153, 255, 0.25);
+}
+
+.toolbar-right {
+    display: flex;
+    gap: 10px;
+}
+
+/* 主编辑区 */
+.editor-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 配置面板（左侧） */
+.editor-config-panel {
+    width: 300px;
+    background: var(--te-bg-card);
+    border-right: 1px solid var(--te-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    border-bottom: 1px solid var(--te-border);
+}
+
+.panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--te-text-primary);
+}
+
+.panel-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: var(--te-text-secondary);
+    transition: color 0.2s;
+}
+
+.panel-close:hover {
+    color: var(--te-text-primary);
+}
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.no-widget-selected {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--te-text-muted);
+    text-align: center;
+}
+
+.no-widget-selected i {
+    font-size: 48px;
+    margin-bottom: 10px;
+    color: var(--te-border-light);
+}
+
+/* 预览区域（中间） */
+.editor-preview-area {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--te-bg-dark);
+}
+
+.preview-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 预览工具栏 */
+.preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: var(--te-bg-card);
+    border-bottom: 1px solid var(--te-border);
+}
+
+.preview-tabs {
+    display: flex;
+    gap: 5px;
+}
+
+.preview-tab {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--te-text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.preview-tab:hover {
+    background: var(--te-bg-hover);
+    color: var(--te-text-primary);
+}
+
+.preview-tab.active {
+    background: var(--te-accent);
+    color: #fff;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 预览视图容器 */
+.preview-view {
+    flex: 1;
+    display: none;
+    overflow: hidden;
+}
+
+.preview-view.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* iframe 实时预览 */
+.preview-view-preview {
+    position: relative;
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #fff;
+}
+
+.preview-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10;
+}
+
+.preview-loading.hidden {
+    display: none;
+}
+
+/* 结构视图 */
+.preview-view-structure {
+    padding: 20px;
+    overflow: auto;
+}
+
+.structure-frame {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: var(--te-bg-card);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    border: 1px solid var(--te-border);
+}
+
+/* 预览区域块 */
+.preview-area {
+    position: relative;
+    min-height: 80px;
+    border: 2px dashed transparent;
+    transition: all 0.3s;
+}
+
+.preview-area:hover {
+    border-color: var(--te-accent);
+}
+
+.preview-area.drag-over {
+    border-color: var(--te-success);
+    background: rgba(27, 197, 189, 0.1);
+}
+
+.preview-area.drag-invalid {
+    border-color: var(--te-danger);
+    background: rgba(246, 78, 96, 0.1);
+}
+
+.area-label {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    font-size: 11px;
+    color: var(--te-text-secondary);
+    background: var(--te-bg-active);
+    padding: 2px 8px;
+    border-radius: 3px;
+    z-index: 10;
+    border: 1px solid var(--te-border);
+}
+
+.area-widgets {
+    min-height: 60px;
+    padding: 10px;
+}
+
+.area-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60px;
+    color: var(--te-text-muted);
+    font-size: 13px;
+    border: 2px dashed var(--te-border-light);
+    border-radius: 4px;
+    background: var(--te-bg-hover);
+}
+
+/* 各区域样式 */
+.area-header {
+    background: var(--te-bg-hover);
+    border-bottom: 1px solid var(--te-border);
+}
+
+.area-banner {
+    background: linear-gradient(135deg, #2b2b40 0%, #1e1e2d 100%);
+}
+
+.preview-main-content {
+    display: flex;
+    min-height: 400px;
+}
+
+.area-left-sidebar {
+    width: 200px;
+    background: var(--te-bg-hover);
+    border-right: 1px solid var(--te-border);
+}
+
+.area-content {
+    flex: 1;
+    background: var(--te-bg-card);
+}
+
+.area-right-sidebar {
+    width: 200px;
+    background: var(--te-bg-hover);
+    border-left: 1px solid var(--te-border);
+}
+
+.area-footer {
+    background: linear-gradient(135deg, #1a1a27 0%, #252531 100%);
+    color: var(--te-text-secondary);
+}
+
+.area-footer .area-label {
+    color: var(--te-text-secondary);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+/* 部件项（在预览区中） */
+.preview-widget-item {
+    position: relative;
+    padding: 15px;
+    background: var(--te-bg-active);
+    border: 1px solid var(--te-border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preview-widget-item:hover {
+    border-color: var(--te-accent);
+    box-shadow: 0 4px 12px rgba(54, 153, 255, 0.2);
+}
+
+.preview-widget-item.selected {
+    border-color: var(--te-accent);
+    box-shadow: 0 0 0 3px rgba(54, 153, 255, 0.3);
+}
+
+.preview-widget-item .widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.preview-widget-item .widget-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--te-text-primary);
+}
+
+.preview-widget-item .widget-actions {
+    display: none;
+    gap: 5px;
+}
+
+.preview-widget-item:hover .widget-actions {
+    display: flex;
+}
+
+.preview-widget-item .widget-actions button {
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+.preview-widget-item .widget-preview {
+    font-size: 12px;
+    color: var(--te-text-secondary);
+    background: var(--te-bg-card);
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--te-border);
+}
+
+/* 部件面板（右侧） */
+.editor-widget-panel {
+    width: 280px;
+    background: var(--te-bg-card);
+    border-left: 1px solid var(--te-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.panel-search {
+    margin-top: 10px;
+}
+
+.panel-search .form-control {
+    background-color: var(--te-input-bg);
+    border-color: var(--te-border);
+    color: var(--te-text-primary);
+}
+
+.panel-search .form-control::placeholder {
+    color: var(--te-text-muted);
+}
+
+.panel-search .form-control:focus {
+    border-color: var(--te-accent);
+    box-shadow: 0 0 0 0.2rem rgba(54, 153, 255, 0.25);
+}
+
+/* 部件列表 */
+.widget-list {
+    padding: 10px;
+}
+
+.widget-group {
+    margin-bottom: 10px;
+}
+
+.widget-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--te-bg-hover);
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--te-text-primary);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.widget-group-header:hover {
+    background: var(--te-bg-active);
+    border-color: var(--te-border);
+}
+
+.widget-group-header .toggle-icon {
+    transition: transform 0.3s;
+    color: var(--te-text-secondary);
+}
+
+.widget-group.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.widget-group.collapsed .widget-group-content {
+    display: none;
+}
+
+.widget-count {
+    margin-left: auto;
+    background: var(--te-accent);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.widget-group-content {
+    padding: 5px 0;
+}
+
+/* 可拖拽部件项 */
+.widget-item.draggable {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+    margin: 5px 0;
+    background: var(--te-bg-hover);
+    border: 1px solid var(--te-border);
+    border-radius: 6px;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+.widget-item.draggable:hover {
+    border-color: var(--te-accent);
+    background: var(--te-bg-active);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.widget-item.draggable:active {
+    cursor: grabbing;
+}
+
+.widget-item.draggable.dragging {
+    opacity: 0.5;
+}
+
+.widget-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--te-accent), #0d6efd);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.widget-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.widget-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--te-text-primary);
+    margin-bottom: 2px;
+}
+
+.widget-desc {
+    font-size: 11px;
+    color: var(--te-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 配置表单 */
+.config-form {
+    padding: 10px 0;
+}
+
+.config-form .form-group {
+    margin-bottom: 15px;
+}
+
+.config-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: var(--te-text-primary);
+}
+
+.config-form .form-control {
+    font-size: 13px;
+    background-color: var(--te-input-bg);
+    border-color: var(--te-border);
+    color: var(--te-text-primary);
+}
+
+.config-form .form-control:focus {
+    border-color: var(--te-accent);
+    box-shadow: 0 0 0 0.2rem rgba(54, 153, 255, 0.25);
+}
+
+.config-form .form-text {
+    font-size: 11px;
+    color: var(--te-text-muted);
+    margin-top: 3px;
+}
+
+.config-widget-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--te-border);
+    margin-bottom: 15px;
+}
+
+.config-widget-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--te-accent), #0d6efd);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+}
+
+.config-widget-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--te-text-primary);
+}
+
+.config-widget-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--te-text-secondary);
+}
+
+/* 按钮样式调整 */
+.theme-editor-container .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.theme-editor-container .btn-primary {
+    background-color: var(--te-accent);
+    border-color: var(--te-accent);
+}
+
+.theme-editor-container .btn-primary:hover {
+    background-color: var(--te-accent-hover);
+    border-color: var(--te-accent-hover);
+}
+
+.theme-editor-container .btn-outline-primary {
+    color: var(--te-accent);
+    border-color: var(--te-accent);
+}
+
+.theme-editor-container .btn-outline-primary:hover {
+    background-color: var(--te-accent);
+    color: #fff;
+}
+
+.theme-editor-container .btn-outline-secondary {
+    color: var(--te-text-secondary);
+    border-color: var(--te-border-light);
+}
+
+.theme-editor-container .btn-outline-secondary:hover {
+    background-color: var(--te-bg-active);
+    color: var(--te-text-primary);
+    border-color: var(--te-text-secondary);
+}
+
+.theme-editor-container .btn-outline-danger {
+    color: var(--te-danger);
+    border-color: var(--te-danger);
+}
+
+.theme-editor-container .btn-outline-danger:hover {
+    background-color: var(--te-danger);
+    color: #fff;
+}
+
+/* 滚动条样式 */
+.theme-editor-container ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.theme-editor-container ::-webkit-scrollbar-track {
+    background: var(--te-bg-dark);
+}
+
+.theme-editor-container ::-webkit-scrollbar-thumb {
+    background: var(--te-border-light);
+    border-radius: 3px;
+}
+
+.theme-editor-container ::-webkit-scrollbar-thumb:hover {
+    background: var(--te-text-muted);
+}
+
+/* 模态框暗色主题样式 */
+.theme-modal-dark {
+    background: var(--te-bg-card);
+    border: 1px solid var(--te-border);
+    color: var(--te-text-primary);
+}
+
+.theme-modal-dark .modal-header {
+    background: var(--te-bg-active);
+    border-bottom: 1px solid var(--te-border);
+    padding: 15px 20px;
+}
+
+.theme-modal-dark .modal-title {
+    color: var(--te-text-primary);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.theme-modal-dark .modal-title i {
+    color: var(--te-accent);
+}
+
+.theme-modal-dark .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.theme-modal-dark .modal-body {
+    background: var(--te-bg-card);
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.theme-modal-dark .modal-footer {
+    background: var(--te-bg-active);
+    border-top: 1px solid var(--te-border);
+    padding: 15px 20px;
+}
+
+/* Bootstrap Modal 背景遮罩 */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.modal-backdrop.show {
+    opacity: 0.8;
+}
+
+/* 模态框内表单控件暗色主题 */
+.theme-modal-dark .form-control,
+.theme-modal-dark .form-select {
+    background-color: var(--te-input-bg);
+    border-color: var(--te-border);
+    color: var(--te-text-primary);
+}
+
+.theme-modal-dark .form-control:focus,
+.theme-modal-dark .form-select:focus {
+    background-color: var(--te-input-bg);
+    border-color: var(--te-accent);
+    color: var(--te-text-primary);
+    box-shadow: 0 0 0 0.2rem rgba(54, 153, 255, 0.25);
+}
+
+.theme-modal-dark .form-control::placeholder {
+    color: var(--te-text-muted);
+}
+
+.theme-modal-dark .form-check-input {
+    background-color: var(--te-input-bg);
+    border-color: var(--te-border);
+}
+
+.theme-modal-dark .form-check-input:checked {
+    background-color: var(--te-accent);
+    border-color: var(--te-accent);
+}
+
+/* 模态框内的实时预览区域 */
+.config-preview-area {
+    margin-bottom: 20px;
+}
+
+.widget-preview-box {
+    background: #fff;
+    border: 1px solid var(--te-border);
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 100px;
+    max-height: 300px;
+    overflow: auto;
+}
+
+.widget-preview-box .preview-loading,
+.widget-preview-box .preview-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    color: var(--te-text-muted);
+    gap: 8px;
+}
+
+.widget-preview-box .preview-error {
+    color: #dc3545;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 高亮可接受的部件 */
+.widget-item.highlighted {
+    animation: highlight-pulse 0.5s ease-in-out infinite alternate;
+    box-shadow: 0 0 10px var(--te-success);
+}
+
+@keyframes highlight-pulse {
+    from {
+        box-shadow: 0 0 5px var(--te-success);
+        border-color: var(--te-success);
+    }
+    to {
+        box-shadow: 0 0 15px var(--te-success);
+        border-color: var(--te-success);
+    }
+}
+
+.theme-modal-dark .form-check-label {
+    color: var(--te-text-primary);
+}
+
+.theme-modal-dark .form-label {
+    color: var(--te-text-primary);
+    font-weight: 500;
+}
+
+.theme-modal-dark .form-text {
+    color: var(--te-text-muted);
+}
+
+.theme-modal-dark .text-muted {
+    color: var(--te-text-muted) !important;
+}
+</style>
+
+<script src="@static(Weline_Theme::js/theme-editor.js)"></script>

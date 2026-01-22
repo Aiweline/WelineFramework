@@ -1,0 +1,156 @@
+<?php
+/**
+ * 最近浏览部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('最近浏览');
+$limit = (int)($this->getData('limit') ?? 6);
+$columns = $this->getData('columns') ?? '6';
+$layout = $this->getData('layout') ?? 'carousel';
+$showPrice = (bool)($this->getData('show_price') ?? true);
+
+// 示例产品数据（实际应从Cookie/Session获取）
+$products = [];
+for ($i = 1; $i <= $limit; $i++) {
+    $products[] = [
+        'id' => $i,
+        'name' => __('浏览过的产品 %d', $i),
+        'url' => '/product/viewed-' . $i,
+        'image' => '/images/products/viewed-' . $i . '.jpg',
+        'price' => rand(50, 400),
+    ];
+}
+
+$widgetId = 'recently-viewed-' . uniqid();
+
+// 如果没有浏览记录，不显示
+if (empty($products)) {
+    return;
+}
+?>
+
+<div class="widget-recently-viewed widget-products" id="<?= $widgetId ?>">
+    <div class="widget-header">
+        <h2 class="widget-title">
+            <i class="ri-history-line"></i>
+            <?= htmlspecialchars($title) ?>
+        </h2>
+    </div>
+    
+    <div class="products-container layout-<?= htmlspecialchars($layout) ?>">
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-prev" type="button">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+        <?php endif; ?>
+        
+        <div class="products-wrapper">
+            <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
+                <?php foreach ($products as $product): ?>
+                    <div class="product-card compact-card">
+                        <a href="<?= htmlspecialchars($product['url']) ?>" class="card-link">
+                            <div class="product-image-wrapper">
+                                <img src="<?= htmlspecialchars($product['image']) ?>" 
+                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                                     class="product-image"
+                                     loading="lazy">
+                            </div>
+                            
+                            <div class="product-info">
+                                <h3 class="product-name"><?= htmlspecialchars($product['name']) ?></h3>
+                                <?php if ($showPrice): ?>
+                                    <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </a>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        
+        <?php if ($layout === 'carousel'): ?>
+            <button class="carousel-arrow carousel-next" type="button">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.widget-recently-viewed {
+    background: #f8f9fa;
+    padding: 30px 0;
+}
+
+.widget-recently-viewed .widget-header {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.widget-recently-viewed .widget-title {
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-recently-viewed .widget-title i {
+    color: #666;
+}
+
+/* 紧凑卡片样式 */
+.widget-recently-viewed .compact-card {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.widget-recently-viewed .compact-card:hover {
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.widget-recently-viewed .card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.widget-recently-viewed .product-image-wrapper {
+    position: relative;
+    padding-top: 100%;
+}
+
+.widget-recently-viewed .product-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.widget-recently-viewed .product-info {
+    padding: 10px;
+    text-align: center;
+}
+
+.widget-recently-viewed .product-name {
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0 0 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+}
+
+.widget-recently-viewed .price-current {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--danger-color, #dc3545);
+}
+</style>

@@ -71,7 +71,7 @@ class DbManager
             try {
                 $this->configProvider = new ConfigProvider();
             } catch (\Throwable $e) {
-                throw new \Exception(__('数据库配置提供者无法初始化：%1', $e->getMessage()));
+                throw new \Exception(__('数据库配置提供者无法初始化：%{1}', [$e->getMessage()]));
             }
         }
         // 重置连接，因为连接对象可能无法正确序列化
@@ -147,7 +147,7 @@ class DbManager
                 $targetConfigProvider = new ConfigProvider();
                 $this->configProvider = $targetConfigProvider;
             } catch (\Throwable $e) {
-                throw new LinkException(__('数据库配置提供者无法初始化：%1', $e->getMessage()));
+                throw new LinkException(__('数据库配置提供者无法初始化：%{1}', [$e->getMessage()]));
             }
         }
         

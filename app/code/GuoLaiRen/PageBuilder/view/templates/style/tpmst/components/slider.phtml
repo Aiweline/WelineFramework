@@ -1,0 +1,413 @@
+<?php
+/**
+ * TPMST 组件 - 轮播区域 (Slider)
+ * 首屏轮播Banner，支持多图轮播和自动播放
+ * 
+ * @component_start
+ * name => 轮播区域
+ * name_en => Banner Slider
+ * description => 首屏轮播Banner，支持多图轮播、自动播放和响应式图片
+ * category => content
+ * type => section
+ * thumbnail => asset/img/banner-03.webp
+ * sort_order => 10
+ * compatible_styles => *
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:slider => 轮播区域设置
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.items => 轮播项配置:json:[]|JSON格式，支持配置多个轮播项
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 自动播放间隔:number:5000|毫秒
+ * slider.bg_color => 背景颜色:color:#0c0060
+ * slider.banner_image_mobile => 默认移动端Banner图片:textarea:|默认使用本地banner-2.jpg
+ * slider.banner_image_desktop => 默认PC端Banner图片:textarea:|默认使用本地banner-03.webp
+ * slider.download_btn_image => 默认下载按钮图片:textarea:|默认使用本地download-btn-m.webp
+ * 
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $componentConfig 组件配置（由可视化构建器传入）
+ * @var array $colors 颜色配置
+ */
+
+// 获取配置：优先使用组件配置，其次使用页面样式配置
+$componentConfig = $this->getData('component_config') ?? [];
+$styleSettings = $componentConfig ?: ($this->getData('style') ?: $this->getData('style_settings') ?: []);
+$colors = $this->getData('colors') ?? [];
+$page = $this->getData('page');
+
+// 辅助函数
+if (!function_exists('tpmst_slider_getConfig')) {
+    function tpmst_slider_getConfig($settings, $key, $default = '') {
+        $value = $settings[$key] ?? $default;
+        if ($value === '' && $default !== '') {
+            return $default;
+        }
+        return $value;
+    }
+}
+
+if (!function_exists('tpmst_slider_color')) {
+    function tpmst_slider_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+// 轮播配置
+$sliderDisplayRaw = tpmst_slider_getConfig($styleSettings, 'slider.display', 'yes');
+$sliderDisplay = in_array($sliderDisplayRaw, ['yes', true, 'true', 1, '1'], true);
+
+// 如果不显示，直接返回
+if (!$sliderDisplay) {
+    return;
+}
+
+$sliderItemsJson = tpmst_slider_getConfig($styleSettings, 'slider.items', '[]');
+$sliderItems = json_decode($sliderItemsJson, true) ?: [];
+
+$sliderAutoplayRaw = tpmst_slider_getConfig($styleSettings, 'slider.autoplay', 'yes');
+$sliderAutoplay = in_array($sliderAutoplayRaw, ['yes', true, 'true', 0, '0'], true);
+
+$sliderAutoplayInterval = (int)tpmst_slider_getConfig($styleSettings, 'slider.autoplay_interval', '5000');
+$sliderBgColor = tpmst_slider_color($colors, 'slider_bg', tpmst_slider_getConfig($styleSettings, 'slider.bg_color', '#0c0060'));
+$sliderBgGradientEnd = tpmst_slider_color($colors, 'slider_bg_gradient_end', '#1d1850');
+
+// 默认轮播图片
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/download-btn-m.webp');
+
+// 读取配置的轮播图片
+$getSliderImage = function($key) use ($styleSettings) {
+    if (array_key_exists($key, $styleSettings)) {
+        $value = trim((string)$styleSettings[$key]);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return null;
+};
+
+$configBannerMobile = $getSliderImage('slider.banner_image_mobile');
+$configBannerDesktop = $getSliderImage('slider.banner_image_desktop');
+$configDownloadBtn = $getSliderImage('slider.download_btn_image');
+
+// 如果没有配置轮播项，使用默认
+if (empty($sliderItems)) {
+    $sliderItems = [[
+        'banner_mobile' => $configBannerMobile ?: $defaultBannerMobile,
+        'banner_desktop' => $configBannerDesktop ?: $defaultBannerDesktop,
+        'download_btn' => $configDownloadBtn ?: $defaultDownloadBtn,
+        'banner_alt' => '100000 earn on teenpatti master',
+        'download_btn_alt' => 'DOWNLOAD APP'
+    ]];
+}
+
+// 处理轮播项，确保所有字段都有值
+foreach ($sliderItems as &$item) {
+    if (empty($item['banner_mobile'])) {
+        $item['banner_mobile'] = $configBannerMobile ?: $defaultBannerMobile;
+    }
+    if (empty($item['banner_desktop'])) {
+        $item['banner_desktop'] = $configBannerDesktop ?: $defaultBannerDesktop;
+    }
+    if (empty($item['download_btn'])) {
+        $item['download_btn'] = $configDownloadBtn ?: $defaultDownloadBtn;
+    }
+    if (empty($item['banner_alt'])) {
+        $item['banner_alt'] = '100000 earn on teenpatti master';
+    }
+    if (empty($item['download_btn_alt'])) {
+        $item['download_btn_alt'] = 'DOWNLOAD APP';
+    }
+}
+unset($item);
+
+// 生成唯一ID（用于多实例）
+$componentId = 'tpmst-slider-' . uniqid();
+?>
+
+<!-- TPMST 组件: 轮播区域 -->
+<div class="tpmst-component tpmst-component-slider rs-slider slider-style2 md-mt--75" id="<?= $componentId ?>">
+    <div class="slider slider-slide-1">
+        <?php foreach ($sliderItems as $index => $sliderItem): ?>
+        <div class="slider-item<?= $index === 0 ? ' active' : '' ?>" data-slide-index="<?= $index ?>">
+            <div class="container">
+                <div class="slider-inner ml--12 mr--12 justify-content-center">
+                    <div class="slide-bg-layer text-center">
+                        <picture>
+                            <?php 
+                            $bannerMobileFinal = !empty($sliderItem['banner_mobile']) ? $sliderItem['banner_mobile'] : $defaultBannerMobile;
+                            $bannerDesktopFinal = !empty($sliderItem['banner_desktop']) ? $sliderItem['banner_desktop'] : $defaultBannerDesktop;
+                            $finalImgSrc = $bannerMobileFinal ?: $bannerDesktopFinal ?: $defaultBannerMobile;
+                            ?>
+                            <?php if (!empty($bannerMobileFinal)): ?>
+                            <source media="(max-width: 768px)" type="image/jpg" srcset="<?= htmlspecialchars($bannerMobileFinal) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($bannerDesktopFinal)): ?>
+                            <source media="(min-width: 769px)" type="image/webp" srcset="<?= htmlspecialchars($bannerDesktopFinal) ?>">
+                            <?php endif; ?>
+                            <img class="slide-img mt--90 md-mt-0" 
+                                 width="375" 
+                                 height="500" 
+                                 src="<?= htmlspecialchars($finalImgSrc) ?>" 
+                                 alt="<?= htmlspecialchars($sliderItem['banner_alt']) ?>" 
+                                 fetchpriority="high" 
+                                 decoding="async">
+                        </picture>
+                    </div>
+                    <?php if (!empty($sliderItem['download_btn'])): ?>
+                    <p class="download-btn">
+                        <picture>
+                            <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
+                            <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
+                            <img class="download-icon animation-scale" 
+                                 src="<?= htmlspecialchars($sliderItem['download_btn']) ?>" 
+                                 fetchpriority="high" 
+                                 decoding="async" 
+                                 width="210" 
+                                 height="54" 
+                                 alt="<?= htmlspecialchars($sliderItem['download_btn_alt']) ?>">
+                        </picture>
+                    </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    
+    <?php if (count($sliderItems) > 1): ?>
+    <!-- 轮播导航箭头 -->
+    <button class="rs-slider-arrow prev" data-slider="<?= $componentId ?>" onclick="tpmstSliderPrev('<?= $componentId ?>')">‹</button>
+    <button class="rs-slider-arrow next" data-slider="<?= $componentId ?>" onclick="tpmstSliderNext('<?= $componentId ?>')">›</button>
+    
+    <!-- 轮播导航点 -->
+    <div class="rs-slider-nav">
+        <?php foreach ($sliderItems as $index => $sliderItem): ?>
+        <span class="rs-slider-nav-dot<?= $index === 0 ? ' active' : '' ?>" 
+              onclick="tpmstSliderGoTo('<?= $componentId ?>', <?= $index ?>)"></span>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+
+<style>
+/* 轮播组件样式 */
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, <?= htmlspecialchars($sliderBgColor) ?> 0%, <?= htmlspecialchars($sliderBgGradientEnd) ?> 100%);
+}
+
+#<?= $componentId ?> .slider {
+    position: relative;
+}
+
+#<?= $componentId ?> .slider-item {
+    display: none;
+    position: relative;
+}
+
+#<?= $componentId ?> .slider-item.active {
+    display: block;
+}
+
+#<?= $componentId ?> .slider-inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+    max-height: none !important;
+    height: auto !important;
+    margin-left: -12px;
+    margin-right: -12px;
+}
+
+#<?= $componentId ?> .slide-bg-layer {
+    text-align: center;
+    width: 100%;
+}
+
+#<?= $componentId ?> .slide-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin-top: -90px;
+}
+
+#<?= $componentId ?> .download-btn {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: pointer;
+    margin: 0;
+    z-index: 10;
+}
+
+#<?= $componentId ?> .download-icon {
+    animation: zoomBtn 2s infinite;
+}
+
+@keyframes zoomBtn {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+#<?= $componentId ?> .rs-slider-nav {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+
+#<?= $componentId ?> .rs-slider-nav-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#<?= $componentId ?> .rs-slider-nav-dot.active {
+    background: #ffd700;
+    width: 30px;
+    border-radius: 6px;
+}
+
+#<?= $componentId ?> .rs-slider-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+#<?= $componentId ?> .rs-slider-arrow:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+#<?= $componentId ?> .rs-slider-arrow.prev {
+    left: 20px;
+}
+
+#<?= $componentId ?> .rs-slider-arrow.next {
+    right: 20px;
+}
+
+@media (max-width: 991px) {
+    #<?= $componentId ?> {
+        margin-top: -75px;
+    }
+    
+    #<?= $componentId ?> .slide-img {
+        margin-top: 0;
+        min-width: 100vw !important;
+    }
+    
+    #<?= $componentId ?> .rs-slider-arrow {
+        display: none;
+    }
+}
+</style>
+
+<script>
+// 轮播功能（支持多实例）
+(function() {
+    const sliderId = '<?= $componentId ?>';
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+    
+    const items = slider.querySelectorAll('.slider-item');
+    const dots = slider.querySelectorAll('.rs-slider-nav-dot');
+    let currentIndex = 0;
+    let autoplayTimer = null;
+    
+    const autoplayEnabled = <?= $sliderAutoplay ? 'true' : 'false' ?>;
+    const autoplayInterval = <?= $sliderAutoplayInterval ?>;
+    
+    function showSlide(index) {
+        items.forEach((item, i) => {
+            item.classList.toggle('active', i === index);
+        });
+        dots.forEach((dot, i) => {
+            dot.classList.toggle('active', i === index);
+        });
+        currentIndex = index;
+    }
+    
+    function nextSlide() {
+        showSlide((currentIndex + 1) % items.length);
+    }
+    
+    function prevSlide() {
+        showSlide((currentIndex - 1 + items.length) % items.length);
+    }
+    
+    function goToSlide(index) {
+        if (index >= 0 && index < items.length) {
+            showSlide(index);
+        }
+    }
+    
+    function startAutoplay() {
+        if (autoplayEnabled && items.length > 1) {
+            stopAutoplay();
+            autoplayTimer = setInterval(nextSlide, autoplayInterval);
+        }
+    }
+    
+    function stopAutoplay() {
+        if (autoplayTimer) {
+            clearInterval(autoplayTimer);
+            autoplayTimer = null;
+        }
+    }
+    
+    slider.addEventListener('mouseenter', stopAutoplay);
+    slider.addEventListener('mouseleave', startAutoplay);
+    
+    // 注册全局函数
+    window.tpmstSliderInstances = window.tpmstSliderInstances || {};
+    window.tpmstSliderInstances[sliderId] = { next: nextSlide, prev: prevSlide, goTo: goToSlide };
+    
+    // 全局控制函数
+    window.tpmstSliderNext = function(id) {
+        if (window.tpmstSliderInstances[id]) {
+            window.tpmstSliderInstances[id].next();
+        }
+    };
+    window.tpmstSliderPrev = function(id) {
+        if (window.tpmstSliderInstances[id]) {
+            window.tpmstSliderInstances[id].prev();
+        }
+    };
+    window.tpmstSliderGoTo = function(id, index) {
+        if (window.tpmstSliderInstances[id]) {
+            window.tpmstSliderInstances[id].goTo(index);
+        }
+    };
+    
+    startAutoplay();
+})();
+</script>

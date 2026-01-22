@@ -1,0 +1,324 @@
+<?php
+/**
+ * 交叉销售部件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$title = $this->getData('title') ?? __('经常一起购买');
+$limit = (int)($this->getData('limit') ?? 4);
+$showAddAllButton = (bool)($this->getData('show_add_all_button') ?? true);
+$showTotalPrice = (bool)($this->getData('show_total_price') ?? true);
+
+// 示例产品数据
+$products = [];
+$totalPrice = 0;
+for ($i = 1; $i <= $limit; $i++) {
+    $price = rand(50, 300);
+    $totalPrice += $price;
+    $products[] = [
+        'id' => $i,
+        'name' => __('搭配产品 %d', $i),
+        'url' => '/product/cross-' . $i,
+        'image' => '/images/products/cross-' . $i . '.jpg',
+        'price' => $price,
+        'selected' => true,
+    ];
+}
+
+$widgetId = 'cross-sell-' . uniqid();
+?>
+
+<div class="widget-cross-sell" id="<?= $widgetId ?>">
+    <h3 class="widget-title">
+        <i class="ri-links-line"></i>
+        <?= htmlspecialchars($title) ?>
+    </h3>
+    
+    <div class="cross-sell-container">
+        <div class="cross-sell-products">
+            <?php foreach ($products as $index => $product): ?>
+                <?php if ($index > 0): ?>
+                    <span class="plus-sign">+</span>
+                <?php endif; ?>
+                
+                <div class="cross-product" data-product-id="<?= $product['id'] ?>">
+                    <div class="product-checkbox">
+                        <input type="checkbox" 
+                               id="cross-product-<?= $product['id'] ?>" 
+                               class="cross-checkbox"
+                               data-price="<?= $product['price'] ?>"
+                               <?= $product['selected'] ? 'checked' : '' ?>>
+                        <label for="cross-product-<?= $product['id'] ?>"></label>
+                    </div>
+                    
+                    <a href="<?= htmlspecialchars($product['url']) ?>" class="product-link">
+                        <img src="<?= htmlspecialchars($product['image']) ?>" 
+                             alt="<?= htmlspecialchars($product['name']) ?>"
+                             class="product-image">
+                    </a>
+                    
+                    <div class="product-info">
+                        <h4 class="product-name">
+                            <a href="<?= htmlspecialchars($product['url']) ?>">
+                                <?= htmlspecialchars($product['name']) ?>
+                            </a>
+                        </h4>
+                        <span class="product-price">¥<?= number_format($product['price'], 2) ?></span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <div class="cross-sell-summary">
+            <?php if ($showTotalPrice): ?>
+                <div class="total-price">
+                    <span class="label"><?= __('总价') ?>:</span>
+                    <span class="value" data-original-total="<?= $totalPrice ?>">¥<?= number_format($totalPrice, 2) ?></span>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($showAddAllButton): ?>
+                <button class="btn-add-all" type="button">
+                    <i class="ri-shopping-cart-2-line"></i>
+                    <?= __('全部加入购物车') ?>
+                </button>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.widget-cross-sell {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    margin: 20px 0;
+}
+
+.widget-cross-sell .widget-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.widget-cross-sell .widget-title i {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-cross-sell .cross-sell-container {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.widget-cross-sell .cross-sell-products {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.widget-cross-sell .plus-sign {
+    font-size: 24px;
+    font-weight: 300;
+    color: #999;
+}
+
+.widget-cross-sell .cross-product {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 15px;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+}
+
+.widget-cross-sell .cross-product:has(.cross-checkbox:checked) {
+    border-color: var(--primary-color, #007bff);
+}
+
+.widget-cross-sell .product-checkbox {
+    position: relative;
+}
+
+.widget-cross-sell .cross-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--primary-color, #007bff);
+}
+
+.widget-cross-sell .product-link {
+    display: block;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.widget-cross-sell .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.widget-cross-sell .product-info {
+    flex: 1;
+    min-width: 100px;
+}
+
+.widget-cross-sell .product-name {
+    margin: 0 0 5px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.widget-cross-sell .product-name a {
+    color: var(--text-color, #333);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.widget-cross-sell .product-name a:hover {
+    color: var(--primary-color, #007bff);
+}
+
+.widget-cross-sell .product-price {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--danger-color, #dc3545);
+}
+
+/* 汇总区域 */
+.widget-cross-sell .cross-sell-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 10px;
+    min-width: 200px;
+}
+
+.widget-cross-sell .total-price {
+    text-align: center;
+}
+
+.widget-cross-sell .total-price .label {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.widget-cross-sell .total-price .value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--danger-color, #dc3545);
+}
+
+.widget-cross-sell .btn-add-all {
+    width: 100%;
+    padding: 12px 24px;
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.widget-cross-sell .btn-add-all:hover {
+    background: var(--primary-dark, #0056b3);
+}
+
+@media (max-width: 768px) {
+    .widget-cross-sell .cross-sell-container {
+        flex-direction: column;
+    }
+    
+    .widget-cross-sell .cross-sell-products {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .widget-cross-sell .cross-sell-summary {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const widget = document.getElementById('<?= $widgetId ?>');
+    if (!widget) return;
+    
+    const checkboxes = widget.querySelectorAll('.cross-checkbox');
+    const totalEl = widget.querySelector('.total-price .value');
+    
+    function updateTotal() {
+        if (!totalEl) return;
+        
+        let total = 0;
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) {
+                total += parseFloat(cb.dataset.price);
+            }
+        });
+        
+        totalEl.textContent = '¥' + total.toFixed(2);
+    }
+    
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateTotal);
+    });
+    
+    // 全部加入购物车
+    const addAllBtn = widget.querySelector('.btn-add-all');
+    if (addAllBtn) {
+        addAllBtn.addEventListener('click', function() {
+            const selectedIds = [];
+            checkboxes.forEach(function(cb) {
+                if (cb.checked) {
+                    const product = cb.closest('.cross-product');
+                    selectedIds.push(product.dataset.productId);
+                }
+            });
+            
+            if (selectedIds.length === 0) {
+                alert('<?= __('请至少选择一个商品') ?>');
+                return;
+            }
+            
+            console.log('Add to cart:', selectedIds);
+            
+            // 显示成功状态
+            this.innerHTML = '<i class="ri-check-line"></i> <?= __('已添加') ?>';
+            this.style.background = 'var(--success-color, #28a745)';
+            
+            setTimeout(() => {
+                this.innerHTML = '<i class="ri-shopping-cart-2-line"></i> <?= __('全部加入购物车') ?>';
+                this.style.background = '';
+            }, 2000);
+        });
+    }
+})();
+</script>
