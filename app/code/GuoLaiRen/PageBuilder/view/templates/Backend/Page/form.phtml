@@ -630,8 +630,33 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <?php foreach ($relatedPages as $relPage): ?>
                         <?php
                         $isCurrentPage = $relPage->getId() === $page->getId();
-                        $pageUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . ltrim($relPage->getData('handle'), '/');
                         $isPublished = $relPage->getData('status') == 1;
+                        
+                        // 获取页面关联站点的URL
+                        $relPageWebsiteId = (int)($relPage->getData('website_id') ?? 0);
+                        $relPageWebsiteUrl = '';
+                        if ($relPageWebsiteId > 0) {
+                            try {
+                                $relWebsiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                                $relWebsite = clone $relWebsiteModel;
+                                $relWebsite->load($relPageWebsiteId);
+                                if ($relWebsite->getId()) {
+                                    $relPageWebsiteUrl = $relWebsite->getData(\Weline\Websites\Model\Website::fields_URL);
+                                }
+                            } catch (\Exception $e) {
+                                // 忽略错误
+                            }
+                        }
+                        $relPageBaseUrl = $relPageWebsiteUrl ? rtrim($relPageWebsiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                        $relPageHandle = $relPage->getData('handle') ?? '';
+                        $relPageIsHome = ($relPage->getData('type') ?? '') === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME;
+                        
+                        // 首页类型且没有handle时，直接使用网站地址
+                        if ($relPageIsHome && empty($relPageHandle)) {
+                            $pageUrl = $relPageBaseUrl;
+                        } else {
+                            $pageUrl = $relPageBaseUrl . '/' . ltrim($relPageHandle, '/');
+                        }
                         ?>
                         <div class="list-group-item <?= $isCurrentPage ? 'bg-light border-primary' : '' ?>">
                             <div class="d-flex align-items-start">
