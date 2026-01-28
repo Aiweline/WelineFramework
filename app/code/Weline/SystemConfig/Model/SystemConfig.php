@@ -32,10 +32,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public const area_BACKEND = 'backend';
     public const area_FRONTEND = 'frontend';
 
-    public string $_primary_key = self::fields_KEY;
     public array $_index_sort_keys = ['key', 'module'];
     public array $_unit_primary_keys = ['key', 'module'];
-    public array $_unit_unique_fields = ['key', 'module', 'area'];
 
     static $configs = [];
 
@@ -123,45 +121,44 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            // 清理模型状态，避免前一次操作影响当前操作
-            $this->clear()->reset();
+            // 使用原生 PDO 查询避免框架 ORM 的复杂逻辑
+            $connection = $this->getConnection();
+            $tableName = $this->getTable();
             
-            // 先查询是否存在（使用完整的唯一条件）
-            $existing = $this->getQuery()
-                ->where(self::fields_KEY, $key)
-                ->where(self::fields_MODULE, $module)
-                ->where(self::fields_AREA, $area)
-                ->find()
-                ->fetch();
+            // 先查询是否存在
+            $sql = "SELECT \"key\" FROM \"{$tableName}\" WHERE \"key\" = :key AND \"module\" = :module AND \"area\" = :area LIMIT 1";
+            $stmt = $connection->getConnector()->query($sql, [
+                'key' => $key,
+                'module' => $module,
+                'area' => $area
+            ]);
+            $existing = $stmt->fetch();
             
-            // 清理查询状态
-            $this->clearQuery();
-            
-            if ($existing && isset($existing[self::fields_KEY])) {
+            if ($existing) {
                 // 存在则更新
-                $this->getQuery()
-                    ->where(self::fields_KEY, $key)
-                    ->where(self::fields_MODULE, $module)
-                    ->where(self::fields_AREA, $area)
-                    ->update([self::fields_VALUE => $value])
-                    ->fetch();
+                $updateSql = "UPDATE \"{$tableName}\" SET \"v\" = :value WHERE \"key\" = :key AND \"module\" = :module AND \"area\" = :area";
+                $connection->getConnector()->query($updateSql, [
+                    'value' => $value,
+                    'key' => $key,
+                    'module' => $module,
+                    'area' => $area
+                ]);
             } else {
                 // 不存在则插入
-                $this->getQuery()
-                    ->insert([
-                        self::fields_KEY => $key,
-                        self::fields_VALUE => $value,
-                        self::fields_MODULE => $module,
-                        self::fields_AREA => $area
-                    ])
-                    ->fetch();
+                $insertSql = "INSERT INTO \"{$tableName}\" (\"key\", \"v\", \"module\", \"area\") VALUES (:key, :value, :module, :area)";
+                $connection->getConnector()->query($insertSql, [
+                    'key' => $key,
+                    'value' => $value,
+                    'module' => $module,
+                    'area' => $area
+                ]);
             }
             
             # 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);
             return true;
-        } catch (\ReflectionException|Core $e) {
+        } catch (\Exception $e) {
             throw new Exception($e->getMessage());
         }
     }
