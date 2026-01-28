@@ -98,6 +98,23 @@ class Website extends Model
     }
 
     /**
+     * 保存前处理URL
+     * 自动添加协议前缀：如果URL不以 http:// 或 https:// 开头，自动添加 http://
+     */
+    public function save_before(): void
+    {
+        parent::save_before();
+        
+        $url = $this->getData(self::fields_URL);
+        if (!empty($url) && is_string($url)) {
+            $url = trim($url);
+            if (!preg_match('/^https?:\/\//i', $url)) {
+                $this->setData(self::fields_URL, 'http://' . $url);
+            }
+        }
+    }
+
+    /**
      * 保存后清除网站缓存
      * 当网站数据更新时，清除缓存的网站列表，确保下次请求时重新加载最新数据
      */
@@ -148,6 +165,11 @@ class Website extends Model
 
     public function setUrl(string $url): self
     {
+        // 自动添加协议前缀：如果URL不以 http:// 或 https:// 开头，自动添加 http://
+        $url = trim($url);
+        if (!empty($url) && !preg_match('/^https?:\/\//i', $url)) {
+            $url = 'http://' . $url;
+        }
         $this->setData(self::fields_URL, $url);
         return $this;
     }
