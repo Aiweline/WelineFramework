@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-01-22T23:41:12+08:00",
+    "generated_at": "2026-01-27T22:42:04+08:00",
     "modules": {
         "Weline_Framework": {
             "name": "Weline_Framework",
@@ -190,7 +190,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme",
             "test_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/Theme//test/e2e",
             "status": true,
-            "version": "1.0.2",
+            "version": "1.0.4",
             "has_tests": true
         },
         "Weline_ThemeFancy": {
@@ -206,7 +206,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Weline/UrlManager",
             "test_path": null,
             "status": true,
-            "version": "1.0.1",
+            "version": "1.0.2",
             "has_tests": false
         },
         "Weline_WarmCache": {
@@ -406,7 +406,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/WeShop/Product",
             "test_path": null,
             "status": true,
-            "version": "1.0.0",
+            "version": "1.0.1",
             "has_tests": false
         },
         "Weline_TwoFactorAuth": {
@@ -662,7 +662,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Aiweline/Stock",
             "test_path": null,
             "status": true,
-            "version": "1.1.0",
+            "version": "1.2.0",
             "has_tests": false
         },
         "WeShop_Address": {
@@ -990,7 +990,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder",
             "test_path": null,
             "status": true,
-            "version": "1.0.15",
+            "version": "1.0.21",
             "has_tests": false
         },
         "GuoLaiRen_Blog": {
@@ -998,7 +998,7 @@
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/Blog",
             "test_path": null,
             "status": true,
-            "version": "1.0.0",
+            "version": "1.0.1",
             "has_tests": false
         },
         "Weline_Bt_Center": {
@@ -1012,6 +1012,14 @@
         "Aws_Domains": {
             "name": "Aws_Domains",
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/Aws/Domains",
+            "test_path": null,
+            "status": true,
+            "version": "1.0.0",
+            "has_tests": false
+        },
+        "WeShop_Filters": {
+            "name": "WeShop_Filters",
+            "base_path": "E:/WelineFramework/DEV-workspace/app/code/WeShop/Filters",
             "test_path": null,
             "status": true,
             "version": "1.0.0",

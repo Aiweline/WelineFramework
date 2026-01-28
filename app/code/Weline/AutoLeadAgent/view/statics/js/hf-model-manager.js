@@ -38,28 +38,34 @@ var HFModelManager = (function () {
 
         return async function (url, options) {
             // 检查是否是 Hugging Face 模型文件请求
-            if (typeof url === 'string' && url.includes('huggingface.co') && config.modelId) {
-                // 提取文件名
-                var match = url.match(/huggingface\.co\/[^\/]+\/[^\/]+\/resolve\/main\/(.+)$/);
-                if (match && match[1]) {
-                    var filename = decodeURIComponent(match[1]);
+            if (typeof url === 'string' && url.includes('huggingface.co')) {
+                // 提取模型ID和文件名
+                var match = url.match(/huggingface\.co\/([^\/]+\/[^\/]+)\/resolve\/[^\/]+\/(.+)$/);
+                if (match && match[2]) {
+                    var urlModelId = match[1]; // 从URL中提取模型ID
+                    var filename = decodeURIComponent(match[2]);
                     var originalFilename = filename;
 
-                    console.log('[HFModelManager] 拦截 Hugging Face 请求:', filename);
-                    console.log('[HFModelManager] 原始 URL:', url);
+                    // 使用配置的模型ID或URL中的模型ID
+                    var effectiveModelId = config.modelId || urlModelId;
 
-                    // 尝试从本地文件系统读取
+                    console.log('[HFModelManager] 拦截 Hugging Face 请求:', effectiveModelId, '/', filename);
+
+                    // 尝试从 LocalFileStorage (IndexedDB) 读取
+                    var fileData = null;
+
+                    // 方法1: LocalFileStorage
                     if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.getModelFile) {
                         try {
                             // 首先尝试精确匹配
-                            var fileData = await LocalFileStorage.getModelFile(config.modelId, filename);
+                            fileData = await LocalFileStorage.getModelFile(effectiveModelId, filename);
 
                             // 如果精确匹配失败，尝试查找替代格式
                             if (!fileData || fileData.byteLength === 0) {
-                                console.log('[HFModelManager] 精确匹配失败，尝试查找替代格式...');
+                                console.log('[HFModelManager] LocalFileStorage 精确匹配失败，尝试查找替代格式...');
 
                                 // 获取模型的所有本地文件
-                                var files = LocalFileStorage.collectModelFiles(config.modelId);
+                                var files = await LocalFileStorage.collectModelFiles(effectiveModelId);
                                 console.log('[HFModelManager] 本地文件列表:', files);
 
                                 // 尝试匹配不同的文件格式
@@ -67,7 +73,7 @@ var HFModelManager = (function () {
                                     // onnx/decoder_model_merged_quantized.onnx -> model.safetensors
                                     if (filename.includes('decoder_model_merged')) {
                                         var altFilename = 'model.safetensors';
-                                        fileData = await LocalFileStorage.getModelFile(config.modelId, altFilename);
+                                        fileData = await LocalFileStorage.getModelFile(effectiveModelId, altFilename);
                                         if (fileData && fileData.byteLength > 0) {
                                             console.log('[HFModelManager] 使用替代文件:', altFilename);
                                             filename = altFilename;
@@ -76,7 +82,7 @@ var HFModelManager = (function () {
                                 }
 
                                 // 如果还是找不到，尝试查找包含相同模式的文件
-                                if ((!fileData || fileData.byteLength === 0) && files.length > 0) {
+                                if ((!fileData || fileData.byteLength === 0) && files && files.length > 0) {
                                     for (var i = 0; i < files.length; i++) {
                                         var localFile = files[i];
                                         // 尝试匹配基础文件名
@@ -90,7 +96,7 @@ var HFModelManager = (function () {
                                         // 如果基本名称匹配（忽略扩展名）
                                         if (localNameWithoutExt === requestedNameWithoutExt ||
                                             (localBaseName.includes('model') && requestedBaseName.includes('model'))) {
-                                            fileData = await LocalFileStorage.getModelFile(config.modelId, localFile.filename);
+                                            fileData = await LocalFileStorage.getModelFile(effectiveModelId, localFile.filename);
                                             if (fileData && fileData.byteLength > 0) {
                                                 console.log('[HFModelManager] 使用匹配文件:', localFile.filename);
                                                 filename = localFile.filename;
@@ -100,34 +106,86 @@ var HFModelManager = (function () {
                                     }
                                 }
                             }
-
-                            if (fileData && fileData.byteLength > 0) {
-                                console.log('[HFModelManager] 成功从本地文件系统加载文件:', filename, (fileData.byteLength / 1024 / 1024).toFixed(2), 'MB');
-
-                                // 创建 Blob 响应
-                                var blob = new Blob([fileData], { type: 'application/octet-stream' });
-                                var response = new Response(blob, {
-                                    status: 200,
-                                    statusText: 'OK',
-                                    headers: {
-                                        'Content-Type': 'application/octet-stream',
-                                        'Content-Length': fileData.byteLength.toString()
-                                    }
-                                });
-                                return response;
-                            } else {
-                                console.warn('[HFModelManager] 本地文件不存在或为空:', filename);
-                            }
                         } catch (localError) {
-                            console.warn('[HFModelManager] 本地文件加载出错:', filename, localError.message);
+                            console.warn('[HFModelManager] LocalFileStorage 加载出错:', filename, localError.message);
                         }
-                    } else {
-                        console.warn('[HFModelManager] LocalFileStorage 不可用，从 Hugging Face 加载:', filename);
+                    }
+
+                    // 方法2: ModelStorage（备用）
+                    if ((!fileData || fileData.byteLength === 0) && typeof ModelStorage !== 'undefined' && ModelStorage.getModelFile) {
+                        try {
+                            console.log('[HFModelManager] 尝试从 ModelStorage 加载:', effectiveModelId, '/', filename);
+                            fileData = await ModelStorage.getModelFile(effectiveModelId, filename);
+                            if (fileData && fileData.byteLength > 0) {
+                                console.log('[HFModelManager] 从 ModelStorage 加载成功:', filename, (fileData.byteLength / 1024 / 1024).toFixed(2), 'MB');
+                            }
+                        } catch (msError) {
+                            console.warn('[HFModelManager] ModelStorage 加载出错:', filename, msError.message);
+                        }
+                    }
+
+                    // 如果成功获取到文件数据，返回响应
+                    if (fileData && fileData.byteLength > 0) {
+                        console.log('[HFModelManager] 成功从缓存加载文件:', filename, (fileData.byteLength / 1024 / 1024).toFixed(2), 'MB');
+
+                        // 创建 Blob 响应
+                        var blob = new Blob([fileData], { type: 'application/octet-stream' });
+                        var response = new Response(blob, {
+                            status: 200,
+                            statusText: 'OK',
+                            headers: {
+                                'Content-Type': 'application/octet-stream',
+                                'Content-Length': fileData.byteLength.toString()
+                            }
+                        });
+                        return response;
+                    }
+
+                    console.log('[HFModelManager] 缓存中未找到文件，从 Hugging Face 下载:', filename);
+
+                    // 下载文件并保存到缓存
+                    try {
+                        var response = await originalFetch(url, options);
+                        if (response.ok) {
+                            // 克隆响应以便保存
+                            var responseClone = response.clone();
+                            var arrayBuffer = await responseClone.arrayBuffer();
+
+                            if (arrayBuffer && arrayBuffer.byteLength > 0) {
+                                console.log('[HFModelManager] 下载完成，保存到缓存:', filename, (arrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
+
+                                // 异步保存到 LocalFileStorage
+                                if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.saveModelFile) {
+                                    LocalFileStorage.saveModelFile(effectiveModelId, filename, arrayBuffer)
+                                        .then(function() {
+                                            console.log('[HFModelManager] 文件已缓存到 LocalFileStorage:', filename);
+                                        })
+                                        .catch(function(saveError) {
+                                            console.warn('[HFModelManager] 缓存文件失败:', filename, saveError);
+                                        });
+                                }
+
+                                // 同时保存到 ModelStorage
+                                if (typeof ModelStorage !== 'undefined' && ModelStorage.saveModelFile) {
+                                    ModelStorage.saveModelFile(effectiveModelId, filename, arrayBuffer)
+                                        .then(function() {
+                                            console.log('[HFModelManager] 文件已缓存到 ModelStorage:', filename);
+                                        })
+                                        .catch(function(msError) {
+                                            console.warn('[HFModelManager] ModelStorage 缓存失败:', filename, msError);
+                                        });
+                                }
+                            }
+                        }
+                        return response;
+                    } catch (fetchError) {
+                        console.error('[HFModelManager] 从 Hugging Face 下载失败:', filename, fetchError);
+                        throw fetchError;
                     }
                 }
             }
 
-            // 使用原始 fetch
+            // 使用原始 fetch（非 Hugging Face 请求）
             return originalFetch(url, options);
         };
     }
@@ -305,6 +363,18 @@ var HFModelManager = (function () {
             modelState.loading = true;
             modelState.error = null;
 
+            // 派发加载开始事件
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
+                    detail: {
+                        percent: 0,
+                        status: 'start',
+                        file: '',
+                        modelId: config.modelId
+                    }
+                }));
+            }
+
             // 检查是否已加载 @xenova/transformers
             if (typeof window.pipeline === 'undefined') {
                 // 动态加载 @xenova/transformers
@@ -320,21 +390,40 @@ var HFModelManager = (function () {
             const { pipeline, env: transformersEnv } = transformersModule;
             env = transformersEnv; // 保存到外部变量
 
-            // 配置自定义 fetch（始终尝试使用本地文件系统）
+            // 配置 transformers.js 环境以启用缓存
+            if (typeof env !== 'undefined') {
+                // 启用本地缓存
+                env.useBrowserCache = true;
+                env.allowLocalModels = true;
+                env.allowRemoteModels = true;
+
+                // 设置缓存目录（transformers.js 会使用 IndexedDB）
+                // env.cacheDir = 'models'; // 使用默认的 IndexedDB 缓存
+
+                console.log('[HFModelManager] Transformers.js 缓存配置:', {
+                    useBrowserCache: env.useBrowserCache,
+                    allowLocalModels: env.allowLocalModels,
+                    allowRemoteModels: env.allowRemoteModels
+                });
+            }
+
+            // 配置自定义 fetch（用于从我们的 IndexedDB 缓存加载）
             var customFetch = createCustomFetch();
 
             // 方法1：尝试设置 env.fetch（如果 transformers 支持）
-            if (customFetch && typeof env !== 'undefined' && env.fetch) {
-                originalEnvFetch = env.fetch;
+            if (customFetch && typeof env !== 'undefined') {
+                if (env.fetch) {
+                    originalEnvFetch = env.fetch;
+                }
                 env.fetch = customFetch;
-                console.log('[HFModelManager] 已配置 env.fetch，将优先使用本地文件');
+                console.log('[HFModelManager] 已配置 env.fetch，将优先使用本地缓存');
             }
 
             // 方法2：如果 transformers 使用全局 fetch，也替换它
             if (customFetch && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
                 originalGlobalFetch = window.fetch;
                 window.fetch = customFetch;
-                console.log('[HFModelManager] 已配置全局 fetch，将优先使用本地文件');
+                console.log('[HFModelManager] 已配置全局 fetch，将优先使用本地缓存');
             }
 
             console.log('[HFModelManager] Loading model:', config.modelId);
@@ -343,6 +432,46 @@ var HFModelManager = (function () {
             var taskType = inferPipelineTask(config.modelId);
             console.log('[HFModelManager] 推断的任务类型:', taskType);
 
+            // 进度回调函数 - 用于更新 UI
+            var progressCallback = function (data) {
+                if (data.status === 'progress') {
+                    var percent = Math.round((data.progress || 0) * 100);
+                    var fileName = data.file || '';
+                    console.log('[HFModelManager] 加载进度:', percent + '%', fileName);
+                    
+                    // 派发自定义事件以更新 UI
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
+                            detail: {
+                                percent: percent,
+                                file: fileName,
+                                status: data.status,
+                                loaded: data.loaded,
+                                total: data.total
+                            }
+                        }));
+                    }
+                } else if (data.status === 'ready') {
+                    console.log('[HFModelManager] 模型准备就绪');
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
+                            detail: { percent: 100, status: 'ready', file: '' }
+                        }));
+                    }
+                } else if (data.status === 'initiate' || data.status === 'download') {
+                    console.log('[HFModelManager] 开始下载:', data.file || '');
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
+                            detail: {
+                                percent: 0,
+                                file: data.file || '',
+                                status: data.status
+                            }
+                        }));
+                    }
+                }
+            };
+
             // 尝试加载模型，如果失败则提供更友好的错误信息
             let model;
             try {
@@ -350,11 +479,7 @@ var HFModelManager = (function () {
                     device: 'webgpu', // 优先使用 WebGPU
                     dtype: 'q8', // 量化以节省内存
                     quantized: false, // 不使用量化版本，使用已下载的 safetensors 文件
-                    progress_callback: function (data) {
-                        if (data.status === 'progress') {
-                            console.log('[HFModelManager] 加载进度:', data.progress, data.file);
-                        }
-                    }
+                    progress_callback: progressCallback
                 });
             } catch (error) {
                 // 如果 WebGPU 失败，尝试使用 CPU
@@ -363,11 +488,7 @@ var HFModelManager = (function () {
                     model = await pipeline(taskType, config.modelId, {
                         device: 'cpu',
                         quantized: false, // 不使用量化版本
-                        progress_callback: function (data) {
-                            if (data.status === 'progress') {
-                                console.log('[HFModelManager] 加载进度:', data.progress, data.file);
-                            }
-                        }
+                        progress_callback: progressCallback
                     });
                 } catch (cpuError) {
                     // 如果都失败，抛出更友好的错误
@@ -998,6 +1119,103 @@ var HFModelManager = (function () {
         console.log('[HFModelManager] Model unloaded');
     }
 
+    /**
+     * 检查模型是否已缓存
+     * @param {string} modelId 模型ID（可选，默认使用配置的模型ID）
+     * @returns {Promise<{cached: boolean, files: Array, totalSize: number}>}
+     */
+    async function checkModelCache(modelId) {
+        modelId = modelId || config.modelId;
+        if (!modelId) {
+            return { cached: false, files: [], totalSize: 0 };
+        }
+
+        console.log('[HFModelManager] 检查模型缓存:', modelId);
+
+        var result = {
+            cached: false,
+            files: [],
+            totalSize: 0,
+            sources: []
+        };
+
+        // 检查 LocalFileStorage
+        if (typeof LocalFileStorage !== 'undefined') {
+            try {
+                var files = await LocalFileStorage.collectModelFiles(modelId);
+                if (files && files.length > 0) {
+                    result.cached = true;
+                    result.files = files;
+                    result.totalSize = files.reduce(function(sum, f) { return sum + (f.size || 0); }, 0);
+                    result.sources.push('LocalFileStorage');
+                    console.log('[HFModelManager] LocalFileStorage 缓存:', files.length, '文件,', (result.totalSize / 1024 / 1024).toFixed(2), 'MB');
+                }
+            } catch (error) {
+                console.warn('[HFModelManager] 检查 LocalFileStorage 缓存失败:', error);
+            }
+        }
+
+        // 检查 ModelStorage
+        if (typeof ModelStorage !== 'undefined' && ModelStorage.collectModelFiles) {
+            try {
+                var msFiles = await ModelStorage.collectModelFiles(modelId);
+                if (msFiles && msFiles.length > 0) {
+                    if (!result.cached) {
+                        result.cached = true;
+                        result.files = msFiles;
+                        result.totalSize = msFiles.reduce(function(sum, f) { return sum + (f.size || 0); }, 0);
+                    }
+                    result.sources.push('ModelStorage');
+                    console.log('[HFModelManager] ModelStorage 缓存:', msFiles.length, '文件');
+                }
+            } catch (error) {
+                console.warn('[HFModelManager] 检查 ModelStorage 缓存失败:', error);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 获取缓存统计信息
+     * @returns {Promise<{totalSize: number, models: Array, quota: Object}>}
+     */
+    async function getCacheStats() {
+        var stats = {
+            totalSize: 0,
+            models: [],
+            quota: { usage: 0, quota: 0, percentUsed: 0 }
+        };
+
+        // 从 LocalFileStorage 获取统计
+        if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.getStorageStats) {
+            try {
+                var lsStats = await LocalFileStorage.getStorageStats();
+                stats.totalSize = lsStats.totalSize || 0;
+                stats.models = lsStats.models || [];
+            } catch (error) {
+                console.warn('[HFModelManager] 获取 LocalFileStorage 统计失败:', error);
+            }
+        }
+
+        // 获取存储配额
+        if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.getStorageQuota) {
+            try {
+                stats.quota = await LocalFileStorage.getStorageQuota();
+            } catch (error) {
+                console.warn('[HFModelManager] 获取存储配额失败:', error);
+            }
+        }
+
+        console.log('[HFModelManager] 缓存统计:', {
+            totalSize: (stats.totalSize / 1024 / 1024).toFixed(2) + ' MB',
+            modelCount: stats.models.length,
+            quotaUsed: stats.quota.percentUsed + '%'
+        });
+
+        return stats;
+    }
+
     // 导出公共 API
     return {
         init: init,
@@ -1010,6 +1228,9 @@ var HFModelManager = (function () {
         isLoaded: isLoaded,
         unload: unload,
         inferPipelineTask: inferPipelineTask,
+        // 缓存相关
+        checkModelCache: checkModelCache,
+        getCacheStats: getCacheStats
     };
 
 })();

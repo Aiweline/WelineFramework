@@ -15,6 +15,7 @@ class Customer extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_customer';
     public const primary_key = 'customer_id';
+    public string $indexer = 'customer_indexer';
     
     public const fields_ID = 'customer_id';
     public const fields_USER_ID = 'user_id';

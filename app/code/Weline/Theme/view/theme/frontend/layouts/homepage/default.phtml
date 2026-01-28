@@ -2,37 +2,27 @@
 /**
  * 布局：首页 - 默认布局
  *
- * 首页默认布局，包含header、banner、main、footer
+ * 首页默认布局，简化为 header、content、footer 三大区域
+ * content 区域是一个大的 slot 容器，可以放入任意部件或容器（行列布局等）
+ * 
  * 字段
  * @meta.name {default="首页默认布局",name="首页默认布局",description="首页默认布局，用于描述布局的名称"}
- * @meta.description {default="首页默认布局，包含header、banner、main、footer",name="首页默认布局，包含header、banner、main、footer",description="首页默认布局，包含header、banner、main、footer，用于描述布局的用途"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @meta.description {default="首页默认布局，包含 header、content、footer 三大区域",name="首页默认布局描述",description="简化的首页布局，content区域支持自由拖放部件和容器"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
  * @param title {default="首页",name="页面标题",description="页面标题，用于设置页面标题"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
- * @param banner {default="",name="Banner内容（HTML字符串）",description="Banner内容（HTML字符串），用于设置Banner区域内容"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- * @param features {default="",name="功能特性区块（HTML字符串）",description="功能特性区块内容（HTML字符串），用于展示产品/服务特性"}
- * @param statistics {default="",name="统计数据区块（HTML字符串）",description="统计数据区块内容（HTML字符串），用于展示关键数据指标"}
- * @param products {default="",name="产品推荐区块（HTML字符串）",description="产品推荐区块内容（HTML字符串），用于展示推荐产品/服务"}
- * @param testimonials {default="",name="客户评价区块（HTML字符串）",description="客户评价区块内容（HTML字符串），用于展示客户评价/推荐"}
- * @param partners {default="",name="合作伙伴区块（HTML字符串）",description="合作伙伴区块内容（HTML字符串），用于展示合作伙伴/品牌"}
- * @param news {default="",name="新闻动态区块（HTML字符串）",description="新闻动态区块内容（HTML字符串），用于展示最新动态"}
- * @param showFeatures {default=true,name="是否显示功能特性区块",description="是否显示功能特性区块，用于控制功能特性区块的显示"}
- * @param showStatistics {default=true,name="是否显示统计数据区块",description="是否显示统计数据区块，用于控制统计数据区块的显示"}
- * @param showProducts {default=true,name="是否显示产品推荐区块",description="是否显示产品推荐区块，用于控制产品推荐区块的显示"}
- * @param showTestimonials {default=true,name="是否显示客户评价区块",description="是否显示客户评价区块，用于控制客户评价区块的显示"}
- * @param showPartners {default=true,name="是否显示合作伙伴区块",description="是否显示合作伙伴区块，用于控制合作伙伴区块的显示"}
- * @param showNews {default=true,name="是否显示新闻动态区块",description="是否显示新闻动态区块，用于控制新闻动态区块的显示"}
- * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
- * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  *
  * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
  * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
 $meta = $this->getData('meta') ?? [];
+// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
+// 直接使用colors数组，无需重复读取和处理
+$colors = $this->getData('colors') ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
@@ -47,154 +37,76 @@ $meta = $this->getData('meta') ?? [];
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
     
     <div class="weline-page-wrapper">
+        <!-- ========== HEADER 区域（使用 partials，内部已配置 widget slot） ========== -->
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
+            
+            <!-- Header 通过 Partials Block 加载，slot 已在 partials/header/default.phtml 中配置 -->
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            
             <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <!-- 首页布局的面包屑导航区域：位于 Header 和主内容之间 -->
-        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-        <w:hook>Weline_Theme::frontend::layouts::homepage::breadcrumb-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-        <w:hook>Weline_Theme::frontend::layouts::homepage::breadcrumb-after</w:hook>
-        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
-        
+        <!-- ========== CONTENT 主内容区域 ========== -->
+        <!-- 
+            content 是一个大的 slot 容器，不设置 accept 限制
+            可以容纳任意部件，包括：
+            - 基础容器：行（row）、列（column）、网格（grid）等
+            - 内容部件：Banner、轮播、产品列表等
+            - 容器内部还可以嵌套子容器和部件
+        -->
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
             
-            <if condition="meta.banner">
-                <section class="homepage-banner">
-                    {{meta.banner}}
-                </section>
-            </if>
-            
-            <if condition="meta.showStatistics && meta.statistics">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::statistics-before</w:hook>
-                <section class="homepage-section homepage-statistics">
-                    <div class="container">
-                        {{meta.statistics}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::statistics-after</w:hook>
-            </if>
-            
-            <if condition="meta.showFeatures && meta.features">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::features-before</w:hook>
-                <section class="homepage-section homepage-features">
-                    <div class="container">
-                        {{meta.features}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::features-after</w:hook>
-            </if>
-            
-            <w:hook>Weline_Theme::frontend::layouts::homepage::main-before</w:hook>
-            <main class="homepage-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="homepage-main" data-layout="homepage">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content<else/>
-                    <if condition="meta.content">
-                        {{meta.content}}
-                    <else/>
-                        <div class="homepage-default-content">
-                            <div class="container">
-                                <section class="welcome-section">
-                                    <h1 class="welcome-title"><lang>欢迎来到我们的网站</lang></h1>
-                                    <p class="welcome-description"><lang>这是一个功能强大、设计精美的电商平台，为您提供优质的产品和服务体验。</lang></p>
-                                </section>
-                                
-                                <section class="features-preview">
-                                    <h2 class="section-title"><lang>核心功能</lang></h2>
-                                    <div class="features-grid">
-                                        <div class="feature-card">
-                                            <div class="feature-icon">🛒</div>
-                                            <h3 class="feature-title"><lang>便捷购物</lang></h3>
-                                            <p class="feature-desc"><lang>简单易用的购物流程，让您轻松选购心仪商品</lang></p>
-                                        </div>
-                                        <div class="feature-card">
-                                            <div class="feature-icon">🚚</div>
-                                            <h3 class="feature-title"><lang>快速配送</lang></h3>
-                                            <p class="feature-desc"><lang>高效的物流系统，确保商品快速送达您的手中</lang></p>
-                                        </div>
-                                        <div class="feature-card">
-                                            <div class="feature-icon">💳</div>
-                                            <h3 class="feature-title"><lang>安全支付</lang></h3>
-                                            <p class="feature-desc"><lang>多种支付方式，保障您的资金安全</lang></p>
-                                        </div>
-                                        <div class="feature-card">
-                                            <div class="feature-icon">🎁</div>
-                                            <h3 class="feature-title"><lang>优质服务</lang></h3>
-                                            <p class="feature-desc"><lang>专业的客服团队，为您提供贴心的服务支持</lang></p>
-                                        </div>
+            <main class="homepage-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::main-before</w:hook>
+                
+                <!-- ========== CONTENT SLOT 主内容插槽 ========== -->
+                <!-- 
+                    这是首页唯一的核心 slot，可以容纳任何部件
+                    用户通过主题编辑器拖入行列容器、Banner、产品轮播等部件
+                    行列等基础容器没有 accept 限制，可以被任何 slot 容纳，也可以容纳任何组件
+                -->
+                <div class="homepage-content-slot" 
+                     data-wslot="content" 
+                     data-wslot-name="内容区域"
+                     data-wslot-multiple="true"
+                     data-wslot-reject="header,footer">
+                    <w:hook>Weline_Theme::frontend::layouts::homepage::content<else/>
+                        <if condition="meta.content">
+                            {{meta.content}}
+                        <else/>
+                            <div class="homepage-default-content">
+                                <div class="container">
+                                    <div class="slot-placeholder" data-placeholder="content">
+                                        <span class="placeholder-icon">📦</span>
+                                        <span class="placeholder-text">内容区域 - 拖拽部件或容器到此处</span>
+                                        <span class="placeholder-hint">支持：行列容器、Banner、产品轮播、分类网格等任意部件</span>
                                     </div>
-                                </section>
-                                
-                                <section class="cta-section">
-                                    <h2 class="section-title"><lang>开始您的购物之旅</lang></h2>
-                                    <p class="cta-description"><lang>浏览我们的产品目录，发现更多精彩商品</lang></p>
-                                    <a href="/category" class="btn btn-primary"><lang>浏览商品</lang></a>
-                                </section>
+                                </div>
                             </div>
-                        </div>
-                    </if>
-                </w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::main-content-after</w:hook>
+                        </if>
+                    </w:hook>
+                </div>
+                
+                <w:hook>Weline_Theme::frontend::layouts::homepage::main-after</w:hook>
             </main>
-            <w:hook>Weline_Theme::frontend::layouts::homepage::main-after</w:hook>
-            
-            <if condition="meta.showProducts && meta.products">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::products-before</w:hook>
-                <section class="homepage-section homepage-products">
-                    <div class="container">
-                        {{meta.products}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::products-after</w:hook>
-            </if>
-            
-            <if condition="meta.showTestimonials && meta.testimonials">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials-before</w:hook>
-                <section class="homepage-section homepage-testimonials">
-                    <div class="container">
-                        {{meta.testimonials}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials-after</w:hook>
-            </if>
-            
-            <if condition="meta.showNews && meta.news">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::news-before</w:hook>
-                <section class="homepage-section homepage-news">
-                    <div class="container">
-                        {{meta.news}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::news-after</w:hook>
-            </if>
-            
-            <if condition="meta.showPartners && meta.partners">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::partners-before</w:hook>
-                <section class="homepage-section homepage-partners">
-                    <div class="container">
-                        {{meta.partners}}
-                    </div>
-                </section>
-                <w:hook>Weline_Theme::frontend::layouts::homepage::partners-after</w:hook>
-            </if>
             
             <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
         
+        <!-- ========== FOOTER 区域（使用 partials，内部已配置 widget slot） ========== -->
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
-            <footer class="weline-footer">
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
-            </footer>
+            
+            <!-- Footer 通过 Partials Block 加载，slot 已在 partials/footer/default.phtml 中配置 -->
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            
             <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
@@ -205,22 +117,34 @@ $meta = $this->getData('meta') ?? [];
     
     <style>
     /* ========================================
-       Amazon风格 - 首页布局样式
+       首页布局样式 - 简化版
+       Header、Content、Footer 三大区域
        ======================================== */
     
-    /* 首页区块样式 */
-    .homepage-banner {
-        width: 100%;
+    /* 页面包裹器 */
+    .weline-page-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
     }
     
-    .homepage-section {
-        width: 100%;
-        padding: 2rem 0;
+    /* 主内容区域 */
+    .weline-main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
     }
     
+    /* 首页主区域 */
     .homepage-main {
         width: 100%;
         flex: 1;
+    }
+    
+    /* Content Slot - 核心内容插槽 */
+    .homepage-content-slot {
+        min-height: 400px;
+        position: relative;
     }
     
     /* 默认内容样式 */
@@ -229,142 +153,396 @@ $meta = $this->getData('meta') ?? [];
         padding: 3rem 0;
     }
     
-    .welcome-section {
+    /* 容器 */
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+    
+    /* ========================================
+       插槽占位符样式
+       ======================================== */
+    .slot-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        margin: 20px;
         text-align: center;
-        padding: 3rem 0;
-        margin-bottom: 3rem;
+        color: #6c757d;
+        min-height: 300px;
     }
     
-    .welcome-title {
-        font-size: 2.5rem;
+    .slot-placeholder .placeholder-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    
+    .slot-placeholder .placeholder-text {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    
+    .slot-placeholder .placeholder-hint {
+        font-size: 13px;
+        color: #9ca3af;
+        max-width: 400px;
+    }
+    
+    /* ========================================
+       编辑模式下的插槽样式
+       ======================================== */
+    body.editor-mode [data-wslot] {
+        outline: 2px dashed transparent;
+        outline-offset: -2px;
+        transition: outline 0.3s ease, background-color 0.3s ease;
+        position: relative;
+    }
+    
+    body.editor-mode [data-wslot]:hover {
+        outline-color: #6366f1;
+        background-color: rgba(99, 102, 241, 0.05);
+    }
+    
+    body.editor-mode [data-wslot].drag-over {
+        outline-color: #10b981;
+        outline-style: solid;
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    body.editor-mode [data-wslot].drag-invalid {
+        outline-color: #ef4444;
+        outline-style: solid;
+        background-color: rgba(239, 68, 68, 0.08);
+    }
+    
+    body.editor-mode [data-wslot]::before {
+        content: attr(data-wslot-name);
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: #fff;
+        font-size: 10px;
         font-weight: 600;
-        color: var(--color-text-primary, #111);
-        margin: 0 0 1rem 0;
+        padding: 3px 10px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 100;
+        pointer-events: none;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
     }
     
-    .welcome-description {
-        font-size: 1.125rem;
-        color: var(--color-text-secondary, #565959);
-        margin: 0;
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
+    body.editor-mode [data-wslot]:hover::before,
+    body.editor-mode [data-wslot].drag-over::before {
+        opacity: 1;
+    }
+
+    body.editor-mode [data-wslot].slot-active {
+        outline-color: #6366f1;
+        outline-style: solid;
+        background-color: rgba(99, 102, 241, 0.08);
     }
     
-    .features-preview {
-        margin: 3rem 0;
+    body.editor-mode .slot-placeholder {
+        cursor: pointer;
+        transition: all 0.3s;
     }
     
-    .section-title {
-        font-size: 1.75rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
-        text-align: center;
-        margin: 0 0 2rem 0;
+    body.editor-mode .slot-placeholder:hover {
+        border-color: #6366f1;
+        background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+        color: #4f46e5;
     }
     
-    .features-grid {
+    /* ========================================
+       基础容器系统 - 行列布局
+       这些容器没有 accept 限制，可以容纳任何部件
+       ======================================== */
+    
+    /* 行容器 */
+    .weline-row {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 0 -10px;
+        width: calc(100% + 20px);
+    }
+    
+    /* 列容器 */
+    .weline-col {
+        flex: 1;
+        padding: 10px;
+        min-width: 0;
+    }
+    
+    /* 列宽度变体 */
+    .weline-col-1 { flex: 0 0 8.333%; max-width: 8.333%; }
+    .weline-col-2 { flex: 0 0 16.666%; max-width: 16.666%; }
+    .weline-col-3 { flex: 0 0 25%; max-width: 25%; }
+    .weline-col-4 { flex: 0 0 33.333%; max-width: 33.333%; }
+    .weline-col-5 { flex: 0 0 41.666%; max-width: 41.666%; }
+    .weline-col-6 { flex: 0 0 50%; max-width: 50%; }
+    .weline-col-7 { flex: 0 0 58.333%; max-width: 58.333%; }
+    .weline-col-8 { flex: 0 0 66.666%; max-width: 66.666%; }
+    .weline-col-9 { flex: 0 0 75%; max-width: 75%; }
+    .weline-col-10 { flex: 0 0 83.333%; max-width: 83.333%; }
+    .weline-col-11 { flex: 0 0 91.666%; max-width: 91.666%; }
+    .weline-col-12 { flex: 0 0 100%; max-width: 100%; }
+    
+    /* 网格容器 */
+    .weline-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 2rem;
-        margin-top: 2rem;
+        gap: 20px;
     }
     
-    .feature-card {
-        background-color: var(--color-bg-primary, #fff);
-        border: 1px solid var(--color-border-light, #e0e0e0);
-        border-radius: 8px;
-        padding: 2rem;
-        text-align: center;
-        transition: box-shadow 0.3s ease, transform 0.3s ease;
+    .weline-grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .weline-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .weline-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .weline-grid-5 { grid-template-columns: repeat(5, 1fr); }
+    .weline-grid-6 { grid-template-columns: repeat(6, 1fr); }
+    
+    /* Section 区块容器 */
+    .weline-section {
+        padding: 2rem 0;
     }
     
-    .feature-card:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        transform: translateY(-4px);
+    .weline-section-sm { padding: 1rem 0; }
+    .weline-section-lg { padding: 4rem 0; }
+    .weline-section-xl { padding: 6rem 0; }
+    
+    /* 嵌套 Slot 容器（用于行列内部） */
+    [data-wslot-container] {
+        min-height: 60px;
+        position: relative;
     }
     
-    .feature-icon {
-        font-size: 3rem;
-        margin-bottom: 1rem;
+    body.editor-mode [data-wslot-container] {
+        border: 1px dashed #d1d5db;
+        border-radius: 4px;
+        padding: 8px;
     }
     
-    .feature-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
-        margin: 0 0 0.75rem 0;
+    body.editor-mode [data-wslot-container]:hover {
+        border-color: #6366f1;
+        background-color: rgba(99, 102, 241, 0.03);
     }
     
-    .feature-desc {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #565959);
-        margin: 0;
-        line-height: 1.6;
-    }
-    
-    .cta-section {
-        text-align: center;
-        padding: 3rem 0;
-        margin-top: 3rem;
-        background-color: var(--color-bg-secondary, #f8f9fa);
-        border-radius: 8px;
-    }
-    
-    .cta-description {
-        font-size: 1.125rem;
-        color: var(--color-text-secondary, #565959);
-        margin: 0 0 1.5rem 0;
-    }
-    
-    /* 首页响应式设计 */
+    /* ========================================
+       响应式设计
+       ======================================== */
     @media (max-width: 1024px) {
-        .features-grid {
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
+        .weline-grid-4,
+        .weline-grid-5,
+        .weline-grid-6 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .weline-col-3,
+        .weline-col-4 {
+            flex: 0 0 50%;
+            max-width: 50%;
         }
     }
     
     @media (max-width: 768px) {
-        .homepage-section {
-            padding: 1.5rem 0;
-        }
-        
         .homepage-default-content {
             padding: 2rem 0;
         }
         
-        .welcome-section {
-            padding: 2rem 0;
-            margin-bottom: 2rem;
+        .slot-placeholder {
+            padding: 40px 15px;
+            min-height: 200px;
         }
         
-        .welcome-title {
-            font-size: 2rem;
+        .slot-placeholder .placeholder-icon {
+            font-size: 36px;
         }
         
-        .welcome-description {
-            font-size: 1rem;
+        .weline-grid-2,
+        .weline-grid-3,
+        .weline-grid-4,
+        .weline-grid-5,
+        .weline-grid-6 {
+            grid-template-columns: repeat(2, 1fr);
         }
         
-        .section-title {
-            font-size: 1.5rem;
+        .weline-col,
+        .weline-col-3,
+        .weline-col-4,
+        .weline-col-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
         }
         
-        .features-grid {
+        .weline-section { padding: 1.5rem 0; }
+        .weline-section-lg { padding: 2.5rem 0; }
+        .weline-section-xl { padding: 4rem 0; }
+    }
+    
+    @media (max-width: 480px) {
+        .weline-grid-2,
+        .weline-grid-3,
+        .weline-grid-4,
+        .weline-grid-5,
+        .weline-grid-6 {
             grid-template-columns: 1fr;
-            gap: 1.5rem;
-        }
-        
-        .feature-card {
-            padding: 1.5rem;
-        }
-        
-        .cta-section {
-            padding: 2rem 1rem;
         }
     }
     </style>
+    
+    <!-- 编辑模式脚本 -->
+    <?php if ($this->getData('editor_mode')): ?>
+    <script>
+    (function() {
+        // 启用编辑模式
+        document.body.classList.add('editor-mode');
+        
+        // 添加插槽高亮样式
+        const style = document.createElement('style');
+        style.textContent = `
+            .slot-highlight {
+                animation: slot-pulse 0.5s ease-in-out 3;
+            }
+            @keyframes slot-pulse {
+                0%, 100% { outline-color: #6366f1; }
+                50% { outline-color: #10b981; outline-width: 4px; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // 使用新的 data-wslot 属性选择器
+        document.querySelectorAll('[data-wslot]').forEach(slot => {
+            slot.addEventListener('click', function(e) {
+                e.stopPropagation();
+                
+                // 从新属性名读取数据
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                    multiple: this.dataset.wslotMultiple === 'true',
+                    exclusive: this.dataset.wslotExclusive === 'true',
+                    append: this.dataset.wslotAppend === 'true',
+                    prepend: this.dataset.wslotPrepend === 'true'
+                };
+                
+                // 通知父窗口
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'slot-selected',
+                        slot: slotData
+                    }, '*');
+                }
+                
+                // 高亮当前插槽
+                document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
+                this.classList.add('slot-active');
+            });
+            
+            // 拖放事件
+            slot.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.add('drag-over');
+                this.classList.remove('drag-invalid');
+            });
+            
+            slot.addEventListener('dragleave', function(e) {
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('drag-over', 'drag-invalid');
+                }
+            });
+            
+            slot.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('drag-over', 'drag-invalid');
+                
+                // 获取拖放的部件数据
+                let widgetData;
+                try {
+                    const jsonData = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                    if (jsonData) {
+                        widgetData = JSON.parse(jsonData);
+                    }
+                } catch (err) {
+                    console.error('Failed to parse widget data:', err);
+                    return;
+                }
+                
+                if (!widgetData) {
+                    console.error('No widget data found in drop event');
+                    return;
+                }
+                
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                    exclusive: this.dataset.wslotExclusive === 'true'
+                };
+                
+                // 检查部件是否被接受
+                const acceptedCodes = slotData.accept;
+                const widgetCode = widgetData.code;
+                const widgetSlot = widgetData.slot;
+                
+                // 部件的 slot 属性匹配，或者 code 在 accept 列表中，或无限制
+                const allowed = (widgetSlot && widgetSlot === slotData.id) || 
+                               acceptedCodes.includes(widgetCode) || 
+                               acceptedCodes.length === 0;
+                
+                if (!allowed) {
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'widget-rejected',
+                            widget: widgetData,
+                            slot: slotData,
+                            reason: `插槽 "${slotData.name}" 不接受部件 "${widgetData.name || widgetCode}"`
+                        }, '*');
+                    }
+                    this.classList.add('drag-invalid');
+                    setTimeout(() => this.classList.remove('drag-invalid'), 500);
+                    return;
+                }
+                
+                // 通知父窗口部件被放入插槽
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'widget-dropped',
+                        widget: widgetData,
+                        slot: slotData
+                    }, '*');
+                }
+                
+                // 显示成功动画
+                this.classList.add('slot-highlight');
+                setTimeout(() => this.classList.remove('slot-highlight'), 1500);
+            });
+        });
+        
+        // 占位符点击事件 - 触发父级 slot
+        document.querySelectorAll('.slot-placeholder').forEach(placeholder => {
+            placeholder.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const slotArea = this.closest('[data-wslot]');
+                if (slotArea) {
+                    slotArea.click();
+                }
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
 </body>
 </html>
 

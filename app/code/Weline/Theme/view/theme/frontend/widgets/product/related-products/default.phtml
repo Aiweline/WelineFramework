@@ -9,6 +9,7 @@ $title = $this->getData('title') ?? __('相关产品');
 $limit = (int)($this->getData('limit') ?? 4);
 $columns = $this->getData('columns') ?? '4';
 $layout = $this->getData('layout') ?? 'carousel';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例产品数据
 $products = [];
@@ -17,7 +18,7 @@ for ($i = 1; $i <= $limit; $i++) {
         'id' => $i,
         'name' => __('相关产品 %d', $i),
         'url' => '/product/related-' . $i,
-        'image' => '/images/products/related-' . $i . '.jpg',
+        'image' => $placeholder,
         'price' => rand(50, 400),
         'original_price' => rand(50, 400) * 1.15,
         'rating' => rand(35, 50) / 10,
@@ -45,9 +46,9 @@ $widgetId = 'related-products-' . uniqid();
                 <?php foreach ($products as $product): ?>
                     <div class="product-card">
                         <div class="product-image-wrapper">
-                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
-                                <img src="<?= htmlspecialchars($product['image']) ?>" 
-                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                            <a href="<?= htmlspecialchars($product['url'] ?? '') ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($product['image'] ?? '') ?>" 
+                                     alt="<?= htmlspecialchars($product['name'] ?? '') ?>"
                                      class="product-image"
                                      loading="lazy">
                             </a>
@@ -64,8 +65,8 @@ $widgetId = 'related-products-' . uniqid();
                         
                         <div class="product-info">
                             <h3 class="product-name">
-                                <a href="<?= htmlspecialchars($product['url']) ?>">
-                                    <?= htmlspecialchars($product['name']) ?>
+                                <a href="<?= htmlspecialchars($product['url'] ?? '') ?>">
+                                    <?= htmlspecialchars($product['name'] ?? '') ?>
                                 </a>
                             </h3>
                             

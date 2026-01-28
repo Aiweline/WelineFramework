@@ -30,7 +30,7 @@ $hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
             <input type="search" 
                    name="q" 
                    class="search-input" 
-                   placeholder="<?= htmlspecialchars($placeholder) ?>"
+                   placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
                    autocomplete="off">
             
             <button type="submit" class="search-button">

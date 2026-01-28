@@ -99,6 +99,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         <tr>
                                             <th>#ID</th>
                                             <th>
+                                                <lang>网站ID</lang>
+                                            </th>
+                                            <th>
                                                 <lang>URL ID</lang>
                                             </th>
                                             <th>
@@ -132,6 +135,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <tr>
                                                 <td scope='row'>{{v.rewrite_id}}</td>
                                                 <td scope='row'>
+                                                    <span class="badge bg-info">{{v.website_id}}</span>
+                                                </td>
+                                                <td scope='row'>
                                                     <if condition='v.url_id'>
                                                         {{v.url_id}}
                                                         <else/>
@@ -158,7 +164,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     </if>
                                                 </td>
                                                 <td scope='row'>
-                                                    <a href="@admin-url('*/backend/rewriter/form')?identify={{v.url_identify}}">
+                                                    <a href="@admin-url('*/backend/rewriter/form')?identify={{v.url_identify}}&website_id={{v.website_id}}">
                                                         <lang>编辑</lang>
                                                     </a>
                                                     <a href="@admin-url('*/backend/rewriter/delete')?rewrite_id={{v.rewrite_id}}">

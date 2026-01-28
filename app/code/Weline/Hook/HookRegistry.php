@@ -151,10 +151,9 @@ class HookRegistry
         // 检查文档（无论是否允许solo冲突，都要检查文档）
         $this->validateDocumentation($registry);
 
-        // 在开发环境下，检查Hook实现文件是否存在但没有规约的情况
-        if (defined('DEV') && DEV) {
-            $this->validateHookSpecifications($registry);
-        }
+        // 检查Hook实现文件是否存在但没有规约的情况（始终检查，不只在开发环境）
+        // 在系统升级和hook:rebuild时，必须确保所有Hook实现都有规约
+        $this->validateHookSpecifications($registry);
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -587,14 +586,17 @@ class HookRegistry
      * 验证所有Hook的文档是否存在
      * 如果缺少文档，抛出异常阻止保存
      * 
-     * @param array $registry Hook注册表数据
+     * @param array $registry Hook注册表数据（包含 'hooks' 和 'hook_to_module' 键）
      * @throws \RuntimeException 如果发现缺少文档的Hook
      */
     private function validateDocumentation(array $registry): void
     {
         $hooksWithoutDoc = [];
         
-        foreach ($registry as $hookName => $hookInfo) {
+        // 从注册表中获取 hooks 数组（registry 结构：['hooks' => [...], 'hook_to_module' => [...]）
+        $hooks = $registry['hooks'] ?? [];
+        
+        foreach ($hooks as $hookName => $hookInfo) {
             // 只检查有规约的Hook（has_spec为true）
             if (!empty($hookInfo['has_spec']) && $hookInfo['has_spec']) {
                 // 检查是否有文档
@@ -652,16 +654,20 @@ class HookRegistry
 
     /**
      * 验证所有Hook实现文件是否有对应的规约
-     * 在开发环境下，如果Hook有实现文件但没有规约，抛出异常阻止保存
+     * 如果Hook有实现文件但没有规约，抛出异常阻止保存
+     * 在系统升级和hook:rebuild时，必须确保所有Hook实现都有规约
      * 
-     * @param array $registry Hook注册表数据
+     * @param array $registry Hook注册表数据（包含 'hooks' 和 'hook_to_module' 键）
      * @throws \RuntimeException 如果发现缺少规约的Hook实现
      */
     private function validateHookSpecifications(array $registry): void
     {
         $hooksWithoutSpec = [];
         
-        foreach ($registry as $hookName => $hookInfo) {
+        // 从注册表中获取 hooks 数组（registry 结构：['hooks' => [...], 'hook_to_module' => [...]）
+        $hooks = $registry['hooks'] ?? [];
+        
+        foreach ($hooks as $hookName => $hookInfo) {
             // 检查是否有实现文件
             $hasImplementations = !empty($hookInfo['implementations']) && is_array($hookInfo['implementations']) && count($hookInfo['implementations']) > 0;
             
@@ -724,7 +730,7 @@ class HookRegistry
             
             $errorMessage .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
             $errorMessage .= "💡 说明：\n";
-            $errorMessage .= "   在开发环境下，所有Hook实现文件都必须有对应的规约定义。\n";
+            $errorMessage .= "   所有Hook实现文件都必须有对应的规约定义（在系统升级和hook:rebuild时强制检查）。\n";
             $errorMessage .= "   Hook规约应在定义Hook的模块的 hook.php 文件中声明。\n";
             $errorMessage .= "   详细说明请参考：app/code/Weline/Framework/Hook/doc/Hook顺序机制设计.md\n";
             $errorMessage .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";

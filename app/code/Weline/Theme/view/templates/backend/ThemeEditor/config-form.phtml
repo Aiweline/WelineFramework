@@ -13,9 +13,9 @@ $config = $widget['config'] ?? [];
 
 if (!$widget) return;
 
-$widgetName = $widget['meta']['name'] ?? $widget['widget_code'];
-$widgetDesc = $widget['meta']['description'] ?? '';
-$widgetType = $widget['widget_type'] ?? 'content';
+$widgetName = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? '');
+$widgetDesc = (string)($widget['meta']['description'] ?? '');
+$widgetType = (string)($widget['widget_type'] ?? 'content');
 
 // 获取部件图标
 $typeIcons = [
@@ -50,13 +50,21 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
         <p class="text-muted"><?= __('该部件暂无可配置参数') ?></p>
     <?php else: ?>
         <?php foreach ($params as $key => $param): 
-            $type = $param['type'] ?? 'string';
-            $label = $param['label'] ?? $key;
+            $type = (string)($param['type'] ?? 'string');
+            $label = (string)($param['label'] ?? $key);
             $default = $param['default'] ?? '';
             $value = $config[$key] ?? $default;
-            $required = $param['required'] ?? false;
-            $description = $param['description'] ?? '';
-            $placeholder = $param['placeholder'] ?? '';
+            // 确保 value 是可转换为字符串的类型
+            if (is_array($value)) {
+                // 保持数组形式
+            } elseif (is_bool($value)) {
+                // 保持布尔形式
+            } else {
+                $value = (string)$value;
+            }
+            $required = (bool)($param['required'] ?? false);
+            $description = (string)($param['description'] ?? '');
+            $placeholder = (string)($param['placeholder'] ?? '');
             $options = $param['options'] ?? [];
         ?>
             <div class="form-group">
@@ -72,7 +80,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                            class="form-control" 
                            id="config_<?= $key ?>" 
                            name="<?= $key ?>"
-                           value="<?= htmlspecialchars($value) ?>"
+                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                            placeholder="<?= htmlspecialchars($placeholder) ?>"
                            <?= $required ? 'required' : '' ?>>
                 
@@ -81,7 +89,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                            class="form-control" 
                            id="config_<?= $key ?>" 
                            name="<?= $key ?>"
-                           value="<?= htmlspecialchars($value) ?>"
+                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                            placeholder="<?= htmlspecialchars($placeholder) ?>"
                            <?= $required ? 'required' : '' ?>>
                 
@@ -100,8 +108,8 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                     <select class="form-control" id="config_<?= $key ?>" name="<?= $key ?>" <?= $required ? 'required' : '' ?>>
                         <option value=""><?= __('-- 请选择 --') ?></option>
                         <?php foreach ($options as $optValue => $optLabel): ?>
-                            <option value="<?= htmlspecialchars($optValue) ?>" <?= $value == $optValue ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($optLabel) ?>
+                            <option value="<?= htmlspecialchars((string)($optValue ?? '')) ?>" <?= $value == $optValue ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)($optLabel ?? '')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -111,7 +119,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                            class="form-control" 
                            id="config_<?= $key ?>" 
                            name="<?= $key ?>"
-                           value="<?= htmlspecialchars($value) ?>"
+                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                            placeholder="<?= htmlspecialchars($placeholder ?: 'https://') ?>"
                            <?= $required ? 'required' : '' ?>>
                 
@@ -121,7 +129,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                                class="form-control" 
                                id="config_<?= $key ?>" 
                                name="<?= $key ?>"
-                               value="<?= htmlspecialchars($value) ?>"
+                               value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                                placeholder="<?= __('图片URL或点击选择') ?>">
                         <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_<?= $key ?>">
                             <i class="ri-image-line"></i>
@@ -129,7 +137,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                     </div>
                     <?php if ($value): ?>
                         <div class="mt-2">
-                            <img src="<?= htmlspecialchars($value) ?>" class="img-thumbnail" style="max-height: 80px;">
+                            <img src="<?= htmlspecialchars((string)($value ?? '')) ?>" class="img-thumbnail" style="max-height: 80px;">
                         </div>
                     <?php endif; ?>
                 
@@ -138,13 +146,13 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                         <input type="color" 
                                class="form-control form-control-color" 
                                id="config_<?= $key ?>_picker" 
-                               value="<?= htmlspecialchars($value ?: '#000000') ?>"
+                               value="<?= htmlspecialchars((string)($value ?? '#000000')) ?>"
                                style="width: 50px;">
                         <input type="text" 
                                class="form-control" 
                                id="config_<?= $key ?>" 
                                name="<?= $key ?>"
-                               value="<?= htmlspecialchars($value) ?>"
+                               value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                                placeholder="#000000">
                     </div>
                 
@@ -154,7 +162,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                               name="<?= $key ?>"
                               rows="4"
                               placeholder="<?= htmlspecialchars($placeholder) ?>"
-                              <?= $required ? 'required' : '' ?>><?= htmlspecialchars($value) ?></textarea>
+                              <?= $required ? 'required' : '' ?>><?= htmlspecialchars((string)($value ?? '')) ?></textarea>
                 
                 <?php elseif ($type === 'array'): ?>
                     <textarea class="form-control" 
@@ -162,7 +170,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                               name="<?= $key ?>"
                               rows="4"
                               placeholder="<?= __('JSON格式数组') ?>"
-                              <?= $required ? 'required' : '' ?>><?= is_array($value) ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : htmlspecialchars($value) ?></textarea>
+                              <?= $required ? 'required' : '' ?>><?= is_array($value) ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : htmlspecialchars((string)($value ?? '')) ?></textarea>
                     <small class="form-text"><?= __('请使用JSON格式输入') ?></small>
                 
                 <?php else: ?>
@@ -170,7 +178,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
                            class="form-control" 
                            id="config_<?= $key ?>" 
                            name="<?= $key ?>"
-                           value="<?= htmlspecialchars($value) ?>"
+                           value="<?= htmlspecialchars((string)($value ?? '')) ?>"
                            <?= $required ? 'required' : '' ?>>
                 <?php endif; ?>
                 

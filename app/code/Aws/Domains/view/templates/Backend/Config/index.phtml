@@ -58,7 +58,7 @@ $regions = $regions ?? [];
                                     </td>
                                     <td>
                                         <?php $region = $config['region'] ?? 'us-east-1'; ?>
-                                        <?= htmlspecialchars($regions[$region] ?? $region, ENT_QUOTES) ?>
+                                        <?= htmlspecialchars($regions[$region] ?? $region??'', ENT_QUOTES) ?>
                                     </td>
                                     <td>
                                         <?php if ((int)($config['is_default'] ?? 0) === 1): ?>

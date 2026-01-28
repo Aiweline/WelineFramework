@@ -149,8 +149,12 @@ class Router implements RouterInterface
      */
     private static function handleExists(string $handle, bool $isPreview = false): bool
     {
+        // 获取当前网站ID
+        $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+        
+        // 缓存键包含 website_id，避免跨站点缓存串
         // 预览模式下，使用不同的缓存键，避免与正常模式冲突
-        $cacheKey = $handle . ($isPreview ? '_preview' : '');
+        $cacheKey = "site_{$websiteId}_{$handle}" . ($isPreview ? '_preview' : '');
         
         // 1. 首先检查请求内静态缓存（最快）
         if (isset(self::$handleCache[$cacheKey])) {
@@ -175,6 +179,7 @@ class Router implements RouterInterface
             // 预览模式下，允许访问所有状态的页面
             if ($isPreview) {
                 $page->clear()
+                    ->where(Page::fields_WEBSITE_ID, $websiteId)
                     ->where(Page::fields_HANDLE, $handle)
                     ->find()
                     ->fetch();
@@ -182,6 +187,7 @@ class Router implements RouterInterface
                 // 非预览模式：允许访问已发布的页面，或者草稿状态的测试页面
                 // 先查询已发布的页面
                 $page->clear()
+                    ->where(Page::fields_WEBSITE_ID, $websiteId)
                     ->where(Page::fields_HANDLE, $handle)
                     ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
                     ->find()
@@ -190,6 +196,7 @@ class Router implements RouterInterface
                 // 如果没找到已发布的页面，再查询测试页面（允许草稿状态）
                 if (!$page->getId()) {
                     $page->clear()
+                        ->where(Page::fields_WEBSITE_ID, $websiteId)
                         ->where(Page::fields_HANDLE, $handle)
                         ->where(Page::fields_TYPE, 'test_page')
                         ->find()

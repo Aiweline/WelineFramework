@@ -15,6 +15,7 @@ class Address extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_address';
     public const primary_key = 'address_id';
+    public string $indexer = 'address_indexer';
     
     public const fields_ID = 'address_id';
     public const fields_CUSTOMER_ID = 'customer_id';

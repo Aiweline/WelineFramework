@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Controller\Frontend\Product;
 
 use WeShop\Frontend\Controller\BaseController;
+use WeShop\Product\Service\ProductEavService;
 use WeShop\Product\Service\ProductService;
 use WeShop\Review\Service\ReviewService;
 use WeShop\QA\Service\QAService;
@@ -57,9 +58,9 @@ class View extends BaseController
             return $this->redirect('weshop/product/list');
         }
         
-        // 检查产品状态
+        // 检查产品状态（status=1 表示启用）
         $status = $product->getData(\WeShop\Product\Model\Product::fields_status);
-        if ($status !== 'enabled') {
+        if ($status != 1 && $status !== 'enabled') {
             $this->getMessageManager()->addError(__('产品已下架'));
             return $this->redirect('weshop/product/list');
         }
@@ -96,7 +97,13 @@ class View extends BaseController
         
         // 获取产品属性（EAV属性）
         $attributes = [];
-        // TODO: 从EAV系统获取产品属性
+        try {
+            /** @var ProductEavService $productEavService */
+            $productEavService = ObjectManager::getInstance(ProductEavService::class);
+            $attributes = $productEavService->getProductAttributesViewModel($productId);
+        } catch (\Throwable $e) {
+            // EAV 服务不可用，忽略
+        }
         
         // 获取相关产品（同分类的其他产品）
         $relatedProducts = [];

@@ -15,6 +15,7 @@ class Wishlist extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_wishlist';
     public const primary_key = 'wishlist_id';
+    public string $indexer = 'wishlist_indexer';
     
     public const fields_ID = 'wishlist_id';
     public const fields_CUSTOMER_ID = 'customer_id';

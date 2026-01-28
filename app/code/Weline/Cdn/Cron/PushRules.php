@@ -127,8 +127,8 @@ class PushRules implements CronTaskInterface
     /**
      * @inheritDoc
      */
-    public function unlock_timeout(): int
+    public function unlock_timeout(int $minute = 30): int
     {
-        return 30; // 30分钟超时解锁
+        return $minute; // 默认30分钟超时解锁
     }
 }

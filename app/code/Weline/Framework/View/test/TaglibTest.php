@@ -88,13 +88,18 @@ class TaglibTest extends TestCore
     public function testDefault()
     {
         $template = new Template();
+        // 测试嵌套属性的默认值
         $content = "1111{{setting.url | 'http://www.amayum.com'}}2222";
         $parse_str = $this->taglib->tagReplace($template, $content);
         $result1 = $parse_str === "1111<?=(\$setting['url']?? 'http://www.amayum.com')  ;?>2222";
+        // 测试简单变量的默认值
+        $content = "1111{{target_button_text | '添加'}}2222";
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        $result2 = $parse_str === "1111<?=\$target_button_text?? '添加' ;?>2222";
         $content = "1111@if{setting.url =>'hhh'| 'http://www.amayum.com'}2222";
         $parse_str = $this->taglib->tagReplace($template, $content);
-        $result2 = $parse_str === "1111<?php if((\$setting['url']??'')  ):echo 'hhh'; else: echo  'http://www.amayum.com'; endif;?>2222";
-        self::assertTrue($result1 && $result2, '变量解析默认值通过');
+        $result3 = $parse_str === "1111<?php if((\$setting['url']??'')  ):echo 'hhh'; else: echo  'http://www.amayum.com'; endif;?>2222";
+        self::assertTrue($result1 && $result2 && $result3, '变量解析默认值通过');
     }
 
     public function testHtmlVoidTagParsing()

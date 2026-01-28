@@ -119,11 +119,11 @@ class FeedGenerator implements CronTaskInterface
     }
 
     /**
-     * 调度任务超时解锁时间（分钟）
+     * @inheritDoc
      */
-    public function timeout(): int
+    public function unlock_timeout(int $minute = 30): int
     {
-        return 30; // 30分钟超时
+        return $minute; // 默认30分钟超时解锁
     }
 }
 

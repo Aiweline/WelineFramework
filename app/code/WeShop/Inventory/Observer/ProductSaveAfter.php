@@ -15,12 +15,13 @@ declare(strict_types=1);
 namespace WeShop\Inventory\Observer;
 
 use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Inventory\Model\Source;
 use WeShop\Inventory\Model\SourceItem;
 use WeShop\Product\Model\Product;
 
-class ProductSaveAfter
+class ProductSaveAfter implements ObserverInterface
 {
     private Source $source;
     private SourceItem $sourceItem;
@@ -35,9 +36,9 @@ class ProductSaveAfter
 
     /**
      * 产品保存后执行 - 初始化默认库存源的库存记录
-     * @param Event $event
+     * @inheritDoc
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $data = $event->getData();
         /** @var Product $product */
@@ -59,6 +60,7 @@ class ProductSaveAfter
         }
 
         $sourceId = (int)$defaultSource->getId();
+        $productId = (int)$productId;
 
         // 检查是否已有库存记录
         $existingItem = $this->sourceItem->getByProductAndSource($productId, $sourceId);

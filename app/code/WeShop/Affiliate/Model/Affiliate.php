@@ -15,6 +15,7 @@ class Affiliate extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_affiliate';
     public const primary_key = 'affiliate_id';
+    public string $indexer = 'affiliate_indexer';
     
     public const fields_ID = 'affiliate_id';
     public const fields_CUSTOMER_ID = 'customer_id';

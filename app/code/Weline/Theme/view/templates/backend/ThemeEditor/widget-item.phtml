@@ -9,14 +9,14 @@
 $widget = $this->getData('widget');
 if (!$widget) return;
 
-$layoutId = $widget['layout_id'] ?? '';
-$widgetCode = $widget['widget_code'] ?? '';
-$widgetModule = $widget['widget_module'] ?? '';
-$widgetType = $widget['widget_type'] ?? '';
+$layoutId = (string)($widget['layout_id'] ?? '');
+$widgetCode = (string)($widget['widget_code'] ?? '');
+$widgetModule = (string)($widget['widget_module'] ?? '');
+$widgetType = (string)($widget['widget_type'] ?? '');
 $config = $widget['config'] ?? [];
 $meta = $widget['meta'] ?? [];
-$widgetName = $meta['name'] ?? $widgetCode;
-$widgetDesc = $meta['description'] ?? '';
+$widgetName = (string)($meta['name'] ?? $widgetCode ?: '');
+$widgetDesc = (string)($meta['description'] ?? '');
 
 // 获取部件图标
 $typeIcons = [

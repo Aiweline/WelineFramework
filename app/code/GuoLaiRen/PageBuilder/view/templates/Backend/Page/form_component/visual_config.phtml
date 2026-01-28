@@ -61,8 +61,8 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     --visual-config-input-border: #dee2e6;
     --visual-config-input-text: #212529;
     --visual-config-hover-bg: #f8f9fa;
-    --visual-config-scrollbar-thumb: #cbd5e1;
-    --visual-config-scrollbar-thumb-hover: #94a3b8;
+    --visual-config-scrollbar-thumb: rgba(148, 163, 184, 0.4);
+    --visual-config-scrollbar-thumb-hover: rgba(148, 163, 184, 0.6);
 }
 
 /* 暗色主题 */
@@ -83,13 +83,38 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     --visual-config-input-border: #495057;
     --visual-config-input-text: #e9ecef;
     --visual-config-hover-bg: #3a3a3a;
-    --visual-config-scrollbar-thumb: #495057;
-    --visual-config-scrollbar-thumb-hover: #6c757d;
+    --visual-config-scrollbar-thumb: rgba(148, 163, 184, 0.3);
+    --visual-config-scrollbar-thumb-hover: rgba(148, 163, 184, 0.5);
 }
 
 .visual-config-wrapper.active {
     display: flex;
     flex-direction: column;
+}
+
+/* 可视化编辑器内所有滚动容器使用极细滚动条 - 跟随主题 */
+.visual-config-wrapper *::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+}
+
+.visual-config-wrapper *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.visual-config-wrapper *::-webkit-scrollbar-thumb {
+    background: var(--visual-config-scrollbar-thumb, rgba(0, 0, 0, 0.15));
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.visual-config-wrapper *::-webkit-scrollbar-thumb:hover {
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(0, 0, 0, 0.25));
+}
+
+.visual-config-wrapper * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(0, 0, 0, 0.15)) transparent;
 }
 
 /* 顶部工具栏 */
@@ -369,28 +394,29 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     padding: 0;
 }
 
-/* 滚动条样式 - 跟随主题 */
+/* 滚动条样式 - 极细滚动条，跟随主题 */
 .config-panel-body::-webkit-scrollbar {
-    width: 8px;
+    width: 3px;
 }
 
 .config-panel-body::-webkit-scrollbar-track {
-    background: var(--visual-config-bg-secondary, #f8f9fa);
+    background: transparent;
 }
 
 .config-panel-body::-webkit-scrollbar-thumb {
-    background: var(--visual-config-scrollbar-thumb, #cbd5e1);
-    border-radius: 4px;
+    background: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4));
+    border-radius: 3px;
+    transition: background 0.2s ease;
 }
 
 .config-panel-body::-webkit-scrollbar-thumb:hover {
-    background: var(--visual-config-scrollbar-thumb-hover, #94a3b8);
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(148, 163, 184, 0.6));
 }
 
 /* Firefox 滚动条样式 */
 .config-panel-body {
     scrollbar-width: thin;
-    scrollbar-color: var(--visual-config-scrollbar-thumb, #cbd5e1) var(--visual-config-bg-secondary, #f8f9fa);
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4)) transparent;
 }
 
 /* 配置区域折叠面板 */
@@ -620,6 +646,31 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     overflow: auto;
 }
 
+/* 预览面板极细滚动条 */
+.preview-panel::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+}
+
+.preview-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.preview-panel::-webkit-scrollbar-thumb {
+    background: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4));
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.preview-panel::-webkit-scrollbar-thumb:hover {
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(148, 163, 184, 0.6));
+}
+
+.preview-panel {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4)) transparent;
+}
+
 /* 右侧组件面板 - 确保在三栏布局中正确显示 */
 .visual-content > .component-panel {
     flex-shrink: 0;
@@ -820,6 +871,30 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     overflow-y: auto;
 }
 
+/* AI预览面板极细滚动条 */
+.ai-fill-preview::-webkit-scrollbar {
+    width: 3px;
+}
+
+.ai-fill-preview::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-fill-preview::-webkit-scrollbar-thumb {
+    background: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4));
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.ai-fill-preview::-webkit-scrollbar-thumb:hover {
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(148, 163, 184, 0.6));
+}
+
+.ai-fill-preview {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4)) transparent;
+}
+
 .ai-fill-preview table {
     font-size: 0.9rem;
 }
@@ -842,8 +917,106 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 }
 
 /* SweetAlert2 弹窗层级调整：确保在可视化窗口之上 */
+/* 可视化编辑器全屏模式的 z-index 是 99999，所以 SweetAlert2 需要更高 */
 .swal2-container {
-    z-index: 12000 !important;
+    z-index: 100000 !important;
+}
+
+/* 确保 SweetAlert2 的所有相关元素都有足够高的层级 */
+.swal2-backdrop-show {
+    z-index: 99999 !important;
+}
+
+.swal2-popup {
+    z-index: 100001 !important;
+}
+
+/* SweetAlert2 暗色主题样式 */
+.swal2-dark-theme .swal2-popup {
+    background: #1e2130 !important;
+    color: #e9ecef !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.swal2-dark-theme .swal2-title {
+    color: #fff !important;
+}
+
+.swal2-dark-theme .swal2-html-container {
+    color: #c9d1d9 !important;
+}
+
+.swal2-dark-theme .swal2-close {
+    color: #8b949e !important;
+}
+
+.swal2-dark-theme .swal2-close:hover {
+    color: #fff !important;
+}
+
+/* 暗色主题表单样式 */
+.swal2-dark-theme .component-config-form {
+    color: #c9d1d9;
+}
+
+.swal2-dark-theme .component-config-form .config-group h6 {
+    color: #e9ecef !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.swal2-dark-theme .component-config-form .config-field label {
+    color: #8b949e !important;
+}
+
+.swal2-dark-theme .component-config-form .form-control,
+.swal2-dark-theme .component-config-form .form-select {
+    background-color: #2d333b !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #e9ecef !important;
+}
+
+.swal2-dark-theme .component-config-form .form-control:focus,
+.swal2-dark-theme .component-config-form .form-select:focus {
+    background-color: #2d333b !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+    color: #e9ecef !important;
+}
+
+.swal2-dark-theme .component-config-form .form-control::placeholder {
+    color: #6c757d !important;
+}
+
+.swal2-dark-theme .component-config-form input[type="color"] {
+    background-color: #2d333b !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.swal2-dark-theme .component-config-form .text-muted {
+    color: #6c757d !important;
+}
+
+/* 暗色主题按钮样式 */
+.swal2-dark-theme .swal2-confirm {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    border: none !important;
+}
+
+.swal2-dark-theme .swal2-cancel {
+    background: #374151 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #e9ecef !important;
+}
+
+.swal2-dark-theme .swal2-cancel:hover {
+    background: #4b5563 !important;
+}
+
+/* 暗色主题加载动画 */
+.swal2-dark-theme .swal2-loading .swal2-confirm {
+    border-color: transparent !important;
+    background: transparent !important;
 }
 </style>
 
@@ -1363,7 +1536,27 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         <!-- 右侧组件面板 -->
         <?php 
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
-        $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
+        // 根据页面类型自动选择布局：博客类型页面使用blog布局
+        $layoutCode = 'default';
+        if ($page) {
+            // 优先使用页面已设置的layout字段
+            $layoutCode = $page->getData('layout');
+            // 如果未设置layout，根据页面类型自动选择
+            if (empty($layoutCode)) {
+                $pageType = $page->getData('type');
+                // 博客类型页面使用blog布局
+                if (in_array($pageType, [
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG,
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY,
+                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST
+                ])) {
+                    $layoutCode = 'blog';
+                } else {
+                    $layoutCode = 'default';
+                }
+            }
+        }
+        $this->assign('layout_code', $layoutCode);
         ?>
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
@@ -1386,6 +1579,28 @@ if (typeof window.openVisualConfig === 'undefined') {
             if (wrapper) {
                 wrapper.classList.add('active');
                 document.body.style.overflow = 'hidden';
+                
+                // 默认进入全屏模式并收起配置栏
+                wrapper.classList.add('fullscreen-mode');
+                
+                var fullscreenBtn = document.getElementById('fullscreenBtn');
+                if (fullscreenBtn) {
+                    fullscreenBtn.classList.add('active');
+                    var icon = fullscreenBtn.querySelector('i');
+                    if (icon) {
+                        icon.className = 'mdi mdi-fullscreen-exit';
+                    }
+                }
+                
+                var configPanel = document.getElementById('configPanel');
+                if (configPanel) {
+                    configPanel.classList.add('collapsed');
+                }
+                
+                var floatingBtn = document.getElementById('floatingExpandBtn');
+                if (floatingBtn) {
+                    floatingBtn.style.display = 'block';
+                }
             }
             if (typeof window.visualConfigLazyInit === 'function') {
                 window.visualConfigLazyInit();
@@ -1411,11 +1626,9 @@ if (typeof window.openVisualConfig === 'undefined') {
 // ========== 组件初始化：支持通过 handle 或 page_id 初始化 ==========
 // 使用唯一的初始化标识，避免在 iframe 环境中重复初始化导致内存耗尽
 (function() {
-    try { console.log('[VisualConfig] 组件脚本运行'); } catch (_){ }
     // 检查是否已经在当前 window 中初始化过（防止重复执行）
     const initKey = 'visualConfigInit_' + (window.location.href || 'default');
     if (window[initKey]) {
-        console.log('⚠️ 可视化配置组件已初始化，跳过重复初始化');
         return;
     }
     window[initKey] = true;
@@ -1460,7 +1673,6 @@ if (typeof window.openVisualConfig === 'undefined') {
         
         // 如果只有 handle 没有 pageId，需要通过 API 获取
         if (handle && !pageId) {
-            console.log('📡 通过 handle 获取页面信息:', handle);
             fetch('<?= $this->getBackendUrl('pagebuilder/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
                 .then(response => response.json())
                 .then(result => {
@@ -1472,14 +1684,10 @@ if (typeof window.openVisualConfig === 'undefined') {
                             window.defaultLanguage = result.data.default_locale;
                             window.currentVisualLanguage = result.data.default_locale;
                         }
-                        console.log('✅ 页面信息获取成功:', { pageId, handle, defaultLocale: window.defaultLanguage });
                         window.visualConfigInitialized = true;
-                    } else {
-                        console.error('❌ 获取页面信息失败:', result.message || '未知错误');
                     }
                 })
                 .catch(error => {
-                    console.error('❌ API 调用失败:', error);
                     if (typeof pageId !== 'undefined' && pageId) {
                         window.visualPageId = pageId;
                         window.visualConfigInitialized = true;
@@ -1495,12 +1703,6 @@ if (typeof window.openVisualConfig === 'undefined') {
             window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>;
             window.currentVisualLanguage = window.defaultLanguage;
         }
-        
-        console.log('✅ 可视化配置组件初始化完成', {
-            pageId: window.visualPageId,
-            handle: window.visualConfigHandle,
-            defaultLanguage: window.defaultLanguage
-        });
     };
     
     if (document.readyState === 'loading') {
@@ -1513,7 +1715,6 @@ if (typeof window.openVisualConfig === 'undefined') {
     window.visualConfigLazyInit = initVisualConfig;
     // 在外部渲染完成后，组件内部也能重新初始化
     window.addEventListener('VisualEditor:rendered', function(){
-        try { console.log('[VisualConfig] 组件捕获 VisualEditor:rendered，重新初始化'); } catch(_){ }
         setTimeout(initVisualConfig, 0);
     });
 })();
@@ -1541,8 +1742,35 @@ const AUTO_SAVE_DELAY = 1000; // 1秒
 
 // 打开可视化配置
 function openVisualConfig(passedHandle) {
-    document.getElementById('visualConfigWrapper').classList.add('active');
+    const wrapper = document.getElementById('visualConfigWrapper');
+    wrapper.classList.add('active');
     document.body.style.overflow = 'hidden';
+    
+    // 默认进入全屏模式并收起配置栏
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const configPanel = document.getElementById('configPanel');
+    const floatingBtn = document.getElementById('floatingExpandBtn');
+    
+    // 进入全屏模式
+    wrapper.classList.add('fullscreen-mode');
+    if (fullscreenBtn) {
+        fullscreenBtn.classList.add('active');
+        const icon = fullscreenBtn.querySelector('i');
+        if (icon) {
+            icon.className = 'mdi mdi-fullscreen-exit';
+        }
+        fullscreenBtn.title = '<?= __('退出全屏') ?>';
+    }
+    
+    // 收起配置栏
+    if (configPanel) {
+        configPanel.classList.add('collapsed');
+    }
+    // 显示悬浮展开按钮
+    if (floatingBtn) {
+        floatingBtn.style.display = 'block';
+    }
+    
     // 如果外部传入了 handle，则以它为准，由组件自行通过接口解析 pageId
     if (typeof passedHandle === 'string' && passedHandle.trim()) {
         window.visualConfigHandle = passedHandle.trim();
@@ -1602,7 +1830,6 @@ function closeVisualConfig() {
                 showConfirmButton: false
             });
         } else {
-            console.log('<?= __('AI正在生成配置，请等待生成完成') ?>');
         }
         return;
     }
@@ -1614,7 +1841,6 @@ function closeVisualConfig() {
 try {
     if (!window.openVisualConfig) {
         window.openVisualConfig = openVisualConfig;
-        console.log('[VisualConfig] 已挂载 window.openVisualConfig(handle)');
     }
     if (!window.closeVisualConfig) {
         window.closeVisualConfig = closeVisualConfig;
@@ -1822,11 +2048,34 @@ window.autoSaveVisualConfig = function() {
 };
 
 // 刷新预览（全局函数，确保可以被 selectColorScheme 调用）
-window.refreshPreview = function() {
+// 支持保持滚动位置，可传入预先保存的位置 { scrollX, scrollY }
+window.refreshPreview = function(savedPosition) {
     const loading = document.getElementById('previewLoading');
     const iframe = document.getElementById('previewIframe');
     
-    if (!loading || !iframe) return;
+    if (!loading || !iframe) {
+        return;
+    }
+    
+    // 保存当前滚动位置（如果没有传入预保存的位置）
+    let savedScrollX = 0;
+    let savedScrollY = 0;
+    
+    if (savedPosition && (savedPosition.scrollX || savedPosition.scrollY)) {
+        // 使用传入的预保存位置
+        savedScrollX = savedPosition.scrollX || 0;
+        savedScrollY = savedPosition.scrollY || 0;
+    } else {
+        // 尝试获取当前滚动位置
+        try {
+            if (iframe.contentWindow && iframe.contentDocument) {
+                savedScrollX = iframe.contentWindow.scrollX || iframe.contentDocument.documentElement.scrollLeft || 0;
+                savedScrollY = iframe.contentWindow.scrollY || iframe.contentDocument.documentElement.scrollTop || 0;
+            }
+        } catch (e) {
+            // 忽略
+        }
+    }
     
     loading.classList.add('active');
     
@@ -1864,6 +2113,27 @@ window.refreshPreview = function() {
     // 监听加载完成
     iframe.onload = function() {
         loading.classList.remove('active');
+        
+        // 恢复滚动位置
+        if (savedScrollY > 0 || savedScrollX > 0) {
+            // 延迟恢复，确保内容已渲染
+            setTimeout(() => {
+                try {
+                    if (iframe.contentWindow) {
+                        iframe.contentWindow.scrollTo(savedScrollX, savedScrollY);
+                    }
+                } catch (e) {
+                    // 忽略
+                }
+            }, 100);
+        }
+        
+        // 重新设置拖放区域
+        setTimeout(() => {
+            if (typeof setupPreviewDropZones === 'function') {
+                setupPreviewDropZones();
+            }
+        }, 200);
     };
 }
 
@@ -1971,7 +2241,6 @@ window.selectColorScheme = function(fieldId, schemeKey) {
         if (typeof window.autoSaveConfig === 'function') {
             window.autoSaveConfig(true).then(() => {
                 // 保存成功后刷新预览
-                console.log('✅ 色系配置已保存，刷新预览...');
                 if (typeof refreshTemplatePreview === 'function') {
                     refreshTemplatePreview();
                 } else if (typeof window.refreshPreview === 'function') {
@@ -2086,8 +2355,6 @@ async function loadTemplateStyleConfig(forceScan = false) {
         
         const response = await fetch(url);
         const result = await response.json();
-        try { console.log('[VisualConfig] 页面模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
-        try { console.log('[VisualConfig] 模板模式配置载入'); console.log('请求URL:', url); console.log('返回结构:', result); } catch (_) {}
         
         if (result.success && result.data) {
             // 显示模板信息（名称 + 代码）
@@ -2122,7 +2389,6 @@ async function loadTemplateStyleConfig(forceScan = false) {
 
 // 模板配置模式：渲染模板配置
 function renderTemplateConfig(configGroups) {
-    try { console.log('[VisualConfig] 渲染配置分组'); console.log('分组keys:', Object.keys(configGroups || {})); } catch (_) {}
 
     // 初始化 SEO / TDK 配置块：同步当前语言下的 TDK 值，并绑定自动保存
     function initSeoSection() {
@@ -2233,7 +2499,6 @@ function renderTemplateConfig(configGroups) {
     function renderConfigField(configKey, config) {
         const rawValue = config.value !== undefined ? config.value : (config.default || '');
         const fieldId = 'config_' + configKey.replace(/\./g, '_');
-        try { console.log('[VisualConfig] 渲染字段:', { configKey, type: config.type || 'text', default: config.default || '', value: rawValue }); } catch (_) {}
         
         let fieldHtml = `<div class="mb-3 config-field-item" data-config-key="${escapeHtmlForTemplate(configKey)}" data-config-label="${escapeHtmlForTemplate(config.label || '')}" data-config-description="${escapeHtmlForTemplate(config.description || config.note || '')}">`;
         // 添加恢复默认值按钮到标签中
@@ -2369,6 +2634,17 @@ function renderTemplateConfig(configGroups) {
                 fieldHtml += `<option value="${escapeHtmlForTemplate(optValue)}" ${rawValue == optValue ? 'selected' : ''}>${escapeHtmlForTemplate(config.options[optValue])}</option>`;
             }
             fieldHtml += `</select>`;
+        } else if (config.type === 'multiselect' && config.options) {
+            // 多选下拉
+            const selectedValues = Array.isArray(rawValue) ? rawValue : (rawValue ? String(rawValue).split(',') : []);
+            fieldHtml += `<select id="${fieldId}" class="form-select auto-save-field" multiple style="min-height: 120px;"
+                    data-config-key="${escapeHtmlForTemplate(configKey)}">`;
+            for (const optValue in config.options) {
+                const isSelected = selectedValues.includes(String(optValue));
+                fieldHtml += `<option value="${escapeHtmlForTemplate(optValue)}" ${isSelected ? 'selected' : ''}>${escapeHtmlForTemplate(config.options[optValue])}</option>`;
+            }
+            fieldHtml += `</select>`;
+            fieldHtml += `<small class="form-text text-muted"><?= __('按住 Ctrl/Cmd 可多选') ?></small>`;
         } else if (config.type === 'radio' && config.options) {
             // Radio 类型
             for (const optValue in config.options) {
@@ -2378,6 +2654,143 @@ function renderTemplateConfig(configGroups) {
                         name="${fieldId}" data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(optValue)}" ${rawValue == optValue ? 'checked' : ''}>`;
                 fieldHtml += `<label class="form-check-label" for="${fieldId}_${optValue}">${escapeHtmlForTemplate(optLabel)}</label>`;
                 fieldHtml += `</div>`;
+            }
+        } else if (config.type === 'checkbox_group' && config.options) {
+            // 复选框组
+            const selectedValues = Array.isArray(rawValue) ? rawValue : (rawValue ? String(rawValue).split(',') : []);
+            fieldHtml += `<div class="checkbox-group" id="${fieldId}_group">`;
+            for (const optValue in config.options) {
+                const isChecked = selectedValues.includes(String(optValue));
+                fieldHtml += `<div class="form-check">`;
+                fieldHtml += `<input type="checkbox" id="${fieldId}_${optValue}" class="form-check-input auto-save-field" 
+                        data-config-key="${escapeHtmlForTemplate(configKey)}" data-checkbox-group="${fieldId}" value="${escapeHtmlForTemplate(optValue)}" ${isChecked ? 'checked' : ''}>`;
+                fieldHtml += `<label class="form-check-label" for="${fieldId}_${optValue}">${escapeHtmlForTemplate(config.options[optValue])}</label>`;
+                fieldHtml += `</div>`;
+            }
+            fieldHtml += `</div>`;
+        } else if (config.type === 'number') {
+            // 数字输入（支持 min/max/step）
+            const minAttr = config.min !== undefined ? `min="${config.min}"` : '';
+            const maxAttr = config.max !== undefined ? `max="${config.max}"` : '';
+            const stepAttr = config.step !== undefined ? `step="${config.step}"` : '';
+            fieldHtml += `<input type="number" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}" 
+                    placeholder="${escapeHtmlForTemplate(config.placeholder || '')}" ${minAttr} ${maxAttr} ${stepAttr}>`;
+        } else if (config.type === 'url') {
+            // URL 输入
+            fieldHtml += `<input type="url" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}" 
+                    placeholder="${escapeHtmlForTemplate(config.placeholder || 'https://')}">`;
+        } else if (config.type === 'image' || config.type === 'image_picker') {
+            // 图片选择器
+            fieldHtml += `<div class="input-group">
+                <input type="text" id="${fieldId}" class="form-control auto-save-field" 
+                        data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}" 
+                        placeholder="<?= __('图片URL') ?>">
+                <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${fieldId}">
+                    <i class="mdi mdi-image"></i> <?= __('选择') ?>
+                </button>
+            </div>`;
+            if (rawValue) {
+                fieldHtml += `<div class="mt-2 image-preview-container">
+                    <img src="${escapeHtmlForTemplate(rawValue)}" class="img-thumbnail" style="max-height: 100px;">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="document.getElementById('${fieldId}').value='';this.parentElement.remove();">
+                        <i class="mdi mdi-delete"></i>
+                    </button>
+                </div>`;
+            }
+        } else if (config.type === 'file') {
+            // 文件选择器
+            fieldHtml += `<div class="input-group">
+                <input type="text" id="${fieldId}" class="form-control auto-save-field" 
+                        data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}" 
+                        placeholder="<?= __('文件路径') ?>">
+                <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="${fieldId}" data-accept="${escapeHtmlForTemplate(config.accept || '*')}">
+                    <i class="mdi mdi-folder-open"></i> <?= __('浏览') ?>
+                </button>
+            </div>`;
+        } else if (config.type === 'date') {
+            // 日期选择器
+            fieldHtml += `<input type="date" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
+        } else if (config.type === 'datetime') {
+            // 日期时间选择器
+            fieldHtml += `<input type="datetime-local" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
+        } else if (config.type === 'rich_text') {
+            // 富文本编辑器
+            fieldHtml += `<textarea id="${fieldId}" class="form-control auto-save-field rich-text-editor" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" rows="${config.rows || 6}">${escapeHtmlForTemplate(rawValue)}</textarea>`;
+            fieldHtml += `<small class="form-text text-muted"><?= __('支持 HTML 格式') ?></small>`;
+        } else if (config.type === 'eav_select') {
+            // EAV 属性选择器
+            const entityCode = config.entity_code || 'product';
+            fieldHtml += `<select id="${fieldId}" class="form-select auto-save-field eav-attribute-select" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" data-entity-code="${escapeHtmlForTemplate(entityCode)}">
+                <option value=""><?= __('-- 加载中... --') ?></option>
+            </select>`;
+            // 延迟加载脚本
+            fieldHtml += `<script>
+                (function() {
+                    var select = document.getElementById('${fieldId}');
+                    if (!select) return;
+                    fetch('<?= $this->getUrl("weline/eav/api/options/attributes") ?>?entity_code=${escapeHtmlForTemplate(entityCode)}')
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data.success && data.data.attributes) {
+                                select.innerHTML = '<option value=""><?= __('-- 请选择属性 --') ?></option>';
+                                data.data.attributes.forEach(function(attr) {
+                                    var opt = document.createElement('option');
+                                    opt.value = attr.code;
+                                    opt.textContent = attr.name + ' (' + attr.code + ')';
+                                    if ('${escapeHtmlForTemplate(rawValue)}' === attr.code) opt.selected = true;
+                                    select.appendChild(opt);
+                                });
+                            }
+                        })
+                        .catch(function(err) {
+                            select.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+                        });
+                })();
+            <\/script>`;
+        } else if (config.type === 'eav_options') {
+            // EAV 属性选项选择器
+            const entityCode = config.entity_code || 'product';
+            const attributeCode = config.attribute_code || '';
+            const multiple = config.multiple || false;
+            fieldHtml += `<select id="${fieldId}" class="form-select auto-save-field eav-options-select" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" 
+                    data-entity-code="${escapeHtmlForTemplate(entityCode)}" 
+                    data-attribute-code="${escapeHtmlForTemplate(attributeCode)}" 
+                    ${multiple ? 'multiple style="min-height: 120px;"' : ''}>
+                <option value=""><?= __('-- 加载中... --') ?></option>
+            </select>`;
+            if (attributeCode) {
+                const selectedValues = multiple ? (Array.isArray(rawValue) ? rawValue : (rawValue ? String(rawValue).split(',') : [])) : [rawValue];
+                fieldHtml += `<script>
+                    (function() {
+                        var select = document.getElementById('${fieldId}');
+                        if (!select) return;
+                        var currentValues = ${JSON.stringify(selectedValues)};
+                        fetch('<?= $this->getUrl("weline/eav/api/options") ?>?entity_code=${escapeHtmlForTemplate(entityCode)}&attribute_code=${escapeHtmlForTemplate(attributeCode)}')
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (data.success && data.data.options) {
+                                    select.innerHTML = '<option value=""><?= __('-- 请选择 --') ?></option>';
+                                    data.data.options.forEach(function(opt) {
+                                        var option = document.createElement('option');
+                                        option.value = opt.id;
+                                        option.textContent = opt.value;
+                                        if (currentValues.includes(String(opt.id))) option.selected = true;
+                                        select.appendChild(option);
+                                    });
+                                }
+                            })
+                            .catch(function(err) {
+                                select.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+                            });
+                    })();
+                <\/script>`;
             }
         } else {
             fieldHtml += `<input type="${config.type || 'text'}" id="${fieldId}" class="form-control auto-save-field" 
@@ -2393,7 +2806,6 @@ function renderTemplateConfig(configGroups) {
     function renderConfigGroup(fileKey, groupKey, group, isColorScheme = false) {
         const sectionId = 'config_' + fileKey + '_' + groupKey;
         let groupHtml = `<div class="config-section ${isColorScheme ? 'color-scheme-section' : ''}" id="${sectionId}">`;
-        try { console.log('[VisualConfig] 渲染分组:', { fileKey, groupKey, isColorScheme, configsCount: group && group.configs ? Object.keys(group.configs).length : 0 }); } catch (_) {}
         
         // 配色方案分组：不可折叠，不显示折叠图标
         if (isColorScheme) {
@@ -2503,9 +2915,17 @@ function renderTemplateConfig(configGroups) {
             }
         }
         
-        // 恢复分组展开状态并默认展开第一个组（SEO 与配色分组始终展开）
+        // 恢复分组展开状态（SEO/TDK 与配色分组始终展开，其他根据模板类型决定）
         const allSections = Array.from(document.querySelectorAll('.config-section:not(.color-scheme-section):not(.seo-section)'));
         let firstSectionFound = false;
+        
+        // 获取当前样式代码，判断是否为新版模板
+        const externalStyleSelect = document.getElementById('style');
+        const currentStyleCode = externalStyleSelect ? externalStyleSelect.value : (window.currentStyle || window.currentTemplateStyleCode || '');
+        
+        // 新版模板列表（这些模板默认收起所有非 SEO/TDK 分组）
+        const newStyleTemplates = ['tpmst', 'marketing-landing', 'modern-shop'];
+        const isNewStyleTemplate = newStyleTemplates.some(t => currentStyleCode.toLowerCase().includes(t.toLowerCase()));
         
         // 获取所有保存的状态
         let savedStates = {};
@@ -2535,9 +2955,13 @@ function renderTemplateConfig(configGroups) {
                     section.classList.remove('collapsed');
                 }
             } else {
-                // 没有保存的状态
-                if (!hasAnySavedState && !firstSectionFound && index === 0) {
-                    // 首次加载且是第一个组，默认展开
+                // 没有保存的状态，根据模板类型决定默认行为
+                if (isNewStyleTemplate) {
+                    // 新版模板：默认全部收起
+                    section.classList.add('collapsed');
+                    saveSectionState(sectionId, false);
+                } else if (!hasAnySavedState && !firstSectionFound && index === 0) {
+                    // 旧模板：首次加载且是第一个组，默认展开
                     firstSectionFound = true;
                     section.classList.remove('collapsed');
                     saveSectionState(sectionId, true);
@@ -2612,7 +3036,6 @@ function refreshTemplateConfig(event) {
     
     loadTemplateStyleConfig(true)
         .then(() => {
-            console.log('✅ 配置刷新成功');
             refreshTemplatePreview();
         })
         .catch(error => {
@@ -2810,7 +3233,6 @@ window.toggleConfigPanel = function() {
 
 // ========== 语言切换功能 ==========
 window.switchVisualLanguage = function(language) {
-    console.log('🌐 切换语言:', language);
     
     // 更新当前语言（如果是在模板配置模式，需要特殊处理）
     if (window.isTemplateConfigMode) {
@@ -3152,7 +3574,6 @@ async function handleConfigImport(event) {
                     showConfirmButton: false
                 });
             } else {
-                console.log('<?= __("导入成功") ?>: ', result.message || '<?= __("配置已导入") ?>');
             }
             
             // 重新加载配置
@@ -3218,7 +3639,6 @@ window.resetVisualConfigField = function(button) {
     const defaultValue = button.getAttribute('data-default-value');
     const configKey = button.getAttribute('data-config-key');
     
-    console.log('🔄 恢复默认值:', { fieldId, fieldType, defaultValue, configKey });
     
     const field = document.getElementById(fieldId);
     if (!field) {
@@ -3302,7 +3722,6 @@ window.resetVisualConfigField = function(button) {
     if (typeof showToast === 'function') {
         showToast('success', '<?= __('成功') ?>', '<?= __('已恢复为默认值') ?>');
     } else {
-        console.log('✅ 字段已恢复默认值');
     }
 };
 
@@ -3387,7 +3806,6 @@ window.resetAllVisualConfig = function() {
                     }
                 });
                 
-                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
                 
                 // 更新保存状态
                 updateSaveStatus('saving', '<?= __('重置中...') ?>');
@@ -3428,7 +3846,6 @@ window.resetAllVisualConfig = function() {
                 const result = await response.json();
                 
                 if (result.success) {
-                    console.log('✅ 全部重置成功，重新加载配置...');
                     
                     // 重新加载配置
                     if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
@@ -3496,7 +3913,6 @@ window.resetVisualConfigGroup = function(section) {
                     }
                 });
                 
-                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
                 
                 // 更新保存状态
                 updateSaveStatus('saving', '<?= __('重置中...') ?>');
@@ -3537,7 +3953,6 @@ window.resetVisualConfigGroup = function(section) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    console.log('✅ 重置成功，重新加载配置...');
                     
                     // 重新加载配置
                     if (window.isTemplateConfigMode && typeof loadTemplateStyleConfig === 'function') {
@@ -3747,7 +4162,6 @@ window.performConfigFill = function(configItems, filledInputs) {
             showConfirmButton: false
         });
     } else {
-        console.log(`<?= __('生成成功，已填充') ?> ${filledCount} <?= __('个配置项') ?>`);
     }
     
     // 自动保存
@@ -3845,6 +4259,10 @@ window.setupPreviewDropZones = function() {
     const previewFrame = document.getElementById('previewIframe');
     if (!previewFrame || !previewFrame.contentWindow) return;
     
+    // 保存主窗口和iframe的引用，以便在事件处理函数中使用
+    const mainWindow = window;
+    const iframeElement = previewFrame;
+    
     try {
         const doc = previewFrame.contentWindow.document;
         
@@ -3858,6 +4276,31 @@ window.setupPreviewDropZones = function() {
                     position: relative;
                     min-height: 50px;
                 }
+                /* 插入位置指示器 */
+                .insert-indicator {
+                    height: 3px;
+                    background: #3498db;
+                    margin: 4px 0;
+                    border-radius: 2px;
+                    opacity: 0.9;
+                    box-shadow: 0 0 8px rgba(52, 152, 219, 0.6);
+                    pointer-events: none;
+                    transition: opacity 0.2s ease;
+                    position: relative;
+                }
+                .insert-indicator::before {
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    width: 8px;
+                    height: 8px;
+                    background: #3498db;
+                    border-radius: 50%;
+                    box-shadow: 0 0 4px rgba(52, 152, 219, 0.8);
+                }
+                
                 [data-region].drag-over {
                     background: rgba(52, 152, 219, 0.1) !important;
                     outline: 3px solid #3498db !important;
@@ -3883,34 +4326,114 @@ window.setupPreviewDropZones = function() {
                     pointer-events: none;
                 }
                 .tpmst-component-wrapper {
-                    position: relative;
+                    position: relative !important;
+                    transition: box-shadow 0.2s ease;
+                    z-index: 1 !important;
+                }
+                /* header/footer 区域的组件包装器需要更高的 z-index */
+                [data-region="header"] .tpmst-component-wrapper,
+                [data-region="footer"] .tpmst-component-wrapper {
+                    z-index: 10000 !important;
                 }
                 .tpmst-component-wrapper:hover {
-                    outline: 2px solid rgba(52, 152, 219, 0.5);
-                    outline-offset: -2px;
+                    /* 参照 header 样式：使用边框内部虚线阴影，不要背景蒙版 */
+                    border: 2px dashed rgba(52, 152, 219, 0.6) !important;
+                    box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.3) !important;
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    z-index: 10001 !important;
+                }
+                /* 确保 hover 时伪元素也不显示背景 */
+                .tpmst-component-wrapper:hover::before,
+                .tpmst-component-wrapper:hover::after {
+                    background: transparent !important;
+                    background-color: transparent !important;
+                }
+                /* 确保内部元素不会阻挡 hover */
+                .tpmst-component-wrapper > * {
+                    pointer-events: auto;
+                }
+                /* header/footer 内的导航和内容区域确保可交互 */
+                [data-region="header"] .tpmst-component-wrapper .tpmst-nav,
+                [data-region="header"] .tpmst-component-wrapper nav,
+                [data-region="footer"] .tpmst-component-wrapper footer {
+                    position: relative !important;
                 }
                 .tpmst-component-wrapper .component-actions {
-                    position: absolute;
-                    top: 5px;
-                    right: 5px;
-                    display: none;
-                    gap: 5px;
-                    z-index: 9999;
+                    position: absolute !important;
+                    top: 8px !important;
+                    right: 8px !important;
+                    left: auto !important;
+                    bottom: auto !important;
+                    display: none !important;
+                    flex-direction: row !important;
+                    align-items: center !important;
+                    justify-content: flex-end !important;
+                    gap: 6px;
+                    z-index: 100000 !important;
+                    background: rgba(255,255,255,0.95) !important;
+                    padding: 6px 8px !important;
+                    border-radius: 6px !important;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05) !important;
+                    pointer-events: auto !important;
+                    margin: 0 !important;
+                    min-width: auto !important;
+                    width: auto !important;
+                    height: auto !important;
                 }
-                .tpmst-component-wrapper:hover .component-actions {
-                    display: flex;
+                .tpmst-component-wrapper:hover .component-actions,
+                .tpmst-component-wrapper .component-actions:hover {
+                    display: flex !important;
+                }
+                /* header/footer 区域的操作按钮需要更高的 z-index */
+                [data-region="header"] .tpmst-component-wrapper .component-actions,
+                [data-region="footer"] .tpmst-component-wrapper .component-actions {
+                    z-index: 100001 !important;
                 }
                 .tpmst-component-wrapper .component-actions button {
-                    padding: 5px 10px;
-                    background: rgba(0,0,0,0.7);
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #3498db;
                     color: #fff;
                     border: none;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     cursor: pointer;
-                    font-size: 12px;
+                    font-size: 14px;
+                    transition: all 0.2s ease;
                 }
                 .tpmst-component-wrapper .component-actions button:hover {
-                    background: rgba(0,0,0,0.9);
+                    background: #2980b9;
+                    transform: scale(1.1);
+                }
+                .tpmst-component-wrapper .component-actions button:last-child {
+                    background: #e74c3c;
+                }
+                .tpmst-component-wrapper .component-actions button:last-child:hover {
+                    background: #c0392b;
+                }
+                /* 排序按钮样式 */
+                .tpmst-component-wrapper .component-actions button.move-up {
+                    background: #27ae60;
+                }
+                .tpmst-component-wrapper .component-actions button.move-up:hover {
+                    background: #229954;
+                }
+                .tpmst-component-wrapper .component-actions button.move-down {
+                    background: #f39c12;
+                }
+                .tpmst-component-wrapper .component-actions button.move-down:hover {
+                    background: #e67e22;
+                }
+                .tpmst-component-wrapper .component-actions button:disabled {
+                    background: #95a5a6;
+                    opacity: 0.5;
+                }
+                .tpmst-component-wrapper .component-actions button:disabled:hover {
+                    transform: none;
                 }
             `;
             doc.head.appendChild(style);
@@ -3931,19 +4454,185 @@ window.setupPreviewDropZones = function() {
         
         // 为每个组件添加操作按钮
         doc.querySelectorAll('.tpmst-component-wrapper').forEach(wrapper => {
-            if (wrapper.querySelector('.component-actions')) return;
+            const region = wrapper.getAttribute('data-region');
             
+            // 确保wrapper有正确的定位样式
+            if (wrapper.style.position !== 'relative') {
+                wrapper.style.position = 'relative';
+            }
+            
+            // 初始化或重置 data-original-index
+            // 用于组件排序时追踪原始索引位置
+            // 每次刷新时都重置，因为顺序已经保存并更新
+            if (region === 'content') {
+                const currentIndex = wrapper.getAttribute('data-index');
+                if (currentIndex !== null) {
+                    wrapper.setAttribute('data-original-index', currentIndex);
+                }
+            }
+            
+            // 移除旧的操作按钮（如果存在）
+            const oldActions = wrapper.querySelector('.component-actions');
+            if (oldActions) {
+                oldActions.remove();
+            }
+            
+            // 创建新的操作按钮容器
             const actions = doc.createElement('div');
             actions.className = 'component-actions';
-            actions.innerHTML = `
-                <button onclick="parent.editComponentInPreview(this.closest('.tpmst-component-wrapper'))" title="编辑">
-                    <i class="mdi mdi-pencil"></i>
-                </button>
-                <button onclick="parent.removeComponentInPreview(this.closest('.tpmst-component-wrapper'))" title="删除">
-                    <i class="mdi mdi-delete"></i>
-                </button>
-            `;
+            // 确保按钮容器有正确的定位样式
+            actions.style.position = 'absolute';
+            actions.style.top = '8px';
+            actions.style.right = '8px';
+            actions.style.zIndex = '99999';
+            
+            // content 区域添加排序按钮
+            if (region === 'content') {
+                const wrapperIndex = wrapper.getAttribute('data-index') || '0';
+                
+                // 上移按钮
+                const moveUpBtn = doc.createElement('button');
+                moveUpBtn.className = 'move-up';
+                moveUpBtn.title = '上移';
+                moveUpBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg>';
+                moveUpBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    // 从主窗口调用函数
+                    if (mainWindow && mainWindow.moveComponentUpByIndex) {
+                        mainWindow.moveComponentUpByIndex(wrapperIndex);
+                    } else {
+                        console.error('无法找到 moveComponentUpByIndex 函数', mainWindow);
+                    }
+                });
+                actions.appendChild(moveUpBtn);
+                
+                // 下移按钮 - 已隐藏
+                // const moveDownBtn = doc.createElement('button');
+                // moveDownBtn.className = 'move-down';
+                // moveDownBtn.title = '下移';
+                // moveDownBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
+                // moveDownBtn.addEventListener('click', function(e) {
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     e.stopImmediatePropagation();
+                //     // 从主窗口调用函数，确保传递字符串类型的索引
+                //     const indexToPass = String(wrapperIndex);
+                //     console.log('下移按钮点击，wrapperIndex:', wrapperIndex, '传递的索引:', indexToPass);
+                //     if (mainWindow && typeof mainWindow.moveComponentDownByIndex === 'function') {
+                //         mainWindow.moveComponentDownByIndex(indexToPass);
+                //     } else {
+                //         console.error('无法找到 moveComponentDownByIndex 函数', {
+                //             mainWindow: !!mainWindow,
+                //             hasFunction: !!(mainWindow && mainWindow.moveComponentDownByIndex),
+                //             functionType: typeof (mainWindow && mainWindow.moveComponentDownByIndex)
+                //         });
+                //     }
+                // });
+                // actions.appendChild(moveDownBtn);
+            }
+            
+            // 编辑按钮
+            const editBtn = doc.createElement('button');
+            editBtn.title = '编辑';
+            editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>';
+            editBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // 从主窗口调用函数，传递wrapper元素（从iframe文档中获取）
+                if (mainWindow && mainWindow.editComponentInPreview && iframeElement) {
+                    try {
+                        // 从iframe文档中重新获取wrapper元素，确保主窗口可以访问
+                        const iframeDoc = iframeElement.contentWindow.document;
+                        const componentCode = wrapper.getAttribute('data-component');
+                        const wrapperRegion = wrapper.getAttribute('data-region');
+                        const wrapperIndex = wrapper.getAttribute('data-index');
+                        
+                        // 构建查询选择器：header/footer 区域没有 data-index，需要区分处理
+                        let selector = `.tpmst-component-wrapper[data-component="${componentCode}"][data-region="${wrapperRegion}"]`;
+                        if (wrapperIndex !== null && wrapperIndex !== undefined) {
+                            selector += `[data-index="${wrapperIndex}"]`;
+                        }
+                        
+                        // 通过属性重新查找wrapper
+                        const targetWrapper = iframeDoc.querySelector(selector);
+                        if (targetWrapper) {
+                            mainWindow.editComponentInPreview(targetWrapper);
+                        } else {
+                            console.error('无法找到目标组件元素', { componentCode, wrapperRegion, wrapperIndex, selector });
+                        }
+                    } catch (err) {
+                        console.error('编辑组件时出错:', err);
+                    }
+                } else {
+                    console.error('无法找到 editComponentInPreview 函数或iframe元素', { mainWindow, iframeElement });
+                }
+            });
+            actions.appendChild(editBtn);
+            
+            // 删除按钮
+            const removeBtn = doc.createElement('button');
+            removeBtn.title = '删除';
+            removeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
+            removeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // 从主窗口调用函数，传递wrapper元素（从iframe文档中获取）
+                if (mainWindow && mainWindow.removeComponentInPreview && iframeElement) {
+                    try {
+                        // 从iframe文档中重新获取wrapper元素，确保主窗口可以访问
+                        const iframeDoc = iframeElement.contentWindow.document;
+                        const componentCode = wrapper.getAttribute('data-component');
+                        const wrapperRegion = wrapper.getAttribute('data-region');
+                        const wrapperIndex = wrapper.getAttribute('data-index');
+                        
+                        // 构建查询选择器：header/footer 区域没有 data-index，需要区分处理
+                        let selector = `.tpmst-component-wrapper[data-component="${componentCode}"][data-region="${wrapperRegion}"]`;
+                        if (wrapperIndex !== null && wrapperIndex !== undefined) {
+                            selector += `[data-index="${wrapperIndex}"]`;
+                        }
+                        
+                        // 通过属性重新查找wrapper
+                        const targetWrapper = iframeDoc.querySelector(selector);
+                        if (targetWrapper) {
+                            mainWindow.removeComponentInPreview(targetWrapper);
+                        } else {
+                            console.error('无法找到目标组件元素', { componentCode, wrapperRegion, wrapperIndex, selector });
+                        }
+                    } catch (err) {
+                        console.error('删除组件时出错:', err);
+                    }
+                } else {
+                    console.error('无法找到 removeComponentInPreview 函数或iframe元素', { mainWindow, iframeElement });
+                }
+            });
+            actions.appendChild(removeBtn);
+            
             wrapper.appendChild(actions);
+        });
+        
+        // 更新所有 content 区域组件的排序按钮状态
+        doc.querySelectorAll('.tpmst-component-wrapper[data-region="content"]').forEach(wrapper => {
+            try {
+                const contentZone = wrapper.closest('[data-region="content"]');
+                if (!contentZone) return;
+                
+                const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+                const currentIndex = components.indexOf(wrapper);
+                
+                const moveUpBtn = wrapper.querySelector('.move-up');
+                const moveDownBtn = wrapper.querySelector('.move-down');
+                
+                if (moveUpBtn) {
+                    moveUpBtn.disabled = currentIndex === 0;
+                }
+                if (moveDownBtn) {
+                    moveDownBtn.disabled = currentIndex === components.length - 1;
+                }
+            } catch (e) {
+                console.warn('更新排序按钮状态失败:', e);
+            }
         });
         
     } catch (e) {
@@ -3955,17 +4644,118 @@ function handlePreviewDragOver(e) {
     e.preventDefault();
     e.stopPropagation();
     this.classList.add('drag-over');
+    
+    // 如果是 content 区域，显示插入位置指示器
+    const targetRegion = this.getAttribute('data-region');
+    const isMultiple = this.getAttribute('data-multiple') === 'true';
+    
+    if (targetRegion === 'content' && isMultiple) {
+        showInsertIndicator(e, this);
+    }
+}
+
+// 显示插入位置指示器
+function showInsertIndicator(e, dropZone) {
+    const components = Array.from(dropZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+    
+    // 移除之前的指示器
+    const existingIndicator = dropZone.querySelector('.insert-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    if (components.length === 0) {
+        // 如果没有组件，在区域顶部显示指示器
+        const indicator = document.createElement('div');
+        indicator.className = 'insert-indicator';
+        dropZone.insertBefore(indicator, dropZone.firstChild);
+        return;
+    }
+    
+    // 使用相对于 dropZone 的坐标
+    const dropZoneRect = dropZone.getBoundingClientRect();
+    const dropY = e.clientY;
+    
+    // 找到鼠标位置所在的组件或最近的组件
+    let targetComponent = null;
+    let insertBefore = true;
+    
+    for (let i = 0; i < components.length; i++) {
+        const component = components[i];
+        const rect = component.getBoundingClientRect();
+        
+        // 检查鼠标是否在当前组件内部
+        if (dropY >= rect.top && dropY <= rect.bottom) {
+            // 鼠标在组件内部，判断是在上半部分还是下半部分
+            const componentMiddle = rect.top + rect.height / 2;
+            if (dropY < componentMiddle) {
+                // 鼠标在组件上半部分，在该组件之前插入
+                targetComponent = component;
+                insertBefore = true;
+            } else {
+                // 鼠标在组件下半部分，在该组件之后插入
+                targetComponent = component;
+                insertBefore = false;
+            }
+            break;
+        }
+        
+        // 如果鼠标在当前组件之前
+        if (dropY < rect.top) {
+            targetComponent = component;
+            insertBefore = true;
+            break;
+        }
+    }
+    
+    // 创建指示器
+    const indicator = document.createElement('div');
+    indicator.className = 'insert-indicator';
+    
+    if (targetComponent) {
+        if (insertBefore) {
+            // 在目标组件之前插入
+            dropZone.insertBefore(indicator, targetComponent);
+        } else {
+            // 在目标组件之后插入
+            if (targetComponent.nextSibling) {
+                dropZone.insertBefore(indicator, targetComponent.nextSibling);
+            } else {
+                dropZone.appendChild(indicator);
+            }
+        }
+    } else {
+        // 如果鼠标在所有组件之后，在最后一个组件之后插入
+        const lastComponent = components[components.length - 1];
+        if (lastComponent.nextSibling) {
+            dropZone.insertBefore(indicator, lastComponent.nextSibling);
+        } else {
+            dropZone.appendChild(indicator);
+        }
+    }
 }
 
 function handlePreviewDragLeave(e) {
     e.preventDefault();
     this.classList.remove('drag-over');
+    
+    // 移除插入指示器
+    const indicator = this.querySelector('.insert-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
 }
 
 function handlePreviewDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     this.classList.remove('drag-over');
+    
+    // 移除插入指示器
+    const indicator = this.querySelector('.insert-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
     
     try {
         const data = JSON.parse(e.dataTransfer.getData('text/plain'));
@@ -4000,24 +4790,293 @@ function handlePreviewDrop(e) {
             return;
         }
         
+        // 计算插入位置（仅对 content 区域有效）
+        let insertPosition = null;
+        if (targetRegion === 'content' && isMultiple) {
+            insertPosition = calculateInsertPosition(e, this);
+        }
+        
         // 添加组件
-        window.parent.addComponentToLayout(data, targetRegion, false);
+        window.parent.addComponentToLayout(data, targetRegion, false, insertPosition);
         
     } catch (err) {
         console.error('Drop error:', err);
     }
 }
 
-// 添加组件到布局
-window.addComponentToLayout = async function(componentData, region, replace = false) {
-    const pageId = window.visualPageId || 0;
-    if (!pageId) {
-        console.error('页面ID未定义');
+// 计算插入位置
+function calculateInsertPosition(e, dropZone) {
+    const components = Array.from(dropZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+    
+    if (components.length === 0) {
+        return 0; // 第一个位置
+    }
+    
+    const dropY = e.clientY;
+    
+    // 找到鼠标位置所在的组件或最近的组件
+    for (let i = 0; i < components.length; i++) {
+        const component = components[i];
+        const rect = component.getBoundingClientRect();
+        
+        // 检查鼠标是否在当前组件内部
+        if (dropY >= rect.top && dropY <= rect.bottom) {
+            // 鼠标在组件内部，判断是在上半部分还是下半部分
+            const componentMiddle = rect.top + rect.height / 2;
+            if (dropY < componentMiddle) {
+                // 鼠标在组件上半部分，在该组件之前插入
+                return i;
+            } else {
+                // 鼠标在组件下半部分，在该组件之后插入
+                return i + 1;
+            }
+        }
+        
+        // 如果鼠标在当前组件之前
+        if (dropY < rect.top) {
+            return i;
+        }
+    }
+    
+    // 如果鼠标在所有组件之后，插入到末尾
+    return components.length;
+}
+
+// 更新排序按钮的禁用状态
+function updateSortButtonsState(wrapper) {
+    try {
+        // wrapper 已经是 iframe 内的元素
+        const contentZone = wrapper.closest('[data-region="content"]');
+        if (!contentZone) return;
+        
+        const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        const currentIndex = components.indexOf(wrapper);
+        
+        const moveUpBtn = wrapper.querySelector('.move-up');
+        const moveDownBtn = wrapper.querySelector('.move-down');
+        
+        if (moveUpBtn) {
+            moveUpBtn.disabled = currentIndex === 0;
+        }
+        if (moveDownBtn) {
+            moveDownBtn.disabled = currentIndex === components.length - 1;
+        }
+    } catch (e) {
+        console.warn('更新排序按钮状态失败:', e);
+    }
+}
+
+// 通过索引上移组件
+window.moveComponentUpByIndex = async function(componentIndex) {
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    
+    try {
+        const doc = previewFrame.contentWindow.document;
+        const contentZone = doc.querySelector('[data-region="content"]');
+        if (!contentZone) return;
+        
+        // 查找所有content区域的组件
+        const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        
+        // 通过data-index查找目标组件（支持字符串和数字匹配）
+        const wrapper = components.find(w => {
+            const idx = w.getAttribute('data-index');
+            return idx === String(componentIndex) || idx === componentIndex;
+        });
+        
+        if (!wrapper) {
+            console.warn('未找到组件，index:', componentIndex);
+            return;
+        }
+        
+        const currentIndex = components.indexOf(wrapper);
+        
+        if (currentIndex <= 0) return; // 已经是第一个
+        
+        // 保存所有组件的原始索引（在移动之前）
+        // 如果组件还没有 data-original-index，则使用当前的 data-index 作为原始索引
+        components.forEach((comp, idx) => {
+            if (!comp.hasAttribute('data-original-index')) {
+                const currentIdx = comp.getAttribute('data-index');
+                comp.setAttribute('data-original-index', currentIdx !== null ? currentIdx : String(idx));
+            }
+        });
+        
+        // 交换 DOM 位置
+        const prevComponent = components[currentIndex - 1];
+        contentZone.insertBefore(wrapper, prevComponent);
+        
+        // 更新所有组件的data-index（保持data-original-index不变）
+        const updatedComponents = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        updatedComponents.forEach((comp, idx) => {
+            comp.setAttribute('data-index', String(idx));
+        });
+        
+        // 保存新顺序
+        await saveComponentOrder();
+        
+        // 更新按钮状态（在iframe中直接更新）
+        updatedComponents.forEach(w => {
+            try {
+                const moveUpBtn = w.querySelector('.move-up');
+                const moveDownBtn = w.querySelector('.move-down');
+                const currentIdx = updatedComponents.indexOf(w);
+                
+                if (moveUpBtn) {
+                    moveUpBtn.disabled = currentIdx === 0;
+                }
+                if (moveDownBtn) {
+                    moveDownBtn.disabled = currentIdx === updatedComponents.length - 1;
+                }
+            } catch (e) {
+                console.warn('更新按钮状态失败:', e);
+            }
+        });
+    } catch (e) {
+        console.error('上移组件失败:', e);
+        if (typeof refreshPreview === 'function') {
+            refreshPreview();
+        }
+    }
+};
+
+// 通过索引下移组件
+window.moveComponentDownByIndex = async function(componentIndex) {
+    console.log('moveComponentDownByIndex 被调用，componentIndex:', componentIndex);
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) {
+        console.warn('下移组件失败: 无法访问预览iframe');
         return;
     }
     
     try {
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/add') ?>', {
+        const doc = previewFrame.contentWindow.document;
+        const contentZone = doc.querySelector('[data-region="content"]');
+        if (!contentZone) {
+            console.warn('下移组件失败: 未找到content区域');
+            return;
+        }
+        
+        // 查找所有content区域的组件
+        const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        console.log('找到组件数量:', components.length);
+        
+        // 通过data-index查找目标组件（支持字符串和数字匹配）
+        const wrapper = components.find(w => {
+            const idx = w.getAttribute('data-index');
+            return idx === String(componentIndex) || idx === componentIndex;
+        });
+        
+        if (!wrapper) {
+            console.warn('下移组件失败: 未找到组件，index:', componentIndex, '所有索引:', components.map(w => w.getAttribute('data-index')));
+            return;
+        }
+        
+        const currentIndex = components.indexOf(wrapper);
+        console.log('当前组件索引:', currentIndex, '总组件数:', components.length);
+        
+        if (currentIndex >= components.length - 1) {
+            console.log('下移组件: 已经是最后一个，无需移动');
+            return; // 已经是最后一个
+        }
+        
+        // 保存所有组件的原始索引（在移动之前）
+        // 如果组件还没有 data-original-index，则使用当前的 data-index 作为原始索引
+        components.forEach((comp, idx) => {
+            if (!comp.hasAttribute('data-original-index')) {
+                const currentIdx = comp.getAttribute('data-index');
+                comp.setAttribute('data-original-index', currentIdx !== null ? currentIdx : String(idx));
+            }
+        });
+        
+        // 交换 DOM 位置
+        // 下移：将 wrapper 插入到下一个组件之后
+        // 参照上移函数的逻辑：上移是 insertBefore(wrapper, prevComponent)
+        // 下移需要插入到 nextComponent 之后，即插入到 nextComponent.nextSibling 之前
+        const nextComponent = components[currentIndex + 1];
+        
+        // 获取下一个组件的下一个兄弟节点（在移动之前获取，避免移动后引用失效）
+        const nextSibling = nextComponent.nextSibling;
+        
+        // 将 wrapper 插入到 nextSibling 之前（即 nextComponent 之后）
+        // 如果 nextSibling 为 null，insertBefore 会自动追加到末尾（这正是我们想要的）
+        contentZone.insertBefore(wrapper, nextSibling);
+        
+        // 更新所有组件的data-index（保持data-original-index不变）
+        const updatedComponents = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        updatedComponents.forEach((comp, idx) => {
+            comp.setAttribute('data-index', String(idx));
+        });
+        
+        // 保存新顺序
+        await saveComponentOrder();
+        
+        // 更新按钮状态（在iframe中直接更新）
+        updatedComponents.forEach(w => {
+            try {
+                const moveUpBtn = w.querySelector('.move-up');
+                const moveDownBtn = w.querySelector('.move-down');
+                const currentIdx = updatedComponents.indexOf(w);
+                
+                if (moveUpBtn) {
+                    moveUpBtn.disabled = currentIdx === 0;
+                }
+                if (moveDownBtn) {
+                    moveDownBtn.disabled = currentIdx === updatedComponents.length - 1;
+                }
+            } catch (e) {
+                console.warn('更新按钮状态失败:', e);
+            }
+        });
+    } catch (e) {
+        console.error('下移组件失败:', e);
+        if (typeof refreshPreview === 'function') {
+            refreshPreview();
+        }
+    }
+};
+
+// 保存组件顺序
+async function saveComponentOrder() {
+    const previewFrame = document.getElementById('previewIframe');
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    
+    try {
+        const doc = previewFrame.contentWindow.document;
+        const contentZone = doc.querySelector('[data-region="content"]');
+        if (!contentZone) return;
+        
+        // 获取当前 DOM 顺序的组件原始索引
+        // 后端期望的是：旧索引的新顺序数组，例如 [1, 0, 2] 表示新顺序是：旧索引1的组件、旧索引0的组件、旧索引2的组件
+        const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        const newOrder = components.map(wrapper => {
+            // 优先使用 data-original-index，如果没有则使用 data-index
+            const originalIdx = wrapper.getAttribute('data-original-index');
+            if (originalIdx !== null) {
+                return parseInt(originalIdx, 10);
+            }
+            return parseInt(wrapper.getAttribute('data-index') || '0', 10);
+        });
+        
+        const pageId = window.visualPageId || 0;
+        if (!pageId) {
+            console.error('页面ID未定义');
+            return;
+        }
+        
+        // 保存滚动位置
+        let savedScrollX = 0;
+        let savedScrollY = 0;
+        try {
+            if (previewFrame.contentWindow) {
+                savedScrollX = previewFrame.contentWindow.scrollX || 0;
+                savedScrollY = previewFrame.contentWindow.scrollY || 0;
+            }
+        } catch (e) {}
+        
+        // 调用 API 保存新顺序
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/reorder') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -4025,65 +5084,397 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
             },
             body: JSON.stringify({
                 page_id: pageId,
-                component_code: componentData.code,
-                region: region,
-                replace: replace,
-                template_code: componentData.template
+                region: 'content',
+                order: newOrder
             })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            // 刷新预览
+            // 刷新预览以更新索引
+            if (typeof refreshPreview === 'function') {
+                refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
+            }
+        } else {
+            console.error('排序失败:', result.message);
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('排序失败') ?>',
+                text: result.message || '<?= __('未知错误') ?>',
+                customClass: { container: 'swal2-dark-theme' }
+            });
+            // 如果失败，恢复原来的顺序
             if (typeof refreshPreview === 'function') {
                 refreshPreview();
+            }
+        }
+    } catch (err) {
+        console.error('排序错误:', err);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('排序失败') ?>',
+            text: err.message || '<?= __('未知错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+        // 如果出错，恢复原来的顺序
+        if (typeof refreshPreview === 'function') {
+            refreshPreview();
+        }
+    }
+}
+
+// 添加组件到布局
+window.addComponentToLayout = async function(componentData, region, replace = false, position = null) {
+    const pageId = window.visualPageId || 0;
+    
+    // 在操作前保存滚动位置
+    const iframe = document.getElementById('previewIframe');
+    let savedScrollX = 0;
+    let savedScrollY = 0;
+    try {
+        if (iframe && iframe.contentWindow && iframe.contentDocument) {
+            savedScrollX = iframe.contentWindow.scrollX || iframe.contentDocument.documentElement.scrollLeft || 0;
+            savedScrollY = iframe.contentWindow.scrollY || iframe.contentDocument.documentElement.scrollTop || 0;
+        }
+    } catch (e) {
+        // 忽略
+    }
+    
+    if (!pageId) {
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('错误') ?>',
+            text: '<?= __('页面ID未定义，请刷新页面重试') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+        return;
+    }
+    
+    try {
+        const requestData = {
+            page_id: pageId,
+            component_code: componentData.code,
+            region: region,
+            replace: replace,
+            template_code: componentData.template || ''
+        };
+        
+        // 如果是 content 区域且指定了位置，添加 position 参数
+        if (region === 'content' && position !== null && position !== undefined) {
+            requestData.position = position;
+        }
+        
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/add') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 刷新预览，传入添加前保存的滚动位置
+            if (typeof refreshPreview === 'function') {
+                refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
             }
             
             Swal.fire({
                 icon: 'success',
                 title: '<?= __('组件已添加') ?>',
-                text: componentData.name,
+                text: componentData.name + ' - ' + region,
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: false,
+                customClass: { container: 'swal2-dark-theme' }
             });
         } else {
+            console.error('❌ API返回失败:', result.message);
             Swal.fire({
                 icon: 'error',
                 title: '<?= __('添加失败') ?>',
-                text: result.message || '<?= __('未知错误') ?>'
+                text: result.message || '<?= __('未知错误') ?>',
+                customClass: { container: 'swal2-dark-theme' }
             });
         }
     } catch (error) {
-        console.error('添加组件失败:', error);
+        console.error('❌ 添加组件失败:', error);
         Swal.fire({
             icon: 'error',
             title: '<?= __('添加失败') ?>',
-            text: error.message || '<?= __('网络错误') ?>'
+            text: error.message || '<?= __('网络错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
         });
     }
 };
 
 // 编辑预览中的组件
-window.editComponentInPreview = function(wrapper) {
+window.editComponentInPreview = async function(wrapper) {
     const componentCode = wrapper.getAttribute('data-component');
     const region = wrapper.getAttribute('data-region');
+    const index = parseInt(wrapper.getAttribute('data-index') || '0', 10);
+    const pageId = window.visualPageId || 0;
     
-    console.log('编辑组件:', componentCode, region);
     
-    // TODO: 打开组件配置编辑器
+    // 在弹窗显示前保存滚动位置
+    const iframe = document.getElementById('previewIframe');
+    let savedScrollX = 0;
+    let savedScrollY = 0;
+    try {
+        if (iframe && iframe.contentWindow && iframe.contentDocument) {
+            savedScrollX = iframe.contentWindow.scrollX || iframe.contentDocument.documentElement.scrollLeft || 0;
+            savedScrollY = iframe.contentWindow.scrollY || iframe.contentDocument.documentElement.scrollTop || 0;
+        }
+    } catch (e) {
+        console.warn('无法获取滚动位置:', e);
+    }
+    
+    if (!pageId) {
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('错误') ?>',
+            text: '<?= __('页面ID未定义') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+        return;
+    }
+    
+    // 显示加载中
     Swal.fire({
-        title: '<?= __('编辑组件') ?>',
-        text: '<?= __('功能开发中...') ?>',
-        icon: 'info'
+        title: '<?= __('加载配置...') ?>',
+        allowOutsideClick: false,
+        customClass: { container: 'swal2-dark-theme' },
+        didOpen: () => { Swal.showLoading(); }
     });
+    
+    try {
+        // 获取页面样式代码
+        const styleSelect = document.getElementById('style');
+        const styleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
+        
+        // 获取组件元数据
+        const metadataUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/metadata') ?>' + 
+            '?component_code=' + encodeURIComponent(componentCode) + 
+            '&style_code=' + encodeURIComponent(styleCode);
+        
+        const metaResponse = await fetch(metadataUrl);
+        const metaResult = await metaResponse.json();
+        
+        if (!metaResult.success) {
+            throw new Error(metaResult.message || '<?= __('获取组件信息失败') ?>');
+        }
+        
+        // 获取当前布局配置中的组件配置
+        const layoutUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/layoutFields') ?>' + 
+            '?page_id=' + pageId;
+        
+        const layoutResponse = await fetch(layoutUrl);
+        const layoutResult = await layoutResponse.json();
+        
+        let currentConfig = {};
+        if (layoutResult.success && layoutResult.layout_config && layoutResult.layout_config[region]) {
+            const componentInLayout = layoutResult.layout_config[region][index];
+            if (componentInLayout && componentInLayout.code === componentCode) {
+                currentConfig = componentInLayout.config || {};
+            }
+        }
+        
+        const metadata = metaResult.metadata;
+        const fields = metadata.fields || {};
+        
+        // 构建配置表单HTML
+        let formHtml = '<div class="component-config-form" style="text-align: left; max-height: 60vh; overflow-y: auto; padding: 0 4px;">';
+        
+        if (Object.keys(fields).length === 0) {
+            formHtml += '<div class="text-center text-muted py-4">';
+            formHtml += '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.3;"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>';
+            formHtml += '<p style="margin-top: 12px;"><?= __('此组件暂无可配置项') ?></p>';
+            formHtml += '</div>';
+        } else {
+            // 按分组渲染配置字段
+            for (const [groupKey, group] of Object.entries(fields)) {
+                formHtml += '<div class="config-group" style="margin-bottom: 20px;">';
+                formHtml += '<h6 style="font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(128,128,128,0.2);">' + 
+                    (group.label || groupKey) + '</h6>';
+                
+                for (const [fieldKey, field] of Object.entries(group.fields || {})) {
+                    // 修复：如果 fieldKey 已经包含组前缀，则直接使用，避免重复前缀
+                    // 例如：fieldKey='button.text', groupKey='button' → fullKey='button.text'
+                    // 而不是：'button.button.text'
+                    const fullKey = fieldKey.startsWith(groupKey + '.') ? fieldKey : (groupKey + '.' + fieldKey);
+                    const currentValue = currentConfig[fullKey] !== undefined ? currentConfig[fullKey] : (field.default || '');
+                    
+                    formHtml += '<div class="config-field" style="margin-bottom: 14px;">';
+                    formHtml += '<label style="display: block; margin-bottom: 4px; font-size: 13px; opacity: 0.7;">' + 
+                        (field.label || fieldKey) + '</label>';
+                    
+                    const fieldType = field.type || 'text';
+                    const inputId = 'comp_config_' + fullKey.replace(/\./g, '_');
+                    
+                    if (fieldType === 'select' && field.options) {
+                        formHtml += '<select id="' + inputId + '" data-field="' + fullKey + '" class="form-select form-select-sm" style="width: 100%;">';
+                        // 修复：如果 options 是数组，使用值本身作为 option value；如果是对象，使用键作为 value
+                        if (Array.isArray(field.options)) {
+                            for (const optValue of field.options) {
+                                const selected = currentValue === optValue ? 'selected' : '';
+                                formHtml += '<option value="' + escapeHtml(optValue) + '" ' + selected + '>' + escapeHtml(optValue) + '</option>';
+                            }
+                        } else {
+                            for (const [optKey, optLabel] of Object.entries(field.options)) {
+                                const selected = currentValue === optKey ? 'selected' : '';
+                                formHtml += '<option value="' + escapeHtml(optKey) + '" ' + selected + '>' + escapeHtml(optLabel) + '</option>';
+                            }
+                        }
+                        formHtml += '</select>';
+                    } else if (fieldType === 'textarea') {
+                        formHtml += '<textarea id="' + inputId + '" data-field="' + fullKey + '" class="form-control form-control-sm" rows="3" style="width: 100%;">' + 
+                            escapeHtml(currentValue) + '</textarea>';
+                    } else if (fieldType === 'color') {
+                        formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
+                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + (currentValue || '#000000') + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
+                        formHtml += '<input type="text" id="' + inputId + '_text" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="#000000">';
+                        formHtml += '</div>';
+                    } else if (fieldType === 'image') {
+                        formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
+                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="<?= __('图片URL') ?>">';
+                        formHtml += '</div>';
+                    } else {
+                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="width: 100%;">';
+                    }
+                    
+                    formHtml += '</div>';
+                }
+                
+                formHtml += '</div>';
+            }
+        }
+        
+        formHtml += '</div>';
+        
+        // 显示配置弹窗（适配后端暗色主题）
+        const result = await Swal.fire({
+            title: '<?= __('组件配置') ?> - ' + (metadata.name || componentCode),
+            html: formHtml,
+            width: 520,
+            showCancelButton: true,
+            confirmButtonText: '<?= __('保存') ?>',
+            cancelButtonText: '<?= __('取消') ?>',
+            customClass: {
+                container: 'swal2-dark-theme',
+                popup: 'swal2-dark-popup'
+            },
+            didOpen: () => {
+                // 颜色选择器同步
+                document.querySelectorAll('.swal2-popup input[type="color"]').forEach(colorInput => {
+                    const textInput = document.getElementById(colorInput.id + '_text');
+                    if (textInput) {
+                        colorInput.addEventListener('input', () => {
+                            textInput.value = colorInput.value;
+                        });
+                        textInput.addEventListener('input', () => {
+                            if (/^#[0-9A-Fa-f]{6}$/.test(textInput.value)) {
+                                colorInput.value = textInput.value;
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        
+        if (result.isConfirmed) {
+            // 收集配置数据
+            const newConfig = { ...currentConfig };
+            document.querySelectorAll('.swal2-popup [data-field]').forEach(input => {
+                const fieldKey = input.getAttribute('data-field');
+                newConfig[fieldKey] = input.value;
+            });
+            
+            
+            // 显示保存中
+            Swal.fire({
+                title: '<?= __('保存中...') ?>',
+                allowOutsideClick: false,
+                customClass: { container: 'swal2-dark-theme' },
+                didOpen: () => { Swal.showLoading(); }
+            });
+            
+            // 调用API保存配置
+            const saveResponse = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/updateConfig') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    page_id: pageId,
+                    component_code: componentCode,
+                    region: region,
+                    index: index,
+                    config: newConfig
+                })
+            });
+            
+            const saveResult = await saveResponse.json();
+            
+            if (saveResult.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<?= __('保存成功') ?>',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    customClass: { container: 'swal2-dark-theme' }
+                });
+                
+                // 刷新预览，传入编辑前保存的滚动位置
+                if (typeof refreshPreview === 'function') {
+                    refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
+                }
+            } else {
+                throw new Error(saveResult.message || '<?= __('保存失败') ?>');
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ 编辑组件失败:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('编辑失败') ?>',
+            text: error.message || '<?= __('未知错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+    }
 };
+
+// HTML 转义函数
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
 
 // 删除预览中的组件
 window.removeComponentInPreview = async function(wrapper) {
     const componentCode = wrapper.getAttribute('data-component');
     const region = wrapper.getAttribute('data-region');
+    const index = wrapper.getAttribute('data-index');
     const pageId = window.visualPageId || 0;
+    
+    
+    // 在弹窗显示前保存滚动位置
+    const iframe = document.getElementById('previewIframe');
+    let savedScrollX = 0;
+    let savedScrollY = 0;
+    try {
+        if (iframe && iframe.contentWindow && iframe.contentDocument) {
+            savedScrollX = iframe.contentWindow.scrollX || iframe.contentDocument.documentElement.scrollLeft || 0;
+            savedScrollY = iframe.contentWindow.scrollY || iframe.contentDocument.documentElement.scrollTop || 0;
+        }
+    } catch (e) {
+        console.warn('无法获取滚动位置:', e);
+    }
     
     const result = await Swal.fire({
         title: '<?= __('删除组件？') ?>',
@@ -4092,48 +5483,77 @@ window.removeComponentInPreview = async function(wrapper) {
         showCancelButton: true,
         confirmButtonText: '<?= __('确认删除') ?>',
         cancelButtonText: '<?= __('取消') ?>',
-        confirmButtonColor: '#d33'
+        confirmButtonColor: '#d33',
+        customClass: { container: 'swal2-dark-theme' }
     });
     
     if (!result.isConfirmed) return;
     
     try {
+        // 显示加载提示
+        Swal.fire({
+            title: '<?= __('删除中...') ?>',
+            allowOutsideClick: false,
+            customClass: { container: 'swal2-dark-theme' },
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const requestData = {
+            page_id: pageId,
+            component_code: componentCode,
+            region: region
+        };
+        
+        // 如果有索引，添加到请求中（用于精确删除）
+        if (index !== null && index !== undefined) {
+            requestData.index = parseInt(index, 10);
+        }
+        
+        
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/remove') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({
-                page_id: pageId,
-                component_code: componentCode,
-                region: region
-            })
+            body: JSON.stringify(requestData)
         });
         
         const data = await response.json();
         
+        
         if (data.success) {
-            // 刷新预览
+            // 刷新预览，传入删除前保存的滚动位置
             if (typeof refreshPreview === 'function') {
-                refreshPreview();
+                refreshPreview({ scrollX: savedScrollX, scrollY: savedScrollY });
             }
             
             Swal.fire({
                 icon: 'success',
                 title: '<?= __('已删除') ?>',
+                text: data.is_global ? '<?= __('全局组件已删除') ?>' : '',
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: false,
+                customClass: { container: 'swal2-dark-theme' }
             });
         } else {
             Swal.fire({
                 icon: 'error',
                 title: '<?= __('删除失败') ?>',
-                text: data.message || '<?= __('未知错误') ?>'
+                text: data.message || '<?= __('未知错误') ?>',
+                customClass: { container: 'swal2-dark-theme' }
             });
         }
     } catch (error) {
-        console.error('删除组件失败:', error);
+        console.error('❌ 删除组件失败:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('删除失败') ?>',
+            text: error.message || '<?= __('网络错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
     }
 };
 
@@ -4182,4 +5602,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- 文件管理器组件 -->
 <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/asset_manager.phtml</w:template>
+
+</script>
 

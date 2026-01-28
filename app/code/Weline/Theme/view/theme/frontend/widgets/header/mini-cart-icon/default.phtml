@@ -13,6 +13,7 @@
 $showQuantity = (bool)($this->getData('show_quantity') ?? true);
 $showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
 $iconStyle = $this->getData('icon_style') ?? 'cart';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 // 图标映射
 $icons = [
@@ -53,7 +54,7 @@ $cartSubtotal = '¥299.00';
         <div class="mini-cart-items">
             <!-- 示例商品 -->
             <div class="mini-cart-item">
-                <img src="/images/placeholder.png" alt="Product" class="item-image">
+                <img src="<?= htmlspecialchars($placeholder ?? '') ?>" alt="Product" class="item-image">
                 <div class="item-info">
                     <h4 class="item-name"><?= __('示例商品名称') ?></h4>
                     <span class="item-price">¥99.00 × 1</span>

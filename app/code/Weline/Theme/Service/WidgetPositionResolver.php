@@ -77,8 +77,12 @@ class WidgetPositionResolver
      */
     public function canPlaceInArea(string $widgetModule, string $widgetCode, string $area): bool
     {
+        // 如果传入的是自定义插槽ID（不在标准区域列表中），默认映射到内容区域
+        if (!array_key_exists($area, ThemeLayout::getAreas())) {
+            $area = ThemeLayout::AREA_CONTENT;
+        }
         $allowedAreas = $this->getAllowedAreas($widgetModule, $widgetCode);
-        return in_array($area, $allowedAreas);
+        return in_array($area, $allowedAreas, true);
     }
 
     /**
@@ -133,10 +137,19 @@ class WidgetPositionResolver
     {
         $registry = $this->widgetRegistry->getRegistry();
 
-        // 查找匹配的部件
-        foreach ($registry as $key => $widget) {
-            if ($widget['module'] === $module && $widget['code'] === $code) {
-                return $widget;
+        // 查找匹配的部件（注册表是嵌套结构：type -> code -> widget_data）
+        foreach ($registry as $type => $widgets) {
+            if (!is_array($widgets)) {
+                continue;
+            }
+            foreach ($widgets as $widgetCode => $widget) {
+                if (!is_array($widget)) {
+                    continue;
+                }
+                if (isset($widget['module']) && isset($widget['code']) 
+                    && $widget['module'] === $module && $widget['code'] === $code) {
+                    return $widget;
+                }
             }
         }
 

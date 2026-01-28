@@ -23,7 +23,12 @@ use WeShop\Product\Model\Product;
 
 class SourceItem extends Model
 {
-    public const indexer = 'inventory_source_item';
+    public const table = 'weshop_inventory_source_item';
+    public const primary_key = 'source_item_id';
+    public const indexer = 'inventory_source_item_indexer';
+    public array $_unit_primary_keys = ['source_item_id'];
+    public array $_index_sort_keys = ['source_id', 'product_id', 'sku', 'status', 'quantity'];
+    
     public const fields_ID = 'source_item_id';
     public const fields_SOURCE_ID = 'source_id';
     public const fields_PRODUCT_ID = 'product_id';
@@ -31,9 +36,6 @@ class SourceItem extends Model
     public const fields_QUANTITY = 'quantity';
     public const fields_STATUS = 'status';  // 1=有货，0=缺货
     public const fields_LOW_STOCK_THRESHOLD = 'low_stock_threshold';
-
-    public array $_unit_primary_keys = ['source_item_id', 'source_id', 'product_id'];
-    public array $_index_sort_keys = ['source_item_id', 'source_id', 'product_id'];
 
     // 库存状态常量
     public const STATUS_IN_STOCK = 1;

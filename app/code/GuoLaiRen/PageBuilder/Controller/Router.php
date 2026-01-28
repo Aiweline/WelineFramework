@@ -36,21 +36,45 @@ class Router implements RouterInterface
             return;
         }
         
-        // 3. 清理路径，提取可能的handle
+        // 3. 处理空路径：如果路径为空，检查当前站点是否有首页页面
+        $trimmedPath = trim($path, '/');
+        if (empty($trimmedPath)) {
+            // 获取当前站点ID
+            $websiteId = self::getCurrentWebsiteId();
+            
+            if ($websiteId > 0) {
+                // 查询当前站点的首页页面（handle不为空）
+                $homePageHandle = self::getHomePageHandle($websiteId);
+                
+                if (!empty($homePageHandle)) {
+                    // 如果找到首页handle，重定向到该首页
+                    $path = '/pagebuilder/frontend/page/view';
+                    $rule['module'] = 'GuoLaiRen_PageBuilder';
+                    $rule['handle'] = $homePageHandle;
+                    $_GET['handle'] = $homePageHandle;
+                    return;
+                }
+            }
+            
+            // 如果没有找到首页，不处理，让其他路由处理
+            return;
+        }
+        
+        // 4. 清理路径，提取可能的handle
         $handle = self::extractHandle($path);
         
         if (empty($handle)) {
             return;
         }
         
-        // 4. 检查handle是否存在（使用缓存避免重复查询）
+        // 5. 检查handle是否存在（使用缓存避免重复查询）
         // 检查是否为预览模式
         $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
         if (!self::handleExists($handle, $isPreview)) {
             return;
         }
         
-        // 5. 重写路由到页面查看控制器
+        // 6. 重写路由到页面查看控制器
         $path = '/pagebuilder/frontend/page/view';
         // 设置路由参数
         $rule['module'] = 'GuoLaiRen_PageBuilder';
@@ -184,6 +208,90 @@ class Router implements RouterInterface
                 error_log('PageBuilder Router Error: ' . $e->getMessage());
             }
             return false;
+        }
+    }
+    
+    /**
+     * 获取当前站点ID
+     * 
+     * @return int
+     */
+    private static function getCurrentWebsiteId(): int
+    {
+        try {
+            // 优先从WebsiteData获取
+            $websiteData = \Weline\Websites\Data\WebsiteData::getWebsiteId();
+            if ($websiteData !== null) {
+                return (int)$websiteData;
+            }
+            
+            // 如果WebsiteData没有，尝试从UrlRewrite获取
+            $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            if ($websiteId > 0) {
+                return $websiteId;
+            }
+            
+            // 最后尝试从$_SERVER获取
+            return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+    
+    /**
+     * 获取指定站点的首页handle
+     * 
+     * @param int $websiteId 站点ID
+     * @return string|null 首页handle，如果不存在或handle为空则返回null
+     */
+    private static function getHomePageHandle(int $websiteId): ?string
+    {
+        try {
+            /** @var Page $pageModel */
+            $pageModel = ObjectManager::getInstance(Page::class);
+            $page = clone $pageModel;
+            
+            // 查询当前站点的首页页面（已发布状态）
+            $page->clear()
+                ->where(Page::fields_WEBSITE_ID, $websiteId)
+                ->where(Page::fields_TYPE, Page::TYPE_HOME)
+                ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
+                ->where(Page::fields_HANDLE, '', '!=')
+                ->find()
+                ->fetch();
+            
+            // 如果找到首页且handle不为空，返回handle
+            if ($page->getId()) {
+                $handle = $page->getData(Page::fields_HANDLE);
+                if (!empty($handle)) {
+                    return $handle;
+                }
+            }
+            
+            // 如果当前站点没有首页，尝试查找全局首页（website_id = 0）
+            if ($websiteId !== 0) {
+                $page->clear()
+                    ->where(Page::fields_WEBSITE_ID, 0)
+                    ->where(Page::fields_TYPE, Page::TYPE_HOME)
+                    ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
+                    ->where(Page::fields_HANDLE, '', '!=')
+                    ->find()
+                    ->fetch();
+                
+                if ($page->getId()) {
+                    $handle = $page->getData(Page::fields_HANDLE);
+                    if (!empty($handle)) {
+                        return $handle;
+                    }
+                }
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            if (defined('DEV') && DEV) {
+                error_log('PageBuilder Router Error (getHomePageHandle): ' . $e->getMessage());
+            }
+            return null;
         }
     }
     

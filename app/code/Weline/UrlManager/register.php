@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_UrlManager',
     __DIR__,
-    '1.0.1',
+    '1.0.2',
     '<a href="https://bbs.aiweline.com">官网</a>提供URL管理。',
     ['Weline_ModuleManager', 'Weline_Admin']
 );

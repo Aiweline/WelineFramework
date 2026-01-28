@@ -5,10 +5,11 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$title = $this->getData('title') ?? __('经常一起购买');
+$title = (string)($this->getData('title') ?? __('经常一起购买'));
 $limit = (int)($this->getData('limit') ?? 4);
 $showAddAllButton = (bool)($this->getData('show_add_all_button') ?? true);
 $showTotalPrice = (bool)($this->getData('show_total_price') ?? true);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例产品数据
 $products = [];
@@ -20,7 +21,7 @@ for ($i = 1; $i <= $limit; $i++) {
         'id' => $i,
         'name' => __('搭配产品 %d', $i),
         'url' => '/product/cross-' . $i,
-        'image' => '/images/products/cross-' . $i . '.jpg',
+        'image' => $placeholder,
         'price' => $price,
         'selected' => true,
     ];
@@ -38,6 +39,12 @@ $widgetId = 'cross-sell-' . uniqid();
     <div class="cross-sell-container">
         <div class="cross-sell-products">
             <?php foreach ($products as $index => $product): ?>
+                <?php
+                // 确保所有产品字段都是字符串，避免null值
+                $productUrl = (string)($product['url'] ?? '');
+                $productImage = (string)($product['image'] ?? '');
+                $productName = (string)($product['name'] ?? '');
+                ?>
                 <?php if ($index > 0): ?>
                     <span class="plus-sign">+</span>
                 <?php endif; ?>
@@ -52,16 +59,16 @@ $widgetId = 'cross-sell-' . uniqid();
                         <label for="cross-product-<?= $product['id'] ?>"></label>
                     </div>
                     
-                    <a href="<?= htmlspecialchars($product['url']) ?>" class="product-link">
-                        <img src="<?= htmlspecialchars($product['image']) ?>" 
-                             alt="<?= htmlspecialchars($product['name']) ?>"
+                    <a href="<?= htmlspecialchars($productUrl) ?>" class="product-link">
+                        <img src="<?= htmlspecialchars($productImage) ?>" 
+                             alt="<?= htmlspecialchars($productName) ?>"
                              class="product-image">
                     </a>
                     
                     <div class="product-info">
                         <h4 class="product-name">
-                            <a href="<?= htmlspecialchars($product['url']) ?>">
-                                <?= htmlspecialchars($product['name']) ?>
+                            <a href="<?= htmlspecialchars($productUrl) ?>">
+                                <?= htmlspecialchars($productName) ?>
                             </a>
                         </h4>
                         <span class="product-price">¥<?= number_format($product['price'], 2) ?></span>

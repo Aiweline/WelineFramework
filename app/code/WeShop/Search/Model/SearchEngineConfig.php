@@ -17,6 +17,7 @@ class SearchEngineConfig extends Model
 {
     public const table = 'weshop_search_engine_config';
     public const primary_key = 'config_id';
+    public string $indexer = 'search_engine_config_indexer';
     
     public const fields_ID = 'config_id';
     public const fields_ENGINE_TYPE = 'engine_type';
@@ -43,6 +44,15 @@ class SearchEngineConfig extends Model
     public function setup(ModelSetup $setup, Context $context): void
     {
         $this->install($setup, $context);
+        
+        // 安装默认配置和驱动注册
+        try {
+            /** @var \WeShop\Search\Setup\InstallData $installData */
+            $installData = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Search\Setup\InstallData::class);
+            $installData->install();
+        } catch (\Exception $e) {
+            error_log("搜索模块安装数据失败: " . $e->getMessage());
+        }
     }
     
     /**

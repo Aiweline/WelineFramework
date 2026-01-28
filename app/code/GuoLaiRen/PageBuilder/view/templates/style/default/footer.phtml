@@ -36,8 +36,10 @@ $styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: 
 $isPreview = $this->getData('is_preview');
 
 // 获取配置值的辅助函数
-function getFooterConfig($settings, $key, $default = '') {
-    return $settings[$key] ?? $default;
+if (!function_exists('getFooterConfig')) {
+    function getFooterConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
 }
 
 // 复用 header.phtml 中的响应式解析函数

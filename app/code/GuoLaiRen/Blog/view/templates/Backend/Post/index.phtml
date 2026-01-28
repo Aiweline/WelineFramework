@@ -111,10 +111,85 @@
                         </table>
                     </div>
 
-                    <?php if (!empty($pagination)): ?>
-                        <div class="mt-3">
-                            <?= $pagination->render() ?>
-                        </div>
+                    <?php if (!empty($pagination) && is_array($pagination) && ($pagination['totalPages'] ?? 0) > 1): ?>
+                        <nav aria-label="Page navigation" class="mt-3">
+                            <ul class="pagination justify-content-center mb-0">
+                                <?php 
+                                $currentPage = (int)($pagination['currentPage'] ?? $pagination['page'] ?? 1);
+                                $totalPages = (int)($pagination['totalPages'] ?? $pagination['lastPage'] ?? 1);
+                                $baseUrl = $this->getBackendUrl('blog/backend/post/index');
+                                $search = $this->request->getGet('search', '');
+                                
+                                // 构建URL参数
+                                $buildUrl = function($page) use ($baseUrl, $search) {
+                                    $params = ['page' => $page];
+                                    if ($search) $params['search'] = $search;
+                                    return $baseUrl . '?' . http_build_query($params);
+                                };
+                                ?>
+                                
+                                <!-- 上一页 -->
+                                <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="<?= $currentPage > 1 ? $buildUrl($currentPage - 1) : '#' ?>">
+                                        <i class="mdi mdi-chevron-left"></i>
+                                    </a>
+                                </li>
+                                
+                                <?php
+                                // 计算显示的页码范围
+                                $startPage = max(1, $currentPage - 2);
+                                $endPage = min($totalPages, $currentPage + 2);
+                                
+                                // 确保显示至少5个页码
+                                if ($endPage - $startPage < 4) {
+                                    if ($startPage == 1) {
+                                        $endPage = min($totalPages, 5);
+                                    } else {
+                                        $startPage = max(1, $totalPages - 4);
+                                    }
+                                }
+                                
+                                // 显示第一页
+                                if ($startPage > 1): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="<?= $buildUrl(1) ?>">1</a>
+                                    </li>
+                                    <?php if ($startPage > 2): ?>
+                                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                
+                                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                    <li class="page-item <?= $i == $currentPage ? 'active' : '' ?>">
+                                        <a class="page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+                                    </li>
+                                <?php endfor; ?>
+                                
+                                <?php // 显示最后一页
+                                if ($endPage < $totalPages): ?>
+                                    <?php if ($endPage < $totalPages - 1): ?>
+                                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                                    <?php endif; ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="<?= $buildUrl($totalPages) ?>"><?= $totalPages ?></a>
+                                    </li>
+                                <?php endif; ?>
+                                
+                                <!-- 下一页 -->
+                                <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="<?= $currentPage < $totalPages ? $buildUrl($currentPage + 1) : '#' ?>">
+                                        <i class="mdi mdi-chevron-right"></i>
+                                    </a>
+                                </li>
+                            </ul>
+                            <div class="text-center mt-2 text-muted small">
+                                <?= __('共 %{total} 条记录，第 %{page}/%{pages} 页', [
+                                    'total' => $pagination['totalRecords'] ?? $pagination['total'] ?? 0,
+                                    'page'  => $currentPage,
+                                    'pages' => $totalPages,
+                                ]) ?>
+                            </div>
+                        </nav>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>

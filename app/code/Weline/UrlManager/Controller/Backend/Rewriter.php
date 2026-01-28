@@ -28,13 +28,21 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
     {
         /**@var UrlRewrite $urlRewriteModel */
         $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+        
+        // 支持按 website_id 过滤
+        $websiteIdFilter = $this->request->getGet('website_id');
+        if ($websiteIdFilter !== null && $websiteIdFilter !== '') {
+            $urlRewriteModel->where('main_table.' . UrlRewrite::fields_WEBSITE_ID, (int)$websiteIdFilter);
+        }
+        
         $rewrites = $urlRewriteModel->fields('main_table.*,main_table.path as rewrite_path,um.url_id,um.path,um.is_deleted')
-            ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id')
+            ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id', 'left')
             ->pagination()
             ->select()
             ->fetch();
         $this->assign('rewrites', $rewrites->getItems());
         $this->assign('pagination', $rewrites->getPagination());
+        $this->assign('current_website_id', $websiteIdFilter ?? '');
         return $this->fetch();
     }
 
@@ -47,6 +55,14 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         } else {
             $data['url_identify'] = md5($data['path']);
         }
+        
+        // 确保 website_id 已设置，默认为当前网站或 0
+        if (!isset($data['website_id']) || $data['website_id'] === '') {
+            $data['website_id'] = UrlRewrite::getCurrentWebsiteId();
+        } else {
+            $data['website_id'] = (int)$data['website_id'];
+        }
+        
         /**@var UrlRewrite $urlRewriter */
         $urlRewriter = ObjectManager::getInstance(UrlRewrite::class);
         $urlRewriter->setData($data);
@@ -62,20 +78,29 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
     public function form()
     {
         $uri_identify = $this->request->getGet('identify', '');
+        // 支持通过 website_id 定位（避免不同站点同 url_identify 时取错）
+        $websiteId = $this->request->getGet('website_id');
+        
         /**@var UrlManager $urlManager */
         $urlManager = ObjectManager::getInstance(UrlManager::class);
-        $url = $urlManager
-            ->fields('main_table.*,ur.rewrite as rewrite_path')
+        $query = $urlManager
+            ->fields('main_table.*,ur.rewrite as rewrite_path,ur.' . UrlRewrite::fields_WEBSITE_ID . ' as website_id')
             ->where('ur.' . UrlRewrite::fields_URL_IDENTIFY, $uri_identify)
             ->joinModel(
                 UrlRewrite::class,
                 'ur',
                 'main_table.identify=ur.url_identify',
                 'right'
-            )
-            ->find()
-            ->fetch();
+            );
+        
+        // 如果指定了 website_id，加入过滤条件
+        if ($websiteId !== null && $websiteId !== '') {
+            $query->where('ur.' . UrlRewrite::fields_WEBSITE_ID, (int)$websiteId);
+        }
+        
+        $url = $query->find()->fetch();
         $this->assign('url', $url);
+        $this->assign('current_website_id', UrlRewrite::getCurrentWebsiteId());
         return $this->fetch();
     }
 

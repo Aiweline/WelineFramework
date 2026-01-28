@@ -83,6 +83,44 @@ class Component extends Model
     }
     
     /**
+     * 生成组件代码（格式：模板名_类型_名字）
+     * 
+     * @param string $styleCode 模板代码
+     * @param string $category 组件分类（header, footer, content）
+     * @param string $name 组件名称
+     * @return string 生成的组件代码
+     */
+    public static function generateComponentCode(string $styleCode, string $category, string $name): string
+    {
+        // 清理组件名称：移除路径分隔符，转换为下划线格式
+        $cleanName = str_replace(['/', '\\', '-'], '_', $name);
+        // 移除多余的下划线
+        $cleanName = preg_replace('/_+/', '_', $cleanName);
+        $cleanName = trim($cleanName, '_');
+        
+        // 如果名称以 category 开头，移除重复的前缀
+        // 例如：header_nav -> nav (当 category=header 时)
+        // 例如：footer_links -> links (当 category=footer 时)
+        // 例如：content_slider -> slider (当 category=content 时)
+        $categoryPrefix = strtolower($category) . '_';
+        if (stripos($cleanName, $categoryPrefix) === 0) {
+            $cleanName = substr($cleanName, strlen($categoryPrefix));
+        }
+        // 也处理没有下划线的情况：header_header -> header（如果名称等于category）
+        if (strtolower($cleanName) === strtolower($category)) {
+            $cleanName = $category; // 保持原名
+        }
+        
+        // 如果名称为空，使用 category 作为名称
+        if (empty($cleanName)) {
+            $cleanName = $category;
+        }
+        
+        // 生成组件代码：模板名_类型_名字
+        return strtolower($styleCode . '_' . $category . '_' . $cleanName);
+    }
+    
+    /**
      * 获取组件的配置定义
      */
     public function getConfigSchema(): array
@@ -202,6 +240,11 @@ class Component extends Model
      */
     public static function getByStyleCode(string $styleCode, bool $includeCompatible = true, bool $activeOnly = true): array
     {
+        // #region agent log
+        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'Component.php:getByStyleCode', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
+        $debugLog('Entry', ['styleCode' => $styleCode, 'includeCompatible' => $includeCompatible, 'activeOnly' => $activeOnly], 'B');
+        // #endregion
+        
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         
         // 获取属于该模板的组件
@@ -213,6 +256,10 @@ class Component extends Model
             $query->where(self::fields_IS_ACTIVE, 1);
         }
         
+        // #region agent log
+        $debugLog('Before own query', ['styleCode' => $styleCode], 'B');
+        // #endregion
+        
         $result = [
             'own' => $query->order(self::fields_SORT_ORDER, 'ASC')
                 ->select()
@@ -220,6 +267,10 @@ class Component extends Model
                 ->getItems(),
             'compatible' => [],
         ];
+        
+        // #region agent log
+        $debugLog('Own query done', ['ownCount' => count($result['own'])], 'B');
+        // #endregion
         
         // 如果需要包含兼容的组件
         if ($includeCompatible) {
@@ -231,11 +282,19 @@ class Component extends Model
                 $allQuery->where(self::fields_IS_ACTIVE, 1);
             }
             
+            // #region agent log
+            $debugLog('Before compatible query', ['excludeStyleCode' => $styleCode], 'E');
+            // #endregion
+            
             $allItems = $allQuery->order(self::fields_STYLE_CODE, 'ASC')
                 ->order(self::fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
+            
+            // #region agent log
+            $debugLog('Compatible query done', ['allItemsCount' => count($allItems)], 'E');
+            // #endregion
             
             // 过滤出兼容的组件
             foreach ($allItems as $component) {
@@ -265,8 +324,36 @@ class Component extends Model
             'scanned' => 0,
             'registered' => 0,
             'updated' => 0,
+            'cleaned' => 0,
             'errors' => [],
         ];
+        
+        // 0. 清理旧格式的组件
+        // 删除所有该模板下的组件，然后重新注册（确保格式一致）
+        $componentsDir = $basePath . 'components/';
+        $componentJsonFile = $componentsDir . 'component.json';
+        
+        // 删除该模板下所有现有组件（使用新格式重新注册）
+        // 注意：必须使用 ->delete()->fetch() 来执行删除，而不是 $item->delete()
+        $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
+        
+        // 先获取要删除的数量
+        $existingComponents = clone $componentModel;
+        $toDeleteItems = $existingComponents->clear()
+            ->where(self::fields_STYLE_CODE, $styleCode)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $result['cleaned'] = count($toDeleteItems);
+        
+        // 使用批量删除
+        if ($result['cleaned'] > 0) {
+            $deleteQuery = clone $componentModel;
+            $deleteQuery->clear()
+                ->where(self::fields_STYLE_CODE, $styleCode)
+                ->delete()
+                ->fetch();
+        }
         
         // 1. 扫描系统组件（header.phtml 和 footer.phtml）
         $systemFiles = [
@@ -278,9 +365,11 @@ class Component extends Model
             if (file_exists($filePath)) {
                 $result['scanned']++;
                 try {
+                    // 使用统一格式生成组件代码：模板名_类型_名字
+                    $componentCode = self::generateComponentCode($styleCode, $category, $category);
                     $registerResult = self::registerComponentFromFile(
                         $styleCode,
-                        $styleCode . '-' . $category,
+                        $componentCode,
                         $filePath,
                         $category,
                         self::TYPE_SYSTEM,
@@ -320,9 +409,14 @@ class Component extends Model
                     }
                     
                     try {
+                        // 获取组件分类（优先使用 region，回退到 category）
+                        $category = $config['region'] ?? $config['category'] ?? self::CATEGORY_CONTENT;
+                        // 使用统一格式生成组件代码：模板名_类型_名字
+                        $componentCode = self::generateComponentCode($styleCode, $category, $code);
+                        
                         $registerResult = self::registerComponentFromJson(
                             $styleCode,
-                            $code,
+                            $componentCode,
                             $config,
                             $filePath,
                             $jsonConfig['regions'] ?? []
@@ -349,14 +443,6 @@ class Component extends Model
                 $fileName = basename($relativePath, '.phtml');
                 $dirName = dirname($relativePath);
                 
-                // 组件代码：目录名-文件名 或 文件名
-                if ($dirName && $dirName !== '.') {
-                    $componentCode = $dirName . '-' . $fileName;
-                } else {
-                    $componentCode = $fileName;
-                }
-                $componentCode = str_replace('/', '-', $componentCode);
-                
                 // 确定分类
                 $category = self::CATEGORY_CONTENT;
                 if (strpos($relativePath, 'header/') === 0) {
@@ -364,6 +450,11 @@ class Component extends Model
                 } elseif (strpos($relativePath, 'footer/') === 0) {
                     $category = self::CATEGORY_FOOTER;
                 }
+                
+                // 组件名称：使用目录名和文件名
+                $componentName = ($dirName && $dirName !== '.') ? $dirName . '_' . $fileName : $fileName;
+                // 使用统一格式生成组件代码：模板名_类型_名字
+                $componentCode = self::generateComponentCode($styleCode, $category, $componentName);
                 
                 try {
                     $registerResult = self::registerComponentFromFile(
@@ -386,13 +477,23 @@ class Component extends Model
         }
         
         // 3. 扫描 content.phtml 并尝试自动拆分组件
+        // 注意：如果 component.json 存在且已定义组件，则跳过 content.phtml 解析
+        // 因为 content.phtml 的锚点格式路径 (content.phtml#section) 与文件系统不兼容
         $contentFile = $basePath . 'content.phtml';
-        if (file_exists($contentFile)) {
+        $hasComponentJsonComponents = file_exists($componentJsonFile) && 
+            isset($jsonConfig) && is_array($jsonConfig) &&
+            isset($jsonConfig['components']) && 
+            !empty($jsonConfig['components']);
+        
+        if (file_exists($contentFile) && !$hasComponentJsonComponents) {
             $result['scanned']++;
             $contentSections = self::parseContentSections($contentFile);
             
             foreach ($contentSections as $section) {
-                $componentCode = $styleCode . '-' . $section['code'];
+                // 获取分类，默认为 content
+                $sectionCategory = $section['category'] ?? self::CATEGORY_CONTENT;
+                // 使用统一格式生成组件代码：模板名_类型_名字
+                $componentCode = self::generateComponentCode($styleCode, $sectionCategory, $section['code']);
                 try {
                     // 注册从 content.phtml 解析出的组件
                     $registerResult = self::registerParsedSection(
@@ -442,6 +543,12 @@ class Component extends Model
             ->find()
             ->fetch();
         
+        // 确保整数字段不为空
+        $sortOrder = $metadata['sort_order'] ?? ($isSystem ? 0 : 10);
+        if ($sortOrder === '' || $sortOrder === null) {
+            $sortOrder = $isSystem ? 0 : 10;
+        }
+        
         $data = [
             self::fields_CODE => $componentCode,
             self::fields_NAME => $metadata['name'] ?? self::formatName($componentCode),
@@ -454,9 +561,9 @@ class Component extends Model
             self::fields_CONFIG_SCHEMA => json_encode($metadata['config_schema'] ?? [], JSON_UNESCAPED_UNICODE),
             self::fields_DEFAULT_CONFIG => json_encode($metadata['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
             self::fields_COMPATIBLE_STYLES => json_encode($metadata['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
-            self::fields_IS_SYSTEM => $isSystem ? 1 : 0,
+            self::fields_IS_SYSTEM => (int)($isSystem ? 1 : 0),
             self::fields_IS_ACTIVE => 1,
-            self::fields_SORT_ORDER => $metadata['sort_order'] ?? ($isSystem ? 0 : 10),
+            self::fields_SORT_ORDER => (int)$sortOrder,
         ];
         
         if ($existing->getId()) {
@@ -495,6 +602,11 @@ class Component extends Model
         string $filePath,
         array $regions = []
     ): array {
+        // #region agent log
+        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'Component.php:registerComponentFromJson', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
+        $debugLog('Entry', ['styleCode' => $styleCode, 'componentCode' => $componentCode], 'C');
+        // #endregion
+        
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         
         // 计算相对路径
@@ -512,7 +624,13 @@ class Component extends Model
             ->find()
             ->fetch();
         
-        // 构建数据
+        // 构建数据 - 确保整数字段不为空
+        $sortOrder = $config['sort_order'] ?? 10;
+        if ($sortOrder === '' || $sortOrder === null) {
+            $sortOrder = 10;
+        }
+        $isSystem = ($config['is_default'] ?? false) ? 1 : 0;
+        
         $data = [
             self::fields_CODE => $componentCode,
             self::fields_NAME => $config['name'] ?? self::formatName($componentCode),
@@ -525,10 +643,14 @@ class Component extends Model
             self::fields_CONFIG_SCHEMA => json_encode($config['config_groups'] ?? [], JSON_UNESCAPED_UNICODE),
             self::fields_DEFAULT_CONFIG => json_encode($config['default_config'] ?? [], JSON_UNESCAPED_UNICODE),
             self::fields_COMPATIBLE_STYLES => json_encode($config['compatible_styles'] ?? ['*'], JSON_UNESCAPED_UNICODE),
-            self::fields_IS_SYSTEM => ($config['is_default'] ?? false) ? 1 : 0,
+            self::fields_IS_SYSTEM => (int)$isSystem,
             self::fields_IS_ACTIVE => 1,
-            self::fields_SORT_ORDER => $config['sort_order'] ?? 10,
+            self::fields_SORT_ORDER => (int)$sortOrder,
         ];
+        
+        // #region agent log
+        $debugLog('Data prepared', ['data_keys' => array_keys($data), 'sort_order' => $data[self::fields_SORT_ORDER], 'is_system' => $data[self::fields_IS_SYSTEM], 'is_active' => $data[self::fields_IS_ACTIVE]], 'C');
+        // #endregion
         
         // 额外存储 region 信息到 config_schema
         if (isset($config['region'])) {
@@ -540,6 +662,9 @@ class Component extends Model
         }
         
         if ($existing->getId()) {
+            // #region agent log
+            $debugLog('Updating existing', ['existingId' => $existing->getId()], 'D');
+            // #endregion
             // 更新现有组件
             foreach ($data as $key => $value) {
                 $existing->setData($key, $value);
@@ -547,6 +672,9 @@ class Component extends Model
             $existing->save();
             return ['created' => false, 'component' => $existing];
         } else {
+            // #region agent log
+            $debugLog('Creating new', ['componentCode' => $componentCode], 'D');
+            // #endregion
             // 创建新组件
             $newComponent = clone $componentModel;
             $newComponent->clearData();

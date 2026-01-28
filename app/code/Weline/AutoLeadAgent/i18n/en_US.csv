@@ -81,22 +81,22 @@ https://github.com/WebAssembly/wasi-sdk/releases,https://github.com/WebAssembly/
 "仅安装 WASI SDK","仅安装 WASI SDK"
 清理后重新编译,清理后重新编译
 查看环境信息,查看环境信息
-Token或域名参数缺失,"Token or domain parameter is missing"
-Token验证失败,"Token validation failed"
-核心代码文件不存在,"Core code file does not exist"
-店铺ID参数无效,"Invalid store ID parameter"
-搜索任务创建成功,"Search task created successfully"
-任务ID参数无效,"Invalid task ID parameter"
-获取搜索结果成功,"Search results retrieved successfully"
-域名参数不能为空,"Domain parameter cannot be empty"
-Token生成成功,"Token generated successfully"
-Token参数不能为空,"Token parameter cannot be empty"
-Token无效或已过期,"Token is invalid or expired"
-Token验证成功,"Token validation successful"
-获取WASM哈希成功,"WASM hash retrieved successfully"
-WASM文件不存在,"WASM file does not exist"
+Token或域名参数缺失,Token或域名参数缺失
+Token验证失败,Token验证失败
+核心代码文件不存在,核心代码文件不存在
+店铺ID参数无效,店铺ID参数无效
+搜索任务创建成功,搜索任务创建成功
+任务ID参数无效,任务ID参数无效
+获取搜索结果成功,获取搜索结果成功
+域名参数不能为空,域名参数不能为空
+Token生成成功,Token生成成功
+Token参数不能为空,Token参数不能为空
+Token无效或已过期,Token无效或已过期
+Token验证成功,Token验证成功
+获取WASM哈希成功,获取WASM哈希成功
+WASM文件不存在,WASM文件不存在
 获取配置失败：%{1},获取配置失败：%{1}
-仅支持POST请求,"Only POST requests are supported"
+仅支持POST请求,仅支持POST请求
 配置保存成功,配置保存成功
 配置保存失败：%{1},配置保存失败：%{1}
 配置已重置为默认值,配置已重置为默认值
@@ -130,19 +130,19 @@ WASM文件不存在,"WASM file does not exist"
 请至少选择一个搜索引擎,请至少选择一个搜索引擎
 请至少选择一个目标网站,请至少选择一个目标网站
 来源ID参数无效,来源ID参数无效
-创建搜索任务失败：%{1},"Failed to create search task: %{1}"
+创建搜索任务失败：%{1},创建搜索任务失败：%{1}
 仅支持AJAX请求,仅支持AJAX请求
-搜索任务不存在：%{1},"Search task does not exist: %{1}"
-当前任务状态不允许继续：%{1},"Current task status does not allow continue: %{1}"
+搜索任务不存在：%{1},搜索任务不存在：%{1}
+当前任务状态不允许继续：%{1},当前任务状态不允许继续：%{1}
 任务缺少搜索引擎配置，无法执行。请先编辑任务并选择至少一个搜索引擎。,任务缺少搜索引擎配置，无法执行。请先编辑任务并选择至少一个搜索引擎。
 任务缺少目标网站配置，无法执行。请先编辑任务并选择至少一个目标网站。,任务缺少目标网站配置，无法执行。请先编辑任务并选择至少一个目标网站。
-更新任务状态失败,"Failed to update task status"
-任务已继续执行,"Task has been resumed"
+更新任务状态失败,更新任务状态失败
+任务已继续执行,任务已继续执行
 "已标记 %{1} 个中断任务为异常","已标记 %{1} 个中断任务为异常"
 任务不存在,任务不存在
 任务状态不是运行中,任务状态不是运行中
 任务已标记为异常中断,任务已标记为异常中断
-获取店铺列表成功,"Store list retrieved successfully"
+获取店铺列表成功,获取店铺列表成功
 进度更新成功,进度更新成功
 更新进度失败：%{1},更新进度失败：%{1}
 没有候选客户需要保存,没有候选客户需要保存
@@ -203,35 +203,35 @@ WASM记录不存在,WASM记录不存在
 配置键,配置键
 配置值,配置值
 作用域,作用域
-创建时间,"Created At"
-更新时间,"Updated At"
+创建时间,创建时间
+更新时间,更新时间
 配置键+作用域唯一索引,配置键+作用域唯一索引
 作用域索引,作用域索引
-Token存储表,"Token Storage Table"
+Token存储表,Token存储表
 "Token ID","Token ID"
-Token字符串,"Token String"
-授权域名,"Authorized Domain"
-过期时间,"Expires At"
-WASM文件哈希值,"WASM File Hash"
-域名索引,"Domain Index"
-过期时间索引,"Expires At Index"
-Token唯一索引,"Token Unique Index"
-潜在客户表,"Lead Candidate Table"
-候选客户ID,"Candidate ID"
-店铺ID,"Store ID"
-客户画像数据（JSON格式）,"Customer Profile Data (JSON Format)"
-匹配分数,"Match Score"
-来源URL,"Source URL"
+Token字符串,Token字符串
+授权域名,授权域名
+过期时间,过期时间
+WASM文件哈希值,WASM文件哈希值
+域名索引,域名索引
+过期时间索引,过期时间索引
+Token唯一索引,Token唯一索引
+潜在客户表,潜在客户表
+候选客户ID,候选客户ID
+店铺ID,店铺ID
+客户画像数据（JSON格式）,客户画像数据（JSON格式）
+匹配分数,匹配分数
+来源URL,来源URL
 所有搜索过的网址（JSON格式）,所有搜索过的网址（JSON格式）
-状态（pending/verified/rejected）,"Status (pending/verified/rejected)"
+状态（pending/verified/rejected）,状态（pending/verified/rejected）
 邮箱地址,邮箱地址
 手机号码,手机号码
 社媒账户（JSON格式）,社媒账户（JSON格式）
 匹配的文本段（JSON格式）,匹配的文本段（JSON格式）
-店铺ID索引,"Store ID Index"
-分数索引,"Score Index"
-状态索引,"Status Index"
-搜索引擎映射表,"Search Engine Mapping Table"
+店铺ID索引,店铺ID索引
+分数索引,分数索引
+状态索引,状态索引
+搜索引擎映射表,搜索引擎映射表
 映射ID,映射ID
 地区名称（标准化）,地区名称（标准化）
 语言代码（标准化）,语言代码（标准化）
@@ -242,19 +242,19 @@ Token唯一索引,"Token Unique Index"
 地区索引,地区索引
 语言索引,语言索引
 启用状态索引,启用状态索引
-搜索任务表,"Search Task Table"
-任务ID,"Task ID"
+搜索任务表,搜索任务表
+任务ID,任务ID
 店铺ID（兼容字段）,店铺ID（兼容字段）
 "来源类型（如 store、product 等）","来源类型（如 store、product 等）"
 来源ID（如店铺ID、产品ID等）,来源ID（如店铺ID、产品ID等）
-状态（pending/running/completed/failed/cancelled）,"Status (pending/running/completed/failed/cancelled)"
+状态（pending/running/completed/failed/cancelled）,状态（pending/running/completed/failed/cancelled）
 进度（已废弃，保留兼容）,进度（已废弃，保留兼容）
 找到的潜在客户数量,找到的潜在客户数量
-结果数据（JSON格式）,"Result Data (JSON Format)"
+结果数据（JSON格式）,结果数据（JSON格式）
 选中的搜索引擎列表（JSON格式）,选中的搜索引擎列表（JSON格式）
 选中的目标网站列表（JSON格式）,选中的目标网站列表（JSON格式）
-创建时间索引,"Created At Index"
-搜索目标网站表,"Search Target Website Table"
+创建时间索引,创建时间索引
+搜索目标网站表,搜索目标网站表
 目标网站ID,目标网站ID
 网站名称,网站名称
 域名,域名
@@ -265,13 +265,406 @@ Token唯一索引,"Token Unique Index"
 是否启用索引,是否启用索引
 排序索引,排序索引
 域名唯一索引,域名唯一索引
-WASM哈希记录表,"WASM Hash Record Table"
-哈希ID,"Hash ID"
-WASM文件路径,"WASM File Path"
-SHA-256哈希值,"SHA-256 Hash Value"
-版本号,Version
-版本索引,"Version Index"
-哈希值唯一索引,"Hash Value Unique Index"
+WASM哈希记录表,WASM哈希记录表
+哈希ID,哈希ID
+WASM文件路径,WASM文件路径
+SHA-256哈希值,SHA-256哈希值
+版本号,版本号
+版本索引,版本索引
+哈希值唯一索引,哈希值唯一索引
+./dom-exception-coercer,./dom-exception-coercer
+./error-coercer,./error-coercer
+./error-event-coercer,./error-event-coercer
+./string-coercer,./string-coercer
+./object-coercer,./object-coercer
+./event-coercer,./event-coercer
+./primitive-coercer,./primitive-coercer
+./promise-rejection-event,./promise-rejection-event
+./error-properties-builder,./error-properties-builder
+./parsers,./parsers
+./coercers,./coercers
+./utils?198b,./utils?198b
+./featureFlagUtils,./featureFlagUtils
+./utils?637c,./utils?637c
+./error-tracking,./error-tracking
+./vendor/uuidv7,./vendor/uuidv7
+./posthog-core,./posthog-core
+./posthog-core-stateless,./posthog-core-stateless
+./types,./types
+./spawn-local,./spawn-local
+./PostHogCoreTestClient,./PostHogCoreTestClient
+./test-utils,./test-utils
+./bot-detection,./bot-detection
+./bucketed-rate-limiter,./bucketed-rate-limiter
+./number-utils,./number-utils
+./string-utils,./string-utils
+./type-utils,./type-utils
+./promise-queue,./promise-queue
+./logger,./logger
+a,a
+./node_modules/.pnpm/@jridgewell+trace-mapping@0.3.25/node_modules/@jridgewell/trace-mapping/dist/trace-mapping.umd.js,./node_modules/.pnpm/@jridgewell+trace-mapping@0.3.25/node_modules/@jridgewell/trace-mapping/dist/trace-mapping.umd.js
+./node_modules/.pnpm/@jridgewell+gen-mapping@0.3.8/node_modules/@jridgewell/gen-mapping/dist/gen-mapping.umd.js,./node_modules/.pnpm/@jridgewell+gen-mapping@0.3.8/node_modules/@jridgewell/gen-mapping/dist/gen-mapping.umd.js
+./node_modules/.pnpm/@babel+helper-plugin-utils@7.25.9/node_modules/@babel/helper-plugin-utils/lib/index.js,./node_modules/.pnpm/@babel+helper-plugin-utils@7.25.9/node_modules/@babel/helper-plugin-utils/lib/index.js
+./node_modules/.pnpm/@jridgewell+set-array@1.2.1/node_modules/@jridgewell/set-array/dist/set-array.umd.js,./node_modules/.pnpm/@jridgewell+set-array@1.2.1/node_modules/@jridgewell/set-array/dist/set-array.umd.js
+./node_modules/.pnpm/@jridgewell+sourcemap-codec@1.5.0/node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.umd.js,./node_modules/.pnpm/@jridgewell+sourcemap-codec@1.5.0/node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.umd.js
+./node_modules/.pnpm/@jridgewell+resolve-uri@3.1.2/node_modules/@jridgewell/resolve-uri/dist/resolve-uri.umd.js,./node_modules/.pnpm/@jridgewell+resolve-uri@3.1.2/node_modules/@jridgewell/resolve-uri/dist/resolve-uri.umd.js
+./node_modules/.pnpm/babel-plugin-dynamic-import-node@2.3.3/node_modules/babel-plugin-dynamic-import-node/lib/utils.js,./node_modules/.pnpm/babel-plugin-dynamic-import-node@2.3.3/node_modules/babel-plugin-dynamic-import-node/lib/utils.js
+path,path
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/index.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/index.js
+./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/metadata/serializeType.js,./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/metadata/serializeType.js
+./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/parameter/parameterVisitor.js,./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/parameter/parameterVisitor.js
+./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/metadata/metadataVisitor.js,./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/metadata/metadataVisitor.js
+./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/common.js,./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/common.js
+./node_modules/.pnpm/ms@2.1.3/node_modules/ms/index.js,./node_modules/.pnpm/ms@2.1.3/node_modules/ms/index.js
+./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/browser.js,./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/browser.js
+./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/node.js,./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/node.js
+tty,tty
+util,util
+./node_modules/.pnpm/supports-color@7.2.0/node_modules/supports-color/index.js,./node_modules/.pnpm/supports-color@7.2.0/node_modules/supports-color/index.js
+./node_modules/.pnpm/globals@11.12.0/node_modules/globals/globals.json,./node_modules/.pnpm/globals@11.12.0/node_modules/globals/globals.json
+os,os
+./node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js,./node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js
+./node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js,./node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/async.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/async.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/util.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/util.js
+./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/index.js,./node_modules/.pnpm/debug@4.4.0/node_modules/debug/src/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/options.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/options.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/pattern-to-regex.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/pattern-to-regex.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/printer.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/printer.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/errors/config-error.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/errors/config-error.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/index.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/caching.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/caching.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/config-descriptors.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/config-descriptors.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/functional.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/functional.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/item.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/item.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/resolve-targets.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/resolve-targets.js
+fs,fs
+./node_modules/.pnpm/json5@2.2.3/node_modules/json5/dist/index.mjs,./node_modules/.pnpm/json5@2.2.3/node_modules/json5/dist/index.mjs
+"./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files sync recursive","./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files sync recursive"
+module,module
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/config-api.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/config-api.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/utils.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/utils.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/module-types.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/module-types.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/fs.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/gensync-utils/fs.js
+"./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files lazy recursive","./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files lazy recursive"
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/package.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/package.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/configuration.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/configuration.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/plugins.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/plugins.js
+./node_modules/.pnpm/@babel+preset-typescript@7.26.0_@babel+core@7.26.0/node_modules/@babel/preset-typescript/package.json,./node_modules/.pnpm/@babel+preset-typescript@7.26.0_@babel+core@7.26.0/node_modules/@babel/preset-typescript/package.json
+url,url
+./node_modules/.pnpm/semver@6.3.1/node_modules/semver/semver.js,./node_modules/.pnpm/semver@6.3.1/node_modules/semver/semver.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform-file.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform-file.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/import.cjs,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/files/import.cjs
+./node_modules/.pnpm/@babel+preset-typescript@7.26.0_@babel+core@7.26.0/node_modules/@babel/preset-typescript/lib/index.js,./node_modules/.pnpm/@babel+preset-typescript@7.26.0_@babel+core@7.26.0/node_modules/@babel/preset-typescript/lib/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/vendor/import-meta-resolve.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/vendor/import-meta-resolve.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/plugin.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/plugin.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/config-chain.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/config-chain.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/deep-array.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/deep-array.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/index.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/plugins.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/plugins.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/partial.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/partial.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/full.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/full.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/environment.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/helpers/environment.js
+./stubs/helper-compilation-targets.js,./stubs/helper-compilation-targets.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/removed.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/removed.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/option-assertions.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/validation/option-assertions.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/file.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/file.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/tools/build-external-helpers.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/tools/build-external-helpers.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/index.js
+./node_modules/.pnpm/@babel+parser@7.26.3/node_modules/@babel/parser/lib/index.js,./node_modules/.pnpm/@babel+parser@7.26.3/node_modules/@babel/parser/lib/index.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/index.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/index.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/config/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform-ast.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transform-ast.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parse.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parse.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parser/index.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parser/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/normalize-opts.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/normalize-opts.js
+./stubs/babel-codeframe.js,./stubs/babel-codeframe.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parser/util/missing-plugin-helper.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/parser/util/missing-plugin-helper.js
+./node_modules/.pnpm/@babel+helpers@7.26.0/node_modules/@babel/helpers/lib/index.js,./node_modules/.pnpm/@babel+helpers@7.26.0/node_modules/@babel/helpers/lib/index.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/index.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/index.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/index.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/index.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/babel-7-helpers.cjs,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/babel-7-helpers.cjs
+./node_modules/.pnpm/convert-source-map@2.0.0/node_modules/convert-source-map/index.js,./node_modules/.pnpm/convert-source-map@2.0.0/node_modules/convert-source-map/index.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/merge-map.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/merge-map.js
+./node_modules/.pnpm/@ampproject+remapping@2.3.0/node_modules/@ampproject/remapping/dist/remapping.umd.js,./node_modules/.pnpm/@ampproject+remapping@2.3.0/node_modules/@ampproject/remapping/dist/remapping.umd.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/plugin-pass.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/plugin-pass.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/block-hoist-plugin.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/block-hoist-plugin.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/normalize-file.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/normalize-file.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/generate.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/file/generate.js
+./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/util/clone-deep.js,./node_modules/.pnpm/@babel+core@7.26.0/node_modules/@babel/core/lib/transformation/util/clone-deep.js
+assert,assert
+process,process
+v8,v8
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/index.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/index.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/modules.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/modules.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/types.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/types.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/template-literals.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/template-literals.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/expressions.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/expressions.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/statements.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/statements.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/classes.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/classes.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/methods.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/methods.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/flow.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/flow.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/base.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/base.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/jsx.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/jsx.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/typescript.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/typescript.js
+./node_modules/.pnpm/jsesc@3.1.0/node_modules/jsesc/jsesc.js,./node_modules/.pnpm/jsesc@3.1.0/node_modules/jsesc/jsesc.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/source-map.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/source-map.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/printer.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/printer.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/whitespace.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/whitespace.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/parentheses.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/node/parentheses.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/buffer.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/buffer.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/token-map.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/token-map.js
+./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/index.js,./node_modules/.pnpm/@babel+generator@7.26.3/node_modules/@babel/generator/lib/generators/index.js
+./node_modules/.pnpm/@babel+helper-replace-supers@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-replace-supers/lib/index.js,./node_modules/.pnpm/@babel+helper-replace-supers@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-replace-supers/lib/index.js
+./node_modules/.pnpm/@babel+helper-skip-transparent-expression-wrappers@7.25.9/node_modules/@babel/helper-skip-transparent-expression-wrappers/lib/index.js,./node_modules/.pnpm/@babel+helper-skip-transparent-expression-wrappers@7.25.9/node_modules/@babel/helper-skip-transparent-expression-wrappers/lib/index.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/fields.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/fields.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/misc.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/misc.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/decorators-2018-09.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/decorators-2018-09.js
+./node_modules/.pnpm/@babel+helper-member-expression-to-functions@7.25.9/node_modules/@babel/helper-member-expression-to-functions/lib/index.js,./node_modules/.pnpm/@babel+helper-member-expression-to-functions@7.25.9/node_modules/@babel/helper-member-expression-to-functions/lib/index.js
+./node_modules/.pnpm/@babel+helper-optimise-call-expression@7.25.9/node_modules/@babel/helper-optimise-call-expression/lib/index.js,./node_modules/.pnpm/@babel+helper-optimise-call-expression@7.25.9/node_modules/@babel/helper-optimise-call-expression/lib/index.js
+./node_modules/.pnpm/@babel+helper-annotate-as-pure@7.25.9/node_modules/@babel/helper-annotate-as-pure/lib/index.js,./node_modules/.pnpm/@babel+helper-annotate-as-pure@7.25.9/node_modules/@babel/helper-annotate-as-pure/lib/index.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/typescript.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/typescript.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/decorators.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/decorators.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/features.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/features.js
+./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/import-builder.js,./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/import-builder.js
+./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/is-module.js,./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/is-module.js
+./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/import-injector.js,./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/import-injector.js
+./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/index.js,./node_modules/.pnpm/@babel+helper-module-imports@7.25.9/node_modules/@babel/helper-module-imports/lib/index.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/rewrite-this.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/rewrite-this.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/rewrite-live-references.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/rewrite-live-references.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/normalize-and-load-metadata.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/normalize-and-load-metadata.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/lazy-modules.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/lazy-modules.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/dynamic-import.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/dynamic-import.js
+./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/get-module-name.js,./node_modules/.pnpm/@babel+helper-module-transforms@7.26.0_@babel+core@7.26.0/node_modules/@babel/helper-module-transforms/lib/get-module-name.js
+./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/index.js,./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/index.js
+./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/identifier.js,./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/identifier.js
+./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/keyword.js,./node_modules/.pnpm/@babel+helper-validator-identifier@7.25.9/node_modules/@babel/helper-validator-identifier/lib/keyword.js
+./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/validator.js,./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/validator.js
+./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/find-suggestion.js,./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/find-suggestion.js
+./node_modules/.pnpm/@babel+helpers@7.26.0/node_modules/@babel/helpers/lib/helpers-generated.js,./node_modules/.pnpm/@babel+helpers@7.26.0/node_modules/@babel/helpers/lib/helpers-generated.js
+./node_modules/.pnpm/@babel+plugin-syntax-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-decorators/lib/index.js,./node_modules/.pnpm/@babel+plugin-syntax-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-decorators/lib/index.js
+./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/index.js,./node_modules/.pnpm/@babel+helper-create-class-features-plugin@7.25.9_@babel+core@7.26.0/node_modules/@babel/helper-create-class-features-plugin/lib/index.js
+./node_modules/.pnpm/@babel+plugin-proposal-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-proposal-decorators/lib/transformer-legacy.js,./node_modules/.pnpm/@babel+plugin-proposal-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-proposal-decorators/lib/transformer-legacy.js
+./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/dynamic-import.js,./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/dynamic-import.js
+./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/lazy.js,./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/lazy.js
+./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/hooks.js,./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/hooks.js
+./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/enum.js,./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/enum.js
+./node_modules/.pnpm/@babel+plugin-syntax-typescript@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-typescript/lib/index.js,./node_modules/.pnpm/@babel+plugin-syntax-typescript@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-typescript/lib/index.js
+./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/const-enum.js,./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/const-enum.js
+./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/global-types.js,./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/global-types.js
+./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/namespace.js,./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/namespace.js
+./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/index.js,./node_modules/.pnpm/@babel+plugin-transform-typescript@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-typescript/lib/index.js
+./node_modules/.pnpm/@babel+plugin-syntax-jsx@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-jsx/lib/index.js,./node_modules/.pnpm/@babel+plugin-syntax-jsx@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-jsx/lib/index.js
+./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/index.js,./node_modules/.pnpm/@babel+plugin-transform-modules-commonjs@7.26.3_@babel+core@7.26.0/node_modules/@babel/plugin-transform-modules-commonjs/lib/index.js
+./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/index.js,./node_modules/.pnpm/@babel+helper-validator-option@7.25.9/node_modules/@babel/helper-validator-option/lib/index.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/options.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/options.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/string.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/string.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/literal.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/literal.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/formatters.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/formatters.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/builder.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/builder.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/parse.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/parse.js
+./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/populate.js,./node_modules/.pnpm/@babel+template@7.25.9/node_modules/@babel/template/lib/populate.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/index.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/index.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/context.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/context.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/visitors.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/visitors.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/cache.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/cache.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/traverse-node.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/traverse-node.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/index.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/index.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/hub.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/hub.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/removal.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/removal.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/virtual-types.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/virtual-types.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/ancestry.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/ancestry.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/index.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/index.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/replacement.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/replacement.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/evaluation.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/evaluation.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/conversion.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/conversion.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/introspection.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/introspection.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/modification.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/modification.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/family.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/family.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/comments.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/comments.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/virtual-types-validator.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/virtual-types-validator.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/inferers.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/inferers.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/util.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/util.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/inferer-reference.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/inference/inferer-reference.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/hoister.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/hoister.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/removal-hooks.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/path/lib/removal-hooks.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/lib/renamer.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/lib/renamer.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/binding.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/scope/binding.js
+./node_modules/.pnpm/globals@11.12.0/node_modules/globals/index.js,./node_modules/.pnpm/globals@11.12.0/node_modules/globals/index.js
+./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/context.js,./node_modules/.pnpm/@babel+traverse@7.26.4/node_modules/@babel/traverse/lib/context.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isNode.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isNode.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/is.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/is.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/deprecationWarning.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/deprecationWarning.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/generated/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/generated/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/flow/removeTypeDuplicates.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/flow/removeTypeDuplicates.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/validate.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/validate.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/utils.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/utils.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/generated/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/generated/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/react/cleanJSXElementLiteralChild.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/react/cleanJSXElementLiteralChild.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/typescript/removeTypeDuplicates.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/typescript/removeTypeDuplicates.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneNode.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneNode.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/addComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/addComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/inherit.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/inherit.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritTrailingComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritTrailingComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritLeadingComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritLeadingComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritInnerComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritInnerComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/constants/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/constants/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toBlock.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toBlock.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getBindingIdentifiers.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getBindingIdentifiers.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/productions.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/productions.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toIdentifier.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toIdentifier.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isValidIdentifier.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isValidIdentifier.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/removePropertiesDeep.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/removePropertiesDeep.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/gatherSequenceExpressions.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/gatherSequenceExpressions.js
+./node_modules/.pnpm/@babel+helper-string-parser@7.25.9/node_modules/@babel/helper-string-parser/lib/index.js,./node_modules/.pnpm/@babel+helper-string-parser@7.25.9/node_modules/@babel/helper-string-parser/lib/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/core.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/core.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/flow.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/flow.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/jsx.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/jsx.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/misc.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/misc.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/experimental.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/experimental.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/typescript.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/typescript.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/placeholders.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/placeholders.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/deprecated-aliases.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/definitions/deprecated-aliases.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/react/isReactComponent.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/react/isReactComponent.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/react/isCompatTag.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/react/isCompatTag.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/react/buildChildren.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/react/buildChildren.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/asserts/assertNode.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/asserts/assertNode.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/asserts/generated/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/asserts/generated/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/flow/createTypeAnnotationBasedOnTypeof.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/flow/createTypeAnnotationBasedOnTypeof.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/flow/createFlowUnionType.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/flow/createFlowUnionType.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/typescript/createTSUnionType.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/typescript/createTSUnionType.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/generated/uppercase.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/builders/generated/uppercase.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/clone.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/clone.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneDeep.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneDeep.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneDeepWithoutLoc.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneDeepWithoutLoc.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneWithoutLoc.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/clone/cloneWithoutLoc.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/addComment.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/addComment.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritsComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/inheritsComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/removeComments.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/comments/removeComments.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/constants/generated/index.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/constants/generated/index.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/ensureBlock.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/ensureBlock.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toBindingIdentifierName.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toBindingIdentifierName.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toComputedKey.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toComputedKey.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toExpression.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toExpression.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toKeyAlias.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toKeyAlias.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toStatement.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toStatement.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/valueToNode.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/valueToNode.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/appendToMemberExpression.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/appendToMemberExpression.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/inherits.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/inherits.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/prependToMemberExpression.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/prependToMemberExpression.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/removeProperties.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/modifications/removeProperties.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getAssignmentIdentifiers.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getAssignmentIdentifiers.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getOuterBindingIdentifiers.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getOuterBindingIdentifiers.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getFunctionName.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/retrievers/getFunctionName.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/traverse/traverse.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/traverse/traverse.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/traverse/traverseFast.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/traverse/traverseFast.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/shallowEqual.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/utils/shallowEqual.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isBinding.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isBinding.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isBlockScoped.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isBlockScoped.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isImmutable.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isImmutable.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isLet.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isLet.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isNodesEquivalent.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isNodesEquivalent.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isPlaceholderType.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isPlaceholderType.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isReferenced.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isReferenced.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isScope.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isScope.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isSpecifierDefault.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isSpecifierDefault.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isType.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isType.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isValidES3Identifier.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isValidES3Identifier.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isVar.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/isVar.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/matchesPattern.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/matchesPattern.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/buildMatchMemberExpression.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/validators/buildMatchMemberExpression.js
+./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toSequenceExpression.js,./node_modules/.pnpm/@babel+types@7.26.3/node_modules/@babel/types/lib/converters/toSequenceExpression.js
+./node_modules/.pnpm/babel-plugin-dynamic-import-node@2.3.3/node_modules/babel-plugin-dynamic-import-node/lib/index.js,./node_modules/.pnpm/babel-plugin-dynamic-import-node@2.3.3/node_modules/babel-plugin-dynamic-import-node/lib/index.js
+./node_modules/.pnpm/@babel+plugin-syntax-class-properties@7.12.13_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-class-properties/lib/index.js,./node_modules/.pnpm/@babel+plugin-syntax-class-properties@7.12.13_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-class-properties/lib/index.js
+./node_modules/.pnpm/@babel+plugin-transform-export-namespace-from@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-export-namespace-from/lib/index.js,./node_modules/.pnpm/@babel+plugin-transform-export-namespace-from@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-export-namespace-from/lib/index.js
+./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/plugin.js,./node_modules/.pnpm/babel-plugin-transform-typescript-metadata@0.3.2_@babel+core@7.26.0_@babel+traverse@7.26.4/node_modules/babel-plugin-transform-typescript-metadata/lib/plugin.js
+./node_modules/.pnpm/@babel+plugin-proposal-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-proposal-decorators/lib/index.js,./node_modules/.pnpm/@babel+plugin-proposal-decorators@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-proposal-decorators/lib/index.js
+./node_modules/.pnpm/babel-plugin-parameter-decorator@1.0.16/node_modules/babel-plugin-parameter-decorator/lib/index.js,./node_modules/.pnpm/babel-plugin-parameter-decorator@1.0.16/node_modules/babel-plugin-parameter-decorator/lib/index.js
+./node_modules/.pnpm/@babel+plugin-syntax-import-assertions@7.26.0_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-import-assertions/lib/index.js,./node_modules/.pnpm/@babel+plugin-syntax-import-assertions@7.26.0_@babel+core@7.26.0/node_modules/@babel/plugin-syntax-import-assertions/lib/index.js
+./node_modules/.pnpm/@babel+plugin-transform-nullish-coalescing-operator@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-nullish-coalescing-operator/lib/index.js,./node_modules/.pnpm/@babel+plugin-transform-nullish-coalescing-operator@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-nullish-coalescing-operator/lib/index.js
+./node_modules/.pnpm/@babel+plugin-transform-optional-chaining@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-optional-chaining/lib/index.js,./node_modules/.pnpm/@babel+plugin-transform-optional-chaining@7.25.9_@babel+core@7.26.0/node_modules/@babel/plugin-transform-optional-chaining/lib/index.js
+crypto,crypto
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/parse-options.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/parse-options.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/re.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/re.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/cmp.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/cmp.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/debug.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/debug.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/semver.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/semver.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/range.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/range.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/lrucache.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/lrucache.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/comparator.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/classes/comparator.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/constants.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/constants.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/identifiers.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/internal/identifiers.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/parse.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/parse.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/eq.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/eq.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/neq.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/neq.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/gt.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/gt.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/gte.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/gte.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/lt.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/lt.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/lte.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/lte.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare-build.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare-build.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/valid.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/valid.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/clean.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/clean.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/inc.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/inc.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/diff.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/diff.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/major.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/major.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/minor.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/minor.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/patch.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/patch.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/prerelease.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/prerelease.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/rcompare.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/rcompare.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare-loose.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/compare-loose.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/sort.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/sort.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/rsort.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/rsort.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/coerce.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/coerce.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/satisfies.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/functions/satisfies.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/to-comparators.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/to-comparators.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/max-satisfying.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/max-satisfying.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/min-satisfying.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/min-satisfying.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/min-version.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/min-version.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/valid.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/valid.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/outside.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/outside.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/gtr.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/gtr.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/ltr.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/ltr.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/intersects.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/intersects.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/simplify.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/simplify.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/subset.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/ranges/subset.js
+./node_modules/.pnpm/create-require@1.1.1/node_modules/create-require/create-require.js,./node_modules/.pnpm/create-require@1.1.1/node_modules/create-require/create-require.js
+./node_modules/.pnpm/semver@7.6.3/node_modules/semver/index.js,./node_modules/.pnpm/semver@7.6.3/node_modules/semver/index.js
+./node_modules/.pnpm/pirates@4.0.6/node_modules/pirates/lib/index.js,./node_modules/.pnpm/pirates@4.0.6/node_modules/pirates/lib/index.js
+./node_modules/.pnpm/object-hash@3.0.0/node_modules/object-hash/index.js,./node_modules/.pnpm/object-hash@3.0.0/node_modules/object-hash/index.js
+"Argument unexpected for: %s","Argument unexpected for: %s"
+"Not enough arguments following: %s","Not enough arguments following: %s"
+"Invalid JSON config file: %s","Invalid JSON config file: %s"
+"Invalid configuration: %s, opts.count excludes opts.array.","Invalid configuration: %s, opts.count excludes opts.array."
+"Invalid configuration: %s, opts.count excludes opts.narg.","Invalid configuration: %s, opts.count excludes opts.narg."
+Positionals:,Positionals:
+command,command
+Commands:,Commands:
+default,default
+aliases:,aliases:
+"deprecated: %s","deprecated: %s"
+deprecated,deprecated
+Options:,Options:
+boolean,boolean
+count,count
+string,string
+array,array
+number,number
+required,required
+choices:,choices:
+Examples:,Examples:
+generated-value,generated-value
+default:,default:
+"Invalid values:","Invalid values:"
+"Argument: %s, Given: %s, Choices: %s","Argument: %s, Given: %s, Choices: %s"
+"Implications failed:","Implications failed:"
+"Arguments %s and %s are mutually exclusive","Arguments %s and %s are mutually exclusive"
+"Did you mean %s?","Did you mean %s?"
+"Argument check failed: %s","Argument check failed: %s"
 "检测到部分更新模式（%{1}），跳过 WASM 编译检查","检测到部分更新模式（%{1}），跳过 WASM 编译检查"
 "=== AutoLeadAgent WASM 编译检查 ===","=== AutoLeadAgent WASM 编译检查 ==="
 "WASM 源码不存在，跳过编译","WASM 源码不存在，跳过编译"
@@ -296,7 +689,7 @@ SHA-256哈希值,"SHA-256 Hash Value"
 "WASM 自动编译失败：%{1}","WASM 自动编译失败：%{1}"
 "WASM 编译检查时发生错误：%{1}","WASM 编译检查时发生错误：%{1}"
 =================================,=================================
-自动寻客端侧模型模块,"Auto Lead Agent Module"
+自动寻客端侧模型模块,自动寻客端侧模型模块
 批量保存配置失败：%{1},批量保存配置失败：%{1}
 Agent执行间隔必须在1-3600秒之间,Agent执行间隔必须在1-3600秒之间
 评分阈值必须在0-100之间,评分阈值必须在0-100之间
@@ -306,19 +699,19 @@ API调用频率必须在1-1000次/分钟之间,API调用频率必须在1-1000次
 推理超时时间必须在1000-120000毫秒之间,推理超时时间必须在1000-120000毫秒之间
 必须至少选择一个搜索引擎,必须至少选择一个搜索引擎
 必须至少选择一个目标网站,必须至少选择一个目标网站
-创建搜索任务失败,"Failed to create search task"
-获取搜索结果失败：%{1},"Failed to get search results: %{1}"
+创建搜索任务失败,创建搜索任务失败
+获取搜索结果失败：%{1},获取搜索结果失败：%{1}
 获取未完成任务失败：%{1},获取未完成任务失败：%{1}
 获取任务详情失败：%{1},获取任务详情失败：%{1}
 未找到来源类型处理器：%{1},未找到来源类型处理器：%{1}
 来源类型处理器未实现SourceTypeHandlerInterface接口,来源类型处理器未实现SourceTypeHandlerInterface接口
 "未找到来源类型详情：%{1} #%{2}","未找到来源类型详情：%{1} #%{2}"
 获取来源类型画像失败：%{1},获取来源类型画像失败：%{1}
-店铺不存在：%{1},"Store does not exist: %{1}"
-提取店铺画像失败：%{1},"Failed to extract store profile: %{1}"
-其他,Other
-通用,General
-生成Token失败：%{1},"Failed to generate token: %{1}"
+店铺不存在：%{1},店铺不存在：%{1}
+提取店铺画像失败：%{1},提取店铺画像失败：%{1}
+其他,其他
+通用,通用
+生成Token失败：%{1},生成Token失败：%{1}
 "正在安装 WASI SDK（便携编译工具）...","正在安装 WASI SDK（便携编译工具）..."
 "✓ WASI SDK 安装成功","✓ WASI SDK 安装成功"
 "✗ WASI SDK 安装失败：%{1}","✗ WASI SDK 安装失败：%{1}"
@@ -371,15 +764,15 @@ API调用频率必须在1-1000次/分钟之间,API调用频率必须在1-1000次
 "WASI SDK 编译失败：权限不足。可能的原因：1) 文件被其他程序占用 2) 目录权限不足 3) 需要管理员权限。请尝试：1) 关闭可能占用文件的程序 2) 以管理员身份运行 3) 检查目录权限：%{1}","WASI SDK 编译失败：权限不足。可能的原因：1) 文件被其他程序占用 2) 目录权限不足 3) 需要管理员权限。请尝试：1) 关闭可能占用文件的程序 2) 以管理员身份运行 3) 检查目录权限：%{1}"
 "WASI SDK 编译失败：%{1}","WASI SDK 编译失败：%{1}"
 编译输出文件不存在,编译输出文件不存在
-注册WASM哈希失败：%{1},"Failed to register WASM hash: %{1}"
+注册WASM哈希失败：%{1},注册WASM哈希失败：%{1}
 "正在清理旧的 WASI SDK 安装...","正在清理旧的 WASI SDK 安装..."
 "无法删除旧的 WASI SDK 安装。请手动删除目录：%{1}","无法删除旧的 WASI SDK 安装。请手动删除目录：%{1}"
 已将旧安装移动到备份目录：%{1},已将旧安装移动到备份目录：%{1}
-WASM文件不存在：%{1},"WASM file does not exist: %{1}"
-计算WASM文件哈希失败,"Failed to calculate WASM file hash"
-计算WASM哈希失败：%{1},"Failed to calculate WASM hash: %{1}"
-未找到WASM哈希记录，且WASM文件不存在,"WASM hash record not found and WASM file does not exist"
-获取最新WASM哈希失败：%{1},"Failed to get latest WASM hash: %{1}"
+WASM文件不存在：%{1},WASM文件不存在：%{1}
+计算WASM文件哈希失败,计算WASM文件哈希失败
+计算WASM哈希失败：%{1},计算WASM哈希失败：%{1}
+未找到WASM哈希记录，且WASM文件不存在,未找到WASM哈希记录，且WASM文件不存在
+获取最新WASM哈希失败：%{1},获取最新WASM哈希失败：%{1}
 搜索引擎映射表已有数据，跳过初始化,搜索引擎映射表已有数据，跳过初始化
 开始初始化默认搜索引擎映射数据...,开始初始化默认搜索引擎映射数据...
 "插入映射失败：%{1} - %{2}","插入映射失败：%{1} - %{2}"
@@ -388,32 +781,32 @@ WASM文件不存在：%{1},"WASM file does not exist: %{1}"
 开始初始化默认搜索目标网站数据...,开始初始化默认搜索目标网站数据...
 "插入目标网站失败：%{1} - %{2}","插入目标网站失败：%{1} - %{2}"
 "默认目标网站数据初始化完成，共插入 %{1} 条记录","默认目标网站数据初始化完成，共插入 %{1} 条记录"
-正在初始化...,Initializing...
-域名未授权,"Domain not authorized"
-Token未找到，请先获取Token,"Token not found, please get token first"
-Agent初始化成功,"Agent initialized successfully"
-初始化失败：%{1},"Initialization failed: %{1}"
-正在加载核心代码...,"Loading core code..."
-"加载核心代码失败：HTTP %{1}","Failed to load core code: HTTP %{1}"
-核心代码加载成功,"Core code loaded successfully"
-加载核心代码失败：%{1},"Failed to load core code: %{1}"
-Token已过期，请重新获取,"Token expired, please get a new token"
-潜在客户,"Lead Candidates"
+正在初始化...,正在初始化...
+域名未授权,域名未授权
+Token未找到，请先获取Token,Token未找到，请先获取Token
+Agent初始化成功,Agent初始化成功
+初始化失败：%{1},初始化失败：%{1}
+正在加载核心代码...,正在加载核心代码...
+"加载核心代码失败：HTTP %{1}","加载核心代码失败：HTTP %{1}"
+核心代码加载成功,核心代码加载成功
+加载核心代码失败：%{1},加载核心代码失败：%{1}
+Token已过期，请重新获取,Token已过期，请重新获取
+潜在客户,潜在客户
 系统,系统
 暂无潜在客户,暂无潜在客户
 客户ID,客户ID
 评分,评分
-状态,Status
-操作,Actions
-查看,View
-配置管理,Configuration
-自动寻客,"Auto Lead Agent"
-基础配置,"Basic Settings"
-Agent执行间隔,"Agent Interval"
-秒,seconds
-Agent每次执行的间隔时间,"Interval between each agent run"
-关键词策略,"Keyword Strategy"
-选择搜索关键词的生成方式,"Select how to generate search keywords"
+状态,状态
+操作,操作
+查看,查看
+配置管理,配置管理
+自动寻客,自动寻客
+基础配置,基础配置
+Agent执行间隔,Agent执行间隔
+秒,秒
+Agent每次执行的间隔时间,Agent每次执行的间隔时间
+关键词策略,关键词策略
+选择搜索关键词的生成方式,选择搜索关键词的生成方式
 浏览器扩展状态,浏览器扩展状态
 未检测到,未检测到
 扩展已就绪,扩展已就绪
@@ -421,60 +814,61 @@ Agent每次执行的间隔时间,"Interval between each agent run"
 您可以正常使用端侧推理、自动化爬取和模型下载功能。,您可以正常使用端侧推理、自动化爬取和模型下载功能。
 端侧推理和智能爬取功能需要配合浏览器扩展使用。,端侧推理和智能爬取功能需要配合浏览器扩展使用。
 查看安装步骤,查看安装步骤
-评分配置,"Scoring Settings"
-最低评分阈值,"Minimum Score Threshold"
-分,points
-只有评分高于此阈值的客户才会被记录,"Only customers with scores above this threshold will be recorded"
-API配置,"API Settings"
-API调用频率,"API Call Rate"
-次/分钟,requests/minute
-每分钟最大API调用次数,"Maximum API calls per minute"
-最大并发任务数,"Max Concurrent Tasks"
-个,tasks
-同时运行的最大任务数量,"Maximum number of tasks running at the same time"
-目标网站配置,"Target Sites Settings"
-默认目标网站,"Default Target Sites"
-用于搜索潜在客户的默认社交媒体网站，每行一个,"Default social media sites for searching potential customers, one per line"
-WASM模型配置,"WASM Model Settings"
-启用WASM模型,"Enable WASM Model"
-启用浏览器端侧WASM模型进行智能分析,"Enable browser-side WASM model for intelligent analysis"
-推理超时时间,"Inference Timeout"
-毫秒,ms
-WASM模型单次推理的最大等待时间,"Maximum waiting time for a single WASM inference"
-"端侧模型配置（Hugging Face）","On-device Model Settings (Hugging Face)"
-未配置模型,"No model configured"
+评分配置,评分配置
+最低评分阈值,最低评分阈值
+分,分
+只有评分高于此阈值的客户才会被记录,只有评分高于此阈值的客户才会被记录
+API配置,API配置
+API调用频率,API调用频率
+次/分钟,次/分钟
+每分钟最大API调用次数,每分钟最大API调用次数
+最大并发任务数,最大并发任务数
+个,个
+同时运行的最大任务数量,同时运行的最大任务数量
+目标网站配置,目标网站配置
+默认目标网站,默认目标网站
+用于搜索潜在客户的默认社交媒体网站，每行一个,用于搜索潜在客户的默认社交媒体网站，每行一个
+WASM模型配置,WASM模型配置
+启用WASM模型,启用WASM模型
+启用浏览器端侧WASM模型进行智能分析,启用浏览器端侧WASM模型进行智能分析
+推理超时时间,推理超时时间
+毫秒,毫秒
+WASM模型单次推理的最大等待时间,WASM模型单次推理的最大等待时间
+"端侧模型配置（Hugging Face）","端侧模型配置（Hugging Face）"
+未配置模型,未配置模型
 模型状态,模型状态
 未加载,未加载
 加载模型,加载模型
 卸载模型,卸载模型
 内存使用,内存使用
-启用端侧推理模型,"Enable on-device inference model"
-启用后，任务必须使用端侧模型进行推理和决策,"When enabled, tasks must use the on-device model for inference and decision-making"
-模型缓存上限,"Model Cache Limit"
-用于在浏览器本地缓存模型文件的最大空间（100-10240MB）,"Maximum browser local cache space for model files (100-10240 MB)"
+加载模型中...,加载模型中...
+启用端侧推理模型,启用端侧推理模型
+启用后，任务必须使用端侧模型进行推理和决策,启用后，任务必须使用端侧模型进行推理和决策
+模型缓存上限,模型缓存上限
+用于在浏览器本地缓存模型文件的最大空间（100-10240MB）,用于在浏览器本地缓存模型文件的最大空间（100-10240MB）
 模型管理,模型管理
 清理所有模型,清理所有模型
 查看缓存信息,查看缓存信息
 清理所有已下载的模型以释放磁盘空间,清理所有已下载的模型以释放磁盘空间
-"搜索 Hugging Face 模型","Search Hugging Face Models"
-"输入模型关键词，例如: qwen llama mistral","Enter model keywords, e.g. qwen llama mistral"
-文本生成,"Text Generation"
-指令对话/翻译,"Instruction Chat / Translation"
-搜索,Search
-仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度,"Only show models that support text generation or instruction chat; it is recommended to choose quantized small models to speed up loading"
+"搜索 Hugging Face 模型","搜索 Hugging Face 模型"
+"输入模型关键词，例如: qwen llama mistral","输入模型关键词，例如: qwen llama mistral"
+文本生成,文本生成
+指令对话/翻译,指令对话/翻译
+搜索,搜索
+仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度,仅显示支持文本生成或指令对话的模型，建议选择已量化的小模型以提升加载速度
 推荐模型：,推荐模型：
 1.5B参数，原生多语言支持,1.5B参数，原生多语言支持
 3.8B参数，多语言支持良好,3.8B参数，多语言支持良好
 1.1B参数，快速推理,1.1B参数，快速推理
 注意：,注意：
 "如果选择的模型类型不被支持（如 qwen3），系统将自动尝试使用 Chrome Built-in AI（如果可用）作为降级方案。","如果选择的模型类型不被支持（如 qwen3），系统将自动尝试使用 Chrome Built-in AI（如果可用）作为降级方案。"
-模型名称,"Model Name"
+模型名称,模型名称
 大小,大小
-下载量,Downloads
-模型详情,"Model Details"
-尚未选择模型,"No model selected"
-刷新当前模型信息,"Refresh current model information"
-保存为当前模型,"Save as current model"
+下载量,下载量
+模型详情,模型详情
+尚未选择模型,尚未选择模型
+刷新当前模型信息,刷新当前模型信息
+保存为当前模型,保存为当前模型
 智能体测试,智能体测试
 测试输入,测试输入
 输入测试指令，例如：你好，帮我访问google首页,输入测试指令，例如：你好，帮我访问google首页
@@ -487,8 +881,8 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 执行步骤：,执行步骤：
 测试中...,测试中...
 智能体处理中，请稍候...,智能体处理中，请稍候...
-重置为默认,"Reset to Defaults"
-保存配置,"Save Settings"
+重置为默认,重置为默认
+保存配置,保存配置
 安装浏览器扩展,安装浏览器扩展
 "请按照以下步骤手动安装 AutoLeadAgent 扩展：","请按照以下步骤手动安装 AutoLeadAgent 扩展："
 打开扩展管理,打开扩展管理
@@ -501,12 +895,14 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 点击,点击
 “加载已解压的扩展程序”,“加载已解压的扩展程序”
 按钮，并选择以下目录：,按钮，并选择以下目录：
+下载扩展,下载扩展
+解压后选择该文件夹,解压后选择该文件夹
 安装成功后，请刷新配置页面以激活功能。,安装成功后，请刷新配置页面以激活功能。
 关闭,关闭
 刷新页面,刷新页面
-确认重置,"Confirm Reset"
-是否确认重置所有配置为默认值？,"Are you sure you want to reset all settings to their default values?"
-取消,Cancel
+确认重置,确认重置
+是否确认重置所有配置为默认值？,是否确认重置所有配置为默认值？
+取消,取消
 "需要登录 HuggingFace","需要登录 HuggingFace"
 "已为你打开 HuggingFace 登录页面，请完成登录后点击下方按钮继续。","已为你打开 HuggingFace 登录页面，请完成登录后点击下方按钮继续。"
 登录成功后，系统将自动检测并继续下载模型。,登录成功后，系统将自动检测并继续下载模型。
@@ -533,16 +929,44 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 "剩余时间: --","剩余时间: --"
 取消下载,取消下载
 下载过程中请勿关闭此窗口，模型文件较大，可能需要较长时间。,下载过程中请勿关闭此窗口，模型文件较大，可能需要较长时间。
-正在保存...,Saving...
-配置保存失败,"Failed to save configuration"
-正在重置...,Resetting...
-重置配置失败,"Failed to reset configuration"
+正在保存...,正在保存...
+配置保存失败,配置保存失败
+正在重置...,正在重置...
+重置配置失败,重置配置失败
+正在初始化模型...,正在初始化模型...
+加载完成,加载完成
+下载模型文件...,下载模型文件...
 请输入测试指令,请输入测试指令
 请先加载模型,请先加载模型
-模型未加载或不可用,模型未加载或不可用
 测试失败,测试失败
-自动寻客管理,"Auto Lead Agent Management"
-潜在客户总数,"Total Lead Candidates"
+检测状态,检测状态
+已检测到扩展，但连接失败。请刷新页面重试。,已检测到扩展，但连接失败。请刷新页面重试。
+"检测到 Playwright MCP，建议安装 AutoLeadAgent 扩展以获得更好体验。","检测到 Playwright MCP，建议安装 AutoLeadAgent 扩展以获得更好体验。"
+"未检测到 AutoLeadAgent 浏览器扩展","未检测到 AutoLeadAgent 浏览器扩展"
+"安装 AutoLeadAgent 智能寻客扩展","安装 AutoLeadAgent 智能寻客扩展"
+"AutoLeadAgent 扩展 - AI 驱动的浏览器自动化","AutoLeadAgent 扩展 - AI 驱动的浏览器自动化"
+"基于 Nanobrowser 开源项目，支持自然语言指令控制浏览器，自动寻找潜在客户。","基于 Nanobrowser 开源项目，支持自然语言指令控制浏览器，自动寻找潜在客户。"
+安装步骤（只需3步）,安装步骤（只需3步）
+下载并解压扩展包,下载并解压扩展包
+"下载 AutoLeadAgent 扩展","下载 AutoLeadAgent 扩展"
+下载后解压到任意目录,下载后解压到任意目录
+"打开 Chrome 扩展管理页面","打开 Chrome 扩展管理页面"
+在页面右上角开启,在页面右上角开启
+开发者模式,开发者模式
+加载已解压的扩展程序,加载已解压的扩展程序
+，选择解压后的文件夹即可,，选择解压后的文件夹即可
+"配置 LLM API 密钥（必须）","配置 LLM API 密钥（必须）"
+"扩展安装后，需要配置 LLM 提供商的 API 密钥才能使用：","扩展安装后，需要配置 LLM 提供商的 API 密钥才能使用："
+点击扩展图标，打开侧边栏,点击扩展图标，打开侧边栏
+"点击设置图标，进入 Models 标签页","点击设置图标，进入 Models 标签页"
+"添加 LLM 提供商（如 OpenAI、Gemini、Claude 或本地 Ollama）","添加 LLM 提供商（如 OpenAI、Gemini、Claude 或本地 Ollama）"
+安装完成后,安装完成后
+"刷新此页面，然后在测试框中输入自然语言指令（如""去百度搜索 AI""），智能体将自动执行。","刷新此页面，然后在测试框中输入自然语言指令（如""去百度搜索 AI""），智能体将自动执行。"
+浏览器限制无法自动打开，地址已复制：,浏览器限制无法自动打开，地址已复制：
+请手动粘贴到地址栏访问,请手动粘贴到地址栏访问
+请手动访问：,请手动访问：
+自动寻客管理,自动寻客管理
+潜在客户总数,潜在客户总数
 待机,待机
 正在检测端侧模型配置...,正在检测端侧模型配置...
 配置模型,配置模型
@@ -565,18 +989,18 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 推理日志,推理日志
 爬取日志,爬取日志
 等待爬取开始...,等待爬取开始...
-搜索任务列表,"Search Task List"
-新建寻找客户任务,"New Lead Search Task"
+搜索任务列表,搜索任务列表
+新建寻找客户任务,新建寻找客户任务
 加载中...,加载中...
 加载任务列表...,加载任务列表...
-自动寻客任务,"Auto Lead Search Task"
+自动寻客任务,自动寻客任务
 欢迎使用自动寻客功能,欢迎使用自动寻客功能
-自动寻客会根据店铺的描述和画像，自动在互联网上寻找潜在客户。,"Auto lead search will analyze store descriptions and profiles to automatically find potential customers on the internet."
-分析当前店铺的行业、目标客户、产品优势等信息；,"Analyze the store's industry, target customers, and product advantages;"
-智能生成搜索关键词并抓取潜在客户线索；,"Intelligently generate search keywords and capture potential customer leads;"
-为每个潜在客户打分，帮助你快速筛选高价值客户。,"Score each potential customer to help you quickly identify high-value leads."
-检测到你有尚未完成的寻找客户任务。,"We detected an unfinished lead search task."
-你可以选择继续执行上一次的任务，或创建一个新的任务。,"You can continue the last task or create a new one."
+自动寻客会根据店铺的描述和画像，自动在互联网上寻找潜在客户。,自动寻客会根据店铺的描述和画像，自动在互联网上寻找潜在客户。
+分析当前店铺的行业、目标客户、产品优势等信息；,分析当前店铺的行业、目标客户、产品优势等信息；
+智能生成搜索关键词并抓取潜在客户线索；,智能生成搜索关键词并抓取潜在客户线索；
+为每个潜在客户打分，帮助你快速筛选高价值客户。,为每个潜在客户打分，帮助你快速筛选高价值客户。
+检测到你有尚未完成的寻找客户任务。,检测到你有尚未完成的寻找客户任务。
+你可以选择继续执行上一次的任务，或创建一个新的任务。,你可以选择继续执行上一次的任务，或创建一个新的任务。
 选择来源类型,选择来源类型
 请选择来源类型,请选择来源类型
 选择要寻找客户的来源类型，系统会基于该来源的描述和画像，自动寻找匹配的潜在客户。,选择要寻找客户的来源类型，系统会基于该来源的描述和画像，自动寻找匹配的潜在客户。
@@ -588,13 +1012,13 @@ WASM模型单次推理的最大等待时间,"Maximum waiting time for a single W
 选择目标网站,选择目标网站
 正在加载目标网站列表...,正在加载目标网站列表...
 至少选择一个目标网站进行搜索,至少选择一个目标网站进行搜索
-使用建议：,"Usage tips:"
-优先为核心店铺创建寻找客户任务；,"Prioritize creating lead search tasks for core stores;"
-在高峰时段建议减少并发任务数量；,"Reduce concurrent tasks during peak hours;"
+使用建议：,使用建议：
+优先为核心店铺创建寻找客户任务；,优先为核心店铺创建寻找客户任务；
+在高峰时段建议减少并发任务数量；,在高峰时段建议减少并发任务数量；
 "可以在""潜在客户""列表中查看任务结果。","可以在""潜在客户""列表中查看任务结果。"
-以后再说,"Maybe later"
-继续上一次任务,"Continue last task"
-立即开始寻找客户,"Start lead search now"
+以后再说,以后再说
+继续上一次任务,继续上一次任务
+立即开始寻找客户,立即开始寻找客户
 确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。,确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。
 加载中,加载中
 推理中,推理中
@@ -668,7 +1092,7 @@ Edge：,Edge：
 搜索引擎,搜索引擎
 未选择,未选择
 目标网站,目标网站
-进度,Progress
+进度,进度
 返回列表,返回列表
 暂无潜在客户数据,暂无潜在客户数据
 ID,ID
@@ -687,8 +1111,8 @@ ID,ID
 搜索来源网址,搜索来源网址
 客户主页链接,客户主页链接
 完整画像数据,完整画像数据
-搜索引擎映射管理,"Search Engine Mapping Management"
-搜索引擎映射,"Search Engine Mapping"
+搜索引擎映射管理,搜索引擎映射管理
+搜索引擎映射,搜索引擎映射
 映射列表,映射列表
 添加映射,添加映射
 地区,地区
@@ -715,8 +1139,8 @@ ID,ID
 操作失败,操作失败
 确定要删除这条映射吗？删除后无法恢复。,确定要删除这条映射吗？删除后无法恢复。
 删除失败,删除失败
-搜索目标网站管理,"Search Target Websites Management"
-搜索目标网站,"Search Target Websites"
+搜索目标网站管理,搜索目标网站管理
+搜索目标网站,搜索目标网站
 目标网站列表,目标网站列表
 添加目标网站,添加目标网站
 输入网站名称或域名,输入网站名称或域名
@@ -732,10 +1156,10 @@ ID,ID
 确定要禁用该目标网站吗？,确定要禁用该目标网站吗？
 操作成功,操作成功
 确定要删除该目标网站吗？此操作不可恢复！,确定要删除该目标网站吗？此操作不可恢复！
-Token管理,"Token Management"
+Token管理,Token管理
 暂无Token记录,暂无Token记录
 WASM哈希,WASM哈希
-WASM管理,"WASM Management"
+WASM管理,WASM管理
 暂无WASM文件记录,暂无WASM文件记录
 文件哈希,文件哈希
 文件路径,文件路径
@@ -746,107 +1170,105 @@ WASM详情,WASM详情
 文件状态,文件状态
 文件存在,文件存在
 文件不存在,文件不存在
-"尝试使用 curl 下载（显示进度）...","尝试使用 curl 下载（显示进度）..."
-"尝试使用 PowerShell 下载（显示进度）...","尝试使用 PowerShell 下载（显示进度）..."
-"尝试使用 PHP 下载（显示进度）...","尝试使用 PHP 下载（显示进度）..."
-所有下载方式均失败,所有下载方式均失败
-"使用 curl 下载（显示进度）...","使用 curl 下载（显示进度）..."
-"使用 wget 下载（显示进度）...","使用 wget 下载（显示进度）..."
-"curl 和 wget 均失败","curl 和 wget 均失败"
-"尝试使用 curl 下载...","尝试使用 curl 下载..."
-"尝试使用 PowerShell 下载...","尝试使用 PowerShell 下载..."
-"尝试使用 PHP 下载...","尝试使用 PHP 下载..."
-"PHP file_get_contents 下载失败","PHP file_get_contents 下载失败"
-"WASI SDK 未安装，无法编译 WASM","WASI SDK 未安装，无法编译 WASM"
-搜索菜单,搜索菜单
-搜索菜单...,搜索菜单...
-常用菜单,常用菜单
-搜索结果,搜索结果
-最近访问,最近访问
-访问最多,访问最多
-模型缓存目录,模型缓存目录
-"例如: /path/to/models 或 C:\Models","例如: /path/to/models 或 C:\Models"
-模型文件将下载到此目录，请确保有足够的磁盘空间,模型文件将下载到此目录，请确保有足够的磁盘空间
-注意：下载模型前必须先配置缓存目录,注意：下载模型前必须先配置缓存目录
-"缓存目录已配置，模型文件存储在 IndexedDB 中","缓存目录已配置，模型文件存储在 IndexedDB 中"
-目录已选择，请立即开始下载（请勿刷新页面）,目录已选择，请立即开始下载（请勿刷新页面）
-文件已存在,文件已存在
-无法创建模型目录：%{1},无法创建模型目录：%{1}
-无法创建子目录：%{1},无法创建子目录：%{1}
-文件大小超过php.ini限制（upload_max_filesize）,文件大小超过php.ini限制（upload_max_filesize）
-文件大小超过表单限制（MAX_FILE_SIZE）,文件大小超过表单限制（MAX_FILE_SIZE）
-文件只上传了部分,文件只上传了部分
-没有文件被上传,没有文件被上传
-缺少临时文件夹,缺少临时文件夹
-文件写入失败,文件写入失败
-PHP扩展阻止了文件上传,PHP扩展阻止了文件上传
-文件上传错误代码：%{1},文件上传错误代码：%{1}
-临时文件不存在,临时文件不存在
-未接收到文件数据或文件为空,未接收到文件数据或文件为空
-目录不可写：%{1},目录不可写：%{1}
-保存文件失败：%{1},保存文件失败：%{1}
-文件保存成功,文件保存成功
-未接收到文件数据,未接收到文件数据
-模型已缓存，无需重复下载,模型已缓存，无需重复下载
-获取文件列表失败：%{1},获取文件列表失败：%{1}
-获取文件列表失败，状态码：%{1},获取文件列表失败，状态码：%{1}
-未找到需要下载的文件,未找到需要下载的文件
-无法创建文件：%{1},无法创建文件：%{1}
-下载文件失败：%{1}（%{2}）,下载文件失败：%{1}（%{2}）
-部分文件下载失败,部分文件下载失败
-模型下载成功,模型下载成功
-下载模型失败：%{1},下载模型失败：%{1}
-搜索关键词不能为空,搜索关键词不能为空
-选择要寻找客户的店铺,"Select the store to search leads for"
-请选择店铺,"Please select a store"
-系统会基于该店铺的描述和画像，自动寻找匹配的潜在客户。,"The system will use the store's description and profile to find matching potential customers."
-等待任务开始...,等待任务开始...
-"Emscripten 未安装，无法编译 WASM","Emscripten 未安装，无法编译 WASM"
-"如需编译 WASM，请安装 Emscripten: https://emscripten.org","如需编译 WASM，请安装 Emscripten: https://emscripten.org"
-"CMake 未安装，无法编译 WASM","CMake 未安装，无法编译 WASM"
-"如需编译 WASM，请安装 CMake >= 3.15","如需编译 WASM，请安装 CMake >= 3.15"
-来源链接,来源链接
-安装步骤：,安装步骤：
-"点击上方""下载扩展包""，解压到任意目录","点击上方""下载扩展包""，解压到任意目录"
-"在扩展页面右上角开启""开发者模式""","在扩展页面右上角开启""开发者模式"""
-加载扩展,加载扩展
-"点击""加载已解压的扩展程序""，选择解压目录","点击""加载已解压的扩展程序""，选择解压目录"
-提示：,提示：
-如果使用服务器部署，也可直接加载目录：,如果使用服务器部署，也可直接加载目录：
-进度更新失败,进度更新失败
-进度（0-100）,"Progress (0-100)"
-暂无任务,"No tasks"
-继续,继续
-"开始编译 AutoLeadAgent WASM 模块...","开始编译 AutoLeadAgent WASM 模块..."
-检查编译环境...,检查编译环境...
-"Emscripten 未安装或未配置","Emscripten 未安装或未配置"
-"请参考文档安装 Emscripten: https://emscripten.org/docs/getting_started/","请参考文档安装 Emscripten: https://emscripten.org/docs/getting_started/"
-将使用纯JS版本作为备用方案,将使用纯JS版本作为备用方案
-"CMake 未安装","CMake 未安装"
-"请安装 CMake >= 3.15","请安装 CMake >= 3.15"
-"编译环境不满足，跳过 WASM 编译","编译环境不满足，跳过 WASM 编译"
-"模块将使用纯 JavaScript 推理引擎","模块将使用纯 JavaScript 推理引擎"
-"正在编译 WASM...","正在编译 WASM..."
-"SHA256 哈希: %{1}","SHA256 哈希: %{1}"
-"WASM 编译失败：%{1}","WASM 编译失败：%{1}"
-"编译自动寻客模块的 WASM 核心算法","编译自动寻客模块的 WASM 核心算法"
-"编译 WASM","编译 WASM"
-"CMake 配置失败：%{1}","CMake 配置失败：%{1}"
-编译失败：%{1},编译失败：%{1}
-编译输出文件不存在：%{1},编译输出文件不存在：%{1}
-自动寻客模块的配置管理功能正在开发中。,自动寻客模块的配置管理功能正在开发中。
-后续版本将支持以下配置项：,后续版本将支持以下配置项：
-Agent执行间隔时间,Agent执行间隔时间
-客户评分阈值,客户评分阈值
-搜索关键词生成策略,搜索关键词生成策略
-API调用频率限制,API调用频率限制
-更新任务状态失败：%{1},更新任务状态失败：%{1}
-可以在“潜在客户”列表中查看任务结果。,"You can view task results in the Lead Candidates list."
-搜索任务,"Search Tasks"
-pending,Pending
-running,Running
-completed,Completed
-failed,Failed
-cancelled,Cancelled
-verified,Verified
-rejected,Rejected
+在地址栏输入或点击按钮：,在地址栏输入或点击按钮：
+开关,开关
+按钮，选择以下目录：,按钮，选择以下目录：
+"安装 Playwright MCP 浏览器自动化","安装 Playwright MCP 浏览器自动化"
+"智能体需要 Playwright MCP 来控制浏览器","智能体需要 Playwright MCP 来控制浏览器"
+"Playwright MCP 是微软官方的浏览器自动化工具，支持导航、点击、输入、截图等操作。","Playwright MCP 是微软官方的浏览器自动化工具，支持导航、点击、输入、截图等操作。"
+浏览器扩展,浏览器扩展
+独立服务,独立服务
+"Playwright MCP 浏览器扩展（推荐）","Playwright MCP 浏览器扩展（推荐）"
+安装浏览器扩展后，系统会自动检测并连接，无需额外配置：,安装浏览器扩展后，系统会自动检测并连接，无需额外配置：
+访问,访问
+下载最新版扩展,下载最新版扩展
+"解压下载的 ZIP 文件","解压下载的 ZIP 文件"
+打开浏览器扩展页面,打开浏览器扩展页面
+"开启右上角""开发者模式""","开启右上角""开发者模式"""
+"点击""加载已解压的扩展程序""，选择解压后的文件夹","点击""加载已解压的扩展程序""，选择解压后的文件夹"
+刷新本页面，系统会自动检测到扩展,刷新本页面，系统会自动检测到扩展
+自动连接,自动连接
+"安装完成后刷新页面，智能体会自动检测并连接到扩展，无需手动配置 MCP。","安装完成后刷新页面，智能体会自动检测并连接到扩展，无需手动配置 MCP。"
+"推荐：Cursor 一键安装","推荐：Cursor 一键安装"
+"如果你使用 Cursor IDE，可以直接在 MCP 设置中添加：","如果你使用 Cursor IDE，可以直接在 MCP 设置中添加："
+"打开 Cursor 设置","打开 Cursor 设置"
+名称填写,名称填写
+类型选择,类型选择
+命令填写,命令填写
+"点击保存，重启 Cursor","点击保存，重启 Cursor"
+"独立 MCP 服务器","独立 MCP 服务器"
+"在服务器上运行 Playwright MCP 作为独立服务：","在服务器上运行 Playwright MCP 作为独立服务："
+"启动服务（端口 8931）","启动服务（端口 8931）"
+"然后在 MCP 客户端配置中使用 URL 连接：","然后在 MCP 客户端配置中使用 URL 连接："
+官方文档,官方文档
+模型未加载或不可用,模型未加载或不可用
+"﻿""鑷姩瀵诲""","Auto Lead Agent"
+浠诲姟绠＄悊,"Task Management"
+鎼滅储浠诲姟,"Search Task"
+瀹㈡埛鐢诲儚,"Customer Profile"
+娼滃湪瀹㈡埛,"Lead Candidate"
+鎼滅储寮曟搸,"Search Engine"
+鐩爣缃戠珯,"Target Website"
+閰嶇疆绠＄悊,Configuration
+閰嶇疆妯″瀷,"Configure Model"
+鍗歌浇妯″瀷,"Unload Model"
+鎺ㄧ悊鑰楁椂,"Inference Time"
+鍐呭瓨鍗犵敤,"Memory Usage"
+娴忚鍣ㄦ墿灞曟湭妫€娴嬪埌,"Extension Not Detected"
+娴忚鍣ㄦ墿灞曞凡杩炴帴,"Extension Connected"
+瀹夎鎵╁睍,"Install Extension"
+鎺ㄧ悊鏃ュ織,"Inference Log"
+鐖彇鏃ュ織,"Crawl Log"
+寰呮満,Idle
+澶辫触,Failed
+閿欒,Error
+鎴愬姛,Success
+閫夋嫨鏉ユ簮绫诲瀷,"Select Source Type"
+閫夋嫨鎼滅储寮曟搸,"Select Search Engines"
+閫夋嫨鐩爣缃戠珯,"Select Target Websites"
+娼滃湪瀹㈡埛鎬绘暟,"Total Candidates"
+娴忚鍣ㄤ笉鍏煎,"Browser Incompatible"
+"涓嬭浇 Chrome","Download Chrome"
+鎴戠煡閬撲簡,"I Understand"
+"鎼滅储 Hugging Face 妯″瀷","Search Hugging Face Models"
+妯″瀷ID,"Model ID"
+缂撳瓨澶у皬,"Cache Size"
+涓嬭浇娆℃暟,Downloads
+鏂囨湰鐢熸垚,"Text Generation"
+淇濆瓨,Save
+鍙栨秷,Cancel
+鍏抽棴,Close
+鍒锋柊,Refresh
+鍒犻櫎,Delete
+涓嬭浇妯″瀷,"Download Model"
+閭,Email
+鐢佃瘽,Phone
+绀惧獟璐︽埛,"Social Media"
+鑱旂郴鏂瑰紡,"Contact Info"
+鍏徃鍚嶇О,"Company Name"
+琛屼笟,Industry
+鍦板尯,Location
+鍖归厤鍒嗘暟,"Match Score"
+璐ㄩ噺璇勫垎,"Quality Score"
+瀵艰埅,Navigate
+鐐瑰嚮,Click
+鎻愬彇,Extract
+蹇収,Snapshot
+宸ュ叿璋冪敤,"Tool Call"
+鍐崇瓥,Decision
+鎿嶄綔,Action
+琛屽姩,Act
+瑙傚療,Observe
+瀹屾垚,Complete
+鏌ョ湅璇︽儏,"View Details"
+纭,Confirm
+鎿嶄綔鎴愬姛,"Operation Successful"
+鎿嶄綔澶辫触,"Operation Failed"
+浠诲姟鍚姩涓?..,"Task starting..."
+绛夊緟鐖彇寮€濮?..,"Waiting for crawl to start..."
+鐢诲儚鍒嗘瀽,"Profile Analysis"
+鍐呭鍖归厤,"Content Matching"
+"Initializing model...",姝ｅ湪鍒濆鍖栨ā鍨?..
+"Loading model...",鍔犺浇妯″瀷涓?..
+"Downloading model files...",涓嬭浇妯″瀷鏂囦欢...
+"Loading complete",鍔犺浇瀹屾垚

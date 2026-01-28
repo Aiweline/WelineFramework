@@ -11,7 +11,12 @@ use Weline\Websites\Model\Website;
 
 class Store extends Model
 {
-    public const indexer = 'store';
+    public const table = 'weshop_store';
+    public const primary_key = 'store_id';
+    public const indexer = 'store_indexer';
+    public array $_unit_primary_keys = ['store_id'];
+    public array $_index_sort_keys = ['website_id', 'name', 'code', 'status', 'sort_order'];
+    
     public const fields_ID = 'store_id';
     public const fields_WEBSITE_ID = 'website_id';
     public const fields_NAME = 'name';

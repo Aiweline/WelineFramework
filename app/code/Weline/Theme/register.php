@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Theme',
     __DIR__,
-    '1.0.2',
+    '1.0.4',
     '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。',
     ['Weline_Meta']
 );

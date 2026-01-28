@@ -13,6 +13,8 @@ use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Model\WebsiteUser;
+use GuoLaiRen\PageBuilder\Service\LayoutService;
+use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -342,6 +344,9 @@ class Page extends BackendController
             $this->assign('selected_locales', []);
         }
         
+        // 获取可用的布局页面列表（新建页面时为空，因为还没有website_id）
+        $this->assign('layout_pages', []);
+        
         return $this->fetch('form');
     }
 
@@ -539,14 +544,26 @@ class Page extends BackendController
             // 创建页面
             $page = clone $this->pageModel;
             
+            // 处理handle字段：首页handle必须不为空
+            $pageHandle = $data['handle'] ?? '';
+            $pageType = $data['type'] ?? '';
+            if (empty($pageHandle) && $pageType === PageModel::TYPE_HOME) {
+                // 如果是首页且handle为空，自动生成一个
+                $pageName = $data['name'] ?? $data['title'] ?? '';
+                $pageHandle = $this->generateSlugFromName($pageName);
+                if (empty($pageHandle)) {
+                    $pageHandle = 'home-' . time();
+                }
+            }
+            
             // CTA 事件名称：如果为空则自动生成为 cta_{handle}_click
             $ctaEventName = $data['cta_event_name'] ?? '';
-            if (empty($ctaEventName) && !empty($data['handle'])) {
-                $ctaEventName = 'cta_' . $data['handle'] . '_click';
+            if (empty($ctaEventName) && !empty($pageHandle)) {
+                $ctaEventName = 'cta_' . $pageHandle . '_click';
             }
             
             $page->clearData()
-                ->setData(PageModel::fields_HANDLE, $data['handle'])
+                ->setData(PageModel::fields_HANDLE, $pageHandle)
                 ->setData(PageModel::fields_TYPE, $data['type'])
                 ->setData(PageModel::fields_NAME, $data['name'])
                 ->setData(PageModel::fields_TITLE, $data['title'])
@@ -568,6 +585,7 @@ class Page extends BackendController
                 ->setData(PageModel::fields_REDIRECT_URL, $data['redirect_url'] ?? '')
                 ->setData(PageModel::fields_HEADER_CUSTOM_CODE, $data['header_custom_code'] ?? '')
                 ->setData(PageModel::fields_FOOTER_CUSTOM_CODE, $data['footer_custom_code'] ?? '')
+                ->setData(PageModel::fields_LAYOUT_PAGE_ID, !empty($data['layout_page_id']) ? (int)$data['layout_page_id'] : null)
                 ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT);
             
             // 关联站点：仅允许设置为当前用户可访问的站点
@@ -837,6 +855,10 @@ class Page extends BackendController
         $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
         $this->assign('ai_enabled', $aiEnabled);
         
+        // 获取可用的布局页面列表（排除当前页面）
+        $layoutPages = $page->getAvailableLayoutPages((int)$pageId);
+        $this->assign('layout_pages', $layoutPages);
+        
         return $this->fetch('form');
     }
 
@@ -1101,10 +1123,21 @@ class Page extends BackendController
                 }
             }
             
+            // 🔧 处理handle字段：首页handle必须不为空
+            $pageHandle = $data['handle'] ?? '';
+            if (empty($pageHandle) && $pageType === PageModel::TYPE_HOME) {
+                // 如果是首页且handle为空，自动生成一个
+                $pageName = $data['name'] ?? $data['title'] ?? $page->getData(PageModel::fields_NAME) ?? '';
+                $pageHandle = $this->generateSlugFromName($pageName);
+                if (empty($pageHandle)) {
+                    $pageHandle = 'home-' . time();
+                }
+            }
+            
             // 🔧 使用条件更新（where()->update()）来保存记录，避免 PostgreSQL CASE 表达式类型不匹配问题
             // 准备更新数据（基础字段，肯定存在）
             $updateData = [
-                PageModel::fields_HANDLE => $data['handle'],
+                PageModel::fields_HANDLE => $pageHandle,
                 PageModel::fields_TYPE => $pageType,
                 PageModel::fields_NAME => $data['name'],
                 PageModel::fields_TITLE => $data['title'],
@@ -1125,6 +1158,7 @@ class Page extends BackendController
                 PageModel::fields_REDIRECT_URL => $data['redirect_url'] ?? '',
                 PageModel::fields_HEADER_CUSTOM_CODE => $data['header_custom_code'] ?? '',
                 PageModel::fields_FOOTER_CUSTOM_CODE => $data['footer_custom_code'] ?? '',
+                PageModel::fields_LAYOUT_PAGE_ID => !empty($data['layout_page_id']) ? (int)$data['layout_page_id'] : null,
                 PageModel::fields_STATUS => $data['status'] ?? PageModel::STATUS_DRAFT,
             ];
             
@@ -1436,6 +1470,8 @@ class Page extends BackendController
     
     /**
      * 删除页面的URL重写规则
+     * 
+     * 注意：URL 重写按 website_id 隔离，删除时需要指定 website_id
      */
     private function deleteUrlRewrite(PageModel $page): void
     {
@@ -1445,11 +1481,16 @@ class Page extends BackendController
                 return;
             }
             
-            $urlIdentify = "pagebuilder_page_{$handle}";
+            // 获取页面的 website_id
+            $websiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+            
+            // URL 指纹包含 website_id 以匹配新格式
+            $urlIdentify = "pagebuilder_page_{$websiteId}_{$handle}";
             
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
             $urlRewriteModel->clear()
+                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
                 ->where(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
                 ->delete()
                 ->fetch();
@@ -1547,6 +1588,7 @@ class Page extends BackendController
     /**
      * 获取样式列表（AJAX接口）
      * 实时扫描样式目录并返回最新的样式列表
+     * 自动检查预览图是否存在，如果不存在则提供生成所需的信息
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_get_styles', '获取样式列表', '', '获取样式列表')]
     public function getStyles()
@@ -1568,13 +1610,43 @@ class Page extends BackendController
             // 格式化样式数据
             $formattedStyles = [];
             foreach ($styleList as $style) {
+                $styleCode = $style->getData(Style::fields_CODE);
+                $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                
+                // 检查预览图是否真实存在
+                $previewUrl = '';
+                $needsPreview = true;
+                
+                if ($previewImage) {
+                    // 尝试多种路径格式
+                    $possiblePaths = [
+                        BP . 'pub/static/' . $previewImage,
+                        BP . 'pub/static/' . ltrim($previewImage, '/'),
+                    ];
+                    
+                    foreach ($possiblePaths as $path) {
+                        if (file_exists($path)) {
+                            $previewUrl = '/static/' . ltrim($previewImage, '/');
+                            // 添加时间戳防止缓存
+                            $previewUrl .= '?t=' . filemtime($path);
+                            $needsPreview = false;
+                            break;
+                        }
+                    }
+                }
+                
                 $formattedStyles[] = [
                     'id' => $style->getId(),
-                    'code' => $style->getData(Style::fields_CODE),
+                    'code' => $styleCode,
                     'name' => $style->getData(Style::fields_NAME),
                     'description' => $style->getData(Style::fields_DESCRIPTION),
                     'path' => $style->getData(Style::fields_PATH),
-                    'preview_image' => $style->getData(Style::fields_PREVIEW_IMAGE),
+                    'preview_image' => $previewUrl ?: '',
+                    'needs_preview' => $needsPreview,
+                    'preview_page_url' => $needsPreview ? $this->request->getUrlBuilder()->getBackendUrl(
+                        'pagebuilder/backend/preview/stylePreview',
+                        ['style' => $styleCode]
+                    ) : '',
                     'supported_types' => $style->getSupportedTypes(),
                 ];
             }
@@ -1583,6 +1655,7 @@ class Page extends BackendController
                 'success' => true,
                 'data' => $formattedStyles,
                 'count' => count($formattedStyles),
+                'upload_url' => $this->request->getUrlBuilder()->getBackendUrl('pagebuilder/backend/template/uploadPreview'),
                 'message' => __('样式列表获取成功')
             ]);
         } catch (\Exception $e) {
@@ -1635,10 +1708,11 @@ class Page extends BackendController
             }
             
             // 页面类型配置
+            // 首页handle直接使用URL前缀（siteHandle），确保首页可以通过URL前缀访问
             $pageTypeConfigs = [
                 PageModel::TYPE_HOME => [
                     'name' => $siteName,
-                    'handle' => $siteHandle,
+                    'handle' => $siteHandle, // 首页handle直接使用URL前缀
                     'title' => $siteName,
                     'is_home' => true,
                 ],
@@ -1672,15 +1746,20 @@ class Page extends BackendController
                     'handle' => $siteHandle . '-shipping',
                     'title' => __('配送政策') . ' - ' . $siteName,
                 ],
+                PageModel::TYPE_COOKIE_POLICY => [
+                    'name' => __('Cookie政策'),
+                    'handle' => $siteHandle . '-cookies',
+                    'title' => __('Cookie政策') . ' - ' . $siteName,
+                ],
                 PageModel::TYPE_BLOG_LIST => [
-                    'name' => __('博客'),
+                    'name' => __('博客列表'),
                     'handle' => $siteHandle . '-blog',
-                    'title' => __('博客') . ' - ' . $siteName,
+                    'title' => __('博客列表') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG => [
-                    'name' => __('博客文章'),
-                    'handle' => $siteHandle . '-blog-post',
-                    'title' => __('博客文章') . ' - ' . $siteName,
+                    'name' => __('博客文章详情'),
+                    'handle' => $siteHandle . '-post',
+                    'title' => __('博客文章详情') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_CATEGORY => [
                     'name' => __('博客分类'),
@@ -1700,23 +1779,41 @@ class Page extends BackendController
                 
                 $config = $pageTypeConfigs[$pageType];
                 
-                // 检查handle是否已存在
-                $existingPage = clone $this->pageModel;
-                $existingPage->clear()
-                    ->where(PageModel::fields_HANDLE, $config['handle'])
-                    ->find()
-                    ->fetch();
-                
-                if ($existingPage->getId()) {
-                    // 如果已存在，跳过或添加数字后缀
-                    $config['handle'] = $config['handle'] . '-' . time();
+                // 检查handle是否已存在（只有当handle不为空时才检查）
+                if (!empty($config['handle'])) {
+                    $existingPage = clone $this->pageModel;
+                    $existingPage->clear()
+                        ->where(PageModel::fields_HANDLE, $config['handle'])
+                        ->find()
+                        ->fetch();
+                    
+                    if ($existingPage->getId()) {
+                        // 如果已存在，跳过或添加数字后缀
+                        $config['handle'] = $config['handle'] . '-' . time();
+                    }
                 }
                 
                 // 创建页面（直接设为已发布状态，以便立即可访问）
                 $page = clone $this->pageModel;
-                $page->clearData()
-                    ->setData(PageModel::fields_HANDLE, $config['handle'])
-                    ->setData(PageModel::fields_TYPE, $pageType)
+                $page->clearData();
+                
+                // 处理handle字段：首页handle必须不为空
+                $pageHandle = $config['handle'] ?? '';
+                if (empty($pageHandle) && ($config['is_home'] ?? false)) {
+                    // 如果是首页且handle为空，自动生成一个
+                    $pageHandle = $this->generateSlugFromName($config['name']);
+                    if (empty($pageHandle)) {
+                        $pageHandle = 'home-' . time();
+                    }
+                }
+                
+                // 只有当handle不为空时才设置handle字段
+                if (!empty($pageHandle)) {
+                    $page->setData(PageModel::fields_HANDLE, $pageHandle);
+                    // 更新config中的handle，以便后续使用
+                    $config['handle'] = $pageHandle;
+                }
+                $page->setData(PageModel::fields_TYPE, $pageType)
                     ->setData(PageModel::fields_NAME, $config['name'])
                     ->setData(PageModel::fields_TITLE, $config['title'])
                     ->setData(PageModel::fields_CONTENT, '')
@@ -1738,7 +1835,7 @@ class Page extends BackendController
                 // 确保页面已保存成功
                 $savedPageId = $page->getId();
                 if (empty($savedPageId)) {
-                    throw new \Exception(__('页面保存失败：%1', $config['name']));
+                    throw new \Exception(__('页面保存失败：%{name}', ['name' => $config['name']]));
                 }
                 
                 // 记录首页ID
@@ -1771,7 +1868,7 @@ class Page extends BackendController
             
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('站点创建成功，共创建 %1 个页面', count($createdPages)),
+                'message' => __('站点创建成功，共创建 %{count} 个页面', ['count' => count($createdPages)]),
                 'pages' => $createdPages,
                 'home_page_id' => $homePageId,
             ]);
@@ -1932,6 +2029,8 @@ class Page extends BackendController
     
     /**
      * 检查 handle 是否已存在（AJAX接口）
+     * 
+     * 注意：handle 在同一 website_id 内必须唯一，不同 website_id 可以重复
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_check_handle', '检查句柄', '', '检查页面句柄是否重复')]
     public function getCheckHandle()
@@ -1939,6 +2038,13 @@ class Page extends BackendController
         try {
             $handle = trim($this->request->getGet('handle', ''));
             $pageId = (int)$this->request->getGet('page_id', 0);
+            // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
+            $websiteId = $this->request->getGet('website_id');
+            if ($websiteId === null || $websiteId === '') {
+                $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            } else {
+                $websiteId = (int)$websiteId;
+            }
             
             if (empty($handle)) {
                 return $this->fetchJson([
@@ -1957,9 +2063,10 @@ class Page extends BackendController
                 ]);
             }
             
-            // 查询数据库检查是否已存在
+            // 查询数据库检查是否已存在（在同一 website_id 内）
             $existingPage = clone $this->pageModel;
             $existingPage->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
@@ -1974,7 +2081,7 @@ class Page extends BackendController
                         'message' => __('当前页面的句柄')
                     ]);
                 } else {
-                    // 被其他页面占用
+                    // 被同网站的其他页面占用
                     return $this->fetchJson([
                         'success' => true,
                         'available' => false,
@@ -2007,12 +2114,21 @@ class Page extends BackendController
     /**
      * 通过 handle 获取页面信息（AJAX接口）
      * 用于可视化配置组件初始化
+     * 
+     * 注意：handle 在同一 website_id 内唯一，查询时需指定 website_id
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_get_page_by_handle', '通过句柄获取页面', '', '通过句柄获取页面信息')]
     public function getPageByHandle()
     {
         try {
             $handle = trim($this->request->getGet('handle', ''));
+            // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
+            $websiteId = $this->request->getGet('website_id');
+            if ($websiteId === null || $websiteId === '') {
+                $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            } else {
+                $websiteId = (int)$websiteId;
+            }
             
             if (empty($handle)) {
                 return $this->fetchJson([
@@ -2021,9 +2137,10 @@ class Page extends BackendController
                 ]);
             }
             
-            // 查询页面
+            // 查询页面（按 website_id + handle）
             $page = clone $this->pageModel;
             $page->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
@@ -2046,6 +2163,7 @@ class Page extends BackendController
                 'data' => [
                     'page_id' => $pageId,
                     'handle' => $handle,
+                    'website_id' => $websiteId,
                     'style_code' => $styleCode,
                     'default_locale' => $defaultLocale,
                     'locales' => $locales,
@@ -2089,10 +2207,39 @@ class Page extends BackendController
         
         // 获取前端预览URL（带语言参数和preview标记）
         $handle = $page->getData(PageModel::fields_HANDLE);
-        $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
-            'pagebuilder/frontend/page/view',
-            ['handle' => $handle, 'locale' => $locale, 'preview' => '1']
-        );
+        $pageType = $page->getData(PageModel::fields_TYPE);
+        $isHomePage = ($pageType === PageModel::TYPE_HOME);
+        
+        // 首页类型且没有handle时，直接使用网站地址
+        if ($isHomePage && empty($handle)) {
+            $websiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+            $websiteUrl = '';
+            if ($websiteId > 0) {
+                try {
+                    $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                    $website = clone $websiteModel;
+                    $website->load($websiteId);
+                    if ($website->getId()) {
+                        $websiteUrl = $website->getData(\Weline\Websites\Model\Website::fields_URL);
+                    }
+                } catch (\Exception $e) {
+                    // 忽略错误
+                }
+            }
+            
+            if ($websiteUrl) {
+                $frontendUrl = rtrim($websiteUrl, '/') . '?preview=1';
+            } else {
+                // 回退到使用当前访问的网站地址
+                $baseUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                $frontendUrl = $baseUrl . '?preview=1';
+            }
+        } else {
+            $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
+                'pagebuilder/frontend/page/view',
+                ['handle' => $handle, 'locale' => $locale, 'preview' => '1']
+            );
+        }
         
         // 直接重定向到前端页面
         header('Location: ' . $frontendUrl);
@@ -2192,12 +2339,16 @@ class Page extends BackendController
      * 自动创建或更新页面的 URL 重写规则
      * @param PageModel $page 页面模型
      * @return bool 是否成功
+     * 
+     * 注意：URL 重写按 website_id 隔离，同 website_id 下 handle 唯一
      */
     private function createOrUpdateUrlRewrite(PageModel $page): bool
     {
         try {
             $handle = $page->getData(PageModel::fields_HANDLE);
             $pageId = $page->getId();
+            // 获取页面的 website_id
+            $websiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
             
             if (empty($handle) || empty($pageId)) {
                 if (DEV) {
@@ -2212,14 +2363,15 @@ class Page extends BackendController
             // 重写路径（使用 handle 作为友好 URL，不带斜杠开头）
             $rewritePath = $handle;
             
-            // URL 指纹（用于唯一标识）
-            $urlIdentify = "pagebuilder_page_{$handle}";
+            // URL 指纹（用于唯一标识，包含 website_id 以支持不同站点同 handle）
+            $urlIdentify = "pagebuilder_page_{$websiteId}_{$handle}";
             
-            // 查找是否已存在重写规则
+            // 查找是否已存在重写规则（按 website_id + url_identify）
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
             $existingRewrite = clone $urlRewriteModel;
             $existingRewrite->clear()
+                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
                 ->where(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
                 ->find()
                 ->fetch();
@@ -2233,6 +2385,7 @@ class Page extends BackendController
                 // 创建新规则
                 $newRewrite = clone $urlRewriteModel;
                 $newRewrite->clearData()
+                    ->setData(UrlRewrite::fields_WEBSITE_ID, $websiteId)
                     ->setData(UrlRewrite::fields_URL_ID, "pagebuilder_page_{$pageId}")
                     ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
                     ->setData(UrlRewrite::fields_PATH, $originalPath)
@@ -2474,18 +2627,15 @@ class Page extends BackendController
                 ]);
             }
             
-            $configGroups = $styleModel->getConfigGroups();
+            // 获取页面的布局配置（实际配置，而非模板默认配置）
+            $layoutService = ObjectManager::getInstance(LayoutService::class);
+            $layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
             
-            // 获取页面配置值
-            $pageSettings = [];
-            $allSettings = $page->getStyleSetting();
-            if (isset($allSettings[$styleCode]) && is_array($allSettings[$styleCode])) {
-                foreach ($allSettings[$styleCode] as $key => $value) {
-                    if (!is_array($value)) {
-                        $pageSettings[$key] = $value;
-                    }
-                }
-            }
+            // 获取页面的完整布局配置（包含组件的实际配置值）
+            $layoutConfig = $layoutService->getFullLayoutConfig($pageId);
+            
+            // 获取组件文件映射
+            $componentFiles = $layoutAssembler->getComponentFilesMap($styleCode);
             
             // 使用PhpSpreadsheet生成Excel
             $spreadsheet = new Spreadsheet();
@@ -2494,134 +2644,95 @@ class Page extends BackendController
             // 需要导出的文件类型
             $fileTypes = ['header', 'content', 'footer'];
             
+            // 设置表头样式（加粗、悬浮、垂直居中）
+            $headerStyle = [
+                'font' => ['bold' => true],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'E0E0E0']
+                ],
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                    'horizontal' => Alignment::HORIZONTAL_LEFT
+                ]
+            ];
+            
+            // 设置默认单元格样式（垂直居中）
+            $defaultStyle = [
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                    'horizontal' => Alignment::HORIZONTAL_LEFT
+                ]
+            ];
+            
             foreach ($fileTypes as $fileType) {
-                if (!isset($configGroups[$fileType])) {
-                    continue;
-                }
-                
-                $fileGroup = $configGroups[$fileType];
                 $sheet = new Worksheet($spreadsheet, ucfirst($fileType));
                 $spreadsheet->addSheet($sheet);
                 
                 // 设置表头
-                $sheet->setCellValue('A1', __('配置Key'));
-                $sheet->setCellValue('B1', __('标签Label'));
-                $sheet->setCellValue('C1', __('值（填写此处）'));
-                $sheet->setCellValue('D1', __('提示Tip'));
+                $sheet->setCellValue('A1', __('组件'));
+                $sheet->setCellValue('B1', __('配置Key'));
+                $sheet->setCellValue('C1', __('标签Label'));
+                $sheet->setCellValue('D1', __('值（填写此处）'));
+                $sheet->setCellValue('E1', __('提示Tip'));
                 
-                // 设置表头样式（加粗、悬浮、垂直居中）
-                $headerStyle = [
-                    'font' => ['bold' => true],
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'E0E0E0']
-                    ],
-                    'alignment' => [
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'horizontal' => Alignment::HORIZONTAL_LEFT
-                    ]
-                ];
-                $sheet->getStyle('A1:D1')->applyFromArray($headerStyle);
+                // 设置表头样式
+                $sheet->getStyle('A1:E1')->applyFromArray($headerStyle);
                 
                 // 设置列宽
-                $sheet->getColumnDimension('A')->setWidth(30);
-                $sheet->getColumnDimension('B')->setWidth(25);
-                $sheet->getColumnDimension('C')->setWidth(40);
-                $sheet->getColumnDimension('D')->setWidth(50);
+                $sheet->getColumnDimension('A')->setWidth(25);
+                $sheet->getColumnDimension('B')->setWidth(30);
+                $sheet->getColumnDimension('C')->setWidth(25);
+                $sheet->getColumnDimension('D')->setWidth(40);
+                $sheet->getColumnDimension('E')->setWidth(50);
                 
                 // 冻结首行
                 $sheet->freezePane('A2');
                 
-                // 设置默认单元格样式（垂直居中）
-                $defaultStyle = [
-                    'alignment' => [
-                        'vertical' => Alignment::VERTICAL_CENTER,
-                        'horizontal' => Alignment::HORIZONTAL_LEFT
-                    ]
-                ];
-                
                 $row = 2;
                 
-                // 遍历分组和配置项
-                if (isset($fileGroup['groups']) && is_array($fileGroup['groups'])) {
-                    foreach ($fileGroup['groups'] as $group) {
-                        if (isset($group['configs']) && is_array($group['configs'])) {
-                            foreach ($group['configs'] as $configKey => $config) {
-                                // 优先使用页面配置值，否则使用默认值
-                                $value = $pageSettings[$configKey] ?? $config['default'] ?? '';
-                                
-                                // 获取tip（从description或help_content）
-                                $tip = '';
-                                if (!empty($config['description'])) {
-                                    $tip = $config['description'];
-                                } elseif (!empty($group['help_content'])) {
-                                    $tip = $group['help_content'];
-                                }
-                                
-                                $sheet->setCellValue('A' . $row, $configKey);
-                                $sheet->setCellValue('B' . $row, $config['label'] ?? '');
-                                $sheet->setCellValue('C' . $row, $value);
-                                $sheet->setCellValue('D' . $row, $tip);
-                                
-                                // 设置所有列的垂直居中
-                                $sheet->getStyle('A' . $row . ':D' . $row)->applyFromArray($defaultStyle);
-                                
-                                // 设置第三列（值列）为红色边框、自动换行、自适应高度
-                                $valueCellStyle = [
-                                    'borders' => [
-                                        'allBorders' => [
-                                            'borderStyle' => Border::BORDER_THIN,
-                                            'color' => ['rgb' => 'FF0000']
-                                        ]
-                                    ],
-                                    'alignment' => [
-                                        'vertical' => Alignment::VERTICAL_CENTER,
-                                        'horizontal' => Alignment::HORIZONTAL_LEFT,
-                                        'wrapText' => true  // 启用自动换行
-                                    ]
-                                ];
-                                $sheet->getStyle('C' . $row)->applyFromArray($valueCellStyle);
-                                
-                                // 为value列设置自适应行高
-                                // 根据文本内容计算需要的行数
-                                $valueStr = (string)$value;
-                                $colWidth = 40; // C列宽度（字符数）
-                                $lineCount = 1;
-                                
-                                if (!empty($valueStr)) {
-                                    // 计算文本的实际显示宽度
-                                    // Excel中每个字符大约7像素宽，列宽40字符约280像素
-                                    // 估算：中文字符宽度约等于2个英文字符
-                                    $displayWidth = 0;
-                                    $maxDisplayWidth = $colWidth * 7; // 列宽对应的像素宽度（约）
-                                    
-                                    $chars = mb_str_split($valueStr, 1, 'UTF-8');
-                                    foreach ($chars as $char) {
-                                        // 判断是否为中文字符
-                                        if (preg_match('/[\x{4e00}-\x{9fff}]/u', $char)) {
-                                            $displayWidth += 14; // 中文字符占14像素
-                                        } else {
-                                            $displayWidth += 7;  // 英文字符占7像素
-                                        }
-                                    }
-                                    
-                                    // 计算需要的行数（考虑自动换行）
-                                    $lineCount = max(1, ceil($displayWidth / max(1, $maxDisplayWidth)));
-                                    
-                                    // 如果文本中包含换行符，增加行数
-                                    $newlineCount = substr_count($valueStr, "\n");
-                                    if ($newlineCount > 0) {
-                                        $lineCount += $newlineCount;
-                                    }
-                                }
-                                
-                                // 设置行高（每行约15磅，最小15，最大不超过200）
-                                // Excel中1磅约等于1.33像素，行高15磅约等于20像素
-                                $rowHeight = max(15, min(200, 15 + ($lineCount - 1) * 15));
-                                $sheet->getRowDimension($row)->setRowHeight($rowHeight);
-                                
-                                $row++;
-                            }
+                // 获取该区域的组件配置
+                $regionConfig = $layoutConfig[$fileType] ?? null;
+                
+                if ($regionConfig === null) {
+                    continue;
+                }
+                
+                // 处理 header 和 footer（对象结构）
+                if ($fileType === 'header' || $fileType === 'footer') {
+                    $componentCode = $regionConfig['component'] ?? '';
+                    $componentConfig = $regionConfig['config'] ?? [];
+                    
+                    if (!empty($componentCode)) {
+                        $this->exportComponentConfig(
+                            $sheet,
+                            $componentCode,
+                            $componentConfig,
+                            $styleCode,
+                            $componentFiles,
+                            $layoutAssembler,
+                            $row,
+                            $defaultStyle
+                        );
+                    }
+                } 
+                // 处理 content（数组结构）
+                elseif ($fileType === 'content' && is_array($regionConfig)) {
+                    foreach ($regionConfig as $componentItem) {
+                        $componentCode = $componentItem['component'] ?? $componentItem['code'] ?? '';
+                        $componentConfig = $componentItem['config'] ?? [];
+                        
+                        if (!empty($componentCode)) {
+                            $this->exportComponentConfig(
+                                $sheet,
+                                $componentCode,
+                                $componentConfig,
+                                $styleCode,
+                                $componentFiles,
+                                $layoutAssembler,
+                                $row,
+                                $defaultStyle
+                            );
                         }
                     }
                 }
@@ -2631,11 +2742,12 @@ class Page extends BackendController
             if ($spreadsheet->getSheetCount() === 0) {
                 $sheet = new Worksheet($spreadsheet, 'Header');
                 $spreadsheet->addSheet($sheet);
-                $sheet->setCellValue('A1', __('配置Key'));
-                $sheet->setCellValue('B1', __('标签Label'));
-                $sheet->setCellValue('C1', __('值（填写此处）'));
-                $sheet->setCellValue('D1', __('提示Tip'));
-                $sheet->getStyle('A1:D1')->applyFromArray($headerStyle ?? []);
+                $sheet->setCellValue('A1', __('组件'));
+                $sheet->setCellValue('B1', __('配置Key'));
+                $sheet->setCellValue('C1', __('标签Label'));
+                $sheet->setCellValue('D1', __('值（填写此处）'));
+                $sheet->setCellValue('E1', __('提示Tip'));
+                $sheet->getStyle('A1:E1')->applyFromArray($headerStyle ?? []);
             }
             
             // 设置第一个sheet为活动sheet
@@ -2664,6 +2776,213 @@ class Page extends BackendController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+    
+    /**
+     * 导出单个组件的配置到Excel
+     * 
+     * @param Worksheet $sheet Excel工作表
+     * @param string $componentCode 组件代码
+     * @param array $componentConfig 组件的实际配置值
+     * @param string $styleCode 样式代码
+     * @param array $componentFiles 组件文件映射
+     * @param LayoutAssembler $layoutAssembler 布局组装器
+     * @param int &$row 当前行号（引用传递，会修改）
+     * @param array $defaultStyle 默认单元格样式
+     */
+    private function exportComponentConfig(
+        Worksheet $sheet,
+        string $componentCode,
+        array $componentConfig,
+        string $styleCode,
+        array $componentFiles,
+        LayoutAssembler $layoutAssembler,
+        int &$row,
+        array $defaultStyle
+    ): void {
+        // 获取组件文件
+        $componentFile = $componentFiles[$componentCode] ?? null;
+        $actualCode = $componentCode;
+        
+        // 特殊处理：tpmst-footer 映射到 footer-links
+        if ($componentCode === 'tpmst-footer' || $componentCode === $styleCode . '-footer') {
+            $actualCode = 'footer-links';
+            $componentFile = $componentFiles[$actualCode] ?? null;
+        }
+        
+        // 如果直接查找失败，尝试去掉模板前缀再查找
+        if (!$componentFile && strpos($componentCode, $styleCode . '-') === 0) {
+            $codeWithoutPrefix = substr($componentCode, strlen($styleCode) + 1);
+            $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
+            if ($componentFile) {
+                $actualCode = $codeWithoutPrefix;
+            }
+        }
+        
+        if (!$componentFile) {
+            return;
+        }
+        
+        // 读取组件文件获取字段定义
+        $componentPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/{$componentFile}";
+        
+        if (!file_exists($componentPath)) {
+            return;
+        }
+        
+        // 解析组件字段定义（使用反射调用私有方法）
+        $reflection = new \ReflectionClass($layoutAssembler);
+        $parseMethod = $reflection->getMethod('parseComponentFields');
+        $parseMethod->setAccessible(true);
+        $fields = $parseMethod->invoke($layoutAssembler, $componentPath);
+        
+        if (empty($fields)) {
+            return;
+        }
+        
+        // 遍历组件的所有配置字段
+        foreach ($fields as $groupName => $groupData) {
+            if (!isset($groupData['fields']) || !is_array($groupData['fields'])) {
+                continue;
+            }
+            
+            foreach ($groupData['fields'] as $fieldKey => $fieldConfig) {
+                // 获取实际配置值（优先使用页面配置，否则使用默认值）
+                $value = $componentConfig[$fieldKey] ?? $fieldConfig['default'] ?? '';
+                
+                // 处理数组类型的值（转换为JSON字符串）
+                if (is_array($value)) {
+                    $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
+                
+                // 获取tip（从description或help_content）
+                $tip = '';
+                if (!empty($fieldConfig['description'])) {
+                    $tip = $fieldConfig['description'];
+                } elseif (!empty($groupData['help_content'])) {
+                    $tip = $groupData['help_content'];
+                }
+                
+                // 构建配置Key（组件代码.字段Key）
+                $configKey = $componentCode . '.' . $fieldKey;
+                
+                $sheet->setCellValue('A' . $row, $componentCode);
+                $sheet->setCellValue('B' . $row, $configKey);
+                $sheet->setCellValue('C' . $row, $fieldConfig['label'] ?? '');
+                $sheet->setCellValue('D' . $row, $value);
+                $sheet->setCellValue('E' . $row, $tip);
+                
+                // 设置所有列的垂直居中
+                $sheet->getStyle('A' . $row . ':E' . $row)->applyFromArray($defaultStyle);
+                
+                // 设置第四列（值列）为红色边框、自动换行、自适应高度
+                $valueCellStyle = [
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['rgb' => 'FF0000']
+                        ]
+                    ],
+                    'alignment' => [
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'horizontal' => Alignment::HORIZONTAL_LEFT,
+                        'wrapText' => true
+                    ]
+                ];
+                $sheet->getStyle('D' . $row)->applyFromArray($valueCellStyle);
+                
+                // 为value列设置自适应行高
+                $valueStr = (string)$value;
+                $colWidth = 40;
+                $lineCount = 1;
+                
+                if (!empty($valueStr)) {
+                    $displayWidth = 0;
+                    $maxDisplayWidth = $colWidth * 7;
+                    
+                    $chars = mb_str_split($valueStr, 1, 'UTF-8');
+                    foreach ($chars as $char) {
+                        if (preg_match('/[\x{4e00}-\x{9fff}]/u', $char)) {
+                            $displayWidth += 14;
+                        } else {
+                            $displayWidth += 7;
+                        }
+                    }
+                    
+                    $lineCount = max(1, ceil($displayWidth / max(1, $maxDisplayWidth)));
+                    $newlineCount = substr_count($valueStr, "\n");
+                    if ($newlineCount > 0) {
+                        $lineCount += $newlineCount;
+                    }
+                }
+                
+                $rowHeight = max(15, min(200, 15 + ($lineCount - 1) * 15));
+                $sheet->getRowDimension($row)->setRowHeight($rowHeight);
+                
+                $row++;
+            }
+        }
+    }
+    
+    /**
+     * 在布局配置中更新组件的配置值
+     * 
+     * @param array &$layoutConfig 布局配置（引用传递，会修改）
+     * @param string $region 区域（header/content/footer）
+     * @param string $componentCode 组件代码
+     * @param string $fieldKey 字段Key
+     * @param mixed $value 配置值
+     * @return bool 是否成功更新
+     */
+    private function updateComponentConfigInLayout(
+        array &$layoutConfig,
+        string $region,
+        string $componentCode,
+        string $fieldKey,
+        $value
+    ): bool {
+        if ($region === 'header' || $region === 'footer') {
+            // header 和 footer 是对象结构
+            $regionConfig = $layoutConfig[$region] ?? null;
+            if ($regionConfig === null) {
+                return false;
+            }
+            
+            $regionComponentCode = $regionConfig['component'] ?? '';
+            if ($regionComponentCode !== $componentCode) {
+                return false;
+            }
+            
+            // 更新配置
+            if (!isset($layoutConfig[$region]['config'])) {
+                $layoutConfig[$region]['config'] = [];
+            }
+            $layoutConfig[$region]['config'][$fieldKey] = $value;
+            return true;
+        } elseif ($region === 'content') {
+            // content 是数组结构
+            $contentComponents = $layoutConfig['content'] ?? [];
+            if (!is_array($contentComponents)) {
+                return false;
+            }
+            
+            // 查找匹配的组件
+            foreach ($contentComponents as $index => $componentItem) {
+                $itemComponentCode = $componentItem['component'] ?? $componentItem['code'] ?? '';
+                if ($itemComponentCode === $componentCode) {
+                    // 更新配置
+                    if (!isset($layoutConfig['content'][$index]['config'])) {
+                        $layoutConfig['content'][$index]['config'] = [];
+                    }
+                    $layoutConfig['content'][$index]['config'][$fieldKey] = $value;
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        return false;
     }
 
     /**
@@ -2728,28 +3047,17 @@ class Page extends BackendController
                 ]);
             }
             
-            $configGroups = $styleModel->getConfigGroups();
-            
-            // 收集所有有效的配置key
-            $validConfigKeys = [];
-            foreach ($configGroups as $fileGroup) {
-                if (isset($fileGroup['groups']) && is_array($fileGroup['groups'])) {
-                    foreach ($fileGroup['groups'] as $group) {
-                        if (isset($group['configs']) && is_array($group['configs'])) {
-                            foreach ($group['configs'] as $configKey => $config) {
-                                $validConfigKeys[$configKey] = true;
-                            }
-                        }
-                    }
-                }
-            }
+            // 获取布局服务和布局配置
+            $layoutService = ObjectManager::getInstance(LayoutService::class);
+            $layout = $layoutService->getOrCreate($pageId);
+            $layoutConfig = $layout->exportConfig();
             
             // 读取Excel文件
             $spreadsheet = IOFactory::load($uploadedFile['tmp_name']);
             
-            $importedConfig = [];
             $importCount = 0;
             $skipCount = 0;
+            $errors = [];
             
             // 遍历所有sheet
             foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
@@ -2763,54 +3071,100 @@ class Page extends BackendController
                 $highestRow = $worksheet->getHighestRow();
                 
                 // 从第二行开始读取（第一行是表头）
+                // 新格式：A列=组件代码，B列=配置Key（组件代码.字段Key），D列=值
                 for ($row = 2; $row <= $highestRow; $row++) {
-                    $configKey = trim((string)$worksheet->getCell('A' . $row)->getValue());
-                    $value = trim((string)$worksheet->getCell('C' . $row)->getValue());
+                    $componentCode = trim((string)$worksheet->getCell('A' . $row)->getValue());
+                    $configKey = trim((string)$worksheet->getCell('B' . $row)->getValue());
+                    $value = trim((string)$worksheet->getCell('D' . $row)->getValue());
                     
-                    // 跳过空key
-                    if (empty($configKey)) {
+                    // 跳过空行
+                    if (empty($componentCode) && empty($configKey)) {
                         continue;
                     }
                     
-                    // 只处理模板中存在的配置项
-                    if (isset($validConfigKeys[$configKey])) {
-                        $importedConfig[$configKey] = $value;
+                    // 解析配置Key（格式：组件代码.字段Key）
+                    if (empty($configKey) || strpos($configKey, '.') === false) {
+                        $skipCount++;
+                        continue;
+                    }
+                    
+                    $parts = explode('.', $configKey, 2);
+                    if (count($parts) !== 2) {
+                        $skipCount++;
+                        continue;
+                    }
+                    
+                    $parsedComponentCode = $parts[0];
+                    $fieldKey = $parts[1];
+                    
+                    // 如果A列的组件代码为空，使用解析出的组件代码
+                    if (empty($componentCode)) {
+                        $componentCode = $parsedComponentCode;
+                    }
+                    
+                    // 验证组件代码是否匹配
+                    if ($componentCode !== $parsedComponentCode) {
+                        $skipCount++;
+                        $errors[] = sprintf(__('第%d行：组件代码不匹配（A列：%s，B列：%s）'), $row, $componentCode, $parsedComponentCode);
+                        continue;
+                    }
+                    
+                    // 处理值（尝试解析JSON）
+                    $parsedValue = $value;
+                    if (!empty($value)) {
+                        $jsonValue = json_decode($value, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $parsedValue = $jsonValue;
+                        }
+                    }
+                    
+                    // 更新布局配置
+                    $updated = $this->updateComponentConfigInLayout(
+                        $layoutConfig,
+                        $sheetName,
+                        $componentCode,
+                        $fieldKey,
+                        $parsedValue
+                    );
+                    
+                    if ($updated) {
                         $importCount++;
                     } else {
                         $skipCount++;
+                        $errors[] = sprintf(__('第%d行：未找到组件 %s 在 %s 区域'), $row, $componentCode, $sheetName);
                     }
                 }
             }
             
-            if (empty($importedConfig)) {
+            if ($importCount === 0) {
+                $errorMsg = __('未找到有效的配置项');
+                if (!empty($errors)) {
+                    $errorMsg .= '。' . implode('；', array_slice($errors, 0, 5));
+                    if (count($errors) > 5) {
+                        $errorMsg .= '...';
+                    }
+                }
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('未找到有效的配置项')
+                    'message' => $errorMsg
                 ]);
             }
             
-            // 更新页面配置
-            $allSettings = $page->getStyleSetting();
-            if (!is_array($allSettings)) {
-                $allSettings = [];
-            }
-            
-            if (!isset($allSettings[$styleCode])) {
-                $allSettings[$styleCode] = [];
-            }
-            
-            // 合并导入的配置
-            $allSettings[$styleCode] = array_merge($allSettings[$styleCode], $importedConfig);
-            
-            // 保存配置
-            $page->setStyleSetting($allSettings);
-            $page->save();
+            // 保存布局配置
+            $layout->importConfig($layoutConfig);
+            $layout->save();
             
             $message = sprintf(
                 __('成功导入 %d 个配置项，跳过 %d 个无效项'),
                 $importCount,
                 $skipCount
             );
+            
+            if (!empty($errors) && count($errors) <= 10) {
+                $message .= '。' . implode('；', $errors);
+            } elseif (!empty($errors)) {
+                $message .= '。' . implode('；', array_slice($errors, 0, 10)) . '...';
+            }
             
             return $this->fetchJson([
                 'success' => true,
@@ -3012,11 +3366,11 @@ class Page extends BackendController
             if (headers_sent()) {
                 http_response_code(500);
                 header('Content-Type: text/plain; charset=utf-8');
-                echo __('导出失败：%1', $e->getMessage());
+                echo __('导出失败：%{message}', ['message' => $e->getMessage()]);
                 exit;
             }
             
-            MessageManager::error(__('导出失败：%1', $e->getMessage()));
+            MessageManager::error(__('导出失败：%{message}', ['message' => $e->getMessage()]));
             $this->redirect('*/backend/page/index');
         }
     }
@@ -3982,6 +4336,45 @@ class Page extends BackendController
             is_dir($path) ? $this->removeDirectory($path) : @unlink($path);
         }
         @rmdir($dir);
+    }
+    
+    /**
+     * 从名称生成slug（用于生成handle）
+     * 
+     * @param string $name 名称
+     * @return string slug格式的字符串
+     */
+    private function generateSlugFromName(string $name): string
+    {
+        if (empty($name)) {
+            return '';
+        }
+        
+        // 转换为小写
+        $slug = mb_strtolower($name, 'UTF-8');
+        
+        // 替换中文字符为拼音（如果可用）或移除
+        // 这里简化处理：只保留字母、数字和连字符
+        $slug = preg_replace('/[^a-z0-9-]+/', '-', $slug);
+        
+        // 移除多余的连字符
+        $slug = preg_replace('/-+/', '-', $slug);
+        
+        // 移除开头和结尾的连字符
+        $slug = trim($slug, '-');
+        
+        // 如果结果为空，返回空字符串
+        if (empty($slug)) {
+            return '';
+        }
+        
+        // 限制长度（handle通常不超过255字符，这里限制为50）
+        if (mb_strlen($slug) > 50) {
+            $slug = mb_substr($slug, 0, 50);
+            $slug = rtrim($slug, '-');
+        }
+        
+        return $slug;
     }
 }
 

@@ -20,7 +20,7 @@ $widgetId = 'search-bar-' . uniqid();
             <input type="search" 
                    name="q" 
                    class="search-input" 
-                   placeholder="<?= htmlspecialchars($placeholder) ?>"
+                   placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
                    value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
                    autocomplete="off">
             

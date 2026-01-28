@@ -14,18 +14,19 @@ use GuoLaiRen\Blog\Model\Post as PostModel;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Multipass\Model\MultipassSite;
+use Weline\Websites\Data\WebsiteData;
+use Weline\Websites\Model\Website;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog', '博客管理', 'mdi mdi-notebook-outline', '管理博客文章')]
 class Post extends BackendController
 {
     private PostModel $postModel;
-    private MultipassSite $siteModel;
+    private Website $websiteModel;
 
     public function __construct(PostModel $postModel)
     {
         $this->postModel = $postModel;
-        $this->siteModel = ObjectManager::getInstance(MultipassSite::class);
+        $this->websiteModel = ObjectManager::getInstance(Website::class);
     }
 
     /**
@@ -33,27 +34,27 @@ class Post extends BackendController
      */
     private function getCategoryOptions(): array
     {
-        return Category::getFlatCategoryList();
+        $websiteId = WebsiteData::getWebsiteId();
+        return Category::getFlatCategoryList(0, $websiteId);
     }
 
     /**
-     * 获取启用的站点列表
+     * 获取站点列表
      */
     private function getSiteOptions(): array
     {
-        $sites = $this->siteModel->clear()
-            ->where(MultipassSite::fields_IS_ENABLED, 1)
-            ->order(MultipassSite::fields_SITE_NAME, 'ASC')
+        $websites = $this->websiteModel->clear()
+            ->order(Website::fields_NAME, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
         
         $options = [];
-        foreach ($sites as $site) {
+        foreach ($websites as $website) {
             $options[] = [
-                'site_id' => $site->getId(),
-                'site_name' => $site->getSiteName(),
-                'site_url' => $site->getSiteUrl(),
+                'site_id' => $website->getWebsiteId(),
+                'site_name' => $website->getName(),
+                'site_url' => $website->getUrl(),
             ];
         }
         return $options;
@@ -69,6 +70,12 @@ class Post extends BackendController
         $listModel = clone $this->postModel;
         $listModel->clear();
 
+        // 根据当前网站过滤
+        $websiteId = WebsiteData::getWebsiteId();
+        if ($websiteId) {
+            $listModel->where(PostModel::fields_SITE_ID, $websiteId);
+        }
+
         if ($keyword = $this->request->getGet('search')) {
             $keyword = "%{$keyword}%";
             $listModel->where(PostModel::fields_TITLE, $keyword, 'like')
@@ -76,7 +83,7 @@ class Post extends BackendController
         }
 
         $posts = $listModel
-            ->order(PostModel::fields_PUBLISHED_AT, 'DESC')
+            ->order(PostModel::fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
@@ -114,12 +121,20 @@ class Post extends BackendController
                 throw new \Exception(__('标题和URL别名不能为空'));
             }
 
-            // 别名唯一性校验
+            // 获取当前网站ID（优先使用表单提交的，否则从WebsiteData获取）
+            $websiteId = (int)($data['site_id'] ?? 0);
+            if (!$websiteId) {
+                $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+            }
+
+            // 别名唯一性校验（同一网站内唯一）
             $exists = clone $this->postModel;
             $exists->clear()
-                ->where(PostModel::fields_SLUG, $slug)
-                ->find()
-                ->fetch();
+                ->where(PostModel::fields_SLUG, $slug);
+            if ($websiteId) {
+                $exists->where(PostModel::fields_SITE_ID, $websiteId);
+            }
+            $exists->find()->fetch();
             if ($exists->getId()) {
                 throw new \Exception(__('URL别名已存在，请更换一个'));
             }
@@ -130,10 +145,16 @@ class Post extends BackendController
                 $published_at = date('Y-m-d H:i:s');
             }
 
+            // 获取当前网站ID（优先使用表单提交的，否则从WebsiteData获取）
+            $websiteId = (int)($data['site_id'] ?? 0);
+            if (!$websiteId) {
+                $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+            }
+
             $post = clone $this->postModel;
             $post->setData(PostModel::fields_TITLE, $title)
                 ->setData(PostModel::fields_SLUG, $slug)
-                ->setData(PostModel::fields_SITE_ID, (int)($data['site_id'] ?? 0))
+                ->setData(PostModel::fields_SITE_ID, $websiteId)
                 ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
                 ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
                 ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
@@ -200,13 +221,24 @@ class Post extends BackendController
                 throw new \Exception(__('标题和URL别名不能为空'));
             }
 
-            // 别名唯一性校验（排除当前记录）
+            // 获取当前网站ID（优先使用表单提交的，否则从文章现有数据或WebsiteData获取）
+            $websiteId = (int)($data['site_id'] ?? 0);
+            if (!$websiteId) {
+                $websiteId = (int)($post->getData(PostModel::fields_SITE_ID) ?? 0);
+            }
+            if (!$websiteId) {
+                $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+            }
+
+            // 别名唯一性校验（排除当前记录，同一网站内唯一）
             $exists = clone $this->postModel;
             $exists->clear()
                 ->where(PostModel::fields_SLUG, $slug)
-                ->where(PostModel::fields_ID, $id, '!=', 'AND')
-                ->find()
-                ->fetch();
+                ->where(PostModel::fields_ID, $id, '!=', 'AND');
+            if ($websiteId) {
+                $exists->where(PostModel::fields_SITE_ID, $websiteId);
+            }
+            $exists->find()->fetch();
             if ($exists->getId()) {
                 throw new \Exception(__('URL别名已存在，请更换一个'));
             }
@@ -219,7 +251,7 @@ class Post extends BackendController
 
             $post->setData(PostModel::fields_TITLE, $title)
                 ->setData(PostModel::fields_SLUG, $slug)
-                ->setData(PostModel::fields_SITE_ID, (int)($data['site_id'] ?? 0))
+                ->setData(PostModel::fields_SITE_ID, $websiteId)
                 ->setData(PostModel::fields_SUMMARY, (string)($data['summary'] ?? ''))
                 ->setData(PostModel::fields_CONTENT, (string)($data['content'] ?? ''))
                 ->setData(PostModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))

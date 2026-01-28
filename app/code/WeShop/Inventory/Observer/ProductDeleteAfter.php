@@ -15,9 +15,10 @@ declare(strict_types=1);
 namespace WeShop\Inventory\Observer;
 
 use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
 use WeShop\Inventory\Model\SourceItem;
 
-class ProductDeleteAfter
+class ProductDeleteAfter implements ObserverInterface
 {
     private SourceItem $sourceItem;
 
@@ -28,9 +29,9 @@ class ProductDeleteAfter
 
     /**
      * 产品删除后执行 - 清理所有库存源中该产品的库存记录
-     * @param Event $event
+     * @inheritDoc
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $data = $event->getData();
         $productId = $data['product_id'] ?? 0;

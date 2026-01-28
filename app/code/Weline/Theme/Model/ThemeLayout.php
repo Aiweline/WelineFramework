@@ -19,17 +19,24 @@ class ThemeLayout extends Model
     public const fields_THEME_ID = 'theme_id';
     public const fields_PAGE_TYPE = 'page_type';
     public const fields_AREA = 'area';
+    public const fields_SLOT_ID = 'slot_id';
     public const fields_WIDGET_CODE = 'widget_code';
     public const fields_WIDGET_MODULE = 'widget_module';
     public const fields_WIDGET_TYPE = 'widget_type';
     public const fields_CONFIG = 'config';
     public const fields_SORT_ORDER = 'sort_order';
     public const fields_IS_ACTIVE = 'is_active';
+    public const fields_STATUS = 'status';
+
+    // 状态常量
+    public const STATUS_DRAFT = 'draft';         // 草稿状态（后台编辑）
+    public const STATUS_PUBLISHED = 'published'; // 已发布状态（前端可见）
 
     // 页面类型常量
     public const PAGE_TYPE_HOME = 'home';
     public const PAGE_TYPE_CATEGORY = 'category';
     public const PAGE_TYPE_PRODUCT = 'product';
+    public const PAGE_TYPE_PRODUCT_LIST = 'product_list'; // 产品列表页
     public const PAGE_TYPE_CMS = 'cms';
     public const PAGE_TYPE_CART = 'cart';
     public const PAGE_TYPE_CHECKOUT = 'checkout';
@@ -54,6 +61,7 @@ class ThemeLayout extends Model
             self::PAGE_TYPE_HOME => __('首页'),
             self::PAGE_TYPE_CATEGORY => __('分类页'),
             self::PAGE_TYPE_PRODUCT => __('产品页'),
+            self::PAGE_TYPE_PRODUCT_LIST => __('产品列表页'),
             self::PAGE_TYPE_CMS => __('CMS页面'),
             self::PAGE_TYPE_CART => __('购物车'),
             self::PAGE_TYPE_CHECKOUT => __('结算页'),
@@ -91,6 +99,64 @@ class ThemeLayout extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        // 添加 slot_id 字段（独占插槽支持）
+        if (!$setup->hasField(self::fields_SLOT_ID)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_SLOT_ID,
+                    self::fields_AREA,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'DEFAULT NULL',
+                    '插槽ID（用于独占插槽）'
+                )
+                ->alter();
+            
+            // 添加索引
+            if (!$setup->hasIndex('idx_theme_slot')) {
+                $setup->alterTable()
+                    ->addIndex(
+                        TableInterface::index_type_KEY,
+                        'idx_theme_slot',
+                        [self::fields_THEME_ID, self::fields_PAGE_TYPE, self::fields_AREA, self::fields_SLOT_ID]
+                    )
+                    ->alter();
+            }
+        }
+
+        // 添加 status 字段（草稿/发布状态）
+        if (!$setup->hasField(self::fields_STATUS)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_STATUS,
+                    self::fields_IS_ACTIVE,
+                    TableInterface::column_type_VARCHAR,
+                    20,
+                    "NOT NULL DEFAULT '" . self::STATUS_DRAFT . "'",
+                    '状态：draft=草稿，published=已发布'
+                )
+                ->alter();
+            
+            // 添加索引
+            if (!$setup->hasIndex('idx_theme_status')) {
+                $setup->alterTable()
+                    ->addIndex(
+                        TableInterface::index_type_KEY,
+                        'idx_theme_status',
+                        [self::fields_THEME_ID, self::fields_PAGE_TYPE, self::fields_STATUS]
+                    )
+                    ->alter();
+            }
+
+            // 将现有数据标记为已发布（兼容旧数据）
+            try {
+                $setup->getConnection()->query(
+                    "UPDATE {$setup->getTable()} SET " . self::fields_STATUS . " = '" . self::STATUS_PUBLISHED . "' WHERE " . self::fields_STATUS . " IS NULL OR " . self::fields_STATUS . " = ''"
+                );
+            } catch (\Exception $e) {
+                // 忽略更新错误
+            }
+        }
     }
 
     /**
@@ -130,6 +196,13 @@ class ThemeLayout extends Model
                 50,
                 'NOT NULL',
                 '区域标识'
+            )
+            ->addColumn(
+                self::fields_SLOT_ID,
+                TableInterface::column_type_VARCHAR,
+                50,
+                'DEFAULT NULL',
+                '插槽ID（用于独占插槽）'
             )
             ->addColumn(
                 self::fields_WIDGET_CODE,
@@ -174,6 +247,13 @@ class ThemeLayout extends Model
                 '是否启用'
             )
             ->addColumn(
+                self::fields_STATUS,
+                TableInterface::column_type_VARCHAR,
+                20,
+                "NOT NULL DEFAULT '" . self::STATUS_DRAFT . "'",
+                '状态：draft=草稿，published=已发布'
+            )
+            ->addColumn(
                 self::fields_CREATE_TIME,
                 TableInterface::column_type_DATETIME,
                 null,
@@ -196,6 +276,11 @@ class ThemeLayout extends Model
                 TableInterface::index_type_KEY,
                 'idx_area_sort',
                 [self::fields_AREA, self::fields_SORT_ORDER]
+            )
+            ->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_theme_status',
+                [self::fields_THEME_ID, self::fields_PAGE_TYPE, self::fields_STATUS]
             )
             ->create();
     }
@@ -240,6 +325,17 @@ class ThemeLayout extends Model
     public function setArea(string $area): self
     {
         return $this->setData(self::fields_AREA, $area);
+    }
+
+    public function getSlotId(): ?string
+    {
+        $slotId = $this->getData(self::fields_SLOT_ID);
+        return $slotId ? (string)$slotId : null;
+    }
+
+    public function setSlotId(?string $slotId): self
+    {
+        return $this->setData(self::fields_SLOT_ID, $slotId);
     }
 
     public function getWidgetCode(): string
@@ -310,11 +406,48 @@ class ThemeLayout extends Model
         return $this->setData(self::fields_IS_ACTIVE, $active ? 1 : 0);
     }
 
+    public function getStatus(): string
+    {
+        return (string)($this->getData(self::fields_STATUS) ?: self::STATUS_DRAFT);
+    }
+
+    public function setStatus(string $status): self
+    {
+        return $this->setData(self::fields_STATUS, $status);
+    }
+
+    /**
+     * 检查是否为草稿状态
+     */
+    public function isDraft(): bool
+    {
+        return $this->getStatus() === self::STATUS_DRAFT;
+    }
+
+    /**
+     * 检查是否为已发布状态
+     */
+    public function isPublished(): bool
+    {
+        return $this->getStatus() === self::STATUS_PUBLISHED;
+    }
+
     /**
      * 获取部件的唯一标识（用于前端）
      */
     public function getWidgetUniqueId(): string
     {
         return $this->getWidgetModule() . '::' . $this->getWidgetCode();
+    }
+
+    /**
+     * 获取所有支持的状态
+     */
+    public static function getStatuses(): array
+    {
+        return [
+            self::STATUS_DRAFT => __('草稿'),
+            self::STATUS_PUBLISHED => __('已发布'),
+        ];
     }
 }

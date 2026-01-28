@@ -573,6 +573,8 @@ class Template extends DataObject
                     
                     // 检查hook内容是否已经是完整的HTML元素（有开始和结束标签）
                     // 如果是，尝试在第一个元素上添加属性
+                    // 注意：如果Hook内容包含script或style标签，不能用span包裹，否则script/style会被当作文本
+                    $hasScriptOrStyle = preg_match('/<(script|style)[^>]*>/i', $hookHtml);
                     if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
                         // 找到第一个标签，添加data属性
                         $tagName = $matches[1];
@@ -582,6 +584,10 @@ class Template extends DataObject
                             $hookHtml,
                             1
                         );
+                    } elseif ($hasScriptOrStyle) {
+                        // 如果包含script或style标签，即使没有找到第一个标签，也不要用span包裹
+                        // 直接在内容前添加一个隐藏的span来标记Hook来源
+                        $hookHtml = '<!-- Hook source: ' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . ' -->' . $hookHtml;
                     } else {
                         // 如果没有找到标签，用span包裹
                         $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';
@@ -608,6 +614,8 @@ class Template extends DataObject
                     }
                     
                     // 检查hook内容是否已经是完整的HTML元素
+                    // 注意：如果Hook内容包含script或style标签，不能用span包裹，否则script/style会被当作文本
+                    $hasScriptOrStyle = preg_match('/<(script|style)[^>]*>/i', $hookHtml);
                     if (preg_match('/^<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/', $hookHtml, $matches)) {
                         // 找到第一个标签，添加data属性
                         $tagName = $matches[1];
@@ -617,6 +625,10 @@ class Template extends DataObject
                             $hookHtml,
                             1
                         );
+                    } elseif ($hasScriptOrStyle) {
+                        // 如果包含script或style标签，即使没有找到第一个标签，也不要用span包裹
+                        // 直接在内容前添加一个隐藏的span来标记Hook来源
+                        $hookHtml = '<!-- Hook source: ' . htmlspecialchars($module, ENT_QUOTES, 'UTF-8') . ' -->' . $hookHtml;
                     } else {
                         // 如果没有找到标签，用span包裹
                         $hookHtml = '<span ' . $dataAttrs . '>' . $hookHtml . '</span>';

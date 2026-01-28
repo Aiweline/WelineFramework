@@ -15,6 +15,7 @@ class Coupon extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_coupon';
     public const primary_key = 'coupon_id';
+    public string $indexer = 'coupon_indexer';
     
     public const fields_ID = 'coupon_id';
     public const fields_CODE = 'code';

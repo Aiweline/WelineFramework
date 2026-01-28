@@ -15,6 +15,16 @@
         <observer name="WeShop_Product::controller_fetch_file_before" instance="WeShop\Product\Observer\ControllerFetchFileBefore" disabled="false" shared="true" sort="20"/>
     </event>
     
+    <!-- 产品保存后事件 - 同步 URL 重写规则 -->
+    <event name="WeShop_Product::product_save_after">
+        <observer name="WeShop_Product::product_url_rewrite_sync" instance="WeShop\Product\Observer\ProductUrlRewriteObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- 产品删除前事件 - 清理 URL 重写规则 -->
+    <event name="WeShop_Product::product_delete_before">
+        <observer name="WeShop_Product::product_url_rewrite_cleanup" instance="WeShop\Product\Observer\ProductUrlRewriteObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+    
     <!-- 注意：其他事件定义在 event.php 中，此文件仅用于注册观察者 -->
     <!-- 如果事件没有观察者，则不需要在此文件中定义 -->
 </config>
