@@ -61,7 +61,8 @@ class Layout extends BackendController
             $layout = $this->layoutService->getOrCreate($layoutOwnerPageId);
             
             // 获取完整布局配置（通过 LayoutOwnerResolver 处理继承）
-            $fullConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page);
+            // 后台编辑时传入 true，允许访问草稿状态首页的 header/footer
+            $fullConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, true);
             
             // 获取布局页面信息（如果使用外部布局页面）
             $layoutPageInfo = $this->layoutOwnerResolver->getLayoutPageInfo($page);
