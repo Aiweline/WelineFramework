@@ -104,99 +104,100 @@ class Acl implements TaglibInterface
                 throw new \Exception(__('acl标签缺少source属性'));
             }
             
-            // 生成唯一标签哈希，用于检测递归编译
-            $tagHash = md5($source . '|' . $tag_key . '|' . serialize($tag_data));
-            
             // #region agent log
             static $aclCallCount = 0;
             $aclCallCount++;
-            if ($aclCallCount <= 10) {
-                @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:callback','message'=>'ACL Taglib ENTRY','data'=>['source'=>$source,'tagHash'=>substr($tagHash,0,8),'callCount'=>$aclCallCount,'inCompiling'=>isset(self::$compilingTags[$tagHash]),'hasCached'=>isset(self::$compileCache[$tagHash])],'hypothesisId'=>'B','sessionId'=>'debug-session'])."\n", FILE_APPEND);
+            if ($aclCallCount <= 20) {
+                @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:callback','message'=>'ACL Taglib ENTRY (runtime)','data'=>['source'=>$source,'callCount'=>$aclCallCount,'tag_key'=>$tag_key],'hypothesisId'=>'B','sessionId'=>'debug-session'])."\n", FILE_APPEND);
             }
             // #endregion
             
-            // 检测递归编译：如果同一个标签正在编译中，直接返回占位符
-            if (isset(self::$compilingTags[$tagHash])) {
-                return '<!-- acl:' . $source . ' (递归编译保护) -->';
+            // 获取标签内部内容
+            $content = $tag_data[2] ?? '';
+            
+            // 运行时权限检查（不再递归编译）
+            if (!self::hasPermission($source)) {
+                return '<!-- 无权限访问: ' . htmlspecialchars($source) . ' -->';
             }
             
-            // 检查编译缓存：如果已经编译过，直接返回缓存结果
-            if (isset(self::$compileCache[$tagHash])) {
-                return self::$compileCache[$tagHash];
-            }
-            
-            // 标记当前标签正在编译
-            self::$compilingTags[$tagHash] = true;
-            
-            try {
-                // 使用缓存的 Request 实例，避免重复获取触发循环
-                if (self::$cachedRequest === null) {
-                    self::$cachedRequest = ObjectManager::getInstance(Request::class);
-                }
-                $request = self::$cachedRequest;
-                
-                // 获取 session，使用缓存避免重复实例化
-                if (self::$cachedSession === null) {
-                    /**@var BackendSession|FrontendSession $session */
-                    self::$cachedSession = ObjectManager::getInstance(
-                        $request->isBackend() ? BackendSession::class : FrontendSession::class
-                    );
-                }
-                $session = self::$cachedSession;
-                
-                // 获取对应用户
-                $user = $session->getLoginUser();
-                // 角色
-                $role = $user->getRoleModel();
-                if ($role->getId() === 1) {
-                    $result = $tag_data[2] ?? '';
-                    self::$compileCache[$tagHash] = $result;
-                    return $result;
-                }
-                /**@var CacheInterface $cache */
-                $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
-                $cacheKey = 'acl_' . $role->getId() . '_source';
-                $accesses = $cache->get($cacheKey);
-                if (!$accesses) {
-                    if (empty($role->getId())) {
-                        /**@var MessageManager $messageManager */
-                        $messageManager = ObjectManager::getInstance(MessageManager::class);
-                        $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
-                        $messageManager->addWarning($msg);
-                        $result = '<!-- ' . $msg . ' 资源 -->';
-                        self::$compileCache[$tagHash] = $result;
-                        return $result;
-                    }
-                    // 检查权限资源
-                    /**@var RoleAccess $roleAccess */
-                    $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-                    $accesses = $roleAccess->getRoleAccessListArray($role);
-                    foreach ($accesses as &$access) {
-                        $access = $access['source_id'];
-                    }
-                    $cache->set($cacheKey, $accesses);
-                }
-                if (!in_array($source, $accesses)) {
-                    /**@var MessageManager $messageManager */
-                    $messageManager = ObjectManager::getInstance(MessageManager::class);
-                    $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
-                    $messageManager->addWarning($msg);
-                    $result = '<!-- ' . $msg . ' 资源 -->';
-                    self::$compileCache[$tagHash] = $result;
-                    return $result;
-                }
-                if (DEV) {
-                    $result = '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
-                } else {
-                    $result = $tag_data[2] ?? '';
-                }
-                self::$compileCache[$tagHash] = $result;
-                return $result;
-            } finally {
-                // 移除编译中标记
-                unset(self::$compilingTags[$tagHash]);
-            }
+            return $content;
         };
+    }
+    
+    /**
+     * 运行时权限检查方法（返回 bool）
+     * @param string $source 权限源标识
+     * @return bool
+     */
+    public static function hasPermission(string $source): bool
+    {
+        // 使用静态缓存避免重复检查
+        static $permissionCache = [];
+        if (isset($permissionCache[$source])) {
+            return $permissionCache[$source];
+        }
+        
+        // 使用缓存的 Request 实例
+        if (self::$cachedRequest === null) {
+            self::$cachedRequest = ObjectManager::getInstance(Request::class);
+        }
+        $request = self::$cachedRequest;
+        
+        // 获取 session
+        if (self::$cachedSession === null) {
+            self::$cachedSession = ObjectManager::getInstance(
+                $request->isBackend() ? BackendSession::class : FrontendSession::class
+            );
+        }
+        $session = self::$cachedSession;
+        
+        // 获取对应用户和角色
+        $user = $session->getLoginUser();
+        $role = $user->getRoleModel();
+        
+        // 超级管理员直接返回 true
+        if ($role->getId() === 1) {
+            $permissionCache[$source] = true;
+            return true;
+        }
+        
+        // 无角色返回 false
+        if (empty($role->getId())) {
+            $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
+            /**@var MessageManager $messageManager */
+            $messageManager = ObjectManager::getInstance(MessageManager::class);
+            $messageManager->addWarning($msg);
+            $permissionCache[$source] = false;
+            return false;
+        }
+        
+        // 获取权限列表（使用缓存）
+        /**@var CacheInterface $cache */
+        $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+        $cacheKey = 'acl_' . $role->getId() . '_source';
+        $accesses = $cache->get($cacheKey);
+        
+        if (!$accesses) {
+            /**@var RoleAccess $roleAccess */
+            $roleAccess = ObjectManager::getInstance(RoleAccess::class);
+            $accesses = $roleAccess->getRoleAccessListArray($role);
+            foreach ($accesses as &$access) {
+                $access = $access['source_id'];
+            }
+            $cache->set($cacheKey, $accesses);
+        }
+        
+        // 检查权限
+        $hasAccess = in_array($source, $accesses);
+        if (!$hasAccess) {
+            $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
+            /**@var MessageManager $messageManager */
+            $messageManager = ObjectManager::getInstance(MessageManager::class);
+            $messageManager->addWarning($msg);
+        }
+        
+        $permissionCache[$source] = $hasAccess;
+        return $hasAccess;
     }
 
     /**
