@@ -621,6 +621,12 @@ class LayoutAssembler
         }
         
         if (!$componentFile) {
+            // 尝试从数据库中查找组件（支持跨模板组件）
+            $dbMetadata = $this->getComponentMetadataFromDatabase($componentCode, $styleCode);
+            if ($dbMetadata) {
+                return $dbMetadata;
+            }
+            
             // 记录日志帮助调试
             error_log("[LayoutAssembler::getComponentMetadata] 组件未找到: code={$componentCode}, style={$styleCode}, available=" . implode(',', array_keys($componentFiles)));
             return null;
@@ -673,6 +679,95 @@ class LayoutAssembler
                 }
             }
         }
+        
+        return $metadata;
+    }
+    
+    /**
+     * 从数据库中获取组件元数据
+     * 
+     * 当组件在文件系统中找不到时，尝试从 Component 模型中查找
+     * 这支持跨模板组件的元数据获取
+     * 
+     * @param string $componentCode 组件代码
+     * @param string $styleCode 模板代码
+     * @return array|null
+     */
+    private function getComponentMetadataFromDatabase(string $componentCode, string $styleCode): ?array
+    {
+        $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\Component::class);
+        
+        // 先精确匹配 code + style_code
+        $component = clone $componentModel;
+        $component->clear()
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, $styleCode)
+            ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        
+        // 如果没找到，尝试标准化组件代码后查找
+        if (!$component->getId()) {
+            // 标准化代码（移除模板前缀，转换格式）
+            $normalizedCode = strtolower(str_replace('_', '-', $componentCode));
+            if (strpos($normalizedCode, $styleCode . '-') === 0) {
+                $normalizedCode = substr($normalizedCode, strlen($styleCode) + 1);
+            }
+            
+            $component = clone $componentModel;
+            $component->clear()
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $normalizedCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE, $styleCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+        }
+        
+        // 如果还没找到，尝试只用组件代码查找（任意模板）
+        if (!$component->getId()) {
+            $component = clone $componentModel;
+            $component->clear()
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE, $componentCode)
+                ->where(\GuoLaiRen\PageBuilder\Model\Component::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+        }
+        
+        if (!$component->getId()) {
+            return null;
+        }
+        
+        // 获取组件文件路径
+        $path = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_PATH);
+        $componentStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE);
+        
+        if (empty($path)) {
+            return null;
+        }
+        
+        // 构建完整文件路径
+        $fullPath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/' . $path;
+        
+        if (!file_exists($fullPath)) {
+            return null;
+        }
+        
+        // 构建元数据
+        $configSchema = $component->getConfigSchema();
+        $metadata = [
+            'code' => $componentCode,
+            'actual_code' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CODE),
+            'file' => basename($path),
+            'style_code' => $componentStyleCode,
+            'name' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_NAME),
+            'description' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_DESCRIPTION),
+            'category' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CATEGORY),
+            'region' => $configSchema['region'] ?? $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_CATEGORY),
+            'type' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_TYPE),
+            'thumbnail' => $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_THUMBNAIL),
+            'config_groups' => $configSchema['config_groups'] ?? [],
+            'fields' => $this->parseComponentFields($fullPath),
+        ];
         
         return $metadata;
     }

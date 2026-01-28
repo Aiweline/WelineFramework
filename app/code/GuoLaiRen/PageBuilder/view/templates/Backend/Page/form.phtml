@@ -55,7 +55,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item">
                         <a href="<?= $this->getBackendUrl('*/backend/page/index') ?>">
-                            <?= $this->getData('breadcrumb_parent') ?: __('页面构建器') ?>
+                            <?= $this->getData('breadcrumb_parent') ?: __('网站构建器') ?>
                         </a>
                     </li>
                     <li class="breadcrumb-item active">
@@ -717,8 +717,8 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                     </button>
                                     
                                     <?php if ($isPublished): ?>
-                                    <!-- 预览按钮 -->
-                                    <a href="<?= $pageUrl ?>?preview=1" 
+                                    <!-- 预览按钮（使用站点链接） -->
+                                    <a href="<?= $pageUrl ?>" 
                                        target="_blank" 
                                        class="btn btn-sm btn-outline-info"
                                        title="<?= __('预览页面') ?>">
@@ -5748,7 +5748,7 @@ window.generatePageContent = function() {
 
 /**
  * ========================================
- * 打开前端在线预览
+ * 打开前端在线预览（使用对应网站的链接）
  * ========================================
  */
 window.openFrontendPreview = function() {
@@ -5773,41 +5773,35 @@ window.openFrontendPreview = function() {
         return;
     }
     
-    // 获取页面ID（如果是编辑模式）
-    const pageId = '<?= $isEdit && $page ? $page->getId() : '' ?>';
-    
-    // 构建预览URL
-    let previewUrl;
-    if (pageId) {
-        // 编辑模式：使用后端预览控制器（后端会处理首页类型且无handle的情况）
-        previewUrl = '<?= $this->getBackendUrl("*/backend/page/preview") ?>?id=' + pageId;
-    } else {
-        // 新建模式
-        if (isHomePage && !handle) {
-            // 首页类型且没有handle：使用网站地址
-            const websiteSelect = document.getElementById('website_id');
-            const websiteId = websiteSelect ? websiteSelect.value : '';
-            
-            // 从网站列表获取网站URL
-            <?php 
-            $websites = $this->getData('websites') ?? [];
-            $websiteUrls = [];
-            foreach ($websites as $website) {
-                $wid = (int)($website['website_id'] ?? 0);
-                $wUrl = $website['url'] ?? '';
-                if ($wid > 0 && $wUrl) {
-                    $websiteUrls[$wid] = rtrim($wUrl, '/');
-                }
-            }
-            ?>
-            const websiteUrls = <?= json_encode($websiteUrls) ?>;
-            const baseUrl = websiteUrls[websiteId] || '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
-            previewUrl = baseUrl + '?preview=1';
-        } else {
-            // 使用友好的重写URL格式：/handle?preview=1
-            const baseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
-            previewUrl = baseUrl + '/' + handle + '?preview=1';
+    // 获取网站URL映射
+    <?php 
+    $websites = $this->getData('websites') ?? [];
+    $websiteUrls = [];
+    foreach ($websites as $website) {
+        $wid = (int)($website['website_id'] ?? 0);
+        $wUrl = $website['url'] ?? '';
+        if ($wid > 0 && $wUrl) {
+            $websiteUrls[$wid] = rtrim($wUrl, '/');
         }
+    }
+    ?>
+    const websiteUrls = <?= json_encode($websiteUrls) ?>;
+    
+    // 获取当前选中的网站ID
+    const websiteSelect = document.getElementById('website_id');
+    const websiteId = websiteSelect ? websiteSelect.value : '';
+    
+    // 获取网站基础URL
+    const baseUrl = websiteUrls[websiteId] || '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+    
+    // 构建预览URL（使用对应网站的链接，不带 ?preview=1 参数）
+    let previewUrl;
+    if (isHomePage && !handle) {
+        // 首页类型且没有handle：直接使用网站地址
+        previewUrl = baseUrl;
+    } else {
+        // 其他页面：网站地址 + 页面handle
+        previewUrl = baseUrl + '/' + handle;
     }
     
     // 在新窗口打开前端预览
