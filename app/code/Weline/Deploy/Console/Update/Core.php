@@ -36,6 +36,11 @@ class Core extends CommandAbstract
      * @var array<string, string> [相对路径 => 状态(A/M/D)]
      */
     private array $changedFiles = [];
+    
+    /**
+     * 是否是新克隆的仓库（第一次运行）
+     */
+    private bool $isNewClone = false;
 
     public function __construct(
         Printing $printer,
@@ -282,7 +287,8 @@ class Core extends CommandAbstract
         } else {
             // 强制模式或新仓库：完整克隆
             $this->cloneRepository($repo, $tmpDir, $branch, $tag);
-            // 强制模式或新仓库时，清空变化文件列表（表示需要全量拷贝）
+            // 标记为新克隆，需要全量拷贝
+            $this->isNewClone = true;
             $this->changedFiles = [];
         }
     }
@@ -441,17 +447,22 @@ class Core extends CommandAbstract
         // 需要更新的所有目录（但不包括 vendor）
         $allPaths = ['app', 'bin', 'pub'];
         
-        // 判断更新模式
-        $isIncrementalWithChanges = !$this->forceUpdate && !empty($this->changedFiles);
+        // 判断更新模式：
+        // 1. 强制模式(-f)或新克隆 → 全量覆盖
+        // 2. 增量模式且有变化 → 只拷贝变化的文件
+        // 3. 增量模式且无变化 → 跳过（已是最新）
         
-        if ($isIncrementalWithChanges) {
+        if ($this->forceUpdate || $this->isNewClone) {
+            // 强制模式或新克隆：完全覆盖所有文件
+            $this->printer->note(__('完全覆盖模式：更新所有文件...'));
+            $this->copyAllFiles($tmpDir, $allPaths);
+        } elseif (!empty($this->changedFiles)) {
             // 增量模式：只拷贝 Git 变化的文件
             $this->printer->note(__('增量模式：只更新 Git 变化的文件...'));
             $this->copyChangedFilesOnly($tmpDir, $allPaths);
         } else {
-            // 强制模式或新仓库：完全覆盖
-            $this->printer->note(__('完全覆盖模式：更新所有文件...'));
-            $this->copyAllFiles($tmpDir, $allPaths);
+            // 增量模式但没有变化：跳过
+            $this->printer->success(__('✓ 已是最新版本，无需更新文件'));
         }
         
         // 注意：不更新 vendor 目录，保留现有的依赖包
