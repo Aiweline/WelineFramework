@@ -147,6 +147,7 @@ class Template extends BackendController
         try {
             $styleId = (int)$this->request->getPost('style_id');
             $isPublished = (int)$this->request->getPost('is_published', 0);
+            $skipPreviewCheck = (bool)$this->request->getPost('skip_preview_check', false);
             
             if ($styleId <= 0) {
                 return $this->fetchJson([
@@ -163,6 +164,46 @@ class Template extends BackendController
                     'success' => false,
                     'message' => __('模板不存在')
                 ]);
+            }
+            
+            // 发布时检查是否有预览图
+            if ($isPublished && !$skipPreviewCheck) {
+                $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                $hasPreview = false;
+                
+                if ($previewImage) {
+                    // 检查预览图文件是否存在
+                    $possiblePaths = [
+                        BP . 'pub/static/' . $previewImage,
+                        BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/' . $previewImage,
+                        BP . $previewImage,
+                    ];
+                    
+                    foreach ($possiblePaths as $path) {
+                        if (file_exists($path) && is_file($path)) {
+                            $hasPreview = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // 没有预览图，需要先生成
+                if (!$hasPreview) {
+                    $previewPageUrl = $this->request->getUrlBuilder()->getBackendUrl(
+                        'pagebuilder/backend/preview/stylePreview',
+                        ['style_code' => $style->getData(Style::fields_CODE)]
+                    );
+                    
+                    return $this->fetchJson([
+                        'success' => false,
+                        'needs_preview' => true,
+                        'message' => __('发布前需要先生成预览图'),
+                        'style_id' => $styleId,
+                        'style_code' => $style->getData(Style::fields_CODE),
+                        'preview_page_url' => $previewPageUrl,
+                        'upload_url' => $this->request->getUrlBuilder()->getBackendUrl('pagebuilder/backend/template/uploadPreview')
+                    ]);
+                }
             }
             
             $style->setData(Style::fields_IS_PUBLISHED, $isPublished ? 1 : 0);
