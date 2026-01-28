@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_I18n',
     __DIR__,
-    '1.0.1',
+    '1.0.2',
     '<a href="https://bbs.aiweline.com">I18n翻译模块</a>'
 );
