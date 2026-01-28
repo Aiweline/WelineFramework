@@ -1,0 +1,250 @@
+<?php
+/**
+ * Satta King 786 - FAQ Section Component
+ * 
+ * 常见问题展示区域，支持手风琴展开效果
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:FAQ Snapshot
+ * content.title => 标题:text:Quick answers about the platform
+ * content.description => 描述:textarea:Concise responses to common questions. Visit the full FAQ page for more detail.
+ * 
+ * group:faq => FAQ列表
+ * faq.items => FAQ列表:textarea:What does satta king mean in online listings?|It is a common label used to group result schedules, market names, and updates in one place.\r\nIs satta king 786 a separate market?|It usually refers to a curated set of markets and result feeds rather than a single standalone market.\r\nHow are results displayed on the platform?|Results follow standard notation such as single, jodi, and panna, with timing stamps for each round.\r\nCan I browse without creating an account?|Yes, basic schedules and format explanations are accessible without sign-in, while alerts require setup.\r\nWhat should I check before downloading the app?|Confirm the source, review permissions, and make sure the package name matches the official listing.\r\nDoes this site promise winnings or financial gain?|No. The content is informational and does not guarantee outcomes or profits.|格式：问题|回答，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['faq_bg'] ?? '#0c0c1e';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $colors['text_secondary'] ?? '#b8b8d0';
+$textMuted = $colors['text_muted'] ?? '#6b6b8a';
+$accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a855f7';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'FAQ Snapshot';
+$title = $config['content.title'] ?? 'Quick answers about the platform';
+$description = $config['content.description'] ?? 'Concise responses to common questions. Visit the full FAQ page for more detail.';
+
+// FAQ列表
+$faqRaw = $config['faq.items'] ?? "What does satta king mean in online listings?|It is a common label used to group result schedules, market names, and updates in one place.\nIs satta king 786 a separate market?|It usually refers to a curated set of markets and result feeds rather than a single standalone market.\nHow are results displayed on the platform?|Results follow standard notation such as single, jodi, and panna, with timing stamps for each round.\nCan I browse without creating an account?|Yes, basic schedules and format explanations are accessible without sign-in, while alerts require setup.\nWhat should I check before downloading the app?|Confirm the source, review permissions, and make sure the package name matches the official listing.\nDoes this site promise winnings or financial gain?|No. The content is informational and does not guarantee outcomes or profits.";
+
+$faqs = [];
+$lines = preg_split('/[\r\n]+/', $faqRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('|', $line, 2);
+    $question = trim($parts[0] ?? '');
+    $answer = trim($parts[1] ?? '');
+    
+    if (!empty($question)) {
+        $faqs[] = [
+            'question' => $question,
+            'answer' => $answer,
+        ];
+    }
+}
+
+$instanceId = 'sk-faq-' . uniqid();
+?>
+
+<section class="sk-faq" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item.active {
+            border-color: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-question {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 24px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-question:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        #<?= $instanceId ?> .sk-faq-question-text {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            flex: 1;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-question-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(124, 58, 237, 0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-question-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: <?= $accentPrimaryLight ?>;
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item.active .sk-faq-question-icon {
+            background: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item.active .sk-faq-question-icon svg {
+            fill: #ffffff;
+            transform: rotate(180deg);
+        }
+        
+        #<?= $instanceId ?> .sk-faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-item.active .sk-faq-answer {
+            max-height: 500px;
+        }
+        
+        #<?= $instanceId ?> .sk-faq-answer-content {
+            padding: 0 24px 24px;
+            font-size: 0.95rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .sk-faq-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .sk-faq-question {
+                padding: 16px 20px;
+            }
+            
+            #<?= $instanceId ?> .sk-faq-question-text {
+                font-size: 0.95rem;
+            }
+            
+            #<?= $instanceId ?> .sk-faq-answer-content {
+                padding: 0 20px 20px;
+            }
+        }
+    </style>
+    
+    <div class="sk-faq-container">
+        <div class="sk-faq-header">
+            <div class="sk-faq-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="sk-faq-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="sk-faq-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="sk-faq-list">
+            <?php foreach ($faqs as $index => $faq): ?>
+            <div class="sk-faq-item<?= $index === 0 ? ' active' : '' ?>">
+                <div class="sk-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span class="sk-faq-question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                    <span class="sk-faq-question-icon">
+                        <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </span>
+                </div>
+                <div class="sk-faq-answer">
+                    <div class="sk-faq-answer-content"><?= htmlspecialchars($faq['answer']) ?></div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

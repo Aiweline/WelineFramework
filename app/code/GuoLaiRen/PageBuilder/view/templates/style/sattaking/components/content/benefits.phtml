@@ -1,0 +1,226 @@
+<?php
+/**
+ * Satta King 786 - Player Benefits Section Component
+ * 
+ * 用户优势/好处展示区域
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Player Benefits
+ * content.title => 标题:text:Why a structured hub matters
+ * content.description => 描述:textarea:We emphasize clarity, consistency, and responsible access for information so users can learn formats without confusion.
+ * 
+ * group:benefits => 优势列表
+ * benefits.items => 优势列表:textarea:Clear rule definitions|Each result type is explained in plain language with example notation.|📖\r\nResponsible guidance|We focus on compliance, age gates, and local law awareness.|⚖️\r\nFocused experience|Less clutter means faster access to schedules.|🎯\r\nAccessible design|Readable typography and high-contrast layouts for mobile viewing.|📱|格式：标题|描述|图标，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['benefits_bg'] ?? '#0f0f1f';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $colors['text_secondary'] ?? '#b8b8d0';
+$textMuted = $colors['text_muted'] ?? '#6b6b8a';
+$accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a855f7';
+$accentSecondary = $colors['accent_secondary'] ?? '#3b82f6';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'Player Benefits';
+$title = $config['content.title'] ?? 'Why a structured hub matters';
+$description = $config['content.description'] ?? 'We emphasize clarity, consistency, and responsible access for information so users can learn formats without confusion.';
+
+// 优势列表
+$benefitsRaw = $config['benefits.items'] ?? "Clear rule definitions|Each result type is explained in plain language with example notation.|📖\nResponsible guidance|We focus on compliance, age gates, and local law awareness.|⚖️\nFocused experience|Less clutter means faster access to schedules.|🎯\nAccessible design|Readable typography and high-contrast layouts for mobile viewing.|📱";
+
+$benefits = [];
+$lines = preg_split('/[\r\n]+/', $benefitsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('|', $line);
+    $benefitTitle = trim($parts[0] ?? '');
+    $benefitDesc = trim($parts[1] ?? '');
+    $benefitIcon = trim($parts[2] ?? '✓');
+    
+    if (!empty($benefitTitle)) {
+        $benefits[] = [
+            'title' => $benefitTitle,
+            'description' => $benefitDesc,
+            'icon' => $benefitIcon,
+        ];
+    }
+}
+
+$instanceId = 'sk-benefits-' . uniqid();
+?>
+
+<section class="sk-benefits" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?>::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card {
+            display: flex;
+            gap: 20px;
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            padding: 28px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateX(8px);
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card-content {
+            flex: 1;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 8px;
+        }
+        
+        #<?= $instanceId ?> .sk-benefits-card-desc {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .sk-benefits-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            #<?= $instanceId ?> .sk-benefits-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .sk-benefits-card:hover {
+                transform: translateY(-4px);
+            }
+        }
+    </style>
+    
+    <div class="sk-benefits-container">
+        <div class="sk-benefits-header">
+            <div class="sk-benefits-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="sk-benefits-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="sk-benefits-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="sk-benefits-grid">
+            <?php foreach ($benefits as $benefit): ?>
+            <div class="sk-benefits-card">
+                <div class="sk-benefits-card-icon"><?= $benefit['icon'] ?></div>
+                <div class="sk-benefits-card-content">
+                    <h3 class="sk-benefits-card-title"><?= htmlspecialchars($benefit['title']) ?></h3>
+                    <p class="sk-benefits-card-desc"><?= htmlspecialchars($benefit['description']) ?></p>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

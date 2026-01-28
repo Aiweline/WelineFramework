@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+ * WeShop_Filters 后台菜单配置
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:Weline_Framework::Backend/etc/xsd/menu.xsd">
+    <menu>
+        <!-- 商品管理下的筛选配置 -->
+        <item id="weshop_catalog_filters" translate="title" module="WeShop_Filters" parent="weshop_catalog" sortOrder="50">
+            <title>筛选配置</title>
+            <action>weshop/filters/backend/config</action>
+            <resource>WeShop_Filters::config</resource>
+        </item>
+        
+        <!-- 价格区间配置 -->
+        <item id="weshop_catalog_price_ranges" translate="title" module="WeShop_Filters" parent="weshop_catalog_filters" sortOrder="10">
+            <title>价格区间</title>
+            <action>weshop/filters/backend/config/priceRanges</action>
+            <resource>WeShop_Filters::price_ranges</resource>
+        </item>
+    </menu>
+</config>

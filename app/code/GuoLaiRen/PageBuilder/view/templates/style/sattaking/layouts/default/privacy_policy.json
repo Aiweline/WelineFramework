@@ -1,0 +1,65 @@
+{
+    "page_type": "privacy_policy",
+    "name": "隐私政策页面布局",
+    "description": "Satta King 786 主题隐私政策页面布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "logo.width": 40,
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact",
+                    "navigation.show_cta": "no"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "hero",
+                "enabled": true,
+                "instance_id": "privacy-hero",
+                "config": {
+                    "content.badge": "Legal",
+                    "content.title": "Privacy Policy",
+                    "content.description": "This Privacy Policy explains how we collect, use, and protect your personal information when you use the Satta King 786 platform.",
+                    "cta.primary_text": "",
+                    "cta.primary_url": "",
+                    "cta.secondary_text": "",
+                    "cta.secondary_url": "",
+                    "features.items": "",
+                    "visual.show_image": "no"
+                }
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "privacy-sections",
+                "config": {
+                    "content.badge": "Policy Details",
+                    "content.title": "Privacy Policy Sections",
+                    "content.description": "Click each section to learn more about our data practices.",
+                    "faq.items": "Information We Collect|We collect information you provide directly, such as when you contact us or use our services. This may include your name, email address, and device information.\nHow We Use Your Information|We use collected information to provide and improve our services, respond to inquiries, and ensure platform security.\nData Sharing|We do not sell your personal information. We may share data with service providers who assist in operating our platform, subject to confidentiality agreements.\nData Security|We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, or destruction.\nYour Rights|You have the right to access, correct, or delete your personal information. Contact us to exercise these rights.\nCookies and Tracking|We use cookies and similar technologies to enhance your experience. You can manage cookie preferences through your browser settings.\nChanges to This Policy|We may update this policy periodically. Continued use of our services after changes constitutes acceptance of the updated policy."
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {
+                    "brand.name": "Satta King 786",
+                    "brand.description": "An informational guide to satta king formats, schedules, and Android access.",
+                    "links.items": "Home=>/\nPrivacy Policy=>/privacy-policy\nTerms of Service=>/terms-of-service\nContact=>/contact",
+                    "copyright.text": "Designed for clarity, speed, and compliance-first guidance."
+                }
+            }
+        ]
+    },
+    "notes": "隐私政策页面布局"
+}

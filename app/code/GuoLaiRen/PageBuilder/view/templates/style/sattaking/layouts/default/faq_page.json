@@ -1,0 +1,41 @@
+{
+    "page_type": "faq_page",
+    "name": "FAQ页面布局",
+    "description": "Satta King 786 主题 FAQ 页面布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-full",
+                "config": {
+                    "content.badge": "Questions & Answers",
+                    "content.title": "Common questions about satta and satta king 786",
+                    "content.description": "Use these answers to understand format notation, timing, and app access.",
+                    "faq.items": "What is the difference between single and jodi?|Single refers to a one digit result, while jodi is a two digit pair formed from open and close digits.\nHow often are results published?|Timing varies by market, but most rounds publish results once the market closes for that session.\nWhy do markets have different timings?|Markets operate independently, so schedules reflect their local timing windows and update routines.\nIs satta legal in India?|Regulations vary by state and jurisdiction. Always check local laws before accessing or participating in any satta activity.\nWhat data does the Android app request?|The app primarily asks for notifications and storage access to support result alerts and archive caching.\nHow do I report an incorrect result?|Use the contact form to submit the market name, date, and the result you observed so the team can review.\nWhere can I read full rule definitions?|The Games page includes a format table and explanations for single, jodi, and panna notation."
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {}
+            }
+        ]
+    }
+}

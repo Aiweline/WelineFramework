@@ -1,0 +1,215 @@
+<?php
+/**
+ * Satta King 786 - Features Section Component
+ * 
+ * 特性展示区域，展示平台核心功能
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Core Features
+ * content.title => 标题:text:What the platform offers
+ * content.description => 描述:textarea:Organized information, streamlined access, and clear formatting so you can explore satta-related content with confidence.
+ * 
+ * group:features => 特性列表
+ * features.items => 特性列表:textarea:Result Schedules|Up-to-date listings of market timings and result windows in an easy-to-read format.|📅\r\nFormat Definitions|Clear explanations of single, jodi, and panna notations used in the ecosystem.|📚\r\nMarket Archives|Historical result data with searchable filters for research and reference.|🗂️\r\nMobile-First Design|Optimized for smaller screens with fast load times and clear typography.|📱|格式：标题|描述|图标，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['features_bg'] ?? '#0f0f1f';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $colors['text_secondary'] ?? '#b8b8d0';
+$textMuted = $colors['text_muted'] ?? '#6b6b8a';
+$accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a855f7';
+$accentSecondary = $colors['accent_secondary'] ?? '#3b82f6';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'Core Features';
+$title = $config['content.title'] ?? 'What the platform offers';
+$description = $config['content.description'] ?? 'Organized information, streamlined access, and clear formatting so you can explore satta-related content with confidence.';
+
+// 特性列表
+$featuresRaw = $config['features.items'] ?? "Result Schedules|Up-to-date listings of market timings and result windows in an easy-to-read format.|📅\nFormat Definitions|Clear explanations of single, jodi, and panna notations used in the ecosystem.|📚\nMarket Archives|Historical result data with searchable filters for research and reference.|🗂️\nMobile-First Design|Optimized for smaller screens with fast load times and clear typography.|📱";
+
+$features = [];
+$lines = preg_split('/[\r\n]+/', $featuresRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('|', $line);
+    $featureTitle = trim($parts[0] ?? '');
+    $featureDesc = trim($parts[1] ?? '');
+    $featureIcon = trim($parts[2] ?? '⭐');
+    
+    if (!empty($featureTitle)) {
+        $features[] = [
+            'title' => $featureTitle,
+            'description' => $featureDesc,
+            'icon' => $featureIcon,
+        ];
+    }
+}
+
+$instanceId = 'sk-features-' . uniqid();
+?>
+
+<section class="sk-features" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .sk-features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .sk-features-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .sk-features-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(124, 58, 237, 0.4);
+            transform: translateY(-6px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        #<?= $instanceId ?> .sk-features-card-icon {
+            width: 64px;
+            height: 64px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-features-card:hover .sk-features-card-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        #<?= $instanceId ?> .sk-features-card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .sk-features-card-desc {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .sk-features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .sk-features-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .sk-features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <div class="sk-features-container">
+        <div class="sk-features-header">
+            <div class="sk-features-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="sk-features-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="sk-features-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="sk-features-grid">
+            <?php foreach ($features as $feature): ?>
+            <div class="sk-features-card">
+                <div class="sk-features-card-icon"><?= $feature['icon'] ?></div>
+                <h3 class="sk-features-card-title"><?= htmlspecialchars($feature['title']) ?></h3>
+                <p class="sk-features-card-desc"><?= htmlspecialchars($feature['description']) ?></p>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

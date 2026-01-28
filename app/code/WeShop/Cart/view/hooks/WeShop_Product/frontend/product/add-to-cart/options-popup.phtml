@@ -1,0 +1,454 @@
+<?php
+/**
+ * WeShop Cart模块 - 可配置产品规格选择弹窗
+ * 
+ * 实现 WeShop_Product::frontend::product::add-to-cart::options-popup 钩子
+ * 为可配置产品提供规格选择弹窗界面
+ * 
+ * @hook-priority 100
+ * @hook-sort-order 1
+ * @hook-solo false
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+?>
+
+<!-- 规格选择弹窗 -->
+<div id="product-options-popup" class="product-options-popup" aria-hidden="true">
+    <div class="popup-overlay" data-action="close-options-popup"></div>
+    <div class="popup-container">
+        <div class="popup-header">
+            <h3 class="popup-title"><?= __('选择规格') ?></h3>
+            <button type="button" class="popup-close" data-action="close-options-popup" aria-label="<?= __('关闭') ?>">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="popup-body">
+            <!-- 产品预览区 -->
+            <div class="product-preview">
+                <div class="product-image">
+                    <img id="popup-product-image" src="" alt="" loading="lazy">
+                </div>
+                <div class="product-info">
+                    <h4 id="popup-product-name" class="product-name"></h4>
+                    <div class="product-price">
+                        <span id="popup-product-price" class="current-price"></span>
+                        <span id="popup-product-original-price" class="original-price"></span>
+                    </div>
+                    <div id="popup-product-stock" class="product-stock"></div>
+                    <div id="popup-selected-options" class="selected-options"></div>
+                </div>
+            </div>
+            
+            <!-- 规格选项区 -->
+            <div id="popup-options-container" class="options-container">
+                <!-- 动态渲染规格选项 -->
+            </div>
+            
+            <!-- 数量选择 -->
+            <div class="quantity-selector">
+                <label><?= __('数量') ?></label>
+                <div class="quantity-input">
+                    <button type="button" class="qty-btn qty-minus" data-action="qty-minus">-</button>
+                    <input type="number" id="popup-qty" class="qty-value" value="1" min="1" max="99">
+                    <button type="button" class="qty-btn qty-plus" data-action="qty-plus">+</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="popup-footer">
+            <button type="button" id="popup-add-to-cart" class="btn btn-primary btn-add-to-cart" disabled>
+                <span class="btn-text"><?= __('加入购物车') ?></span>
+                <span class="btn-loading" style="display: none;">
+                    <svg class="spinner" width="16" height="16" viewBox="0 0 24 24">
+                        <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="60" stroke-dashoffset="20">
+                            <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                        </circle>
+                    </svg>
+                </span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ========================================
+   规格选择弹窗样式
+   ======================================== */
+.product-options-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 0.3s, opacity 0.3s;
+}
+
+.product-options-popup[aria-hidden="false"] {
+    visibility: visible;
+    opacity: 1;
+}
+
+.product-options-popup .popup-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+}
+
+.product-options-popup .popup-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    max-height: 85vh;
+    background: var(--color-bg-primary, #fff);
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out;
+    overflow: hidden;
+}
+
+.product-options-popup[aria-hidden="false"] .popup-container {
+    transform: translateY(0);
+}
+
+/* 弹窗头部 */
+.popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.popup-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-text-primary, #111827);
+}
+
+.popup-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--color-text-secondary, #6b7280);
+    transition: background-color 0.2s;
+}
+
+.popup-close:hover {
+    background: var(--color-bg-secondary, #f3f4f6);
+}
+
+/* 弹窗主体 */
+.popup-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* 产品预览 */
+.product-preview {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.product-preview .product-image {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--color-bg-secondary, #f8f9fa);
+}
+
+.product-preview .product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-preview .product-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.product-preview .product-name {
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0 0 8px;
+    color: var(--color-text-primary, #111827);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-preview .product-price {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.product-preview .current-price {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #dc2626;
+}
+
+.product-preview .original-price {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #9ca3af);
+    text-decoration: line-through;
+}
+
+.product-preview .product-stock {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.product-preview .product-stock.in-stock {
+    color: #16a34a;
+}
+
+.product-preview .product-stock.out-of-stock {
+    color: #dc2626;
+}
+
+.selected-options {
+    font-size: 0.75rem;
+    color: var(--color-text-muted, #9ca3af);
+    margin-top: 4px;
+}
+
+/* 规格选项容器 */
+.options-container {
+    margin-bottom: 20px;
+}
+
+.option-group {
+    margin-bottom: 20px;
+}
+
+.option-group:last-child {
+    margin-bottom: 0;
+}
+
+.option-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary, #111827);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.option-label .required {
+    color: #dc2626;
+}
+
+.option-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* 选项按钮 */
+.option-value {
+    position: relative;
+    min-width: 48px;
+    padding: 8px 16px;
+    border: 2px solid var(--color-border-light, #e5e7eb);
+    border-radius: 8px;
+    background: var(--color-bg-primary, #fff);
+    font-size: 0.875rem;
+    color: var(--color-text-primary, #111827);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.option-value:hover:not(.disabled):not(.selected) {
+    border-color: var(--color-accent, #3b82f6);
+}
+
+.option-value.selected {
+    border-color: var(--color-accent, #3b82f6);
+    background: var(--color-accent-light, #eff6ff);
+    color: var(--color-accent, #3b82f6);
+}
+
+.option-value.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+/* 色块选项 */
+.option-value.swatch-color,
+.option-value.swatch-image {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.option-value.swatch-color .swatch-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+}
+
+.option-value.swatch-image .swatch-inner {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.option-value.swatch-color.selected,
+.option-value.swatch-image.selected {
+    box-shadow: 0 0 0 2px var(--color-accent, #3b82f6);
+}
+
+/* 数量选择器 */
+.quantity-selector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 20px;
+    border-top: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.quantity-selector label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary, #111827);
+}
+
+.quantity-input {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.qty-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: var(--color-bg-secondary, #f3f4f6);
+    font-size: 1.25rem;
+    color: var(--color-text-primary, #111827);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.qty-btn:hover {
+    background: var(--color-bg-tertiary, #e5e7eb);
+}
+
+.qty-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.qty-value {
+    width: 60px;
+    height: 40px;
+    border: none;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 500;
+    -moz-appearance: textfield;
+}
+
+.qty-value::-webkit-outer-spin-button,
+.qty-value::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* 弹窗底部 */
+.popup-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--color-border-light, #e5e7eb);
+    background: var(--color-bg-primary, #fff);
+}
+
+.popup-footer .btn-add-to-cart {
+    width: 100%;
+    height: 48px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    background: var(--color-accent, #3b82f6);
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.popup-footer .btn-add-to-cart:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.popup-footer .btn-add-to-cart:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 加载状态 */
+.btn-add-to-cart.loading .btn-text {
+    display: none;
+}
+
+.btn-add-to-cart.loading .btn-loading {
+    display: inline-flex !important;
+}
+
+/* 响应式 */
+@media (min-width: 640px) {
+    .product-options-popup {
+        align-items: center;
+    }
+    
+    .product-options-popup .popup-container {
+        max-width: 480px;
+        max-height: 80vh;
+        border-radius: 16px;
+        transform: translateY(20px);
+    }
+    
+    .product-options-popup[aria-hidden="false"] .popup-container {
+        transform: translateY(0);
+    }
+}
+</style>
