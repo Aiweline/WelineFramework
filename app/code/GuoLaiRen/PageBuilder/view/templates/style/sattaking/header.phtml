@@ -1,0 +1,262 @@
+<?php
+/**
+ * Satta King 786 模板 - Header
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:Satta King 786
+ * logo.url => Logo图片URL:text:
+ * logo.width => Logo宽度:number:40|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 背景颜色:color:rgba(8, 8, 26, 0.95)
+ * navigation.text_color => 文字颜色:color:#ffffff
+ * navigation.link_hover_color => 链接悬停颜色:color:#a855f7
+ * navigation.links => 导航链接:textarea:Home=>/\r\nGames=>/games\r\nDownload=>/download\r\nFAQ=>/faq|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Download App
+ * navigation.cta_url => CTA按钮链接:text:#download
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'sattaking';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'sattaking';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<!DOCTYPE html>
+<html lang="<?= $this->getRequest()->getLang() ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($page ? $page->getData('title') : 'Satta King 786') ?></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 辅助函数
+if (!function_exists('sk_color')) {
+    function sk_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('sk_getConfig')) {
+    function sk_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+// Logo配置
+$logoDisplay = sk_getConfig($styleSettings, 'logo.display', 'yes');
+$logoText = sk_getConfig($styleSettings, 'logo.text', 'Satta King 786');
+$logoUrl = sk_getConfig($styleSettings, 'logo.url', '');
+$logoWidth = sk_getConfig($styleSettings, 'logo.width', '40');
+
+// 导航配置
+$navDisplay = sk_getConfig($styleSettings, 'navigation.display', 'yes');
+$navBgColor = sk_getConfig($styleSettings, 'navigation.bg_color', 'rgba(8, 8, 26, 0.95)');
+$navTextColor = sk_getConfig($styleSettings, 'navigation.text_color', '#ffffff');
+$navLinkHoverColor = sk_getConfig($styleSettings, 'navigation.link_hover_color', '#a855f7');
+$navLinksRaw = sk_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");
+$showCta = sk_getConfig($styleSettings, 'navigation.show_cta', 'yes');
+$ctaText = sk_getConfig($styleSettings, 'navigation.cta_text', 'Download App');
+$ctaUrl = sk_getConfig($styleSettings, 'navigation.cta_url', '#download');
+
+// 颜色配置
+$accentPrimary = sk_color($colors, 'accent_primary', '#7c3aed');
+$buttonPrimaryBg = sk_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)');
+
+// 解析导航链接
+$navLinks = [];
+$lines = preg_split('/[\r\n]+/', $navLinksRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+?>
+
+<?php if ($navDisplay === 'yes'): ?>
+<style>
+    .sk-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: <?= htmlspecialchars($navBgColor) ?>;
+        backdrop-filter: blur(10px);
+        padding: 15px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .sk-header-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .sk-logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: <?= htmlspecialchars($navTextColor) ?>;
+    }
+    
+    .sk-logo-icon {
+        width: <?= intval($logoWidth) ?>px;
+        height: <?= intval($logoWidth) ?>px;
+        background: <?= $buttonPrimaryBg ?>;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .sk-logo-icon svg {
+        width: 20px;
+        height: 20px;
+        fill: #ffffff;
+    }
+    
+    .sk-logo-text {
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+    
+    .sk-nav {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+    }
+    
+    .sk-nav-links {
+        display: flex;
+        gap: 32px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .sk-nav-link {
+        color: <?= htmlspecialchars($navTextColor) ?>;
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: color 0.3s ease;
+    }
+    
+    .sk-nav-link:hover {
+        color: <?= htmlspecialchars($navLinkHoverColor) ?>;
+    }
+    
+    .sk-cta-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 24px;
+        background: <?= $buttonPrimaryBg ?>;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .sk-cta-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(124, 58, 237, 0.4);
+    }
+    
+    .sk-cta-btn svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+    }
+    
+    @media (max-width: 768px) {
+        .sk-nav-links {
+            display: none;
+        }
+        
+        .sk-cta-btn span {
+            display: none;
+        }
+        
+        .sk-cta-btn {
+            padding: 10px;
+        }
+    }
+</style>
+
+<header class="sk-header">
+    <div class="sk-header-container">
+        <?php if ($logoDisplay === 'yes'): ?>
+        <a href="/" class="sk-logo">
+            <span class="sk-logo-icon">
+                <?php if ($logoUrl): ?>
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain;">
+                <?php else: ?>
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <?php endif; ?>
+            </span>
+            <span class="sk-logo-text"><?= htmlspecialchars($logoText) ?></span>
+        </a>
+        <?php endif; ?>
+        
+        <nav class="sk-nav">
+            <ul class="sk-nav-links">
+                <?php foreach ($navLinks as $link): ?>
+                <li><a href="<?= htmlspecialchars($link['url']) ?>" class="sk-nav-link"><?= htmlspecialchars($link['name']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($showCta === 'yes'): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-cta-btn">
+                <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                <span><?= htmlspecialchars($ctaText) ?></span>
+            </a>
+            <?php endif; ?>
+        </nav>
+    </div>
+</header>
+<?php endif; ?>

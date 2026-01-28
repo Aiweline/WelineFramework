@@ -1,0 +1,588 @@
+<?php
+/**
+ * 关于我们内容组件
+ * 
+ * @component_start
+ * code: about-content
+ * name: 关于我们内容
+ * name_en: About Content
+ * description: 企业/品牌关于页面内容展示组件，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:display => 显示控制
+ * display.show_stats => 显示数据统计:select:yes|yes,no
+ * display.show_values => 显示价值观:select:yes|yes,no
+ * display.show_team => 显示团队:select:yes|yes,no
+ * display.show_cta => 显示底部CTA:select:yes|yes,no
+ * 
+ * group:hero => 顶部横幅
+ * hero.title => 页面标题:text:关于我们
+ * hero.subtitle => 页面副标题:textarea:我们致力于为客户提供卓越的产品和服务，以创新和诚信为基础，共同创造更美好的未来。
+ * hero.bg_color => 背景色:color:#0c0060
+ * hero.bg_gradient_end => 渐变结束色:color:#1d1850
+ * hero.title_color => 标题颜色:color:#ffd700
+ * hero.text_color => 文字颜色:color:#cccccc
+ * hero.padding => 内边距:number:80|px
+ * 
+ * group:stats => 数据统计
+ * stats.stat_1_number => 统计1数字:text:10+
+ * stats.stat_1_label => 统计1标签:text:年行业经验
+ * stats.stat_2_number => 统计2数字:text:50K+
+ * stats.stat_2_label => 统计2标签:text:满意客户
+ * stats.stat_3_number => 统计3数字:text:100+
+ * stats.stat_3_label => 统计3标签:text:团队成员
+ * stats.stat_4_number => 统计4数字:text:30+
+ * stats.stat_4_label => 统计4标签:text:服务国家
+ * stats.number_color => 数字颜色:color:#ffd700
+ * stats.label_color => 标签颜色:color:#8b8b8b
+ * stats.card_bg => 卡片背景:color:rgba(255,255,255,0.05)
+ * 
+ * group:story => 故事区块
+ * story.title => 标题:text:我们的故事
+ * story.subtitle => 副标题:text:从小小的梦想开始，到如今的全球业务
+ * story.content => 内容:textarea:我们的故事始于对卓越的追求。多年来，我们始终坚持以客户为中心，不断创新和进步。
+ * story.bg_color => 背景色:color:#0d0e13
+ * story.title_color => 标题颜色:color:#ffd700
+ * 
+ * group:values => 价值观区块
+ * values.title => 标题:text:我们的价值观
+ * values.subtitle => 副标题:text:这些核心价值观定义了我们是谁以及我们如何工作
+ * values.value_1_icon => 价值1图标:text:💡
+ * values.value_1_title => 价值1标题:text:创新
+ * values.value_1_desc => 价值1描述:textarea:我们不断挑战现状，寻找更好的解决方案，推动行业发展。
+ * values.value_2_icon => 价值2图标:text:🤝
+ * values.value_2_title => 价值2标题:text:诚信
+ * values.value_2_desc => 价值2描述:textarea:诚实和透明是我们与客户、合作伙伴建立信任的基础。
+ * values.value_3_icon => 价值3图标:text:⭐
+ * values.value_3_title => 价值3标题:text:卓越
+ * values.value_3_desc => 价值3描述:textarea:我们追求每一个细节的完美，为客户提供超越期望的体验。
+ * values.bg_color => 背景色:color:#1d1850
+ * 
+ * group:team => 团队区块
+ * team.title => 标题:text:领导团队
+ * team.subtitle => 副标题:text:认识推动我们前进的人
+ * team.member_1_icon => 成员1头像:text:👨‍💼
+ * team.member_1_name => 成员1姓名:text:John Smith
+ * team.member_1_role => 成员1职位:text:首席执行官
+ * team.member_2_icon => 成员2头像:text:👩‍💼
+ * team.member_2_name => 成员2姓名:text:Sarah Johnson
+ * team.member_2_role => 成员2职位:text:首席技术官
+ * team.member_3_icon => 成员3头像:text:👨‍💻
+ * team.member_3_name => 成员3姓名:text:Michael Chen
+ * team.member_3_role => 成员3职位:text:产品总监
+ * team.member_4_icon => 成员4头像:text:👩‍🎨
+ * team.member_4_name => 成员4姓名:text:Emily Wang
+ * team.member_4_role => 成员4职位:text:设计总监
+ * 
+ * group:cta => 底部CTA
+ * cta.title => CTA标题:text:准备好开始了吗？
+ * cta.description => CTA描述:textarea:加入我们，一起创造美好的未来。我们期待与您合作！
+ * cta.button_text => 按钮文字:text:联系我们
+ * cta.button_url => 按钮链接:text:/contact
+ * cta.button_bg => 按钮背景:color:linear-gradient(90deg, #ffd700 0%, #ffa500 100%)
+ * cta.button_text_color => 按钮文字颜色:color:#8b4513
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 显示控制
+$showStats = ($config['display.show_stats'] ?? 'yes') !== 'no';
+$showValues = ($config['display.show_values'] ?? 'yes') !== 'no';
+$showTeam = ($config['display.show_team'] ?? 'yes') !== 'no';
+$showCta = ($config['display.show_cta'] ?? 'yes') !== 'no';
+
+// Hero配置
+$heroTitle = $config['hero.title'] ?? '';
+$heroSubtitle = $config['hero.subtitle'] ?? '';
+$heroBgColorConfig = $config['hero.bg_color'] ?? '';
+$heroGradientEndConfig = $config['hero.bg_gradient_end'] ?? '';
+$heroTitleColorConfig = $config['hero.title_color'] ?? '';
+$heroTextColorConfig = $config['hero.text_color'] ?? '';
+$heroPadding = $config['hero.padding'] ?? '80';
+
+// 统计配置
+$stat1Number = $config['stats.stat_1_number'] ?? '10+';
+$stat1Label = $config['stats.stat_1_label'] ?? __('年行业经验');
+$stat2Number = $config['stats.stat_2_number'] ?? '50K+';
+$stat2Label = $config['stats.stat_2_label'] ?? __('满意客户');
+$stat3Number = $config['stats.stat_3_number'] ?? '100+';
+$stat3Label = $config['stats.stat_3_label'] ?? __('团队成员');
+$stat4Number = $config['stats.stat_4_number'] ?? '30+';
+$stat4Label = $config['stats.stat_4_label'] ?? __('服务国家');
+$statsNumberColorConfig = $config['stats.number_color'] ?? '';
+$statsLabelColorConfig = $config['stats.label_color'] ?? '';
+$statsCardBgConfig = $config['stats.card_bg'] ?? '';
+
+// 故事配置
+$storyTitle = $config['story.title'] ?? __('我们的故事');
+$storySubtitle = $config['story.subtitle'] ?? __('从小小的梦想开始，到如今的全球业务');
+$storyContent = $config['story.content'] ?? '';
+$storyBgColorConfig = $config['story.bg_color'] ?? '';
+$storyTitleColorConfig = $config['story.title_color'] ?? '';
+
+// 价值观配置
+$valuesTitle = $config['values.title'] ?? __('我们的价值观');
+$valuesSubtitle = $config['values.subtitle'] ?? __('这些核心价值观定义了我们是谁以及我们如何工作');
+$value1Icon = $config['values.value_1_icon'] ?? '💡';
+$value1Title = $config['values.value_1_title'] ?? __('创新');
+$value1Desc = $config['values.value_1_desc'] ?? __('我们不断挑战现状，寻找更好的解决方案，推动行业发展。');
+$value2Icon = $config['values.value_2_icon'] ?? '🤝';
+$value2Title = $config['values.value_2_title'] ?? __('诚信');
+$value2Desc = $config['values.value_2_desc'] ?? __('诚实和透明是我们与客户、合作伙伴建立信任的基础。');
+$value3Icon = $config['values.value_3_icon'] ?? '⭐';
+$value3Title = $config['values.value_3_title'] ?? __('卓越');
+$value3Desc = $config['values.value_3_desc'] ?? __('我们追求每一个细节的完美，为客户提供超越期望的体验。');
+$valuesBgColorConfig = $config['values.bg_color'] ?? '';
+
+// 团队配置
+$teamTitle = $config['team.title'] ?? __('领导团队');
+$teamSubtitle = $config['team.subtitle'] ?? __('认识推动我们前进的人');
+$member1Icon = $config['team.member_1_icon'] ?? '👨‍💼';
+$member1Name = $config['team.member_1_name'] ?? 'John Smith';
+$member1Role = $config['team.member_1_role'] ?? __('首席执行官');
+$member2Icon = $config['team.member_2_icon'] ?? '👩‍💼';
+$member2Name = $config['team.member_2_name'] ?? 'Sarah Johnson';
+$member2Role = $config['team.member_2_role'] ?? __('首席技术官');
+$member3Icon = $config['team.member_3_icon'] ?? '👨‍💻';
+$member3Name = $config['team.member_3_name'] ?? 'Michael Chen';
+$member3Role = $config['team.member_3_role'] ?? __('产品总监');
+$member4Icon = $config['team.member_4_icon'] ?? '👩‍🎨';
+$member4Name = $config['team.member_4_name'] ?? 'Emily Wang';
+$member4Role = $config['team.member_4_role'] ?? __('设计总监');
+
+// CTA配置
+$ctaTitle = $config['cta.title'] ?? __('准备好开始了吗？');
+$ctaDescription = $config['cta.description'] ?? __('加入我们，一起创造美好的未来。我们期待与您合作！');
+$ctaButtonText = $config['cta.button_text'] ?? __('联系我们');
+$ctaButtonUrl = $config['cta.button_url'] ?? '/contact';
+$ctaButtonBgConfig = $config['cta.button_bg'] ?? '';
+$ctaButtonTextColorConfig = $config['cta.button_text_color'] ?? '';
+
+// 页面数据
+$page = $this->getData('page');
+$pageTitle = $heroTitle ?: ($page ? ($page->getData('title') ?? __('关于我们')) : __('关于我们'));
+$pageContent = $storyContent ?: ($page ? ($page->getData('content') ?? '') : '');
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 从主题颜色中获取配色（配置项优先）
+$heroBg = $heroBgColorConfig ?: ($colors['hero_bg'] ?? '#0c0060');
+$heroGradientEnd = $heroGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#1d1850');
+$sectionBg1 = $storyBgColorConfig ?: ($colors['section_bg_1'] ?? '#0d0e13');
+$sectionBg2 = $valuesBgColorConfig ?: ($colors['section_bg_2'] ?? '#1d1850');
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $heroTextColorConfig ?: ($colors['text_secondary'] ?? '#cccccc');
+$textMuted = $statsLabelColorConfig ?: ($colors['text_muted'] ?? '#8b8b8b');
+$accentPrimary = $heroTitleColorConfig ?: ($colors['accent_primary'] ?? '#ffd700');
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#ffed4e';
+$accentSecondary = $colors['accent_secondary'] ?? '#ff6b35';
+$buttonPrimaryBg = $ctaButtonBgConfig ?: ($colors['button_primary_bg'] ?? 'linear-gradient(90deg, #ffd700 0%, #ffa500 100%)');
+$buttonPrimaryText = $ctaButtonTextColorConfig ?: ($colors['button_primary_text'] ?? '#8b4513');
+$cardBg = $statsCardBgConfig ?: ($colors['card_bg'] ?? 'rgba(255,255,255,0.05)');
+$borderLight = $colors['border_light'] ?? 'rgba(255,255,255,0.1)';
+$statsNumberColor = $statsNumberColorConfig ?: $accentPrimary;
+$storyTitleColor = $storyTitleColorConfig ?: $accentPrimary;
+
+$instanceId = $component_instance_id ?? 'about-content-' . uniqid();
+?>
+
+<section class="tpmst-section about-content-component" id="<?= $instanceId ?>">
+    <style>
+        /* Hero Section */
+        #<?= $instanceId ?> .about-hero {
+            background: linear-gradient(135deg, <?= $heroBg ?> 0%, <?= $heroGradientEnd ?> 100%);
+            color: <?= $textPrimary ?>;
+            padding: <?= htmlspecialchars($heroPadding) ?>px 0;
+            text-align: center;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-hero .tpmst-section-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .about-hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .about-hero p {
+            font-size: 1.25rem;
+            color: <?= $textSecondary ?>;
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.8;
+        }
+        
+        /* Stats Section */
+        #<?= $instanceId ?> .about-stats-wrapper {
+            padding: 60px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            max-width: 1200px;
+            margin: -100px auto 0;
+            padding: 0 20px;
+            position: relative;
+            z-index: 10;
+        }
+        #<?= $instanceId ?> .stat-card {
+            background: <?= $cardBg ?>;
+            backdrop-filter: blur(10px);
+            border: 1px solid <?= $borderLight ?>;
+            padding: 35px 25px;
+            border-radius: 16px;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        #<?= $instanceId ?> .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(255, 215, 0, 0.2);
+        }
+        #<?= $instanceId ?> .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: <?= $statsNumberColor ?>;
+        }
+        #<?= $instanceId ?> .stat-label {
+            font-size: 0.95rem;
+            color: <?= $textMuted ?>;
+            margin-top: 8px;
+        }
+        
+        /* Story Section */
+        #<?= $instanceId ?> .about-story-wrapper {
+            background: <?= $sectionBg1 ?>;
+            padding: 80px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-story {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 15px;
+            color: <?= $storyTitleColor ?>;
+        }
+        #<?= $instanceId ?> .section-subtitle {
+            text-align: center;
+            color: <?= $textMuted ?>;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        #<?= $instanceId ?> .story-content {
+            font-size: 1.1rem;
+            line-height: 1.9;
+            color: <?= $textSecondary ?>;
+        }
+        #<?= $instanceId ?> .story-content p {
+            margin-bottom: 20px;
+        }
+        
+        /* Values Section */
+        #<?= $instanceId ?> .about-values {
+            background: <?= $sectionBg2 ?>;
+            padding: 80px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-values .tpmst-section-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .values-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+        }
+        #<?= $instanceId ?> .value-card {
+            background: <?= $cardBg ?>;
+            backdrop-filter: blur(10px);
+            border: 1px solid <?= $borderLight ?>;
+            padding: 40px 30px;
+            border-radius: 16px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        #<?= $instanceId ?> .value-card:hover {
+            box-shadow: 0 10px 40px rgba(255, 215, 0, 0.15);
+            transform: translateY(-5px);
+            border-color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .value-icon {
+            width: 70px;
+            height: 70px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 20px;
+        }
+        #<?= $instanceId ?> .value-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .value-card p {
+            font-size: 0.95rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+        }
+        
+        /* Team Section */
+        #<?= $instanceId ?> .about-team-wrapper {
+            background: <?= $sectionBg1 ?>;
+            padding: 80px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-team {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .team-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+        }
+        #<?= $instanceId ?> .team-member {
+            text-align: center;
+        }
+        #<?= $instanceId ?> .team-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: <?= $buttonPrimaryBg ?>;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3);
+        }
+        #<?= $instanceId ?> .team-member h4 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .team-role {
+            font-size: 0.9rem;
+            color: <?= $accentPrimary ?>;
+            font-weight: 500;
+        }
+        
+        /* CTA Section */
+        #<?= $instanceId ?> .about-cta {
+            background: linear-gradient(135deg, <?= $heroBg ?> 0%, <?= $heroGradientEnd ?> 100%);
+            padding: 80px 0;
+            text-align: center;
+            color: <?= $textPrimary ?>;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .about-cta .tpmst-section-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .about-cta h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .about-cta p {
+            font-size: 1.15rem;
+            color: <?= $textSecondary ?>;
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #<?= $instanceId ?> .cta-btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-weight: 600;
+            font-size: 1rem;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        #<?= $instanceId ?> .cta-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4);
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .about-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            #<?= $instanceId ?> .values-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            #<?= $instanceId ?> .team-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .about-hero h1 {
+                font-size: 2rem;
+            }
+            #<?= $instanceId ?> .about-stats {
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+            }
+            #<?= $instanceId ?> .stat-card {
+                padding: 25px 15px;
+            }
+            #<?= $instanceId ?> .stat-number {
+                font-size: 1.75rem;
+            }
+            #<?= $instanceId ?> .values-grid,
+            #<?= $instanceId ?> .team-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <!-- Hero -->
+    <div class="tpmst-section about-hero">
+        <div class="tpmst-section-inner">
+            <h1><?= htmlspecialchars($pageTitle) ?></h1>
+            <p><?= htmlspecialchars($heroSubtitle ?: __('我们致力于为客户提供卓越的产品和服务，以创新和诚信为基础，共同创造更美好的未来。')) ?></p>
+        </div>
+    </div>
+    
+    <?php if ($showStats): ?>
+    <!-- Stats -->
+    <div class="about-stats-wrapper">
+    <div class="about-stats">
+        <div class="stat-card">
+            <div class="stat-number"><?= htmlspecialchars($stat1Number) ?></div>
+            <div class="stat-label"><?= htmlspecialchars($stat1Label) ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number"><?= htmlspecialchars($stat2Number) ?></div>
+            <div class="stat-label"><?= htmlspecialchars($stat2Label) ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number"><?= htmlspecialchars($stat3Number) ?></div>
+            <div class="stat-label"><?= htmlspecialchars($stat3Label) ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number"><?= htmlspecialchars($stat4Number) ?></div>
+            <div class="stat-label"><?= htmlspecialchars($stat4Label) ?></div>
+        </div>
+    </div>
+    </div>
+    <?php endif; ?>
+    
+    <!-- Story -->
+    <div class="tpmst-section about-story-wrapper">
+    <div class="about-story">
+        <h2 class="section-title"><?= htmlspecialchars($storyTitle) ?></h2>
+        <p class="section-subtitle"><?= htmlspecialchars($storySubtitle) ?></p>
+        <div class="story-content">
+            <?php if ($pageContent): ?>
+                <?= $pageContent ?>
+            <?php else: ?>
+                <p><?= __('我们的故事始于对卓越的追求。多年来，我们始终坚持以客户为中心，不断创新和进步，致力于为每一位客户提供最优质的产品和服务。') ?></p>
+                <p><?= __('从最初的小团队发展到如今的国际化企业，我们的核心价值观从未改变：诚信、创新、卓越。这些价值观指引着我们的每一个决策，帮助我们与客户建立长期的信任关系。') ?></p>
+                <p><?= __('展望未来，我们将继续秉承初心，不断探索新的可能，为客户创造更多价值，为社会做出更大贡献。') ?></p>
+            <?php endif; ?>
+        </div>
+    </div>
+    </div>
+    
+    <?php if ($showValues): ?>
+    <!-- Values -->
+    <div class="tpmst-section about-values">
+        <div class="tpmst-section-inner">
+        <h2 class="section-title"><?= htmlspecialchars($valuesTitle) ?></h2>
+        <p class="section-subtitle"><?= htmlspecialchars($valuesSubtitle) ?></p>
+        <div class="values-grid">
+            <div class="value-card">
+                <div class="value-icon"><?= $value1Icon ?></div>
+                <h3><?= htmlspecialchars($value1Title) ?></h3>
+                <p><?= htmlspecialchars($value1Desc) ?></p>
+            </div>
+            <div class="value-card">
+                <div class="value-icon"><?= $value2Icon ?></div>
+                <h3><?= htmlspecialchars($value2Title) ?></h3>
+                <p><?= htmlspecialchars($value2Desc) ?></p>
+            </div>
+            <div class="value-card">
+                <div class="value-icon"><?= $value3Icon ?></div>
+                <h3><?= htmlspecialchars($value3Title) ?></h3>
+                <p><?= htmlspecialchars($value3Desc) ?></p>
+            </div>
+        </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($showTeam): ?>
+    <!-- Team -->
+    <div class="tpmst-section about-team-wrapper">
+    <div class="about-team">
+        <h2 class="section-title"><?= htmlspecialchars($teamTitle) ?></h2>
+        <p class="section-subtitle"><?= htmlspecialchars($teamSubtitle) ?></p>
+        <div class="team-grid">
+            <div class="team-member">
+                <div class="team-avatar"><?= $member1Icon ?></div>
+                <h4><?= htmlspecialchars($member1Name) ?></h4>
+                <div class="team-role"><?= htmlspecialchars($member1Role) ?></div>
+            </div>
+            <div class="team-member">
+                <div class="team-avatar"><?= $member2Icon ?></div>
+                <h4><?= htmlspecialchars($member2Name) ?></h4>
+                <div class="team-role"><?= htmlspecialchars($member2Role) ?></div>
+            </div>
+            <div class="team-member">
+                <div class="team-avatar"><?= $member3Icon ?></div>
+                <h4><?= htmlspecialchars($member3Name) ?></h4>
+                <div class="team-role"><?= htmlspecialchars($member3Role) ?></div>
+            </div>
+            <div class="team-member">
+                <div class="team-avatar"><?= $member4Icon ?></div>
+                <h4><?= htmlspecialchars($member4Name) ?></h4>
+                <div class="team-role"><?= htmlspecialchars($member4Role) ?></div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($showCta): ?>
+    <!-- CTA -->
+    <div class="tpmst-section about-cta">
+        <div class="tpmst-section-inner">
+            <h2><?= htmlspecialchars($ctaTitle) ?></h2>
+            <p><?= htmlspecialchars($ctaDescription) ?></p>
+            <a href="<?= htmlspecialchars($ctaButtonUrl) ?>" class="cta-btn"><?= htmlspecialchars($ctaButtonText) ?></a>
+        </div>
+    </div>
+    <?php endif; ?>
+</section>

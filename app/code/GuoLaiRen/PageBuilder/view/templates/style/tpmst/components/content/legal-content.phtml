@@ -1,0 +1,355 @@
+<?php
+/**
+ * 通用法律内容组件
+ * 
+ * @component_start
+ * code: legal-content
+ * name: 法律文档内容
+ * name_en: Legal Content
+ * description: 法律文档内容展示组件，支持目录、更新时间显示，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:display => 显示控制
+ * display.show_toc => 显示目录:select:yes|yes,no
+ * display.show_last_updated => 显示更新时间:select:yes|yes,no
+ * display.show_icon => 显示图标:select:yes|yes,no
+ * 
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.header_padding => 头部内边距:number:80|px
+ * layout.content_padding => 内容内边距:number:60|px
+ * 
+ * group:header => 头部设置
+ * header.title => 页面标题:text:|留空使用页面标题
+ * header.icon => 自定义图标:text:|如:🔒 📜 💰
+ * header.bg_color => 背景色:color:#0c0060
+ * header.bg_gradient_end => 渐变结束色:color:#1d1850
+ * header.title_color => 标题颜色:color:#ffd700
+ * header.text_color => 文字颜色:color:#cccccc
+ * 
+ * group:toc => 目录设置
+ * toc.title => 目录标题:text:目录
+ * toc.bg_color => 目录背景色:color:rgba(255,255,255,0.05)
+ * toc.border_color => 目录边框色:color:rgba(255,255,255,0.1)
+ * 
+ * group:content => 内容设置
+ * content.bg_color => 内容区背景色:color:#0d0e13
+ * content.text_color => 内容文字颜色:color:#cccccc
+ * content.heading_color => 标题颜色:color:#ffd700
+ * content.link_color => 链接颜色:color:#ffd700
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 显示控制
+$showToc = ($config['display.show_toc'] ?? 'yes') !== 'no';
+$showLastUpdated = ($config['display.show_last_updated'] ?? 'yes') !== 'no';
+$showIcon = ($config['display.show_icon'] ?? 'yes') !== 'no';
+
+// 布局设置
+$contentWidth = $config['layout.content_width'] ?? 'narrow';
+$headerPadding = $config['layout.header_padding'] ?? '80';
+$contentPadding = $config['layout.content_padding'] ?? '60';
+
+// 头部设置
+$headerTitle = $config['header.title'] ?? '';
+$headerIcon = $config['header.icon'] ?? '';
+$headerBgColorConfig = $config['header.bg_color'] ?? '';
+$headerGradientEndConfig = $config['header.bg_gradient_end'] ?? '';
+$headerTitleColorConfig = $config['header.title_color'] ?? '';
+$headerTextColorConfig = $config['header.text_color'] ?? '';
+
+// 目录设置
+$tocTitle = $config['toc.title'] ?? __('目录');
+$tocBgColorConfig = $config['toc.bg_color'] ?? '';
+$tocBorderColorConfig = $config['toc.border_color'] ?? '';
+
+// 内容设置
+$contentBgColorConfig = $config['content.bg_color'] ?? '';
+$contentTextColorConfig = $config['content.text_color'] ?? '';
+$contentHeadingColorConfig = $config['content.heading_color'] ?? '';
+$contentLinkColorConfig = $config['content.link_color'] ?? '';
+
+// 页面数据
+$page = $this->getData('page');
+$pageTitle = $headerTitle ?: ($page ? ($page->getData('title') ?? '') : '');
+$pageContent = $page ? ($page->getData('content') ?? '') : '';
+$lastUpdated = $page ? ($page->getData('updated_at') ?? $page->getData('created_at') ?? '') : '';
+$pageType = $page ? ($page->getData('type') ?? '') : '';
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 从主题颜色中获取配色（配置项优先）
+$heroBg = $headerBgColorConfig ?: ($colors['hero_bg'] ?? '#0c0060');
+$heroGradientEnd = $headerGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#1d1850');
+$sectionBg1 = $contentBgColorConfig ?: ($colors['section_bg_1'] ?? '#0d0e13');
+$sectionBg2 = $colors['section_bg_2'] ?? '#1d1850';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $contentTextColorConfig ?: ($colors['text_secondary'] ?? '#cccccc');
+$textMuted = $headerTextColorConfig ?: ($colors['text_muted'] ?? '#8b8b8b');
+$accentPrimary = $headerTitleColorConfig ?: ($colors['accent_primary'] ?? '#ffd700');
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#ffed4e';
+$accentSecondary = $colors['accent_secondary'] ?? '#ff6b35';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(90deg, #ffd700 0%, #ffa500 100%)';
+$cardBg = $tocBgColorConfig ?: ($colors['card_bg'] ?? 'rgba(255,255,255,0.05)');
+$borderLight = $tocBorderColorConfig ?: ($colors['border_light'] ?? 'rgba(255,255,255,0.1)');
+$contentHeadingColor = $contentHeadingColorConfig ?: $accentPrimary;
+$contentLinkColor = $contentLinkColorConfig ?: $accentPrimary;
+
+// 根据页面类型设置图标
+$typeIcons = [
+    'privacy_policy' => '🔒',
+    'terms_of_service' => '📜',
+    'refund_policy' => '💰',
+    'shipping_policy' => '🚚',
+    'cookie_policy' => '🍪',
+];
+$currentIcon = $headerIcon ?: ($typeIcons[$pageType] ?? '📄');
+
+// 宽度类
+$maxWidth = match($contentWidth) {
+    'wide' => '1200px',
+    'medium' => '1000px',
+    default => '800px',
+};
+
+$instanceId = $component_instance_id ?? 'legal-content-' . uniqid();
+?>
+
+<section class="tpmst-section legal-content-component" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            padding: 60px 0;
+            background: <?= $sectionBg1 ?>;
+            min-height: 60vh;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .tpmst-section-inner {
+            max-width: <?= $maxWidth ?>;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .legal-wrapper {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            padding: 50px 60px;
+            border-radius: 16px;
+        }
+        
+        #<?= $instanceId ?> .legal-header {
+            margin-bottom: 30px;
+            padding-bottom: 25px;
+            border-bottom: 2px solid <?= $borderLight ?>;
+        }
+        #<?= $instanceId ?> .legal-title {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: <?= $accentPrimary ?>;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        #<?= $instanceId ?> .legal-icon {
+            width: 48px;
+            height: 48px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        #<?= $instanceId ?> .legal-updated {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+        }
+        #<?= $instanceId ?> .legal-updated time {
+            font-weight: 500;
+            color: <?= $textSecondary ?>;
+        }
+        
+        /* 目录样式 */
+        #<?= $instanceId ?> .legal-toc {
+            background: <?= $sectionBg2 ?>;
+            border-radius: 10px;
+            padding: 25px 30px;
+            margin-bottom: 35px;
+            border: 1px solid <?= $borderLight ?>;
+        }
+        #<?= $instanceId ?> .legal-toc h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #<?= $instanceId ?> .legal-toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            columns: 2;
+            column-gap: 30px;
+        }
+        #<?= $instanceId ?> .legal-toc li {
+            margin-bottom: 8px;
+            break-inside: avoid;
+        }
+        #<?= $instanceId ?> .legal-toc a {
+            color: <?= $textSecondary ?>;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #<?= $instanceId ?> .legal-toc a:hover {
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .legal-toc a::before {
+            content: '›';
+            color: <?= $accentPrimary ?>;
+            font-weight: bold;
+        }
+        
+        /* 内容样式 */
+        #<?= $instanceId ?> .legal-body {
+            font-size: 1rem;
+            line-height: 1.9;
+            color: <?= $textSecondary ?>;
+        }
+        #<?= $instanceId ?> .legal-body h2 {
+            font-size: 1.5rem;
+            margin-top: 45px;
+            margin-bottom: 20px;
+            color: <?= $accentPrimary ?>;
+            padding-bottom: 12px;
+            border-bottom: 2px solid <?= $borderLight ?>;
+            scroll-margin-top: 100px;
+        }
+        #<?= $instanceId ?> .legal-body h3 {
+            font-size: 1.25rem;
+            margin-top: 30px;
+            margin-bottom: 12px;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .legal-body p {
+            margin-bottom: 18px;
+        }
+        #<?= $instanceId ?> .legal-body ul,
+        #<?= $instanceId ?> .legal-body ol {
+            margin-bottom: 18px;
+            padding-left: 25px;
+        }
+        #<?= $instanceId ?> .legal-body li {
+            margin-bottom: 10px;
+        }
+        #<?= $instanceId ?> .legal-body strong {
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .legal-body a {
+            color: <?= $accentPrimary ?>;
+            text-decoration: underline;
+        }
+        #<?= $instanceId ?> .legal-body blockquote {
+            border-left: 4px solid <?= $accentPrimary ?>;
+            padding: 15px 20px;
+            background: <?= $sectionBg2 ?>;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        #<?= $instanceId ?> .legal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        #<?= $instanceId ?> .legal-body th,
+        #<?= $instanceId ?> .legal-body td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid <?= $borderLight ?>;
+        }
+        #<?= $instanceId ?> .legal-body th {
+            background: <?= $sectionBg2 ?>;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> {
+                padding: 40px 0;
+            }
+            #<?= $instanceId ?> .tpmst-section-inner {
+                padding: 0 15px;
+            }
+            #<?= $instanceId ?> .legal-wrapper {
+                padding: 30px 25px;
+            }
+            #<?= $instanceId ?> .legal-title {
+                font-size: 1.75rem;
+            }
+            #<?= $instanceId ?> .legal-toc ul {
+                columns: 1;
+            }
+        }
+    </style>
+    
+    <div class="tpmst-section-inner">
+    <div class="legal-wrapper">
+        <header class="legal-header">
+            <h1 class="legal-title">
+                <span class="legal-icon"><?= $currentIcon ?></span>
+                <?= htmlspecialchars($pageTitle) ?>
+            </h1>
+            <?php if ($showLastUpdated && $lastUpdated): ?>
+            <p class="legal-updated">
+                <?= __('最后更新') ?>: <time datetime="<?= date('Y-m-d', strtotime($lastUpdated)) ?>"><?= date('Y年n月j日', strtotime($lastUpdated)) ?></time>
+            </p>
+            <?php endif; ?>
+        </header>
+        
+        <?php if ($showToc && $pageContent): ?>
+        <?php
+        // 从内容中提取 h2 标题生成目录
+        preg_match_all('/<h2[^>]*>(.*?)<\/h2>/i', $pageContent, $matches);
+        if (!empty($matches[1])): ?>
+        <nav class="legal-toc">
+            <h4>📑 <?= __('目录') ?></h4>
+            <ul>
+                <?php foreach ($matches[1] as $index => $heading): 
+                    $headingId = 'section-' . ($index + 1);
+                ?>
+                <li><a href="#<?= $headingId ?>"><?= strip_tags($heading) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php
+        // 为 h2 添加 id
+        $contentWithIds = preg_replace_callback('/<h2([^>]*)>(.*?)<\/h2>/i', function($m) {
+            static $counter = 0;
+            $counter++;
+            return '<h2' . $m[1] . ' id="section-' . $counter . '">' . $m[2] . '</h2>';
+        }, $pageContent);
+        $pageContent = $contentWithIds;
+        endif;
+        ?>
+        <?php endif; ?>
+        
+        <div class="legal-body">
+            <?= $pageContent ?>
+        </div>
+    </div>
+    </div>
+</section>

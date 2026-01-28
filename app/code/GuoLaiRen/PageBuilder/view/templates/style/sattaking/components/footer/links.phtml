@@ -1,0 +1,213 @@
+<?php
+/**
+ * Satta King 786 - Footer Links Component
+ * 
+ * 页脚链接区域，简洁的品牌信息和导航链接
+ * 基于 https://www.insattaking786.com/ 原网站结构
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:brand => 品牌设置
+ * brand.name => 品牌名称:text:Satta King 786
+ * brand.description => 品牌描述:textarea:An informational guide to satta king formats, schedules, and Android access. Always check local laws and follow responsible play practices.
+ * brand.show_logo => 显示Logo:select:yes|yes,no
+ * 
+ * group:links => 链接设置
+ * links.items => 导航链接:textarea:Download App=>#download\r\nGames=>#games\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * links.style => 链接样式:select:inline|inline,grid|inline=一行显示,grid=网格显示
+ * 
+ * group:copyright => 版权设置
+ * copyright.text => 底部标语:text:Designed for clarity, speed, and compliance-first guidance.
+ * copyright.show_year => 显示年份:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$footerBg = $colors['footer_bg'] ?? '#08081a';
+$footerText = $colors['footer_text'] ?? '#6b6b8a';
+$footerLink = $colors['footer_link'] ?? '#b8b8d0';
+$footerLinkHover = $colors['footer_link_hover'] ?? '#a855f7';
+$footerBorder = $colors['footer_border'] ?? 'rgba(255, 255, 255, 0.06)';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)';
+
+// 品牌配置
+$brandName = $config['brand.name'] ?? 'Satta King 786';
+$brandDesc = $config['brand.description'] ?? 'An informational guide to satta king formats, schedules, and Android access. Always check local laws and follow responsible play practices.';
+$showLogo = ($config['brand.show_logo'] ?? 'yes') !== 'no';
+
+// 链接配置
+$linksRaw = $config['links.items'] ?? "Download App=>#download\nGames=>#games\nFAQ=>#faq\nContact=>/contact";
+$linksStyle = $config['links.style'] ?? 'inline';
+
+// 解析链接
+$parseLinks = function($raw) {
+    $links = [];
+    $lines = preg_split('/[\r\n]+/', $raw);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        
+        if (!empty($name)) {
+            $links[] = ['name' => $name, 'url' => $url];
+        }
+    }
+    return $links;
+};
+
+$navLinks = $parseLinks($linksRaw);
+
+// 版权配置
+$copyrightText = $config['copyright.text'] ?? 'Designed for clarity, speed, and compliance-first guidance.';
+$showYear = ($config['copyright.show_year'] ?? 'yes') !== 'no';
+
+$currentYear = date('Y');
+$instanceId = 'sk-footer-' . uniqid();
+?>
+
+<footer class="sk-footer" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $footerBg ?>;
+            padding: 60px 0 40px;
+            border-top: 1px solid <?= $footerBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+            text-align: center;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-brand {
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-logo-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: #ffffff;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-brand-desc {
+            font-size: 0.9rem;
+            color: <?= $footerText ?>;
+            line-height: 1.7;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin: 32px 0;
+            padding: 24px 0;
+            border-top: 1px solid <?= $footerBorder ?>;
+            border-bottom: 1px solid <?= $footerBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-link {
+            font-size: 0.9rem;
+            color: <?= $footerLink ?>;
+            transition: color 0.3s ease;
+            padding: 4px 0;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-link:hover {
+            color: <?= $footerLinkHover ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-bottom {
+            font-size: 0.85rem;
+            color: <?= $footerText ?>;
+            line-height: 1.6;
+        }
+        
+        #<?= $instanceId ?> .sk-footer-tagline {
+            font-style: italic;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .sk-footer-links {
+                gap: 16px;
+            }
+            
+            #<?= $instanceId ?> .sk-footer-logo {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+    
+    <div class="sk-footer-container">
+        <!-- Brand Section -->
+        <div class="sk-footer-brand">
+            <?php if ($showLogo): ?>
+            <div class="sk-footer-logo">
+                <span class="sk-footer-logo-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </span>
+                <span><?= htmlspecialchars($brandName) ?></span>
+            </div>
+            <?php else: ?>
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 16px;"><?= htmlspecialchars($brandName) ?></h3>
+            <?php endif; ?>
+            
+            <p class="sk-footer-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+        </div>
+        
+        <!-- Navigation Links -->
+        <?php if (!empty($navLinks)): ?>
+        <nav class="sk-footer-links">
+            <?php foreach ($navLinks as $link): ?>
+            <a href="<?= htmlspecialchars($link['url']) ?>" class="sk-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+            <?php endforeach; ?>
+        </nav>
+        <?php endif; ?>
+        
+        <!-- Bottom Tagline -->
+        <div class="sk-footer-bottom">
+            <p class="sk-footer-tagline"><?= htmlspecialchars($copyrightText) ?></p>
+        </div>
+    </div>
+</footer>

@@ -1,0 +1,282 @@
+<?php
+/**
+ * Content 容器部件模板
+ * 
+ * 定义主内容区域布局和内部插槽位置
+ * 子部件会自动渲染到对应的插槽中
+ * 支持多种布局：全宽、带左侧栏、带右侧栏、双侧栏
+ * 
+ * @var array $config 部件配置
+ * @var array $children 子部件（按插槽分组）
+ */
+
+$layout = $config['layout'] ?? 'full-width';
+$sidebarWidth = $config['sidebar_width'] ?? '25';
+$containerWidth = $config['container_width'] ?? 'container';
+
+// 子部件数据（由渲染器注入）
+$children = $children ?? [];
+
+// 计算主内容区宽度
+$contentWidth = 100;
+if ($layout === 'with-left' || $layout === 'with-right') {
+    $contentWidth = 100 - (int)$sidebarWidth;
+} elseif ($layout === 'with-both') {
+    $contentWidth = 100 - ((int)$sidebarWidth * 2);
+}
+?>
+<main class="widget-content-container layout-<?= htmlspecialchars($layout) ?>" 
+      data-layout="<?= htmlspecialchars($layout) ?>">
+    
+    <div class="<?= htmlspecialchars($containerWidth) ?>">
+        
+        <!-- Hero 区域（全宽顶部） -->
+        <section class="content-slot slot-hero" data-slot="hero" data-accept="hero-slider,promo-banner" data-exclusive="true">
+            <?php if (!empty($children['hero'])): ?>
+                <?php foreach ($children['hero'] as $child): ?>
+                    <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <?= $child['html'] ?? '' ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="slot-placeholder slot-placeholder-large">
+                    <i class="ri-slideshow-3-line"></i>
+                    <span>Hero 轮播区域</span>
+                    <small>拖放轮播图或促销横幅到此处</small>
+                </div>
+            <?php endif; ?>
+        </section>
+        
+        <!-- 推荐区域（全宽） -->
+        <section class="content-slot slot-featured" data-slot="featured" data-accept="featured-products,category-grid,deals-of-day">
+            <?php if (!empty($children['featured'])): ?>
+                <?php foreach ($children['featured'] as $child): ?>
+                    <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <?= $child['html'] ?? '' ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="slot-placeholder">
+                    <i class="ri-star-line"></i>
+                    <span>推荐区域</span>
+                    <small>推荐产品、分类网格或特价商品</small>
+                </div>
+            <?php endif; ?>
+        </section>
+        
+        <!-- 主内容区域 (带侧栏布局) -->
+        <div class="content-body">
+            
+            <?php if ($layout === 'with-left' || $layout === 'with-both'): ?>
+            <!-- 左侧栏 -->
+            <aside class="content-slot slot-sidebar-left" 
+                   data-slot="sidebar-left" 
+                   data-accept="category-filters,category-list,sidebar-menu,sidebar-ads"
+                   style="flex: 0 0 <?= $sidebarWidth ?>%;">
+                <?php if (!empty($children['sidebar-left'])): ?>
+                    <?php foreach ($children['sidebar-left'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder slot-placeholder-vertical">
+                        <i class="ri-layout-left-line"></i>
+                        <span>左侧栏</span>
+                        <small>筛选、菜单、广告</small>
+                    </div>
+                <?php endif; ?>
+            </aside>
+            <?php endif; ?>
+            
+            <!-- 主内容区 -->
+            <section class="content-slot slot-main" 
+                     data-slot="main" 
+                     data-accept="*"
+                     style="flex: 1;">
+                <?php if (!empty($children['main'])): ?>
+                    <?php foreach ($children['main'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder slot-placeholder-large">
+                        <i class="ri-layout-masonry-line"></i>
+                        <span>主内容区</span>
+                        <small>产品列表、文章、自定义内容</small>
+                    </div>
+                <?php endif; ?>
+            </section>
+            
+            <?php if ($layout === 'with-right' || $layout === 'with-both'): ?>
+            <!-- 右侧栏 -->
+            <aside class="content-slot slot-sidebar-right" 
+                   data-slot="sidebar-right" 
+                   data-accept="mini-cart,recently-viewed,sidebar-newsletter,sidebar-social,tags-cloud"
+                   style="flex: 0 0 <?= $sidebarWidth ?>%;">
+                <?php if (!empty($children['sidebar-right'])): ?>
+                    <?php foreach ($children['sidebar-right'] as $child): ?>
+                        <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                            <?= $child['html'] ?? '' ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="slot-placeholder slot-placeholder-vertical">
+                        <i class="ri-layout-right-line"></i>
+                        <span>右侧栏</span>
+                        <small>购物车、最近浏览、订阅</small>
+                    </div>
+                <?php endif; ?>
+            </aside>
+            <?php endif; ?>
+            
+        </div>
+        
+        <!-- 底部区域（全宽） -->
+        <section class="content-slot slot-bottom" data-slot="bottom" data-accept="testimonials,brand-logos,faq-accordion,trust-badges">
+            <?php if (!empty($children['bottom'])): ?>
+                <?php foreach ($children['bottom'] as $child): ?>
+                    <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
+                        <?= $child['html'] ?? '' ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="slot-placeholder">
+                    <i class="ri-layout-bottom-line"></i>
+                    <span>底部区域</span>
+                    <small>客户评价、品牌Logo、FAQ等</small>
+                </div>
+            <?php endif; ?>
+        </section>
+        
+    </div>
+    
+</main>
+
+<style>
+.widget-content-container {
+    width: 100%;
+    padding: 20px 0;
+}
+
+.widget-content-container > .container,
+.widget-content-container > .container-fluid,
+.widget-content-container > .container-lg {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.widget-content-container > .container-fluid {
+    max-width: 100%;
+}
+
+/* Hero 区域 */
+.slot-hero {
+    margin-bottom: 30px;
+}
+
+/* 推荐区域 */
+.slot-featured {
+    margin-bottom: 30px;
+}
+
+/* 主内容区域布局 */
+.content-body {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+/* 侧栏样式 */
+.slot-sidebar-left,
+.slot-sidebar-right {
+    flex-shrink: 0;
+}
+
+/* 主内容区 */
+.slot-main {
+    min-height: 400px;
+}
+
+/* 底部区域 */
+.slot-bottom {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* 插槽通用样式 */
+.content-slot {
+    position: relative;
+    min-height: 50px;
+}
+
+/* 插槽占位符 */
+.slot-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 30px 20px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    color: #999;
+    font-size: 14px;
+    background: rgba(0,0,0,0.02);
+    text-align: center;
+}
+
+.slot-placeholder i {
+    font-size: 32px;
+    opacity: 0.5;
+}
+
+.slot-placeholder small {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.slot-placeholder-large {
+    min-height: 200px;
+}
+
+.slot-placeholder-vertical {
+    min-height: 300px;
+}
+
+/* 编辑模式下高亮插槽 */
+.content-slot[data-slot]:hover {
+    outline: 2px dashed #007bff;
+    outline-offset: 2px;
+}
+
+.slot-widget {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.slot-widget:last-child {
+    margin-bottom: 0;
+}
+
+/* 响应式布局 */
+@media (max-width: 992px) {
+    .content-body {
+        flex-wrap: wrap;
+    }
+    
+    .slot-sidebar-left,
+    .slot-sidebar-right {
+        flex: 0 0 100% !important;
+        order: 2;
+    }
+    
+    .slot-main {
+        order: 1;
+        flex: 0 0 100%;
+    }
+}
+</style>

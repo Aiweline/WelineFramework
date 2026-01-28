@@ -1,0 +1,63 @@
+{
+    "page_type": "games_page",
+    "name": "Games页面布局",
+    "description": "Satta King 786 主题 Games 页面布局，包含游戏列表、格式说明和时间安排",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-full",
+                "config": {
+                    "content.badge": "Game Index",
+                    "content.title": "Major satta king market categories",
+                    "content.description": "Each market has its own timing and result format. Use this guide to understand the labels you see in satta listings.",
+                    "games.items": "Gali|Late-night market known for concise result windows and rapid updates.|🌙\nDesawar|Morning-focused schedule with single and jodi emphasis.|☀️\nFaridabad|Structured rounds with documented historical results.|📈\nGhaziabad|Often listed with detailed pana breakdowns and fixed closing times.|📊\nDelhi Bazaar|Multiple daily rounds with larger archive depth.|🏛️\nShri Ganesh|Listed in select schedules with varied result formats.|🕉️"
+                }
+            },
+            {
+                "code": "platform",
+                "enabled": true,
+                "instance_id": "format-breakdown",
+                "config": {
+                    "content.badge": "Format Breakdown",
+                    "content.title": "Standard result notation used in satta",
+                    "content.description": "Most satta king 786 listings use the same notation. This section explains the basics for new readers.",
+                    "features.items": "Single|One digit result shown for a market round. Typical display: 7|1️⃣\nJodi|Two digit pairing created from open and close digits. Typical display: 34|2️⃣\nPanna|Three digit group used to describe detailed outcomes. Typical display: 158|3️⃣\nMorning rounds|Often include Desawar and other early listings with compact windows.|🌅\nEvening rounds|Larger markets publish results later with longer time slots.|🌆\nOpen/Close status|Indicates market activity state and triggers result updates.|🔄"
+                }
+            },
+            {
+                "code": "benefits",
+                "enabled": true,
+                "instance_id": "responsible-use",
+                "config": {
+                    "content.badge": "Responsible Use",
+                    "content.title": "Keep satta information in context",
+                    "content.description": "This site documents formats and schedules for satta king audiences. It does not promote winnings or financial outcomes.",
+                    "benefits.items": "Know the rules|Review each market's listed rules, timing notes, and format legend before engaging with any satta content.|📖\nCheck local regulations|Regulations vary by region. Use the platform only where permitted and follow age requirements.|⚖️"
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {}
+            }
+        ]
+    }
+}

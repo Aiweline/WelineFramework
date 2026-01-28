@@ -1,0 +1,37 @@
+{
+    "page_type": "custom_page",
+    "name": "自定义页面默认布局",
+    "description": "Satta King 786 主题自定义页面布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "logo.width": 40,
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact",
+                    "navigation.show_cta": "no"
+                }
+            }
+        ],
+        "content": [],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {
+                    "brand.name": "Satta King 786",
+                    "brand.description": "An informational guide to satta king formats, schedules, and Android access.",
+                    "links.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact=>/contact",
+                    "copyright.text": "Designed for clarity, speed, and compliance-first guidance."
+                }
+            }
+        ]
+    },
+    "notes": "自定义页面，content区域为空，可由用户自行配置"
+}

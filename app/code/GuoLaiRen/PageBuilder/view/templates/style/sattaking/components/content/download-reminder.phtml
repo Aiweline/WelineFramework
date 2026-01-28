@@ -1,0 +1,271 @@
+<?php
+/**
+ * Satta King 786 - Download Reminder Component
+ * 
+ * 下载提醒区块，引导用户下载应用
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 顶部徽章:text:Download Reminder
+ * content.title => 标题:text:Keep satta updates organized on Android
+ * content.description => 描述:textarea:Use the app to track satta king rounds and review the satta king 786 format library in one place. No hype, just clarity.
+ * 
+ * group:buttons => 按钮设置
+ * buttons.primary_text => 主按钮文字:text:Download for Android
+ * buttons.primary_url => 主按钮链接:text:#download
+ * buttons.secondary_text => 次按钮文字:text:Read FAQ
+ * buttons.secondary_url => 次按钮链接:text:#faq
+ * buttons.show_secondary => 显示次按钮:select:yes|yes,no
+ * 
+ * group:style => 样式设置
+ * style.bg_gradient_start => 渐变开始色:color:#1a1a3e
+ * style.bg_gradient_end => 渐变结束色:color:#0f0f2e
+ * style.title_color => 标题颜色:color:#ffffff
+ * style.text_color => 文字颜色:color:#b8b8d0
+ * style.padding => 内边距:number:80|px
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a855f7';
+$accentSecondary = $colors['accent_secondary'] ?? '#3b82f6';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)';
+$buttonSecondaryBorder = $colors['button_secondary_border'] ?? '#7c3aed';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'Download Reminder';
+$title = $config['content.title'] ?? 'Keep satta updates organized on Android';
+$description = $config['content.description'] ?? 'Use the app to track satta king rounds and review the satta king 786 format library in one place. No hype, just clarity.';
+
+// 按钮配置
+$primaryText = $config['buttons.primary_text'] ?? 'Download for Android';
+$primaryUrl = $config['buttons.primary_url'] ?? '#download';
+$secondaryText = $config['buttons.secondary_text'] ?? 'Read FAQ';
+$secondaryUrl = $config['buttons.secondary_url'] ?? '#faq';
+$showSecondary = ($config['buttons.show_secondary'] ?? 'yes') !== 'no';
+
+// 样式配置
+$bgGradientStart = $config['style.bg_gradient_start'] ?? ($colors['section_bg_2'] ?? '#1a1a3e');
+$bgGradientEnd = $config['style.bg_gradient_end'] ?? ($colors['section_bg_3'] ?? '#0f0f2e');
+$titleColor = $config['style.title_color'] ?? ($colors['text_primary'] ?? '#ffffff');
+$textColor = $config['style.text_color'] ?? ($colors['text_secondary'] ?? '#b8b8d0');
+$padding = $config['style.padding'] ?? '80';
+
+$instanceId = 'sk-download-reminder-' . uniqid();
+?>
+
+<section class="sk-download-reminder" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: linear-gradient(135deg, <?= $bgGradientStart ?> 0%, <?= $bgGradientEnd ?> 100%);
+            padding: <?= intval($padding) ?>px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?>::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 50%, rgba(124, 58, 237, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?>::after {
+            content: '';
+            position: absolute;
+            bottom: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 70% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-badge svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $titleColor ?>;
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-desc {
+            font-size: 1.125rem;
+            color: <?= $textColor ?>;
+            line-height: 1.7;
+            margin-bottom: 32px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn-primary {
+            background: <?= $buttonPrimaryBg ?>;
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(124, 58, 237, 0.5);
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn-primary svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn-secondary {
+            background: transparent;
+            color: <?= $accentPrimaryLight ?>;
+            border: 2px solid <?= $buttonSecondaryBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-btn-secondary:hover {
+            background: rgba(124, 58, 237, 0.1);
+            border-color: <?= $accentPrimaryLight ?>;
+        }
+        
+        /* 装饰元素 */
+        #<?= $instanceId ?> .sk-dr-decor {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, <?= $accentPrimary ?>20, <?= $accentSecondary ?>10);
+            filter: blur(60px);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-decor-1 {
+            width: 300px;
+            height: 300px;
+            top: -100px;
+            left: -100px;
+        }
+        
+        #<?= $instanceId ?> .sk-dr-decor-2 {
+            width: 250px;
+            height: 250px;
+            bottom: -80px;
+            right: -80px;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> {
+                padding: <?= intval($padding) * 0.75 ?>px 0;
+            }
+            
+            #<?= $instanceId ?> .sk-dr-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .sk-dr-desc {
+                font-size: 1rem;
+            }
+            
+            #<?= $instanceId ?> .sk-dr-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            #<?= $instanceId ?> .sk-dr-btn {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+    
+    <!-- 装饰元素 -->
+    <div class="sk-dr-decor sk-dr-decor-1"></div>
+    <div class="sk-dr-decor sk-dr-decor-2"></div>
+    
+    <div class="sk-dr-container">
+        <div class="sk-dr-badge">
+            <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+            <?= htmlspecialchars($badge) ?>
+        </div>
+        
+        <h2 class="sk-dr-title"><?= htmlspecialchars($title) ?></h2>
+        
+        <p class="sk-dr-desc"><?= htmlspecialchars($description) ?></p>
+        
+        <div class="sk-dr-buttons">
+            <a href="<?= htmlspecialchars($primaryUrl) ?>" class="sk-dr-btn sk-dr-btn-primary">
+                <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                <?= htmlspecialchars($primaryText) ?>
+            </a>
+            
+            <?php if ($showSecondary): ?>
+            <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="sk-dr-btn sk-dr-btn-secondary">
+                <?= htmlspecialchars($secondaryText) ?>
+            </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
