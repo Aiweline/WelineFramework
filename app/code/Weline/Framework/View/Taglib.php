@@ -2688,6 +2688,13 @@ class Taglib
             'css', 'js', 'url', 'frontend-url', 'backend-url', 'backend-api', 'api',
             'template', 'include', 'static', 'theme:css', 'theme:js', 'theme:template'
         ];
+        
+        // 强制运行时执行的标签（避免编译时递归）
+        $runtimeOnlyTags = ['acl'];
+        if (in_array($node->name, $runtimeOnlyTags, true)) {
+            return self::STAGE_RUNTIME;
+        }
+        
         $hasDynamicAttrs = $this->isAttributesDynamic($node->attributes);
         $hasDynamicChildren = $this->isNodesDynamic($node->children);
         $hasDynamicInline = ($node->tagKey === '@tag()' || $node->tagKey === '@tag{}')
