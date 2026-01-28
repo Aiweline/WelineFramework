@@ -353,7 +353,8 @@ class Countries extends BaseController
                 ->fetch();
             if ($this->countries->getId()) {
                 $this->countries->setData($this->countries::fields_IS_INSTALL, 0)->save(true);
-                $this->countries->getLocaleModel()->where(Locale::fields_COUNTRY_CODE, $code)
+                // 使用 clearQuery() 清除之前可能存在的 join 条件，避免 PostgreSQL UPDATE 语句报错
+                $this->countries->getLocaleModel()->clearQuery()->where(Locale::fields_COUNTRY_CODE, $code)
                     ->update([Locale::fields_IS_INSTALL => 0, Locale::fields_IS_ACTIVE => 0])
                     ->fetch();
                 $this->getMessageManager()->addSuccess(__('成功卸载!国家：%{1}(%{2})', [$this->countries->getData(Name::fields_DISPLAY_NAME),
