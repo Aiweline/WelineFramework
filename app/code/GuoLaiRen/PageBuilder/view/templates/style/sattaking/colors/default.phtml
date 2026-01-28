@@ -1,0 +1,121 @@
+<?php
+/**
+ * Satta King 786 模板 - 默认色系配置（深紫蓝渐变系）
+ * 基于 insattaking786.com 网站风格，现代深色主题
+ * 
+ * SCHEME_NAME: default
+ * SCHEME_DISPLAY_NAME: 深紫蓝主题（默认）
+ * SCHEME_DESCRIPTION: 现代深紫蓝渐变风格，适合信息平台、游戏指南类网站
+ */
+
+$colors = [
+    // ========== 主背景色 ==========
+    'body_bg' => '#0a0a1a',                    // Body背景色（深黑蓝）
+    'hero_bg' => 'linear-gradient(135deg, #1a1a3e 0%, #0f0f2e 50%, #0a0a1a 100%)', // Hero渐变背景
+    'hero_bg_start' => '#1a1a3e',              // Hero渐变开始色
+    'hero_bg_end' => '#0a0a1a',                // Hero渐变结束色
+    'nav_bg' => 'rgba(10, 10, 26, 0.95)',      // 导航栏背景色（半透明深黑蓝）
+    'nav_bg_scrolled' => 'rgba(10, 10, 26, 0.98)', // 滚动时导航栏背景
+    'section_bg_1' => '#0f0f1f',               // 区块背景1（深蓝黑）
+    'section_bg_2' => '#141428',               // 区块背景2（稍浅蓝黑）
+    'section_bg_3' => '#1a1a35',               // 区块背景3（蓝紫调）
+    'section_bg_4' => '#0c0c1e',               // 区块背景4（最深）
+    'card_bg' => 'rgba(255, 255, 255, 0.03)',  // 卡片背景（极淡白）
+    'card_bg_hover' => 'rgba(255, 255, 255, 0.06)', // 卡片悬停背景
+    'card_bg_gradient' => 'linear-gradient(145deg, rgba(30, 30, 60, 0.5) 0%, rgba(20, 20, 40, 0.3) 100%)', // 卡片渐变
+    'footer_bg' => '#08081a',                  // Footer背景色
+    
+    // ========== 文字颜色 ==========
+    'text_primary' => '#ffffff',               // 主文字颜色（白色）
+    'text_secondary' => '#b8b8d0',             // 次要文字颜色（淡紫灰）
+    'text_muted' => '#6b6b8a',                 // 弱化文字颜色（暗紫灰）
+    'text_dark' => '#1a1a2e',                  // 深色文字（用于浅色背景）
+    
+    // ========== 强调色（紫蓝渐变系） ==========
+    'accent_primary' => '#7c3aed',             // 主强调色（亮紫色）
+    'accent_primary_light' => '#a855f7',       // 浅紫色
+    'accent_primary_dark' => '#5b21b6',        // 深紫色
+    'accent_secondary' => '#3b82f6',           // 次强调色（蓝色）
+    'accent_secondary_light' => '#60a5fa',     // 浅蓝色
+    'accent_gradient' => 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)', // 紫蓝渐变
+    'accent_gradient_hover' => 'linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)', // 悬停渐变
+    
+    // ========== 导航栏颜色 ==========
+    'nav_text' => '#ffffff',                   // 导航文字颜色
+    'nav_link' => '#b8b8d0',                   // 导航链接颜色
+    'nav_link_hover' => '#a855f7',             // 导航链接悬停颜色
+    'nav_link_active' => '#7c3aed',            // 导航链接激活颜色
+    
+    // ========== 按钮颜色 ==========
+    'button_primary_bg' => 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)', // 主按钮背景
+    'button_primary_bg_hover' => 'linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)', // 主按钮悬停背景
+    'button_primary_text' => '#ffffff',        // 主按钮文字颜色
+    'button_primary_shadow' => 'rgba(124, 58, 237, 0.4)', // 主按钮阴影
+    'button_primary_shadow_hover' => 'rgba(124, 58, 237, 0.6)', // 主按钮悬停阴影
+    'button_secondary_bg' => 'transparent',    // 次按钮背景
+    'button_secondary_border' => '#7c3aed',    // 次按钮边框
+    'button_secondary_text' => '#a855f7',      // 次按钮文字
+    
+    // ========== 标题和强调文字 ==========
+    'heading_color' => '#ffffff',              // 标题颜色
+    'heading_color_accent' => '#a855f7',       // 强调标题颜色（紫色）
+    'heading_gradient' => 'linear-gradient(135deg, #ffffff 0%, #a855f7 100%)', // 标题渐变
+    'link_color' => '#60a5fa',                 // 链接颜色（蓝色）
+    'link_hover_color' => '#a855f7',           // 链接悬停颜色（紫色）
+    
+    // ========== 边框和分割线 ==========
+    'border_light' => 'rgba(255, 255, 255, 0.08)', // 浅边框
+    'border_default' => 'rgba(255, 255, 255, 0.12)', // 默认边框
+    'border_accent' => 'rgba(124, 58, 237, 0.3)', // 强调边框
+    'divider_color' => 'rgba(255, 255, 255, 0.06)', // 分割线颜色
+    
+    // ========== 卡片和区块 ==========
+    'card_border' => 'rgba(255, 255, 255, 0.08)', // 卡片边框
+    'card_border_hover' => 'rgba(124, 58, 237, 0.4)', // 卡片悬停边框
+    'card_shadow' => '0 4px 24px rgba(0, 0, 0, 0.3)', // 卡片阴影
+    'card_shadow_hover' => '0 8px 32px rgba(124, 58, 237, 0.2)', // 卡片悬停阴影
+    'section_title_color' => '#ffffff',        // 区块标题颜色
+    
+    // ========== 特殊区域背景 ==========
+    'hero_overlay' => 'linear-gradient(180deg, rgba(10, 10, 26, 0) 0%, rgba(10, 10, 26, 0.8) 100%)', // Hero遮罩
+    'features_bg' => '#0f0f1f',                // 特性区域背景
+    'games_bg' => '#141428',                   // 游戏区域背景
+    'benefits_bg' => '#0f0f1f',                // 优势区域背景
+    'faq_bg' => '#0c0c1e',                     // FAQ区域背景
+    'download_bg' => 'linear-gradient(135deg, #1a1a3e 0%, #0f0f2e 100%)', // 下载区域背景
+    
+    // ========== 图标和装饰 ==========
+    'icon_bg' => 'linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)', // 图标背景
+    'icon_color' => '#a855f7',                 // 图标颜色
+    'badge_bg' => 'rgba(124, 58, 237, 0.2)',   // 徽章背景
+    'badge_text' => '#a855f7',                 // 徽章文字
+    
+    // ========== 表单颜色 ==========
+    'input_bg' => 'rgba(255, 255, 255, 0.05)', // 输入框背景
+    'input_border' => 'rgba(255, 255, 255, 0.1)', // 输入框边框
+    'input_border_focus' => '#7c3aed',         // 输入框聚焦边框
+    'input_text' => '#ffffff',                 // 输入框文字
+    'input_placeholder' => '#6b6b8a',          // 输入框占位符
+    
+    // ========== Footer颜色 ==========
+    'footer_text' => '#6b6b8a',                // Footer文字颜色
+    'footer_link' => '#b8b8d0',                // Footer链接颜色
+    'footer_link_hover' => '#a855f7',          // Footer链接悬停颜色
+    'footer_border' => 'rgba(255, 255, 255, 0.06)', // Footer边框
+    
+    // ========== 阴影和效果 ==========
+    'shadow_sm' => '0 2px 8px rgba(0, 0, 0, 0.2)',
+    'shadow_md' => '0 4px 16px rgba(0, 0, 0, 0.3)',
+    'shadow_lg' => '0 8px 32px rgba(0, 0, 0, 0.4)',
+    'shadow_glow' => '0 0 40px rgba(124, 58, 237, 0.3)', // 紫色发光
+    'shadow_glow_blue' => '0 0 40px rgba(59, 130, 246, 0.3)', // 蓝色发光
+    
+    // ========== 动画相关 ==========
+    'transition_fast' => '0.15s ease',
+    'transition_normal' => '0.3s ease',
+    'transition_slow' => '0.5s ease',
+    
+    // ========== CSS变量 ==========
+    'base_main_color' => '#7c3aed',            // 主色调
+    'base_secondary_color' => '#3b82f6',       // 次色调
+];

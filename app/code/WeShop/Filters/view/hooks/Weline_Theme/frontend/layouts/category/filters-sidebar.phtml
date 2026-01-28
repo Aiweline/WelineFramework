@@ -1,0 +1,235 @@
+<?php
+/**
+ * 分类页面筛选侧边栏 Hook
+ * 
+ * 替换 Weline_Theme 中的 category-filters widget 的 mock 内容
+ * 
+ * @hook-priority 200
+ * @hook-sort-order 1
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+use WeShop\Filters\Service\FilterService;
+use WeShop\Filters\Service\FilterUrlService;
+use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Model\Product;
+use WeShop\Catalog\Service\CategoryService;
+use Weline\Framework\Manager\ObjectManager;
+
+// 获取当前分类数据
+$categoriesData = $this->request->getData('categories') ?? [];
+$category = $this->request->getData('category') ?? [];
+$categoryId = (int)($category['category_id'] ?? $categoriesData['current']['category_id'] ?? 0);
+
+// Debug output
+$debug = true;
+if ($debug) {
+    echo '<div class="debug-filters-info" style="color:#333;padding:10px;background:#ffffcc;margin:10px 0;font-size:12px;">';
+    echo '<strong>Filter Debug:</strong><br>';
+    echo 'categoryId: ' . $categoryId . '<br>';
+    echo 'category keys: ' . (empty($category) ? 'empty' : implode(', ', array_keys($category))) . '<br>';
+    echo 'categoriesData keys: ' . (empty($categoriesData) ? 'empty' : implode(', ', array_keys($categoriesData))) . '<br>';
+    echo '</div>';
+}
+
+if ($categoryId <= 0) {
+    if ($debug) {
+        echo '<div style="color:orange;padding:10px;">categoryId is 0, returning early</div>';
+    }
+    return;
+}
+
+// 获取分类下的产品ID
+try {
+    /** @var CategoryService $categoryService */
+    $categoryService = ObjectManager::getInstance(CategoryService::class);
+    $categoryIds = $categoryService->getAllDescendantCategoryIds($categoryId);
+    $categoryIds[] = $categoryId;
+    
+    /** @var ProductCategory $productCategory */
+    $productCategory = ObjectManager::getInstance(ProductCategory::class);
+    $productCategory->reset()
+        ->fields('DISTINCT ' . ProductCategory::fields_product_id)
+        ->where(ProductCategory::fields_category_id, $categoryIds, 'in')
+        ->joinProduct()
+        ->where('product.' . Product::fields_status, 1);
+    
+    $results = $productCategory->select()->fetchArray();
+    $productIds = array_column($results, ProductCategory::fields_product_id);
+    
+    if (empty($productIds)) {
+        if ($debug) {
+            echo '<div style="color:orange;padding:10px;">No products in category, returning early</div>';
+        }
+        return;
+    }
+    
+    if ($debug) {
+        echo '<div style="padding:5px;background:#e0ffe0;">Found ' . count($productIds) . ' products</div>';
+    }
+    
+    // 获取筛选服务
+    /** @var FilterService $filterService */
+    $filterService = ObjectManager::getInstance(FilterService::class);
+    
+    /** @var FilterUrlService $urlService */
+    $urlService = ObjectManager::getInstance(FilterUrlService::class);
+    
+    // 获取URL中的筛选参数
+    $filterParams = $urlService->getFilterParams();
+    
+    // 获取筛选结果
+    $filterResult = $filterService->getFilterResult($categoryId, $productIds, $filterParams);
+    
+    // 获取筛选数据
+    $filters = $filterResult->getFilters();
+    $appliedFilters = $filterResult->getAppliedFilters();
+    $clearAllUrl = $filterResult->getClearAllUrl();
+    
+    // 更新筛选后的产品ID到 request，供产品列表使用
+    $filteredProductIds = $filterResult->getProductIds();
+    $this->request->setData('filtered_product_ids', $filteredProductIds);
+    
+} catch (\Throwable $e) {
+    // 筛选服务不可用，显示错误信息
+    echo '<div class="debug-filters-error" style="color:red;padding:10px;background:#ffe0e0;margin:10px 0;">';
+    echo '<strong>Filter Error:</strong> ' . htmlspecialchars($e->getMessage());
+    echo '<br><small>' . htmlspecialchars($e->getFile() . ':' . $e->getLine()) . '</small>';
+    echo '</div>';
+    return;
+}
+
+if ($debug) {
+    echo '<div style="padding:5px;background:#e0e0ff;">Filters count: ' . count($filters) . ', Applied filters: ' . count($appliedFilters) . '</div>';
+}
+
+if (empty($filters) && empty($appliedFilters)) {
+    if ($debug) {
+        echo '<div style="color:orange;padding:10px;">No filters available, returning early</div>';
+    }
+    return;
+}
+?>
+<div class="category-filter-mock" data-category-id="<?= $categoryId ?>">
+    <div class="category-filter-header">
+        <div class="category-filter-title"><lang>筛选条件</lang></div>
+        <?php if (!empty($appliedFilters)): ?>
+        <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="category-filter-clear"><lang>清除全部</lang></a>
+        <?php endif; ?>
+    </div>
+
+    <?php if (!empty($appliedFilters)): ?>
+    <div class="category-filter-applied">
+        <?php foreach ($appliedFilters as $filter): ?>
+        <span class="filter-chip is-active" data-filter-code="<?= htmlspecialchars($filter['filter_code'] ?? '') ?>" data-value="<?= htmlspecialchars($filter['value'] ?? '') ?>">
+            <?= htmlspecialchars($filter['label'] ?? '') ?>
+            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
+        </span>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php foreach ($filters as $filter): ?>
+    <?php
+        $filterCode = $filter['code'] ?? '';
+        $filterName = $filter['name'] ?? '';
+        $displayType = $filter['display_type'] ?? 'list';
+        $collapsed = $filter['collapsed'] ?? false;
+        $options = $filter['options'] ?? [];
+        
+        if (empty($options)) {
+            continue;
+        }
+    ?>
+    <div class="category-filter-group <?= $collapsed ? 'is-collapsed' : '' ?>" data-filter-code="<?= htmlspecialchars($filterCode) ?>">
+        <div class="category-filter-group-title"><?= htmlspecialchars($filterName) ?></div>
+        
+        <?php if ($displayType === 'slider' && isset($options[0]['slider'])): ?>
+            <?php $slider = $options[0]['slider']; ?>
+            <div class="price-slider-container">
+                <div class="price-slider-wrapper">
+                    <div class="price-slider-track"></div>
+                    <div class="price-slider-range"></div>
+                    <input type="range" class="price-slider-min" 
+                           min="<?= $slider['min'] ?>" 
+                           max="<?= $slider['max'] ?>" 
+                           value="<?= $slider['current_min'] ?>"
+                           step="<?= $slider['step'] ?>">
+                    <input type="range" class="price-slider-max" 
+                           min="<?= $slider['min'] ?>" 
+                           max="<?= $slider['max'] ?>" 
+                           value="<?= $slider['current_max'] ?>"
+                           step="<?= $slider['step'] ?>">
+                </div>
+                <div class="price-slider-labels">
+                    <span><?= $slider['currency'] ?><span class="price-min-display"><?= $slider['current_min'] ?></span></span>
+                    <span><?= $slider['currency'] ?><span class="price-max-display"><?= $slider['current_max'] ?></span></span>
+                </div>
+            </div>
+        <?php elseif ($displayType === 'swatch'): ?>
+            <ul class="category-filter-list swatch-list">
+                <?php foreach ($options as $option): ?>
+                <li>
+                    <a href="javascript:void(0)" 
+                       class="category-filter-item <?= ($option['selected'] ?? false) ? 'is-active' : '' ?>"
+                       data-value="<?= htmlspecialchars($option['value'] ?? '') ?>"
+                       title="<?= htmlspecialchars($option['label'] ?? '') ?>">
+                        <?php if (isset($option['swatch'])): ?>
+                            <?php if (($option['swatch']['type'] ?? '') === 'color'): ?>
+                            <span class="filter-swatch <?= ($option['selected'] ?? false) ? 'is-selected' : '' ?>" 
+                                  style="background-color: <?= htmlspecialchars($option['swatch']['value'] ?? '') ?>"></span>
+                            <?php elseif (($option['swatch']['type'] ?? '') === 'image'): ?>
+                            <img class="filter-swatch <?= ($option['selected'] ?? false) ? 'is-selected' : '' ?>" 
+                                 src="<?= htmlspecialchars($option['swatch']['value'] ?? '') ?>" 
+                                 alt="<?= htmlspecialchars($option['label'] ?? '') ?>">
+                            <?php else: ?>
+                            <span class="filter-swatch <?= ($option['selected'] ?? false) ? 'is-selected' : '' ?>"><?= htmlspecialchars($option['swatch']['value'] ?? '') ?></span>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="label"><?= htmlspecialchars($option['label'] ?? '') ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <ul class="category-filter-list">
+                <?php foreach ($options as $option): ?>
+                <li>
+                    <a href="javascript:void(0)" 
+                       class="category-filter-item <?= ($option['selected'] ?? false) ? 'is-active' : '' ?>"
+                       data-value="<?= htmlspecialchars($option['value'] ?? '') ?>">
+                        <span class="label">
+                            <?php if (isset($option['stars_filled'])): ?>
+                            <span class="stars"><?= str_repeat('★', $option['stars_filled']) . str_repeat('☆', $option['stars_empty'] ?? 0) ?></span>
+                            <lang>及以上</lang>
+                            <?php else: ?>
+                            <?= htmlspecialchars($option['label'] ?? '') ?>
+                            <?php endif; ?>
+                        </span>
+                        <span class="count"><?= $option['count'] ?? 0 ?></span>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+</div>
+
+<div class="filter-mobile-overlay"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.WeShopFilters) {
+        window.weShopFilterController = WeShopFilters.init({
+            categoryId: <?= (int)$categoryId ?>,
+            filterContainer: '.category-filter-mock',
+            enableAjax: true,
+            updateUrl: true
+        });
+    }
+});
+</script>

@@ -1,0 +1,625 @@
+<?php
+/**
+ * WeShop Product模块 - 产品详情主内容区域Hook
+ * 
+ * 在产品详情页主内容区域渲染产品图片、信息、购买选项等
+ * Hook名称：WeShop_Product::frontend::layouts::product::main-content
+ * 
+ * @hook-priority 100      Hook优先级：100
+ * @hook-sort-order 1      Hook排序顺序：1
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+// 获取产品数据（由控制器传递）
+$product = $this->getData('product');
+$attributes = $this->getData('attributes') ?? [];
+
+// 如果没有产品数据，不渲染任何内容（让fallback显示）
+if (empty($product) || empty($product['product_id'])) {
+    return;
+}
+
+// 获取产品基本信息
+$productId = $product['product_id'] ?? 0;
+$name = $product['name'] ?? '';
+$shortDescription = $product['short_description'] ?? '';
+$price = (float)($product['price'] ?? 0);
+$cost = (float)($product['cost'] ?? 0);
+$sku = $product['sku'] ?? '';
+$stock = (int)($product['stock'] ?? 0);
+$inStock = $product['in_stock'] ?? ($stock > 0);
+$stockStatus = $product['stock_status'] ?? ($inStock ? 'in_stock' : 'out_of_stock');
+$weight = (float)($product['weight'] ?? 0);
+$mainImage = $product['image'] ?? '';
+$images = $product['images'] ?? [];
+
+// 确保images是数组
+if (is_string($images)) {
+    $images = json_decode($images, true) ?: [];
+}
+if (empty($images) && !empty($mainImage)) {
+    $images = [$mainImage];
+}
+?>
+
+<div class="product-detail-view" data-product-id="<?= (int)$productId ?>">
+    <div class="product-detail-row">
+        <!-- 产品图片区域 -->
+        <div class="product-gallery">
+            <div class="product-main-image">
+                <?php if (!empty($images)): ?>
+                <img id="main-product-image" 
+                     src="<?= htmlspecialchars($images[0] ?? '') ?>" 
+                     alt="<?= htmlspecialchars($name) ?>"
+                     class="product-image-main" />
+                <?php else: ?>
+                <div class="product-image-placeholder">
+                    <span class="placeholder-icon">📷</span>
+                    <span class="placeholder-text"><?= __('暂无图片') ?></span>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <?php if (count($images) > 1): ?>
+            <div class="product-thumbnails">
+                <?php foreach ($images as $index => $img): ?>
+                <div class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>" 
+                     data-index="<?= $index ?>" 
+                     data-src="<?= htmlspecialchars($img) ?>">
+                    <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($name) ?> - <?= $index + 1 ?>" />
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- 产品信息区域 -->
+        <div class="product-info-section">
+            <h1 class="product-title"><?= htmlspecialchars($name) ?></h1>
+            
+            <?php if (!empty($shortDescription)): ?>
+            <p class="product-short-description"><?= htmlspecialchars($shortDescription) ?></p>
+            <?php endif; ?>
+            
+            <div class="product-meta">
+                <?php if (!empty($sku)): ?>
+                <div class="product-sku">
+                    <span class="meta-label"><?= __('SKU') ?>:</span>
+                    <span class="meta-value"><?= htmlspecialchars($sku) ?></span>
+                </div>
+                <?php endif; ?>
+                
+                <div class="product-availability <?= $inStock ? 'in-stock' : 'out-of-stock' ?>">
+                    <span class="meta-label"><?= __('库存状态') ?>:</span>
+                    <span class="meta-value"><?= $inStock ? __('有货') : __('缺货') ?></span>
+                    <?php if ($inStock && $stock > 0): ?>
+                    <span class="stock-count">(<?= $stock ?> <?= __('件') ?>)</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <div class="product-price-box">
+                <span class="product-price-label"><?= __('价格') ?>:</span>
+                <span class="product-price-value">
+                    <span class="currency-symbol">¥</span>
+                    <span class="price-amount"><?= number_format($price, 2) ?></span>
+                </span>
+                <?php if ($cost > 0 && $cost < $price): ?>
+                <span class="product-original-price">
+                    <span class="currency-symbol">¥</span>
+                    <span class="price-amount"><?= number_format($cost, 2) ?></span>
+                </span>
+                <span class="product-discount"><?= round((1 - $price / $cost) * 100) ?>% <?= __('优惠') ?></span>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 购买区域 -->
+            <div class="product-actions">
+                <div class="quantity-selector">
+                    <label for="product-qty"><?= __('数量') ?>:</label>
+                    <div class="qty-input-group">
+                        <button type="button" class="qty-btn qty-minus" data-action="minus">-</button>
+                        <input type="number" id="product-qty" name="qty" value="1" min="1" max="<?= $stock > 0 ? $stock : 99 ?>" class="qty-input" />
+                        <button type="button" class="qty-btn qty-plus" data-action="plus">+</button>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button type="button" 
+                            class="btn btn-primary btn-add-to-cart" 
+                            data-product-id="<?= (int)$productId ?>"
+                            <?= !$inStock ? 'disabled' : '' ?>>
+                        <span class="btn-icon">🛒</span>
+                        <span class="btn-text"><?= $inStock ? __('加入购物车') : __('缺货') ?></span>
+                    </button>
+                    
+                    <button type="button" 
+                            class="btn btn-secondary btn-buy-now" 
+                            data-product-id="<?= (int)$productId ?>"
+                            <?= !$inStock ? 'disabled' : '' ?>>
+                        <span class="btn-text"><?= __('立即购买') ?></span>
+                    </button>
+                    
+                    <button type="button" 
+                            class="btn btn-outline btn-wishlist" 
+                            data-product-id="<?= (int)$productId ?>">
+                        <span class="btn-icon">❤</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 产品属性列表 -->
+            <?php if (!empty($attributes)): ?>
+            <div class="product-attributes">
+                <h3 class="attributes-title"><?= __('产品规格') ?></h3>
+                <table class="attributes-table">
+                    <tbody>
+                        <?php foreach ($attributes as $attr): ?>
+                        <tr>
+                            <th><?= htmlspecialchars($attr['label'] ?? $attr['code'] ?? '') ?></th>
+                            <td><?= htmlspecialchars($attr['value'] ?? '') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ========================================
+   产品详情主内容样式
+   ======================================== */
+.product-detail-view {
+    width: 100%;
+}
+
+.product-detail-row {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+/* 产品图片区域 */
+.product-gallery {
+    flex: 0 0 45%;
+    max-width: 500px;
+}
+
+.product-main-image {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--color-bg-secondary, #f8f9fa);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.product-image-main {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.product-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted, #6c757d);
+}
+
+.product-image-placeholder .placeholder-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.product-thumbnails {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    overflow-x: auto;
+}
+
+.thumbnail-item {
+    flex: 0 0 60px;
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--color-border-light, #e5e7eb);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.thumbnail-item.active,
+.thumbnail-item:hover {
+    border-color: var(--color-accent, #3b82f6);
+}
+
+.thumbnail-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 产品信息区域 */
+.product-info-section {
+    flex: 1;
+    min-width: 300px;
+}
+
+.product-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #111827);
+    margin: 0 0 0.75rem;
+    line-height: 1.3;
+}
+
+.product-short-description {
+    font-size: 0.95rem;
+    color: var(--color-text-secondary, #6b7280);
+    margin: 0 0 1rem;
+    line-height: 1.6;
+}
+
+.product-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.product-sku,
+.product-availability {
+    font-size: 0.875rem;
+}
+
+.meta-label {
+    color: var(--color-text-muted, #6c757d);
+}
+
+.meta-value {
+    color: var(--color-text-primary, #111827);
+    font-weight: 500;
+}
+
+.product-availability.in-stock .meta-value {
+    color: #059669;
+}
+
+.product-availability.out-of-stock .meta-value {
+    color: #dc2626;
+}
+
+.stock-count {
+    color: var(--color-text-muted, #6c757d);
+    font-size: 0.8rem;
+}
+
+/* 价格区域 */
+.product-price-box {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.product-price-label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #6c757d);
+}
+
+.product-price-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #dc2626;
+}
+
+.product-original-price {
+    font-size: 1rem;
+    color: var(--color-text-muted, #9ca3af);
+    text-decoration: line-through;
+}
+
+.product-discount {
+    font-size: 0.75rem;
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+/* 购买区域 */
+.product-actions {
+    margin-bottom: 1.5rem;
+}
+
+.quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.quantity-selector label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #6c757d);
+}
+
+.qty-input-group {
+    display: flex;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.qty-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--color-bg-secondary, #f8f9fa);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.qty-btn:hover {
+    background: var(--color-border-light, #e5e7eb);
+}
+
+.qty-input {
+    width: 60px;
+    height: 36px;
+    border: none;
+    border-left: 1px solid var(--color-border-light, #e5e7eb);
+    border-right: 1px solid var(--color-border-light, #e5e7eb);
+    text-align: center;
+    font-size: 1rem;
+    -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--color-accent, #3b82f6);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #f97316;
+    color: #fff;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #ea580c;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    color: var(--color-text-primary, #111827);
+}
+
+.btn-outline:hover {
+    border-color: var(--color-accent, #3b82f6);
+    color: var(--color-accent, #3b82f6);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-wishlist {
+    padding: 0.75rem;
+}
+
+/* 产品属性 */
+.product-attributes {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.attributes-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    color: var(--color-text-primary, #111827);
+}
+
+.attributes-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.attributes-table th,
+.attributes-table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.attributes-table th {
+    width: 35%;
+    color: var(--color-text-muted, #6c757d);
+    font-weight: 500;
+    background: var(--color-bg-secondary, #f8f9fa);
+}
+
+.attributes-table td {
+    color: var(--color-text-primary, #111827);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .product-detail-row {
+        flex-direction: column;
+    }
+    
+    .product-gallery {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    .product-info-section {
+        min-width: 100%;
+    }
+    
+    .product-title {
+        font-size: 1.5rem;
+    }
+    
+    .product-price-value {
+        font-size: 1.5rem;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .btn-wishlist {
+        width: auto;
+        align-self: flex-start;
+    }
+}
+</style>
+
+<script>
+(function() {
+    // 图片切换
+    document.querySelectorAll('.thumbnail-item').forEach(function(thumb) {
+        thumb.addEventListener('click', function() {
+            var src = this.dataset.src;
+            var mainImg = document.getElementById('main-product-image');
+            if (mainImg && src) {
+                mainImg.src = src;
+                document.querySelectorAll('.thumbnail-item').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                this.classList.add('active');
+            }
+        });
+    });
+    
+    // 数量加减
+    document.querySelectorAll('.qty-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var input = this.parentElement.querySelector('.qty-input');
+            if (!input) return;
+            var val = parseInt(input.value) || 1;
+            var min = parseInt(input.min) || 1;
+            var max = parseInt(input.max) || 99;
+            
+            if (this.dataset.action === 'minus') {
+                val = Math.max(min, val - 1);
+            } else if (this.dataset.action === 'plus') {
+                val = Math.min(max, val + 1);
+            }
+            input.value = val;
+        });
+    });
+    
+    // 加入购物车
+    document.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var productId = this.dataset.productId;
+            var qtyInput = document.getElementById('product-qty');
+            var qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+            
+            // 触发自定义事件，让购物车模块处理
+            var event = new CustomEvent('weshop:addToCart', {
+                detail: { productId: productId, qty: qty }
+            });
+            document.dispatchEvent(event);
+            
+            // 显示提示
+            this.querySelector('.btn-text').textContent = '<?= __('已添加') ?>';
+            setTimeout(function() {
+                btn.querySelector('.btn-text').textContent = '<?= __('加入购物车') ?>';
+            }, 1500);
+        });
+    });
+    
+    // 立即购买
+    document.querySelectorAll('.btn-buy-now').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var productId = this.dataset.productId;
+            var qtyInput = document.getElementById('product-qty');
+            var qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+            
+            // 触发自定义事件
+            var event = new CustomEvent('weshop:buyNow', {
+                detail: { productId: productId, qty: qty }
+            });
+            document.dispatchEvent(event);
+        });
+    });
+    
+    // 收藏
+    document.querySelectorAll('.btn-wishlist').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var productId = this.dataset.productId;
+            var icon = this.querySelector('.btn-icon');
+            
+            // 触发自定义事件
+            var event = new CustomEvent('weshop:addToWishlist', {
+                detail: { productId: productId }
+            });
+            document.dispatchEvent(event);
+            
+            // 切换图标
+            if (icon.textContent === '❤') {
+                icon.textContent = '💖';
+            } else {
+                icon.textContent = '❤';
+            }
+        });
+    });
+})();
+</script>
