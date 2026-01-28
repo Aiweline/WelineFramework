@@ -173,11 +173,31 @@ class PageRenderService
         $this->assign('layout_info', $layoutInfo);
         
         // 如果页面没有自定义布局配置，加载该页面类型的默认布局配置
-        $hasCustomLayout = !empty($layoutConfig) && (
-            !empty($layoutConfig['header']) || 
-            !empty($layoutConfig['content']) || 
-            !empty($layoutConfig['footer'])
-        );
+        // 注意：需要检查区域是否真的有有效组件，而不仅仅是非空数组
+        $hasCustomHeader = $this->regionHasValidComponents($layoutConfig['header'] ?? null);
+        $hasCustomContent = $this->regionHasValidComponents($layoutConfig['content'] ?? null);
+        $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
+        $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
+        
+        // 如果 header 或 footer 没有有效组件，尝试从默认配置加载
+        if (!$hasCustomHeader || !$hasCustomFooter) {
+            $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
+            
+            // 如果 header 为空，使用默认 header
+            if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
+                $layoutConfig['header'] = $defaultLayoutConfig['header'];
+                $this->assign('using_default_header', true);
+            }
+            
+            // 如果 footer 为空，使用默认 footer
+            if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
+                $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
+                $this->assign('using_default_footer', true);
+            }
+            
+            // 更新布局配置
+            $this->assign('layout_config', $layoutConfig);
+        }
         
         if (!$hasCustomLayout && $pageType) {
             // 加载页面类型的默认布局配置
@@ -376,6 +396,45 @@ class PageRenderService
             'content' => $pageConfig['content'] ?? [],
             'footer' => $pageConfig['footer'] ?? [],
         ];
+    }
+    
+    /**
+     * 检查区域配置是否包含有效的组件
+     * 
+     * 处理两种格式：
+     * 1. 数组格式：[{code: ..., enabled: ...}, ...]
+     * 2. PageLayout 导出格式：{component: ..., config: ...}
+     * 
+     * @param mixed $regionConfig 区域配置
+     * @return bool 是否有有效组件
+     */
+    private function regionHasValidComponents($regionConfig): bool
+    {
+        if (empty($regionConfig)) {
+            return false;
+        }
+        
+        // 如果是数组格式 [{code: ...}, ...]
+        if (is_array($regionConfig) && isset($regionConfig[0])) {
+            foreach ($regionConfig as $component) {
+                if (!empty($component['code']) || !empty($component['component'])) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // 如果是 PageLayout 导出格式 {component: ..., config: ...}
+        if (is_array($regionConfig) && array_key_exists('component', $regionConfig)) {
+            return !empty($regionConfig['component']);
+        }
+        
+        // 如果是单组件格式 {code: ...}
+        if (is_array($regionConfig) && isset($regionConfig['code'])) {
+            return !empty($regionConfig['code']);
+        }
+        
+        return false;
     }
     
     /**
