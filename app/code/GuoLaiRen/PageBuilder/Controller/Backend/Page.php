@@ -449,7 +449,25 @@ class Page extends BackendController
      */
     private function buildStructuredDataForPage(PageModel $page): array
     {
-        $baseHost = $this->request ? ($this->request->getBaseHost() ?? '') : '';
+        // 优先使用页面关联站点的 URL
+        $baseHost = '';
+        $pageWebsiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+        if ($pageWebsiteId > 0) {
+            try {
+                $websiteModel = clone $this->websiteModel;
+                $websiteModel->clear()->load($pageWebsiteId);
+                if ($websiteModel->getId()) {
+                    $baseHost = $websiteModel->getData(\Weline\Websites\Model\Website::fields_URL) ?? '';
+                }
+            } catch (\Exception $e) {
+                // 忽略错误，使用默认值
+            }
+        }
+        // 如果没有站点 URL，使用当前请求的 baseHost
+        if (empty($baseHost)) {
+            $baseHost = $this->request ? ($this->request->getBaseHost() ?? '') : '';
+        }
+        
         $handle = (string)$page->getData(PageModel::fields_HANDLE);
         $pageUrl = '';
         if ($baseHost !== '') {
@@ -2565,9 +2583,30 @@ class Page extends BackendController
         try {
             $handle = trim((string)($this->request->getParam('handle') ?? ''));
             $sub = trim((string)($this->request->getParam('sub') ?? ''));
+            $websiteId = (int)($this->request->getParam('website_id') ?? 0);
+            
             if ($handle === '') {
                 throw new \Exception(__('缺少 handle'));
             }
+            
+            // 获取网站 URL（用于生成完整的图片地址）
+            $websiteUrl = '';
+            if ($websiteId > 0) {
+                try {
+                    $websiteModel = clone $this->websiteModel;
+                    $websiteModel->clear()->load($websiteId);
+                    if ($websiteModel->getId()) {
+                        $websiteUrl = rtrim($websiteModel->getData(\Weline\Websites\Model\Website::fields_URL) ?? '', '/');
+                    }
+                } catch (\Exception $e) {
+                    // 忽略错误
+                }
+            }
+            // 如果没有网站 URL，使用当前请求的 baseHost
+            if (empty($websiteUrl)) {
+                $websiteUrl = rtrim(rtrim($this->request->getBaseHost() ?? '', '/'), ':');
+            }
+            
             $baseDir = rtrim(BP . 'pub/media/page-build', '/');
             $root = $baseDir . '/' . $handle;
             if (!is_dir($root)) {
@@ -2591,13 +2630,17 @@ class Page extends BackendController
                         if ($file === '.' || $file === '..') continue;
                         $full = $realPath . '/' . $file;
                         $isDir = is_dir($full);
+                        // 复制地址使用完整的网站 URL
+                        $relativePath = '/pub/media/page-build/' . $handle . ($relative ? '/' . $relative : '') . '/' . $file;
                         $items[] = [
                             'name' => $file,
                             'type' => $isDir ? 'dir' : 'file',
                             'size' => $isDir ? 0 : (filesize($full) ?: 0),
                             'mtime' => filemtime($full) ?: time(),
-                            // 复制地址以 /pub 开头
-                            'url' => $isDir ? '' : ('/pub/media/page-build/' . $handle . ($relative ? '/' . $relative : '') . '/' . $file)
+                            // 完整的 URL（用于复制）
+                            'url' => $isDir ? '' : ($websiteUrl . $relativePath),
+                            // 相对路径（用于预览）
+                            'relative_url' => $isDir ? '' : $relativePath
                         ];
                     }
                     closedir($dh);
@@ -2614,7 +2657,8 @@ class Page extends BackendController
                 'handle' => $handle,
                 'sub' => $relative,
                 'items' => $items,
-                'root' => '/media/page-build/' . $handle
+                'root' => '/media/page-build/' . $handle,
+                'website_url' => $websiteUrl
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([

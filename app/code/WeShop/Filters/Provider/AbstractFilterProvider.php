@@ -264,4 +264,15 @@ abstract class AbstractFilterProvider implements FilterProviderInterface
         
         return in_array($value, $appliedValues, true);
     }
+    
+    /**
+     * @inheritDoc
+     * 
+     * 默认实现：直接返回值
+     * 子类应该重写此方法以提供翻译后的标签
+     */
+    public function getValueLabel(string $value): string
+    {
+        return $value;
+    }
 }

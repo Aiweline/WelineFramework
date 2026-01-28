@@ -103,4 +103,12 @@ interface FilterProviderInterface
      * @return string|null
      */
     public function getIcon(): ?string;
+    
+    /**
+     * 获取筛选值的显示标签（用于翻译）
+     * 
+     * @param string $value 筛选值
+     * @return string 翻译后的显示标签
+     */
+    public function getValueLabel(string $value): string;
 }

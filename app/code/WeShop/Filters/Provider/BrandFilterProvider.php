@@ -53,7 +53,9 @@ class BrandFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        return __('品牌');
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        return $isEnglish ? 'Brand' : __('品牌');
     }
     
     /**
@@ -255,5 +257,27 @@ class BrandFilterProvider extends AbstractFilterProvider
     {
         $this->mode = $mode;
         return $this;
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        try {
+            $attribute = $this->getBrandAttribute();
+            if (!$attribute || !$attribute->getId()) {
+                return $value;
+            }
+            
+            if ($attribute->hasOption()) {
+                $labels = $this->getOptionLabels($attribute, [$value]);
+                return $labels[$value] ?? $value;
+            }
+            
+            return $value;
+        } catch (\Throwable $e) {
+            return $value;
+        }
     }
 }

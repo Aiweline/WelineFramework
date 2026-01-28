@@ -260,4 +260,35 @@ class EavAttributeFilterProvider extends AbstractFilterProvider
     ): self {
         return new self($attributeCode, $attributeName, $sortOrder);
     }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        // 获取可筛选属性数据
+        $filterableData = $this->attributeFilterService->getFilterableAttributes(
+            $this->entityCode,
+            [],
+            [$this->attributeCode]
+        );
+        
+        if (empty($filterableData[$this->attributeCode])) {
+            return $value;
+        }
+        
+        $data = $filterableData[$this->attributeCode];
+        $attributeData = $data['attribute'] ?? [];
+        $optionsData = $data['options'] ?? [];
+        
+        // 如果属性有预定义选项，从选项中获取翻译标签
+        if (($attributeData['has_option'] ?? false) && !empty($optionsData)) {
+            $optionInfo = $optionsData[$value] ?? null;
+            if ($optionInfo) {
+                return $optionInfo['value'] ?: ($optionInfo['code'] ?? $value);
+            }
+        }
+        
+        return $value;
+    }
 }
