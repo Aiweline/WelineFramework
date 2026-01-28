@@ -121,17 +121,41 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            // 使用新模型实例，避免复用旧实例可能残留的事务状态
+            // 使用新模型实例，避免复用旧实例可能残留的查询状态
             /** @var SystemConfig $config */
             $config = ObjectManager::getInstance(SystemConfig::class);
             
-            // 直接设置数据，save(true) 会根据 $_unit_primary_keys 自动判断 insert/update
-            $config->setData([
-                self::fields_KEY => $key,
-                self::fields_VALUE => $value,
-                self::fields_MODULE => $module,
-                self::fields_AREA => $area
-            ])->save(true);
+            // 先查询是否存在（不使用事务，避免 ON CONFLICT 需要 UNIQUE 约束的问题）
+            $existing = $config->clear()->reset()
+                ->where([
+                    [self::fields_KEY, $key],
+                    [self::fields_MODULE, $module],
+                    [self::fields_AREA, $area]
+                ])
+                ->find()
+                ->fetch();
+            
+            if ($existing && isset($existing[self::fields_KEY])) {
+                // 存在则更新
+                $config->clear()->reset()
+                    ->where([
+                        [self::fields_KEY, $key],
+                        [self::fields_MODULE, $module],
+                        [self::fields_AREA, $area]
+                    ])
+                    ->update([self::fields_VALUE => $value])
+                    ->fetch();
+            } else {
+                // 不存在则插入（不使用 ON CONFLICT）
+                $config->clear()->reset()
+                    ->insert([
+                        self::fields_KEY => $key,
+                        self::fields_VALUE => $value,
+                        self::fields_MODULE => $module,
+                        self::fields_AREA => $area
+                    ], [], '', true)  // ignore_primary_key=true 避免生成 ON CONFLICT
+                    ->fetch();
+            }
             
             // 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
