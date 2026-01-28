@@ -10,6 +10,7 @@ use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Event\EventsManager;
 
 /**
  * 分类详情页控制器
@@ -33,6 +34,9 @@ class View extends BaseController
      */
     public function index(): string
     {
+        // 添加 Filters 模块到请求模块链，以便加载翻译
+        $this->request->addModule('WeShop_Filters');
+        
         /** @var CategoryService $categoryService */
         $categoryService = ObjectManager::getInstance(CategoryService::class);
         
@@ -210,6 +214,19 @@ class View extends BaseController
         // 将分类和产品数据设置到 Request 对象，供 Hook 模板访问
         $this->request->setData('category', $categoryData);
         $this->request->setData('products', $products);
+        
+        // 触发分类加载后事件，用于筛选器收集等扩展功能
+        // 注意：事件数据需要包装在 'data' 键下，以符合框架的事件数据约定
+        // dispatch 第二个参数是引用传递，必须先存入变量
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventData = [
+            'data' => [
+                'category_id' => $category->getId(),
+                'product_ids' => array_keys($productIdsSeen),
+            ],
+        ];
+        $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventData);
         
         // SEO数据
         $this->assign('title', $categoryData['name']);

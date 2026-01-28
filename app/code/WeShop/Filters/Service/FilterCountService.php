@@ -65,13 +65,14 @@ class FilterCountService
         
         $counts = $filter->getCounts($categoryId, $productIds, $otherFilters);
         
-        // 触发计数收集事件
-        $this->eventsManager->dispatch('WeShop_Filters::filter_counts_collect', [
+        // 触发计数收集事件（dispatch 需要变量传递）
+        $countsEventData = [
             'category_id' => $categoryId,
             'product_ids' => $productIds,
             'filter_code' => $filterCode,
             'counts' => &$counts,
-        ]);
+        ];
+        $this->eventsManager->dispatch('WeShop_Filters::filter_counts_collect', $countsEventData);
         
         return $counts;
     }

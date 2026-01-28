@@ -67,8 +67,10 @@ class FilterCacheService
             }
         }
         
+        // 包含语言到缓存键中，确保不同语言使用不同的缓存
+        $lang = \Weline\Framework\App\State::getLangLocal();
         $paramString = json_encode($filterParams);
-        return self::CACHE_PREFIX . $categoryId . '_' . md5($paramString);
+        return self::CACHE_PREFIX . $categoryId . '_' . $lang . '_' . md5($paramString);
     }
     
     /**

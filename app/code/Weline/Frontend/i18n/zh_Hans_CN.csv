@@ -146,3 +146,4 @@ Cookie政策,Cookie政策
 选择自动登录的有效期,选择自动登录的有效期
 加载中...,加载中...
 "验证器应用未部署，请运行: php bin/w deploy:upgrade","验证器应用未部署，请运行: php bin/w deploy:upgrade"
+刷新,刷新
