@@ -460,7 +460,24 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * 需要排除的字段名关键词（图片、地址等非文字内容）
+     */
+    private const EXCLUDED_FIELD_KEYWORDS = [
+        'url', 'href', 'link', 'src',           // 链接/地址相关
+        'image', 'img', 'photo', 'picture',     // 图片相关
+        'file', 'attachment', 'upload',         // 文件相关
+        'icon', 'logo', 'avatar', 'thumbnail',  // 图标/头像相关
+        'video', 'audio', 'media',              // 媒体相关
+        'path', 'route',                        // 路径相关
+        'color', 'colour', 'bg_color', 'background_color', // 颜色相关
+        'email', 'phone', 'tel', 'mobile',      // 联系方式（通常不需要AI生成）
+    ];
+    
+    /**
      * 获取单个组件的文字配置项
+     * 
+     * 只获取文字类型（text/textarea）的配置项
+     * 并排除图片、地址、文件等非文字内容的字段
      */
     private function getComponentTextConfigs(array $metadata): array
     {
@@ -489,6 +506,11 @@ class AiGenerate extends BackendController
                     $fullKey = $groupKey . '.' . $fieldKey;
                 }
                 
+                // 检查字段名是否包含排除的关键词
+                if ($this->shouldExcludeField($fullKey)) {
+                    continue;
+                }
+                
                 $textConfigs[] = [
                     'key' => $fullKey,
                     'label' => $field['label'] ?? $fieldKey,
@@ -500,6 +522,34 @@ class AiGenerate extends BackendController
         }
         
         return $textConfigs;
+    }
+    
+    /**
+     * 判断字段是否应该被排除（不交给AI生成）
+     * 
+     * @param string $fieldKey 字段名（可能包含组名，如 header.logo_url）
+     * @return bool 是否应该排除
+     */
+    private function shouldExcludeField(string $fieldKey): bool
+    {
+        $fieldKeyLower = strtolower($fieldKey);
+        
+        foreach (self::EXCLUDED_FIELD_KEYWORDS as $keyword) {
+            // 检查字段名是否包含排除关键词
+            // 使用 _ 或 . 作为分隔符来匹配完整的词，避免误排除
+            // 例如：排除 "image" 但不排除 "imagery_description"
+            $pattern = '/(^|[._])' . preg_quote($keyword, '/') . '([._]|$)/i';
+            if (preg_match($pattern, $fieldKeyLower)) {
+                return true;
+            }
+            
+            // 也检查完全匹配的情况
+            if ($fieldKeyLower === $keyword) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     /**
@@ -882,6 +932,11 @@ class AiGenerate extends BackendController
                         $fullKey = $groupKey . '.' . $fieldKey;
                     }
                     
+                    // 排除图片、地址等非文字内容的字段
+                    if ($this->shouldExcludeField($fullKey)) {
+                        continue;
+                    }
+                    
                     $textConfigs[] = [
                         'key' => $fullKey,
                         'label' => ($componentName ? "【{$componentName}】" : '') . ($field['label'] ?? $fieldKey),
@@ -967,8 +1022,8 @@ class AiGenerate extends BackendController
                 ]);
             }
             
-            // 生成组件代码（小写、连字符）
-            $componentCode = $this->generateComponentCode($name);
+            // 生成组件代码（新规范：{category}-{name} 格式）
+            $componentCode = $this->generateComponentCode($name, $region);
             
             // 解析配置字段
             $configFields = $this->parseConfigFields($fieldsInput, $componentCode);
@@ -1068,24 +1123,39 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 生成组件代码（小写、连字符）
+     * 生成组件代码
+     * 
+     * 新规范：{category}-{name} 格式
+     * 
+     * @param string $name 组件名称
+     * @param string $region 组件区域（用于生成 category 前缀）
+     * @return string 标准化的组件代码
      */
-    private function generateComponentCode(string $name): string
+    private function generateComponentCode(string $name, string $region = 'content'): string
     {
         // 移除特殊字符，转换为小写
         $code = preg_replace('/[^\p{L}\p{N}\s]/u', '', $name);
         
         // 中文转拼音或使用时间戳
         if (preg_match('/[\x{4e00}-\x{9fa5}]/u', $code)) {
-            // 简单处理：使用 component- + 时间戳
-            $code = 'custom-' . date('ymdHi');
+            // 简单处理：使用时间戳作为名称部分
+            $namePart = 'ai-' . date('ymdHi');
         } else {
             // 英文：转小写，空格变连字符
-            $code = strtolower(trim($code));
-            $code = preg_replace('/\s+/', '-', $code);
+            $namePart = strtolower(trim($code));
+            $namePart = preg_replace('/\s+/', '-', $namePart);
+            // 移除多余的连字符
+            $namePart = preg_replace('/-+/', '-', $namePart);
+            $namePart = trim($namePart, '-');
         }
         
-        return $code;
+        // 如果名称为空，使用时间戳
+        if (empty($namePart)) {
+            $namePart = 'ai-' . date('ymdHi');
+        }
+        
+        // 生成标准格式：{category}-{name}
+        return strtolower($region) . '-' . $namePart;
     }
 
     /**
@@ -1321,12 +1391,15 @@ PROMPT;
      */
     private function saveComponentFile(string $styleCode, array $component): string
     {
+        $pathResolver = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver::class);
+        
         $region = $component['region'] ?? 'content';
         $code = $component['code'] ?? '';
         $phtmlCode = $component['phtml_code'] ?? '';
         
-        $basePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components";
-        $regionPath = "{$basePath}/{$region}";
+        // 使用 TemplatePathResolver 获取路径
+        $componentsPath = $pathResolver->getComponentsPath($styleCode);
+        $regionPath = "{$componentsPath}/{$region}";
         $filePath = "{$regionPath}/{$code}.phtml";
         
         // 确保目录存在
@@ -1345,7 +1418,9 @@ PROMPT;
      */
     private function updateComponentJson(string $styleCode, array $component): void
     {
-        $jsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/component.json";
+        $pathResolver = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver::class);
+        
+        $jsonPath = $pathResolver->getComponentJsonPath($styleCode);
         
         if (!file_exists($jsonPath)) {
             throw new \Exception('component.json 文件不存在');
@@ -1357,19 +1432,23 @@ PROMPT;
             throw new \Exception('component.json 解析失败');
         }
         
-        // 添加新组件
+        // 添加新组件（使用标准格式）
         $code = $component['code'];
+        $region = $component['region'] ?? 'content';
+        
         $config['components'][$code] = [
             'name' => $component['name'],
             'name_en' => $component['name_en'] ?? '',
             'description' => $component['description'] ?? '',
-            'region' => $component['region'],
-            'category' => $component['category'] ?? $component['region'],
+            'region' => $region,
+            'category' => $region,
             'type' => 'section',
+            'icon' => 'bi-stars', // AI 生成的组件使用星星图标
             'sort_order' => 100, // AI生成的组件排在后面
             'is_default' => false,
             'compatible_styles' => ['*'],
-            'file' => $component['file'],
+            'file' => "{$region}/{$code}.phtml",
+            'config_schema' => $component['config_schema'] ?? [],
             'ai_generated' => true,
             'created_at' => date('Y-m-d H:i:s'),
         ];

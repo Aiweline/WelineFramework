@@ -5256,9 +5256,13 @@ window.editComponentInPreview = async function(wrapper) {
     });
     
     try {
-        // 获取页面样式代码
+        // 获取组件实际所属的模板代码（优先从组件 wrapper 获取，支持跨模板组件）
+        const componentStyleCode = wrapper.getAttribute('data-style-code');
+        // 获取页面样式代码（作为后备）
         const styleSelect = document.getElementById('style');
-        const styleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
+        const pageStyleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
+        // 使用组件的 style_code，如果没有则使用页面的
+        const styleCode = componentStyleCode || pageStyleCode;
         
         // 获取组件元数据
         const metadataUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/metadata') ?>' + 

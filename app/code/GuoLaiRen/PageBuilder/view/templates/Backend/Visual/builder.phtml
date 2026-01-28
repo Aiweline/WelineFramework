@@ -29,7 +29,7 @@ $styles = $this->getData('styles') ?? [];
         <div class="page-title-box d-flex align-items-center justify-content-between">
             <div>
                 <h4 class="mb-1">
-                    <i class="mdi mdi-puzzle-edit"></i> <?= __('可视化页面构建器') ?>
+                    <i class="mdi mdi-puzzle-edit"></i> <?= __('可视化网站构建器') ?>
                 </h4>
                 <p class="text-muted mb-0">
                     <?= htmlspecialchars($page->getData('name') ?? '') ?> 
@@ -529,26 +529,268 @@ const VB = {
         component: '<?= $this->getBackendUrl('*/backend/visual/api/component') ?>'
     },
     
+    // 当前选中的目标（用于智能筛选）
+    selectedTarget: null,
+    
     // 初始化
     init() {
         this.initSortable();
         this.initViewportButtons();
+        this.initRegionSelection();
         this.renderPreview();
+    },
+    
+    // 初始化区域选择（用于智能筛选）
+    initRegionSelection() {
+        // 选中区域时筛选组件库
+        document.querySelectorAll('[data-section]').forEach(section => {
+            section.addEventListener('click', (e) => {
+                if (e.target.closest('.vb-component')) return; // 忽略组件点击
+                const region = section.dataset.section;
+                this.selectTarget({ type: 'region', region: region });
+            });
+        });
+        
+        // 选中 slot 时筛选组件库
+        document.querySelectorAll('[data-slot]').forEach(slot => {
+            slot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const slotName = slot.dataset.slot;
+                const parentEl = slot.closest('[data-component]');
+                const parentCode = parentEl ? parentEl.dataset.component : null;
+                const parentInstanceId = parentEl ? parentEl.dataset.instanceId : null;
+                this.selectTarget({ 
+                    type: 'slot', 
+                    parentComponentCode: parentCode,
+                    parentInstanceId: parentInstanceId,
+                    slot: slotName 
+                });
+            });
+        });
+        
+        // 点击空白区域清除筛选
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('[data-section]') && 
+                !e.target.closest('[data-slot]') && 
+                !e.target.closest('.component-library')) {
+                this.clearComponentFilter();
+            }
+        });
+    },
+    
+    // 选中目标（区域或 slot）
+    async selectTarget(target) {
+        this.selectedTarget = target;
+        
+        // 高亮选中的区域/slot
+        document.querySelectorAll('.vb-section-selected').forEach(el => {
+            el.classList.remove('vb-section-selected');
+        });
+        
+        if (target.type === 'region') {
+            const section = document.querySelector(`[data-section="${target.region}"]`);
+            if (section) section.classList.add('vb-section-selected');
+        }
+        
+        // 筛选组件库
+        await this.filterComponentLibrary(target);
+    },
+    
+    // 筛选组件库
+    async filterComponentLibrary(target) {
+        try {
+            const params = new URLSearchParams({
+                style_code: this.styleCode,
+            });
+            
+            if (target.type === 'region') {
+                params.append('region', target.region);
+            } else if (target.type === 'slot') {
+                params.append('parent_component_code', target.parentComponentCode);
+                params.append('slot', target.slot);
+            }
+            
+            const response = await fetch(this.api.component + '/compatible?' + params);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.highlightCompatibleComponents(data.components);
+                this.scrollComponentLibraryToCategory(target.type === 'region' ? target.region : data.accepts?.[0]);
+                this.showFilterHint(target, data.components.length);
+            }
+        } catch (error) {
+            console.error('筛选组件库失败:', error);
+        }
+    },
+    
+    // 高亮兼容的组件
+    highlightCompatibleComponents(componentCodes) {
+        document.querySelectorAll('.component-card').forEach(card => {
+            const code = card.dataset.componentCode;
+            if (componentCodes.includes(code)) {
+                card.classList.remove('filtered-out');
+                card.classList.add('compatible');
+            } else {
+                card.classList.add('filtered-out');
+                card.classList.remove('compatible');
+            }
+        });
+    },
+    
+    // 滚动组件库到指定分类
+    scrollComponentLibraryToCategory(category) {
+        const categoryHeader = document.querySelector(`.component-category[data-category="${category}"]`);
+        if (categoryHeader) {
+            categoryHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    },
+    
+    // 显示筛选提示
+    showFilterHint(target, count) {
+        const hintContainer = document.querySelector('.component-filter-hint');
+        if (!hintContainer) return;
+        
+        let hintText = '';
+        if (target.type === 'region') {
+            hintText = `已筛选 ${target.region} 区域兼容组件`;
+        } else {
+            hintText = `已筛选 slot "${target.slot}" 兼容组件`;
+        }
+        
+        hintContainer.innerHTML = `
+            <span>${hintText} (${count} 个)</span>
+            <button class="btn btn-sm btn-link clear-filter-btn" onclick="VB.clearComponentFilter()">
+                <i class="mdi mdi-close"></i> 清除筛选
+            </button>
+        `;
+        hintContainer.style.display = 'block';
+    },
+    
+    // 清除组件筛选
+    clearComponentFilter() {
+        this.selectedTarget = null;
+        
+        document.querySelectorAll('.vb-section-selected').forEach(el => {
+            el.classList.remove('vb-section-selected');
+        });
+        
+        document.querySelectorAll('.component-card').forEach(card => {
+            card.classList.remove('filtered-out', 'compatible');
+        });
+        
+        const hintContainer = document.querySelector('.component-filter-hint');
+        if (hintContainer) {
+            hintContainer.style.display = 'none';
+        }
     },
     
     // 初始化拖拽排序
     initSortable() {
         const container = document.getElementById('preview-content');
         if (typeof Sortable !== 'undefined' && container) {
-            new Sortable(container, {
+            // 销毁现有的 Sortable 实例
+            if (this._sortableInstance) {
+                this._sortableInstance.destroy();
+            }
+            
+            this._sortableInstance = new Sortable(container, {
                 animation: 150,
-                handle: '.mdi-drag',
+                handle: '.component-drag-handle, .mdi-drag',
                 draggable: '.vb-component',
-                ghostClass: 'dragging',
+                ghostClass: 'vb-component-dragging',
+                chosenClass: 'vb-component-chosen',
+                dragClass: 'vb-component-drag',
+                // 嵌套组件跟随移动：整个组件（包含子组件）作为一个整体拖拽
+                // Sortable.js 默认会拖拽整个元素及其子元素
+                onStart: (evt) => {
+                    // 标记正在拖拽
+                    document.body.classList.add('vb-dragging');
+                    
+                    // 高亮可放置区域
+                    this.highlightDropTargets(evt.item.dataset.component);
+                },
                 onEnd: (evt) => {
+                    // 移除拖拽标记
+                    document.body.classList.remove('vb-dragging');
+                    this.clearDropTargetHighlights();
+                    
+                    // 保存新顺序（嵌套组件会随父组件一起移动）
                     this.reorderComponents();
                 }
             });
+        }
+        
+        // 初始化嵌套 slot 容器的拖拽
+        this.initNestedSortable();
+    },
+    
+    // 初始化嵌套 slot 的拖拽
+    initNestedSortable() {
+        document.querySelectorAll('.vb-slot-container').forEach(slotContainer => {
+            if (slotContainer._sortable) {
+                slotContainer._sortable.destroy();
+            }
+            
+            if (typeof Sortable !== 'undefined') {
+                slotContainer._sortable = new Sortable(slotContainer, {
+                    animation: 150,
+                    handle: '.component-drag-handle, .mdi-drag',
+                    draggable: '.vb-component',
+                    group: 'nested',
+                    ghostClass: 'vb-component-dragging',
+                    onEnd: (evt) => {
+                        // 更新嵌套组件顺序
+                        const parentInstanceId = evt.to.closest('[data-instance-id]')?.dataset.instanceId;
+                        const slotName = evt.to.dataset.slot;
+                        if (parentInstanceId && slotName) {
+                            this.reorderNestedComponents(parentInstanceId, slotName);
+                        }
+                    }
+                });
+            }
+        });
+    },
+    
+    // 高亮可放置的目标区域
+    highlightDropTargets(componentCode) {
+        // TODO: 根据组件的 placeable_in 高亮可放置区域
+    },
+    
+    // 清除放置目标高亮
+    clearDropTargetHighlights() {
+        document.querySelectorAll('.vb-drop-target').forEach(el => {
+            el.classList.remove('vb-drop-target');
+        });
+    },
+    
+    // 重新排序嵌套组件
+    async reorderNestedComponents(parentInstanceId, slotName) {
+        const slotContainer = document.querySelector(`[data-instance-id="${parentInstanceId}"] [data-slot="${slotName}"]`);
+        if (!slotContainer) return;
+        
+        const order = [];
+        slotContainer.querySelectorAll('.vb-component').forEach(el => {
+            order.push(el.dataset.instanceId);
+        });
+        
+        try {
+            const response = await fetch(this.api.component + '/reorderNested', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    page_id: this.pageId,
+                    parent_instance_id: parentInstanceId,
+                    slot: slotName,
+                    order: order
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                this.layoutConfig = result.layout_config;
+            }
+        } catch (error) {
+            console.error('排序嵌套组件失败:', error);
         }
     },
     
@@ -568,33 +810,175 @@ const VB = {
         // TODO: 实现实时预览渲染
     },
     
-    // 添加组件
-    async addComponent(componentCode, fromTemplate) {
+    // 验证组件放置
+    async validateComponentPlacement(componentCode, region, parentComponentCode = null, slot = null) {
         try {
-            const response = await fetch(this.api.layout + '/addComponent', {
+            const response = await fetch(this.api.component + '/validate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    component_code: componentCode,
+                    region: region,
+                    style_code: this.styleCode,
+                    parent_component_code: parentComponentCode,
+                    slot: slot
+                })
+            });
+            
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('验证失败:', error);
+            return { success: false, valid: false, message: '验证请求失败' };
+        }
+    },
+    
+    // 添加组件（支持局部刷新）
+    async addComponent(componentCode, fromTemplate, options = {}) {
+        const region = options.region || this.selectedTarget?.region || 'content';
+        const position = options.position ?? null;
+        const parentComponentId = options.parentInstanceId || this.selectedTarget?.parentInstanceId || null;
+        const targetSlot = options.slot || this.selectedTarget?.slot || null;
+        
+        try {
+            // 先验证是否可以放置
+            const validation = await this.validateComponentPlacement(
+                componentCode, 
+                region, 
+                parentComponentId ? this.getComponentCodeByInstanceId(parentComponentId) : null,
+                targetSlot
+            );
+            
+            if (!validation.valid) {
+                showToast('error', validation.message || '不能放置到此位置');
+                return;
+            }
+            
+            // 显示加载占位符（局部刷新优化）
+            const placeholderId = 'placeholder-' + Date.now();
+            this.insertPlaceholder(placeholderId, region, position);
+            
+            const response = await fetch(this.api.component + '/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     page_id: this.pageId,
                     component_code: componentCode,
-                    from_template: fromTemplate,
-                    position: 'content'
+                    region: region,
+                    template_code: fromTemplate,
+                    position: position,
+                    parent_component_id: parentComponentId,
+                    slot: targetSlot,
+                    return_html: true  // 请求返回渲染的 HTML
                 })
             });
             
             const result = await response.json();
             
+            // 移除占位符
+            this.removePlaceholder(placeholderId);
+            
             if (result.success) {
                 this.layoutConfig = result.layout_config;
-                this.refreshContentArea();
-                showToast('success', '组件添加成功');
+                
+                // 如果返回了组件 HTML，使用局部刷新
+                if (result.partial && result.component_html) {
+                    this.insertComponentDOM(result, region, position);
+                    showToast('success', '组件添加成功');
+                } else {
+                    // 回退到全量刷新
+                    this.refreshContentArea();
+                    showToast('success', result.message || '组件添加成功');
+                }
             } else {
-                showToast('error', result.message || '添加失败');
+                if (result.validation_failed) {
+                    showToast('error', result.message || '验证失败：不能放置到此位置');
+                } else {
+                    showToast('error', result.message || '添加失败');
+                }
             }
         } catch (error) {
             console.error(error);
             showToast('error', '网络错误');
         }
+    },
+    
+    // 插入组件 DOM（局部刷新）
+    insertComponentDOM(result, region, position) {
+        const { instance_id, component_html } = result;
+        
+        // 创建临时容器解析 HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = component_html.trim();
+        const componentElement = tempDiv.firstElementChild;
+        
+        // 找到目标容器
+        const container = document.getElementById(`preview-${region}`);
+        if (!container) {
+            console.warn('目标容器不存在:', region);
+            this.refreshContentArea();
+            return;
+        }
+        
+        const children = container.querySelectorAll('.vb-component');
+        
+        // 插入到指定位置
+        if (position !== null && position < children.length) {
+            container.insertBefore(componentElement, children[position]);
+        } else {
+            // 插入到添加区域之前
+            const addZone = container.querySelector('.vb-add-zone');
+            if (addZone) {
+                container.insertBefore(componentElement, addZone);
+            } else {
+                container.appendChild(componentElement);
+            }
+        }
+        
+        // 重新初始化拖拽
+        this.initSortable();
+    },
+    
+    // 插入加载占位符
+    insertPlaceholder(placeholderId, region, position) {
+        const container = document.getElementById(`preview-${region}`);
+        if (!container) return;
+        
+        const placeholder = document.createElement('div');
+        placeholder.className = 'vb-component vb-component-loading';
+        placeholder.id = placeholderId;
+        placeholder.innerHTML = `
+            <div class="vb-component-loading-spinner">
+                <i class="mdi mdi-loading mdi-spin"></i>
+                <span>加载中...</span>
+            </div>
+        `;
+        
+        const children = container.querySelectorAll('.vb-component:not(.vb-component-loading)');
+        if (position !== null && position < children.length) {
+            container.insertBefore(placeholder, children[position]);
+        } else {
+            const addZone = container.querySelector('.vb-add-zone');
+            if (addZone) {
+                container.insertBefore(placeholder, addZone);
+            } else {
+                container.appendChild(placeholder);
+            }
+        }
+    },
+    
+    // 移除占位符
+    removePlaceholder(placeholderId) {
+        const placeholder = document.getElementById(placeholderId);
+        if (placeholder) {
+            placeholder.remove();
+        }
+    },
+    
+    // 根据实例ID获取组件代码
+    getComponentCodeByInstanceId(instanceId) {
+        const component = document.querySelector(`[data-instance-id="${instanceId}"]`);
+        return component ? component.dataset.component : null;
     },
     
     // 移除组件
