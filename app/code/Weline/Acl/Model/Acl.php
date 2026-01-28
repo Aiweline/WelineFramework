@@ -45,14 +45,25 @@ class Acl extends \Weline\Framework\Database\Model
     public array $_unit_primary_keys = [self::fields_SOURCE_ID];
 
 
-    private Url $url;
+    private ?Url $url = null;
 
     public function __init()
     {
         parent::__init();
-        if (!isset($this->url)) {
+        // 不再在 __init 中创建 Url 实例，改为延迟加载
+        // 避免在模型实例化时触发 Url 及其依赖的创建，防止循环依赖
+    }
+    
+    /**
+     * 延迟加载 Url 实例
+     * @return Url
+     */
+    private function getUrlInstance(): Url
+    {
+        if ($this->url === null) {
             $this->url = ObjectManager::getInstance(Url::class);
         }
+        return $this->url;
     }
 
     public function setAclId(string $acl_id): static
@@ -200,7 +211,7 @@ class Acl extends \Weline\Framework\Database\Model
         if (!$this->isBackend()) {
             $url = '/' . trim($this->getRoute(), '/');
         } else {
-            $url = $this->url->getBackendUrl('/' . trim($this->getRoute(), '/'));
+            $url = $this->getUrlInstance()->getBackendUrl('/' . trim($this->getRoute(), '/'));
         }
         return $url ?? '';
     }
