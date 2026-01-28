@@ -46,31 +46,56 @@ class Dictionary extends BaseController
             $this->collectRealTranslationData($localeCode);
         }
         
-        // 使用联合查询：词典表 LEFT JOIN 翻译表
-        $query = $this->dictionary->reset()
-            ->fields(
-                'main_table.' . $this->dictionary::fields_WORD . ' as word' . ',' .
-                'COALESCE(ld.' . $this->localeDictionary::fields_TRANSLATE . ', main_table.' . $this->dictionary::fields_WORD . ') as translate' . ',' .
-                'COALESCE(ld.' . $this->localeDictionary::fields_LOCALE_CODE . ', "' . $localeCode . '") as locale_code' . ',' .
-                'ld.' . $this->localeDictionary::fields_MD5 . ' as md5' . ',' .
-                'COALESCE(ld.update_time, 0) as update_time'
-            )
-            ->join(
-                $this->localeDictionary->getTable() . ' as ld',
-                'main_table.' . $this->dictionary::fields_WORD . ' = ld.' . $this->localeDictionary::fields_WORD . ' AND ld.' . $this->localeDictionary::fields_LOCALE_CODE . ' = "' . $localeCode . '"',
-                'left'
-            );
-        // 搜索功能 - 搜索原文或翻译内容
+        // 使用简单查询，避免 COALESCE 函数导致的 PostgreSQL 解析问题
+        // 先查询词典表，再单独获取翻译数据
+        $query = $this->dictionary->reset();
+        
+        // 搜索功能
         if ($search) {
             $search = addslashes($search);
-            $query->where('(main_table.' . $this->dictionary::fields_WORD . ' LIKE "%' . $search . '%" OR ld.' . $this->localeDictionary::fields_TRANSLATE . ' LIKE "%' . $search . '%")');
+            $query->where($this->dictionary::fields_WORD, '%' . $search . '%', 'like');
         }
         
         // 使用框架分页功能
         $query->pagination($page, $pageSize);
         
-        // 执行联合查询
-        $allTranslations = $query->select()->fetch();
+        // 执行查询获取词典数据
+        $dictionaryResult = $query->select()->fetch();
+        
+        // 获取所有词汇
+        $words = [];
+        foreach ($dictionaryResult->getItems() as $item) {
+            $words[] = $item->getData($this->dictionary::fields_WORD);
+        }
+        
+        // 查询对应的翻译数据
+        $translations = [];
+        if (!empty($words)) {
+            $translationData = $this->localeDictionary->reset()
+                ->where($this->localeDictionary::fields_LOCALE_CODE, $localeCode)
+                ->where($this->localeDictionary::fields_WORD, $words, 'in')
+                ->select()
+                ->fetchArray();
+            
+            foreach ($translationData as $t) {
+                $translations[$t[$this->localeDictionary::fields_WORD]] = $t;
+            }
+        }
+        
+        // 组合数据
+        $allTranslations = $dictionaryResult;
+        $combinedItems = [];
+        foreach ($dictionaryResult->getItems() as $item) {
+            $word = $item->getData($this->dictionary::fields_WORD);
+            $t = $translations[$word] ?? null;
+            $combinedItems[] = [
+                'word' => $word,
+                'translate' => $t[$this->localeDictionary::fields_TRANSLATE] ?? $word,
+                'locale_code' => $t[$this->localeDictionary::fields_LOCALE_CODE] ?? $localeCode,
+                'md5' => $t[$this->localeDictionary::fields_MD5] ?? null,
+                'update_time' => $t['update_time'] ?? 0
+            ];
+        }
         
         // 获取分页信息
         $pagination = $allTranslations->getPagination();
@@ -83,7 +108,7 @@ class Dictionary extends BaseController
         
         // 格式化时间显示
         $formattedItems = [];
-        foreach ($allTranslations->getItems() as $item) {
+        foreach ($combinedItems as $item) {
             $item['formatted_update_time'] = $this->formatUpdateTime($item['update_time'] ?? 0);
             $formattedItems[] = $item;
         }
@@ -806,29 +831,48 @@ class Dictionary extends BaseController
         $pageSize = (int)$this->request->getParam('page_size', 10);
         
         try {
-            // 使用联合查询：词典表 LEFT JOIN 翻译表
-            $query = $this->dictionary->reset()
-                ->fields(
-                    'main_table.' . $this->dictionary::fields_WORD . ' as word' . ',' .
-                    'COALESCE(ld.' . $this->localeDictionary::fields_TRANSLATE . ', main_table.' . $this->dictionary::fields_WORD . ') as translate' . ',' .
-                    'COALESCE(ld.' . $this->localeDictionary::fields_LOCALE_CODE . ', "' . $localeCode . '") as locale_code' . ',' .
-                    'ld.' . $this->localeDictionary::fields_MD5 . ' as md5' . ',' .
-                    'COALESCE(ld.update_time, 0) as update_time'
-                )
-                ->join( 
-                    $this->localeDictionary->getTable() . ' as ld',
-                    'main_table.' . $this->dictionary::fields_WORD . ' = ld.' . $this->localeDictionary::fields_WORD . ' AND ld.' . $this->localeDictionary::fields_LOCALE_CODE . ' = "' . $localeCode . '"',
-                    'left'
-                ) ;
+            // 使用简单查询，避免 COALESCE 函数导致的 PostgreSQL 解析问题
+            $query = $this->dictionary->reset();
             
-            // 应用搜索条件（与主页面保持一致）
+            // 应用搜索条件
             if (!empty($search)) {
                 $search = addslashes($search);
-                $query->where('(main_table.' . $this->dictionary::fields_WORD . ' LIKE "%' . $search . '%" OR ld.' . $this->localeDictionary::fields_TRANSLATE . ' LIKE "%' . $search . '%")');
+                $query->where($this->dictionary::fields_WORD, '%' . $search . '%', 'like');
             }
             
-            // 获取所有数据
-            $translationItems = $query->select()->fetchArray();
+            // 获取所有词典数据
+            $dictionaryItems = $query->select()->fetchArray();
+            
+            // 获取所有词汇
+            $words = array_column($dictionaryItems, $this->dictionary::fields_WORD);
+            
+            // 查询对应的翻译数据
+            $translations = [];
+            if (!empty($words)) {
+                $translationData = $this->localeDictionary->reset()
+                    ->where($this->localeDictionary::fields_LOCALE_CODE, $localeCode)
+                    ->where($this->localeDictionary::fields_WORD, $words, 'in')
+                    ->select()
+                    ->fetchArray();
+                
+                foreach ($translationData as $t) {
+                    $translations[$t[$this->localeDictionary::fields_WORD]] = $t;
+                }
+            }
+            
+            // 组合数据
+            $translationItems = [];
+            foreach ($dictionaryItems as $item) {
+                $word = $item[$this->dictionary::fields_WORD];
+                $t = $translations[$word] ?? null;
+                $translationItems[] = [
+                    'word' => $word,
+                    'translate' => $t[$this->localeDictionary::fields_TRANSLATE] ?? $word,
+                    'locale_code' => $t[$this->localeDictionary::fields_LOCALE_CODE] ?? $localeCode,
+                    'md5' => $t[$this->localeDictionary::fields_MD5] ?? null,
+                    'update_time' => $t['update_time'] ?? 0
+                ];
+            }
             
             // 在应用层进行排序：未翻译优先
             if (!empty($translationItems)) {
