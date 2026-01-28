@@ -27,8 +27,15 @@ class Core extends CommandAbstract
     private bool $updateAll = false;  // 是否更新整个项目
     private bool $forceUpdate = false;  // 是否强制更新（删除本地重新拉取）
     private int $updatedFiles = 0;  // 更新的文件数
-    private int $skippedFiles = 0;  // 跳过的文件数（内容相同）
+    private int $skippedFiles = 0;  // 跳过的文件数（受保护的配置文件）
     private int $newFiles = 0;  // 新增的文件数
+    private int $deletedFiles = 0;  // 删除的文件数
+    
+    /**
+     * Git 变化的文件列表（增量模式使用）
+     * @var array<string, string> [相对路径 => 状态(A/M/D)]
+     */
+    private array $changedFiles = [];
 
     public function __construct(
         Printing $printer,
@@ -53,12 +60,12 @@ class Core extends CommandAbstract
                 '-b, --branch=<分支名>' => '指定分支（必填，如：main, master, dev）',
                 '-t, --tag=<标签名>' => '指定标签版本（可选，如：v1.0.0）',
                 '--repo=<仓库地址>' => '指定 Git 仓库地址（默认：Gitee 仓库）',
-                '-f, --force' => '强制更新：删除本地缓存，重新克隆仓库',
+                '-f, --force' => '强制更新：重新克隆仓库，完全覆盖核心文件',
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '增量更新' => '默认使用 git pull 增量拉取，只更新有变化的文件',
-                '强制更新' => '使用 -f 参数强制删除本地缓存，重新完整克隆',
+                '增量更新' => '默认使用 git fetch 增量拉取，通过 git diff 获取变化文件列表，只拷贝变化的文件',
+                '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
             ],
@@ -79,9 +86,9 @@ class Core extends CommandAbstract
         $this->printer->note('');
         $this->printer->setup('═══════════════════════════════════════════════════════════════');
         if ($this->forceUpdate) {
-            $this->printer->setup(__('框架核心代码更新（强制模式 - 完整重新下载）'));
+            $this->printer->setup(__('框架核心代码更新（强制模式 - 完整重新下载并覆盖）'));
         } else {
-            $this->printer->setup(__('框架核心代码更新（增量模式 - 只更新变化部分）'));
+            $this->printer->setup(__('框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）'));
         }
         $this->printer->setup('═══════════════════════════════════════════════════════════════');
         $this->printer->note('');
@@ -101,28 +108,24 @@ class Core extends CommandAbstract
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
         }
-        $this->printer->note(__('更新模式：%{1}', [$this->forceUpdate ? '强制完整更新' : '增量更新']));
+        $this->printer->note(__('更新模式：%{1}', [$this->forceUpdate ? '强制完整更新（覆盖所有文件）' : '增量更新（只更新 Git 变化的文件）']));
         $this->printer->note('');
 
         // 3. 创建/准备临时目录
         $this->printer->setup(__('步骤 3/6：准备临时目录...'));
         $tmpDir = $this->prepareTempDirectory();
 
-        // 4. 克隆/拉取仓库
+        // 4. 克隆/拉取仓库（增量模式会获取变化文件列表）
         $this->printer->setup(__('步骤 4/6：下载框架代码...'));
         $this->downloadFramework($repo, $tmpDir, $branch, $tag);
 
-        // 5. 拷贝核心文件（增量）
+        // 5. 拷贝核心文件
         $this->printer->setup(__('步骤 5/6：更新核心文件...'));
         $this->copyCoreFiles($tmpDir);
 
-        // 6. 保留临时目录（用于下次增量更新），除非强制模式
+        // 6. 保留临时目录（用于下次增量更新）
         $this->printer->setup(__('步骤 6/6：完成处理...'));
-        if ($this->forceUpdate) {
-            $this->printer->note(__('强制模式：保留缓存目录用于下次增量更新'));
-        } else {
-            $this->printer->note(__('增量模式：保留缓存目录用于下次更新'));
-        }
+        $this->printer->note(__('保留缓存目录用于下次增量更新'));
         $this->printer->success(__('✓ 缓存目录：%{1}', [$tmpDir]));
 
         $this->printer->note('');
@@ -135,7 +138,8 @@ class Core extends CommandAbstract
         $this->printer->note(__('更新统计：'));
         $this->printer->note(__('  - 新增文件：%{1} 个', [$this->newFiles]));
         $this->printer->note(__('  - 更新文件：%{1} 个', [$this->updatedFiles]));
-        $this->printer->note(__('  - 跳过文件：%{1} 个（内容相同）', [$this->skippedFiles]));
+        $this->printer->note(__('  - 删除文件：%{1} 个', [$this->deletedFiles]));
+        $this->printer->note(__('  - 跳过文件：%{1} 个（受保护的配置文件）', [$this->skippedFiles]));
         $this->printer->note('');
     }
 
@@ -186,8 +190,15 @@ class Core extends CommandAbstract
         $isExistingRepo = is_dir($gitDir);
         
         if ($isExistingRepo && !$this->forceUpdate) {
-            // 增量模式：已有仓库，使用 git fetch + reset 更新
+            // 增量模式：已有仓库，使用 git fetch + diff 获取变化文件
             $this->printer->note(__('增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...'));
+            
+            // 获取当前 HEAD
+            $currentHead = '';
+            exec(sprintf('cd %s && git rev-parse HEAD 2>&1', escapeshellarg($tmpDir)), $headOutput, $headCode);
+            if ($headCode === 0 && !empty($headOutput)) {
+                $currentHead = trim($headOutput[0]);
+            }
             
             // 获取远程更新
             $fetchCmd = sprintf('cd %s && git fetch origin', escapeshellarg($tmpDir));
@@ -201,11 +212,25 @@ class Core extends CommandAbstract
                 return;
             }
             
+            // 确定目标引用
+            $targetRef = $tag ? $tag : "origin/{$branch}";
+            
             if ($tag) {
-                // 如果指定了标签，获取所有标签并切换
-                $this->printer->note(__('获取标签并切换到 %{1}...', [$tag]));
+                // 如果指定了标签，获取所有标签
+                $this->printer->note(__('获取标签...', [$tag]));
                 exec(sprintf('cd %s && git fetch --tags', escapeshellarg($tmpDir)), $output, $tagFetchCode);
-                exec(sprintf('cd %s && git checkout %s', escapeshellarg($tmpDir), escapeshellarg($tag)), $output, $checkoutCode);
+            }
+            
+            // 获取 Git diff 变化的文件列表（在 reset 之前）
+            if (!empty($currentHead)) {
+                $this->changedFiles = $this->getGitChangedFiles($tmpDir, $currentHead, $targetRef);
+                $changedCount = count($this->changedFiles);
+                $this->printer->note(__('检测到 %{1} 个变化的文件', [$changedCount]));
+            }
+            
+            if ($tag) {
+                // 切换到标签
+                exec(sprintf('cd %s && git checkout %s 2>&1', escapeshellarg($tmpDir), escapeshellarg($tag)), $output, $checkoutCode);
                 
                 if ($checkoutCode !== 0) {
                     $this->printer->error(__('标签不存在: %{1}', [$tag]));
@@ -257,7 +282,66 @@ class Core extends CommandAbstract
         } else {
             // 强制模式或新仓库：完整克隆
             $this->cloneRepository($repo, $tmpDir, $branch, $tag);
+            // 强制模式或新仓库时，清空变化文件列表（表示需要全量拷贝）
+            $this->changedFiles = [];
         }
+    }
+    
+    /**
+     * 获取 Git 变化的文件列表
+     * 
+     * @param string $tmpDir 临时目录
+     * @param string $fromRef 起始引用（当前 HEAD）
+     * @param string $toRef 目标引用（远程分支或标签）
+     * @return array<string, string> [相对路径 => 状态(A/M/D/R)]
+     */
+    private function getGitChangedFiles(string $tmpDir, string $fromRef, string $toRef): array
+    {
+        $changedFiles = [];
+        
+        // 使用 git diff --name-status 获取变化的文件及其状态
+        $diffCmd = sprintf(
+            'cd %s && git diff --name-status %s..%s 2>&1',
+            escapeshellarg($tmpDir),
+            escapeshellarg($fromRef),
+            escapeshellarg($toRef)
+        );
+        
+        exec($diffCmd, $diffOutput, $diffCode);
+        
+        if ($diffCode !== 0) {
+            $this->printer->warning(__('无法获取 Git diff，将使用全量更新'));
+            return [];
+        }
+        
+        foreach ($diffOutput as $line) {
+            $line = trim($line);
+            if (empty($line)) {
+                continue;
+            }
+            
+            // 格式: "M\tpath/to/file" 或 "R100\told/path\tnew/path"
+            $parts = preg_split('/\t+/', $line);
+            if (count($parts) >= 2) {
+                $status = $parts[0];
+                $filePath = $parts[1];
+                
+                // 处理重命名的情况 (R100 old_path new_path)
+                if (str_starts_with($status, 'R')) {
+                    // 旧文件标记为删除
+                    $changedFiles[$filePath] = 'D';
+                    // 新文件标记为添加
+                    if (isset($parts[2])) {
+                        $changedFiles[$parts[2]] = 'A';
+                    }
+                } else {
+                    // A=添加, M=修改, D=删除
+                    $changedFiles[$filePath] = $status[0];
+                }
+            }
+        }
+        
+        return $changedFiles;
     }
     
     /**
@@ -352,13 +436,120 @@ class Core extends CommandAbstract
         $this->updatedFiles = 0;
         $this->skippedFiles = 0;
         $this->newFiles = 0;
-        
-        // 更新整个项目，增量更新（只更新变化的文件）
-        $processedPaths = 0;
-        $failedPaths = 0;
+        $this->deletedFiles = 0;
         
         // 需要更新的所有目录（但不包括 vendor）
         $allPaths = ['app', 'bin', 'pub'];
+        
+        // 判断更新模式
+        $isIncrementalWithChanges = !$this->forceUpdate && !empty($this->changedFiles);
+        
+        if ($isIncrementalWithChanges) {
+            // 增量模式：只拷贝 Git 变化的文件
+            $this->printer->note(__('增量模式：只更新 Git 变化的文件...'));
+            $this->copyChangedFilesOnly($tmpDir, $allPaths);
+        } else {
+            // 强制模式或新仓库：完全覆盖
+            $this->printer->note(__('完全覆盖模式：更新所有文件...'));
+            $this->copyAllFiles($tmpDir, $allPaths);
+        }
+        
+        // 注意：不更新 vendor 目录，保留现有的依赖包
+        $this->printer->note('');
+        $this->printer->note(__('⚠ vendor 目录未更新，保留现有依赖包'));
+    }
+    
+    /**
+     * 增量模式：只拷贝 Git 变化的文件
+     */
+    private function copyChangedFilesOnly(string $tmpDir, array $allowedPaths): void
+    {
+        // 需要保护的完整文件路径（绝对不覆盖）
+        $protectedPaths = [
+            'app/etc/env.php',
+            'app/.env',
+            '.env',
+        ];
+        
+        $processedCount = 0;
+        
+        foreach ($this->changedFiles as $relativePath => $status) {
+            // 标准化路径分隔符
+            $relativePath = str_replace(['/', '\\'], DS, $relativePath);
+            
+            // 检查是否在允许的目录中
+            $isInAllowedPath = false;
+            foreach ($allowedPaths as $allowedPath) {
+                if (str_starts_with($relativePath, $allowedPath . DS) || $relativePath === $allowedPath) {
+                    $isInAllowedPath = true;
+                    break;
+                }
+            }
+            
+            if (!$isInAllowedPath) {
+                continue;
+            }
+            
+            // 检查是否是受保护的文件
+            $normalizedPath = str_replace('\\', '/', $relativePath);
+            $isProtected = false;
+            foreach ($protectedPaths as $protectedPath) {
+                if ($normalizedPath === $protectedPath) {
+                    $isProtected = true;
+                    break;
+                }
+            }
+            
+            $sourcePath = $tmpDir . DS . $relativePath;
+            $targetPath = BP . $relativePath;
+            
+            if ($isProtected && file_exists($targetPath)) {
+                // 受保护的文件，跳过
+                $this->skippedFiles++;
+                continue;
+            }
+            
+            switch ($status) {
+                case 'A': // 新增
+                    if (file_exists($sourcePath)) {
+                        $this->ensureDirectoryExists(dirname($targetPath));
+                        copy($sourcePath, $targetPath);
+                        $this->newFiles++;
+                        $processedCount++;
+                    }
+                    break;
+                    
+                case 'M': // 修改
+                    if (file_exists($sourcePath)) {
+                        $this->ensureDirectoryExists(dirname($targetPath));
+                        copy($sourcePath, $targetPath);
+                        $this->updatedFiles++;
+                        $processedCount++;
+                    }
+                    break;
+                    
+                case 'D': // 删除
+                    // 注意：通常不删除目标目录中的文件，因为用户可能有自定义修改
+                    // 如果需要删除，取消下面的注释
+                    // if (file_exists($targetPath)) {
+                    //     unlink($targetPath);
+                    //     $this->deletedFiles++;
+                    //     $processedCount++;
+                    // }
+                    break;
+            }
+        }
+        
+        $this->printer->success(__('✓ 处理了 %{1} 个变化的文件', [$processedCount]));
+    }
+    
+    /**
+     * 强制模式：完全覆盖所有文件
+     */
+    private function copyAllFiles(string $tmpDir, array $allPaths): void
+    {
+        $processedPaths = 0;
+        $failedPaths = 0;
         
         foreach ($allPaths as $path) {
             $source = $tmpDir . DS . $path;
@@ -370,10 +561,10 @@ class Core extends CommandAbstract
                 continue;
             }
             
-            $this->printer->note(__('扫描 %{1}...', [$path]));
+            $this->printer->note(__('拷贝 %{1}...', [$path]));
             
-            // 增量更新：只更新有变化的文件
-            if ($this->copyDirectoryIncremental($source, $target)) {
+            // 完全覆盖：拷贝所有文件
+            if ($this->copyDirectoryFull($source, $target)) {
                 $this->printer->success(__('✓ %{1}', [$path]));
                 $processedPaths++;
             } else {
@@ -382,55 +573,20 @@ class Core extends CommandAbstract
             }
         }
         
-        // 注意：不更新 vendor 目录，保留现有的依赖包
         $this->printer->note('');
         $this->printer->success(__('✓ 共处理 %{1} 个路径', [$processedPaths]));
         if ($failedPaths > 0) {
             $this->printer->warning(__('⚠ 跳过 %{1} 个路径', [$failedPaths]));
         }
-        $this->printer->note(__('⚠ vendor 目录未更新，保留现有依赖包'));
     }
-
-    private function copyDirectory(string $source, string $target): bool
-    {
-        if (!is_dir($source)) {
-            return false;
-        }
-        
-        if (!is_dir($target)) {
-            mkdir($target, 0755, true);
-        }
-        
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
-        
-        foreach ($iterator as $item) {
-            $targetPath = $target . DS . $iterator->getSubPathName();
-            
-            if ($item->isDir()) {
-                if (!is_dir($targetPath)) {
-                    mkdir($targetPath, 0755, true);
-                }
-            } else {
-                $sourcePath = $item->getPathname();
-                copy($sourcePath, $targetPath);
-            }
-        }
-        
-        return true;
-    }
-
+    
     /**
-     * 增量更新目录：
+     * 完全覆盖目录：
      * 1. 新文件 → 拷贝
-     * 2. 内容变化的文件 → 更新
-     * 3. 内容相同的文件 → 跳过
-     * 4. 受保护的配置文件 → 永不覆盖
-     * 5. Git 仓库中不存在的用户文件 → 保留不动
+     * 2. 已存在的文件 → 覆盖（除了受保护的配置文件）
+     * 3. 目标目录中的额外文件 → 保留不动
      */
-    private function copyDirectoryIncremental(string $source, string $target): bool
+    private function copyDirectoryFull(string $source, string $target): bool
     {
         if (!is_dir($source)) {
             return false;
@@ -453,14 +609,14 @@ class Core extends CommandAbstract
             $targetPath = $target . DS . $relativePath;
             
             if ($item->isDir()) {
-                // 目录：不存在就创建，存在就保持（永远不删除）
+                // 目录：不存在就创建
                 if (!is_dir($targetPath)) {
                     mkdir($targetPath, 0755, true);
                 }
             } elseif ($item->isFile()) {
                 $sourcePath = $item->getPathname();
                 
-                // 检查是否是受保护的文件路径（完整路径匹配）
+                // 检查是否是受保护的文件路径
                 $shouldProtect = false;
                 foreach ($protectedPaths as $protectedPath) {
                     if ($relativePath === $protectedPath) {
@@ -471,26 +627,23 @@ class Core extends CommandAbstract
                 
                 // 保护配置文件：绝对不覆盖 app/etc/env.php 和 .env
                 if ($shouldProtect && file_exists($targetPath)) {
-                    // 目标文件已存在，绝对跳过（保护用户配置）
                     $this->skippedFiles++;
                     continue;
                 }
                 
                 // 检查目标文件是否存在
-                if (file_exists($targetPath)) {
-                    // 文件已存在，比较内容是否相同
-                    if ($this->isFileContentSame($sourcePath, $targetPath)) {
-                        // 内容相同，跳过
-                        $this->skippedFiles++;
-                        continue;
-                    }
-                    // 内容不同，更新文件
-                    copy($sourcePath, $targetPath);
-                    $this->updatedFiles++;
-                } else {
-                    // 新文件，拷贝
-                    copy($sourcePath, $targetPath);
+                $isNewFile = !file_exists($targetPath);
+                
+                // 确保目标目录存在
+                $this->ensureDirectoryExists(dirname($targetPath));
+                
+                // 直接覆盖拷贝
+                copy($sourcePath, $targetPath);
+                
+                if ($isNewFile) {
                     $this->newFiles++;
+                } else {
+                    $this->updatedFiles++;
                 }
             }
         }
@@ -499,30 +652,13 @@ class Core extends CommandAbstract
     }
     
     /**
-     * 比较两个文件内容是否相同（使用 MD5 哈希）
+     * 确保目录存在
      */
-    private function isFileContentSame(string $file1, string $file2): bool
+    private function ensureDirectoryExists(string $dir): void
     {
-        // 先比较文件大小，大小不同则内容必定不同
-        $size1 = filesize($file1);
-        $size2 = filesize($file2);
-        
-        if ($size1 !== $size2) {
-            return false;
-        }
-        
-        // 大小相同，比较内容哈希
-        return md5_file($file1) === md5_file($file2);
-    }
-
-    private function copyFile(string $source, string $target): bool
-    {
-        $dir = dirname($target);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        
-        return copy($source, $target);
     }
 
     private function removeDirectory(string $dir): void
@@ -536,12 +672,6 @@ class Core extends CommandAbstract
         } else {
             exec(sprintf('rm -rf %s', escapeshellarg($dir)));
         }
-    }
-
-    private function cleanup(string $tmpDir): void
-    {
-        $this->removeDirectory($tmpDir);
-        $this->printer->success(__('✓ 临时文件已清理'));
     }
 
     private function commandExists(string $command): bool
