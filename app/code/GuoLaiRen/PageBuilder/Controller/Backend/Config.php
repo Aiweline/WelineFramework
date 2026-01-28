@@ -62,11 +62,11 @@ class Config extends BackendController
         }
 
         try {
-            /** @var SystemConfig $systemConfig */
-            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
-            
             $aiEnabled = $this->request->getPost('ai_enabled', '0');
             $i18nEnabled = $this->request->getPost('i18n_enabled', '0');
+            
+            /** @var SystemConfig $systemConfig */
+            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
             
             // 保存AI功能开关
             $systemConfig->setConfig(
