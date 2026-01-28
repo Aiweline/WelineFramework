@@ -525,9 +525,19 @@ class Url implements UrlInterface
     }
 
     public static array $parserCache = [];
+    
+    /**
+     * 防止重入标志，避免在获取网站列表时触发循环
+     * @var bool
+     */
+    private static bool $parsingInProgress = false;
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
+        // 防止重入：如果正在解析中，直接返回URL，避免无限循环
+        if (self::$parsingInProgress) {
+            return $parse_url ?: $_SERVER['REQUEST_URI'] ?? '/';
+        }
         
         # 静态文件不用再分析店铺
         if ($parse_url and str_contains($parse_url, '.')
@@ -597,37 +607,44 @@ class Url implements UrlInterface
                 }
             } else {
                 // 缓存不存在或无效，从数据库查询
-                $detect_website_data = new DataObject([
-                    'sites' => [],
-                    'site_sample' => [
-                        "website_id" => 1,
-                        "name" => "默认网站",
-                        "code" => "default",
-                        "url" => "http://127.0.0.1:9981/default",
-                        "default_currency" => "CNY",
-                        "default_language" => "zh_Hans_CN",
-                        "default_timezone" => "Asia/Shanghai",
-                    ],
-                    'get_sites' => true
-                ]);
-                $eventManager = w_obj(EventsManager::class);
-                $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
-                $sites = $detect_website_data->getData('sites');
-                # 找出站点链接最长的，依次写入self::$parserSites
-                $tmp = [];
-                foreach ($sites as $site) {
-                    $site_url = $site['url'];
-                    $length = strlen($site_url);
-                    $tmp[$length] = $site;
+                // 设置重入保护标志，防止事件处理过程中触发循环
+                self::$parsingInProgress = true;
+                try {
+                    $detect_website_data = new DataObject([
+                        'sites' => [],
+                        'site_sample' => [
+                            "website_id" => 1,
+                            "name" => "默认网站",
+                            "code" => "default",
+                            "url" => "http://127.0.0.1:9981/default",
+                            "default_currency" => "CNY",
+                            "default_language" => "zh_Hans_CN",
+                            "default_timezone" => "Asia/Shanghai",
+                        ],
+                        'get_sites' => true
+                    ]);
+                    $eventManager = w_obj(EventsManager::class);
+                    $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
+                    $sites = $detect_website_data->getData('sites');
+                    # 找出站点链接最长的，依次写入self::$parserSites
+                    $tmp = [];
+                    foreach ($sites as $site) {
+                        $site_url = $site['url'];
+                        $length = strlen($site_url);
+                        $tmp[$length] = $site;
+                    }
+                    krsort($tmp);
+                    foreach ($tmp as $site) {
+                        $site_url = $site['url'];
+                        self::$parserSites[$site_url] = $site;
+                    }
+                    
+                    // 将查询结果保存到缓存
+                    $websiteCache->setAllSites($sites);
+                } finally {
+                    // 确保无论成功或异常都重置标志
+                    self::$parsingInProgress = false;
                 }
-                krsort($tmp);
-                foreach ($tmp as $site) {
-                    $site_url = $site['url'];
-                    self::$parserSites[$site_url] = $site;
-                }
-                
-                // 将查询结果保存到缓存
-                $websiteCache->setAllSites($sites);
             }
         }
         # 匹配网站 self::$parserSites 最长倒序

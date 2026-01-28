@@ -49,7 +49,7 @@ class Website extends BackendController
         $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
         
         foreach ($items as &$website) {
-            $websiteId = $website['website_id'];
+            $websiteId = (int)$website['website_id'];
             // 获取关联货币
             $currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
             $website['currency_codes'] = $currencyCodes;
@@ -92,7 +92,7 @@ class Website extends BackendController
             $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
             
             foreach ($items as &$website) {
-                $websiteId = $website['website_id'];
+                $websiteId = (int)$website['website_id'];
                 // 获取关联货币
                 $currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
                 $website['currency_codes'] = $currencyCodes;
@@ -157,11 +157,11 @@ class Website extends BackendController
                 
                 // 保存关联货币
                 $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-                $websiteCurrency->setWebsiteCurrencies($websiteId, $currencyCodes);
+                $websiteCurrency->setWebsiteCurrencies((int)$websiteId, $currencyCodes);
                 
                 // 保存关联语言
                 $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-                $websiteLanguage->setWebsiteLanguages($websiteId, $languageCodes);
+                $websiteLanguage->setWebsiteLanguages((int)$websiteId, $languageCodes);
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
