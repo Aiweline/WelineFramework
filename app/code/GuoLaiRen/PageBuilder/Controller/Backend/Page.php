@@ -89,7 +89,7 @@ class Page extends BackendController
         }
         
         // 获取用户角色
-        $user = $this->session->getLoginUser();
+        $user = $this->session->getLoginUser(\Weline\Backend\Model\BackendUser::class);
         if (!$user) {
             return false;
         }
