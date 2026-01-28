@@ -34,9 +34,16 @@ class Collect implements CommandInterface
 
     /**
      * @inheritDoc
+     * 
+     * 参数说明：
+     * - $data['skip_template_cache_clear']: bool - 是否跳过模板缓存清理（默认false）
+     *   在系统升级流程中使用，因为 Upgrade.php 已经清理过模板缓存，无需重复清理
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 检查是否跳过模板缓存清理（在系统升级流程中，Upgrade.php 已清理过）
+        $skipTemplateCacheClear = $data['skip_template_cache_clear'] ?? false;
+        
         // 检查是否指定了模块名
         $moduleName = $args['module'] ?? $args['m'] ?? $args[1] ?? null;
         
@@ -73,14 +80,17 @@ class Collect implements CommandInterface
         }
         
         // 清理模板缓存（标签在模板中使用）
-        $this->printing->note(__('清理模板缓存...'));
-        try {
-            /** @var \Weline\Framework\Cache\Console\Template\Clear $templateCacheClear */
-            $templateCacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class);
-            $templateCacheClear->execute();
-            $this->printing->success(__('模板缓存清理完成！'));
-        } catch (\Exception $e) {
-            $this->printing->warning(__('模板缓存清理失败：%{1}', [$e->getMessage()]));
+        // 在系统升级流程中跳过，因为 Upgrade.php 已经清理过
+        if (!$skipTemplateCacheClear) {
+            $this->printing->note(__('清理模板缓存...'));
+            try {
+                /** @var \Weline\Framework\Cache\Console\Template\Clear $templateCacheClear */
+                $templateCacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class);
+                $templateCacheClear->execute([], ['silent' => true]);
+                $this->printing->success(__('模板缓存清理完成！'));
+            } catch (\Exception $e) {
+                $this->printing->warning(__('模板缓存清理失败：%{1}', [$e->getMessage()]));
+            }
         }
         
         $this->printing->success(__('标签库收集和缓存清理完成！'));
@@ -97,12 +107,10 @@ class Collect implements CommandInterface
         $modules = Env::getInstance()->getActiveModules();
         
         $totalModules = count($modules);
-        $currentModule = 0;
+        $modulesWithTags = 0;
         
+        // 批量扫描所有模块的标签，减少输出
         foreach ($modules as $module) {
-            $currentModule++;
-            $this->printing->printing(__('正在扫描模块 %{1} (%{2}/%{3})...', [$module['name'], $currentModule, $totalModules]));
-            
             $tags = glob($module['base_path'] . 'Taglib' . DS . '*.php');
             if (!empty($tags)) {
                 foreach ($tags as $tag) {
@@ -110,9 +118,12 @@ class Collect implements CommandInterface
                     $tagClass = str_replace(DS, '\\', str_replace($module['base_path'], $module['namespace_path'] . '\\', $tagF));
                     $modules_tags[$module['name']][] = $tagClass;
                 }
-                $this->printing->printing(__('  - 找到 %{1} 个标签', [count($tags)]));
+                $modulesWithTags++;
             }
         }
+        
+        // 只输出汇总信息
+        $this->printing->note(__('扫描完成: %{1} 个模块中有 %{2} 个模块包含标签', [$totalModules, $modulesWithTags]));
         
         // 验证和收集标签数据
         $module_tags = [];
