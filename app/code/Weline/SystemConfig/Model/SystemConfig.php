@@ -32,8 +32,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public const area_BACKEND = 'backend';
     public const area_FRONTEND = 'frontend';
 
-    public array $_index_sort_keys = ['key', 'module'];
-    public array $_unit_primary_keys = ['key', 'module'];
+    public array $_index_sort_keys = ['key', 'module', 'area'];
+    public array $_unit_primary_keys = ['key', 'module', 'area'];
 
     static $configs = [];
 
@@ -121,26 +121,16 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            // 使用模型 ORM 方法，自动处理 SQL 方言差异
-            $this->clear()->reset()
-                ->where([
-                    [self::fields_KEY, $key],
-                    [self::fields_MODULE, $module],
-                    [self::fields_AREA, $area]
-                ])
-                ->find()
-                ->fetch();
+            // 清理模型状态
+            $this->clear()->reset();
             
-            // 设置数据
+            // 直接设置数据，save(true) 会根据 $_unit_primary_keys 自动判断 insert/update
             $this->setData([
                 self::fields_KEY => $key,
                 self::fields_VALUE => $value,
                 self::fields_MODULE => $module,
                 self::fields_AREA => $area
-            ]);
-            
-            // 保存（模型会根据是否存在自动处理 insert/update）
-            $this->save(true);
+            ])->save(true);
             
             // 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
