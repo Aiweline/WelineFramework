@@ -919,7 +919,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         $joins = '';
         foreach ($this->joins as $join) {
-            // join[0] 里是类似 "m_role `r`" 或 "m_role r" 的字符串
+            // join[0] 里是类似 "m_role `r`" 或 "m_role r" 或 "m_role as r" 的字符串
             $tableWithAlias = trim($join[0]);
             $condition = $join[1];
             $type = strtoupper($join[2] ?? 'LEFT');
@@ -933,8 +933,14 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 // 最后一个 token 视为别名（去掉反引号/双引号）
                 $aliasToken = $parts[count($parts) - 1];
                 $alias = trim($aliasToken, '`"');
-                // 其余部分还原成原始表名字符串
-                $rawTable = implode(' ', array_slice($parts, 0, -1));
+                
+                // 🔧 处理 "table as alias" 格式：跳过 AS 关键字
+                $tableParts = array_slice($parts, 0, -1);
+                // 如果倒数第二个是 "as" 或 "AS"，也要跳过
+                if (count($tableParts) > 0 && strtolower($tableParts[count($tableParts) - 1]) === 'as') {
+                    $tableParts = array_slice($tableParts, 0, -1);
+                }
+                $rawTable = implode(' ', $tableParts);
             }
 
             // 格式化表名（只对真正的表名部分做 schema/引号处理）

@@ -98,7 +98,8 @@ class CountryDataUpdateService
                 }
                 $insert_countries_display = array_chunk($insert_countries_display, 50);
                 foreach ($insert_countries_display as $batch) {
-                    $this->localeNames->clear()->insert($batch, Name::fields_COUNTRY_CODE)->fetch();
+                    // 使用联合唯一索引字段作为冲突检测
+                    $this->localeNames->clear()->insert($batch, Name::fields_COUNTRY_CODE . ',' . Name::fields_DISPLAY_LOCALE_CODE)->fetch();
                 }
                 $this->countries->commit();
             } catch (\Exception $e) {
