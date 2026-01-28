@@ -23,21 +23,7 @@ $categoriesData = $this->request->getData('categories') ?? [];
 $category = $this->request->getData('category') ?? [];
 $categoryId = (int)($category['category_id'] ?? $categoriesData['current']['category_id'] ?? 0);
 
-// Debug output
-$debug = true;
-if ($debug) {
-    echo '<div class="debug-filters-info" style="color:#333;padding:10px;background:#ffffcc;margin:10px 0;font-size:12px;">';
-    echo '<strong>Filter Debug:</strong><br>';
-    echo 'categoryId: ' . $categoryId . '<br>';
-    echo 'category keys: ' . (empty($category) ? 'empty' : implode(', ', array_keys($category))) . '<br>';
-    echo 'categoriesData keys: ' . (empty($categoriesData) ? 'empty' : implode(', ', array_keys($categoriesData))) . '<br>';
-    echo '</div>';
-}
-
 if ($categoryId <= 0) {
-    if ($debug) {
-        echo '<div style="color:orange;padding:10px;">categoryId is 0, returning early</div>';
-    }
     return;
 }
 
@@ -60,14 +46,7 @@ try {
     $productIds = array_column($results, ProductCategory::fields_product_id);
     
     if (empty($productIds)) {
-        if ($debug) {
-            echo '<div style="color:orange;padding:10px;">No products in category, returning early</div>';
-        }
         return;
-    }
-    
-    if ($debug) {
-        echo '<div style="padding:5px;background:#e0ffe0;">Found ' . count($productIds) . ' products</div>';
     }
     
     // 获取筛选服务
@@ -93,22 +72,11 @@ try {
     $this->request->setData('filtered_product_ids', $filteredProductIds);
     
 } catch (\Throwable $e) {
-    // 筛选服务不可用，显示错误信息
-    echo '<div class="debug-filters-error" style="color:red;padding:10px;background:#ffe0e0;margin:10px 0;">';
-    echo '<strong>Filter Error:</strong> ' . htmlspecialchars($e->getMessage());
-    echo '<br><small>' . htmlspecialchars($e->getFile() . ':' . $e->getLine()) . '</small>';
-    echo '</div>';
+    // 筛选服务不可用，跳过
     return;
 }
 
-if ($debug) {
-    echo '<div style="padding:5px;background:#e0e0ff;">Filters count: ' . count($filters) . ', Applied filters: ' . count($appliedFilters) . '</div>';
-}
-
 if (empty($filters) && empty($appliedFilters)) {
-    if ($debug) {
-        echo '<div style="color:orange;padding:10px;">No filters available, returning early</div>';
-    }
     return;
 }
 ?>
