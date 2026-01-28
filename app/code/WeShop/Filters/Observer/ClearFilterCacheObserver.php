@@ -66,11 +66,12 @@ class ClearFilterCacheObserver implements ObserverInterface
             $this->cacheService->clearByCategoryId($categoryId);
         }
         
-        // 触发缓存清除事件
-        $this->eventsManager->dispatch('WeShop_Filters::cache_clear', [
+        // 触发缓存清除事件（dispatch 需要变量传递）
+        $cacheEventData = [
             'category_ids' => $categoryIds,
             'clear_all' => false,
-        ]);
+        ];
+        $this->eventsManager->dispatch('WeShop_Filters::cache_clear', $cacheEventData);
     }
     
     /**

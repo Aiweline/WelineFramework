@@ -49,11 +49,17 @@ class AiGenerate extends BackendController
      */
     public function pageContent(): string
     {
+        // 设置响应头
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        
         if (!$this->request->isPost()) {
-            $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+            // 记录详细的请求方法信息用于调试
+            $actualMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
+            error_log("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
+            
             return json_encode([
                 'success' => false,
-                'message' => __('仅支持POST请求')
+                'message' => __('仅支持POST请求') . " (实际方法: {$actualMethod})"
             ]);
         }
 

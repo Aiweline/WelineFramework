@@ -225,7 +225,12 @@ class FilterCache extends Model
     public function clearAllCache(): bool
     {
         try {
-            $this->reset()->truncate();
+            // 使用 DELETE 代替 TRUNCATE 以兼容 PostgreSQL
+            // TRUNCATE 在框架中使用了 MySQL 特有语法
+            $this->reset()
+                ->where(self::fields_cache_id, '', '!=')
+                ->delete()
+                ->fetch();
             return true;
         } catch (\Throwable $e) {
             return false;

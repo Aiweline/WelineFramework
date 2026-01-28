@@ -78,23 +78,25 @@ class FilterService
         // 获取可用的筛选器集合
         $filterCollection = $this->collectFilters($categoryId, $productIds);
         
-        // 触发筛选前事件
-        $this->eventsManager->dispatch('WeShop_Filters::filters_apply_before', [
+        // 触发筛选前事件（dispatch 需要变量传递，不能直接传数组字面量）
+        $beforeEventData = [
             'category_id' => $categoryId,
             'product_ids' => $productIds,
             'filter_params' => &$filterParams,
-        ]);
+        ];
+        $this->eventsManager->dispatch('WeShop_Filters::filters_apply_before', $beforeEventData);
         
         // 应用筛选条件
         $filteredProductIds = $this->applyFilters($productIds, $filterParams, $filterCollection);
         
         // 触发筛选后事件
-        $this->eventsManager->dispatch('WeShop_Filters::filters_apply_after', [
+        $afterEventData = [
             'category_id' => $categoryId,
             'original_product_ids' => $productIds,
             'filtered_product_ids' => &$filteredProductIds,
             'filter_params' => $filterParams,
-        ]);
+        ];
+        $this->eventsManager->dispatch('WeShop_Filters::filters_apply_after', $afterEventData);
         
         // 构建筛选组数据（使用筛选后的产品ID更新计数）
         $filtersData = $this->buildFiltersData($categoryId, $filteredProductIds, $filterParams, $filterCollection);
@@ -131,11 +133,12 @@ class FilterService
         $collection = $this->registry->getForCategory($categoryId);
         
         // 触发筛选器收集事件，允许其他模块添加自定义筛选器
-        $this->eventsManager->dispatch('WeShop_Filters::filters_collect', [
+        $eventData = [
             'category_id' => $categoryId,
             'product_ids' => $productIds,
             'filters' => $collection,
-        ]);
+        ];
+        $this->eventsManager->dispatch('WeShop_Filters::filters_collect', $eventData);
         
         return $collection;
     }
@@ -209,13 +212,14 @@ class FilterService
             // 获取筛选选项
             $options = $filter->getOptions($categoryId, $productIds, $appliedFilters);
             
-            // 触发选项收集事件
-            $this->eventsManager->dispatch('WeShop_Filters::filter_options_collect', [
+            // 触发选项收集事件（dispatch 需要变量传递）
+            $optionsEventData = [
                 'filter_code' => $filterCode,
                 'category_id' => $categoryId,
                 'product_ids' => $productIds,
                 'options' => &$options,
-            ]);
+            ];
+            $this->eventsManager->dispatch('WeShop_Filters::filter_options_collect', $optionsEventData);
             
             // 如果没有选项，跳过
             if (empty($options)) {
@@ -281,9 +285,8 @@ class FilterService
      */
     private function getValueLabel(FilterProviderInterface $filter, string $value): string
     {
-        // 简化实现：直接返回值
-        // 实际可以从筛选器的选项中查找对应标签
-        return $value;
+        // 调用筛选器的 getValueLabel 方法获取翻译后的标签
+        return $filter->getValueLabel($value);
     }
     
     /**

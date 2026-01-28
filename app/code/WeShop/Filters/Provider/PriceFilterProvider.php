@@ -59,7 +59,9 @@ class PriceFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        return __('价格区间');
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        return $isEnglish ? 'Price Range' : __('价格区间');
     }
     
     /**
@@ -246,28 +248,32 @@ class PriceFilterProvider extends AbstractFilterProvider
             ->fields(Product::fields_ID)
             ->where(Product::fields_ID, $productIds, 'in');
         
-        // 构建价格条件（OR 关系）
-        $priceConditions = [];
-        foreach ($ranges as $range) {
+        // 使用框架的 where 方法构建价格条件，避免 SQL 注入和跨数据库兼容性问题
+        // 对于多个范围，使用 OR 条件组
+        if (count($ranges) === 1) {
+            // 单个范围：直接使用 where
+            $range = $ranges[0];
+            $productModel->where(Product::fields_price, $range['min'], '>=');
             if ($range['max'] !== null) {
-                $priceConditions[] = sprintf(
-                    '(%s >= %f AND %s <= %f)',
-                    Product::fields_price,
-                    $range['min'],
-                    Product::fields_price,
-                    $range['max']
-                );
-            } else {
-                $priceConditions[] = sprintf(
-                    '%s >= %f',
-                    Product::fields_price,
-                    $range['min']
-                );
+                $productModel->where(Product::fields_price, $range['max'], '<=');
             }
-        }
-        
-        if (!empty($priceConditions)) {
-            $productModel->where('(' . implode(' OR ', $priceConditions) . ')');
+        } else {
+            // 多个范围：构建 OR 条件（使用数值格式化确保兼容性）
+            $priceConditions = [];
+            $priceField = Product::fields_price;
+            foreach ($ranges as $range) {
+                $minPrice = number_format($range['min'], 2, '.', '');
+                if ($range['max'] !== null) {
+                    $maxPrice = number_format($range['max'], 2, '.', '');
+                    $priceConditions[] = "({$priceField} >= {$minPrice} AND {$priceField} <= {$maxPrice})";
+                } else {
+                    $priceConditions[] = "{$priceField} >= {$minPrice}";
+                }
+            }
+            
+            if (!empty($priceConditions)) {
+                $productModel->where('(' . implode(' OR ', $priceConditions) . ')');
+            }
         }
         
         $results = $productModel->select()->fetchArray();
@@ -482,5 +488,19 @@ class PriceFilterProvider extends AbstractFilterProvider
     {
         $this->dynamicRangeCount = $count;
         return $this;
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        $parsed = $this->parseRangeValue($value);
+        if ($parsed === null) {
+            return $value;
+        }
+        
+        // 使用 PriceRange 的标签生成方法
+        return PriceRange::generateLabel($parsed['min'], $parsed['max'], $this->currencySymbol);
     }
 }

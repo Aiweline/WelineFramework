@@ -223,12 +223,17 @@ class PriceRange extends Model
      */
     public static function generateLabel(float $minPrice, ?float $maxPrice, string $currencySymbol = ''): string
     {
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        
         if ($maxPrice === null) {
-            return $currencySymbol . number_format($minPrice, 0) . ' ' . __('及以上');
+            $suffix = $isEnglish ? 'and above' : __('及以上');
+            return $currencySymbol . number_format($minPrice, 0) . ' ' . $suffix;
         }
         
         if ($minPrice == 0) {
-            return __('低于') . ' ' . $currencySymbol . number_format($maxPrice, 0);
+            $prefix = $isEnglish ? 'Under' : __('低于');
+            return $prefix . ' ' . $currencySymbol . number_format($maxPrice, 0);
         }
         
         return $currencySymbol . number_format($minPrice, 0) . ' - ' . $currencySymbol . number_format($maxPrice, 0);

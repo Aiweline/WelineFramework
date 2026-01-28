@@ -6,6 +6,7 @@ namespace WeShop\Filters\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Request;
 use WeShop\Filters\Model\FilterRegistry;
 use WeShop\Filters\Model\CategoryFilterConfig;
 use WeShop\Filters\Provider\EavAttributeFilterProvider;
@@ -49,6 +50,15 @@ class CollectFiltersObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // 将 Filters 模块添加到请求模块链，以便加载翻译
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $request->addModule('WeShop_Filters');
+        } catch (\Throwable $e) {
+            // 静默处理
+        }
+        
         $data = $event->getData('data');
         
         if (!is_array($data)) {

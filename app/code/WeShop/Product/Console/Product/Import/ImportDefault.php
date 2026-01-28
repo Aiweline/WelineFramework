@@ -7,6 +7,7 @@ namespace WeShop\Product\Console\Product\Import;
 use WeShop\Catalog\Model\Category;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Review\Model\Review;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
@@ -49,6 +50,7 @@ class ImportDefault extends CommandAbstract
         $this->deleteExistingTestProducts();
 
         $importedCount = 0;
+        $importedProductIds = [];
 
         // 定义测试产品数据
         $products = $this->getTestProducts();
@@ -87,6 +89,7 @@ class ImportDefault extends CommandAbstract
 
                 $this->printer->success("✓ 创建产品: {$productData['name']} (SKU: {$productData['sku']}, ID: {$productId})");
                 $importedCount++;
+                $importedProductIds[] = $productId;
 
                 // 关联产品分类
                 if (isset($productData['category_handles']) && is_array($productData['category_handles'])) {
@@ -136,6 +139,94 @@ class ImportDefault extends CommandAbstract
 
         $this->printer->success("\n导入完成！");
         $this->printer->note("成功导入: {$importedCount} 个产品");
+        
+        // 生成示例评论数据
+        $this->generateSampleReviews($importedProductIds);
+    }
+    
+    /**
+     * 生成示例评论数据
+     * 
+     * @param array $productIds
+     */
+    private function generateSampleReviews(array $productIds): void
+    {
+        if (empty($productIds)) {
+            return;
+        }
+        
+        $this->printer->note("\n正在生成示例评论数据...");
+        
+        try {
+            /** @var Review $reviewModel */
+            $reviewModel = ObjectManager::getInstance(Review::class);
+            
+            // 先清除旧的评论数据
+            $reviewModel->reset()
+                ->where(Review::fields_PRODUCT_ID, $productIds, 'in')
+                ->delete()
+                ->fetch();
+            
+            $sampleTitles = [
+                '非常满意', '物超所值', '推荐购买', '质量不错', '性价比高',
+                '发货很快', '包装完好', '与描述相符', '值得推荐', '回购首选',
+            ];
+            
+            $sampleContents = [
+                '产品质量很好，完全符合预期，物流也很快，下次还会再买。',
+                '包装很精美，产品做工精细，非常满意这次购物体验。',
+                '性价比很高，功能齐全，使用方便，推荐给大家。',
+                '发货速度快，物流给力，产品质量也不错，好评！',
+                '第二次购买了，一如既往的好，会继续支持。',
+                '朋友推荐来买的，果然没有让我失望，很满意。',
+                '做工精良，材质优秀，价格也很合理。',
+                '收到货后马上就用了，效果很好，值得购买。',
+            ];
+            
+            $totalReviews = 0;
+            
+            foreach ($productIds as $productId) {
+                // 每个产品生成 2-8 条评论
+                $reviewCount = random_int(2, 8);
+                
+                for ($i = 0; $i < $reviewCount; $i++) {
+                    $rating = $this->getWeightedRating();
+                    
+                    $reviewData = [
+                        Review::fields_PRODUCT_ID => $productId,
+                        Review::fields_CUSTOMER_ID => random_int(1, 100),
+                        Review::fields_RATING => $rating,
+                        Review::fields_TITLE => $sampleTitles[array_rand($sampleTitles)],
+                        Review::fields_CONTENT => $sampleContents[array_rand($sampleContents)],
+                        Review::fields_STATUS => Review::STATUS_APPROVED,
+                    ];
+                    
+                    $reviewModel->reset()->insert($reviewData)->fetch();
+                    $totalReviews++;
+                }
+            }
+            
+            $this->printer->success("已为 " . count($productIds) . " 个产品生成 {$totalReviews} 条评论");
+            
+        } catch (\Throwable $e) {
+            $this->printer->warning("生成评论数据失败: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 获取加权随机评分（偏向高分）
+     * 
+     * 评分分布：5分40%, 4分30%, 3分15%, 2分10%, 1分5%
+     */
+    private function getWeightedRating(): int
+    {
+        $rand = random_int(1, 100);
+        
+        if ($rand <= 40) return 5;
+        if ($rand <= 70) return 4;
+        if ($rand <= 85) return 3;
+        if ($rand <= 95) return 2;
+        return 1;
     }
 
     public function tip(): string

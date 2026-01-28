@@ -37,7 +37,9 @@ class SaleFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        return __('促销');
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        return $isEnglish ? 'Deals & Discounts' : __('促销');
     }
     
     /**
@@ -257,5 +259,24 @@ class SaleFilterProvider extends AbstractFilterProvider
             Product::fields_price,
             $minDiscount
         );
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        
+        $labels = [
+            self::ON_SALE => $isEnglish ? 'On Sale' : __('促销商品'),
+            self::DISCOUNT_10 => $isEnglish ? '10% Off or More' : __('9折及以上'),
+            self::DISCOUNT_20 => $isEnglish ? '20% Off or More' : __('8折及以上'),
+            self::DISCOUNT_30 => $isEnglish ? '30% Off or More' : __('7折及以上'),
+            self::DISCOUNT_50 => $isEnglish ? '50% Off or More' : __('5折及以上'),
+        ];
+        
+        return $labels[$value] ?? $value;
     }
 }

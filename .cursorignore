@@ -40,8 +40,9 @@ out/
 # ============================================
 # Large Static Data Files
 # ============================================
-# Data files
+# Data files (exclude large data files, but keep i18n translation files)
 *.csv
+!**/i18n/*.csv
 *.tsv
 *.xlsx
 *.xls
