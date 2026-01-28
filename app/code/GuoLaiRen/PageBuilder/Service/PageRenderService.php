@@ -18,6 +18,9 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
+use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
+use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\Template;
@@ -34,6 +37,9 @@ class PageRenderService
     private Page $pageModel;
     private Style $styleModel;
     private LocalDescription $localDescriptionModel;
+    private TemplatePathResolver $pathResolver;
+    private ComponentResolver $componentResolver;
+    private LayoutConfigNormalizer $configNormalizer;
     private ?Request $request = null;
     private ?Template $template = null;
     
@@ -48,13 +54,19 @@ class PageRenderService
         LayoutOwnerResolver $layoutOwnerResolver,
         Page $pageModel,
         Style $styleModel,
-        LocalDescription $localDescriptionModel
+        LocalDescription $localDescriptionModel,
+        ?TemplatePathResolver $pathResolver = null,
+        ?ComponentResolver $componentResolver = null,
+        ?LayoutConfigNormalizer $configNormalizer = null
     ) {
         $this->layoutAssembler = $layoutAssembler;
         $this->layoutOwnerResolver = $layoutOwnerResolver;
         $this->pageModel = $pageModel;
         $this->styleModel = $styleModel;
         $this->localDescriptionModel = $localDescriptionModel;
+        $this->pathResolver = $pathResolver ?? TemplatePathResolver::getInstance();
+        $this->componentResolver = $componentResolver ?? ComponentResolver::getInstance();
+        $this->configNormalizer = $configNormalizer ?? LayoutConfigNormalizer::getInstance();
     }
     
     /**
@@ -181,14 +193,20 @@ class PageRenderService
         $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
         $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
         
-        // 如果 header 或 footer 没有有效组件，尝试从默认配置加载
-        if (!$hasCustomHeader || !$hasCustomFooter) {
+        // 如果 header、content 或 footer 没有有效组件，尝试从默认配置加载
+        if (!$hasCustomHeader || !$hasCustomContent || !$hasCustomFooter) {
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
             
             // 如果 header 为空，使用默认 header
             if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
                 $layoutConfig['header'] = $defaultLayoutConfig['header'];
                 $this->assign('using_default_header', true);
+            }
+            
+            // 如果 content 为空，使用默认 content
+            if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
+                $layoutConfig['content'] = $defaultLayoutConfig['content'];
+                $this->assign('using_default_content', true);
             }
             
             // 如果 footer 为空，使用默认 footer
@@ -261,7 +279,7 @@ class PageRenderService
         }
         
         // 读取布局配置文件
-        $layoutsJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/layouts.json";
+        $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
             return null;
@@ -289,7 +307,8 @@ class PageRenderService
         $templatePath = "GuoLaiRen_PageBuilder::style/{$styleCode}/layouts/{$layoutFile}";
         
         // 验证模板文件是否存在
-        $fullPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/{$layoutFile}";
+        $layoutsPath = $this->pathResolver->getLayoutsPath($styleCode);
+        $fullPath = $layoutsPath . '/' . $layoutFile;
         
         if (!file_exists($fullPath)) {
             return null;
@@ -312,7 +331,7 @@ class PageRenderService
         }
         
         // 读取布局配置文件
-        $layoutsJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/layouts.json";
+        $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
             return null;
@@ -363,11 +382,11 @@ class PageRenderService
         }
         
         // 直接使用页面类型代码作为配置文件名
-        $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/{$pageType}.json";
+        $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, $pageType);
         
         if (!file_exists($configFilePath)) {
             // fallback 到 custom_page
-            $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/custom_page.json";
+            $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, 'custom_page');
             if (!file_exists($configFilePath)) {
                 return $defaultConfig;
             }
@@ -1059,7 +1078,7 @@ class PageRenderService
             
             // 构建组件模板路径（如果未通过 Component 模型解析）
             if (!$componentPath) {
-                $componentPath = "GuoLaiRen_PageBuilder::templates/style/{$useTemplateCode}/components/{$componentFile}";
+                $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
             }
             
             // 传递数据到组件
@@ -1078,7 +1097,9 @@ class PageRenderService
                     if ($isVisualEditor) {
                         $escapedCode = htmlspecialchars($code);
                         $escapedRegion = htmlspecialchars($region);
-                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\">{$componentHtml}</div>";
+                        // 存储组件实际所属的模板代码（用于跨模板组件编辑）
+                        $escapedStyleCode = htmlspecialchars($useTemplateCode);
+                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
                     }
                     $html .= $componentHtml;
                     $html .= "<!-- Component {$code} rendered successfully -->\n";
@@ -1095,35 +1116,12 @@ class PageRenderService
     
     /**
      * 获取组件文件映射
+     * 
+     * 使用 ComponentResolver 获取组件映射
      */
     private function getComponentFilesMap(string $styleCode): array
     {
-        if (isset(self::$componentFilesCache[$styleCode])) {
-            return self::$componentFilesCache[$styleCode];
-        }
-        
-        $componentJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/component.json";
-        
-        if (!file_exists($componentJsonPath)) {
-            self::$componentFilesCache[$styleCode] = [];
-            return [];
-        }
-        
-        $jsonContent = file_get_contents($componentJsonPath);
-        $jsonConfig = json_decode($jsonContent, true);
-        
-        if (!$jsonConfig || !isset($jsonConfig['components'])) {
-            self::$componentFilesCache[$styleCode] = [];
-            return [];
-        }
-        
-        $map = [];
-        foreach ($jsonConfig['components'] as $code => $config) {
-            $map[$code] = $config['file'] ?? ($code . '.phtml');
-        }
-        
-        self::$componentFilesCache[$styleCode] = $map;
-        return $map;
+        return $this->componentResolver->getComponentFilesMap($styleCode);
     }
     
     /**
@@ -1290,6 +1288,9 @@ class PageRenderService
     
     /**
      * 渲染可视化编辑器模式
+     * 
+     * 统一使用组件化模式：始终构建完整 HTML 结构
+     * header/content/footer 组件只是 HTML 片段，不包含完整的 HTML 文档结构
      */
     private function renderVisualMode(
         string $headerHtml,
@@ -1306,34 +1307,9 @@ class PageRenderService
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $dropZoneScripts = $this->getDropZoneScripts((int)$page->getId(), $layoutOwnerPageId);
         
-        // 检查 header 是否包含完整的 HTML 结构
-        $hasFullHtml = (strpos($headerHtml, '<head>') !== false || strpos($headerHtml, '<html>') !== false);
-        
-        if ($hasFullHtml) {
-            // 传统模式：header 包含完整的 HTML 结构
-            $headerHtml = preg_replace('/(<body[^>]*>)/i', "$1\n" . $debugInfo, $headerHtml, 1);
-            $wrappedHeader = '<div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>';
-            $wrappedContent = '<div class="pb-slot pb-slot-content" data-region="content" data-multiple="true" data-slot-name="Content">' . $contentHtml . '</div>';
-            $wrappedFooter = '<div class="pb-slot pb-slot-footer" data-region="footer" data-multiple="false" data-slot-name="Footer">' . $footerHtml . '</div>';
-            
-            // 注入样式到 head
-            $wrappedHeader = preg_replace(
-                '/(<\/head>)/i',
-                $dropZoneStyles . "\n    $1",
-                $wrappedHeader,
-                1
-            );
-            
-            // 注入脚本到 body 末尾
-            $wrappedFooter = preg_replace(
-                '/(<\/body>)/i',
-                "\n    " . $dropZoneScripts . "\n$1",
-                $wrappedFooter,
-                1
-            );
-            
-            return $previewBoot . $wrappedHeader . $wrappedContent . $wrappedFooter;
-        }
+        // 清理 header/footer 中可能存在的 HTML 文档结构标签（兼容旧模板）
+        $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
+        $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
         
         // 组件化模式：构建完整 HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
@@ -1362,6 +1338,41 @@ class PageRenderService
     ' . $dropZoneScripts . '
 </body>
 </html>';
+    }
+    
+    /**
+     * 清理 HTML 文档结构标签
+     * 
+     * 移除组件 HTML 中可能存在的完整文档结构标签
+     * 确保组件只是纯粹的 HTML 片段
+     */
+    private function cleanHtmlDocumentTags(string $html): string
+    {
+        // 移除 DOCTYPE
+        $html = preg_replace('/<!DOCTYPE[^>]*>/i', '', $html);
+        
+        // 移除 <html> 标签（保留内容）
+        $html = preg_replace('/<html[^>]*>/i', '', $html);
+        $html = preg_replace('/<\/html>/i', '', $html);
+        
+        // 移除 <head> 标签及其内容（保留重要的 meta 和 style）
+        // 提取 head 中的 style 标签
+        $styles = '';
+        if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
+            $styles = implode("\n", $matches[0]);
+        }
+        $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
+        
+        // 移除 <body> 标签（保留内容）
+        $html = preg_replace('/<body[^>]*>/i', '', $html);
+        $html = preg_replace('/<\/body>/i', '', $html);
+        
+        // 如果有提取到的 styles，添加回去
+        if (!empty($styles)) {
+            $html = $styles . $html;
+        }
+        
+        return trim($html);
     }
     
     /**
