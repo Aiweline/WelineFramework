@@ -215,6 +215,72 @@ class ModelSetup
     }
 
     /**
+     * @DESC         |复制表（包含结构和数据）
+     *
+     * 参数区：
+     *
+     * @param string $source_table 源表名
+     * @param string $target_table 目标表名
+     * @param bool $with_data 是否复制数据，默认 true
+     *
+     * @return bool
+     * @throws \Exception
+     */
+    public function copyTable(string $source_table, string $target_table, bool $with_data = true): bool
+    {
+        if ($this->model === null) {
+            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
+        }
+        
+        $connector = $this->model->getConnection()->getConnector();
+        $connection = $this->model->getConnection();
+        
+        // 检查源表是否存在
+        if (!$connector->tableExist($source_table)) {
+            throw new \Weline\Framework\App\Exception(__('源表不存在：%1', $source_table));
+        }
+        
+        // 如果目标表已存在，先删除
+        if ($connector->tableExist($target_table)) {
+            $this->dropTable($target_table);
+        }
+        
+        try {
+            // 获取源表的建表语句
+            $createTableSql = $connector->getCreateTableSql($source_table);
+            
+            if (empty($createTableSql)) {
+                throw new \Weline\Framework\App\Exception(__('无法获取表的建表语句：%1', $source_table));
+            }
+            
+            // 移除 IF NOT EXISTS（如果有）
+            $createTableSql = preg_replace('/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+/i', 'CREATE TABLE ', $createTableSql);
+            
+            // 替换表名（处理各种引号格式：`table`、"table"、table）
+            // 匹配 CREATE TABLE 后的表名
+            $createTableSql = preg_replace(
+                '/CREATE\s+TABLE\s+[`"\']?[^`"\'\s(]+[`"\']?/i',
+                'CREATE TABLE ' . $target_table,
+                $createTableSql,
+                1
+            );
+            
+            // 执行建表语句
+            $connection->query($createTableSql)->fetch();
+            
+            // 如果需要复制数据
+            if ($with_data) {
+                $insertSql = "INSERT INTO {$target_table} SELECT * FROM {$source_table}";
+                $connection->query($insertSql)->fetch();
+            }
+            
+            return true;
+        } catch (\Exception $e) {
+            throw new \Weline\Framework\App\Exception(__('复制表失败：%1', $e->getMessage()));
+        }
+    }
+
+    /**
      * @DESC         |忽略约束删除表
      *
      * 参数区：

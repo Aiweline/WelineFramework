@@ -37,7 +37,10 @@ class RequestCache extends \Weline\Framework\Cache\CacheFactory
     public static function getDomainKey(Request|RequestAbstract|null $request = null): string
     {
         if ($request === null) {
-            $request = ObjectManager::getInstance(Request::class);
+            // 避免创建 Request 实例时触发循环，直接从 $_SERVER 获取
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $website_code = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
+            return $website_code ?: $host;
         }
         $host = $request->getServer('HTTP_HOST') ?? '';
         $website_code = $request->getServer('WELINE_WEBSITE_CODE') ?? '';

@@ -480,63 +480,18 @@ class Reinstall extends CommandAbstract
                 $this->printer->note(__('  复制表：%{1} → %{2}...', [$tableName, $backupTableName]));
                 
                 try {
-                    // 使用 ORM 方法复制表：获取建表语句 → 修改表名 → 执行建表 → 复制数据
-                    // 获取 connection 对象（ORM 接口）
-                    $connection = $model->getConnection();
+                    // 使用 ModelSetup::copyTable 复制表（自动处理不同数据库的差异）
+                    $modelSetup = ObjectManager::make(ModelSetup::class);
+                    $modelSetup->putModel($model);
+                    $modelSetup->copyTable($tableName, $backupTableName, true);
                     
-                    // 检查备份表是否已存在，如果存在则先删除（避免重复创建错误）
-                    if ($connector->tableExist($backupTableName)) {
-                        $this->printer->note(__('  备份表已存在，先删除旧表：%{1}...', [$backupTableName]));
-                        try {
-                            $modelSetup = ObjectManager::make(ModelSetup::class);
-                            $modelSetup->putModel($model);
-                            $modelSetup->dropTable($backupTableName);
-                            $this->printer->note(__('  ✓ 旧备份表已删除'));
-                        } catch (\Exception $dropException) {
-                            $this->printer->warning(__('  删除旧备份表失败：%{1}，将继续尝试创建', [$dropException->getMessage()]));
-                        }
-                    }
-                    
-                    // 方法1：先尝试使用 CREATE TABLE ... AS SELECT（PostgreSQL 和 MySQL 都支持）
-                    // 如果失败，使用方法2：分步创建表并复制数据
-                    try {
-                        // 方法1：使用 CREATE TABLE ... AS SELECT（PostgreSQL 和 MySQL 都支持）
-                        $copySql = "CREATE TABLE {$backupTableName} AS SELECT * FROM {$tableName}";
-                        $connection->query($copySql)->fetch();
-                    } catch (\Exception $e1) {
-                        // 方法2：如果方法1失败，先获取建表语句，修改表名后执行，再插入数据
-                        $createTableSql = $connector->getCreateTableSql($tableName);
-                        
-                        if (empty($createTableSql)) {
-                            throw new \Exception(__('无法获取表的建表语句：%{1}', [$e1->getMessage()]));
-                        }
-                        
-                        // 移除 IF NOT EXISTS
-                        $createTableSql = preg_replace('/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+/i', 'CREATE TABLE ', $createTableSql);
-                        
-                        // 提取并替换表名（支持各种引号格式）
-                        // 匹配 CREATE TABLE 后的表名（可能包含 schema.table 格式）
-                        $createTableSql = preg_replace(
-                            '/CREATE\s+TABLE\s+[^(\s]+/i',
-                            'CREATE TABLE ' . $backupTableName,
-                            $createTableSql,
-                            1
-                        );
-                        
-                        // 使用 connection->query() 执行建表语句（ORM 接口）
-                        $connection->query($createTableSql)->fetch();
-                        
-                        // 使用 connection->query() 复制数据（ORM 接口）
-                        $insertBackupSql = "INSERT INTO {$backupTableName} SELECT * FROM {$tableName}";
-                        $connection->query($insertBackupSql)->fetch();
-                    }
-                    
-                    // 记录备份表信息（保存 connector 以便后续使用）
+                    // 记录备份表信息（保存 model 和 connector 以便后续使用）
                     $this->backupTables[] = [
                         'original' => $originTableName,
                         'backup' => $backupTableName,
                         'module' => $moduleName,
-                        'connector' => $connector
+                        'connector' => $connector,
+                        'model' => $model
                     ];
                     
                     $this->printer->success(__('  ✓ 表已复制：%{1} (包含所有数据)', [$backupTableName]));
@@ -845,21 +800,22 @@ class Reinstall extends CommandAbstract
             
             foreach ($allBackupTables as $table) {
                 try {
-                    // 获取对应的 connector 对象
-                    $connector = null;
+                    // 获取对应的 model 对象
+                    $model = null;
                     foreach ($this->backupTables as $backupInfo) {
                         if ($backupInfo['backup'] === $table['backup'] || $backupInfo['original'] === $table['original']) {
-                            $connector = $backupInfo['connector'];
+                            $model = $backupInfo['model'] ?? null;
                             break;
                         }
                     }
-                    if (!$connector && !empty($this->backupTables)) {
-                        $connector = $this->backupTables[0]['connector'];
+                    if (!$model && !empty($this->backupTables)) {
+                        $model = $this->backupTables[0]['model'] ?? null;
                     }
-                    if ($connector && method_exists($connector, 'getLink')) {
-                        /** @var \PDO $pdo */
-                        $pdo = call_user_func([$connector, 'getLink']);
-                        $pdo->exec("DROP TABLE IF EXISTS `{$table['backup']}`");
+                    if ($model) {
+                        // 使用 ModelSetup 删除表（自动处理不同数据库的语法差异）
+                        $modelSetup = ObjectManager::make(ModelSetup::class);
+                        $modelSetup->putModel($model);
+                        $modelSetup->dropTable($table['backup']);
                         $this->printer->success(__('  ✓ 已删除：%{1}', [$table['backup']]));
                     }
                 } catch (\Exception $e) {
@@ -872,10 +828,10 @@ class Reinstall extends CommandAbstract
         } else {
             $this->printer->note('');
             $this->printer->setup(__('备份表已保留。'));
-            $this->printer->note(__('您可以稍后使用以下 SQL 手动删除：'));
+            $this->printer->note(__('您可以稍后重新执行此命令并选择删除，或手动删除以下备份表：'));
             $this->printer->note('');
             foreach ($allBackupTables as $table) {
-                $this->printer->note("  DROP TABLE IF EXISTS `{$table['backup']}`;");
+                $this->printer->note("  {$table['backup']}");
             }
         }
     }
