@@ -2282,13 +2282,27 @@ class Page extends BackendController
                 exit;
             }
             
-            // 构建完整的文件路径
-            $baseDir = BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/';
-            $filePath = $baseDir . $previewImage;
+            // 构建完整的文件路径（支持多个可能的位置）
+            $filePath = null;
+            $possiblePaths = [
+                // 新位置：pub/static 目录
+                BP . 'pub/static/' . $previewImage,
+                // 旧位置：模板目录
+                BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/' . $previewImage,
+                // 直接路径（如果存储的是绝对路径的一部分）
+                BP . $previewImage,
+            ];
             
-            if (!file_exists($filePath) || !is_file($filePath)) {
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path) && is_file($path)) {
+                    $filePath = $path;
+                    break;
+                }
+            }
+            
+            if (!$filePath) {
                 header('HTTP/1.1 404 Not Found');
-                echo 'Preview image file does not exist: ' . $previewImage;
+                echo 'Preview image file does not exist: ' . $previewImage . '. Tried paths: ' . implode(', ', $possiblePaths);
                 exit;
             }
             

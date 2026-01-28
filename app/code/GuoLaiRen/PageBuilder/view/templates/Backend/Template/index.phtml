@@ -457,7 +457,7 @@ const API_URLS = {
 };
 
 // 切换发布状态
-function togglePublish(styleId, isPublished) {
+async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
     if (!confirm(isPublished ? '<?= __('确定要发布此模板吗？发布后，新建页面时将可以选择此模板。') ?>' : '<?= __('确定要取消发布此模板吗？取消发布后，新建页面时将无法选择此模板。') ?>')) {
         return;
     }
@@ -465,26 +465,149 @@ function togglePublish(styleId, isPublished) {
     const formData = new FormData();
     formData.append('style_id', styleId);
     formData.append('is_published', isPublished);
+    if (skipPreviewCheck) {
+        formData.append('skip_preview_check', '1');
+    }
     
-    fetch(API_URLS.togglePublish, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
+    try {
+        const response = await fetch(API_URLS.togglePublish, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const data = await response.json();
+        
         if (data.success) {
             location.reload();
+        } else if (data.needs_preview && isPublished) {
+            // 需要先生成预览图
+            const confirmGenerate = confirm('<?= __('此模板还没有预览图，发布前需要先生成预览图。是否立即生成？') ?>');
+            
+            if (confirmGenerate) {
+                // 显示生成中提示
+                Swal.fire({
+                    title: '<?= __('正在生成预览图...') ?>',
+                    html: '<?= __('请稍候，正在自动生成模板预览图') ?>',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                try {
+                    // 生成预览图
+                    await generatePreviewForPublish(data.style_code);
+                    
+                    // 预览图生成成功，重新发布
+                    Swal.fire({
+                        icon: 'success',
+                        title: '<?= __('预览图生成成功') ?>',
+                        text: '<?= __('正在完成发布...') ?>',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    
+                    // 延迟后重新调用发布（跳过预览检查）
+                    setTimeout(() => {
+                        togglePublish(styleId, isPublished, true);
+                    }, 1500);
+                    
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __('预览图生成失败') ?>',
+                        text: error.message || '<?= __('请手动生成预览图后再发布') ?>'
+                    });
+                }
+            }
         } else {
             alert(data.message || '<?= __('操作失败') ?>');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error:', error);
         alert('<?= __('操作失败，请稍后重试') ?>');
-    });
+    }
+}
+
+// 为发布生成预览图
+async function generatePreviewForPublish(styleCode) {
+    console.log('🔄 为发布生成预览图:', styleCode);
+    
+    // 创建隐藏的 iframe 加载预览页面
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position: absolute; left: -9999px; width: 1400px; height: 900px; border: none;';
+    iframe.src = API_URLS.stylePreview + '?style_code=' + encodeURIComponent(styleCode);
+    document.body.appendChild(iframe);
+    
+    try {
+        // 等待 iframe 加载完成
+        await new Promise((resolve, reject) => {
+            iframe.onload = resolve;
+            iframe.onerror = reject;
+            setTimeout(resolve, 15000);
+        });
+        
+        // 额外等待页面渲染
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 使用 html2canvas 截图
+        if (typeof html2canvas === 'undefined') {
+            throw new Error('html2canvas 未加载');
+        }
+        
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const iframeBody = iframeDoc.body;
+        
+        if (!iframeBody) {
+            throw new Error('无法访问 iframe 内容');
+        }
+        
+        console.log('📸 正在截图...');
+        
+        const canvas = await html2canvas(iframeBody, {
+            allowTaint: true,
+            useCORS: true,
+            scale: 0.5,
+            width: 1400,
+            height: 900,
+            logging: false,
+            backgroundColor: '#ffffff'
+        });
+        
+        // 转换为 base64
+        const imageData = canvas.toDataURL('image/png', 0.9);
+        
+        console.log('📤 正在上传预览图...');
+        
+        // 上传到服务器
+        const formData = new FormData();
+        formData.append('style_code', styleCode);
+        formData.append('image_data', imageData);
+        
+        const response = await fetch(API_URLS.uploadPreview, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || '上传失败');
+        }
+        
+        console.log('✅ 预览图生成成功');
+        return result;
+        
+    } finally {
+        // 移除 iframe
+        iframe.remove();
+    }
 }
 
 // 搜索功能 - 回车键搜索

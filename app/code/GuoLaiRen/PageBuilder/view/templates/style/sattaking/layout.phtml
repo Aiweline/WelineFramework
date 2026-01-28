@@ -339,7 +339,8 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
         }
         
         /* ========== Component Wrapper ========== */
-        .sk-component-wrapper {
+        .sk-component-wrapper,
+        .tpmst-component-wrapper {
             position: relative;
         }
         
@@ -384,7 +385,7 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
         <?php if (!empty($headerComponents)): ?>
             <?php foreach ($headerComponents as $component): ?>
                 <?php if ($component['enabled'] ?? true): ?>
-                <div class="sk-component-wrapper" 
+                <div class="sk-component-wrapper tpmst-component-wrapper" 
                      data-component="<?= htmlspecialchars($component['code']) ?>"
                      data-region="header">
                     <?= $renderComponent($component) ?>
@@ -399,7 +400,7 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
         <?php if (!empty($contentComponents)): ?>
             <?php foreach ($contentComponents as $index => $component): ?>
                 <?php if ($component['enabled'] ?? true): ?>
-                <div class="sk-component-wrapper" 
+                <div class="sk-component-wrapper tpmst-component-wrapper" 
                      data-component="<?= htmlspecialchars($component['code']) ?>"
                      data-region="content"
                      data-index="<?= $index ?>">
@@ -415,7 +416,7 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
         <?php if (!empty($footerComponents)): ?>
             <?php foreach ($footerComponents as $component): ?>
                 <?php if ($component['enabled'] ?? true): ?>
-                <div class="sk-component-wrapper" 
+                <div class="sk-component-wrapper tpmst-component-wrapper" 
                      data-component="<?= htmlspecialchars($component['code']) ?>"
                      data-region="footer">
                     <?= $renderComponent($component) ?>
