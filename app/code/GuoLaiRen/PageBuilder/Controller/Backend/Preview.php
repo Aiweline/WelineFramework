@@ -6,27 +6,40 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
+use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 页面预览控制器
  * 用于实时预览头部、内容、页脚配置
+ * 
+ * 渲染流程：
+ * 1. 获取页面布局配置（layout_config）
+ * 2. Header/Footer 从首页获取（全局），Content 从当前页面获取
+ * 3. 使用 PageRenderService 统一渲染（与前端保持一致）
+ * 4. 根据 visual_editor 参数决定是否添加可视化编辑功能
  */
 class Preview extends BackendController
 {
     private Page $pageModel;
     private LocalDescription $localDescriptionModel;
     private Style $styleModel;
+    private LayoutAssembler $layoutAssembler;
+    private PageRenderService $pageRenderService;
 
     public function __construct(
         Page $pageModel,
         LocalDescription $localDescriptionModel,
-        Style $styleModel
+        Style $styleModel,
+        PageRenderService $pageRenderService
     ) {
         $this->pageModel = $pageModel;
         $this->localDescriptionModel = $localDescriptionModel;
         $this->styleModel = $styleModel;
+        $this->layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
+        $this->pageRenderService = $pageRenderService;
     }
 
     /**
@@ -70,7 +83,7 @@ class Preview extends BackendController
             $this->assign('is_preview', true);
             
             // 渲染模板
-            $html = $this->view->getTemplateEngine()->fetchTemplate($templatePath, $this->view->getData());
+            $html = $this->fetch($templatePath);
             
             return $this->fetchJson([
                 'success' => true,
@@ -126,7 +139,7 @@ class Preview extends BackendController
             $this->assign('is_preview', true);
             
             // 渲染模板
-            $html = $this->view->getTemplateEngine()->fetchTemplate($templatePath, $this->view->getData());
+            $html = $this->fetch($templatePath);
             
             return $this->fetchJson([
                 'success' => true,
@@ -182,7 +195,7 @@ class Preview extends BackendController
             $this->assign('is_preview', true);
             
             // 渲染模板
-            $html = $this->view->getTemplateEngine()->fetchTemplate($templatePath, $this->view->getData());
+            $html = $this->fetch($templatePath);
             
             return $this->fetchJson([
                 'success' => true,
@@ -293,7 +306,11 @@ class Preview extends BackendController
      * 组合 style/{styleCode}/header.phtml、content.phtml、footer.phtml 三个模板
      * 支持临时切换样式（用于样式选择器预览）
      * 
-     * 【重要】此方法的渲染逻辑必须与前端 Page.php::view() 保持一致
+     * 【重要】使用 PageRenderService 统一渲染逻辑，确保与前端 Page.php::view() 完全一致
+     * 
+     * 渲染模式：
+     * - visual_editor=1: 可视化编辑模式（带拖拽插槽容器、组件包装器）
+     * - 无 visual_editor: 预览模式（纯净渲染，与正式上线效果一致）
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '页面预览', '', '页面预览')]
     public function full()
@@ -307,8 +324,9 @@ class Preview extends BackendController
             return;
         }
 
-        // 加载页面数据
+        // 加载页面数据（强制刷新，避免缓存）
         $page = clone $this->pageModel;
+        $page->clearData(); // 清除可能存在的缓存数据
         $page->load($pageId);
         
         if (!$page->getId()) {
@@ -316,202 +334,28 @@ class Preview extends BackendController
             return;
         }
 
-        // 获取样式代码：优先使用临时样式代码，否则使用页面配置的样式
-        $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
-        
         // 获取当前语言（从Cookie或URL参数）
         $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
         
-        // 加载样式模型获取默认配置
-        $style = clone $this->styleModel;
-        $style->clear()
-            ->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)
-            ->find()
-            ->fetch();
-        
-        // 解析样式配置
-        $styleConfigs = [];
-        if ($style->getId()) {
-            $parsed = $style->parseStyleConfig();
-            $styleConfigs = $parsed['configs'] ?? [];
-        }
-        
-        // 构建最终配置（与前端 Page.php::view() 逻辑保持一致）
-        $finalSettings = [];
-        
-        // 第一步：使用模板默认配置值（最低优先级）
-        foreach ($styleConfigs as $key => $config) {
-            if (isset($config['default'])) {
-                $finalSettings[$key] = $config['default'];
-            }
-        }
-        
-        // 第二步：用页面保存的配置覆盖（中等优先级）
-        // 如果使用临时样式，跳过页面配置（只使用模板默认值）
-        if (!$tempStyleCode || $tempStyleCode === $page->getData('style')) {
-            $allStyleSettings = $page->getStyleSetting();
-            $pageStyleSettings = [];
-            if ($styleCode && isset($allStyleSettings[$styleCode])) {
-                $rawSettings = $allStyleSettings[$styleCode];
-                // 清理可能存在的三层结构，只保留标量值
-                foreach ($rawSettings as $key => $value) {
-                    if (!is_array($value)) {
-                        $pageStyleSettings[$key] = $value;
-                    }
-                }
-            }
-            // 注意：不再限制只覆盖样式定义中存在的配置项，确保所有页面配置都能生效
-            foreach ($pageStyleSettings as $key => $value) {
-                $finalSettings[$key] = $value;
-            }
-        }
-        
-        // 第三步：用翻译的配置覆盖（最高优先级）
-        // 从本地化描述中获取翻译的样式配置
-        $localizedContent = null;
-        if ($currentLocale) {
-            $localDesc = clone $this->localDescriptionModel;
-            $localDesc->clear()
-                ->where(\GuoLaiRen\PageBuilder\Model\Page\LocalDescription::fields_ID, $page->getId())
-                ->where('local_code', $currentLocale)
-                ->find()
-                ->fetch();
-            
-            if ($localDesc->getId()) {
-                $localizedContent = [
-                    'content' => $localDesc->getData('content'),
-                    'config' => $localDesc->getData('config')
-                ];
-            }
-        }
-        
-        if ($localizedContent && !empty($localizedContent['config'])) {
-            $translatedConfig = is_string($localizedContent['config']) 
-                ? json_decode($localizedContent['config'] ?? '', true) 
-                : $localizedContent['config'];
-            
-            // 检查是否有 style_config 节点
-            if (isset($translatedConfig['style_config']) && is_array($translatedConfig['style_config'])) {
-                foreach ($translatedConfig['style_config'] as $key => $value) {
-                    // 覆盖配置（不限制只覆盖样式定义中存在的配置项）
-                    $finalSettings[$key] = $value;
-                }
-            }
-        }
-
-        // 设置模板变量（传递两个变量名以兼容不同模板）
-        $this->assign('page', $page);
-        $this->assign('style_settings', $finalSettings);
-        $this->assign('style', $finalSettings);
-        $this->assign('is_preview', true); // 标记为预览模式
-        $this->assign('current_locale', $currentLocale);
-        
-        // 组合渲染 header、content、footer 三个模板
-        // 使用模块路径格式：GuoLaiRen_PageBuilder::templates/style/{styleCode}/header.phtml
-        $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
-        
-        // 渲染 header
-        $headerHtml = $this->fetch("{$stylePath}/header.phtml");
-        
-        // 渲染 content
-        // 如果页面有自定义内容，使用自定义内容替代 content.phtml
-        // 优先使用翻译后的内容，如果没有则使用默认内容
-        $customContent = '';
-        if ($localizedContent && !empty($localizedContent['content'])) {
-            // 使用翻译后的自定义内容
-            $customContent = $localizedContent['content'];
-        } else {
-            // 使用默认语言的自定义内容
-            $customContent = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_CONTENT);
-        }
-        
-        if (!empty($customContent)) {
-            // 使用自定义内容（已翻译或默认）
-            $contentHtml = $customContent;
-        } else {
-            // 使用样式模板的 content.phtml
-            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
-        }
-        
-        // 渲染 footer
-        $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
-        
-        // 获取Header和Footer自定义代码
-        $headerCustomCode = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_HEADER_CUSTOM_CODE) ?? '';
-        $footerCustomCode = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_FOOTER_CUSTOM_CODE) ?? '';
-        
-        // 在header的</head>标签前插入Header自定义代码
-        if (!empty($headerCustomCode)) {
-            $headerHtml = preg_replace(
-                '/(<\/head>)/i',
-                $headerCustomCode . "\n    $1",
-                $headerHtml,
-                1
-            );
-        }
-        
-        // 在footer的</body>标签前插入Footer自定义代码
-        if (!empty($footerCustomCode)) {
-            $footerHtml = preg_replace(
-                '/(<\/body>)/i',
-                "\n    " . $footerCustomCode . "\n$1",
-                $footerHtml,
-                1
-            );
-        }
-        
-        // 输出组合后的完整页面
-        // 在预览模式下，强制在地址栏附加 preview=1 并设置全局预览标记，避免触发统计
-        $previewBoot = '<script>(function(){
-            try {
-                window.__PAGEBUILDER_PREVIEW__ = true;
-                var url = new URL(window.location.href);
-                if (!url.searchParams.get("preview")) {
-                    url.searchParams.set("preview", "1");
-                    window.history.replaceState({}, document.title, url.toString());
-                }
-            } catch(e) {}
-        })();</script>';
-        
-        // 检测是否在可视化编辑器中
+        // 检测渲染模式
         $isVisualEditor = $this->request->getGet('visual_editor') === '1';
+        $renderMode = $isVisualEditor ? PageRenderService::MODE_VISUAL : PageRenderService::MODE_PREVIEW;
         
-        if ($isVisualEditor) {
-            // 可视化编辑器模式：添加插槽容器和拖拽支持
-            $dropZoneStyles = $this->getDropZoneStyles();
-            $dropZoneScripts = $this->getDropZoneScripts($pageId);
-            
-            // 将 header/content/footer 包装在插槽容器中
-            $wrappedHeader = '<div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>';
-            $wrappedContent = '<div class="pb-slot pb-slot-content" data-region="content" data-multiple="true" data-slot-name="Content">' . $contentHtml . '</div>';
-            $wrappedFooter = '<div class="pb-slot pb-slot-footer" data-region="footer" data-multiple="false" data-slot-name="Footer">' . $footerHtml . '</div>';
-            
-            // 注入样式到 head
-            $wrappedHeader = preg_replace(
-                '/(<\/head>)/i',
-                $dropZoneStyles . "\n    $1",
-                $wrappedHeader,
-                1
-            );
-            
-            // 注入脚本到 body 末尾
-            $wrappedFooter = preg_replace(
-                '/(<\/body>)/i',
-                "\n    " . $dropZoneScripts . "\n$1",
-                $wrappedFooter,
-                1
-            );
-            
-            echo $previewBoot . $wrappedHeader . $wrappedContent . $wrappedFooter;
-        } else {
-            // 普通预览模式
-            echo $previewBoot . $headerHtml . $contentHtml . $footerHtml;
-        }
+        // 使用 PageRenderService 统一渲染
+        // 这确保了可视化编辑器预览和前端正式页面的渲染逻辑完全一致
+        $html = $this->pageRenderService->render(
+            $page,
+            $renderMode,
+            $currentLocale,
+            $tempStyleCode
+        );
+        
+        echo $html;
     }
 
     /**
      * 预览样式模板默认效果（无需页面ID）
-     * 仅使用模板的默认配置渲染，用于在选择样式时快速预览模板效果
+     * 使用 PageRenderService 统一渲染，确保与正式页面渲染逻辑一致
      * 路由：pagebuilder/backend_preview/stylePreview?style_code=marketing-landing
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '样式模板预览', '', '样式模板预览')]
@@ -519,6 +363,7 @@ class Preview extends BackendController
     {
         $styleCode = $this->request->getGet('style_code');
         $locale = $this->request->getGet('locale', 'zh_Hans_CN'); // 默认语言
+        $pageType = $this->request->getGet('page_type', Page::TYPE_HOME); // 默认首页类型
         
         if (!$styleCode) {
             echo '<div style="padding: 20px; color: red;">样式代码不能为空</div>';
@@ -543,49 +388,49 @@ class Preview extends BackendController
             return;
         }
 
-        // 获取模板的默认配置
-        $templateDefaults = $this->getTemplateDefaults($styleCode);
-        
-        // 创建一个空的页面对象，用于模板渲染
-        $dummyPage = clone $this->pageModel;
+        // 创建一个虚拟页面对象用于渲染
+        // 使用 ObjectManager::make() 确保获得干净的实例
+        // 注意：必须设置所有整数字段的默认值，避免 PostgreSQL 整数类型错误
+        $dummyPage = ObjectManager::make(Page::class);
         $dummyPage->setData([
-            'id' => 0,
-            'title' => '样式模板预览 - ' . $styleModel->getData('name'),
-            'handle' => 'template-preview-' . $styleCode,
-            'style' => $styleCode,
-            'status' => 1,
-            'content' => '',
-            'description' => '预览模式：使用模板默认配置'
+            Page::fields_ID => 0,
+            Page::fields_WEBSITE_ID => 0,
+            Page::fields_PARENT_ID => 0,
+            Page::fields_LAYOUT_PAGE_ID => null,
+            Page::fields_STATUS => 1,
+            Page::fields_TITLE => '样式模板预览 - ' . $styleModel->getData('name'),
+            Page::fields_NAME => '样式模板预览',
+            Page::fields_HANDLE => 'template-preview-' . $styleCode,
+            Page::fields_STYLE => $styleCode,
+            Page::fields_TYPE => $pageType, // 设置页面类型，用于加载对应的默认布局配置
+            Page::fields_CONTENT => '',
+            Page::fields_META_DESCRIPTION => '预览模式：使用模板默认配置',
+            Page::fields_LOCALES => '[]',
+            Page::fields_DEFAULT_LOCALE => $locale,
+            Page::fields_STYLE_SETTING => '{}',
+            Page::fields_LAYOUT_CONFIG => '{}',
         ]);
 
-        // 设置模板变量
-        $this->assign('page', $dummyPage);
-        $this->assign('style_settings', $templateDefaults);
-        $this->assign('is_preview', true);
-        $this->assign('is_template_preview', true); // 标记为模板预览模式
-        $this->assign('locale', $locale);
-        
-        // 组合渲染 header、content、footer 三个模板
-        $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
-        
         try {
-            // 渲染 header
-            $headerHtml = $this->fetch("{$stylePath}/header.phtml");
+            // 使用 PageRenderService 统一渲染
+            // 这确保了样式预览与正式页面渲染使用相同的逻辑
+            $html = $this->pageRenderService->render(
+                $dummyPage,
+                PageRenderService::MODE_PREVIEW,
+                $locale,
+                $styleCode // 传递样式代码
+            );
             
-            // 渲染 content
-            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
-            
-            // 渲染 footer
-            $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
-            
-            // 输出组合后的完整页面
-            echo $headerHtml . $contentHtml . $footerHtml;
+            echo $html;
         } catch (\Exception $e) {
             echo '<div style="padding: 20px; color: red;">';
             echo '<h3>模板渲染错误</h3>';
             echo '<p>样式代码：' . htmlspecialchars($styleCode ?? '') . '</p>';
-            echo '<p>错误信息：' . htmlspecialchars((($e->getMessage() ?? '')) ?? '') . '</p>';
-            echo '<p>模板路径：' . htmlspecialchars($stylePath ?? '') . '</p>';
+            echo '<p>页面类型：' . htmlspecialchars($pageType ?? '') . '</p>';
+            echo '<p>错误信息：<b style="color:#945252">' . htmlspecialchars($e->getMessage() ?? '') . '</b></p>';
+            if (method_exists($e, 'getTraceAsString')) {
+                echo '<pre style="font-size:11px;overflow:auto;max-height:300px;background:#f5f5f5;padding:10px;">' . htmlspecialchars($e->getTraceAsString()) . '</pre>';
+            }
             echo '</div>';
         }
     }
@@ -924,188 +769,46 @@ class Preview extends BackendController
 <style id="pb-dropzone-styles">
 /* ============================================
    PageBuilder 插槽容器样式
-   用于可视化编辑器中的拖拽放置
+   仅边框标记，无背景变化
    ============================================ */
 
 /* 插槽容器基础样式 */
 .pb-slot {
     position: relative;
     min-height: 50px;
-    transition: all 0.3s ease;
 }
 
-/* 插槽标签 */
+/* 插槽标签 - 仅在拖拽时显示 */
 .pb-slot::before {
     content: attr(data-slot-name);
     position: absolute;
     top: 0;
     left: 0;
-    padding: 4px 12px;
-    background: rgba(52, 152, 219, 0.9);
+    padding: 3px 10px;
+    background: #3498db;
     color: #fff;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
     z-index: 9998;
     opacity: 0;
-    transform: translateY(-100%);
-    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
     border-radius: 0 0 4px 0;
 }
 
-.pb-slot:hover::before,
 .pb-slot.drag-over::before {
     opacity: 1;
-    transform: translateY(0);
 }
 
-/* 插槽悬停效果 */
-.pb-slot:hover {
-    outline: 2px dashed rgba(52, 152, 219, 0.5);
-    outline-offset: -2px;
+/* 移除 pb-slot 和 pb-slot-content 的 hover 效果 */
+.pb-slot:hover,
+.pb-slot-content:hover {
+    box-shadow: none !important;
 }
 
-/* 拖拽进入效果 */
+/* 拖拽进入效果 - 内部阴影边框 */
 .pb-slot.drag-over {
-    outline: 3px solid #3498db !important;
-    outline-offset: -3px;
-    background: rgba(52, 152, 219, 0.05) !important;
-}
-
-/* Header 插槽 - 蓝色 */
-.pb-slot-header::before {
-    background: rgba(41, 128, 185, 0.95);
-}
-
-.pb-slot-header:hover,
-.pb-slot-header.drag-over {
-    outline-color: #2980b9;
-}
-
-/* Content 插槽 - 绿色 */
-.pb-slot-content::before {
-    background: rgba(39, 174, 96, 0.95);
-}
-
-.pb-slot-content:hover,
-.pb-slot-content.drag-over {
-    outline-color: #27ae60;
-}
-
-/* Footer 插槽 - 紫色 */
-.pb-slot-footer::before {
-    background: rgba(142, 68, 173, 0.95);
-}
-
-.pb-slot-footer:hover,
-.pb-slot-footer.drag-over {
-    outline-color: #8e44ad;
-}
-
-/* 空插槽提示 */
-.pb-slot-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100px;
-    background: rgba(0, 0, 0, 0.02);
-    border: 2px dashed rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
-    margin: 10px;
-}
-
-.pb-slot-empty::after {
-    content: '拖拽组件到此处';
-    color: rgba(0, 0, 0, 0.3);
-    font-size: 14px;
-}
-
-/* 拖拽指示器 */
-.pb-drop-indicator {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: #3498db;
-    z-index: 9999;
-    pointer-events: none;
-    animation: pb-pulse 1s infinite;
-}
-
-@keyframes pb-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* 组件操作栏 */
-.pb-component-actions {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    display: none;
-    gap: 5px;
-    z-index: 9999;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 5px;
-    border-radius: 6px;
-}
-
-.pb-slot:hover .pb-component-actions {
-    display: flex;
-}
-
-.pb-component-actions button {
-    padding: 5px 10px;
-    background: transparent;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background 0.2s;
-}
-
-.pb-component-actions button:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.pb-component-actions button.btn-edit {
-    color: #3498db;
-}
-
-.pb-component-actions button.btn-delete {
-    color: #e74c3c;
-}
-
-/* 唯一插槽的替换提示 */
-.pb-slot[data-multiple="false"].has-component.drag-over::after {
-    content: '将替换当前组件';
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 8px 16px;
-    background: rgba(231, 76, 60, 0.9);
-    color: #fff;
-    font-size: 12px;
-    border-radius: 4px;
-    z-index: 9999;
-}
-
-/* 多组件插槽的添加提示 */
-.pb-slot[data-multiple="true"].drag-over::after {
-    content: '添加到此区域';
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 8px 16px;
-    background: rgba(39, 174, 96, 0.9);
-    color: #fff;
-    font-size: 12px;
-    border-radius: 4px;
-    z-index: 9999;
+    box-shadow: inset 0 0 0 3px #3498db;
 }
 </style>
 CSS;
@@ -1209,16 +912,49 @@ CSS;
                 return;
             }
             
+            // 计算插入位置（仅 content 区域且允许多个时）
+            let insertPosition = null;
+            if (targetRegion === 'content' && isMultiple) {
+                insertPosition = calculateInsertPosition(e, this);
+            }
+            
             // 添加组件
-            addComponent(data, targetRegion, false);
+            addComponent(data, targetRegion, false, insertPosition);
             
         } catch (err) {
             console.error('❌ 拖拽处理错误:', err);
         }
     }
     
+    // 计算插入位置（基于鼠标在组件上半/下半）
+    function calculateInsertPosition(e, dropZone) {
+        const components = Array.from(dropZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
+        
+        if (components.length === 0) {
+            return 0;
+        }
+        
+        const dropY = e.clientY;
+        
+        for (let i = 0; i < components.length; i++) {
+            const component = components[i];
+            const rect = component.getBoundingClientRect();
+            
+            if (dropY >= rect.top && dropY <= rect.bottom) {
+                const middle = rect.top + rect.height / 2;
+                return dropY < middle ? i : i + 1;
+            }
+            
+            if (dropY < rect.top) {
+                return i;
+            }
+        }
+        
+        return components.length;
+    }
+    
     // 添加组件
-    async function addComponent(componentData, region, replace) {
+    async function addComponent(componentData, region, replace, position = null) {
         try {
             // 显示加载提示
             window.parent.Swal && window.parent.Swal.fire({
@@ -1231,7 +967,7 @@ CSS;
             
             // 调用父窗口的添加组件函数
             if (typeof window.parent.addComponentToLayout === 'function') {
-                await window.parent.addComponentToLayout(componentData, region, replace);
+                await window.parent.addComponentToLayout(componentData, region, replace, position);
             } else {
                 console.warn('⚠️ addComponentToLayout 函数不存在');
                 window.parent.Swal && window.parent.Swal.fire({
@@ -1285,6 +1021,160 @@ CSS;
 })();
 </script>
 JS;
+    }
+    
+    /**
+     * 渲染指定区域的组件
+     * 
+     * @param string $region 区域名称（header/content/footer）
+     * @param array $components 组件配置数组
+     * @param string $styleCode 模板代码
+     * @param \GuoLaiRen\PageBuilder\Model\Page $page 页面对象
+     * @param array $styleSettings 样式配置
+     * @return string 渲染后的 HTML
+     */
+    private function renderRegionComponents(string $region, array $components, string $styleCode, $page, array $styleSettings): string
+    {
+        if (empty($components)) {
+            return '';
+        }
+        
+        $html = '';
+        
+        // 调试信息
+        $html .= "<!-- Rendering region: {$region}, styleCode: {$styleCode}, components: " . count($components) . " -->\n";
+        
+        // 组件代码到文件的映射（从 component.json 读取）
+        $componentFiles = $this->getComponentFilesMap($styleCode);
+        
+        // 调试：输出可用的组件文件映射
+        $html .= "<!-- Available component files: " . implode(', ', array_keys($componentFiles)) . " -->\n";
+        
+        // 检查是否在可视化编辑器模式
+        $isVisualEditor = $this->request->getGet('visual_editor') === '1';
+        
+        $componentIndex = 0;
+        foreach ($components as $componentConfig) {
+            $code = $componentConfig['code'] ?? '';
+            $enabled = $componentConfig['enabled'] ?? true;
+            $config = $componentConfig['config'] ?? [];
+            $componentTemplateCode = $componentConfig['template_code'] ?? '';
+            
+            if (!$enabled || empty($code)) {
+                $componentIndex++;
+                continue;
+            }
+            
+            // 确定使用哪个模板的组件文件
+            $useTemplateCode = $styleCode;
+            
+            // 查找组件文件 - 优先在当前模板中查找
+            $componentFile = $componentFiles[$code] ?? null;
+            
+            // 如果直接查找失败，尝试去掉模板前缀再查找
+            // 例如：tpmst-slider -> slider, tpmst-advantages -> advantages
+            if (!$componentFile && strpos($code, $styleCode . '-') === 0) {
+                $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
+                $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
+                $html .= "<!-- Trying without prefix: {$codeWithoutPrefix} -->\n";
+            }
+            
+            if (!$componentFile && !empty($componentTemplateCode) && $componentTemplateCode !== $styleCode) {
+                // 尝试从指定的其他模板查找
+                $otherComponentFiles = $this->getComponentFilesMap($componentTemplateCode);
+                $componentFile = $otherComponentFiles[$code] ?? null;
+                
+                // 同样尝试去掉前缀
+                if (!$componentFile && strpos($code, $componentTemplateCode . '-') === 0) {
+                    $codeWithoutPrefix = substr($code, strlen($componentTemplateCode) + 1);
+                    $componentFile = $otherComponentFiles[$codeWithoutPrefix] ?? null;
+                }
+                
+                if ($componentFile) {
+                    $useTemplateCode = $componentTemplateCode;
+                }
+            }
+            
+            if (!$componentFile) {
+                $html .= "<!-- Component not found: {$code} in template {$styleCode} (tried with/without prefix) -->\n";
+                $componentIndex++;
+                continue;
+            }
+            
+            // 构建组件模板路径（使用 templates/style/ 与其他模板路径保持一致）
+            $componentPath = "GuoLaiRen_PageBuilder::templates/style/{$useTemplateCode}/components/{$componentFile}";
+            
+            // 传递数据到组件
+            $this->assign('page', $page);
+            $this->assign('style', $styleSettings);
+            $this->assign('style_settings', $styleSettings);
+            $this->assign('component_config', $config);
+            
+            try {
+                // 使用 fetch() 方法渲染组件（与控制器其他地方一致）
+                $componentHtml = $this->fetch($componentPath);
+                
+                if (empty($componentHtml)) {
+                    $html .= "<!-- Component {$code} rendered but output is empty -->\n";
+                } else {
+                    // 在可视化编辑器模式下，为组件添加包装器以支持编辑和删除操作
+                    if ($isVisualEditor) {
+                        $escapedCode = htmlspecialchars($code);
+                        $escapedRegion = htmlspecialchars($region);
+                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\">{$componentHtml}</div>";
+                    }
+                    $html .= $componentHtml;
+                    $html .= "<!-- Component {$code} rendered successfully -->\n";
+                }
+            } catch (\Exception $e) {
+                $html .= "<!-- Error rendering component {$code}: " . htmlspecialchars($e->getMessage() ?? 'Unknown error') . " -->\n";
+                $html .= "<!-- Stack trace: " . htmlspecialchars($e->getTraceAsString()) . " -->\n";
+            } catch (\Throwable $e) {
+                $html .= "<!-- Fatal error rendering component {$code}: " . htmlspecialchars($e->getMessage() ?? 'Unknown error') . " -->\n";
+            }
+            
+            $componentIndex++;
+        }
+        
+        return $html;
+    }
+    
+    /**
+     * 获取模板的组件文件映射
+     * 
+     * @param string $styleCode 模板代码
+     * @return array 组件代码 => 文件路径
+     */
+    private function getComponentFilesMap(string $styleCode): array
+    {
+        static $cache = [];
+        
+        if (isset($cache[$styleCode])) {
+            return $cache[$styleCode];
+        }
+        
+        $componentJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/component.json";
+        
+        if (!file_exists($componentJsonPath)) {
+            $cache[$styleCode] = [];
+            return [];
+        }
+        
+        $jsonContent = file_get_contents($componentJsonPath);
+        $jsonConfig = json_decode($jsonContent, true);
+        
+        if (!$jsonConfig || !isset($jsonConfig['components'])) {
+            $cache[$styleCode] = [];
+            return [];
+        }
+        
+        $map = [];
+        foreach ($jsonConfig['components'] as $code => $config) {
+            $map[$code] = $config['file'] ?? ($code . '.phtml');
+        }
+        
+        $cache[$styleCode] = $map;
+        return $map;
     }
 }
 

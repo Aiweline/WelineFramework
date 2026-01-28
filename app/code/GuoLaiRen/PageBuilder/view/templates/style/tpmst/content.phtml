@@ -510,7 +510,7 @@ unset($item);
                                      width="375" 
                                      height="500" 
                                      src="<?= htmlspecialchars($finalImgSrc) ?>" 
-                                     alt="<?= htmlspecialchars($sliderItem['banner_alt']) ?>" 
+                                     alt="<?= htmlspecialchars($sliderItem['banner_alt'] ?? '') ?>" 
                                      fetchpriority="high" 
                                      decoding="async">
                             </picture>
@@ -518,15 +518,15 @@ unset($item);
                         <?php if (!empty($sliderItem['download_btn'])): ?>
                         <p class="download-btn">
                             <picture>
-                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
-                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($sliderItem['download_btn']) ?>">
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($sliderItem['download_btn'] ?? '') ?>">
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($sliderItem['download_btn'] ?? '') ?>">
                                 <img class="download-icon animation-scale lazy-loading" 
-                                     src="<?= htmlspecialchars($sliderItem['download_btn']) ?>" 
+                                     src="<?= htmlspecialchars($sliderItem['download_btn'] ?? '') ?>" 
                                      fetchpriority="high" 
                                      decoding="async" 
                                      width="210" 
                                      height="54" 
-                                     alt="<?= htmlspecialchars($sliderItem['download_btn_alt']) ?>">
+                                     alt="<?= htmlspecialchars($sliderItem['download_btn_alt'] ?? 'Download') ?>">
                             </picture>
                         </p>
                         <?php endif; ?>

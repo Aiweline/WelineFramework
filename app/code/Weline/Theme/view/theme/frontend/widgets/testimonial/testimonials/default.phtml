@@ -12,6 +12,7 @@ $columns = $this->getData('columns') ?? '3';
 $layout = $this->getData('layout') ?? 'grid';
 $showRating = (bool)($this->getData('show_rating') ?? true);
 $showAvatar = (bool)($this->getData('show_avatar') ?? true);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例数据
 if (empty($testimonials)) {
@@ -20,21 +21,21 @@ if (empty($testimonials)) {
             'content' => __('产品质量非常好，物流速度也很快，下次还会继续购买！'),
             'author' => '张先生',
             'position' => __('企业客户'),
-            'avatar' => '/images/avatars/avatar1.jpg',
+            'avatar' => $placeholder,
             'rating' => 5,
         ],
         [
             'content' => __('客服态度很好，有问题都能及时解决，购物体验非常满意。'),
             'author' => '李女士',
             'position' => __('普通用户'),
-            'avatar' => '/images/avatars/avatar2.jpg',
+            'avatar' => $placeholder,
             'rating' => 5,
         ],
         [
             'content' => __('价格实惠，性价比很高，已经推荐给身边的朋友了。'),
             'author' => '王先生',
             'position' => __('VIP会员'),
-            'avatar' => '/images/avatars/avatar3.jpg',
+            'avatar' => $placeholder,
             'rating' => 4,
         ],
     ];
@@ -71,19 +72,19 @@ $widgetId = 'testimonials-' . uniqid();
                         </div>
                     <?php endif; ?>
                     
-                    <p class="testimonial-content"><?= htmlspecialchars($testimonial['content']) ?></p>
+                    <p class="testimonial-content"><?= htmlspecialchars($testimonial['content'] ?? '') ?></p>
                     
                     <div class="testimonial-author">
                         <?php if ($showAvatar && !empty($testimonial['avatar'])): ?>
-                            <img src="<?= htmlspecialchars($testimonial['avatar']) ?>" 
-                                 alt="<?= htmlspecialchars($testimonial['author']) ?>"
+                            <img src="<?= htmlspecialchars($testimonial['avatar'] ?? '') ?>" 
+                                 alt="<?= htmlspecialchars($testimonial['author'] ?? '') ?>"
                                  class="author-avatar">
                         <?php endif; ?>
                         
                         <div class="author-info">
-                            <h4 class="author-name"><?= htmlspecialchars($testimonial['author']) ?></h4>
+                            <h4 class="author-name"><?= htmlspecialchars($testimonial['author'] ?? '') ?></h4>
                             <?php if (!empty($testimonial['position'])): ?>
-                                <span class="author-position"><?= htmlspecialchars($testimonial['position']) ?></span>
+                                <span class="author-position"><?= htmlspecialchars($testimonial['position'] ?? '') ?></span>
                             <?php endif; ?>
                         </div>
                     </div>

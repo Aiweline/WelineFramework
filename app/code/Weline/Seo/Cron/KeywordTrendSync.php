@@ -173,11 +173,11 @@ class KeywordTrendSync implements CronTaskInterface
     }
 
     /**
-     * 调度任务超时解锁时间（分钟）
+     * @inheritDoc
      */
-    public function timeout(): int
+    public function unlock_timeout(int $minute = 30): int
     {
-        return 60; // 60分钟超时
+        return 60; // 60分钟超时自动解锁
     }
 }
 

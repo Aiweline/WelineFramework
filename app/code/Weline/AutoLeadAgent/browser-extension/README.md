@@ -1,100 +1,127 @@
-# AutoLeadAgent 浏览器扩展
+# AutoLeadAgent 智能寻客助手 - 浏览器扩展
 
-智能寻客系统的浏览器扩展，用于真实爬取社交媒体平台获取潜在客户信息。
+AI 驱动的浏览器自动化扩展，帮助您自动发现潜在客户、提取数据、填写表单等。
 
-## 功能
+## 功能特性
 
-- 🔍 真实爬取 LinkedIn、Twitter、Facebook、Instagram、YouTube 等平台
-- 🎯 自动提取用户信息（姓名、职位、简介、头像等）
-- 🔗 与 WelineFramework AutoLeadAgent 模块无缝集成
-- 🛡️ 绑过浏览器 CORS 限制
+- 🤖 **AI 智能代理**: 使用自然语言描述任务，AI 自动执行
+- 🔍 **自动寻客**: 在社交媒体、搜索引擎等平台自动寻找潜在客户
+- 📊 **数据提取**: 智能提取网页结构化数据
+- 📝 **表单自动填写**: 自动填写注册、登录等表单
+- 🔄 **任务重放**: 记录并重放历史任务
+- 🛡️ **防火墙保护**: 配置允许/禁止访问的网站
 
 ## 安装方法
 
-### Chrome（新版 120+）
+### 方法一：开发者模式安装（推荐）
 
-1. 打开 Chrome，地址栏输入 `chrome://extensions/` 回车
-2. **右上角**开启 **"开发者模式"** 开关
-3. 页面会出现三个按钮，点击 **"加载已解压的扩展"**（Load unpacked）
-4. 选择本 `browser-extension` 文件夹（或解压后的文件夹）
-5. 看到扩展图标出现在工具栏即安装成功
+1. 打开 Chrome 浏览器，访问 `chrome://extensions/`
+2. 开启右上角的 **开发者模式**
+3. 点击 **加载已解压的扩展程序**
+4. 选择 `browser-extension` 文件夹
+5. 扩展安装完成！
 
-### Edge
+### 方法二：打包安装
 
-1. 打开 Edge，地址栏输入 `edge://extensions/` 回车
-2. **左下角**开启 **"开发人员模式"** 开关
-3. 点击 **"加载解压缩的扩展"**
-4. 选择本 `browser-extension` 文件夹
-5. 看到扩展图标出现在工具栏即安装成功
+1. 在 `chrome://extensions/` 页面点击 **打包扩展程序**
+2. 选择 `browser-extension` 文件夹作为扩展程序根目录
+3. 点击打包，生成 `.crx` 文件
+4. 将 `.crx` 文件拖拽到扩展页面安装
 
-### Firefox
+## 配置 API 密钥
 
-1. 打开 Firefox，地址栏输入 `about:debugging#/runtime/this-firefox` 回车
-2. 点击 **"临时载入附加组件..."**
-3. 选择 `browser-extension` 文件夹中的 **`manifest.json`** 文件
-4. 扩展安装完成
+首次使用需要配置 LLM API 密钥：
 
-> ⚠️ **注意**：Firefox 临时扩展在浏览器重启后需要重新加载
+1. 点击扩展图标，或右键选择 **选项**
+2. 在 **Models** 标签页添加 LLM 提供商
+3. 支持的提供商：
+   - OpenAI (GPT-4, GPT-4o 等)
+   - Google (Gemini)
+   - Anthropic (Claude)
+   - 本地 Ollama
+   - 任意 OpenAI 兼容 API
 
-### 常见问题
+## 使用方法
 
-**Q: 看不到"加载已解压的扩展"按钮？**
-- 确保已开启开发者模式
-- 某些企业管理的浏览器可能禁用此功能，请联系IT管理员
+### 侧边栏使用
 
-**Q: 加载后扩展无法使用？**
-- 检查扩展是否显示错误信息
-- 确保 manifest.json 格式正确
-- 尝试刷新扩展或重新加载
+1. 点击扩展图标打开侧边栏
+2. 在输入框中描述您想要完成的任务
+3. 点击发送，AI 将自动执行任务
 
-## 支持的平台
+### 示例任务
 
-| 平台 | 搜索功能 | 数据提取 |
-|------|----------|----------|
-| LinkedIn | ✅ | 姓名、职位、地区、头像、个人主页 |
-| Twitter/X | ✅ | 用户名、昵称、简介、头像、主页 |
-| Facebook | ✅ | 姓名、头像、主页 |
-| Instagram | ✅ | 用户名、头像、主页 |
-| YouTube | ✅ | 频道名、订阅数、简介、头像 |
+```
+在 LinkedIn 上搜索 "AI Engineer" 并提取前10个结果的姓名和公司
 
-## 使用说明
+去 Google 搜索 "best CRM software" 并提取前5个结果的标题和链接
 
-1. 安装扩展后，访问 AutoLeadAgent 后台管理页面
-2. 系统会自动检测扩展是否已安装
-3. 创建并启动寻客任务
-4. 扩展将自动在后台打开标签页爬取数据
-5. 爬取到的客户信息会自动返回到系统
+打开 Twitter，搜索 #startup 相关帖子，提取发帖者信息
+```
 
-## 注意事项
+## 与后端集成
 
-⚠️ **重要提醒**：
+扩展支持与 AutoLeadAgent 后端系统通信：
 
-1. 请遵守各平台的使用条款和爬虫政策
-2. 建议控制爬取频率，避免账号被封禁
-3. 爬取数据仅用于商业合作目的
-4. 请勿滥用此工具进行恶意爬取
+1. 后端通过 `chrome.runtime.sendMessage` 发送任务
+2. 扩展执行浏览器自动化任务
+3. 结果通过消息回传给后端
+
+### 通信示例
+
+```javascript
+// 后端发送任务给扩展
+chrome.runtime.sendMessage(extensionId, {
+    action: 'executeTask',
+    task: '在 Google 搜索 "AI tools" 并提取结果'
+}, response => {
+    console.log('任务结果:', response);
+});
+```
 
 ## 技术架构
 
+- **Puppeteer Core**: 使用 Chrome DevTools Protocol 控制浏览器
+- **双代理架构**:
+  - Navigator Agent: 执行具体的网页导航和交互
+  - Planner Agent: 规划和优化任务执行策略
+- **React + TailwindCSS**: 现代化的侧边栏和选项页 UI
+
+## 目录结构
+
 ```
 browser-extension/
-├── manifest.json      # 扩展配置
-├── background.js      # 后台服务（处理爬取请求）
-├── content.js         # 内容脚本（页面数据提取）
-├── popup.html         # 弹窗界面
-├── popup.js           # 弹窗逻辑
-├── icons/             # 扩展图标
-└── README.md          # 说明文档
+├── manifest.json          # 扩展清单文件
+├── background.iife.js     # 后台服务工作线程
+├── buildDomTree.js        # DOM 树构建脚本
+├── content/               # 内容脚本
+├── side-panel/            # 侧边栏 UI
+├── options/               # 选项页面 UI
+├── permission/            # 权限请求页面
+├── _locales/              # 多语言支持
+│   ├── en/
+│   ├── zh_CN/
+│   └── ...
+└── icons/                 # 图标资源
 ```
 
-## 开发调试
+## 常见问题
 
-1. 修改代码后，在扩展管理页面点击"重新加载"
-2. 按 F12 打开开发者工具查看日志
-3. 后台脚本日志：扩展管理页面 → 点击"背景页"
-4. 内容脚本日志：目标页面的开发者工具控制台
+### Q: 扩展无法控制某些网页？
+A: Chrome 限制扩展访问 `chrome://` 页面和 Chrome Web Store。请确保您在普通网页上使用扩展。
+
+### Q: API 调用失败？
+A: 请检查 API 密钥是否正确配置，以及网络连接是否正常。
+
+### Q: 任务执行太慢？
+A: 可以在设置中调整页面加载等待时间和最大步骤数。
+
+## 开发说明
+
+本扩展基于 [Nanobrowser](https://github.com/nanobrowser/nanobrowser) 开源项目开发。
+
+如需修改源码，请参考 `nanobrowser` 目录中的源代码，使用 `pnpm build` 重新构建。
 
 ## 许可证
 
-MIT License - WelineFramework
-
+Apache-2.0 License

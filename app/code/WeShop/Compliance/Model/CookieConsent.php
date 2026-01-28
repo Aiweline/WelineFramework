@@ -15,6 +15,7 @@ class CookieConsent extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_cookie_consent';
     public const primary_key = 'consent_id';
+    public string $indexer = 'cookie_consent_indexer';
     
     public const fields_ID = 'consent_id';
     public const fields_CUSTOMER_ID = 'customer_id';

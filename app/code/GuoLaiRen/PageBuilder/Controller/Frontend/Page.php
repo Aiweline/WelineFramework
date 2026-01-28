@@ -14,6 +14,7 @@ use GuoLaiRen\Blog\Model\Post as BlogPost;
 use GuoLaiRen\PageBuilder\Helper\PageHelper;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\FrontendController;
 
 class Page extends FrontendController
@@ -21,17 +22,20 @@ class Page extends FrontendController
     private PageModel $pageModel;
     private PageHelper $pageHelper;
     private Style $styleModel;
+    private PageRenderService $pageRenderService;
     private ?BlogPost $blogPostModel = null;
     private ?BlogCategory $blogCategoryModel = null;
 
     public function __construct(
         PageModel $pageModel,
         PageHelper $pageHelper,
-        Style $styleModel
+        Style $styleModel,
+        PageRenderService $pageRenderService
     ) {
         $this->pageModel = $pageModel;
         $this->pageHelper = $pageHelper;
         $this->styleModel = $styleModel;
+        $this->pageRenderService = $pageRenderService;
     }
 
     /**
@@ -57,6 +61,16 @@ class Page extends FrontendController
     }
 
     /**
+     * 首页访问（根路径）
+     * 当访问站点根路径时，自动加载该站点的首页
+     */
+    public function index()
+    {
+        // 直接调用 view 方法，handle 为空时会自动加载首页
+        return $this->view();
+    }
+
+    /**
      * 为博客类型页面加载博客数据
      */
     private function loadBlogData(PageModel $page): void
@@ -68,11 +82,18 @@ class Page extends FrontendController
             return;
         }
         
-        // 获取所有启用的分类
+        // 获取所有启用的分类（当前网站）
+        $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
         $categoryModel = clone $this->getBlogCategoryModel();
-        $blogCategories = $categoryModel->clear()
-            ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED)
-            ->order(BlogCategory::fields_SORT_ORDER, 'ASC')
+        $query = $categoryModel->clear()
+            ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED);
+        
+        // 根据当前网站过滤
+        if ($websiteId) {
+            $query->where(BlogCategory::fields_SITE_ID, $websiteId);
+        }
+        
+        $blogCategories = $query->order(BlogCategory::fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -89,11 +110,16 @@ class Page extends FrontendController
         $currentCategory = null;
         if ($categorySlug) {
             $catModel = clone $this->getBlogCategoryModel();
-            $catModel->clear()
+            $query = $catModel->clear()
                 ->where(BlogCategory::fields_SLUG, $categorySlug)
-                ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED)
-                ->find()
-                ->fetch();
+                ->where(BlogCategory::fields_STATUS, BlogCategory::STATUS_ENABLED);
+            
+            // 根据当前网站过滤
+            if ($websiteId) {
+                $query->where(BlogCategory::fields_SITE_ID, $websiteId);
+            }
+            
+            $query->find()->fetch();
             if ($catModel->getId()) {
                 $currentCategory = $catModel;
             }
@@ -104,11 +130,16 @@ class Page extends FrontendController
         if ($pageType === PageModel::TYPE_BLOG && $postSlug) {
             // 博客文章详情页
             $postModel = clone $this->getBlogPostModel();
-            $postModel->clear()
+            $query = $postModel->clear()
                 ->where(BlogPost::fields_SLUG, $postSlug)
-                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-                ->find()
-                ->fetch();
+                ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
+            
+            // 根据当前网站过滤
+            if ($websiteId) {
+                $query->where(BlogPost::fields_SITE_ID, $websiteId);
+            }
+            
+            $query->find()->fetch();
             
             if ($postModel->getId()) {
                 // 增加浏览量
@@ -119,11 +150,17 @@ class Page extends FrontendController
                 $categoryId = $postModel->getData(BlogPost::fields_CATEGORY_ID);
                 if ($categoryId) {
                     $relatedModel = clone $this->getBlogPostModel();
-                    $relatedPosts = $relatedModel->clear()
+                    $relatedQuery = $relatedModel->clear()
                         ->where(BlogPost::fields_CATEGORY_ID, $categoryId)
                         ->where(BlogPost::fields_ID, $postModel->getId(), '!=')
-                        ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-                        ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
+                        ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
+                    
+                    // 根据当前网站过滤
+                    if ($websiteId) {
+                        $relatedQuery->where(BlogPost::fields_SITE_ID, $websiteId);
+                    }
+                    
+                    $relatedPosts = $relatedQuery->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
                         ->limit(6)
                         ->select()
                         ->fetch()
@@ -134,17 +171,22 @@ class Page extends FrontendController
         } else {
             // 博客列表页或分类页
             $postModel = clone $this->getBlogPostModel();
-            $postModel->clear()
+            $query = $postModel->clear()
                 ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
+            
+            // 根据当前网站过滤
+            if ($websiteId) {
+                $query->where(BlogPost::fields_SITE_ID, $websiteId);
+            }
             
             // 如果指定了分类
             if ($currentCategory) {
-                $postModel->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
+                $query->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
             }
             
             // 分页查询（is_featured字段可能不存在，使用try-catch处理）
             try {
-                $blogPosts = $postModel
+                $blogPosts = $query
                     ->order(BlogPost::fields_IS_FEATURED, 'DESC')
                     ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
                     ->page($pageNum, $pageSize)
@@ -154,12 +196,19 @@ class Page extends FrontendController
             } catch (\Exception $e) {
                 // 如果is_featured字段不存在，仅按发布时间排序
                 $postModel = clone $this->getBlogPostModel();
-                $postModel->clear()
+                $fallbackQuery = $postModel->clear()
                     ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
-                if ($currentCategory) {
-                    $postModel->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
+                
+                // 根据当前网站过滤
+                if ($websiteId) {
+                    $fallbackQuery->where(BlogPost::fields_SITE_ID, $websiteId);
                 }
-                $blogPosts = $postModel
+                
+                if ($currentCategory) {
+                    $fallbackQuery->where(BlogPost::fields_CATEGORY_ID, $currentCategory->getId());
+                }
+                
+                $blogPosts = $fallbackQuery
                     ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
                     ->page($pageNum, $pageSize)
                     ->pagination()
@@ -173,9 +222,15 @@ class Page extends FrontendController
         
         // 获取最近文章（用于侧边栏）
         $recentModel = clone $this->getBlogPostModel();
-        $recentPosts = $recentModel->clear()
-            ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-            ->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
+        $recentQuery = $recentModel->clear()
+            ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED);
+        
+        // 根据当前网站过滤
+        if ($websiteId) {
+            $recentQuery->where(BlogPost::fields_SITE_ID, $websiteId);
+        }
+        
+        $recentPosts = $recentQuery->order(BlogPost::fields_PUBLISHED_AT, 'DESC')
             ->limit(10)
             ->select()
             ->fetch()
@@ -186,10 +241,16 @@ class Page extends FrontendController
         $allTags = [];
         try {
             $tagsModel = clone $this->getBlogPostModel();
-            $postsWithTags = $tagsModel->clear()
+            $tagsQuery = $tagsModel->clear()
                 ->where(BlogPost::fields_STATUS, BlogPost::STATUS_PUBLISHED)
-                ->where(BlogPost::fields_TAGS, '', '!=')
-                ->select()
+                ->where(BlogPost::fields_TAGS, '', '!=');
+            
+            // 根据当前网站过滤
+            if ($websiteId) {
+                $tagsQuery->where(BlogPost::fields_SITE_ID, $websiteId);
+            }
+            
+            $postsWithTags = $tagsQuery->select()
                 ->fetch()
                 ->getItems();
         } catch (\Exception $e) {
@@ -212,11 +273,7 @@ class Page extends FrontendController
     public function view()
     {
         $handle = $this->request->getGet('handle');
-        if (!$handle) {
-            $this->redirect(404);
-            return;
-        }
-
+        
         // 检查是否为预览模式
         $isPreview = $this->request->getGet('preview') == '1';
         
@@ -231,19 +288,85 @@ class Page extends FrontendController
         // 获取当前使用的语言（从Cookie或URL参数）
         $currentLocale = $requestedLocale ?: \Weline\Framework\Http\Cookie::getLang();
 
-        // 加载页面
-        $page = clone $this->pageModel;
-        $page->clear()->where(PageModel::fields_HANDLE, $handle);
+        // 获取当前网站ID
+        $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
         
-        // 如果不是预览模式，只显示已发布的页面
-        if (!$isPreview) {
-            $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+        $page = null;
+        
+        // 如果 handle 为空，尝试加载该站点的首页
+        if (empty($handle) && $websiteId > 0) {
+            $page = clone $this->pageModel;
+            $page->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::fields_TYPE, PageModel::TYPE_HOME);
+            
+            // 如果不是预览模式，只显示已发布的页面
+            if (!$isPreview) {
+                $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+            }
+            
+            $page->find()->fetch();
+            
+            // 如果没找到，尝试 website_id = 0 的全局首页
+            if (!$page->getId()) {
+                $page = clone $this->pageModel;
+                $page->clear()
+                    ->where(PageModel::fields_WEBSITE_ID, 0)
+                    ->where(PageModel::fields_TYPE, PageModel::TYPE_HOME);
+                if (!$isPreview) {
+                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                }
+                $page->find()->fetch();
+            }
         }
         
-        $page->find()->fetch();
+        // 如果有 handle，按正常流程加载页面
+        if (empty($page) || !$page->getId()) {
+            if (empty($handle)) {
+                $this->redirect(404);
+                return;
+            }
+            
+            // 加载页面（按 website_id + handle 查询）
+            $page = clone $this->pageModel;
+            $page->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
+                ->where(PageModel::fields_HANDLE, $handle);
+            
+            // 如果不是预览模式，只显示已发布的页面
+            if (!$isPreview) {
+                $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+            }
+            
+            $page->find()->fetch();
 
+            // 如果没找到，尝试回退查找：
+            // 1. 如果当前 website_id != 0，尝试 website_id = 0（全局/默认站点）
+            // 2. 如果还是没找到，尝试只按 handle 查找（兼容旧数据或配置错误情况）
+            if (!$page->getId() && $websiteId !== 0) {
+                $page = clone $this->pageModel;
+                $page->clear()
+                    ->where(PageModel::fields_WEBSITE_ID, 0)
+                    ->where(PageModel::fields_HANDLE, $handle);
+                if (!$isPreview) {
+                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                }
+                $page->find()->fetch();
+            }
+            
+            if (!$page->getId()) {
+                // 最后尝试：只按 handle 查找，取第一个匹配的已发布页面
+                $page = clone $this->pageModel;
+                $page->clear()
+                    ->where(PageModel::fields_HANDLE, $handle);
+                if (!$isPreview) {
+                    $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+                }
+                $page->find()->fetch();
+            }
+        }
 
-        if (!$page->getId()) {
+        if (!$page || !$page->getId()) {
             $this->redirect(404);
             return;
         }
@@ -278,128 +401,31 @@ class Page extends FrontendController
         // 如果是博客类型页面，加载博客数据
         $this->loadBlogData($page);
 
-        // 获取页面的样式和样式配置
+        // 获取页面的样式代码
         $styleCode = $page->getData(PageModel::fields_STYLE);
-        $allStyleSettings = $page->getStyleSetting(); // 获取页面的所有样式配置
         
-        // 获取当前样式的配置值（从所有样式配置中提取）
-        $pageStyleSettings = [];
-        if ($styleCode && isset($allStyleSettings[$styleCode])) {
-            $rawSettings = $allStyleSettings[$styleCode];
-            
-            // 清理可能存在的三层结构（旧数据可能包含语言代码作为key）
-            // 只保留标量值（配置项），过滤掉数组值（语言代码节点）
-            foreach ($rawSettings as $key => $value) {
-                if (!is_array($value)) {
-                    $pageStyleSettings[$key] = $value;
-                }
-            }
-        }
-        
-		if ($styleCode) {
-            // 加载样式信息
-            // 注意：页面已选择了样式，无论样式是否"激活"都应正常渲染
-            // is_active 仅用于样式选择器是否显示，不影响已使用该样式的页面
+        if ($styleCode) {
+            // 验证样式是否存在
             $style = clone $this->styleModel;
-			$style->clear()
-				->where(Style::fields_CODE, $styleCode)
-				->find()
-				->fetch();
+            $style->clear()
+                ->where(Style::fields_CODE, $styleCode)
+                ->find()
+                ->fetch();
             
             if ($style->getId()) {
-                // 获取样式的默认配置（最低优先级）
-                $parsed = $style->parseStyleConfig();
-                $styleConfigs = $parsed['configs'] ?? [];  // ← 修复：提取 configs 部分
-                $finalSettings = [];
+                // 确定渲染模式：preview 或 live
+                $renderMode = $isPreview ? PageRenderService::MODE_PREVIEW : PageRenderService::MODE_LIVE;
                 
-                // 第一步：使用默认配置值
-                foreach ($styleConfigs as $key => $config) {
-                    if (isset($config['default'])) {
-                        $finalSettings[$key] = $config['default'];
-                    }
-                }
+                // 使用统一的 PageRenderService 渲染页面
+                // 这确保了可视化编辑器预览和正式上线页面的渲染逻辑完全一致
+                $html = $this->pageRenderService->render(
+                    $page,
+                    $renderMode,
+                    $currentLocale,
+                    null // 无临时样式
+                );
                 
-                // 第二步：用页面保存的配置覆盖（中等优先级）
-                // 注意：不再限制只覆盖样式定义中存在的配置项，确保所有页面配置都能生效
-                foreach ($pageStyleSettings as $key => $value) {
-                    $finalSettings[$key] = $value;
-                }
-                
-                // 第三步：用翻译的配置覆盖（最高优先级）
-                // 从本地化描述中获取翻译的样式配置
-                if ($localizedContent && !empty($localizedContent['config'])) {
-                    $translatedConfig = is_string($localizedContent['config']) 
-                        ? json_decode($localizedContent['config'] ?? '', true) 
-                        : $localizedContent['config'];
-                    
-                    // 检查是否有 style_config 节点
-                    if (isset($translatedConfig['style_config']) && is_array($translatedConfig['style_config'])) {
-                        foreach ($translatedConfig['style_config'] as $key => $value) {
-                            // 覆盖配置（不限制只覆盖样式定义中存在的配置项）
-                            $finalSettings[$key] = $value;
-                        }
-                    }
-                }
-                
-                // 将最终配置传递给模板（传递两个变量名以兼容不同模板）
-                $this->assign('style_settings', $finalSettings);
-                $this->assign('style', $finalSettings);
-                
-                // 使用模块路径格式渲染样式模板
-                $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
-                
-                // 渲染 header
-                $headerHtml = $this->fetch("{$stylePath}/header.phtml");
-                
-                // 渲染 content
-                // 如果页面有自定义内容，使用自定义内容替代 content.phtml
-                // 优先使用翻译后的内容，如果没有则使用默认内容
-                $customContent = '';
-                if ($localizedContent && !empty($localizedContent['content'])) {
-                    // 使用翻译后的自定义内容
-                    $customContent = $localizedContent['content'];
-                } else {
-                    // 使用默认语言的自定义内容
-                    $customContent = $page->getData(PageModel::fields_CONTENT);
-                }
-                
-                if (!empty($customContent)) {
-                    // 使用自定义内容（已翻译或默认）
-                    $contentHtml = $customContent;
-                } else {
-                    // 使用样式模板的 content.phtml
-                    $contentHtml = $this->fetch("{$stylePath}/content.phtml");
-                }
-                
-                // 渲染 footer
-                $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
-                
-                // 获取Header和Footer自定义代码
-                $headerCustomCode = $page->getData(PageModel::fields_HEADER_CUSTOM_CODE) ?? '';
-                $footerCustomCode = $page->getData(PageModel::fields_FOOTER_CUSTOM_CODE) ?? '';
-                
-                // 在header的</head>标签前插入Header自定义代码
-                if (!empty($headerCustomCode)) {
-                    $headerHtml = preg_replace(
-                        '/(<\/head>)/i',
-                        $headerCustomCode . "\n    $1",
-                        $headerHtml,
-                        1
-                    );
-                }
-                
-                // 在footer的</body>标签前插入Footer自定义代码
-                if (!empty($footerCustomCode)) {
-                    $footerHtml = preg_replace(
-                        '/(<\/body>)/i',
-                        "\n    " . $footerCustomCode . "\n$1",
-                        $footerHtml,
-                        1
-                    );
-                }
-                
-                // 输出组合后的完整页面
-                echo $headerHtml . $contentHtml . $footerHtml;
+                echo $html;
                 
                 // 如果是预览模式，添加语言切换悬浮按钮
                 if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {

@@ -28,6 +28,13 @@ class Cli extends CliAbstract
     public function run(): void
     {
         $args = $this->parseArgs($this->argv);
+        
+        // 检查是否是查找命令 (find 或 -f)
+        if ($this->isFindCommand($args)) {
+            $this->handleFindCommand($args);
+            return;
+        }
+        
         // 有命令时，需要接受用户检查 和 参数检查 但是在检测到env环境为空时，允许执行，方便安装
         $env_user = Env::get('user');
         if (isset($args['command']) && $env_user) {
@@ -56,6 +63,160 @@ class Cli extends CliAbstract
         ObjectManager::getInstance($command_class['class'])->execute($args, $data);
         $this->printer->printing("\n");
         $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
+    }
+    
+    /**
+     * @DESC         |检查是否是查找命令
+     *
+     * @param array $args 参数数组
+     * @return bool
+     */
+    private function isFindCommand(array $args): bool
+    {
+        // 检查 find 命令
+        if (isset($args['command']) && strtolower($args['command']) === 'find') {
+            return true;
+        }
+        
+        // 检查 -f 参数
+        if (isset($args['f']) || isset($args['-f'])) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * @DESC         |处理查找命令
+     *
+     * @param array $args 参数数组
+     * @return void
+     */
+    private function handleFindCommand(array $args): void
+    {
+        // 获取搜索关键词
+        $keyword = $this->getFindKeyword($args);
+        
+        if (empty($keyword)) {
+            $this->showFindHelp();
+            return;
+        }
+        
+        // 搜索命令
+        $results = $this->searchCommands($keyword);
+        
+        // 显示搜索结果
+        $this->showSearchResults($results, $keyword);
+    }
+    
+    /**
+     * @DESC         |获取查找关键词
+     *
+     * @param array $args 参数数组
+     * @return string
+     */
+    private function getFindKeyword(array $args): string
+    {
+        // 如果使用 find 命令，关键词是第二个参数
+        if (isset($args['command']) && strtolower($args['command']) === 'find') {
+            // 查找数字索引的参数（非命令本身）
+            foreach ($this->argv as $index => $arg) {
+                if ($index > 0 && !str_starts_with($arg, '-')) {
+                    return trim($arg);
+                }
+            }
+        }
+        
+        // 如果使用 -f 参数
+        if (isset($args['f']) && is_string($args['f']) && $args['f'] !== true) {
+            return trim($args['f']);
+        }
+        
+        return '';
+    }
+    
+    /**
+     * @DESC         |显示查找命令帮助
+     *
+     * @return void
+     */
+    private function showFindHelp(): void
+    {
+        $this->printer->note('🔍 ' . __('命令查找功能'));
+        $this->printer->separator('─', 0, 'NOTE');
+        $this->printer->printing(__('用法') . ':');
+        $this->printer->success('  php bin/w find <关键词>');
+        $this->printer->success('  php bin/w -f <关键词>');
+        $this->printer->printing('');
+        $this->printer->printing(__('说明') . ':');
+        $this->printer->note('  ' . __('在命令名称、描述中搜索包含关键词的命令'));
+        $this->printer->printing('');
+        $this->printer->printing(__('示例') . ':');
+        $this->printer->success('  php bin/w find cache      # ' . __('搜索包含 "cache" 的命令'));
+        $this->printer->success('  php bin/w -f module       # ' . __('搜索包含 "module" 的命令'));
+        $this->printer->success('  php bin/w find 清理       # ' . __('搜索描述中包含 "清理" 的命令'));
+    }
+    
+    /**
+     * @DESC         |搜索命令
+     *
+     * @param string $keyword 搜索关键词
+     * @return array 搜索结果
+     */
+    private function searchCommands(string $keyword): array
+    {
+        $commands = Env::getCommands();
+        $results = [];
+        $keywordLower = strtolower($keyword);
+        
+        foreach ($commands as $group => $group_commands) {
+            foreach ($group_commands as $cmd => $data) {
+                $cmdLower = strtolower($cmd);
+                $tipLower = isset($data['tip']) ? strtolower($data['tip']) : '';
+                
+                // 在命令名称或描述中搜索关键词
+                if (str_contains($cmdLower, $keywordLower) || str_contains($tipLower, $keywordLower)) {
+                    if (!isset($results[$group])) {
+                        $results[$group] = [];
+                    }
+                    $results[$group][$cmd] = $data;
+                }
+            }
+        }
+        
+        return $results;
+    }
+    
+    /**
+     * @DESC         |显示搜索结果
+     *
+     * @param array $results 搜索结果
+     * @param string $keyword 搜索关键词
+     * @return void
+     */
+    private function showSearchResults(array $results, string $keyword): void
+    {
+        if (empty($results)) {
+            $this->printer->warning('🔍 ' . __('没有找到包含 "%{1}" 的命令', [$keyword]));
+            $this->printer->note(__('💡 提示：尝试使用更短的关键词，或使用命令的一部分进行搜索'));
+            return;
+        }
+        
+        // 计算匹配的命令总数
+        $totalCount = 0;
+        foreach ($results as $group_commands) {
+            $totalCount += count($group_commands);
+        }
+        
+        $this->printer->note('🔍 ' . __('搜索 "%{1}" 找到 %{2} 个命令', [$keyword, $totalCount]));
+        $this->printer->separator('─', 0, 'NOTE');
+        
+        // 使用分组树形显示
+        $this->printer->groupedTreeList($results, 'NOTE');
+        
+        // 添加底部提示
+        $this->printer->separator('═', 0, 'SUCCESS');
+        $this->printer->note('💡 ' . __('提示：使用 "php bin/w <命令> -h" 查看命令详情'));
     }
 
     function parseArgs(array $args): array
@@ -275,8 +436,9 @@ class Cli extends CliAbstract
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
             } catch (Exception $exception) {
                 $this->printer->error($exception->getMessage());
-                exit();
+                exit(1);
             }
+            exit(0);
         }
         $commands = Env::getCommands();
         if ($command !== 'command:upgrade' && empty($commands)) {

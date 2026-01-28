@@ -15,6 +15,7 @@ class SocialShare extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_social_share';
     public const primary_key = 'share_id';
+    public string $indexer = 'social_share_indexer';
     
     public const fields_ID = 'share_id';
     public const fields_CUSTOMER_ID = 'customer_id';

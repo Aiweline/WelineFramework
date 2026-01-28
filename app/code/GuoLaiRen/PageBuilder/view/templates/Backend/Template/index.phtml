@@ -44,8 +44,8 @@ $pages = $this->getData('pages') ?: [];
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form action="<?= $this->getBackendUrl('*/backend/template/index') ?>" method="get" class="row g-3">
-                    <div class="col-md-6">
+                <form action="<?= $this->getBackendUrl('*/backend/template/index') ?>" method="get" class="row g-3 align-items-end">
+                    <div class="col-md-5">
                         <label class="form-label"><?= __('搜索模板') ?></label>
                         <div class="input-group">
                             <span class="input-group-text">
@@ -69,7 +69,7 @@ $pages = $this->getData('pages') ?: [];
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label"><?= __('预览页面选择') ?></label>
                         <select class="form-select" id="previewPageSelect">
                             <option value="0"><?= __('使用测试页面') ?></option>
@@ -80,8 +80,20 @@ $pages = $this->getData('pages') ?: [];
                             <?php endforeach; ?>
                         </select>
                         <small class="form-text text-muted">
-                            <?= __('选择用于配置预览的页面数据（用于测试模板是否可用）') ?>
+                            <?= __('选择用于配置预览的页面数据') ?>
                         </small>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label"><?= __('预览图管理') ?></label>
+                        <div class="btn-group w-100" role="group">
+                            <button type="button" class="btn btn-outline-info" onclick="generateAllPreviews(false)" title="<?= __('为缺少预览图的模板生成预览') ?>">
+                                <i class="mdi mdi-image-plus"></i> <?= __('生成缺失') ?>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="generateAllPreviews(true)" title="<?= __('强制刷新所有模板的预览图') ?>">
+                                <i class="mdi mdi-refresh"></i> <?= __('全部刷新') ?>
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -120,7 +132,7 @@ $pages = $this->getData('pages') ?: [];
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
-                    <!-- 样式卡片网格（复用form.phtml中的样式） -->
+                    <!-- 样式卡片网格 -->
                     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3" id="styleCardsContainer">
                         <?php foreach ($styles as $style): ?>
                             <?php
@@ -130,61 +142,84 @@ $pages = $this->getData('pages') ?: [];
                             $styleCode = $style->getData('code');
                             $styleName = $style->getData('name');
                             $styleDescription = $style->getData('description') ?: '';
+                            $safeStyleCode = htmlspecialchars($styleCode ?? '');
+                            $safeStyleName = htmlspecialchars($styleName ?? '');
                             
-                            // 构建预览图片URL
+                            // 构建预览图片URL - 使用静态文件路径
                             $previewImageUrl = '';
                             if ($previewImage) {
-                                $previewImageUrl = $this->getBackendUrl('pagebuilder/backend/page/stylePreviewImage', [
-                                    'code' => $styleCode
-                                ]);
+                                // 检查是否是完整路径还是相对路径
+                                if (strpos($previewImage, 'pagebuilder/previews/') === 0) {
+                                    $previewImageUrl = '/static/' . $previewImage . '?t=' . time();
+                                } else {
+                                    $previewImageUrl = '/static/pagebuilder/previews/' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $styleCode) . '.png?t=' . time();
+                                }
+                                // 检查文件是否真实存在
+                                $checkPath = BP . 'pub/static/' . ltrim($previewImage, '/');
+                                if (!file_exists($checkPath)) {
+                                    $previewImageUrl = ''; // 文件不存在，清空URL
+                                }
                             }
                             ?>
                             
-                            <div class="col">
+                            <div class="col" data-style-code="<?= $safeStyleCode ?>">
                                 <div class="card style-card">
                                     <!-- 预览区域 -->
-                                    <div class="style-card-preview" id="preview-<?= htmlspecialchars($styleCode ?? '') ?>">
+                                    <div class="style-card-preview" id="preview-<?= $safeStyleCode ?>">
                                         <?php if ($previewImageUrl): ?>
-                                            <!-- 有预览图，直接显示 -->
+                                            <!-- 有预览图，直接显示静态图片 -->
                                             <div class="style-card-preview-actions">
                                                 <div class="style-card-preview-btn" 
-                                                     onclick="openImagePreview('<?= htmlspecialchars($previewImageUrl ?? '') ?>', '<?= htmlspecialchars($styleName ?? '') ?>')" 
+                                                     onclick="openImagePreview('<?= htmlspecialchars($previewImageUrl) ?>', '<?= $safeStyleName ?>')" 
                                                      title="<?= __('放大预览图') ?>">
                                                     <i class="mdi mdi-magnify-plus"></i>
                                                 </div>
                                                 <div class="style-card-preview-btn" 
-                                                     onclick="openDefaultPreview('<?= htmlspecialchars($styleCode ?? '') ?>', '<?= htmlspecialchars($styleName ?? '') ?>')" 
-                                                     title="<?= __('默认模板预览') ?>">
-                                                    <i class="mdi mdi-file-eye"></i>
+                                                     onclick="refreshSinglePreview('<?= $safeStyleCode ?>')" 
+                                                     title="<?= __('刷新预览图') ?>">
+                                                    <i class="mdi mdi-refresh"></i>
+                                                </div>
+                                                <div class="style-card-preview-btn" 
+                                                     onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')" 
+                                                     title="<?= __('在新窗口预览') ?>">
+                                                    <i class="mdi mdi-open-in-new"></i>
                                                 </div>
                                             </div>
-                                            <img src="<?= htmlspecialchars($previewImageUrl ?? '') ?>" 
-                                                 alt="<?= htmlspecialchars($styleName ?? '') ?>"
-                                                 onerror="this.parentElement.innerHTML='<div class=\'style-card-preview-placeholder\'><i class=\'mdi mdi-image-broken\'></i><div><?= __('图片加载失败') ?></div></div>'">
+                                            <img src="<?= htmlspecialchars($previewImageUrl) ?>" 
+                                                 alt="<?= $safeStyleName ?>"
+                                                 class="style-preview-img"
+                                                 onerror="handlePreviewImageError(this, '<?= $safeStyleCode ?>')">
                                         <?php else: ?>
-                                            <!-- 没有预览图，使用iframe + canvas生成预览 -->
+                                            <!-- 没有预览图，显示占位符和生成按钮 -->
                                             <div class="style-card-preview-actions">
                                                 <div class="style-card-preview-btn" 
-                                                     onclick="openDefaultPreview('<?= htmlspecialchars($styleCode ?? '') ?>', '<?= htmlspecialchars($styleName ?? '') ?>')" 
-                                                     title="<?= __('默认模板预览') ?>">
-                                                    <i class="mdi mdi-file-eye"></i>
+                                                     onclick="refreshSinglePreview('<?= $safeStyleCode ?>')" 
+                                                     title="<?= __('生成预览图') ?>">
+                                                    <i class="mdi mdi-image-plus"></i>
+                                                </div>
+                                                <div class="style-card-preview-btn" 
+                                                     onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')" 
+                                                     title="<?= __('在新窗口预览') ?>">
+                                                    <i class="mdi mdi-open-in-new"></i>
                                                 </div>
                                             </div>
-                                            <div class="style-card-preview-loading">
-                                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                                <div style="margin-top: 10px; font-size: 12px;"><?= __('正在生成预览...') ?></div>
+                                            <div class="style-card-preview-placeholder">
+                                                <i class="mdi mdi-image-outline"></i>
+                                                <div><?= __('暂无预览图') ?></div>
+                                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="refreshSinglePreview('<?= $safeStyleCode ?>')">
+                                                    <i class="mdi mdi-image-plus"></i> <?= __('生成预览') ?>
+                                                </button>
                                             </div>
-                                            <canvas id="style-preview-canvas-<?= htmlspecialchars(str_replace(['/', '-'], '_', $styleCode)) ?>" 
-                                                    style="display: none; width: 100%; height: 100%;"></canvas>
-                                            <iframe id="style-preview-iframe-<?= htmlspecialchars(str_replace(['/', '-'], '_', $styleCode)) ?>" 
-                                                    src="<?= $this->getBackendUrl('pagebuilder/backend/preview/stylePreview', ['style_code' => $styleCode]) ?>"
-                                                    style="position: absolute; left: -9999px; width: 1200px; height: 800px; border: none;"
-                                                    onload="captureIframePreview('style-preview-iframe-<?= htmlspecialchars(str_replace(['/', '-'], '_', $styleCode)) ?>', 'style-preview-canvas-<?= htmlspecialchars(str_replace(['/', '-'], '_', $styleCode)) ?>', 'preview-<?= htmlspecialchars($styleCode ?? '') ?>')">
-                                            </iframe>
                                         <?php endif; ?>
                                         
+                                        <!-- 加载状态遮罩（默认隐藏） -->
+                                        <div class="style-card-preview-loading" style="display: none;">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                            <div style="margin-top: 10px; font-size: 12px;"><?= __('正在生成预览...') ?></div>
+                                        </div>
+                                        
                                         <!-- 状态徽章 -->
-                                        <div class="position-absolute top-0 start-0 m-2">
+                                        <div class="position-absolute top-0 start-0 m-2" style="z-index: 5;">
                                             <?php if ($isPublished): ?>
                                                 <span class="badge bg-success">
                                                     <i class="mdi mdi-check-circle"></i> <?= __('已发布') ?>
@@ -197,7 +232,7 @@ $pages = $this->getData('pages') ?: [];
                                         </div>
                                         
                                         <?php if (!$isActive): ?>
-                                        <div class="position-absolute top-0 end-0 m-2">
+                                        <div class="position-absolute top-0 end-0 m-2" style="z-index: 5;">
                                             <span class="badge bg-danger">
                                                 <i class="mdi mdi-cancel"></i> <?= __('已禁用') ?>
                                             </span>
@@ -208,7 +243,7 @@ $pages = $this->getData('pages') ?: [];
                                     <!-- 卡片内容 -->
                                     <div class="style-card-body">
                                         <div class="style-card-title">
-                                            <span><?= htmlspecialchars($styleName ?? '') ?></span>
+                                            <span><?= $safeStyleName ?></span>
                                         </div>
                                         
                                         <?php if ($styleDescription): ?>
@@ -219,11 +254,11 @@ $pages = $this->getData('pages') ?: [];
                                         <?php endif; ?>
                                         
                                         <div class="style-card-meta">
-                                            <span class="style-card-code"><?= htmlspecialchars($styleCode ?? '') ?></span>
-                                            <?php if ($previewImage): ?>
+                                            <span class="style-card-code"><?= $safeStyleCode ?></span>
+                                            <?php if ($previewImageUrl): ?>
                                                 <i class="mdi mdi-image text-success" title="<?= __('有预览图') ?>"></i>
                                             <?php else: ?>
-                                                <i class="mdi mdi-monitor text-muted" title="<?= __('实时预览') ?>"></i>
+                                                <i class="mdi mdi-image-off text-muted" title="<?= __('无预览图') ?>"></i>
                                             <?php endif; ?>
                                         </div>
                                         
@@ -232,7 +267,7 @@ $pages = $this->getData('pages') ?: [];
                                             <!-- 配置预览按钮 -->
                                             <button type="button" 
                                                     class="btn btn-sm btn-primary flex-fill" 
-                                                    onclick="openConfigPreview('<?= htmlspecialchars($styleCode ?? '') ?>')"
+                                                    onclick="openConfigPreview('<?= $safeStyleCode ?>')"
                                                     title="<?= __('使用选定页面的数据预览并编辑模板配置') ?>">
                                                 <i class="mdi mdi-cog"></i> <?= __('配置预览') ?>
                                             </button>
@@ -395,33 +430,32 @@ $pages = $this->getData('pages') ?: [];
     z-index: 10;
 }
 
-.style-card-preview canvas {
+.style-preview-img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    background: #fff;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 0.3s ease;
 }
 
-.style-card-preview iframe {
-    /* iframe用于截图，隐藏显示 */
-    position: absolute !important;
-    left: -9999px !important;
-    visibility: hidden !important;
+.style-card:hover .style-preview-img {
+    transform: scale(1.02);
 }
 </style>
 
 <!-- html2canvas for screenshot功能 -->
 <script src="@static(GuoLaiRen_PageBuilder::libs/html2canvas/html2canvas.min.js)"></script>
-<script>
-// 检查html2canvas是否加载成功
-if (typeof html2canvas === 'undefined') {
-    console.error('❌ html2canvas 未加载成功！预览功能将无法使用。');
-} else {
-    console.log('✓ html2canvas 已加载');
-}
-</script>
 
 <script>
+// API URLs
+const API_URLS = {
+    generatePreview: '<?= $this->getBackendUrl('*/backend/template/generatePreview') ?>',
+    uploadPreview: '<?= $this->getBackendUrl('*/backend/template/uploadPreview') ?>',
+    generateAllPreviews: '<?= $this->getBackendUrl('*/backend/template/generateAllPreviews') ?>',
+    togglePublish: '<?= $this->getBackendUrl('*/backend/template/togglePublish') ?>',
+    stylePreview: '<?= $this->getBackendUrl('pagebuilder/backend/preview/stylePreview') ?>'
+};
+
 // 切换发布状态
 function togglePublish(styleId, isPublished) {
     if (!confirm(isPublished ? '<?= __('确定要发布此模板吗？发布后，新建页面时将可以选择此模板。') ?>' : '<?= __('确定要取消发布此模板吗？取消发布后，新建页面时将无法选择此模板。') ?>')) {
@@ -432,7 +466,7 @@ function togglePublish(styleId, isPublished) {
     formData.append('style_id', styleId);
     formData.append('is_published', isPublished);
     
-    fetch('<?= $this->getBackendUrl('*/backend/template/togglePublish') ?>', {
+    fetch(API_URLS.togglePublish, {
         method: 'POST',
         body: formData,
         headers: {
@@ -472,12 +506,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // 配置预览 - 打开可视化配置界面
 function openConfigPreview(styleCode) {
     const pageId = document.getElementById('previewPageSelect').value || 0;
-    // 设置全局变量供 visual_config.phtml 使用
     window.currentTemplateStyleCode = styleCode;
     window.currentTemplatePageId = parseInt(pageId) || 0;
-    window.isTemplateConfigMode = true; // 标记为模板配置模式
-    
-    // 打开可视化配置界面（使用 visual_config.phtml）
+    window.isTemplateConfigMode = true;
     openVisualConfig();
 }
 
@@ -497,165 +528,341 @@ function openImagePreview(imageSrc, title) {
             justify-content: center;
             cursor: zoom-out;
         " onclick="closePreviewImageModal()">
-            <div style="
-                max-width: 95%;
-                max-height: 95%;
-                position: relative;
-            ">
-                <img src="${imageSrc}" 
-                     alt="${title}" 
-                     style="
-                         max-width: 100%;
-                         max-height: 95vh;
-                         object-fit: contain;
-                         border-radius: 8px;
-                         box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-                     ">
-                <button onclick="closePreviewImageModal()" 
-                        style="
-                            position: absolute;
-                            top: -40px;
-                            right: 0;
-                            background: rgba(255, 255, 255, 0.9);
-                            border: none;
-                            border-radius: 50%;
-                            width: 36px;
-                            height: 36px;
-                            font-size: 20px;
-                            cursor: pointer;
-                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                        ">
-                    ×
-                </button>
+            <div style="max-width: 95%; max-height: 95%; position: relative;">
+                <img src="${imageSrc}" alt="${title}" style="max-width: 100%; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);">
+                <button onclick="closePreviewImageModal()" style="position: absolute; top: -40px; right: 0; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">×</button>
             </div>
         </div>
     `;
-    
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.body.style.overflow = 'hidden';
 }
 
 function closePreviewImageModal() {
     const modal = document.getElementById('previewImageModal');
-    if (modal) {
-        modal.remove();
-    }
+    if (modal) modal.remove();
     document.body.style.overflow = '';
 }
 
 // ESC键关闭模态框
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closePreviewImageModal();
-    }
+    if (e.key === 'Escape') closePreviewImageModal();
 });
 
 /**
- * 截取iframe预览并转换为canvas显示
- * 复用页面编辑时的逻辑
+ * 打开默认模板预览（新窗口）
  */
-async function captureIframePreview(iframeId, canvasId, previewId) {
-    console.log('🎬 开始截取预览:', iframeId);
+function openDefaultPreview(styleCode, styleName) {
+    const previewUrl = API_URLS.stylePreview + '?style_code=' + encodeURIComponent(styleCode);
+    window.open(previewUrl, '_blank');
+}
+
+/**
+ * 处理预览图加载失败
+ */
+function handlePreviewImageError(imgEl, styleCode) {
+    const previewContainer = imgEl.closest('.style-card-preview');
+    if (previewContainer) {
+        // 隐藏损坏的图片，显示占位符
+        imgEl.style.display = 'none';
+        const placeholder = document.createElement('div');
+        placeholder.className = 'style-card-preview-placeholder';
+        placeholder.innerHTML = `
+            <i class="mdi mdi-image-broken"></i>
+            <div><?= __('预览图加载失败') ?></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="refreshSinglePreview('${styleCode}')">
+                <i class="mdi mdi-refresh"></i> <?= __('重新生成') ?>
+            </button>
+        `;
+        previewContainer.appendChild(placeholder);
+    }
+}
+
+/**
+ * 刷新单个模板的预览图
+ */
+async function refreshSinglePreview(styleCode) {
+    console.log('🔄 开始生成预览图:', styleCode);
     
-    const iframe = document.getElementById(iframeId);
-    const canvas = document.getElementById(canvasId);
-    const previewContainer = document.getElementById(previewId);
-    const loadingEl = previewContainer ? previewContainer.querySelector('.style-card-preview-loading') : null;
-    
-    if (!iframe || !canvas || !previewContainer) {
-        console.error('❌ 截图失败：找不到必要的DOM元素');
-        if (loadingEl) {
-            loadingEl.innerHTML = '<div class="text-danger small"><?= __('预览生成失败') ?></div>';
-        }
+    const cardEl = document.querySelector(`[data-style-code="${styleCode}"]`);
+    if (!cardEl) {
+        console.error('找不到模板卡片:', styleCode);
         return;
     }
     
-    // 检查html2canvas是否可用
-    if (typeof html2canvas === 'undefined') {
-        console.error('❌ html2canvas 未加载');
-        if (loadingEl) {
-            loadingEl.innerHTML = '<div class="style-card-preview-placeholder"><i class="mdi mdi-alert-circle"></i><div style="font-size: 12px; margin-top: 5px;"><?= __('预览生成失败') ?></div></div>';
-        }
-        return;
-    }
+    const previewContainer = cardEl.querySelector('.style-card-preview');
+    const loadingEl = previewContainer.querySelector('.style-card-preview-loading');
+    
+    // 显示加载状态
+    if (loadingEl) loadingEl.style.display = 'flex';
     
     try {
-        // 等待iframe完全加载
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 创建隐藏的 iframe 加载预览页面
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position: absolute; left: -9999px; width: 1400px; height: 900px; border: none;';
+        iframe.src = API_URLS.stylePreview + '?style_code=' + encodeURIComponent(styleCode);
+        document.body.appendChild(iframe);
+        
+        // 等待 iframe 加载完成
+        await new Promise((resolve, reject) => {
+            iframe.onload = resolve;
+            iframe.onerror = reject;
+            // 超时处理
+            setTimeout(resolve, 15000);
+        });
+        
+        // 额外等待页面渲染
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 使用 html2canvas 截图
+        if (typeof html2canvas === 'undefined') {
+            throw new Error('html2canvas 未加载');
+        }
         
         const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
         const iframeBody = iframeDoc.body;
         
         if (!iframeBody) {
-            throw new Error('无法访问iframe内容');
+            throw new Error('无法访问 iframe 内容');
         }
         
-        console.log('📸 开始使用html2canvas截图...');
+        console.log('📸 正在截图...');
         
-        // 使用html2canvas截取iframe内容
-        const screenshotCanvas = await html2canvas(iframeBody, {
+        const canvas = await html2canvas(iframeBody, {
             allowTaint: true,
             useCORS: true,
-            scale: 0.25, // 降低分辨率以提高性能
-            width: 1200,
-            height: 800,
+            scale: 0.5,
+            width: 1400,
+            height: 900,
             logging: false,
-            removeContainer: false
+            backgroundColor: '#ffffff'
         });
         
-        // 将截图绘制到目标canvas（调整尺寸以适应卡片）
-        const ctx = canvas.getContext('2d');
-        canvas.width = 400; // 卡片宽度
-        canvas.height = 200; // 卡片高度
+        // 移除 iframe
+        iframe.remove();
         
-        // 计算缩放比例（保持宽高比）
-        const scale = Math.min(canvas.width / screenshotCanvas.width, canvas.height / screenshotCanvas.height);
-        const x = (canvas.width / 2) - (screenshotCanvas.width / 2) * scale;
-        const y = (canvas.height / 2) - (screenshotCanvas.height / 2) * scale;
+        // 转换为 base64
+        const imageData = canvas.toDataURL('image/png', 0.9);
         
-        ctx.drawImage(screenshotCanvas, x, y, screenshotCanvas.width * scale, screenshotCanvas.height * scale);
+        console.log('📤 正在上传预览图...');
         
-        // 显示canvas，隐藏加载状态
-        canvas.style.display = 'block';
-        if (loadingEl) {
-            loadingEl.style.display = 'none';
-        }
+        // 上传到服务器
+        const formData = new FormData();
+        formData.append('style_code', styleCode);
+        formData.append('image_data', imageData);
         
-        // 移除iframe（已经不需要了）
-        setTimeout(() => {
-            if (iframe.parentElement) {
-                iframe.remove();
+        const response = await fetch(API_URLS.uploadPreview, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
             }
-        }, 100);
+        });
         
-        console.log('✅ 预览截图成功');
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ 预览图生成成功');
+            
+            // 更新卡片中的预览图
+            updatePreviewImage(previewContainer, result.preview_url, styleCode);
+        } else {
+            throw new Error(result.message || '上传失败');
+        }
         
     } catch (error) {
-        console.error('❌ 截图失败:', error);
-        
-        // 显示错误提示
-        if (loadingEl) {
-            loadingEl.innerHTML = `
-                <div class="style-card-preview-placeholder">
-                    <i class="mdi mdi-alert-circle"></i>
-                    <div style="font-size: 12px; margin-top: 5px;"><?= __('预览生成失败') ?></div>
-                </div>
-            `;
-        }
-        
-        // 移除iframe
-        if (iframe.parentElement) {
-            iframe.remove();
-        }
+        console.error('❌ 生成预览图失败:', error);
+        alert('<?= __('生成预览图失败：') ?>' + error.message);
+    } finally {
+        // 隐藏加载状态
+        if (loadingEl) loadingEl.style.display = 'none';
     }
 }
 
 /**
- * 打开默认模板预览
+ * 更新预览图显示
  */
-function openDefaultPreview(styleCode, styleName) {
-    const previewUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/stylePreview') ?>?style_code=' + encodeURIComponent(styleCode);
-    window.open(previewUrl, '_blank');
+function updatePreviewImage(previewContainer, imageUrl, styleCode) {
+    // 清除旧内容（保留加载遮罩和徽章）
+    const loading = previewContainer.querySelector('.style-card-preview-loading');
+    const badges = previewContainer.querySelectorAll('.position-absolute');
+    
+    previewContainer.innerHTML = '';
+    
+    // 添加操作按钮
+    const actionsHtml = `
+        <div class="style-card-preview-actions">
+            <div class="style-card-preview-btn" onclick="openImagePreview('${imageUrl}', '')" title="<?= __('放大预览图') ?>">
+                <i class="mdi mdi-magnify-plus"></i>
+            </div>
+            <div class="style-card-preview-btn" onclick="refreshSinglePreview('${styleCode}')" title="<?= __('刷新预览图') ?>">
+                <i class="mdi mdi-refresh"></i>
+            </div>
+            <div class="style-card-preview-btn" onclick="openDefaultPreview('${styleCode}', '')" title="<?= __('在新窗口预览') ?>">
+                <i class="mdi mdi-open-in-new"></i>
+            </div>
+        </div>
+    `;
+    previewContainer.insertAdjacentHTML('beforeend', actionsHtml);
+    
+    // 添加图片
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.className = 'style-preview-img';
+    img.onerror = function() { handlePreviewImageError(this, styleCode); };
+    previewContainer.appendChild(img);
+    
+    // 恢复加载遮罩
+    if (loading) previewContainer.appendChild(loading);
+    
+    // 恢复徽章
+    badges.forEach(badge => previewContainer.appendChild(badge));
+    
+    // 更新元数据图标
+    const cardBody = previewContainer.closest('.style-card').querySelector('.style-card-body');
+    const metaIcon = cardBody.querySelector('.style-card-meta i');
+    if (metaIcon) {
+        metaIcon.className = 'mdi mdi-image text-success';
+        metaIcon.title = '<?= __('有预览图') ?>';
+    }
+}
+
+/**
+ * 批量生成所有模板的预览图
+ */
+async function generateAllPreviews(force = false) {
+    const confirmMsg = force 
+        ? '<?= __('确定要强制刷新所有模板的预览图吗？这可能需要较长时间。') ?>'
+        : '<?= __('确定要为缺少预览图的模板生成预览吗？') ?>';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    console.log('🚀 开始批量生成预览图, force:', force);
+    
+    try {
+        // 获取需要生成预览的模板列表
+        const formData = new FormData();
+        formData.append('force', force ? '1' : '0');
+        
+        const response = await fetch(API_URLS.generateAllPreviews, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || '获取模板列表失败');
+        }
+        
+        const templates = result.data.filter(t => t.needs_generate);
+        
+        if (templates.length === 0) {
+            alert('<?= __('所有模板都已有预览图，无需生成。') ?>');
+            return;
+        }
+        
+        // 显示进度提示
+        const progressModal = createProgressModal(templates.length);
+        document.body.appendChild(progressModal);
+        
+        let completed = 0;
+        let failed = 0;
+        
+        // 逐个生成预览图
+        for (const template of templates) {
+            try {
+                updateProgressModal(progressModal, template.name, completed, templates.length);
+                await refreshSinglePreview(template.code);
+                completed++;
+            } catch (error) {
+                console.error(`生成 ${template.code} 预览失败:`, error);
+                failed++;
+            }
+            
+            // 间隔一下，避免太快
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // 完成后移除进度提示
+        progressModal.remove();
+        
+        alert(`<?= __('批量生成完成！成功：') ?>${completed}<?= __('，失败：') ?>${failed}`);
+        
+        // 刷新页面显示新预览图
+        if (completed > 0) {
+            location.reload();
+        }
+        
+    } catch (error) {
+        console.error('批量生成失败:', error);
+        alert('<?= __('批量生成失败：') ?>' + error.message);
+    }
+}
+
+/**
+ * 创建进度提示模态框
+ */
+function createProgressModal(total) {
+    const modal = document.createElement('div');
+    modal.id = 'previewProgressModal';
+    modal.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        ">
+            <div style="
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                min-width: 400px;
+                text-align: center;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            ">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <h5 class="mb-3"><?= __('正在生成预览图...') ?></h5>
+                <p class="text-muted mb-2" id="progressCurrentTemplate">-</p>
+                <div class="progress mb-2" style="height: 20px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         id="progressBar"
+                         style="width: 0%">0%</div>
+                </div>
+                <small class="text-muted" id="progressCount">0 / ${total}</small>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+/**
+ * 更新进度提示
+ */
+function updateProgressModal(modal, currentName, completed, total) {
+    const currentEl = modal.querySelector('#progressCurrentTemplate');
+    const barEl = modal.querySelector('#progressBar');
+    const countEl = modal.querySelector('#progressCount');
+    
+    if (currentEl) currentEl.textContent = currentName;
+    
+    const percent = Math.round((completed / total) * 100);
+    if (barEl) {
+        barEl.style.width = percent + '%';
+        barEl.textContent = percent + '%';
+    }
+    
+    if (countEl) countEl.textContent = `${completed} / ${total}`;
 }
 </script>
 

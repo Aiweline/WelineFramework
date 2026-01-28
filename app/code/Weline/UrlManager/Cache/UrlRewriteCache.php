@@ -73,13 +73,15 @@ class UrlRewriteCache
      * 获取URL重写缓存
      * 
      * @param string $uri URI路径
+     * @param int $websiteId 网站ID（用于缓存隔离，默认为0）
      * @return array{path: string}|null|false 返回重写路径（数组），如果缓存了"未找到"返回null，如果缓存未命中返回false
      */
-    public function get(string $uri): array|null|false
+    public function get(string $uri, int $websiteId = 0): array|null|false
     {
         // 第一层：请求内静态缓存（最快）
-        $cacheKey1 = $uri;
-        $cacheKey2 = '/' . $uri;
+        // 缓存键包含 website_id 维度，避免跨站点缓存串
+        $cacheKey1 = "site_{$websiteId}_{$uri}";
+        $cacheKey2 = "site_{$websiteId}_/{$uri}";
         
         if (array_key_exists($cacheKey1, self::$staticCache)) {
             return self::$staticCache[$cacheKey1];
@@ -93,8 +95,8 @@ class UrlRewriteCache
         // 定期清理缓存（防止攻击者填满磁盘）
         $this->cleanupIfNeeded();
         
-        $fileCacheKey1 = self::CACHE_KEY_PREFIX . md5($cacheKey1);
-        $fileCacheKey2 = self::CACHE_KEY_PREFIX . md5($cacheKey2);
+        $fileCacheKey1 = self::CACHE_KEY_PREFIX . "site_{$websiteId}_" . md5($uri);
+        $fileCacheKey2 = self::CACHE_KEY_PREFIX . "site_{$websiteId}_" . md5('/' . $uri);
         
         // 检查缓存是否存在
         if ($this->cache->exists($fileCacheKey1)) {
@@ -120,19 +122,21 @@ class UrlRewriteCache
      * 
      * @param string $uri URI路径
      * @param array{path: string}|null $rewriteData 重写数据，如果未找到传入null
+     * @param int $websiteId 网站ID（用于缓存隔离，默认为0）
      */
-    public function set(string $uri, ?array $rewriteData): void
+    public function set(string $uri, ?array $rewriteData, int $websiteId = 0): void
     {
-        $cacheKey1 = $uri;
-        $cacheKey2 = '/' . $uri;
+        // 缓存键包含 website_id 维度，避免跨站点缓存串
+        $cacheKey1 = "site_{$websiteId}_{$uri}";
+        $cacheKey2 = "site_{$websiteId}_/{$uri}";
         
         // 设置请求内静态缓存
         self::$staticCache[$cacheKey1] = $rewriteData;
         self::$staticCache[$cacheKey2] = $rewriteData;
         
         // 设置文件缓存
-        $fileCacheKey1 = self::CACHE_KEY_PREFIX . md5($cacheKey1);
-        $fileCacheKey2 = self::CACHE_KEY_PREFIX . md5($cacheKey2);
+        $fileCacheKey1 = self::CACHE_KEY_PREFIX . "site_{$websiteId}_" . md5($uri);
+        $fileCacheKey2 = self::CACHE_KEY_PREFIX . "site_{$websiteId}_" . md5('/' . $uri);
         
         // 根据是否找到设置不同的缓存时间
         $ttl = $rewriteData !== null ? self::CACHE_TTL_FOUND : self::CACHE_TTL_NOT_FOUND;

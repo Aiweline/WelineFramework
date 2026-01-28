@@ -20,6 +20,7 @@ class Category extends Model
 
     // 字段定义
     public const fields_ID          = 'category_id';
+    public const fields_SITE_ID    = 'site_id';
     public const fields_NAME        = 'name';
     public const fields_SLUG        = 'slug';
     public const fields_DESCRIPTION = 'description';
@@ -79,10 +80,17 @@ class Category extends Model
     public function getChildCategories(): array
     {
         $children = clone $this;
-        return $children->clear()
+        $query = $children->clear()
             ->where(self::fields_PARENT_ID, $this->getId())
-            ->where(self::fields_STATUS, self::STATUS_ENABLED)
-            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->where(self::fields_STATUS, self::STATUS_ENABLED);
+        
+        // 如果当前分类有 site_id，只查询同站点的子分类
+        $siteId = $this->getData(self::fields_SITE_ID);
+        if ($siteId) {
+            $query->where(self::fields_SITE_ID, $siteId);
+        }
+        
+        return $query->order(self::fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -94,11 +102,17 @@ class Category extends Model
     public function getPostCount(): int
     {
         $postModel = \Weline\Framework\Manager\ObjectManager::getInstance(Post::class);
-        $count = $postModel->clear()
+        $query = $postModel->clear()
             ->where(Post::fields_CATEGORY_ID, $this->getId())
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED)
-            ->count();
-        return (int)$count;
+            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED);
+        
+        // 如果当前分类有 site_id，只统计同站点的文章
+        $siteId = $this->getData(self::fields_SITE_ID);
+        if ($siteId) {
+            $query->where(Post::fields_SITE_ID, $siteId);
+        }
+        
+        return (int)$query->count();
     }
 
     /**
@@ -107,10 +121,17 @@ class Category extends Model
     public function getPosts(int $page = 1, int $pageSize = 10): array
     {
         $postModel = \Weline\Framework\Manager\ObjectManager::getInstance(Post::class);
-        return $postModel->clear()
+        $query = $postModel->clear()
             ->where(Post::fields_CATEGORY_ID, $this->getId())
-            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED)
-            ->order(Post::fields_PUBLISHED_AT, 'DESC')
+            ->where(Post::fields_STATUS, Post::STATUS_PUBLISHED);
+        
+        // 如果当前分类有 site_id，只查询同站点的文章
+        $siteId = $this->getData(self::fields_SITE_ID);
+        if ($siteId) {
+            $query->where(Post::fields_SITE_ID, $siteId);
+        }
+        
+        return $query->order(Post::fields_PUBLISHED_AT, 'DESC')
             ->page($page, $pageSize)
             ->select()
             ->fetch()
@@ -119,13 +140,22 @@ class Category extends Model
 
     /**
      * 获取分类树（用于下拉选择）
+     * 
+     * @param int $excludeId 排除的分类ID
+     * @param int|null $siteId 站点ID，如果提供则只返回该站点的分类
      */
-    public static function getCategoryTree(int $excludeId = 0): array
+    public static function getCategoryTree(int $excludeId = 0, ?int $siteId = null): array
     {
         $model = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
-        $categories = $model->clear()
-            ->where(self::fields_STATUS, self::STATUS_ENABLED)
-            ->order(self::fields_SORT_ORDER, 'ASC')
+        $query = $model->clear()
+            ->where(self::fields_STATUS, self::STATUS_ENABLED);
+        
+        // 如果提供了 site_id，只查询该站点的分类
+        if ($siteId !== null) {
+            $query->where(self::fields_SITE_ID, $siteId);
+        }
+        
+        $categories = $query->order(self::fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
@@ -165,10 +195,13 @@ class Category extends Model
 
     /**
      * 获取扁平化的分类列表（带层级缩进）
+     * 
+     * @param int $excludeId 排除的分类ID
+     * @param int|null $siteId 站点ID，如果提供则只返回该站点的分类
      */
-    public static function getFlatCategoryList(int $excludeId = 0): array
+    public static function getFlatCategoryList(int $excludeId = 0, ?int $siteId = null): array
     {
-        $tree = self::getCategoryTree($excludeId);
+        $tree = self::getCategoryTree($excludeId, $siteId);
         $flat = [];
 
         $flatten = function($items, $prefix = '') use (&$flatten, &$flat) {
@@ -200,6 +233,13 @@ class Category extends Model
                 0,
                 'primary key auto_increment',
                 '分类ID'
+            )
+            ->addColumn(
+                self::fields_SITE_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '所属站点ID'
             )
             ->addColumn(
                 self::fields_NAME,
@@ -303,6 +343,12 @@ class Category extends Model
                 [self::fields_SORT_ORDER],
                 '排序索引'
             )
+            ->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_site_id',
+                [self::fields_SITE_ID],
+                '站点索引'
+            )
             ->create();
     }
 
@@ -311,7 +357,26 @@ class Category extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 当前版本暂不需要升级逻辑
+        if (!$setup->tableExist()) {
+            return;
+        }
+        
+        // 添加 site_id 字段
+        if (!$setup->hasField(self::fields_SITE_ID)) {
+            $setup->alterTable()->addColumn(
+                self::fields_SITE_ID,
+                self::fields_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '所属站点ID'
+            )->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_site_id',
+                [self::fields_SITE_ID],
+                '站点索引'
+            )->alter();
+        }
     }
 
     /**

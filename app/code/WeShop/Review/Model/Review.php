@@ -15,6 +15,7 @@ class Review extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_review';
     public const primary_key = 'review_id';
+    public string $indexer = 'review_indexer';
     
     public const fields_ID = 'review_id';
     public const fields_PRODUCT_ID = 'product_id';

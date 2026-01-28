@@ -129,7 +129,8 @@ if (empty($displayText) || $displayText === __('配送至')) {
                 try {
                     // 显示加载状态
                     autoDetect.classList.add('loading');
-                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span><?= __('定位中...') ?></span>';
+                    const loadingText = '@lang{定位中...}';
+                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>' + loadingText + '</span>';
                     
                     // 检查WelineGeo是否已加载
                     if (typeof WelineGeo === 'undefined') {
@@ -185,7 +186,8 @@ if (empty($displayText) || $displayText === __('配送至')) {
                 } finally {
                     // 恢复按钮状态
                     autoDetect.classList.remove('loading');
-                    autoDetect.innerHTML = '<i class="fas fa-crosshairs"></i> <span><?= __('自动定位') ?></span>';
+                    const autoDetectText = '<?= __('自动定位') ?>';
+                    autoDetect.innerHTML = '<i class="fas fa-crosshairs"></i> <span>' + autoDetectText + '</span>';
                 }
             });
         }

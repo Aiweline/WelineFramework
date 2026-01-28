@@ -15,6 +15,7 @@ class Question extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_question';
     public const primary_key = 'question_id';
+    public string $indexer = 'question_indexer';
     
     public const fields_ID = 'question_id';
     public const fields_PRODUCT_ID = 'product_id';

@@ -14,15 +14,44 @@
  * 
  * @fields_start
  * 
- * group:advantages => 优势区域设置
- * advantages.display => 显示优势区域:select:yes|yes,no
- * advantages.title => 标题:text:Our Advantages
- * advantages.bg_color => 背景颜色:color:#1a1a2e
- * advantages.icon_1 => 优势1-图标:textarea:|默认使用本地icon01.webp
- * advantages.icon_2 => 优势2-图标:textarea:|默认使用本地icon02.webp
- * advantages.icon_3 => 优势3-图标:textarea:|默认使用本地icon03.webp
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ * 
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#1a1a2e
+ * style.title_color => 标题颜色:color:#ffed4e
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#ffed4e
+ * style.card_title_font_size => 卡片标题字号:number:18|px
+ * style.card_desc_color => 卡片描述颜色:color:#ffffff
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:85|px
+ * style.icon_border_radius => 图标圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:30|px
+ * 
+ * group:button => 按钮配置
+ * button.text => 按钮文本:text:Download
+ * button.url => 按钮链接:text:#download
+ * button.bg_gradient_start => 按钮渐变起始色:color:#ffd700
+ * button.bg_gradient_end => 按钮渐变结束色:color:#ffa500
+ * button.text_color => 按钮文字颜色:color:#8b4513
+ * button.border_radius => 按钮圆角:number:8|px
+ * button.padding_x => 按钮水平内边距:number:40|px
+ * button.padding_y => 按钮垂直内边距:number:12|px
+ * 
+ * group:icons => 图标配置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地icon01.webp
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地icon02.webp
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地icon03.webp
  * 
  * group:texts => 文本内容
+ * texts.title => 区域标题:text:Our Advantages
  * texts.advantage_1_title => 优势1标题:text:Teen Patti Speed
  * texts.advantage_1_desc => 优势1描述:textarea:Fast-paced variant where players bet quickly, aiming for the best three-card hand.
  * texts.advantage_2_title => 优势2标题:text:Rummy Master
@@ -44,20 +73,49 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$display = $getConfig('advantages.display', 'yes') !== 'no';
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
 if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
 
-$title = $getConfig('advantages.title', 'Our Advantages');
-$bgColor = $getConfig('advantages.bg_color', '#1a1a2e');
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#1a1a2e'));
+$titleColor = $getConfig('style.title_color', '#ffed4e');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', '#ffed4e');
+$cardTitleFontSize = $getConfig('style.card_title_font_size', '18');
+$cardDescColor = $getConfig('style.card_desc_color', '#ffffff');
+$cardDescFontSize = $getConfig('style.card_desc_font_size', '14');
+$iconSize = $getConfig('style.icon_size', '85');
+$iconBorderRadius = $getConfig('style.icon_border_radius', '50');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+$cardGap = $getConfig('style.card_gap', '30');
 
+// 按钮配置
+$btnText = $getConfig('button.text', 'Download');
+$btnUrl = $getConfig('button.url', '#download');
+$btnGradientStart = $getConfig('button.bg_gradient_start', '#ffd700');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#ffa500');
+$btnTextColor = $getConfig('button.text_color', '#8b4513');
+$btnBorderRadius = $getConfig('button.border_radius', '8');
+$btnPaddingX = $getConfig('button.padding_x', '40');
+$btnPaddingY = $getConfig('button.padding_y', '12');
+
+// 图标配置
 $defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon01.webp');
 $defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon02.webp');
 $defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/our-advantages/icon03.webp');
 
-$icon1 = $getConfig('advantages.icon_1', '') ?: $defaultIcon1;
-$icon2 = $getConfig('advantages.icon_2', '') ?: $defaultIcon2;
-$icon3 = $getConfig('advantages.icon_3', '') ?: $defaultIcon3;
+$icon1 = $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1;
+$icon2 = $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2;
+$icon3 = $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3;
 
+// 文本内容
+$title = $getConfig('texts.title', $getConfig('advantages.title', 'Our Advantages'));
 $title1 = $getConfig('texts.advantage_1_title', 'Teen Patti Speed');
 $desc1 = $getConfig('texts.advantage_1_desc', 'Fast-paced variant where players bet quickly, aiming for the best three-card hand in thrilling, rapid rounds.');
 $title2 = $getConfig('texts.advantage_2_title', 'Rummy Master');
@@ -69,18 +127,20 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
 <style>
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
-    padding: 60px 20px;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    width: 100%;
 }
 
-#<?= $componentId ?> .tpmst-adv-container {
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 1200px;
     margin: 0 auto;
+    padding: 0 20px;
 }
 
 #<?= $componentId ?> .tpmst-adv-title {
     text-align: center;
-    font-size: clamp(24px, 5vw, 36px);
-    color: #ffed4e;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 5vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    color: <?= htmlspecialchars($titleColor) ?>;
     margin-bottom: 40px;
     font-weight: 700;
 }
@@ -88,7 +148,7 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
 #<?= $componentId ?> .tpmst-adv-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 30px;
+    gap: <?= htmlspecialchars($cardGap) ?>px;
 }
 
 #<?= $componentId ?> .tpmst-adv-card {
@@ -97,23 +157,23 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
 }
 
 #<?= $componentId ?> .tpmst-adv-icon {
-    width: 85px;
-    height: 85px;
-    border-radius: 50%;
+    width: <?= htmlspecialchars($iconSize) ?>px;
+    height: <?= htmlspecialchars($iconSize) ?>px;
+    border-radius: <?= htmlspecialchars($iconBorderRadius) ?>%;
     object-fit: cover;
     margin-bottom: 20px;
 }
 
 #<?= $componentId ?> .tpmst-adv-card-title {
-    font-size: 18px;
-    color: #ffed4e;
+    font-size: <?= htmlspecialchars($cardTitleFontSize) ?>px;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
     margin-bottom: 15px;
     font-weight: 600;
 }
 
 #<?= $componentId ?> .tpmst-adv-card-desc {
-    font-size: 14px;
-    color: #ffffff;
+    font-size: <?= htmlspecialchars($cardDescFontSize) ?>px;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
     line-height: 1.6;
     opacity: 0.9;
 }
@@ -121,56 +181,74 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
 #<?= $componentId ?> .tpmst-adv-btn {
     display: inline-block;
     margin-top: 20px;
-    padding: 12px 40px;
-    background: linear-gradient(90deg, #ffd700 0%, #ffa500 100%);
-    color: #8b4513;
+    padding: <?= htmlspecialchars($btnPaddingY) ?>px <?= htmlspecialchars($btnPaddingX) ?>px;
+    background: linear-gradient(90deg, <?= htmlspecialchars($btnGradientStart) ?> 0%, <?= htmlspecialchars($btnGradientEnd) ?> 100%);
+    color: <?= htmlspecialchars($btnTextColor) ?>;
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: <?= htmlspecialchars($btnBorderRadius) ?>px;
     font-weight: 700;
     transition: transform 0.3s, box-shadow 0.3s;
 }
 
 #<?= $componentId ?> .tpmst-adv-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+    box-shadow: 0 4px 15px <?= htmlspecialchars($btnGradientStart) ?>66;
 }
 
 @media (max-width: 767px) {
     #<?= $componentId ?> {
-        padding: 40px 15px;
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+    
+    #<?= $componentId ?> .tpmst-section-inner {
+        padding: 0 15px;
     }
     
     #<?= $componentId ?> .tpmst-adv-title {
-        display: none;
+        <?= $showTitle ? '' : 'display: none;' ?>
     }
     
     #<?= $componentId ?> .tpmst-adv-card-desc {
-        display: none;
+        <?= $showDescription ? '' : 'display: none;' ?>
     }
 }
 </style>
 
-<section id="<?= $componentId ?>" class="tpmst-advantages-component">
-    <div class="tpmst-adv-container">
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-advantages-component">
+    <div class="tpmst-section-inner">
+        <?php if ($showTitle): ?>
         <h2 class="tpmst-adv-title"><?= htmlspecialchars($title) ?></h2>
+        <?php endif; ?>
         <div class="tpmst-adv-grid">
             <div class="tpmst-adv-card">
                 <img class="tpmst-adv-icon" src="<?= htmlspecialchars($icon1) ?>" alt="<?= htmlspecialchars($title1) ?>">
                 <h3 class="tpmst-adv-card-title"><?= htmlspecialchars($title1) ?></h3>
+                <?php if ($showDescription): ?>
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc1) ?></p>
-                <a href="#download" class="tpmst-adv-btn">Download</a>
+                <?php endif; ?>
+                <?php if ($showButton): ?>
+                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <?php endif; ?>
             </div>
             <div class="tpmst-adv-card">
                 <img class="tpmst-adv-icon" src="<?= htmlspecialchars($icon2) ?>" alt="<?= htmlspecialchars($title2) ?>">
                 <h3 class="tpmst-adv-card-title"><?= htmlspecialchars($title2) ?></h3>
+                <?php if ($showDescription): ?>
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc2) ?></p>
-                <a href="#download" class="tpmst-adv-btn">Download</a>
+                <?php endif; ?>
+                <?php if ($showButton): ?>
+                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <?php endif; ?>
             </div>
             <div class="tpmst-adv-card">
                 <img class="tpmst-adv-icon" src="<?= htmlspecialchars($icon3) ?>" alt="<?= htmlspecialchars($title3) ?>">
                 <h3 class="tpmst-adv-card-title"><?= htmlspecialchars($title3) ?></h3>
+                <?php if ($showDescription): ?>
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc3) ?></p>
-                <a href="#download" class="tpmst-adv-btn">Download</a>
+                <?php endif; ?>
+                <?php if ($showButton): ?>
+                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <?php endif; ?>
             </div>
         </div>
     </div>

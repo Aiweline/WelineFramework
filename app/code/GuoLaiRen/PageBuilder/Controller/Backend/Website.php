@@ -117,5 +117,17 @@ class Website extends BackendController
 
         return $this->fetch();
     }
+
+    /**
+     * 快速创建站点（代理到 Websites 模块）
+     * 用于一键建站等场景的快速创建
+     */
+    #[Acl('Weline_Websites::website_quick_save', '快速创建站点', '', '快速创建站点')]
+    public function quickSave()
+    {
+        // 代理到 Websites 模块的 quickSave 方法
+        $websitesController = ObjectManager::getInstance(\Weline\Websites\Controller\Admin\Website::class);
+        return $websitesController->quickSave();
+    }
 }
 

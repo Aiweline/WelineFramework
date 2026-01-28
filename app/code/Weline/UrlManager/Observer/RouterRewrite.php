@@ -58,6 +58,34 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         }
         return $this->cache;
     }
+    
+    /**
+     * 获取当前网站ID
+     * 
+     * @return int
+     */
+    private function getCurrentWebsiteId(): int
+    {
+        return UrlRewrite::getCurrentWebsiteId();
+    }
+    
+    /**
+     * 按 website_id 和 rewrite 查找重写记录
+     * 
+     * @param int $websiteId 网站ID
+     * @param string $rewrite 重写路径
+     * @return UrlRewrite
+     */
+    private function findRewriteByWebsiteAndRewrite(int $websiteId, string $rewrite): UrlRewrite
+    {
+        return $this->getUrlRewrite()
+            ->reset()
+            ->clearQuery()
+            ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
+            ->where(UrlRewrite::fields_REWRITE, $rewrite)
+            ->find()
+            ->fetch();
+    }
 
     /**
      * @inheritDoc
@@ -66,13 +94,14 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     {
         $uri = ltrim($event->getData(), '/');
         $cache = $this->getCache();
+        $websiteId = $this->getCurrentWebsiteId();
         
-        // 尝试从缓存获取
+        // 尝试从缓存获取（缓存按 website_id 隔离）
         // 返回值说明：
         // - array: 找到缓存，包含path
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
-        $rewriteData = $cache->get($uri);
+        $rewriteData = $cache->get($uri, $websiteId);
         
         if (is_array($rewriteData) && isset($rewriteData['path'])) {
             // 找到缓存，应用重写
@@ -84,36 +113,39 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         }
         
         // $rewriteData === false，缓存未命中，查询数据库
-        $rewrite = $this->getUrlRewrite()->load(UrlRewrite::fields_REWRITE, $uri);
-        if(!$rewrite->getId()){
-            $rewrite = $this->getUrlRewrite()->reset()->load(UrlRewrite::fields_REWRITE, '/' . $uri);
+        // 按 (website_id, rewrite) 查询，不回退到 website_id=0
+        $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $uri);
+        if (!$rewrite->getId()) {
+            // 尝试带斜杠的版本
+            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $uri);
         }
+        
         if ($rewrite->getId()) {
             // 缓存查询结果
             $path = $rewrite->getData('path');
             $rewriteData = ['path' => $path];
-            $cache->set($uri, $rewriteData);
+            $cache->set($uri, $rewriteData, $websiteId);
             
             // 应用重写
             $this->applyRewrite($event, $path, $uri);
         } else {
             # 找不到尝试使用path匹配
             $path = Url::parse_url($uri, 'path');
-            $rewrite = $this->getUrlRewrite()->reset()->load(UrlRewrite::fields_REWRITE, $path);
-            if(!$rewrite->getId()){
-                $rewrite = $this->getUrlRewrite()->reset()->load(UrlRewrite::fields_REWRITE, '/' . $path);
+            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $path);
+            if (!$rewrite->getId()) {
+                $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $path);
             }
             if ($rewrite->getId()) {
                 // 缓存查询结果
                 $rewritePath = $rewrite->getData('path');
                 $rewriteData = ['path' => $rewritePath];
-                $cache->set($uri, $rewriteData);
+                $cache->set($uri, $rewriteData, $websiteId);
                 
                 // 应用重写
                 $this->applyRewrite($event, $rewritePath, $uri);
             } else {
                 // 缓存未找到的结果（避免重复查询）
-                $cache->set($uri, null);
+                $cache->set($uri, null, $websiteId);
             }
         }
     }

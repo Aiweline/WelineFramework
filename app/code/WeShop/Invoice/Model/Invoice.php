@@ -15,6 +15,7 @@ class Invoice extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_invoice';
     public const primary_key = 'invoice_id';
+    public string $indexer = 'invoice_indexer';
     
     public const fields_ID = 'invoice_id';
     public const fields_ORDER_ID = 'order_id';

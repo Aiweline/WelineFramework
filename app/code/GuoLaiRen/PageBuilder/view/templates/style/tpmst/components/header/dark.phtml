@@ -20,7 +20,8 @@
  * 
  * group:navigation => 导航设置
  * navigation.display => 显示导航:select:yes|yes,no
- * navigation.items => 导航项:textarea:Home#home,About#about,Games#games,FAQ#faq|格式: 名称#链接
+ * navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
+ * navigation.items => 导航项:textarea:Home#home,About#about,Games#games,FAQ#faq|格式: 名称#链接（use_subpages=yes时忽略）
  * 
  * group:button => 按钮设置
  * button.display => 显示按钮:select:yes|yes,no
@@ -41,50 +42,122 @@
 // 生成唯一组件ID
 $componentId = 'tpmst-header-dark-' . uniqid();
 
-// 获取样式配置
-$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+// 获取数据
 $page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+
+// 合并配置：component_config 优先于 style_settings
+$config = array_merge($styleSettings, $componentConfig);
+
+// 辅助函数：读取配置，支持 group.field 格式
+// 同时兼容旧格式 group.group.field（历史数据兼容）
+$getConfig = function($key, $default = '') use ($config) {
+    // 优先查找标准格式 (如 button.text)
+    if (isset($config[$key]) && $config[$key] !== '') {
+        return $config[$key];
+    }
+    // 兼容旧格式：尝试 group.group.field 格式 (如 button.button.text)
+    $parts = explode('.', $key);
+    if (count($parts) === 2) {
+        $legacyKey = $parts[0] . '.' . $key; // button.text -> button.button.text
+        if (isset($config[$legacyKey]) && $config[$legacyKey] !== '') {
+            return $config[$legacyKey];
+        }
+    }
+    return $default;
+};
 
 // Logo 配置
-$showLogo = ($styleSettings['header-dark.logo.display'] ?? $styleSettings['logo.display'] ?? 'yes') === 'yes';
-$logoUrl = $styleSettings['header-dark.logo.url'] ?? $styleSettings['logo.url'] ?? '';
-$logoWidth = $styleSettings['header-dark.logo.width'] ?? '160px';
+$logoDisplayValue = $getConfig('logo.display', 'yes');
+$showLogo = !in_array($logoDisplayValue, ['no', '0', 0], true);
+$logoUrl = $getConfig('logo.url', '');
+$logoWidth = $getConfig('logo.width', '160px');
 
 // 如果没有配置 Logo，使用默认
 if (empty($logoUrl)) {
-    $logoUrl = $this->getStaticUrl('GuoLaiRen_PageBuilder::style/tpmst/asset/img/logo/logo.avif');
+    $logoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/logo/logo.avif');
 }
 
 // 导航配置
-$showNav = ($styleSettings['header-dark.navigation.display'] ?? 'yes') === 'yes';
-$navItemsRaw = $styleSettings['header-dark.navigation.items'] ?? 'Home#home,About#about,Games#games,FAQ#faq';
+$navDisplayValue = $getConfig('navigation.display', 'yes');
+$showNav = !in_array($navDisplayValue, ['no', '0', 0], true);
+$useSubpages = $getConfig('navigation.use_subpages', 'no') === 'yes';
+
 $navItems = [];
-if (!empty($navItemsRaw)) {
-    foreach (explode(',', $navItemsRaw) as $item) {
-        $parts = explode('#', trim($item));
-        if (count($parts) >= 2) {
-            $navItems[] = ['text' => trim($parts[0]), 'href' => '#' . trim($parts[1])];
+
+// 优先使用真实子页面作为导航
+if ($useSubpages && $page) {
+    $navigationPages = $page->getNavigationPages([], 10);
+    foreach ($navigationPages as $navPage) {
+        $navItems[] = [
+            'text' => $navPage['title'] ?? '',
+            'href' => $navPage['url'] ?? '/', // SEO 友好的 /handle URL
+        ];
+    }
+}
+
+// 如果没有子页面，使用配置的导航项
+if (empty($navItems)) {
+    $navItemsRaw = $getConfig('navigation.items', 'Home#home,About#about,Games#games,FAQ#faq');
+    if (!empty($navItemsRaw)) {
+        foreach (explode(',', $navItemsRaw) as $item) {
+            $parts = explode('#', trim($item));
+            if (count($parts) >= 2) {
+                $href = trim($parts[1]);
+                // 如果不是锚点链接（#开头），则作为 URL 路径
+                if (strpos($href, '#') !== 0 && strpos($href, '/') !== 0 && strpos($href, 'http') !== 0) {
+                    $href = '/' . $href;
+                } elseif (strpos($href, '#') === 0 && strlen($href) > 1) {
+                    // 保持锚点格式
+                    $href = '#' . ltrim($href, '#');
+                }
+                $navItems[] = ['text' => trim($parts[0]), 'href' => $href];
+            } elseif (count($parts) === 1 && !empty(trim($parts[0]))) {
+                // 只有名称没有链接，自动生成 URL
+                $text = trim($parts[0]);
+                $navItems[] = ['text' => $text, 'href' => '/' . strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $text))];
+            }
         }
     }
 }
 
+// 最后的默认值
+if (empty($navItems)) {
+    if ($page) {
+        $defaultPages = $page->getNavigationPages([], 5);
+        foreach ($defaultPages as $navPage) {
+            $navItems[] = ['text' => $navPage['title'], 'href' => $navPage['url']];
+        }
+    }
+    if (empty($navItems)) {
+        $navItems = [
+            ['text' => 'Home', 'href' => '/'],
+            ['text' => 'About', 'href' => '/about'],
+            ['text' => 'Games', 'href' => '/games'],
+            ['text' => 'FAQ', 'href' => '/faq'],
+        ];
+    }
+}
+
 // 按钮配置
-$showButton = ($styleSettings['header-dark.button.display'] ?? 'yes') === 'yes';
-$buttonText = $styleSettings['header-dark.button.text'] ?? 'Download Now';
-$buttonUrl = $styleSettings['header-dark.button.url'] ?? '#download';
+$buttonDisplayValue = $getConfig('button.display', 'yes');
+$showButton = !in_array($buttonDisplayValue, ['no', '0', 0], true);
+$buttonText = $getConfig('button.text', 'Download Now');
+$buttonUrl = $getConfig('button.url', '#download');
 
 // 样式配置
-$bgColor = $styleSettings['header-dark.style.background'] ?? '#1a1a2e';
-$navColor = $styleSettings['header-dark.style.nav_color'] ?? '#ffffff';
-$accentColor = $styleSettings['header-dark.style.accent_color'] ?? '#e94560';
-$headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
+$bgColor = $getConfig('style.background', '#1a1a2e');
+$navColor = $getConfig('style.nav_color', '#ffffff');
+$accentColor = $getConfig('style.accent_color', '#e94560');
+$headerHeight = $getConfig('style.height', '70px');
 ?>
 
 <!-- 深色头部组件 -->
-<header id="<?= $componentId ?>" class="tpmst-header-dark-component">
-    <div class="header-inner">
+<header id="<?= $componentId ?>" class="tpmst-section tpmst-header-dark-component">
+    <div class="tpmst-section-inner">
         <?php if ($showLogo): ?>
-        <div class="header-logo">
+        <div class="tpmst-header-logo">
             <a href="/">
                 <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo" style="width: <?= htmlspecialchars($logoWidth) ?>">
             </a>
@@ -92,7 +165,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
         <?php endif; ?>
         
         <?php if ($showNav && !empty($navItems)): ?>
-        <nav class="header-nav">
+        <nav class="tpmst-header-nav">
             <ul>
                 <?php foreach ($navItems as $item): ?>
                 <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
@@ -102,7 +175,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
         <?php endif; ?>
         
         <?php if ($showButton): ?>
-        <div class="header-action">
+        <div class="tpmst-header-action">
             <a href="<?= htmlspecialchars($buttonUrl) ?>" class="btn-download">
                 <span class="btn-icon">⬇</span>
                 <span class="btn-text"><?= htmlspecialchars($buttonText) ?></span>
@@ -125,6 +198,18 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
 
    ============================================ */
 
+   * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", sans-serif;
+    line-height: 1.6;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
     height: <?= htmlspecialchars($headerHeight) ?>;
@@ -134,7 +219,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     box-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
 }
 
-#<?= $componentId ?> .header-inner {
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 1200px;
     margin: 0 auto;
     height: 100%;
@@ -144,21 +229,21 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     padding: 0 20px;
 }
 
-#<?= $componentId ?> .header-logo a {
+#<?= $componentId ?> .tpmst-header-logo a {
     display: flex;
     align-items: center;
 }
 
-#<?= $componentId ?> .header-logo img {
+#<?= $componentId ?> .tpmst-header-logo img {
     height: auto;
     transition: transform 0.3s ease;
 }
 
-#<?= $componentId ?> .header-logo a:hover img {
+#<?= $componentId ?> .tpmst-header-logo a:hover img {
     transform: scale(1.05);
 }
 
-#<?= $componentId ?> .header-nav ul {
+#<?= $componentId ?> .tpmst-header-nav ul {
     display: flex;
     list-style: none;
     margin: 0;
@@ -166,7 +251,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     gap: 30px;
 }
 
-#<?= $componentId ?> .header-nav a {
+#<?= $componentId ?> .tpmst-header-nav a {
     color: <?= htmlspecialchars($navColor) ?>;
     text-decoration: none;
     font-size: 15px;
@@ -177,7 +262,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     transition: color 0.3s ease;
 }
 
-#<?= $componentId ?> .header-nav a::after {
+#<?= $componentId ?> .tpmst-header-nav a::after {
     content: '';
     position: absolute;
     bottom: 0;
@@ -188,11 +273,11 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     transition: width 0.3s ease;
 }
 
-#<?= $componentId ?> .header-nav a:hover {
+#<?= $componentId ?> .tpmst-header-nav a:hover {
     color: <?= htmlspecialchars($accentColor) ?>;
 }
 
-#<?= $componentId ?> .header-nav a:hover::after {
+#<?= $componentId ?> .tpmst-header-nav a:hover::after {
     width: 100%;
 }
 
@@ -243,7 +328,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
 
 /* 响应式 */
 @media (max-width: 768px) {
-    #<?= $componentId ?> .header-nav {
+    #<?= $componentId ?> .tpmst-header-nav {
         display: none;
         position: absolute;
         top: 100%;
@@ -254,16 +339,16 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
         box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
     }
     
-    #<?= $componentId ?> .header-nav.active {
+    #<?= $componentId ?> .tpmst-header-nav.active {
         display: block;
     }
     
-    #<?= $componentId ?> .header-nav ul {
+    #<?= $componentId ?> .tpmst-header-nav ul {
         flex-direction: column;
         gap: 15px;
     }
     
-    #<?= $componentId ?> .header-nav a {
+    #<?= $componentId ?> .tpmst-header-nav a {
         font-size: 16px;
     }
     
@@ -286,7 +371,7 @@ $headerHeight = $styleSettings['header-dark.style.height'] ?? '70px';
     if (!component) return;
     
     var menuToggle = component.querySelector('.mobile-menu-toggle');
-    var nav = component.querySelector('.header-nav');
+    var nav = component.querySelector('.tpmst-header-nav');
     
     if (menuToggle && nav) {
         menuToggle.addEventListener('click', function() {

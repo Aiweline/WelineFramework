@@ -12,8 +12,8 @@
  * @var array $areas
  */
 
-$theme_id = $this->getData('theme_id');
-$page_type = $this->getData('page_type');
+$theme_id = $this->getData('theme_id') ?? 0;
+$page_type = $this->getData('page_type') ?? 'home';
 $layout = $this->getData('layout') ?: [];
 $areas = $this->getData('areas') ?: [];
 
@@ -53,8 +53,8 @@ function getContainerWithChildren(array $areaWidgets): array {
 function renderWidget($template, array $widget, array $children = []): string {
     $widgetTemplate = $widget['meta']['template'] ?? '';
     $config = $widget['config'] ?? [];
-    $widgetCode = $widget['widget_code'] ?? '';
-    $layoutId = $widget['layout_id'] ?? 0;
+    $widgetCode = (string)($widget['widget_code'] ?? '');
+    $layoutId = (int)($widget['layout_id'] ?? 0);
     
     if (!$widgetTemplate) {
         return renderWidgetPlaceholder($widget);
@@ -85,7 +85,7 @@ function renderWidget($template, array $widget, array $children = []): string {
         return sprintf(
             '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-config=\'%s\'>%s</div>',
             $layoutId,
-            htmlspecialchars($widgetCode),
+            htmlspecialchars((string)($widgetCode ?? ''))),
             htmlspecialchars(json_encode($config)),
             $html
         );
@@ -98,8 +98,8 @@ function renderWidget($template, array $widget, array $children = []): string {
                 </div>
             </div>',
             $layoutId,
-            htmlspecialchars($widgetCode),
-            htmlspecialchars($e->getMessage())
+            htmlspecialchars((string)($widgetCode ?? ''))),
+            htmlspecialchars((string)($e->getMessage() ?? ''))
         );
     }
 }
@@ -108,9 +108,9 @@ function renderWidget($template, array $widget, array $children = []): string {
  * 渲染占位符
  */
 function renderWidgetPlaceholder(array $widget): string {
-    $name = $widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件';
-    $layoutId = $widget['layout_id'] ?? 0;
-    $widgetCode = $widget['widget_code'] ?? '';
+    $name = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件');
+    $layoutId = (int)($widget['layout_id'] ?? 0);
+    $widgetCode = (string)($widget['widget_code'] ?? '');
     
     return sprintf(
         '<div class="preview-widget widget-placeholder" data-layout-id="%d" data-widget-code="%s">
@@ -120,8 +120,8 @@ function renderWidgetPlaceholder(array $widget): string {
             </div>
         </div>',
         $layoutId,
-        htmlspecialchars($widgetCode),
-        htmlspecialchars($name)
+        htmlspecialchars((string)($widgetCode ?? ''))),
+        htmlspecialchars((string)($name ?? ''))
     );
 }
 
@@ -136,8 +136,8 @@ function renderAreaPlaceholder(string $area, string $label): string {
                 <span>%s - 拖拽部件到此处</span>
             </div>
         </div>',
-        htmlspecialchars($area),
-        htmlspecialchars($label)
+        htmlspecialchars((string)$area),
+        htmlspecialchars((string)$label)
     );
 }
 ?>
@@ -301,7 +301,7 @@ function renderAreaPlaceholder(string $area, string $label): string {
     </style>
 </head>
 <body>
-    <div class="theme-page page-<?= htmlspecialchars($page_type) ?>">
+    <div class="theme-page page-<?= htmlspecialchars((string)($page_type ?? 'home')) ?>">
         
         <!-- ========== HEADER 区域 ========== -->
         <section class="theme-area theme-area-header" data-area="header">

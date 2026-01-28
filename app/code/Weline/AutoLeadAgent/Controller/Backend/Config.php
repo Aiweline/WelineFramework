@@ -575,16 +575,22 @@ class Config extends BackendController
             ];
 
             // 估算模型大小（从 siblings 中计算）
+            // 注意：Hugging Face 大文件使用 LFS，实际大小在 lfs.size 中
             $totalSize = 0;
             if (isset($modelInfo['siblings']) && is_array($modelInfo['siblings'])) {
                 foreach ($modelInfo['siblings'] as $sibling) {
-                    if (isset($sibling['size'])) {
+                    // 优先使用 LFS 大小（大文件的实际大小）
+                    if (isset($sibling['lfs']['size'])) {
+                        $totalSize += (int)$sibling['lfs']['size'];
+                    } elseif (isset($sibling['size'])) {
+                        // 普通文件使用顶层 size
                         $totalSize += (int)$sibling['size'];
                     }
                 }
             }
             $formattedInfo['estimated_size'] = $totalSize; // 字节
             $formattedInfo['estimated_size_mb'] = round($totalSize / 1024 / 1024, 2); // MB
+            $formattedInfo['estimated_size_gb'] = round($totalSize / 1024 / 1024 / 1024, 2); // GB
 
             return $this->fetchJson([
                 'success' => true,
@@ -886,9 +892,13 @@ class Config extends BackendController
                     $name === 'tokenizer.json' ||
                     $name === 'config.json' ||
                     str_starts_with($name, 'tokenizer_config.json')) {
+                    // 优先使用 LFS 大小（大文件的实际大小），否则使用顶层 size
+                    $fileSize = isset($file['lfs']['size']) 
+                        ? (int)$file['lfs']['size'] 
+                        : (int)($file['size'] ?? 0);
                     $requiredFiles[] = [
                         'filename' => $name,
-                        'expected_size' => (int)($file['size'] ?? 0),
+                        'expected_size' => $fileSize,
                     ];
                 }
             }

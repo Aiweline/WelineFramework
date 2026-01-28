@@ -37,6 +37,9 @@ class Total extends \Weline\Framework\View\Block
         if (!$this->getData('tip')) {
             throw new Exception('未提供提示tip参数');
         }
+        # 将标题和提示赋值给模板
+        $this->assign('title', $this->getData('title'));
+        $this->assign('tip', $this->getData('tip'));
         # 检测比较期限是否提供
         $last_period = $this->getData('last-period') ?? ''; # 默认用昨日期限
         $now_period = $this->getData('now-period') ?? ''; # 默认用今日期限

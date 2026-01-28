@@ -168,6 +168,41 @@ if (empty($childCategories) && empty($parentCategory)) {
                         $catUrl = $template->getUrl('catalog/category/' . $catPath);
                         $catName = htmlspecialchars($cat['name'] ?? '');
                         
+                        // 获取分类图标（优先从已加载的数据中获取，如果没有则从 EAV 属性获取）
+                        $catIcon = $cat['icon'] ?? '';
+                        $showIcon = $cat['show_icon'] ?? true;
+                        
+                        // 如果数据中没有图标信息，尝试从 EAV 属性获取
+                        if (empty($catIcon) || !isset($cat['show_icon'])) {
+                            try {
+                                /** @var \WeShop\Catalog\Model\Category $categoryModel */
+                                $categoryModel = ObjectManager::getInstance(\WeShop\Catalog\Model\Category::class);
+                                $categoryModel->load((int)($cat['category_id'] ?? 0));
+                                
+                                if ($categoryModel->getId()) {
+                                    // 获取图标属性值
+                                    if (empty($catIcon)) {
+                                        $iconValue = $categoryModel->getAttributeValue('icon');
+                                        $catIcon = $iconValue ?: '';
+                                    }
+                                    
+                                    // 检查是否显示图标（通过 EAV 属性 show_icon 控制，默认为 true）
+                                    if (!isset($cat['show_icon'])) {
+                                        $showIconValue = $categoryModel->getAttributeValue('show_icon');
+                                        $showIcon = $showIconValue !== null ? (bool)$showIconValue : true; // 默认显示图标
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                // 如果获取失败，使用默认值
+                                if (empty($catIcon)) {
+                                    $catIcon = '';
+                                }
+                                if (!isset($cat['show_icon'])) {
+                                    $showIcon = true; // 默认显示图标
+                                }
+                            }
+                        }
+                        
                         // 检查是否有子分类
                         $hasChildren = !empty($cat['children']) && is_array($cat['children']) && count($cat['children']) > 0;
                         $childrenCount = $hasChildren ? count($cat['children']) : 0;
@@ -197,7 +232,14 @@ if (empty($childCategories) && empty($parentCategory)) {
                         // 分类链接容器（链接宽度自适应，容器外可点击展开）
                         $html .= '<span class="category-subcategory-link-wrapper">';
                         $html .= '<a href="' . htmlspecialchars($catUrl) . '" class="category-subcategory-link" onclick="event.stopPropagation();">';
-                        $html .= $catName;
+                        
+                        // 显示图标（如果启用且有图标值）
+                        if ($showIcon && !empty($catIcon)) {
+                            $html .= '<i class="category-subcategory-icon ' . htmlspecialchars($catIcon) . '"></i>';
+                        }
+                        
+                        $html .= '<span class="category-subcategory-name">' . $catName . '</span>';
+                        
                         // 如果有子分类，显示子分类个数
                         if ($hasChildren && $childrenCount > 0) {
                             $html .= '<span class="category-subcategory-count"> (' . $childrenCount . ')</span>';
@@ -401,13 +443,32 @@ if (empty($childCategories) && empty($parentCategory)) {
 }
 
 .category-subcategory-link {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     color: var(--color-text-primary, #111827);
     text-decoration: none;
     border-radius: 4px;
     transition: background-color 0.2s, color 0.2s;
     white-space: nowrap;
+}
+
+.category-subcategory-icon {
+    font-size: 0.875rem;
+    width: 1rem;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--color-text-secondary, #6b7280);
+    transition: color 0.2s;
+}
+
+.category-subcategory-link:hover .category-subcategory-icon {
+    color: var(--color-link, #007185);
+}
+
+.category-subcategory-name {
+    flex: 1;
 }
 
 .category-subcategory-link:hover {

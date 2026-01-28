@@ -12,6 +12,7 @@ $limit = (int)($this->getData('limit') ?? 8);
 $columns = $this->getData('columns') ?? '4';
 $showCount = (bool)($this->getData('show_count') ?? true);
 $imageRatio = $this->getData('image_ratio') ?? 'square';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 图片比例映射
 $ratioMap = [
@@ -23,14 +24,14 @@ $paddingTop = $ratioMap[$imageRatio] ?? '100%';
 
 // 示例分类数据
 $categories = [
-    ['id' => 1, 'name' => __('电子产品'), 'url' => '/category/electronics', 'image' => '/images/categories/electronics.jpg', 'count' => 156],
-    ['id' => 2, 'name' => __('服装鞋帽'), 'url' => '/category/fashion', 'image' => '/images/categories/fashion.jpg', 'count' => 243],
-    ['id' => 3, 'name' => __('家居生活'), 'url' => '/category/home', 'image' => '/images/categories/home.jpg', 'count' => 178],
-    ['id' => 4, 'name' => __('美妆个护'), 'url' => '/category/beauty', 'image' => '/images/categories/beauty.jpg', 'count' => 134],
-    ['id' => 5, 'name' => __('食品生鲜'), 'url' => '/category/food', 'image' => '/images/categories/food.jpg', 'count' => 89],
-    ['id' => 6, 'name' => __('母婴用品'), 'url' => '/category/baby', 'image' => '/images/categories/baby.jpg', 'count' => 67],
-    ['id' => 7, 'name' => __('运动户外'), 'url' => '/category/sports', 'image' => '/images/categories/sports.jpg', 'count' => 112],
-    ['id' => 8, 'name' => __('图书文具'), 'url' => '/category/books', 'image' => '/images/categories/books.jpg', 'count' => 78],
+    ['id' => 1, 'name' => __('电子产品'), 'url' => '/category/electronics', 'image' => $placeholder, 'count' => 156],
+    ['id' => 2, 'name' => __('服装鞋帽'), 'url' => '/category/fashion', 'image' => $placeholder, 'count' => 243],
+    ['id' => 3, 'name' => __('家居生活'), 'url' => '/category/home', 'image' => $placeholder, 'count' => 178],
+    ['id' => 4, 'name' => __('美妆个护'), 'url' => '/category/beauty', 'image' => $placeholder, 'count' => 134],
+    ['id' => 5, 'name' => __('食品生鲜'), 'url' => '/category/food', 'image' => $placeholder, 'count' => 89],
+    ['id' => 6, 'name' => __('母婴用品'), 'url' => '/category/baby', 'image' => $placeholder, 'count' => 67],
+    ['id' => 7, 'name' => __('运动户外'), 'url' => '/category/sports', 'image' => $placeholder, 'count' => 112],
+    ['id' => 8, 'name' => __('图书文具'), 'url' => '/category/books', 'image' => $placeholder, 'count' => 78],
 ];
 
 $categories = array_slice($categories, 0, $limit);
@@ -51,17 +52,17 @@ $widgetId = 'category-grid-' . uniqid();
     
     <div class="category-grid columns-<?= htmlspecialchars($columns) ?>">
         <?php foreach ($categories as $category): ?>
-            <a href="<?= htmlspecialchars($category['url']) ?>" class="category-card">
+            <a href="<?= htmlspecialchars($category['url'] ?? '') ?>" class="category-card">
                 <div class="category-image-wrapper" style="padding-top: <?= $paddingTop ?>;">
-                    <img src="<?= htmlspecialchars($category['image']) ?>" 
-                         alt="<?= htmlspecialchars($category['name']) ?>"
+                    <img src="<?= htmlspecialchars($category['image'] ?? '') ?>" 
+                         alt="<?= htmlspecialchars($category['name'] ?? '') ?>"
                          class="category-image"
                          loading="lazy">
                     <div class="category-overlay"></div>
                 </div>
                 
                 <div class="category-info">
-                    <h3 class="category-name"><?= htmlspecialchars($category['name']) ?></h3>
+                    <h3 class="category-name"><?= htmlspecialchars($category['name'] ?? '') ?></h3>
                     <?php if ($showCount): ?>
                         <span class="category-count"><?= $category['count'] ?> <?= __('件商品') ?></span>
                     <?php endif; ?>

@@ -9,14 +9,17 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class OptionId extends Model
 {
-    public const indexer = 'product_option_id';
-    public const fields_ID = 'product_id';
+    public const table = 'weshop_product_option_id';
+    public const primary_key = 'product_option_id';
+    public const indexer = 'product_option_id_indexer';
+    public array $_unit_primary_keys = ['attribute_id', 'option_id', 'product_id'];
+    public array $_index_sort_keys = ['parent_product_id', 'attribute_id', 'option_id', 'product_id'];
+    
+    public const fields_ID = 'product_option_id';
     public const fields_ATTRIBUTE_ID = 'attribute_id';
     public const fields_PRODUCT_ID = 'product_id';
     public const fields_PRENT_PRODUCT_ID = 'parent_product_id';
     public const fields_OPTION_ID = 'option_id';
-
-    public array $_index_sort_keys = ['parent_product_id', 'attribute_id', 'option_id', 'product_id'];
 
     /**
      * @inheritDoc
