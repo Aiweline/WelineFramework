@@ -129,7 +129,8 @@ class InstallAll extends BaseController
             // 插入新国家数据
             if (!empty($insert_countries)) {
                 $countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
-                $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE)->fetch();
+                // 使用联合唯一索引字段作为冲突检测
+                $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE . ',' . $localeNames::fields_DISPLAY_LOCALE_CODE)->fetch();
                 $totalProcessed += count($insert_countries);
                 $this->getMessageManager()->addSuccess(__('成功插入%{1}个国家数据！', [count($insert_countries)]));
             }

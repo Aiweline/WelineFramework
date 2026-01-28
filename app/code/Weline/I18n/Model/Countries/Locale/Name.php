@@ -38,7 +38,7 @@ class Name extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 重装模块触发 install 即可
     }
 
     /**
@@ -55,6 +55,8 @@ class Name extends \Weline\Framework\Database\Model
                 ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_country_code', self::fields_COUNTRY_CODE, '国码索引')
                 ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_display_locale_code', self::fields_DISPLAY_LOCALE_CODE, '展示区码索引')
                 ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_display_name', self::fields_DISPLAY_NAME, '国名索引')
+                // 添加联合唯一索引，用于支持 PostgreSQL 的 ON CONFLICT 语法
+                ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_UNIQUE, 'uk_country_display_locale', self::fields_COUNTRY_CODE . ',' . self::fields_DISPLAY_LOCALE_CODE, '国家语言唯一索引')
                 ->create();
         }
     }

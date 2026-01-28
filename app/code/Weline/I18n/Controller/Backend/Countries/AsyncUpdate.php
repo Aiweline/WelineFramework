@@ -210,7 +210,8 @@ class AsyncUpdate extends BaseController
         // 批量插入新国家
         if (!empty($insert_countries)) {
             $countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
-            $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE)->fetch();
+            // 使用联合唯一索引字段作为冲突检测
+            $localeNames->clearQuery()->insert($insert_countries_display, $localeNames::fields_COUNTRY_CODE . ',' . $localeNames::fields_DISPLAY_LOCALE_CODE)->fetch();
         }
         
         // 批量更新现有国家
@@ -343,7 +344,8 @@ class AsyncUpdate extends BaseController
             
             foreach ($batches as $index => $batch) {
                 try {
-                    $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE)->fetch();
+                    // 使用联合唯一索引字段作为冲突检测
+                    $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
                 } catch (\Exception $e) {
                     // 忽略重复插入错误
                     if (!str_contains($e->getMessage(), 'UNIQUE constraint failed')) {
@@ -473,8 +475,8 @@ class AsyncUpdate extends BaseController
         $batchData = array_slice($allLocaleNames, $batch * self::BATCH_SIZE, self::BATCH_SIZE);
         
         if (!empty($batchData)) {
-            // 插入当前批次
-            $localeName->clearQuery()->insert($batchData, LocaleName::fields_LOCALE_CODE)->fetch();
+            // 插入当前批次，使用联合唯一索引字段作为冲突检测
+            $localeName->clearQuery()->insert($batchData, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
             
             $processed = ($batch + 1) * self::BATCH_SIZE;
             if ($processed > $total) $processed = $total;
@@ -543,7 +545,8 @@ class AsyncUpdate extends BaseController
         $totalBatches = count($batches);
         
         foreach ($batches as $index => $batch) {
-            $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE)->fetch();
+            // 使用联合唯一索引字段作为冲突检测
+            $localeName->clearQuery()->insert($batch, LocaleName::fields_LOCALE_CODE . ',' . LocaleName::fields_DISPLAY_LOCALE_CODE)->fetch();
             
             $progress = 50 + (($index + 1) / $totalBatches) * 40;
             $this->setProgress($taskId, "正在插入区域名称数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
