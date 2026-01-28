@@ -1,0 +1,28 @@
+{
+    "page_type": "refund_policy",
+    "name": "法律文档默认布局",
+    "description": "隐私政策、服务条款等法律文档页面标准布局",
+    "version": "1.0.0",
+    "applicable_types": ["privacy_policy", "terms_of_service", "refund_policy", "shipping_policy"],
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "legal-content-default",
+                "config": {
+                    "show_toc": true,
+                    "show_last_updated": true,
+                    "content_width": "narrow"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "header 和 footer 为空数组表示从首页继承"
+}

@@ -1,0 +1,147 @@
+<?php
+/**
+ * Satta King 786 模板 - Content
+ * 
+ * 内容区域渲染文件，通过组件系统加载内容组件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1200|px
+ * layout.padding_vertical => 上下内边距:responsive:60/80|px[MD]
+ * layout.padding_horizontal => 左右内边距:responsive:20/40|px[MD]
+ * 
+ * group:style => 样式设置
+ * style.background_color => 背景颜色:color:#0c0c1e
+ * style.text_color => 文字颜色:color:#a0a0c0
+ * style.heading_color => 标题颜色:color:#ffffff
+ * style.link_color => 链接颜色:color:#a855f7
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'sattaking';
+if (empty($templateCode)) {
+    $templateCode = 'sattaking';
+}
+$this->assign('template_code', $templateCode);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 辅助函数
+if (!function_exists('sk_content_color')) {
+    function sk_content_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('sk_content_getConfig')) {
+    function sk_content_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+// 布局配置
+$maxWidth = sk_content_getConfig($styleSettings, 'layout.max_width', '1200');
+$paddingVertical = sk_content_getConfig($styleSettings, 'layout.padding_vertical', '60/80');
+$paddingHorizontal = sk_content_getConfig($styleSettings, 'layout.padding_horizontal', '20/40');
+
+// 样式配置
+$bgColor = sk_content_getConfig($styleSettings, 'style.background_color', sk_content_color($colors, 'main_bg', '#0c0c1e'));
+$textColor = sk_content_getConfig($styleSettings, 'style.text_color', sk_content_color($colors, 'text_secondary', '#a0a0c0'));
+$headingColor = sk_content_getConfig($styleSettings, 'style.heading_color', sk_content_color($colors, 'text_primary', '#ffffff'));
+$linkColor = sk_content_getConfig($styleSettings, 'style.link_color', sk_content_color($colors, 'accent_primary', '#a855f7'));
+
+// 获取布局配置
+$layoutConfig = $this->getData('layout_config') ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+?>
+
+<style>
+    .sk-content {
+        background: <?= htmlspecialchars($bgColor) ?>;
+        color: <?= htmlspecialchars($textColor) ?>;
+        min-height: 50vh;
+        padding-top: 80px; /* 为固定头部留出空间 */
+    }
+    
+    .sk-content-container {
+        max-width: <?= intval($maxWidth) ?>px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+    
+    .sk-content h1, .sk-content h2, .sk-content h3, .sk-content h4 {
+        color: <?= htmlspecialchars($headingColor) ?>;
+    }
+    
+    .sk-content a {
+        color: <?= htmlspecialchars($linkColor) ?>;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+    
+    .sk-content a:hover {
+        color: <?= htmlspecialchars($linkColor) ?>;
+        opacity: 0.8;
+    }
+</style>
+
+<main class="sk-content">
+    <?php
+    // 映射组件代码到文件路径
+    $componentFiles = [
+        'hero' => 'content/hero.phtml',
+        'features' => 'content/features.phtml',
+        'app-download' => 'content/app-download.phtml',
+        'platform' => 'content/platform.phtml',
+        'games' => 'content/games.phtml',
+        'benefits' => 'content/benefits.phtml',
+        'download-reminder' => 'content/download-reminder.phtml',
+        'faq' => 'content/faq.phtml',
+    ];
+    
+    // 如果有组件配置，渲染组件
+    if (!empty($contentComponents)) {
+        foreach ($contentComponents as $index => $component) {
+            $componentCode = $component['code'] ?? $component['component'] ?? '';
+            $componentConfig = $component['config'] ?? [];
+            
+            if (empty($componentCode)) continue;
+            
+            $componentFile = $componentFiles[$componentCode] ?? null;
+            if ($componentFile) {
+                $this->assign('component_config', $componentConfig);
+                $this->assign('component_instance_id', 'sk-component-' . $componentCode . '-' . $index);
+                $this->assign('colors', $colors);
+                ?>
+                <div class="sk-component-wrapper" data-component="<?= htmlspecialchars($componentCode) ?>" data-index="<?= $index ?>">
+                    <?= $this->fetchTemplate("GuoLaiRen_PageBuilder::templates/style/sattaking/components/{$componentFile}") ?>
+                </div>
+                <?php
+            }
+        }
+    } else {
+        // 默认显示页面内容
+        if ($page) {
+            $pageContent = $page->getData('content') ?? '';
+            if ($pageContent) {
+                echo '<div class="sk-content-container">' . $pageContent . '</div>';
+            }
+        }
+    }
+    ?>
+</main>

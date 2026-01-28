@@ -1,0 +1,61 @@
+{
+    "page_type": "home_page",
+    "name": "首页默认布局",
+    "description": "Teen Patti Master 首页标准布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {}
+            }
+        ],
+        "content": [
+            {
+                "code": "hero-slider",
+                "enabled": true,
+                "instance_id": "hero-slider-default",
+                "config": {
+                    "banner.display": "yes",
+                    "download_btn.display": "yes",
+                    "layout.slider_classes": "rs-slider slider-style2",
+                    "layout.margin_top": "-75"
+                }
+            },
+            {
+                "code": "advantages",
+                "enabled": true,
+                "instance_id": "advantages-default",
+                "config": {}
+            },
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-default",
+                "config": {}
+            },
+            {
+                "code": "testimonials",
+                "enabled": true,
+                "instance_id": "testimonials-default",
+                "config": {}
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-default",
+                "config": {}
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {}
+            }
+        ]
+    }
+}

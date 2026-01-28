@@ -1,0 +1,160 @@
+{
+    "template": "sattaking",
+    "name": "Satta King 786",
+    "description": "深紫蓝渐变风格主题，现代信息平台设计",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "description": "页面顶部导航区域",
+            "multiple": false,
+            "components": ["header-nav"]
+        },
+        "content": {
+            "name": "内容区域",
+            "description": "页面主要内容区域",
+            "multiple": true,
+            "components": ["hero", "features", "app-download", "platform", "games", "benefits", "download-reminder", "faq"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "description": "页面底部链接和版权区域",
+            "multiple": false,
+            "components": ["footer-links"]
+        }
+    },
+    "components": {
+        "header-nav": {
+            "code": "header-nav",
+            "name": "导航栏",
+            "description": "页面顶部导航，支持Logo、导航链接和CTA按钮",
+            "icon": "bi-menu-button-wide",
+            "category": "header",
+            "file": "header/nav.phtml",
+            "default_config": {
+                "logo.display": "yes",
+                "logo.text": "Satta King 786",
+                "logo.width": 40,
+                "navigation.show_cta": "yes",
+                "navigation.cta_text": "Download App",
+                "navigation.cta_url": "#download"
+            }
+        },
+        "hero": {
+            "code": "hero",
+            "name": "首屏英雄区",
+            "description": "首屏大图区域，包含标题、描述、CTA按钮和特性标签",
+            "icon": "bi-badge-hd",
+            "category": "content",
+            "file": "content/hero.phtml",
+            "default_config": {
+                "content.badge": "Guide & Platform",
+                "content.title": "Satta King 786 Guide to Satta Formats and Play",
+                "cta.primary_text": "Get the Android App",
+                "cta.secondary_text": "Explore Games"
+            }
+        },
+        "features": {
+            "code": "features",
+            "name": "特性展示",
+            "description": "展示平台核心功能特性，支持4列布局",
+            "icon": "bi-stars",
+            "category": "content",
+            "file": "content/features.phtml",
+            "default_config": {
+                "content.badge": "Core Features",
+                "content.title": "What the platform offers"
+            }
+        },
+        "app-download": {
+            "code": "app-download",
+            "name": "应用下载",
+            "description": "应用下载区域，包含下载按钮和安装指南",
+            "icon": "bi-download",
+            "category": "content",
+            "file": "content/app-download.phtml",
+            "default_config": {
+                "content.badge": "App Download",
+                "content.title": "Android access designed for clarity",
+                "download.primary_text": "Primary Download"
+            }
+        },
+        "platform": {
+            "code": "platform",
+            "name": "平台概述",
+            "description": "展示平台数据结构和特性，6格布局",
+            "icon": "bi-grid-3x2",
+            "category": "content",
+            "file": "content/platform.phtml",
+            "default_config": {
+                "content.badge": "Platform Overview",
+                "content.title": "How data is structured on the platform"
+            }
+        },
+        "games": {
+            "code": "games",
+            "name": "游戏/市场展示",
+            "description": "展示热门游戏或市场列表，4列卡片布局",
+            "icon": "bi-controller",
+            "category": "content",
+            "file": "content/games.phtml",
+            "default_config": {
+                "content.badge": "Popular Games",
+                "content.title": "Well-known markets and formats"
+            }
+        },
+        "benefits": {
+            "code": "benefits",
+            "name": "用户优势",
+            "description": "展示使用平台的好处，2列布局",
+            "icon": "bi-check-circle",
+            "category": "content",
+            "file": "content/benefits.phtml",
+            "default_config": {
+                "content.badge": "Player Benefits",
+                "content.title": "Why a structured hub matters"
+            }
+        },
+        "faq": {
+            "code": "faq",
+            "name": "常见问题",
+            "description": "FAQ手风琴展示，支持展开收起效果",
+            "icon": "bi-question-circle",
+            "category": "content",
+            "file": "content/faq.phtml",
+            "default_config": {
+                "content.badge": "FAQ Snapshot",
+                "content.title": "Quick answers about the platform"
+            }
+        },
+        "download-reminder": {
+            "code": "download-reminder",
+            "name": "下载提醒",
+            "description": "下载提醒区块，引导用户下载应用",
+            "icon": "bi-phone",
+            "category": "content",
+            "file": "content/download-reminder.phtml",
+            "default_config": {
+                "content.badge": "Download Reminder",
+                "content.title": "Keep satta updates organized on Android",
+                "buttons.primary_text": "Download for Android",
+                "buttons.secondary_text": "Read FAQ"
+            }
+        },
+        "footer-links": {
+            "code": "footer-links",
+            "name": "页脚链接",
+            "description": "简洁的页脚区域，包含品牌信息和导航链接",
+            "icon": "bi-layout-text-window-reverse",
+            "category": "footer",
+            "file": "footer/links.phtml",
+            "default_config": {
+                "brand.name": "Satta King 786",
+                "brand.description": "An informational guide to satta king formats, schedules, and Android access. Always check local laws and follow responsible play practices.",
+                "links.items": "Download App=>#download\nGames=>#games\nFAQ=>#faq\nContact=>/contact",
+                "copyright.text": "Designed for clarity, speed, and compliance-first guidance."
+            }
+        }
+    }
+}

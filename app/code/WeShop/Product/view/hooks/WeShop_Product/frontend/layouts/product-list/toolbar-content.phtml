@@ -1,0 +1,274 @@
+<?php
+/**
+ * WeShop Product模块 - 产品列表工具栏Hook
+ * 
+ * 在产品列表页工具栏区域渲染排序、视图切换、每页数量等选项
+ * Hook名称：WeShop_Product::frontend::layouts::product-list::toolbar-content
+ * 
+ * @hook-priority 100      Hook优先级：100
+ * @hook-sort-order 1      Hook排序顺序：1
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+// 获取产品列表数据（由控制器传递）
+$products = $this->getData('products') ?? [];
+$pagination = $this->getData('pagination') ?? [];
+$sortOptions = $this->getData('sort_options') ?? [];
+$currentSort = $this->getData('current_sort') ?? 'default';
+$currentView = $this->getData('current_view') ?? 'grid';
+$pageSize = (int)($pagination['page_size'] ?? 24);
+$totalCount = (int)($pagination['total'] ?? count($products));
+
+// 默认排序选项
+if (empty($sortOptions)) {
+    $sortOptions = [
+        'default' => __('默认排序'),
+        'price_asc' => __('价格从低到高'),
+        'price_desc' => __('价格从高到低'),
+        'name_asc' => __('名称 A-Z'),
+        'name_desc' => __('名称 Z-A'),
+        'newest' => __('最新上架'),
+        'bestselling' => __('销量最高'),
+    ];
+}
+
+// 每页数量选项
+$pageSizeOptions = [12, 24, 48, 96];
+?>
+
+<div class="product-toolbar">
+    <div class="toolbar-left">
+        <span class="product-count">
+            <?= sprintf(__('共 %d 件商品'), $totalCount) ?>
+        </span>
+    </div>
+    
+    <div class="toolbar-right">
+        <!-- 排序选择 -->
+        <div class="toolbar-item sort-selector">
+            <label for="product-sort"><?= __('排序') ?>:</label>
+            <select id="product-sort" class="sort-select" data-action="sort">
+                <?php foreach ($sortOptions as $value => $label): ?>
+                <option value="<?= htmlspecialchars($value) ?>" <?= $currentSort === $value ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($label) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+        <!-- 每页数量 -->
+        <div class="toolbar-item pagesize-selector">
+            <label for="page-size"><?= __('每页') ?>:</label>
+            <select id="page-size" class="pagesize-select" data-action="pagesize">
+                <?php foreach ($pageSizeOptions as $size): ?>
+                <option value="<?= $size ?>" <?= $pageSize === $size ? 'selected' : '' ?>>
+                    <?= $size ?> <?= __('件') ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+        <!-- 视图切换 -->
+        <div class="toolbar-item view-switcher">
+            <button type="button" 
+                    class="view-btn <?= $currentView === 'grid' ? 'active' : '' ?>" 
+                    data-view="grid" 
+                    title="<?= __('网格视图') ?>">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                    <rect x="0" y="0" width="8" height="8" rx="1"></rect>
+                    <rect x="10" y="0" width="8" height="8" rx="1"></rect>
+                    <rect x="0" y="10" width="8" height="8" rx="1"></rect>
+                    <rect x="10" y="10" width="8" height="8" rx="1"></rect>
+                </svg>
+            </button>
+            <button type="button" 
+                    class="view-btn <?= $currentView === 'list' ? 'active' : '' ?>" 
+                    data-view="list" 
+                    title="<?= __('列表视图') ?>">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                    <rect x="0" y="0" width="18" height="4" rx="1"></rect>
+                    <rect x="0" y="7" width="18" height="4" rx="1"></rect>
+                    <rect x="0" y="14" width="18" height="4" rx="1"></rect>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ========================================
+   产品列表工具栏样式
+   ======================================== */
+.product-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.product-count {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #6c757d);
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toolbar-item label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted, #6c757d);
+    white-space: nowrap;
+}
+
+.sort-select,
+.pagesize-select {
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-text-primary, #111827);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+}
+
+.sort-select:focus,
+.pagesize-select:focus {
+    outline: none;
+    border-color: var(--color-accent, #3b82f6);
+}
+
+.view-switcher {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    background: var(--color-bg-secondary, #f8f9fa);
+    border-radius: 6px;
+}
+
+.view-btn {
+    padding: 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted, #9ca3af);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-btn:hover {
+    color: var(--color-text-primary, #111827);
+}
+
+.view-btn.active {
+    background: var(--color-bg-primary, #fff);
+    color: var(--color-accent, #3b82f6);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .product-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .toolbar-left {
+        justify-content: center;
+    }
+    
+    .toolbar-right {
+        justify-content: center;
+    }
+    
+    .toolbar-item {
+        flex: 1;
+        min-width: 120px;
+    }
+    
+    .sort-select,
+    .pagesize-select {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+(function() {
+    // 排序变更
+    var sortSelect = document.getElementById('product-sort');
+    if (sortSelect) {
+        sortSelect.addEventListener('change', function() {
+            var url = new URL(window.location.href);
+            url.searchParams.set('sort', this.value);
+            url.searchParams.delete('page'); // 重置页码
+            window.location.href = url.toString();
+        });
+    }
+    
+    // 每页数量变更
+    var pageSizeSelect = document.getElementById('page-size');
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', function() {
+            var url = new URL(window.location.href);
+            url.searchParams.set('limit', this.value);
+            url.searchParams.delete('page'); // 重置页码
+            window.location.href = url.toString();
+        });
+    }
+    
+    // 视图切换
+    document.querySelectorAll('.view-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var view = this.dataset.view;
+            var gridContainer = document.querySelector('.product-grid-container, .products-grid');
+            
+            if (gridContainer) {
+                gridContainer.classList.remove('view-grid', 'view-list');
+                gridContainer.classList.add('view-' + view);
+            }
+            
+            document.querySelectorAll('.view-btn').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // 保存视图偏好
+            localStorage.setItem('product_view', view);
+        });
+    });
+    
+    // 恢复视图偏好
+    var savedView = localStorage.getItem('product_view');
+    if (savedView) {
+        var viewBtn = document.querySelector('.view-btn[data-view="' + savedView + '"]');
+        if (viewBtn) {
+            viewBtn.click();
+        }
+    }
+})();
+</script>
