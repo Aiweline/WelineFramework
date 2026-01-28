@@ -188,6 +188,7 @@ RTL模式,"RTL Mode"
 注册,Register
 网站维护,"Website Maintenance"
 返回首页重试,"Return to Home and Retry"
+刷新,Refresh
 Cms内容管理,"CMS Content Management"
 内容管理,"Content Management"
 后台可视化建设页面等的内容管理。,"Content management for backend visual page building, etc."
@@ -304,4 +305,3 @@ API用户列表,"API User List"
 展开所有菜单,"Expand All Menus"
 收起菜单组,"Collapse Menu Group"
 访问次数:,"Visit Count:"
-刷新,Refresh
