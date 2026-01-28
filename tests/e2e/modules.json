@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-01-27T22:42:04+08:00",
+    "generated_at": "2026-01-28T11:42:20+08:00",
     "modules": {
         "Weline_Framework": {
             "name": "Weline_Framework",
@@ -985,14 +985,6 @@
             "version": "1.0.7",
             "has_tests": false
         },
-        "GuoLaiRen_PageBuilder": {
-            "name": "GuoLaiRen_PageBuilder",
-            "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder",
-            "test_path": null,
-            "status": true,
-            "version": "1.0.21",
-            "has_tests": false
-        },
         "GuoLaiRen_Blog": {
             "name": "GuoLaiRen_Blog",
             "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/Blog",
@@ -1023,6 +1015,14 @@
             "test_path": null,
             "status": true,
             "version": "1.0.0",
+            "has_tests": false
+        },
+        "GuoLaiRen_PageBuilder": {
+            "name": "GuoLaiRen_PageBuilder",
+            "base_path": "E:/WelineFramework/DEV-workspace/app/code/GuoLaiRen/PageBuilder",
+            "test_path": null,
+            "status": true,
+            "version": "1.0.21",
             "has_tests": false
         }
     }
