@@ -296,9 +296,10 @@ class Page extends Model
      * 博客等页面可以从首页继承 header/footer 配置
      * 
      * @param int|null $websiteId 站点ID，不传则使用当前页面的站点ID（0 表示默认/全局站点）
+     * @param bool $publishedOnly 是否只查找已发布的首页（默认true用于前台渲染，false用于后台编辑）
      * @return Page|null 首页对象
      */
-    public function getHomePage(?int $websiteId = null): ?Page
+    public function getHomePage(?int $websiteId = null, bool $publishedOnly = true): ?Page
     {
         // 使用 ?? 运算符处理 null，保留 0 作为有效的 website_id
         $websiteId = $websiteId ?? (int)$this->getData(self::fields_WEBSITE_ID);
@@ -306,10 +307,14 @@ class Page extends Model
         $homePage = clone $this;
         $homePage->clear()
             ->where(self::fields_WEBSITE_ID, $websiteId)
-            ->where(self::fields_TYPE, self::TYPE_HOME)
-            ->where(self::fields_STATUS, self::STATUS_PUBLISHED)
-            ->find()
-            ->fetch();
+            ->where(self::fields_TYPE, self::TYPE_HOME);
+        
+        // 仅在前台渲染时检查发布状态，后台编辑时允许访问草稿状态的首页
+        if ($publishedOnly) {
+            $homePage->where(self::fields_STATUS, self::STATUS_PUBLISHED);
+        }
+        
+        $homePage->find()->fetch();
         
         return $homePage->getId() ? $homePage : null;
     }
