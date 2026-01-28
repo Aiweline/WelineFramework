@@ -63,7 +63,7 @@ if ($error) {
                name="<?= htmlspecialchars($name) ?>"
                id="<?= htmlspecialchars($id) ?>"
                class="<?= $inputClass ?>"
-               placeholder="<?= htmlspecialchars($placeholder) ?>"
+               placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
                value="<?= htmlspecialchars($value) ?>"
                autocomplete="<?= htmlspecialchars($autocomplete) ?>"
                <?= $required ? 'required' : '' ?>

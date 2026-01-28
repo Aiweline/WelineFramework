@@ -15,6 +15,7 @@ class GiftCard extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_gift_card';
     public const primary_key = 'card_id';
+    public string $indexer = 'gift_card_indexer';
     
     public const fields_ID = 'card_id';
     public const fields_CARD_NUMBER = 'card_number';

@@ -526,6 +526,22 @@ return [
         'description' => __('在分类页左侧筛选栏中渲染子分类筛选区域，支持显示上级分类返回入口和当前分类的直接子分类列表。'),
         'doc' => 'frontend/layouts/category/subcategories-filter.md',
     ],
+    'Weline_Theme::frontend::layouts::category::filters-sidebar' => [
+        'name' => __('分类页筛选侧栏'),
+        'description' => __('在分类页左侧渲染产品筛选侧栏，支持价格、品牌、颜色、评分等多维度筛选。由 WeShop_Filters 模块实现。'),
+        'doc' => 'frontend/layouts/category/filters-sidebar.md',
+        'slot' => true,
+    ],
+    'Weline_Theme::frontend::layouts::category::filters-before' => [
+        'name' => __('分类筛选区之前'),
+        'description' => __('在分类筛选区域之前触发，允许其他模块注入内容。'),
+        'doc' => 'frontend/layouts/category/filters-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::category::filters-after' => [
+        'name' => __('分类筛选区之后'),
+        'description' => __('在分类筛选区域之后触发，允许其他模块注入内容。'),
+        'doc' => 'frontend/layouts/category/filters-after.md',
+    ],
     
     // ==================== Theme Frontend Header Actions (简单格式 Hook，向后兼容) ====================
     'header-categories-menu' => [

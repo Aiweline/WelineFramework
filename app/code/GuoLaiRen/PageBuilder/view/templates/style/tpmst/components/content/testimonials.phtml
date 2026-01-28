@@ -13,15 +13,40 @@
  * 
  * @fields_start
  * 
- * group:testimonials => 评价设置
- * testimonials.display => 显示评价区域:select:yes|yes,no
- * testimonials.title => 标题:text:Testimonials
- * testimonials.bg_color => 背景颜色:color:#1a1a2e
- * testimonials.avatar_1 => 评价1头像:textarea:|默认使用本地头像
- * testimonials.avatar_2 => 评价2头像:textarea:|默认使用本地头像
- * testimonials.avatar_3 => 评价3头像:textarea:|默认使用本地头像
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_rating => 显示评分:select:yes|yes,no
+ * display.show_avatar => 显示头像:select:yes|yes,no
+ * 
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#1a1a2e
+ * style.title_color => 标题颜色:color:#ffd700
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.05)
+ * style.card_border_radius => 卡片圆角:number:12|px
+ * style.card_border_left_color => 卡片左边框色:color:#ff6b35
+ * style.card_border_left_width => 卡片左边框宽度:number:4|px
+ * style.card_padding => 卡片内边距:number:25|px
+ * style.name_color => 姓名颜色:color:#ffd700
+ * style.name_font_size => 姓名字号:number:16|px
+ * style.rating_color => 评分颜色:color:#ffd700
+ * style.content_color => 评价内容颜色:color:#ffffff
+ * style.content_font_size => 评价内容字号:number:14|px
+ * style.avatar_size => 头像尺寸:number:60|px
+ * style.avatar_border_radius => 头像圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:20|px
+ * 
+ * group:avatars => 头像配置
+ * avatars.avatar_1 => 评价1头像:textarea:|默认使用本地头像
+ * avatars.avatar_2 => 评价2头像:textarea:|默认使用本地头像
+ * avatars.avatar_3 => 评价3头像:textarea:|默认使用本地头像
  * 
  * group:texts => 评价内容
+ * texts.title => 区域标题:text:Testimonials
  * texts.testimonial_1_name => 评价1姓名:text:Rajesh Kumar (Mumbai)
  * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
  * texts.testimonial_1_content => 评价1内容:textarea:Best Teen Patti app I've used! I've been playing for 6 months and won ₹45,000 so far.
@@ -46,20 +71,45 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$display = $getConfig('testimonials.display', 'yes') !== 'no';
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('testimonials.display', 'yes')) !== 'no';
 if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showRating = $getConfig('display.show_rating', 'yes') !== 'no';
+$showAvatar = $getConfig('display.show_avatar', 'yes') !== 'no';
 
-$title = $getConfig('testimonials.title', 'Testimonials');
-$bgColor = $getConfig('testimonials.bg_color', '#1a1a2e');
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('testimonials.bg_color', '#1a1a2e'));
+$titleColor = $getConfig('style.title_color', '#ffd700');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.05)');
+$cardBorderRadius = $getConfig('style.card_border_radius', '12');
+$cardBorderLeftColor = $getConfig('style.card_border_left_color', '#ff6b35');
+$cardBorderLeftWidth = $getConfig('style.card_border_left_width', '4');
+$cardPadding = $getConfig('style.card_padding', '25');
+$nameColor = $getConfig('style.name_color', '#ffd700');
+$nameFontSize = $getConfig('style.name_font_size', '16');
+$ratingColor = $getConfig('style.rating_color', '#ffd700');
+$contentColor = $getConfig('style.content_color', '#ffffff');
+$contentFontSize = $getConfig('style.content_font_size', '14');
+$avatarSize = $getConfig('style.avatar_size', '60');
+$avatarBorderRadius = $getConfig('style.avatar_border_radius', '50');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+$cardGap = $getConfig('style.card_gap', '20');
 
+// 头像配置
 $defaultAvatar1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Rajesh-Kumar-1.avif');
 $defaultAvatar2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Priya-Sharma-2.avif');
 $defaultAvatar3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/user/Amit-Patel-3.avif');
 
-$avatar1 = $getConfig('testimonials.avatar_1', '') ?: $defaultAvatar1;
-$avatar2 = $getConfig('testimonials.avatar_2', '') ?: $defaultAvatar2;
-$avatar3 = $getConfig('testimonials.avatar_3', '') ?: $defaultAvatar3;
+$avatar1 = $getConfig('avatars.avatar_1', $getConfig('testimonials.avatar_1', '')) ?: $defaultAvatar1;
+$avatar2 = $getConfig('avatars.avatar_2', $getConfig('testimonials.avatar_2', '')) ?: $defaultAvatar2;
+$avatar3 = $getConfig('avatars.avatar_3', $getConfig('testimonials.avatar_3', '')) ?: $defaultAvatar3;
 
+// 文本内容
+$title = $getConfig('texts.title', $getConfig('testimonials.title', 'Testimonials'));
 $name1 = $getConfig('texts.testimonial_1_name', 'Rajesh Kumar (Mumbai)');
 $rating1 = $getConfig('texts.testimonial_1_rating', '⭐⭐⭐⭐⭐');
 $content1 = $getConfig('texts.testimonial_1_content', "Best Teen Patti app I've used! I've been playing for 6 months and won ₹45,000 so far.");
@@ -76,18 +126,20 @@ $content3 = $getConfig('texts.testimonial_3_content', 'Love the game variety. Wo
 <style>
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
-    padding: 60px 20px;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    width: 100%;
 }
 
-#<?= $componentId ?> .tpmst-test-container {
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 1000px;
     margin: 0 auto;
+    padding: 0 20px;
 }
 
 #<?= $componentId ?> .tpmst-test-title {
     text-align: center;
-    font-size: clamp(24px, 5vw, 36px);
-    color: #ffd700;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 5vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    color: <?= htmlspecialchars($titleColor) ?>;
     margin-bottom: 40px;
     font-weight: 700;
 }
@@ -95,14 +147,14 @@ $content3 = $getConfig('texts.testimonial_3_content', 'Love the game variety. Wo
 #<?= $componentId ?> .tpmst-test-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
+    gap: <?= htmlspecialchars($cardGap) ?>px;
 }
 
 #<?= $componentId ?> .tpmst-test-card {
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    padding: 25px;
-    border-left: 4px solid #ff6b35;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    border-radius: <?= htmlspecialchars($cardBorderRadius) ?>px;
+    padding: <?= htmlspecialchars($cardPadding) ?>px;
+    border-left: <?= htmlspecialchars($cardBorderLeftWidth) ?>px solid <?= htmlspecialchars($cardBorderLeftColor) ?>;
 }
 
 #<?= $componentId ?> .tpmst-test-header {
@@ -113,68 +165,86 @@ $content3 = $getConfig('texts.testimonial_3_content', 'Love the game variety. Wo
 }
 
 #<?= $componentId ?> .tpmst-test-avatar {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
+    width: <?= htmlspecialchars($avatarSize) ?>px;
+    height: <?= htmlspecialchars($avatarSize) ?>px;
+    border-radius: <?= htmlspecialchars($avatarBorderRadius) ?>%;
     object-fit: cover;
     flex-shrink: 0;
 }
 
 #<?= $componentId ?> .tpmst-test-name {
     font-weight: 600;
-    color: #ffd700;
-    font-size: 16px;
+    color: <?= htmlspecialchars($nameColor) ?>;
+    font-size: <?= htmlspecialchars($nameFontSize) ?>px;
 }
 
 #<?= $componentId ?> .tpmst-test-rating {
-    color: #ffd700;
+    color: <?= htmlspecialchars($ratingColor) ?>;
     margin-top: 5px;
 }
 
 #<?= $componentId ?> .tpmst-test-content {
-    color: #ffffff;
-    font-size: 14px;
+    color: <?= htmlspecialchars($contentColor) ?>;
+    font-size: <?= htmlspecialchars($contentFontSize) ?>px;
     line-height: 1.6;
     opacity: 0.9;
 }
 
 @media (max-width: 767px) {
     #<?= $componentId ?> {
-        padding: 40px 15px;
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+    
+    #<?= $componentId ?> .tpmst-section-inner {
+        padding: 0 15px;
     }
 }
 </style>
 
-<section id="<?= $componentId ?>" class="tpmst-testimonials-component">
-    <div class="tpmst-test-container">
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-testimonials-component">
+    <div class="tpmst-section-inner">
+        <?php if ($showTitle): ?>
         <h2 class="tpmst-test-title"><?= htmlspecialchars($title) ?></h2>
+        <?php endif; ?>
         <div class="tpmst-test-grid">
             <div class="tpmst-test-card">
                 <div class="tpmst-test-header">
+                    <?php if ($showAvatar): ?>
                     <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar1) ?>" alt="<?= htmlspecialchars($name1) ?>">
+                    <?php endif; ?>
                     <div>
                         <div class="tpmst-test-name"><?= htmlspecialchars($name1) ?></div>
+                        <?php if ($showRating): ?>
                         <div class="tpmst-test-rating"><?= htmlspecialchars($rating1) ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <p class="tpmst-test-content"><?= htmlspecialchars($content1) ?></p>
             </div>
             <div class="tpmst-test-card">
                 <div class="tpmst-test-header">
+                    <?php if ($showAvatar): ?>
                     <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar2) ?>" alt="<?= htmlspecialchars($name2) ?>">
+                    <?php endif; ?>
                     <div>
                         <div class="tpmst-test-name"><?= htmlspecialchars($name2) ?></div>
+                        <?php if ($showRating): ?>
                         <div class="tpmst-test-rating"><?= htmlspecialchars($rating2) ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <p class="tpmst-test-content"><?= htmlspecialchars($content2) ?></p>
             </div>
             <div class="tpmst-test-card">
                 <div class="tpmst-test-header">
+                    <?php if ($showAvatar): ?>
                     <img class="tpmst-test-avatar" src="<?= htmlspecialchars($avatar3) ?>" alt="<?= htmlspecialchars($name3) ?>">
+                    <?php endif; ?>
                     <div>
                         <div class="tpmst-test-name"><?= htmlspecialchars($name3) ?></div>
+                        <?php if ($showRating): ?>
                         <div class="tpmst-test-rating"><?= htmlspecialchars($rating3) ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <p class="tpmst-test-content"><?= htmlspecialchars($content3) ?></p>

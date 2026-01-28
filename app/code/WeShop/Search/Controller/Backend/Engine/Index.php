@@ -193,6 +193,14 @@ class Index extends BackendController
         $configData = [];
         
         switch ($engineType) {
+            case SearchEngineConfig::ENGINE_MEILISEARCH:
+                $configData = [
+                    'host' => $this->request->getPost('host', 'http://127.0.0.1:7700'),
+                    'api_key' => $this->request->getPost('api_key', ''),
+                    'index_name' => $this->request->getPost('index_name', 'products'),
+                ];
+                break;
+                
             case SearchEngineConfig::ENGINE_MYSQL:
                 // MySQL不需要额外配置
                 $configData = [];

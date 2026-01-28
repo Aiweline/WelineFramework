@@ -62,6 +62,8 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                 <div class="col-md-3">
                                     <div class="card">
                                         <div class="card-body">
+                                            <!-- 隐藏字段存储模型ID，由 JS 动态更新 -->
+                                            <input type="hidden" id="task-page-model-id" value="" data-enabled="0" data-cache-size="0">
                                             <h5 class="card-title mb-2">
                                                 <i class="mdi mdi-robot text-info me-1"></i>
                                                 <?= __('模型状态') ?>
@@ -121,6 +123,34 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                             <p class="mb-0" id="memory-usage-indicator">
                                                 <span class="text-muted">-- MB</span>
                                             </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 模型加载进度条 -->
+                            <div class="row mb-3" id="task-model-loading-progress-row" style="display: none;">
+                                <div class="col-12">
+                                    <div class="card border-info">
+                                        <div class="card-body py-2">
+                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                <small class="text-info">
+                                                    <i class="mdi mdi-download-circle me-1"></i>
+                                                    <span id="task-loading-status-text"><?= __('加载模型中...') ?></span>
+                                                </small>
+                                                <small class="text-primary fw-bold" id="task-loading-percent">0%</small>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                                                     role="progressbar" 
+                                                     id="task-loading-progress-bar"
+                                                     style="width: 0%;" 
+                                                     aria-valuenow="0" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted" id="task-loading-file-name" style="font-size: 11px;"></small>
                                         </div>
                                     </div>
                                 </div>
@@ -424,6 +454,84 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+    
+    // 监听模型加载进度事件
+    window.addEventListener('hf-model-loading-progress', function(event) {
+        var detail = event.detail || {};
+        var progressRow = document.getElementById('task-model-loading-progress-row');
+        var progressBar = document.getElementById('task-loading-progress-bar');
+        var percentText = document.getElementById('task-loading-percent');
+        var statusText = document.getElementById('task-loading-status-text');
+        var fileNameText = document.getElementById('task-loading-file-name');
+        
+        if (!progressRow) return;
+        
+        if (detail.status === 'start') {
+            // 开始加载，显示进度条
+            progressRow.style.display = 'block';
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.setAttribute('aria-valuenow', '0');
+                progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.remove('bg-success');
+                progressBar.classList.add('bg-info');
+            }
+            if (percentText) percentText.textContent = '0%';
+            if (statusText) statusText.textContent = '<?= __('正在初始化模型...') ?>';
+            if (fileNameText) fileNameText.textContent = '';
+        } else if (detail.status === 'ready' || detail.percent >= 100) {
+            // 加载完成
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.setAttribute('aria-valuenow', '100');
+                progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.remove('bg-info');
+                progressBar.classList.add('bg-success');
+            }
+            if (percentText) percentText.textContent = '100%';
+            if (statusText) statusText.textContent = '<?= __('加载完成') ?>';
+            if (fileNameText) fileNameText.textContent = '';
+            
+            // 延迟隐藏进度条
+            setTimeout(function() {
+                progressRow.style.display = 'none';
+                // 重置进度条样式
+                if (progressBar) {
+                    progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                    progressBar.classList.add('bg-info');
+                    progressBar.classList.remove('bg-success');
+                }
+            }, 2000);
+        } else if (detail.status === 'progress' || detail.status === 'download' || detail.status === 'initiate') {
+            // 加载中
+            progressRow.style.display = 'block';
+            var percent = detail.percent || 0;
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                progressBar.setAttribute('aria-valuenow', percent);
+            }
+            if (percentText) percentText.textContent = percent + '%';
+            
+            // 更新状态文本
+            if (statusText) {
+                if (detail.status === 'download' || detail.status === 'initiate') {
+                    statusText.textContent = '<?= __('下载模型文件...') ?>';
+                } else {
+                    statusText.textContent = '<?= __('加载模型中...') ?>';
+                }
+            }
+            
+            // 显示当前文件名
+            if (fileNameText && detail.file) {
+                var fileName = detail.file;
+                // 缩短文件名显示
+                if (fileName.length > 60) {
+                    fileName = '...' + fileName.slice(-57);
+                }
+                fileNameText.textContent = fileName;
+            }
+        }
+    });
 });
 </script>
 
@@ -527,6 +635,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 var enabled = !!cfg.hf_model_enabled;
                 var cacheSize = parseInt(cfg.hf_model_cache_size || '0', 10);
 
+                // 更新隐藏字段
+                var hiddenModelId = document.getElementById('task-page-model-id');
+                if (hiddenModelId) {
+                    hiddenModelId.value = modelId;
+                    hiddenModelId.setAttribute('data-enabled', enabled ? '1' : '0');
+                    hiddenModelId.setAttribute('data-cache-size', String(cacheSize));
+                }
+
                 if (!modelId) {
                     modelConfigSummaryEl.innerHTML =
                         '<span class="text-danger">' +
@@ -547,6 +663,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         : '';
                     statusText =
                         '<?= __('当前已启用端侧模型：') ?>' + modelId + cachePart;
+                    
+                    // 如果模型已启用，触发自动加载
+                    if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+                        console.log('[TaskPage] 检测到已启用模型，触发自动加载:', modelId);
+                        setTimeout(function() {
+                            ModelLifecycle.autoLoadModel();
+                        }, 300);
+                    }
                 }
 
                 modelConfigSummaryEl.innerHTML = statusText;

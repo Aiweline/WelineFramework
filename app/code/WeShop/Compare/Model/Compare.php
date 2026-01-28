@@ -15,6 +15,7 @@ class Compare extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_compare';
     public const primary_key = 'compare_id';
+    public string $indexer = 'compare_indexer';
     
     public const fields_ID = 'compare_id';
     public const fields_CUSTOMER_ID = 'customer_id';

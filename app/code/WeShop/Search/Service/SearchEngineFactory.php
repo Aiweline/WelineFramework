@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Search\Service;
 
 use WeShop\Search\Api\SearchEngineInterface;
+use WeShop\Search\Engine\MeilisearchEngine;
 use WeShop\Search\Engine\MysqlEngine;
 use WeShop\Search\Engine\ElasticsearchEngine;
 use WeShop\Search\Engine\AlgoliaEngine;
@@ -13,6 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 搜索引擎工厂类
+ * 支持驱动模式，类似数据库驱动机制
  */
 class SearchEngineFactory
 {
@@ -29,9 +31,11 @@ class SearchEngineFactory
         $config = $configModel->getActiveEngineConfig($scope);
         
         if (!$config) {
-            // 如果没有配置，默认使用MySQL引擎
-            $engine = ObjectManager::getInstance(MysqlEngine::class);
-            $engine->initConfig([]);
+            // 如果没有配置，默认使用 Meilisearch 引擎
+            $engine = self::createEngineByType(SearchEngineConfig::ENGINE_MEILISEARCH);
+            if ($engine) {
+                $engine->initConfig([]);
+            }
             return $engine;
         }
         
@@ -47,18 +51,38 @@ class SearchEngineFactory
     }
     
     /**
-     * 根据类型创建搜索引擎实例
+     * 根据类型创建搜索引擎实例（支持驱动模式）
      * 
      * @param string $engineType 引擎类型
      * @return SearchEngineInterface|null
      */
     public static function createEngineByType(string $engineType): ?SearchEngineInterface
     {
-        return match ($engineType) {
+        // 优先从驱动注册表加载
+        try {
+            /** @var SearchEngineDriverRegistry $driverRegistry */
+            $driverRegistry = ObjectManager::getInstance(SearchEngineDriverRegistry::class);
+            $driverClass = $driverRegistry->getDriverClass($engineType);
+            
+            if ($driverClass && class_exists($driverClass, false)) {
+                try {
+                    return ObjectManager::getInstance($driverClass);
+                } catch (\Throwable $e) {
+                    // 如果实例化失败，回退到硬编码方式
+                    error_log("搜索引擎驱动实例化失败: {$driverClass} - " . $e->getMessage());
+                }
+            }
+        } catch (\Throwable $e) {
+            // 如果驱动注册表加载失败，静默回退到硬编码方式
+        }
+        
+        // 回退到硬编码方式（向后兼容）
+        return match (strtolower($engineType)) {
+            SearchEngineConfig::ENGINE_MEILISEARCH => ObjectManager::getInstance(MeilisearchEngine::class),
             SearchEngineConfig::ENGINE_MYSQL => ObjectManager::getInstance(MysqlEngine::class),
             SearchEngineConfig::ENGINE_ELASTICSEARCH => ObjectManager::getInstance(ElasticsearchEngine::class),
             SearchEngineConfig::ENGINE_ALGOLIA => ObjectManager::getInstance(AlgoliaEngine::class),
-            default => ObjectManager::getInstance(MysqlEngine::class), // 默认使用MySQL
+            default => ObjectManager::getInstance(MeilisearchEngine::class), // 默认使用 Meilisearch
         };
     }
     
@@ -70,6 +94,11 @@ class SearchEngineFactory
     public static function getAvailableEngines(): array
     {
         return [
+            SearchEngineConfig::ENGINE_MEILISEARCH => [
+                'name' => 'Meilisearch',
+                'class' => MeilisearchEngine::class,
+                'description' => '快速、相关且容错的搜索引擎，提供即时搜索体验',
+            ],
             SearchEngineConfig::ENGINE_MYSQL => [
                 'name' => 'MySQL全文搜索',
                 'class' => MysqlEngine::class,

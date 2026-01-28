@@ -72,6 +72,44 @@ if ($isEdit && !empty($config[SearchEngineConfig::fields_CONFIG_DATA])) {
                     </div>
                 </div>
                 
+                <!-- Meilisearch配置 -->
+                <div class="card mt-3" id="config-meilisearch" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title"><?= __('Meilisearch配置') ?></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <?= __('Meilisearch 是一个快速、相关且容错的搜索引擎。请确保已安装并运行 Meilisearch 服务。') ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="meilisearch_host"><?= __('服务地址') ?> <span class="text-danger">*</span></label>
+                            <input type="text" id="meilisearch_host" name="host" class="form-control" 
+                                   value="<?= htmlspecialchars($configData['host'] ?? 'http://127.0.0.1:7700') ?>" 
+                                   placeholder="http://127.0.0.1:7700" required>
+                            <small class="form-text text-muted"><?= __('Meilisearch 服务地址，默认端口为 7700') ?></small>
+                        </div>
+                        <div class="form-group">
+                            <label for="meilisearch_api_key"><?= __('API Key') ?></label>
+                            <input type="text" id="meilisearch_api_key" name="api_key" class="form-control" 
+                                   value="<?= htmlspecialchars($configData['api_key'] ?? '') ?>" 
+                                   placeholder="<?= __('可选，如果 Meilisearch 启用了 API Key 认证，请填写') ?>">
+                            <small class="form-text text-muted"><?= __('如果 Meilisearch 启用了 API Key 认证，请填写主密钥或搜索密钥') ?></small>
+                        </div>
+                        <div class="form-group">
+                            <label for="meilisearch_index_name"><?= __('索引名称') ?></label>
+                            <input type="text" id="meilisearch_index_name" name="index_name" class="form-control" 
+                                   value="<?= htmlspecialchars($configData['index_name'] ?? 'products') ?>" 
+                                   placeholder="products">
+                            <small class="form-text text-muted"><?= __('产品索引名称，默认为 products') ?></small>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn btn-info" onclick="testMeilisearchConnection()">
+                                <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- MySQL配置 -->
                 <div class="card mt-3" id="config-mysql" style="display: none;">
                     <div class="card-header">
@@ -247,6 +285,73 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('<?= __('保存请求失败：') ?>' + error.message);
             }
         });
+        });
     });
-});
+    
+    // 测试 Meilisearch 连接
+    function testMeilisearchConnection() {
+        const host = document.getElementById('meilisearch_host').value;
+        const apiKey = document.getElementById('meilisearch_api_key').value;
+        const indexName = document.getElementById('meilisearch_index_name').value;
+        
+        if (!host) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<?= __('请填写服务地址') ?>',
+                    text: '<?= __('请先填写 Meilisearch 服务地址') ?>'
+                });
+            }
+            return;
+        }
+        
+        // 显示加载提示
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __('正在测试连接...') ?>',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+        
+        // 发送测试请求
+        fetch('<?= $this->getUrl('search/backend/engine/test') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                engine_type: 'meilisearch',
+                host: host,
+                api_key: apiKey,
+                index_name: indexName
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: data.success ? 'success' : 'error',
+                    title: data.success ? '<?= __('连接成功') ?>' : '<?= __('连接失败') ?>',
+                    text: data.message || ''
+                });
+            } else {
+                alert(data.success ? '<?= __('连接成功') ?>' : '<?= __('连接失败：') ?>' + (data.message || ''));
+            }
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __('测试请求失败') ?>',
+                    text: error.message
+                });
+            } else {
+                alert('<?= __('测试请求失败：') ?>' + error.message);
+            }
+        });
+    }
 </script>

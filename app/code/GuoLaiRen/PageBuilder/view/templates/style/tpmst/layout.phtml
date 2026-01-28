@@ -29,7 +29,7 @@ if (empty($headerComponents)) {
 
 if (empty($contentComponents)) {
     $contentComponents = [
-        ['code' => 'slider', 'enabled' => true, 'config' => []],
+        ['code' => 'hero-slider', 'enabled' => true, 'config' => ['banner.display' => 'yes', 'layout.slider_classes' => 'rs-slider slider-style2', 'layout.margin_top' => '-75']],
         ['code' => 'advantages', 'enabled' => true, 'config' => []],
         ['code' => 'games', 'enabled' => true, 'config' => []],
         ['code' => 'testimonials', 'enabled' => true, 'config' => []],
@@ -51,18 +51,25 @@ $componentFiles = [
     'header-dark' => 'header/dark.phtml',
     
     // Content 组件
+    'hero-slider' => 'content/hero-slider.phtml',
     'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
     'advantages' => 'content/advantages.phtml',
     'games' => 'content/games.phtml',
     'testimonials' => 'content/testimonials.phtml',
     'faq' => 'content/faq.phtml',
     'app-info' => 'content/app-info.phtml',
     'blog-content' => 'content/blog.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
     'strategy' => 'content/strategy.phtml',
     'hindi-content' => 'content/hindi.phtml',
     'disclaimer' => 'content/disclaimer.phtml',
     'floating-download' => 'content/floating-download.phtml',
     'mobile-nav' => 'content/mobile-nav.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
     
     // Footer 组件
     'footer-links' => 'footer/links.phtml',

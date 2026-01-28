@@ -22,7 +22,12 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class ProductLayoutSchedule extends Model
 {
+    public const table = 'weshop_product_layout_schedule';
+    public const primary_key = 'schedule_id';
     public const indexer = 'weshop_product_layout_schedule';
+    public array $_unit_primary_keys = ['schedule_id'];
+    public array $_index_sort_keys = ['product_id', 'layout_type', 'status', 'start_time', 'end_time'];
+    
     public const fields_ID = 'schedule_id';
     public const fields_PRODUCT_ID = 'product_id';
     public const fields_LAYOUT_TYPE = 'layout_type';

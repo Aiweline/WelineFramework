@@ -5,7 +5,8 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$image = $this->getData('image') ?? '/images/placeholder.jpg';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
+$image = $this->getData('image') ?? $placeholder;
 $title = $this->getData('title') ?? '';
 $content = $this->getData('content') ?? '';
 $buttonText = $this->getData('button_text') ?? '';
@@ -19,7 +20,7 @@ $widgetId = 'image-text-' . uniqid();
 <div class="widget-image-text layout-<?= htmlspecialchars($layout) ?>" id="<?= $widgetId ?>">
     <?php if ($layout === 'image-bg'): ?>
         <!-- 图片背景布局 -->
-        <div class="bg-container" style="background-image: url('<?= htmlspecialchars($image) ?>');">
+        <div class="bg-container" style="background-image: url('<?= htmlspecialchars($image ?? '') ?>');">
             <div class="bg-overlay"></div>
             <div class="text-content">
                 <?php if ($title): ?>
@@ -29,14 +30,14 @@ $widgetId = 'image-text-' . uniqid();
                     <div class="content-text"><?= $content ?></div>
                 <?php endif; ?>
                 <?php if ($buttonText && $buttonLink): ?>
-                    <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+                    <a href="<?= htmlspecialchars($buttonLink ?? '') ?>" class="content-button"><?= htmlspecialchars($buttonText ?? '') ?></a>
                 <?php endif; ?>
             </div>
         </div>
     <?php elseif ($layout === 'image-top'): ?>
         <!-- 图上文下布局 -->
         <div class="image-section">
-            <img src="<?= htmlspecialchars($image) ?>" alt="<?= htmlspecialchars($title) ?>" class="content-image">
+            <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
         </div>
         <div class="text-section">
             <?php if ($title): ?>
@@ -53,7 +54,7 @@ $widgetId = 'image-text-' . uniqid();
         <!-- 图左文右 / 图右文左 -->
         <div class="content-row">
             <div class="image-section" style="flex: 0 0 <?= $imageWidth ?>%;">
-                <img src="<?= htmlspecialchars($image) ?>" alt="<?= htmlspecialchars($title) ?>" class="content-image">
+                <img src="<?= htmlspecialchars($image ?? '') ?>" alt="<?= htmlspecialchars($title ?? '') ?>" class="content-image">
             </div>
             <div class="text-section">
                 <?php if ($title): ?>
@@ -63,7 +64,7 @@ $widgetId = 'image-text-' . uniqid();
                     <div class="content-text"><?= $content ?></div>
                 <?php endif; ?>
                 <?php if ($buttonText && $buttonLink): ?>
-                    <a href="<?= htmlspecialchars($buttonLink) ?>" class="content-button"><?= htmlspecialchars($buttonText) ?></a>
+                    <a href="<?= htmlspecialchars($buttonLink ?? '') ?>" class="content-button"><?= htmlspecialchars($buttonText ?? '') ?></a>
                 <?php endif; ?>
             </div>
         </div>

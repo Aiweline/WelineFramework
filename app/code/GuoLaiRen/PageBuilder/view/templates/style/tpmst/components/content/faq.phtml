@@ -13,12 +13,35 @@
  * 
  * @fields_start
  * 
- * group:faq => FAQ设置
- * faq.display => 显示FAQ:select:yes|yes,no
- * faq.title => 标题:text:FAQs
- * faq.bg_color => 背景颜色:color:#0f0f1e
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ * 
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0f0f1e
+ * style.title_color => 标题颜色:color:#ffd700
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.item_bg_color => 问题卡片背景色:color:rgba(255,255,255,0.05)
+ * style.item_border_radius => 问题卡片圆角:number:8|px
+ * style.item_border_color => 问题卡片边框色:color:rgba(255,255,255,0.1)
+ * style.item_gap => 问题间距:number:15|px
+ * style.question_color => 问题文字颜色:color:#ffd700
+ * style.question_font_size => 问题字号(PC端):number:16|px
+ * style.question_font_size_mobile => 问题字号(移动端):number:14|px
+ * style.question_padding => 问题内边距:number:20|px
+ * style.question_hover_bg => 问题悬停背景:color:rgba(255,255,255,0.05)
+ * style.icon_color => 图标颜色:color:#ffd700
+ * style.icon_size => 图标大小:number:20|px
+ * style.answer_color => 答案文字颜色:color:#ffffff
+ * style.answer_font_size => 答案字号:number:14|px
+ * style.answer_padding => 答案内边距:number:20|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
  * 
  * group:texts => FAQ内容
+ * texts.title => 区域标题:text:FAQs
  * texts.faq_1_question => 问题1:text:What is Teen Patti Master?
  * texts.faq_1_answer => 答案1:textarea:Teen Patti Master is India's best online card game...
  * texts.faq_2_question => 问题2:text:How to Download Teen Patti Master APK?
@@ -44,11 +67,36 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$display = $getConfig('faq.display', 'yes') !== 'no';
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
 if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
 
-$title = $getConfig('faq.title', 'FAQs');
-$bgColor = $getConfig('faq.bg_color', '#0f0f1e');
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('faq.bg_color', '#0f0f1e'));
+$titleColor = $getConfig('style.title_color', '#ffd700');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$itemBgColor = $getConfig('style.item_bg_color', 'rgba(255,255,255,0.05)');
+$itemBorderRadius = $getConfig('style.item_border_radius', '8');
+$itemBorderColor = $getConfig('style.item_border_color', 'rgba(255,255,255,0.1)');
+$itemGap = $getConfig('style.item_gap', '15');
+$questionColor = $getConfig('style.question_color', '#ffd700');
+$questionFontSize = $getConfig('style.question_font_size', '16');
+$questionFontSizeMobile = $getConfig('style.question_font_size_mobile', '14');
+$questionPadding = $getConfig('style.question_padding', '20');
+$questionHoverBg = $getConfig('style.question_hover_bg', 'rgba(255,255,255,0.05)');
+$iconColor = $getConfig('style.icon_color', '#ffd700');
+$iconSize = $getConfig('style.icon_size', '20');
+$answerColor = $getConfig('style.answer_color', '#ffffff');
+$answerFontSize = $getConfig('style.answer_font_size', '14');
+$answerPadding = $getConfig('style.answer_padding', '20');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+
+// 标题
+$title = $getConfig('texts.title', $getConfig('faq.title', 'FAQs'));
 
 $faqs = [
     [
@@ -77,35 +125,38 @@ $faqs = [
 <style>
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
-    padding: 60px 20px;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    width: 100%;
 }
 
-#<?= $componentId ?> .tpmst-faq-container {
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 900px;
     margin: 0 auto;
+    padding: 0 20px;
 }
 
 #<?= $componentId ?> .tpmst-faq-title {
     text-align: center;
-    font-size: clamp(24px, 5vw, 36px);
-    color: #ffd700;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 5vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    color: <?= htmlspecialchars($titleColor) ?>;
     margin-bottom: 40px;
     font-weight: 700;
 }
 
 #<?= $componentId ?> .tpmst-faq-item {
-    background: rgba(255,255,255,0.05);
-    border-radius: 8px;
-    margin-bottom: 15px;
+    background: <?= htmlspecialchars($itemBgColor) ?>;
+    border-radius: <?= htmlspecialchars($itemBorderRadius) ?>px;
+    margin-bottom: <?= htmlspecialchars($itemGap) ?>px;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid <?= htmlspecialchars($itemBorderColor) ?>;
 }
 
 #<?= $componentId ?> .tpmst-faq-question {
-    padding: 20px;
+    padding: <?= htmlspecialchars($questionPadding) ?>px;
     cursor: pointer;
     font-weight: 600;
-    color: #ffd700;
+    font-size: <?= htmlspecialchars($questionFontSize) ?>px;
+    color: <?= htmlspecialchars($questionColor) ?>;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -113,11 +164,12 @@ $faqs = [
 }
 
 #<?= $componentId ?> .tpmst-faq-question:hover {
-    background: rgba(255,255,255,0.05);
+    background: <?= htmlspecialchars($questionHoverBg) ?>;
 }
 
 #<?= $componentId ?> .tpmst-faq-icon {
-    font-size: 20px;
+    font-size: <?= htmlspecialchars($iconSize) ?>px;
+    color: <?= htmlspecialchars($iconColor) ?>;
     transition: transform 0.3s;
 }
 
@@ -126,8 +178,9 @@ $faqs = [
 }
 
 #<?= $componentId ?> .tpmst-faq-answer {
-    padding: 0 20px 20px;
-    color: #ffffff;
+    padding: 0 <?= htmlspecialchars($answerPadding) ?>px <?= htmlspecialchars($answerPadding) ?>px;
+    color: <?= htmlspecialchars($answerColor) ?>;
+    font-size: <?= htmlspecialchars($answerFontSize) ?>px;
     display: none;
     line-height: 1.8;
     opacity: 0.9;
@@ -139,24 +192,30 @@ $faqs = [
 
 @media (max-width: 767px) {
     #<?= $componentId ?> {
-        padding: 40px 15px;
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+    
+    #<?= $componentId ?> .tpmst-section-inner {
+        padding: 0 15px;
     }
     
     #<?= $componentId ?> .tpmst-faq-question {
         padding: 15px;
-        font-size: 14px;
+        font-size: <?= htmlspecialchars($questionFontSizeMobile) ?>px;
     }
 }
 </style>
 
-<section id="<?= $componentId ?>" class="tpmst-faq-component">
-    <div class="tpmst-faq-container">
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-faq-component">
+    <div class="tpmst-section-inner">
+        <?php if ($showTitle): ?>
         <h2 class="tpmst-faq-title"><?= htmlspecialchars($title) ?></h2>
+        <?php endif; ?>
         <?php foreach ($faqs as $index => $faq): ?>
-        <div class="tpmst-faq-item" data-faq-index="<?= $index ?>">
+        <div class="tpmst-faq-item<?= ($firstOpen && $index === 0) ? ' active' : '' ?>" data-faq-index="<?= $index ?>">
             <div class="tpmst-faq-question">
                 <span><?= htmlspecialchars($faq['question']) ?></span>
-                <span class="tpmst-faq-icon">+</span>
+                <span class="tpmst-faq-icon"><?= ($firstOpen && $index === 0) ? '−' : '+' ?></span>
             </div>
             <div class="tpmst-faq-answer">
                 <?= nl2br(htmlspecialchars($faq['answer'])) ?>

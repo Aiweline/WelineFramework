@@ -15,6 +15,7 @@ class Rma extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_rma';
     public const primary_key = 'rma_id';
+    public string $indexer = 'rma_indexer';
     
     public const fields_ID = 'rma_id';
     public const fields_ORDER_ID = 'order_id';

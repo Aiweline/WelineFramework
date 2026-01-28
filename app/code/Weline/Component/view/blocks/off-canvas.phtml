@@ -3,7 +3,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
 <has name='icon'>
     <i class='{{icon}}'></i>
 </has>
-<lang>{{target_button_text}}</lang>
+<lang>{{target_button_text|'添加'}}</lang>
 </{{target_tag}}>
 <!-- {{id}} -->
 <div class='offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
@@ -13,7 +13,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
             <has name='icon'>
                 <i class='{{icon}}'></i>
             </has>
-            <lang>{{title}}</lang>
+            <lang>{{title|''}}</lang>
         </h5>
         <has name='close_button_show'>
             <button type='button' class='btn-close text-reset {{submit_button_class}}' data-bs-dismiss='offcanvas'
@@ -31,7 +31,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
                     </if>
                     <if condition='save'>
                         <button class='{{submit_button_class}} pull-right' id="{{id}}Save">
-                            <lang>{{submit_button_text}}</lang>
+                            <lang>{{submit_button_text|'保存'}}</lang>
                         </button>
                     </if>
                 </div>
@@ -51,26 +51,44 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
             if ('{{save}}' === '1') {
                 // Iframe加载完成后
                 Iframe.on('load', function () {
-                    <?php if (isset($save_form) and $save_form): ?>
-                    var form = Iframe.contents().find('body').find('{{save_form}}') ?? undefined;
-                    <?php else: ?>
-                    var form = Iframe.contents().find('body').find('form') ?? undefined;
-                    <?php endif; ?>
-                    if (form !== undefined && form.length > 0) {
-                        for (var i = 0; i < form.length; i++) {
-                            // 触发原生表单校验
-                            if ($(form[i]).find(':submit').length === 0) {
-                                form[i].insertAdjacentHTML('beforeend', '<input type="submit" class="sr-only">')
-                            }
+                    try {
+                        // 检查当前URL是否是offcanvas的成功/错误页面
+                        var iframeSrc = Iframe.attr('src') || '';
+                        var iframeLocation = Iframe[0].contentWindow.location.href || '';
+                        var isOffcanvasResultPage = iframeSrc.indexOf('/component/offcanvas/') !== -1 || 
+                                                    iframeLocation.indexOf('/component/offcanvas/') !== -1;
+                        
+                        // 如果是offcanvas的结果页面，不检测form
+                        if (isOffcanvasResultPage) {
+                            return;
                         }
-                    } else {
-                        <?php if (DEBUG) {
-                   $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form);
-                   // 转义一下
-                   $msg = htmlspecialchars($msg);
-                   echo " confirm('{$msg}');";
-                    }
-                        ?>
+                        
+                        <?php if (isset($save_form) and $save_form): ?>
+                        var form = Iframe.contents().find('body').find('{{save_form}}');
+                        form = (form && form.length > 0) ? form : undefined;
+                        <?php else: ?>
+                        var form = Iframe.contents().find('body').find('form');
+                        form = (form && form.length > 0) ? form : undefined;
+                        <?php endif; ?>
+                        if (form !== undefined && form.length > 0) {
+                            for (var i = 0; i < form.length; i++) {
+                                // 触发原生表单校验
+                                if ($(form[i]).find(':submit').length === 0) {
+                                    form[i].insertAdjacentHTML('beforeend', '<input type="submit" class="sr-only">')
+                                }
+                            }
+                        } else {
+                            <?php if (DEBUG) {
+                           $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form ?? '');
+                           // 转义一下
+                           $msg = htmlspecialchars($msg);
+                           echo " confirm('{$msg}');";
+                            }
+                            ?>
+                        }
+                    } catch (e) {
+                        // 跨域或其他错误时忽略
+                        console.log('OffCanvas form check skipped:', e);
                     }
                 })
             }
@@ -95,26 +113,49 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
             $('#{{id}}Save').on('click', function () {
                 let iframe = $('#{{id}}Iframe');
                 <?php if ($save_form): ?>
-                var form = iframe.contents().find('body').find('{{save_form}}') ?? undefined;
+                var form = iframe.contents().find('body').find('{{save_form}}');
+                form = (form && form.length > 0) ? form : undefined;
                 <?php else: ?>
-                var form = iframe.contents().find('body').find('form') ?? undefined;
+                var form = iframe.contents().find('body').find('form');
+                form = (form && form.length > 0) ? form : undefined;
                 <?php endif; ?>
 
-                if (form !== undefined && form.length > 0) {
-                    for (var i = 0; i < form.length; i++) {
-                        let sub_form = $(form[i])
-                        sub_form.find(':submit').click()
-                        showLoading();
+                try {
+                    // 检查当前URL是否是offcanvas的成功/错误页面
+                    var iframeSrc = iframe.attr('src') || '';
+                    var iframeLocation = '';
+                    try {
+                        iframeLocation = iframe[0].contentWindow.location.href || '';
+                    } catch (e) {
+                        // 跨域时无法获取
                     }
-                    hideLoading();
-                } else {
-                    <?php if (DEBUG) {
-                    $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form);
-                    // 转义一下
-                    $msg = htmlspecialchars($msg);
-                   echo " confirm('{$msg}');";
-                }
-                    ?>
+                    var isOffcanvasResultPage = iframeSrc.indexOf('/component/offcanvas/') !== -1 || 
+                                                iframeLocation.indexOf('/component/offcanvas/') !== -1;
+                    
+                    // 如果是offcanvas的结果页面，不检测form
+                    if (isOffcanvasResultPage) {
+                        return;
+                    }
+                    
+                    if (form !== undefined && form.length > 0) {
+                        for (var i = 0; i < form.length; i++) {
+                            let sub_form = $(form[i])
+                            sub_form.find(':submit').click()
+                            showLoading();
+                        }
+                        hideLoading();
+                    } else {
+                        <?php if (DEBUG) {
+                        $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form ?? '');
+                        // 转义一下
+                        $msg = htmlspecialchars($msg);
+                       echo " confirm('{$msg}');";
+                    }
+                        ?>
+                    }
+                } catch (e) {
+                    // 跨域或其他错误时忽略
+                    console.log('OffCanvas form submit check skipped:', e);
                 }
             })
         })

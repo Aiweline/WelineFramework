@@ -37,6 +37,12 @@ class UpgradeData
         
         // 4. 创建 is_right_menu 属性
         $this->createIsRightMenuAttribute($category, $setId, $groupId);
+        
+        // 5. 创建 icon 属性
+        $this->createIconAttribute($category, $setId, $groupId);
+        
+        // 6. 创建 show_icon 属性
+        $this->createShowIconAttribute($category, $setId, $groupId);
     }
     
     /**
@@ -174,6 +180,130 @@ class UpgradeData
                 EavAttribute::fields_is_system => 0,
                 EavAttribute::fields_is_enable => 1,
                 EavAttribute::fields_default_value => '0',
+            ])
+            ->forceCheck(true, $attributeModel->_unit_primary_keys)
+            ->save();
+    }
+    
+    /**
+     * 创建 icon 属性
+     */
+    private function createIconAttribute(Category $category, int $setId, int $groupId): void
+    {
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
+        
+        $eavEntity = ObjectManager::getInstance(EavEntity::class)
+            ->loadByCode($category::entity_code);
+        
+        // 查找文本类型（用于存储图标类名）
+        /** @var Type $typeModel */
+        $typeModel = ObjectManager::getInstance(Type::class);
+        $type = $typeModel->where(Type::fields_code, 'input_string')
+            ->find()
+            ->fetch();
+        
+        if (!$type->getId()) {
+            throw new \Exception(__('EAV 属性类型不存在: input_string'));
+        }
+        
+        // 检查属性是否已存在
+        $existingAttribute = $attributeModel->reset()
+            ->where(EavAttribute::fields_code, 'icon')
+            ->where(EavAttribute::fields_eav_entity_id, $eavEntity->getId())
+            ->find()
+            ->fetch();
+        
+        if ($existingAttribute->getId()) {
+            // 属性已存在，跳过创建
+            return;
+        }
+        
+        // 创建属性
+        $attributeModel->reset()
+            ->current_setEntity($category)
+            ->setData([
+                EavAttribute::fields_code => 'icon',
+                EavAttribute::fields_name => __('图标'),
+                EavAttribute::fields_type_id => $type->getId(),
+                EavAttribute::fields_set_id => $setId,
+                EavAttribute::fields_group_id => $groupId,
+                EavAttribute::fields_eav_entity_id => $eavEntity->getId(),
+                EavAttribute::fields_multiple_valued => 0,
+                EavAttribute::fields_has_option => 0,
+                EavAttribute::fields_is_system => 0,
+                EavAttribute::fields_is_enable => 1,
+                EavAttribute::fields_default_value => '',
+            ])
+            ->forceCheck(true, $attributeModel->_unit_primary_keys)
+            ->save();
+    }
+    
+    /**
+     * 创建 show_icon 属性
+     */
+    private function createShowIconAttribute(Category $category, int $setId, int $groupId): void
+    {
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
+        
+        $eavEntity = ObjectManager::getInstance(EavEntity::class)
+            ->loadByCode($category::entity_code);
+        
+        // 查找可用的布尔类型（优先使用 input_bool，因为它更简单且不需要选项表）
+        /** @var Type $typeModel */
+        $typeModel = ObjectManager::getInstance(Type::class);
+        $type = $typeModel->where(Type::fields_code, 'input_bool')
+            ->find()
+            ->fetch();
+        
+        if (!$type->getId()) {
+            // 如果 input_bool 不存在，查找 select_yes_no
+            $type = $typeModel->reset()
+                ->where(Type::fields_code, 'select_yes_no')
+                ->find()
+                ->fetch();
+        }
+        
+        if (!$type->getId()) {
+            // 如果都不存在，使用 select_option
+            $type = $typeModel->reset()
+                ->where(Type::fields_code, 'select_option')
+                ->find()
+                ->fetch();
+        }
+        
+        if (!$type->getId()) {
+            throw new \Exception(__('EAV 属性类型不存在: input_bool、select_yes_no 或 select_option'));
+        }
+        
+        // 检查属性是否已存在
+        $existingAttribute = $attributeModel->reset()
+            ->where(EavAttribute::fields_code, 'show_icon')
+            ->where(EavAttribute::fields_eav_entity_id, $eavEntity->getId())
+            ->find()
+            ->fetch();
+        
+        if ($existingAttribute->getId()) {
+            // 属性已存在，跳过创建
+            return;
+        }
+        
+        // 创建属性
+        $attributeModel->reset()
+            ->current_setEntity($category)
+            ->setData([
+                EavAttribute::fields_code => 'show_icon',
+                EavAttribute::fields_name => __('显示图标'),
+                EavAttribute::fields_type_id => $type->getId(),
+                EavAttribute::fields_set_id => $setId,
+                EavAttribute::fields_group_id => $groupId,
+                EavAttribute::fields_eav_entity_id => $eavEntity->getId(),
+                EavAttribute::fields_multiple_valued => 0,
+                EavAttribute::fields_has_option => 0,
+                EavAttribute::fields_is_system => 0,
+                EavAttribute::fields_is_enable => 1,
+                EavAttribute::fields_default_value => '1', // 默认显示图标
             ])
             ->forceCheck(true, $attributeModel->_unit_primary_keys)
             ->save();

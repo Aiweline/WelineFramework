@@ -16,6 +16,13 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Request extends CommandAbstract
 {
+    /**
+     * 命令别名
+     */
+    public const ALIASES = [
+        'http:req',  // http:request 的简短形式
+    ];
+
     function __construct()
     {
     }

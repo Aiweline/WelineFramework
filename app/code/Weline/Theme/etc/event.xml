@@ -2,35 +2,43 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Weline_Framework_Register::register_installer">
-        <observer name="Weline_Theme::register_installer" instance="Weline\Theme\Observer\Register" disabled="false" shared="false" sort="0"/>
-    </event>
-    <event name="Weline_Framework_View::fetch_file">
-        <observer name="Framework_Theme::fetch_file" instance="Weline\Theme\Observer\TemplateFetchFile" disabled="false" shared="true" sort="0"/>
-        <observer name="Weline_Theme::partials_fetch_file_before" instance="Weline\Theme\Observer\PartialsFetchFileBefore" disabled="false" shared="true" sort="5"/>
-    </event>
-    <event name="Weline_Framework_Console::compile">
-        <observer name="Framework_Theme::compile" instance="Weline\Theme\Observer\CompileResource" disabled="false" shared="true" sort="0"/>
-    </event>
-    <event name="Weline_Framework_Module::module_upgrade">
-        <observer name="Weline_Frontend::compiler_upgrade" instance="Weline\Theme\Observer\UpgradeCompiler" disabled="false" shared="true" sort="0"/>
-    </event>
+    
+    <!-- 
+        控制器模板获取前事件 - 根据 layoutType 自动加载主题布局
+        
+        功能：
+        1. 检测控制器的 layoutType 属性
+        2. 根据 layoutType 和主题配置构建布局模板路径
+        3. 将模板路径重写为布局模板路径
+        4. 设置主题相关数据（colors、meta等）
+    -->
     <event name="Weline_Framework_Controller::fetch_file_before">
-        <observer name="Weline_Theme::controller_fetch_file_before" instance="Weline\Theme\Observer\ControllerFetchFileBefore" disabled="false" shared="true" sort="10"/>
+        <observer name="Weline_Theme::controller_fetch_file_before"
+                  instance="Weline\Theme\Observer\ControllerFetchFileBefore"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
     </event>
+    
+    <!-- 
+        控制器模板获取后事件 - 处理布局插槽替换
+        
+        功能：
+        1. 检测渲染后的 HTML 中的 data-wslot / widget-slot-area 元素
+        2. 从数据库获取该页面的部件布局配置
+        3. 渲染部件并填充到对应插槽
+        4. 返回最终的 HTML
+        
+        注意：使用 fetch_file_after 事件而非 after_render 事件
+        因为 after_render 事件在框架中未被触发，而 fetch_file_after 
+        在控制器渲染完成后可靠触发
+    -->
     <event name="Weline_Framework_Controller::fetch_file_after">
-        <observer name="Weline_Theme::controller_fetch_file_after" instance="Weline\Theme\Observer\ControllerFetchFileAfter" disabled="false" shared="true" sort="10"/>
-        <!-- 控制器模板获取后：在最终tpl文件生成后，提取CSS/JS并生成静态文件，然后更新tpl -->
-        <!-- 注意：必须在 ControllerFetchFileAfter 之后执行，因为需要等待布局文件渲染完成 -->
-        <observer name="Weline_Theme::layout_assets_generator" instance="Weline\Theme\Observer\LayoutAssetsGenerator" disabled="false" shared="true" sort="20"/>
+        <observer name="Weline_Theme::layout_slot_renderer"
+                  instance="Weline\Theme\Observer\LayoutSlotRenderer"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
     </event>
-    <!-- 系统升级后：自动清理主题缓存并扫描 app/design 下的所有主题 -->
-    <event name="Weline_Framework_Setup::upgrade_after">
-        <observer name="Weline_Theme::setup_upgrade_after" instance="Weline\Theme\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="0"/>
-        <observer name="Weline_Theme::variable_meta_register" instance="Weline\Theme\Observer\VariableMetaRegister" disabled="false" shared="true" sort="100"/>
-    </event>
-    <!-- Meta扫描事件：解析变量文件并注册到Meta系统 -->
-    <event name="Weline_Meta::scan_path">
-        <observer name="Weline_Theme::meta_scan_variable_files" instance="Weline\Theme\Observer\MetaScanVariableFiles" disabled="false" shared="true" sort="20"/>
-    </event>
+    
 </config>

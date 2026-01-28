@@ -34,9 +34,10 @@ class ThemeLayoutService
      *
      * @param int $themeId 主题ID
      * @param string $pageType 页面类型
+     * @param string $status 状态：draft=草稿，published=已发布（默认读取已发布）
      * @return array 按区域分组的部件配置
      */
-    public function getLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    public function getLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
         // 按区域分组
         $groupedLayout = [];
@@ -52,6 +53,7 @@ class ThemeLayoutService
                 ->where(ThemeLayout::fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::fields_IS_ACTIVE, 1)
+                ->where(ThemeLayout::fields_STATUS, $status)
                 ->order(ThemeLayout::fields_AREA)
                 ->order(ThemeLayout::fields_SORT_ORDER)
                 ->select()
@@ -76,8 +78,10 @@ class ThemeLayoutService
                         'widget_code' => $layout[ThemeLayout::fields_WIDGET_CODE] ?? '',
                         'widget_module' => $layout[ThemeLayout::fields_WIDGET_MODULE] ?? '',
                         'widget_type' => $layout[ThemeLayout::fields_WIDGET_TYPE] ?? '',
+                        'slot_id' => $layout[ThemeLayout::fields_SLOT_ID] ?? null,
                         'config' => is_string($config) ? json_decode($config, true) : $config,
                         'sort_order' => $layout[ThemeLayout::fields_SORT_ORDER] ?? 0,
+                        'status' => $layout[ThemeLayout::fields_STATUS] ?? $status,
                     ];
                 }
             }
@@ -89,27 +93,82 @@ class ThemeLayoutService
     }
 
     /**
-     * 获取完整布局数据（包含部件元信息）
+     * 获取草稿布局配置（后台编辑用）
+     *
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @return array 按区域分组的部件配置
      */
-    public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    public function getDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
     {
-        $layout = $this->getLayout($themeId, $pageType);
+        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+    }
+
+    /**
+     * 获取已发布布局配置（前端显示用）
+     *
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @return array 按区域分组的部件配置
+     */
+    public function getPublishedLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    {
+        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
+    }
+
+    /**
+     * 获取完整布局数据（包含部件元信息）
+     *
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @param string $status 状态：draft=草稿，published=已发布（默认读取已发布）
+     * @return array
+     */
+    public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED): array
+    {
+        $layout = $this->getLayout($themeId, $pageType, $status);
         $widgetRegistry = $this->widgetRegistry->getRegistry();
 
-        // 为每个部件添加元信息
+        // 为每个部件添加元信息，并按 slot_id 组织到 slots 子数组
         foreach ($layout as $area => &$areaData) {
+            // 初始化 slots 数组（用于有 slot_id 的部件）
+            $areaData['slots'] = [];
+            
             foreach ($areaData['widgets'] as &$widget) {
+                // 添加部件元信息
                 $widgetKey = $widget['widget_module'] . '/' . $widget['widget_type'] . '/' . $widget['widget_code'];
                 if (isset($widgetRegistry[$widgetKey])) {
                     $widget['meta'] = $widgetRegistry[$widgetKey];
                 } else {
-                    // 尝试其他匹配方式
-                    foreach ($widgetRegistry as $key => $meta) {
-                        if ($meta['code'] === $widget['widget_code'] && $meta['module'] === $widget['widget_module']) {
-                            $widget['meta'] = $meta;
-                            break;
+                    // 尝试其他匹配方式（注册表是嵌套结构：type -> code -> widget_data）
+                    $found = false;
+                    foreach ($widgetRegistry as $type => $typeWidgets) {
+                        if (!is_array($typeWidgets)) {
+                            continue;
+                        }
+                        foreach ($typeWidgets as $code => $meta) {
+                            if (!is_array($meta)) {
+                                continue;
+                            }
+                            if (isset($meta['code']) && isset($meta['module'])
+                                && $meta['code'] === $widget['widget_code'] 
+                                && $meta['module'] === $widget['widget_module']) {
+                                $widget['meta'] = $meta;
+                                $found = true;
+                                break 2;
+                            }
                         }
                     }
+                }
+                
+                // 如果部件有 slot_id，也添加到 slots 数组中
+                // 这样模板可以通过 $layout['header']['slots']['logo'] 访问
+                $slotId = $widget['slot_id'] ?? null;
+                if ($slotId) {
+                    if (!isset($areaData['slots'][$slotId])) {
+                        $areaData['slots'][$slotId] = [];
+                    }
+                    $areaData['slots'][$slotId][] = $widget;
                 }
             }
         }
@@ -118,11 +177,45 @@ class ThemeLayoutService
     }
 
     /**
-     * 保存单个部件配置
+     * 获取完整草稿布局数据（后台编辑用）
+     */
+    public function getFullDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    {
+        return $this->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+    }
+
+    /**
+     * 保存单个部件配置（默认保存为草稿状态）
+     * 
+     * @param array $data 部件数据
+     *  - theme_id: 主题ID
+     *  - page_type: 页面类型
+     *  - area: 区域
+     *  - widget_code: 部件代码
+     *  - widget_module: 部件模块
+     *  - slot_id: 插槽ID（可选）
+     *  - exclusive: 是否独占插槽（可选，默认false）
+     *  - config: 部件配置
+     *  - status: 状态（可选，默认draft）
      */
     public function saveWidget(array $data): int
     {
         $layoutId = $data['layout_id'] ?? 0;
+        $slotId = $data['slot_id'] ?? null;
+        $exclusive = (bool)($data['exclusive'] ?? false);
+        $status = $data['status'] ?? ThemeLayout::STATUS_DRAFT;
+
+        // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
+        if ($exclusive && !$layoutId) {
+            $this->removeExclusiveWidgets(
+                (int)$data['theme_id'],
+                $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT,
+                $data['area'],
+                $slotId,
+                $data['widget_code'],
+                $status
+            );
+        }
 
         if ($layoutId) {
             // 更新现有部件
@@ -136,26 +229,70 @@ class ThemeLayoutService
             ->setThemeId((int)$data['theme_id'])
             ->setPageType($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT)
             ->setArea($data['area'])
+            ->setSlotId($slotId)
             ->setWidgetCode($data['widget_code'])
             ->setWidgetModule($data['widget_module'])
             ->setWidgetType($data['widget_type'] ?? '')
             ->setWidgetConfig($data['config'] ?? [])
             ->setSortOrder((int)($data['sort_order'] ?? 0))
             ->setIsActive((bool)($data['is_active'] ?? true))
+            ->setStatus($status)
             ->save();
 
         return $this->themeLayout->getLayoutId();
     }
 
     /**
-     * 批量保存布局
+     * 删除独占插槽中的现有部件（仅限同状态）
+     * 
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @param string $area 区域
+     * @param string|null $slotId 插槽ID
+     * @param string $widgetCode 新部件代码（用于判断是否同类型）
+     * @param string $status 状态
      */
-    public function saveLayout(int $themeId, string $pageType, array $layoutData): bool
+    private function removeExclusiveWidgets(int $themeId, string $pageType, string $area, ?string $slotId, string $widgetCode, string $status = ThemeLayout::STATUS_DRAFT): void
     {
-        // 先删除该页面的所有布局
+        try {
+            $query = $this->themeLayout->reset()
+                ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::fields_AREA, $area)
+                ->where(ThemeLayout::fields_STATUS, $status);
+
+            // 如果有插槽ID，按插槽删除；否则按区域+部件代码删除
+            if ($slotId) {
+                $query->where(ThemeLayout::fields_SLOT_ID, $slotId);
+            } else {
+                // 删除同类型的部件（独占整个区域）
+                $query->where(ThemeLayout::fields_WIDGET_CODE, $widgetCode);
+            }
+
+            $existingWidgets = $query->select()->fetch();
+
+            if (is_array($existingWidgets)) {
+                foreach ($existingWidgets as $widget) {
+                    if (is_array($widget) && isset($widget[ThemeLayout::fields_ID])) {
+                        $this->deleteWidget((int)$widget[ThemeLayout::fields_ID]);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // 忽略错误，可能是表不存在
+        }
+    }
+
+    /**
+     * 批量保存布局（默认保存为草稿）
+     */
+    public function saveLayout(int $themeId, string $pageType, array $layoutData, string $status = ThemeLayout::STATUS_DRAFT): bool
+    {
+        // 先删除该页面该状态的所有布局
         $this->themeLayout->reset()
             ->where(ThemeLayout::fields_THEME_ID, $themeId)
             ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::fields_STATUS, $status)
             ->delete()
             ->fetch();
 
@@ -169,14 +306,201 @@ class ThemeLayoutService
                     'widget_code' => $widget['widget_code'],
                     'widget_module' => $widget['widget_module'],
                     'widget_type' => $widget['widget_type'] ?? '',
+                    'slot_id' => $widget['slot_id'] ?? null,
                     'config' => $widget['config'] ?? [],
                     'sort_order' => $index,
                     'is_active' => $widget['is_active'] ?? true,
+                    'status' => $status,
                 ]);
             }
         }
 
         return true;
+    }
+
+    /**
+     * 发布布局：将草稿状态的布局复制为已发布状态
+     * 
+     * 如果没有草稿数据，会先尝试从已发布数据复制，
+     * 确保发布操作不会导致空数据。
+     * 
+     * @param int $themeId 主题ID
+     * @param string|null $pageType 页面类型，null则发布所有页面类型
+     * @return bool
+     */
+    public function publishLayout(int $themeId, ?string $pageType = null): bool
+    {
+        try {
+            // 获取需要发布的页面类型列表
+            if ($pageType) {
+                $pageTypes = [$pageType];
+            } else {
+                $pageTypes = array_keys(ThemeLayout::getPageTypes());
+            }
+
+            $hasPublishedData = false;
+
+            foreach ($pageTypes as $type) {
+                // 1. 获取草稿布局
+                $draftLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_DRAFT);
+                
+                // 检查草稿是否有数据
+                $hasDraftWidgets = false;
+                foreach ($draftLayout as $area => $areaData) {
+                    if (!empty($areaData['widgets'])) {
+                        $hasDraftWidgets = true;
+                        break;
+                    }
+                }
+                
+                // 2. 如果没有草稿数据，检查是否有已发布数据（保持不变）
+                if (!$hasDraftWidgets) {
+                    $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED);
+                    $hasPublishedWidgets = false;
+                    foreach ($publishedLayout as $area => $areaData) {
+                        if (!empty($areaData['widgets'])) {
+                            $hasPublishedWidgets = true;
+                            break;
+                        }
+                    }
+                    
+                    // 如果已发布数据存在，不需要处理这个页面类型
+                    if ($hasPublishedWidgets) {
+                        $hasPublishedData = true;
+                        continue;
+                    }
+                    
+                    // 草稿和已发布都没有数据，跳过（不删除已有数据）
+                    continue;
+                }
+
+                // 3. 有草稿数据，删除旧的已发布记录
+                $this->themeLayout->reset()
+                    ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                    ->where(ThemeLayout::fields_PAGE_TYPE, $type)
+                    ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_PUBLISHED)
+                    ->delete()
+                    ->fetch();
+
+                // 4. 将草稿数据复制为已发布
+                foreach ($draftLayout as $area => $areaData) {
+                    foreach ($areaData['widgets'] as $widget) {
+                        $this->saveWidget([
+                            'theme_id' => $themeId,
+                            'page_type' => $type,
+                            'area' => $area,
+                            'widget_code' => $widget['widget_code'],
+                            'widget_module' => $widget['widget_module'],
+                            'widget_type' => $widget['widget_type'] ?? '',
+                            'slot_id' => $widget['slot_id'] ?? null,
+                            'config' => $widget['config'] ?? [],
+                            'sort_order' => $widget['sort_order'] ?? 0,
+                            'is_active' => true,
+                            'status' => ThemeLayout::STATUS_PUBLISHED,
+                        ]);
+                    }
+                }
+                
+                $hasPublishedData = true;
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * 检查主题是否有草稿（未发布的修改）
+     */
+    public function hasDraft(int $themeId, ?string $pageType = null): bool
+    {
+        try {
+            $query = $this->themeLayout->reset()
+                ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_DRAFT);
+
+            if ($pageType) {
+                $query->where(ThemeLayout::fields_PAGE_TYPE, $pageType);
+            }
+
+            $result = $query->select()->fetchOriginal();
+            
+            // 检查 fetchOriginal() 是否返回有效对象
+            if ($result === false || $result === null) {
+                return false;
+            }
+            
+            $count = $result->count();
+            return $count > 0;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * 撤销草稿：删除所有草稿，恢复到已发布状态
+     */
+    public function discardDraft(int $themeId, ?string $pageType = null): bool
+    {
+        try {
+            $query = $this->themeLayout->reset()
+                ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::fields_STATUS, ThemeLayout::STATUS_DRAFT);
+
+            if ($pageType) {
+                $query->where(ThemeLayout::fields_PAGE_TYPE, $pageType);
+            }
+
+            $query->delete()->fetch();
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * 初始化草稿：从已发布状态复制到草稿状态
+     * 用于首次编辑时，将线上数据复制为草稿进行编辑
+     */
+    public function initDraftFromPublished(int $themeId, ?string $pageType = null): bool
+    {
+        try {
+            $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
+
+            foreach ($pageTypes as $type) {
+                // 检查是否已有草稿
+                if ($this->hasDraft($themeId, $type)) {
+                    continue; // 已有草稿，跳过
+                }
+
+                // 获取已发布布局
+                $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED);
+
+                // 复制为草稿
+                foreach ($publishedLayout as $area => $areaData) {
+                    foreach ($areaData['widgets'] as $widget) {
+                        $this->saveWidget([
+                            'theme_id' => $themeId,
+                            'page_type' => $type,
+                            'area' => $area,
+                            'widget_code' => $widget['widget_code'],
+                            'widget_module' => $widget['widget_module'],
+                            'widget_type' => $widget['widget_type'] ?? '',
+                            'slot_id' => $widget['slot_id'] ?? null,
+                            'config' => $widget['config'] ?? [],
+                            'sort_order' => $widget['sort_order'] ?? 0,
+                            'is_active' => true,
+                            'status' => ThemeLayout::STATUS_DRAFT,
+                        ]);
+                    }
+                }
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -271,9 +595,9 @@ class ThemeLayoutService
     /**
      * 复制布局到另一个页面类型
      */
-    public function copyLayout(int $themeId, string $fromPageType, string $toPageType): bool
+    public function copyLayout(int $themeId, string $fromPageType, string $toPageType, string $status = ThemeLayout::STATUS_DRAFT): bool
     {
-        $sourceLayout = $this->getLayout($themeId, $fromPageType);
+        $sourceLayout = $this->getLayout($themeId, $fromPageType, $status);
 
         // 转换格式
         $layoutData = [];
@@ -281,13 +605,16 @@ class ThemeLayoutService
             $layoutData[$area] = $areaData['widgets'];
         }
 
-        return $this->saveLayout($themeId, $toPageType, $layoutData);
+        return $this->saveLayout($themeId, $toPageType, $layoutData, $status);
     }
 
     /**
      * 获取可用的部件列表（按类型分组）
+     * 
+     * @param string|null $pageType 页面类型，用于过滤部件。null 则不过滤
+     * @return array
      */
-    public function getAvailableWidgets(): array
+    public function getAvailableWidgets(?string $pageType = null): array
     {
         $widgets = $this->widgetRegistry->getRegistry();
 
@@ -302,49 +629,148 @@ class ThemeLayoutService
                 continue;
             }
             
-            if (!isset($grouped[$type])) {
-                $grouped[$type] = [
-                    'label' => $this->getTypeLabel($type),
-                    'widgets' => [],
-                ];
-            }
-            
             // 遍历该类型下的所有部件
             foreach ($typeWidgets as $widgetName => $widget) {
-                if (is_array($widget)) {
-                    // 确保部件数据包含 type 字段
-                    if (!isset($widget['type'])) {
-                        $widget['type'] = $type;
-                    }
-                    // 确保部件数据包含 code 字段
-                    if (!isset($widget['code'])) {
-                        $widget['code'] = $widgetName;
-                    }
-                    
-                    // 从原始配置中提取 position 和 compatible 字段
-                    // WidgetScanner 将原始配置存储在 'config' 子数组中
-                    $originalConfig = $widget['config'] ?? [];
-                    
-                    // 确保 position 字段存在（从原始配置中提取）
-                    if (!isset($widget['position']) && isset($originalConfig['position'])) {
-                        $widget['position'] = $originalConfig['position'];
-                    }
-                    // 如果仍然没有 position，根据 type 设置默认值
-                    if (!isset($widget['position']) || empty($widget['position'])) {
-                        $widget['position'] = $this->getDefaultPositionByType($type);
-                    }
-                    
-                    // 确保 compatible 字段存在
-                    if (!isset($widget['compatible'])) {
-                        $widget['compatible'] = $originalConfig['compatible'] ?? false;
-                    }
-                    
-                    $grouped[$type]['widgets'][] = $widget;
+                if (!is_array($widget)) {
+                    continue;
                 }
+                
+                // 确保部件数据包含 type 字段
+                if (!isset($widget['type'])) {
+                    $widget['type'] = $type;
+                }
+                // 确保部件数据包含 code 字段
+                if (!isset($widget['code'])) {
+                    $widget['code'] = $widgetName;
+                }
+                
+                // 从原始配置中提取字段
+                // WidgetScanner 将原始配置存储在 'config' 子数组中
+                $originalConfig = $widget['config'] ?? [];
+                
+                // 提取 page_types 字段
+                $pageTypes = $widget['page_types'] ?? $originalConfig['page_types'] ?? ['*'];
+                $widget['page_types'] = $pageTypes;
+                
+                // 如果指定了页面类型，检查部件是否适用
+                if ($pageType !== null) {
+                    if (!$this->isWidgetAllowedForPageType($pageTypes, $pageType)) {
+                        continue; // 跳过不适用于当前页面类型的部件
+                    }
+                }
+                
+                // 确保 position 字段存在（从原始配置中提取）
+                if (!isset($widget['position']) && isset($originalConfig['position'])) {
+                    $widget['position'] = $originalConfig['position'];
+                }
+                // 如果仍然没有 position，根据 type 设置默认值
+                if (!isset($widget['position']) || empty($widget['position'])) {
+                    $widget['position'] = $this->getDefaultPositionByType($type);
+                }
+                
+                // 确保 compatible 字段存在
+                if (!isset($widget['compatible'])) {
+                    $widget['compatible'] = $originalConfig['compatible'] ?? false;
+                }
+                
+                // 提取 exclusive 字段（独占部件）
+                if (!isset($widget['exclusive'])) {
+                    $widget['exclusive'] = $originalConfig['exclusive'] ?? false;
+                }
+                
+                // 提取 is_container 字段
+                if (!isset($widget['is_container'])) {
+                    $widget['is_container'] = $originalConfig['is_container'] ?? false;
+                }
+                
+                // 提取 slot 字段
+                if (!isset($widget['slot'])) {
+                    $widget['slot'] = $originalConfig['slot'] ?? null;
+                }
+                
+                // 提取 slots 字段（容器部件的内部插槽定义）
+                if (!isset($widget['slots'])) {
+                    $widget['slots'] = $originalConfig['slots'] ?? [];
+                }
+                
+                // 翻译 params 中的 label、description、placeholder 和 options
+                if (!empty($widget['params']) && is_array($widget['params'])) {
+                    $translatedParams = [];
+                    foreach ($widget['params'] as $paramKey => $paramConfig) {
+                        if (!is_array($paramConfig)) {
+                            $translatedParams[$paramKey] = $paramConfig;
+                            continue;
+                        }
+                        
+                        // 翻译 label
+                        if (!empty($paramConfig['label'])) {
+                            $paramConfig['label'] = __($paramConfig['label']);
+                        }
+                        
+                        // 翻译 description
+                        if (!empty($paramConfig['description'])) {
+                            $paramConfig['description'] = __($paramConfig['description']);
+                        }
+                        
+                        // 翻译 placeholder
+                        if (!empty($paramConfig['placeholder'])) {
+                            $paramConfig['placeholder'] = __($paramConfig['placeholder']);
+                        }
+                        
+                        // 翻译 options（用于 select 类型）
+                        if (!empty($paramConfig['options']) && is_array($paramConfig['options'])) {
+                            $translatedOptions = [];
+                            foreach ($paramConfig['options'] as $optionValue => $optionLabel) {
+                                $translatedOptions[$optionValue] = __($optionLabel);
+                            }
+                            $paramConfig['options'] = $translatedOptions;
+                        }
+                        
+                        $translatedParams[$paramKey] = $paramConfig;
+                    }
+                    $widget['params'] = $translatedParams;
+                }
+                
+                // 添加到分组
+                if (!isset($grouped[$type])) {
+                    $grouped[$type] = [
+                        'label' => $this->getTypeLabel($type),
+                        'widgets' => [],
+                    ];
+                }
+                
+                $grouped[$type]['widgets'][] = $widget;
             }
         }
 
         return $grouped;
+    }
+
+    /**
+     * 检查部件是否适用于指定的页面类型
+     * 
+     * @param array $widgetPageTypes 部件支持的页面类型列表
+     * @param string $pageType 当前页面类型
+     * @return bool
+     */
+    private function isWidgetAllowedForPageType(array $widgetPageTypes, string $pageType): bool
+    {
+        // * 表示所有页面类型都可用
+        if (in_array('*', $widgetPageTypes)) {
+            return true;
+        }
+        
+        // 检查是否包含当前页面类型
+        if (in_array($pageType, $widgetPageTypes)) {
+            return true;
+        }
+        
+        // default 类型的部件在所有页面都可用
+        if (in_array('default', $widgetPageTypes)) {
+            return true;
+        }
+        
+        return false;
     }
     
     /**

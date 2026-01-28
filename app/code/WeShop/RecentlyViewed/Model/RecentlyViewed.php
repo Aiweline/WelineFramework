@@ -15,6 +15,7 @@ class RecentlyViewed extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_recently_viewed';
     public const primary_key = 'view_id';
+    public string $indexer = 'recently_viewed_indexer';
     
     public const fields_ID = 'view_id';
     public const fields_CUSTOMER_ID = 'customer_id';

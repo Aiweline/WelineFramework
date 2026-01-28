@@ -17,6 +17,7 @@ class SearchHistory extends Model
 {
     public const table = 'weshop_search_history';
     public const primary_key = 'history_id';
+    public string $indexer = 'search_history_indexer';
     
     public const fields_ID = 'history_id';
     public const fields_KEYWORD = 'keyword';

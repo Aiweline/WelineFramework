@@ -21,7 +21,9 @@ class Order extends \Weline\Framework\Database\Model
     public const fields_created_at = 'created_at';
     public const fields_updated_at = 'updated_at';
 
+    public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
+    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'total', 'created_at'];
 
     public function setup(ModelSetup $setup, Context $context): void
     {

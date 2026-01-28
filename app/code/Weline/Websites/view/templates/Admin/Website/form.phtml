@@ -88,7 +88,14 @@ $selected_languages = $selected_languages ?? [];
         <div class="card-body">
             <h4 class="card-title"><?= isset($website['website_id']) ? '编辑网站' : '添加网站' ?></h4>
 
-            <form action="<?= $this->getUrl('*/admin/website/' . (isset($website['website_id']) ? 'edit' : 'add')) ?>"
+            <?php
+            $formAction = '*/admin/website/' . (isset($website['website_id']) ? 'edit' : 'add');
+            $formParams = [];
+            if (isset($website['website_id'])) {
+                $formParams['id'] = $website['website_id'];
+            }
+            ?>
+            <form action="<?= $this->getUrl($formAction, $formParams) ?>"
                   method="post" class="needs-validation" novalidate>
                 <div class="row">
                     <?php if (isset($website['website_id'])): ?>

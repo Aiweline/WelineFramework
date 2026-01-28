@@ -676,7 +676,18 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $joins   = $this->buildJoinsForPgsql();
         $wheres  = $this->buildWheresForPgsql();
         $order   = $this->buildOrderForPgsql();
-        $groupBy = isset($this->ast['group']) && $this->ast['group'] ? 'GROUP BY ' . $this->normalizeSql($this->ast['group']) : '';
+        // 🔧 修复：如果 AST 中的 group 已经包含 "GROUP BY"，则直接使用，否则添加
+        $groupBy = '';
+        if (isset($this->ast['group']) && $this->ast['group']) {
+            $groupValue = trim($this->ast['group']);
+            if (stripos($groupValue, 'GROUP BY') === 0) {
+                // 已经包含 "GROUP BY"，直接使用
+                $groupBy = $this->normalizeSql($groupValue);
+            } else {
+                // 不包含 "GROUP BY"，添加它
+                $groupBy = 'GROUP BY ' . $this->normalizeSql($groupValue);
+            }
+        }
         $having  = isset($this->ast['having']) && $this->ast['having'] ? 'HAVING ' . $this->normalizeSql($this->ast['having']) : '';
         $extra   = $this->ast['extra'] ?? $this->additional_sql;
 

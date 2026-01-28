@@ -11,6 +11,7 @@ $icpLink = $this->getData('icp_link') ?? 'https://beian.miit.gov.cn/';
 $policeNumber = $this->getData('police_number') ?? '';
 $policeLink = $this->getData('police_link') ?? '';
 $additionalText = $this->getData('additional_text') ?? '';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 // 替换变量
 $siteName = 'WeShop'; // 应从系统配置获取
@@ -38,7 +39,7 @@ $widgetId = 'footer-copyright-' . uniqid();
             
             <?php if ($policeNumber): ?>
                 <a href="<?= htmlspecialchars($policeLink) ?>" target="_blank" rel="noopener noreferrer" class="police-link">
-                    <img src="/images/icons/police-badge.png" alt="" class="police-icon">
+                    <img src="<?= htmlspecialchars($placeholder ?? '') ?>" alt="" class="police-icon">
                     <?= htmlspecialchars($policeNumber) ?>
                 </a>
             <?php endif; ?>
