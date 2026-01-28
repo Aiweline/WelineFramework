@@ -1,0 +1,495 @@
+<?php
+/**
+ * TPMST 博客文章列表组件
+ * 
+ * @fields_start
+ * blog.title|博客列表标题|text|Latest Blog Posts
+ * blog.subtitle|副标题|text|Stay updated with our latest news and articles
+ * blog.posts_per_page|每页显示数量|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_category|显示分类|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.card_style|卡片样式|select:default=默认,minimal=简约,featured=特色|default
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $blog_posts 博客文章列表
+ * @var array $blog_categories 博客分类列表
+ * @var array $style_settings 样式配置
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+// 配置项
+$getConfig = function($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', __('Latest Blog Posts'));
+$subtitle = $getConfig('blog.subtitle', __('Stay updated with our latest news and articles'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = $getConfig('blog.card_style', 'default');
+
+// 颜色配置
+$primaryColor = $getConfig('color_scheme.primary', '#6c5ce7');
+$secondaryColor = $getConfig('color_scheme.secondary', '#00cec9');
+$bgColor = $getConfig('color_scheme.background', '#0c0060');
+$textColor = $getConfig('color_scheme.text', '#ffffff');
+?>
+
+<section class="tpmst-section tpmst-blog-list" id="blog">
+    <div class="tpmst-section-inner">
+        <!-- 标题区域 -->
+        <div class="blog-header">
+            <h2 class="blog-title"><?= htmlspecialchars($title) ?></h2>
+            <?php if ($subtitle): ?>
+            <p class="blog-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </div>
+        
+        <div class="blog-content-wrapper <?= $showSidebar ? 'with-sidebar' : 'full-width' ?>">
+            <!-- 文章列表 -->
+            <div class="blog-posts-grid">
+                <?php if (empty($blogPosts)): ?>
+                <div class="blog-empty">
+                    <div class="empty-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                        </svg>
+                    </div>
+                    <p><?= __('暂时还没有博客文章，稍后再来看看吧～') ?></p>
+                </div>
+                <?php else: ?>
+                    <?php foreach ($blogPosts as $index => $post): ?>
+                    <article class="blog-card blog-card-<?= $cardStyle ?> <?= $index === 0 && $cardStyle === 'featured' ? 'featured' : '' ?>">
+                        <?php if (!empty($post['cover_image'])): ?>
+                        <div class="blog-card-image">
+                            <a href="<?= htmlspecialchars($post['url']) ?>">
+                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" 
+                                     alt="<?= htmlspecialchars($post['title']) ?>"
+                                     loading="lazy">
+                            </a>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <div class="blog-card-content">
+                            <div class="blog-card-meta">
+                                <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                <span class="blog-category"><?= htmlspecialchars($post['category_name']) ?></span>
+                                <?php endif; ?>
+                                
+                                <?php if ($showDate && !empty($post['published_at'])): ?>
+                                <span class="blog-date">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/>
+                                    </svg>
+                                    <?= date('M d, Y', strtotime($post['published_at'])) ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <h3 class="blog-card-title">
+                                <a href="<?= htmlspecialchars($post['url']) ?>">
+                                    <?= htmlspecialchars($post['title']) ?>
+                                </a>
+                            </h3>
+                            
+                            <?php if (!empty($post['summary'])): ?>
+                            <p class="blog-card-excerpt">
+                                <?= htmlspecialchars(mb_substr($post['summary'], 0, 150)) ?><?= mb_strlen($post['summary']) > 150 ? '...' : '' ?>
+                            </p>
+                            <?php endif; ?>
+                            
+                            <div class="blog-card-footer">
+                                <?php if ($showAuthor && !empty($post['author'])): ?>
+                                <span class="blog-author">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                    </svg>
+                                    <?= htmlspecialchars($post['author']) ?>
+                                </span>
+                                <?php endif; ?>
+                                
+                                <a href="<?= htmlspecialchars($post['url']) ?>" class="blog-read-more">
+                                    <?= __('Read More') ?>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+            
+            <!-- 侧边栏 -->
+            <?php if ($showSidebar): ?>
+            <aside class="blog-sidebar">
+                <!-- 分类 -->
+                <?php if (!empty($blogCategories)): ?>
+                <div class="sidebar-widget">
+                    <h4 class="widget-title"><?= __('Categories') ?></h4>
+                    <ul class="category-list">
+                        <?php foreach ($blogCategories as $category): ?>
+                        <li>
+                            <a href="<?= htmlspecialchars($category['url']) ?>">
+                                <?= htmlspecialchars($category['name']) ?>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+                
+                <!-- 最近文章 -->
+                <?php if (!empty($recentPosts)): ?>
+                <div class="sidebar-widget">
+                    <h4 class="widget-title"><?= __('Recent Posts') ?></h4>
+                    <ul class="recent-posts-list">
+                        <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                        <li>
+                            <a href="<?= htmlspecialchars($post['url']) ?>">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" 
+                                     alt="<?= htmlspecialchars($post['title']) ?>"
+                                     loading="lazy">
+                                <?php endif; ?>
+                                <div class="recent-post-info">
+                                    <span class="recent-post-title"><?= htmlspecialchars($post['title']) ?></span>
+                                    <?php if (!empty($post['published_at'])): ?>
+                                    <span class="recent-post-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+            </aside>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+.tpmst-blog-list {
+    padding: 60px 0;
+    background: <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+    width: 100%;
+}
+
+.tpmst-blog-list .tpmst-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.blog-header {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.blog-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($primaryColor) ?>, <?= htmlspecialchars($secondaryColor) ?>);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.blog-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.8;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.blog-content-wrapper {
+    display: flex;
+    gap: 40px;
+}
+
+.blog-content-wrapper.full-width .blog-posts-grid {
+    width: 100%;
+}
+
+.blog-content-wrapper.with-sidebar .blog-posts-grid {
+    flex: 1;
+}
+
+.blog-posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 30px;
+}
+
+.blog-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blog-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.blog-card-image {
+    position: relative;
+    padding-top: 56.25%;
+    overflow: hidden;
+}
+
+.blog-card-image img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.blog-card:hover .blog-card-image img {
+    transform: scale(1.05);
+}
+
+.blog-card-content {
+    padding: 20px;
+}
+
+.blog-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.blog-category {
+    background: <?= htmlspecialchars($primaryColor) ?>;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.blog-date {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.blog-card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.blog-card-title a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.blog-card-title a:hover {
+    color: <?= htmlspecialchars($primaryColor) ?>;
+}
+
+.blog-card-excerpt {
+    font-size: 0.95rem;
+    opacity: 0.8;
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.blog-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blog-author {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.blog-read-more {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: gap 0.3s;
+}
+
+.blog-read-more:hover {
+    gap: 10px;
+}
+
+/* 侧边栏 */
+.blog-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+}
+
+.sidebar-widget {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.widget-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid <?= htmlspecialchars($primaryColor) ?>;
+}
+
+.category-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.category-list li {
+    margin-bottom: 8px;
+}
+
+.category-list a {
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.8;
+    transition: opacity 0.3s, padding-left 0.3s;
+    display: block;
+    padding: 8px 0;
+}
+
+.category-list a:hover {
+    opacity: 1;
+    padding-left: 10px;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+}
+
+.recent-posts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.recent-posts-list li {
+    margin-bottom: 15px;
+}
+
+.recent-posts-list a {
+    display: flex;
+    gap: 12px;
+    color: inherit;
+    text-decoration: none;
+    transition: opacity 0.3s;
+}
+
+.recent-posts-list a:hover {
+    opacity: 0.8;
+}
+
+.recent-posts-list img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.recent-post-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.recent-post-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.recent-post-date {
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
+
+/* 空状态 */
+.blog-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    opacity: 0.6;
+}
+
+.empty-icon {
+    margin-bottom: 20px;
+}
+
+/* 响应式 */
+@media (max-width: 992px) {
+    .blog-content-wrapper {
+        flex-direction: column;
+    }
+    
+    .blog-sidebar {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .tpmst-blog-list {
+        padding: 40px 0;
+    }
+    
+    .tpmst-blog-list .tpmst-section-inner {
+        padding: 0 15px;
+    }
+    
+    .blog-title {
+        font-size: 2rem;
+    }
+    
+    .blog-posts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>

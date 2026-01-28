@@ -1,0 +1,41 @@
+{
+    "page_type": "contact_page",
+    "name": "Contact页面布局",
+    "description": "Satta King 786 主题联系我们页面布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "platform",
+                "enabled": true,
+                "instance_id": "support-channels",
+                "config": {
+                    "content.badge": "Support Channels",
+                    "content.title": "We keep support focused and privacy friendly",
+                    "content.description": "Share only the details needed to help with your request. No marketing messages or promises of winnings are provided.",
+                    "features.items": "App installation|Help with downloads, versions, and permission prompts.|📱\nFormat clarification|Questions about single, jodi, and panna results.|📊\nResult review|Report a mismatch in posted satta king results.|🔍\nSupport hours|Monday to Saturday, 10:00 AM to 7:00 PM IST. We aim to respond within 24 hours.|⏰\nEmail response|Get help via email with clear documentation.|📧\nTicket tracking|Track your support request status.|🎫"
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {}
+            }
+        ]
+    }
+}

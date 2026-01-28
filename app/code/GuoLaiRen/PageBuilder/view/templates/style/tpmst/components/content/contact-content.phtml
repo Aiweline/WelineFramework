@@ -1,0 +1,568 @@
+<?php
+/**
+ * 联系我们内容组件
+ * 
+ * @component_start
+ * code: contact-content
+ * name: 联系我们内容
+ * name_en: Contact Content
+ * description: 联系方式和表单展示组件，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:display => 显示控制
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示联系表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ * 
+ * group:hero => 顶部横幅
+ * hero.title => 页面标题:text:联系我们
+ * hero.subtitle => 页面副标题:textarea:我们期待与您的交流，请随时通过以下方式与我们联系。
+ * hero.bg_color => 背景色:color:#0c0060
+ * hero.bg_gradient_end => 渐变结束色:color:#1d1850
+ * hero.title_color => 标题颜色:color:#ffd700
+ * 
+ * group:contact_info => 联系信息
+ * contact_info.address => 地址:textarea:上海市浦东新区XX路XXX号
+ * contact_info.phone => 电话:text:+86 21 1234 5678
+ * contact_info.email => 邮箱:text:contact@example.com
+ * contact_info.work_hours => 工作时间:text:周一至周五 9:00-18:00
+ * 
+ * group:social => 社交媒体
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook:text:
+ * social.twitter => Twitter:text:
+ * social.linkedin => LinkedIn:text:
+ * 
+ * group:form => 表单设置
+ * form.title => 表单标题:text:发送消息
+ * form.submit_text => 提交按钮:text:发送消息
+ * form.success_message => 成功提示:text:感谢您的留言，我们会尽快回复！
+ * 
+ * group:map => 地图设置
+ * map.embed_url => 地图嵌入链接:textarea:|百度地图或Google地图嵌入链接
+ * map.height => 地图高度:number:400|px
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 显示控制
+$showMap = ($config['display.show_map'] ?? 'yes') !== 'no';
+$showForm = ($config['display.show_form'] ?? 'yes') !== 'no';
+$showSocial = ($config['display.show_social'] ?? 'yes') !== 'no';
+$showInfo = ($config['display.show_info'] ?? 'yes') !== 'no';
+
+// Hero配置
+$heroTitle = $config['hero.title'] ?? '';
+$heroSubtitle = $config['hero.subtitle'] ?? '';
+$heroBgColorConfig = $config['hero.bg_color'] ?? '';
+$heroGradientEndConfig = $config['hero.bg_gradient_end'] ?? '';
+$heroTitleColorConfig = $config['hero.title_color'] ?? '';
+
+// 联系信息
+$contactAddress = $config['contact_info.address'] ?? __('上海市浦东新区XX路XXX号');
+$contactPhone = $config['contact_info.phone'] ?? '+86 21 1234 5678';
+$contactEmail = $config['contact_info.email'] ?? 'contact@example.com';
+$contactWorkHours = $config['contact_info.work_hours'] ?? __('周一至周五 9:00-18:00');
+
+// 社交媒体
+$socialWechat = $config['social.wechat'] ?? '';
+$socialWeibo = $config['social.weibo'] ?? '';
+$socialFacebook = $config['social.facebook'] ?? '';
+$socialTwitter = $config['social.twitter'] ?? '';
+$socialLinkedin = $config['social.linkedin'] ?? '';
+
+// 表单设置
+$formTitle = $config['form.title'] ?? __('发送消息');
+$formSubmitText = $config['form.submit_text'] ?? __('发送消息');
+$formSuccessMessage = $config['form.success_message'] ?? __('感谢您的留言，我们会尽快回复！');
+
+// 地图设置
+$mapEmbedUrl = $config['map.embed_url'] ?? '';
+$mapHeight = $config['map.height'] ?? '400';
+
+// 页面数据
+$page = $this->getData('page');
+$pageTitle = $heroTitle ?: ($page ? ($page->getData('title') ?? __('联系我们')) : __('联系我们'));
+$pageContent = $page ? ($page->getData('content') ?? '') : '';
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 从主题颜色中获取配色（配置项优先）
+$heroBg = $heroBgColorConfig ?: ($colors['hero_bg'] ?? '#0c0060');
+$heroGradientEnd = $heroGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#1d1850');
+$sectionBg1 = $colors['section_bg_1'] ?? '#0d0e13';
+$sectionBg2 = $colors['section_bg_2'] ?? '#1d1850';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $colors['text_secondary'] ?? '#cccccc';
+$textMuted = $colors['text_muted'] ?? '#8b8b8b';
+$accentPrimary = $heroTitleColorConfig ?: ($colors['accent_primary'] ?? '#ffd700');
+$accentSecondary = $colors['accent_secondary'] ?? '#ff6b35';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(90deg, #ffd700 0%, #ffa500 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#8b4513';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.05)';
+$borderLight = $colors['border_light'] ?? 'rgba(255,255,255,0.1)';
+
+$instanceId = $component_instance_id ?? 'contact-content-' . uniqid();
+?>
+
+<section class="tpmst-section contact-content-component" id="<?= $instanceId ?>">
+    <style>
+        /* Hero Section */
+        #<?= $instanceId ?> .contact-hero {
+            background: linear-gradient(135deg, <?= $heroBg ?> 0%, <?= $heroGradientEnd ?> 100%);
+            color: <?= $textPrimary ?>;
+            padding: 80px 0;
+            text-align: center;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .contact-hero .tpmst-section-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .contact-hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .contact-hero p {
+            font-size: 1.2rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        /* Main Content */
+        #<?= $instanceId ?> .contact-main-wrapper {
+            background: <?= $sectionBg1 ?>;
+            padding: 80px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .contact-main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Contact Info */
+        #<?= $instanceId ?> .contact-info {
+            padding-right: 20px;
+        }
+        #<?= $instanceId ?> .contact-info h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .contact-info > p {
+            color: <?= $textMuted ?>;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            margin-bottom: 40px;
+        }
+        
+        #<?= $instanceId ?> .info-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        #<?= $instanceId ?> .info-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 25px;
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            transition: all 0.3s;
+        }
+        #<?= $instanceId ?> .info-card:hover {
+            border-color: <?= $accentPrimary ?>;
+            box-shadow: 0 10px 40px rgba(255, 215, 0, 0.15);
+            transform: translateX(5px);
+        }
+        #<?= $instanceId ?> .info-icon {
+            width: 55px;
+            height: 55px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        #<?= $instanceId ?> .info-content h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .info-content p {
+            color: <?= $textMuted ?>;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+        #<?= $instanceId ?> .info-content a {
+            color: <?= $accentPrimary ?>;
+            text-decoration: none;
+        }
+        #<?= $instanceId ?> .info-content a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Social Links */
+        #<?= $instanceId ?> .social-section {
+            margin-top: 40px;
+        }
+        #<?= $instanceId ?> .social-section h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .social-links {
+            display: flex;
+            gap: 12px;
+        }
+        #<?= $instanceId ?> .social-link {
+            width: 45px;
+            height: 45px;
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        #<?= $instanceId ?> .social-link:hover {
+            background: <?= $buttonPrimaryBg ?>;
+            border-color: <?= $accentPrimary ?>;
+            transform: translateY(-3px);
+        }
+        
+        /* Contact Form */
+        #<?= $instanceId ?> .contact-form-wrapper {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            padding: 40px;
+            border-radius: 20px;
+        }
+        #<?= $instanceId ?> .contact-form-wrapper h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        #<?= $instanceId ?> .form-group {
+            margin-bottom: 20px;
+        }
+        #<?= $instanceId ?> .form-group.full-width {
+            grid-column: span 2;
+        }
+        #<?= $instanceId ?> .form-label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 8px;
+        }
+        #<?= $instanceId ?> .form-input,
+        #<?= $instanceId ?> .form-textarea,
+        #<?= $instanceId ?> .form-select {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid <?= $borderLight ?>;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: rgba(0,0,0,0.3);
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .form-input::placeholder,
+        #<?= $instanceId ?> .form-textarea::placeholder {
+            color: <?= $textMuted ?>;
+        }
+        #<?= $instanceId ?> .form-input:focus,
+        #<?= $instanceId ?> .form-textarea:focus,
+        #<?= $instanceId ?> .form-select:focus {
+            outline: none;
+            border-color: <?= $accentPrimary ?>;
+            box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.2);
+        }
+        #<?= $instanceId ?> .form-textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        #<?= $instanceId ?> .form-select {
+            cursor: pointer;
+        }
+        #<?= $instanceId ?> .form-select option {
+            background: <?= $sectionBg1 ?>;
+            color: <?= $textPrimary ?>;
+        }
+        #<?= $instanceId ?> .submit-btn {
+            width: 100%;
+            padding: 16px 30px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        #<?= $instanceId ?> .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4);
+        }
+        
+        /* Map Section */
+        #<?= $instanceId ?> .contact-map {
+            background: <?= $sectionBg2 ?>;
+            padding: 60px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .map-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .map-container h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .map-placeholder {
+            height: 400px;
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 15px;
+            color: <?= $textMuted ?>;
+        }
+        #<?= $instanceId ?> .map-placeholder .map-icon {
+            font-size: 4rem;
+        }
+        
+        /* FAQ Section */
+        #<?= $instanceId ?> .contact-faq-wrapper {
+            background: <?= $sectionBg1 ?>;
+            padding: 80px 0;
+            width: 100%;
+        }
+        #<?= $instanceId ?> .contact-faq {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #<?= $instanceId ?> .contact-faq h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 40px;
+            color: <?= $accentPrimary ?>;
+        }
+        #<?= $instanceId ?> .faq-item {
+            border-bottom: 1px solid <?= $borderLight ?>;
+            padding: 20px 0;
+        }
+        #<?= $instanceId ?> .faq-question {
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 10px;
+            font-size: 1.05rem;
+        }
+        #<?= $instanceId ?> .faq-answer {
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .contact-main {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+            #<?= $instanceId ?> .contact-info {
+                padding-right: 0;
+            }
+        }
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .contact-hero h1 {
+                font-size: 2rem;
+            }
+            #<?= $instanceId ?> .contact-form-wrapper {
+                padding: 25px;
+            }
+            #<?= $instanceId ?> .form-row {
+                grid-template-columns: 1fr;
+            }
+            #<?= $instanceId ?> .form-group.full-width {
+                grid-column: span 1;
+            }
+        }
+    </style>
+    
+    <!-- Hero -->
+    <div class="tpmst-section contact-hero">
+        <div class="tpmst-section-inner">
+            <h1><?= htmlspecialchars($pageTitle) ?></h1>
+            <p><?= __('我们很乐意听取您的意见。请随时与我们联系，我们将尽快回复您。') ?></p>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="tpmst-section contact-main-wrapper">
+    <div class="contact-main">
+        <!-- Contact Info -->
+        <div class="contact-info">
+            <h2><?= __('联系方式') ?></h2>
+            <p><?= __('您可以通过以下方式联系我们，或填写右侧的表单，我们将在24小时内回复。') ?></p>
+            
+            <div class="info-cards">
+                <div class="info-card">
+                    <div class="info-icon">📍</div>
+                    <div class="info-content">
+                        <h4><?= __('公司地址') ?></h4>
+                        <p><?= __('中国上海市浦东新区世纪大道100号') ?></p>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">📧</div>
+                    <div class="info-content">
+                        <h4><?= __('电子邮件') ?></h4>
+                        <p><a href="mailto:contact@example.com">contact@example.com</a></p>
+                        <p><a href="mailto:support@example.com">support@example.com</a></p>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">📞</div>
+                    <div class="info-content">
+                        <h4><?= __('联系电话') ?></h4>
+                        <p><a href="tel:+8621-12345678">+86 21-1234-5678</a></p>
+                        <p><?= __('工作时间') ?>: <?= __('周一至周五 9:00-18:00') ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <?php if ($showSocial): ?>
+            <div class="social-section">
+                <h4><?= __('关注我们') ?></h4>
+                <div class="social-links">
+                    <a href="#" class="social-link" title="WeChat">💬</a>
+                    <a href="#" class="social-link" title="Weibo">📱</a>
+                    <a href="#" class="social-link" title="LinkedIn">💼</a>
+                    <a href="#" class="social-link" title="Twitter">🐦</a>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <?php if ($showForm): ?>
+        <!-- Contact Form -->
+        <div class="contact-form-wrapper">
+            <h3><?= __('发送消息') ?></h3>
+            <form class="contact-form" action="#" method="post">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label"><?= __('您的姓名') ?> *</label>
+                        <input type="text" class="form-input" name="name" required placeholder="<?= __('请输入您的姓名') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><?= __('电子邮件') ?> *</label>
+                        <input type="email" class="form-input" name="email" required placeholder="<?= __('请输入您的邮箱') ?>">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label"><?= __('联系电话') ?></label>
+                        <input type="tel" class="form-input" name="phone" placeholder="<?= __('请输入您的电话') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><?= __('咨询类型') ?></label>
+                        <select class="form-select" name="subject">
+                            <option value=""><?= __('请选择') ?></option>
+                            <option value="general"><?= __('一般咨询') ?></option>
+                            <option value="sales"><?= __('销售咨询') ?></option>
+                            <option value="support"><?= __('技术支持') ?></option>
+                            <option value="partnership"><?= __('商务合作') ?></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><?= __('您的留言') ?> *</label>
+                    <textarea class="form-textarea" name="message" required placeholder="<?= __('请详细描述您的需求...') ?>"></textarea>
+                </div>
+                <button type="submit" class="submit-btn">
+                    <?= __('发送消息') ?> →
+                </button>
+            </form>
+        </div>
+        <?php endif; ?>
+    </div>
+    </div>
+    
+    <?php if ($showMap): ?>
+    <!-- Map -->
+    <div class="tpmst-section contact-map">
+        <div class="map-container">
+            <h2><?= __('我们的位置') ?></h2>
+            <div class="map-placeholder">
+                <span class="map-icon">🗺️</span>
+                <span><?= __('地图将在此处显示') ?></span>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <!-- FAQ -->
+    <div class="tpmst-section contact-faq-wrapper">
+    <div class="contact-faq">
+        <h2><?= __('常见问题') ?></h2>
+        <div class="faq-item">
+            <div class="faq-question"><?= __('你们的工作时间是什么时候？') ?></div>
+            <div class="faq-answer"><?= __('我们的工作时间是周一至周五 9:00-18:00（中国标准时间）。节假日除外。') ?></div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-question"><?= __('通常多久会收到回复？') ?></div>
+            <div class="faq-answer"><?= __('我们会尽力在24个工作小时内回复所有询问。对于紧急事项，建议您直接致电。') ?></div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-question"><?= __('如何获取技术支持？') ?></div>
+            <div class="faq-answer"><?= __('您可以通过上方的联系表单选择"技术支持"类型，或直接发送邮件至 support@example.com。') ?></div>
+        </div>
+    </div>
+    </div>
+</section>

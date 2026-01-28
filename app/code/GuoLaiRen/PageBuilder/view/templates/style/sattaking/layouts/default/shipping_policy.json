@@ -1,0 +1,65 @@
+{
+    "page_type": "shipping_policy",
+    "name": "配送政策页面布局",
+    "description": "Satta King 786 主题配送政策页面布局（数字产品适用）",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "Satta King 786",
+                    "logo.width": 40,
+                    "navigation.items": "Home=>/\nDownload App=>#download\nGames=>/games\nFAQ=>/faq\nContact Us=>/contact",
+                    "navigation.show_cta": "no"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "hero",
+                "enabled": true,
+                "instance_id": "shipping-hero",
+                "config": {
+                    "content.badge": "Legal",
+                    "content.title": "Delivery Policy",
+                    "content.description": "Information about how digital content and services are delivered on the Satta King 786 platform.",
+                    "cta.primary_text": "",
+                    "cta.primary_url": "",
+                    "cta.secondary_text": "",
+                    "cta.secondary_url": "",
+                    "features.items": "",
+                    "visual.show_image": "no"
+                }
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "shipping-sections",
+                "config": {
+                    "content.badge": "Delivery Details",
+                    "content.title": "Digital Delivery Information",
+                    "content.description": "Learn about our digital content delivery process.",
+                    "faq.items": "Digital Content|All content on Satta King 786 is delivered digitally through our web platform and mobile application.\nInstant Access|Free informational content is available immediately upon accessing the platform.\nApp Downloads|The Android application can be downloaded directly from our website. Delivery is instant upon successful download.\nEmail Notifications|For premium services (if applicable), access credentials and confirmations are sent via email.\nTechnical Requirements|Users need a compatible device and internet connection to access our digital content.\nSupport|For delivery issues or technical difficulties, please contact our support team through the contact page."
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {
+                    "brand.name": "Satta King 786",
+                    "brand.description": "An informational guide to satta king formats, schedules, and Android access.",
+                    "links.items": "Home=>/\nPrivacy Policy=>/privacy-policy\nTerms of Service=>/terms-of-service\nContact=>/contact",
+                    "copyright.text": "Designed for clarity, speed, and compliance-first guidance."
+                }
+            }
+        ]
+    },
+    "notes": "配送政策页面布局，适用于数字产品"
+}
