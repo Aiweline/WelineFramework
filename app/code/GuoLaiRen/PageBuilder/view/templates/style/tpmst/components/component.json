@@ -36,7 +36,7 @@
         "header-nav": {
             "name": "导航头部（Logo居中）",
             "name_en": "Navigation Header (Logo Centered)",
-            "description": "Logo居中布局，包含导航菜单、下载按钮和Banner",
+            "description": "Logo居中布局，包含导航菜单和下载按钮",
             "region": "header",
             "category": "header",
             "type": "section",
@@ -44,7 +44,7 @@
             "sort_order": 1,
             "is_default": true,
             "compatible_styles": ["*"],
-            "config_groups": ["header", "banner", "color_scheme", "pixel"],
+            "config_groups": ["header", "navigation", "download_button", "color_scheme", "pixel"],
             "file": "header/nav.phtml"
         },
         "header-simple": {
@@ -86,6 +86,44 @@
             "config_groups": ["slider"],
             "file": "content/slider.phtml"
         },
+        "banner": {
+            "name": "Banner横幅",
+            "name_en": "Banner",
+            "description": "首屏Banner横幅，支持响应式图片和下载按钮",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "thumbnail": "asset/img/banner-03.webp",
+            "sort_order": 11,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["banner"],
+            "file": "content/banner.phtml"
+        },
+        "hero-slider": {
+            "name": "首屏轮播Banner",
+            "name_en": "Hero Slider",
+            "description": "首屏轮播Banner，与导航重叠效果，支持响应式图片和下载按钮",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "thumbnail": "asset/img/banner-03.webp",
+            "sort_order": 12,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["banner", "download_btn", "layout"],
+            "file": "content/hero-slider.phtml",
+            "config_schema": {
+                "banner.display": {"type": "select", "options": ["yes", "no"], "default": "yes", "label": "显示Banner"},
+                "banner.image_mobile": {"type": "textarea", "default": "", "label": "移动端Banner图片"},
+                "banner.image_desktop": {"type": "textarea", "default": "", "label": "PC端Banner图片"},
+                "banner.alt": {"type": "text", "default": "100000 earn on teenpatti master", "label": "图片描述"},
+                "download_btn.display": {"type": "select", "options": ["yes", "no"], "default": "yes", "label": "显示下载按钮"},
+                "download_btn.image": {"type": "textarea", "default": "", "label": "下载按钮图片"},
+                "layout.slider_classes": {"type": "textarea", "default": "rs-slider slider-style2", "label": "CSS类名"},
+                "layout.margin_top": {"type": "number", "default": -75, "label": "顶部负边距(移动端)"}
+            }
+        },
         "advantages": {
             "name": "优势展示",
             "name_en": "Advantages Section",
@@ -114,18 +152,6 @@
             "config_groups": ["games", "texts"],
             "file": "content/games.phtml"
         },
-        "app-info": {
-            "name": "应用信息",
-            "name_en": "App Info",
-            "description": "应用基本信息展示，包含名称、版本、大小等",
-            "region": "content",
-            "category": "content",
-            "type": "section",
-            "sort_order": 35,
-            "compatible_styles": ["*"],
-            "config_groups": ["app_info", "texts"],
-            "file": "content/app-info.phtml"
-        },
         "testimonials": {
             "name": "用户评价",
             "name_en": "Testimonials",
@@ -152,77 +178,103 @@
             "config_groups": ["faq", "texts"],
             "file": "content/faq.phtml"
         },
-        "blog-content": {
-            "name": "博客内容",
-            "name_en": "Blog Content",
-            "description": "详细的博客文章内容区域",
+        "blog-list": {
+            "name": "博客文章列表",
+            "name_en": "Blog Posts List",
+            "description": "展示博客文章列表，支持分类筛选和侧边栏",
             "region": "content",
             "category": "content",
             "type": "section",
             "sort_order": 60,
-            "compatible_styles": ["tpmst"],
-            "config_groups": ["texts"],
-            "file": "content/blog.phtml"
-        },
-        "strategy": {
-            "name": "策略介绍",
-            "name_en": "Strategy Section",
-            "description": "游戏策略和技巧介绍区域",
-            "region": "content",
-            "category": "content",
-            "type": "section",
-            "sort_order": 55,
-            "compatible_styles": ["tpmst"],
-            "config_groups": ["texts"],
-            "file": "content/strategy.phtml"
-        },
-        "hindi-content": {
-            "name": "印地语内容",
-            "name_en": "Hindi Content",
-            "description": "印地语本地化内容区域",
-            "region": "content",
-            "category": "content",
-            "type": "section",
-            "sort_order": 65,
-            "compatible_styles": ["tpmst"],
-            "config_groups": ["texts"],
-            "file": "content/hindi.phtml"
-        },
-        "disclaimer": {
-            "name": "免责声明",
-            "name_en": "Disclaimer",
-            "description": "底部免责声明文字区域",
-            "region": "content",
-            "category": "widget",
-            "type": "widget",
-            "sort_order": 70,
+            "is_default": false,
             "compatible_styles": ["*"],
-            "config_groups": ["texts"],
-            "file": "content/disclaimer.phtml"
+            "config_groups": ["blog"],
+            "file": "content/blog-list.phtml"
         },
-        "floating-download": {
-            "name": "浮动下载按钮",
-            "name_en": "Floating Download Button",
-            "description": "页面右侧/底部浮动下载按钮",
+        "blog-detail": {
+            "name": "博客文章详情",
+            "name_en": "Blog Post Detail",
+            "description": "展示单篇博客文章详情，包含分享、相关文章等",
             "region": "content",
-            "category": "widget",
-            "type": "widget",
-            "sort_order": 80,
-            "compatible_styles": ["tpmst"],
-            "config_groups": [],
-            "file": "content/floating-download.phtml"
+            "category": "content",
+            "type": "section",
+            "sort_order": 61,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["blog"],
+            "file": "content/blog-detail.phtml"
         },
-        "mobile-nav": {
-            "name": "移动端导航",
-            "name_en": "Mobile Navigation",
-            "description": "移动端底部导航栏",
+        "blog-category": {
+            "name": "博客分类",
+            "name_en": "Blog Category",
+            "description": "展示特定分类下的博客文章列表",
             "region": "content",
-            "category": "widget",
-            "type": "widget",
-            "sort_order": 75,
-            "compatible_styles": ["tpmst"],
-            "config_groups": ["texts"],
-            "file": "content/mobile-nav.phtml"
+            "category": "content",
+            "type": "section",
+            "sort_order": 62,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["blog"],
+            "file": "content/blog-category.phtml"
+        },
+        "legal-content": {
+            "name": "法律文档内容",
+            "name_en": "Legal Content",
+            "description": "通用法律文档内容组件，适用于隐私政策、服务条款、Cookie政策等",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 70,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "applicable_page_types": ["privacy_policy", "terms_of_service", "refund_policy", "shipping_policy", "cookie_policy"],
+            "config_groups": ["legal"],
+            "file": "content/legal-content.phtml",
+            "config_schema": {
+                "show_toc": {"type": "boolean", "default": true, "label": "显示目录"},
+                "show_last_updated": {"type": "boolean", "default": true, "label": "显示更新时间"},
+                "content_width": {"type": "select", "options": ["narrow", "medium", "wide"], "default": "narrow", "label": "内容宽度"}
+            }
+        },
+        "about-content": {
+            "name": "关于我们内容",
+            "name_en": "About Content",
+            "description": "关于我们页面内容组件，包含公司介绍、团队、价值观等区块",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 71,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "applicable_page_types": ["about_page"],
+            "config_groups": ["about"],
+            "file": "content/about-content.phtml",
+            "config_schema": {
+                "layout": {"type": "select", "options": ["standard", "split", "timeline"], "default": "standard", "label": "布局模式"},
+                "show_team": {"type": "boolean", "default": true, "label": "显示团队"},
+                "show_values": {"type": "boolean", "default": true, "label": "显示价值观"},
+                "show_stats": {"type": "boolean", "default": true, "label": "显示数据统计"}
+            }
+        },
+        "contact-content": {
+            "name": "联系我们内容",
+            "name_en": "Contact Content",
+            "description": "联系我们页面内容组件，包含联系表单、地图、联系方式等",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "sort_order": 72,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "applicable_page_types": ["contact_page"],
+            "config_groups": ["contact"],
+            "file": "content/contact-content.phtml",
+            "config_schema": {
+                "layout": {"type": "select", "options": ["split", "centered", "full"], "default": "split", "label": "布局模式"},
+                "show_map": {"type": "boolean", "default": true, "label": "显示地图"},
+                "show_form": {"type": "boolean", "default": true, "label": "显示表单"},
+                "show_social": {"type": "boolean", "default": true, "label": "显示社交链接"}
+            }
         },
         "footer-links": {
             "name": "链接底部",

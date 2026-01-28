@@ -245,94 +245,121 @@ File: Main Js File
     }
 
     function initMenuItemScroll() {
-        // focus active menu in left sidebar（使用原生 Upzet 方式）
-        // 参照 BackendThemeUpzet/app.js initMenuItemScroll
+        // focus active menu in left sidebar（参照 Upzet 模板实现）
         // 注意：允许 frequent-menus-section 下的菜单显示激活状态，但禁止对其进行滚动定位
         $(document).ready(function () {
-            if ($("#sidebar-menu").length > 0) {
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        sessionId: 'debug-session',
-                        runId: 'pre-fix',
-                        hypothesisId: 'H1',
-                        location: 'Admin/app.js:initMenuItemScroll',
-                        message: '#sidebar-menu presence before scroll logic',
-                        data: {
-                            sidebarCount: $("#sidebar-menu").length
-                        },
-                        timestamp: Date.now()
-                    })
-                }).catch(function () {});
-                // #endregion agent log
-                // 查找所有激活的菜单项，排除 frequent-menus-section 和 frequent-menu-item 相关的菜单项
-                var $activeLinks = $("#sidebar-menu .mm-active .active");
-                var $activeLink = null;
-
-                // 遍历所有激活的菜单项，找到第一个不在 frequent-menus-section 下且不是 frequent-menu-item 的
-                $activeLinks.each(function () {
-                    var $link = $(this);
-                    var $li = $link.closest('li');
-
-                    // 排除条件：
-                    // 1. 在 frequent-menus-section 下的元素
-                    // 2. 是 frequent-menu-item 或 menu-frequent-item 类的元素
-                    // 3. 父元素是 frequent-menu-item 或 menu-frequent-item 的元素
-                    var isInFrequentSection = $link.closest('#frequent-menus-section').length > 0;
-                    var isFrequentMenuItem = $li.hasClass('frequent-menu-item') || $li.hasClass('menu-frequent-item');
-                    var hasFrequentParent = $li.closest('.frequent-menu-item, .menu-frequent-item').length > 0;
-
-                    // 如果不在排除范围内，则使用它
-                    if (!isInFrequentSection && !isFrequentMenuItem && !hasFrequentParent) {
-                        $activeLink = $link;
-                        // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                sessionId: 'debug-session',
-                                runId: 'pre-fix',
-                                hypothesisId: 'H2',
-                                location: 'Admin/app.js:initMenuItemScroll',
-                                message: 'Chosen active menu link for scroll',
-                                data: {
-                                    href: $link.attr('href') || null,
-                                    text: $link.text() || null
-                                },
-                                timestamp: Date.now()
-                            })
-                        }).catch(function () {});
-                        // #endregion agent log
-                        return false; // 跳出循环
+            // 延迟执行，确保菜单已完全渲染和展开
+            setTimeout(function() {
+                if ($("#sidebar-menu").length > 0) {
+                    // 查找激活的菜单项（优先查找带 active 类的链接）
+                    var $activeLink = $("#sidebar-menu .mm-active .active").first();
+                    
+                    // 如果没找到，尝试其他选择器
+                    if (!$activeLink || $activeLink.length === 0) {
+                        $activeLink = $("#sidebar-menu .mm-active > a.active").first();
                     }
-                });
-
-                // 如果找到了符合条件的激活菜单项，则进行定位
-                if ($activeLink && $activeLink.length > 0) {
-                    var isCollapsedMode = $('body').hasClass('vertical-collpsed');
-                    var targetElement = $activeLink;
-
-                    // 在图标菜单模式下，如果当前激活的是子菜单项，滚动到父级菜单
-                    if (isCollapsedMode) {
-                        var $currentLi = $activeLink.closest('li');
-                        var $parentLi = $currentLi.parent('ul.sub-menu').prev('a').parent('li');
-
-                        // 如果存在父级菜单项，则滚动到父级菜单
-                        if ($parentLi.length > 0) {
-                            targetElement = $parentLi.find('> a');
+                    if (!$activeLink || $activeLink.length === 0) {
+                        $activeLink = $("#sidebar-menu li.mm-active > a.active").first();
+                    }
+                    
+                    // 如果还是没找到，查找 mm-active 的菜单项的第一个链接
+                    if (!$activeLink || $activeLink.length === 0) {
+                        var $activeLi = $("#sidebar-menu li.mm-active").not('.frequent-menu-item, .menu-frequent-item')
+                            .not(function() {
+                                return $(this).closest('#frequent-menus-section').length > 0;
+                            }).first();
+                        if ($activeLi.length > 0) {
+                            $activeLink = $activeLi.find('> a').first();
+                        }
+                    }
+                    
+                    // 排除 frequent-menus-section 下的菜单项
+                    if ($activeLink && $activeLink.length > 0) {
+                        var $li = $activeLink.closest('li');
+                        var isInFrequentSection = $activeLink.closest('#frequent-menus-section').length > 0;
+                        var isFrequentMenuItem = $li.hasClass('frequent-menu-item') || $li.hasClass('menu-frequent-item');
+                        var hasFrequentParent = $li.closest('.frequent-menu-item, .menu-frequent-item').length > 0;
+                        
+                        if (isInFrequentSection || isFrequentMenuItem || hasFrequentParent) {
+                            $activeLink = null;
                         }
                     }
 
-                    var activeMenu = targetElement.offset().top;
-                    if (activeMenu > 300) {
-                        activeMenu = activeMenu - 300;
-                        $(".vertical-menu .simplebar-content-wrapper").animate({ scrollTop: activeMenu }, "slow");
+                    // 如果找到了符合条件的激活菜单项，则进行定位
+                    if ($activeLink && $activeLink.length > 0) {
+                        var isCollapsedMode = $('body').hasClass('vertical-collpsed');
+                        var targetElement = $activeLink;
+
+                        // 在图标菜单模式下，如果当前激活的是子菜单项，滚动到父级菜单
+                        if (isCollapsedMode) {
+                            var $currentLi = $activeLink.closest('li');
+                            var $parentLi = $currentLi.parent('ul.sub-menu').prev('a').parent('li');
+
+                            // 如果存在父级菜单项，则滚动到父级菜单
+                            if ($parentLi.length > 0) {
+                                targetElement = $parentLi.find('> a').first();
+                            }
+                        }
+
+                        // 获取滚动容器 - 优先使用 simplebar API
+                        var $simplebarContainer = $('.vertical-menu [data-simplebar]');
+                        var scrollElement = null;
+                        
+                        if ($simplebarContainer.length > 0) {
+                            // 尝试使用 simplebar API
+                            if ($simplebarContainer[0].simpleBar) {
+                                scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
+                            }
+                            
+                            // 如果 simplebar API 不可用，查找 .simplebar-content-wrapper
+                            if (!scrollElement) {
+                                var $contentWrapper = $simplebarContainer.find('.simplebar-content-wrapper');
+                                if ($contentWrapper.length > 0) {
+                                    scrollElement = $contentWrapper[0];
+                                }
+                            }
+                        }
+                        
+                        // 降级方案：直接查找 .simplebar-content-wrapper
+                        if (!scrollElement) {
+                            var $contentWrapper = $(".vertical-menu .simplebar-content-wrapper");
+                            if ($contentWrapper.length > 0) {
+                                scrollElement = $contentWrapper[0];
+                            }
+                        }
+
+                        if (scrollElement && targetElement.length > 0) {
+                            try {
+                                // 计算目标滚动位置
+                                var menuOffset = targetElement.offset();
+                                
+                                if (menuOffset) {
+                                    // 获取滚动容器的位置
+                                    var containerOffset = $(scrollElement).offset();
+                                    var containerScrollTop = $(scrollElement).scrollTop();
+                                    
+                                    // 计算菜单项相对于滚动容器的位置
+                                    var activeMenuTop = 0;
+                                    if (containerOffset) {
+                                        activeMenuTop = menuOffset.top - containerOffset.top + containerScrollTop;
+                                    } else {
+                                        // 降级：使用 position() 方法
+                                        activeMenuTop = targetElement.position().top + containerScrollTop;
+                                    }
+                                    
+                                    // 如果激活菜单项位置超过300px，则滚动定位（留出顶部空间）
+                                    if (activeMenuTop > 300) {
+                                        var targetScrollTop = activeMenuTop - 300;
+                                        $(scrollElement).animate({ scrollTop: targetScrollTop }, "slow");
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('菜单定位失败:', e);
+                            }
+                        }
                     }
                 }
-                // 如果所有激活的菜单项都在排除范围内，则不进行任何定位操作
-            }
+            }, 500); // 延迟500ms，确保菜单完全渲染和展开
         });
     }
 

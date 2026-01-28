@@ -24,10 +24,17 @@ var ModelLifecycle = (function () {
         onError: null
     };
 
+    // 配置选项
+    var config = {
+        autoLoad: true,           // 是否自动加载模型
+        autoUnload: true,         // 页面关闭时是否自动卸载
+        autoLoadDelay: 500        // 自动加载延迟（毫秒）
+    };
+
     /**
      * 初始化
      */
-    function init(options) {
+    async function init(options) {
         options = options || {};
 
         if (options.onStatusChange) callbacks.onStatusChange = options.onStatusChange;
@@ -36,36 +43,263 @@ var ModelLifecycle = (function () {
         if (options.onUnload) callbacks.onUnload = options.onUnload;
         if (options.onError) callbacks.onError = options.onError;
 
+        // 合并配置
+        if (typeof options.autoLoad !== 'undefined') config.autoLoad = options.autoLoad;
+        if (typeof options.autoUnload !== 'undefined') config.autoUnload = options.autoUnload;
+        if (typeof options.autoLoadDelay !== 'undefined') config.autoLoadDelay = options.autoLoadDelay;
+
+        // 请求持久化存储（防止浏览器清理缓存）
+        await requestPersistentStorageIfNeeded();
+
         // 绑定页面离开事件
         bindPageEvents();
 
         // 初始化状态检查
         checkModelStatus();
 
+        // 检查缓存状态
+        await checkCachedModels();
+
         // 绑定 UI 按钮
         bindUIButtons();
 
-        console.log('[ModelLifecycle] 初始化完成');
+        // 自动加载模型
+        if (config.autoLoad) {
+            autoLoadModel();
+        }
+
+        console.log('[ModelLifecycle] 初始化完成, 自动加载:', config.autoLoad);
     }
 
     /**
-     * 绑定页面事件（用于自动卸载）
+     * 请求持久化存储（防止浏览器自动清理）
+     */
+    async function requestPersistentStorageIfNeeded() {
+        if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.requestPersistentStorage) {
+            try {
+                const isPersisted = await LocalFileStorage.isStoragePersisted();
+                if (!isPersisted) {
+                    console.log('[ModelLifecycle] 请求持久化存储权限...');
+                    await LocalFileStorage.requestPersistentStorage();
+                } else {
+                    console.log('[ModelLifecycle] 存储已持久化');
+                }
+            } catch (error) {
+                console.warn('[ModelLifecycle] 请求持久化存储失败:', error);
+            }
+        }
+    }
+
+    /**
+     * 检查已缓存的模型
+     */
+    async function checkCachedModels() {
+        var modelId = getConfiguredModelId();
+        if (!modelId) {
+            console.log('[ModelLifecycle] 未配置模型，跳过缓存检查');
+            return;
+        }
+
+        console.log('[ModelLifecycle] 检查模型缓存状态:', modelId);
+
+        // 检查 LocalFileStorage
+        if (typeof LocalFileStorage !== 'undefined') {
+            try {
+                var hasFiles = await LocalFileStorage.hasModelFiles(modelId);
+                if (hasFiles) {
+                    console.log('[ModelLifecycle] 检测到模型缓存 (LocalFileStorage):', modelId);
+                    updateCacheStatusUI(true, modelId);
+                    return;
+                }
+            } catch (error) {
+                console.warn('[ModelLifecycle] 检查 LocalFileStorage 缓存失败:', error);
+            }
+        }
+
+        // 检查 ModelStorage
+        if (typeof ModelStorage !== 'undefined' && ModelStorage.hasModelFiles) {
+            try {
+                var hasFiles = await ModelStorage.hasModelFiles(modelId);
+                if (hasFiles) {
+                    console.log('[ModelLifecycle] 检测到模型缓存 (ModelStorage):', modelId);
+                    updateCacheStatusUI(true, modelId);
+                    return;
+                }
+            } catch (error) {
+                console.warn('[ModelLifecycle] 检查 ModelStorage 缓存失败:', error);
+            }
+        }
+
+        console.log('[ModelLifecycle] 未检测到模型缓存:', modelId);
+        updateCacheStatusUI(false, modelId);
+    }
+
+    /**
+     * 更新缓存状态 UI
+     */
+    function updateCacheStatusUI(cached, modelId) {
+        var cacheStatusEl = document.getElementById('hf-model-cache-status');
+        if (cacheStatusEl) {
+            if (cached) {
+                cacheStatusEl.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check-circle"></i> 已缓存</span>';
+                cacheStatusEl.title = '模型已缓存到本地，可快速加载';
+            } else {
+                cacheStatusEl.innerHTML = '<span class="badge bg-secondary"><i class="mdi mdi-cloud-download-outline"></i> 未缓存</span>';
+                cacheStatusEl.title = '首次加载时将从 Hugging Face 下载';
+            }
+        }
+    }
+
+    /**
+     * 自动加载模型（页面访问时）
+     */
+    async function autoLoadModel() {
+        // 检查是否已配置模型
+        var modelId = getConfiguredModelId();
+        if (!modelId) {
+            console.log('[ModelLifecycle] 未配置模型，跳过自动加载');
+            return;
+        }
+
+        // 检查模型是否已加载
+        if (state.loaded || state.loading) {
+            console.log('[ModelLifecycle] 模型已加载或正在加载，跳过自动加载');
+            return;
+        }
+
+        // 延迟加载，等待页面完全渲染
+        setTimeout(async function() {
+            console.log('[ModelLifecycle] 开始自动加载模型:', modelId);
+            try {
+                await loadModel(modelId);
+            } catch (error) {
+                console.error('[ModelLifecycle] 自动加载模型失败:', error);
+            }
+        }, config.autoLoadDelay);
+    }
+
+    /**
+     * 获取配置的模型 ID
+     */
+    function getConfiguredModelId() {
+        // 尝试从页面元素获取（配置页）
+        var configCard = document.getElementById('hf-model-config-card');
+        if (configCard) {
+            var modelId = configCard.getAttribute('data-current-model-id');
+            if (modelId && modelId.trim()) {
+                return modelId.trim();
+            }
+        }
+
+        // 尝试从隐藏字段获取
+        var hiddenInput = document.getElementById('hf_model_id');
+        if (hiddenInput && hiddenInput.value) {
+            return hiddenInput.value.trim();
+        }
+
+        // 尝试从任务页隐藏字段获取
+        var taskPageModelId = document.getElementById('task-page-model-id');
+        if (taskPageModelId && taskPageModelId.value) {
+            // 检查是否启用
+            var enabled = taskPageModelId.getAttribute('data-enabled');
+            if (enabled === '1') {
+                return taskPageModelId.value.trim();
+            }
+        }
+
+        // 尝试从 badge 获取
+        var badge = document.getElementById('hf-model-current-badge');
+        if (badge) {
+            var text = badge.textContent.trim();
+            if (text && text !== '未配置模型' && text !== 'Not Configured') {
+                return text;
+            }
+        }
+
+        // 尝试从 HFModelManager 配置获取
+        if (typeof HFModelManager !== 'undefined') {
+            try {
+                var managerState = HFModelManager.getState();
+                if (managerState && managerState.modelId) {
+                    return managerState.modelId;
+                }
+            } catch (e) {
+                // 忽略
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 绑定页面事件（用于自动加载/卸载）
      */
     function bindPageEvents() {
         // 页面离开时卸载模型
-        window.addEventListener('beforeunload', function () {
-            if (state.loaded) {
+        window.addEventListener('beforeunload', function (event) {
+            if (config.autoUnload && state.loaded) {
                 console.log('[ModelLifecycle] 页面即将离开，卸载模型');
                 unloadModel();
             }
         });
 
-        // 页面可见性变化时可选卸载
+        // 页面关闭时确保卸载
+        window.addEventListener('unload', function () {
+            if (config.autoUnload && state.loaded) {
+                console.log('[ModelLifecycle] 页面关闭，强制卸载模型');
+                try {
+                    if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded()) {
+                        HFModelManager.unload();
+                    }
+                } catch (e) {
+                    // 忽略错误
+                }
+            }
+        });
+
+        // 页面可见性变化时处理
         document.addEventListener('visibilitychange', function () {
-            if (document.hidden && state.loaded) {
+            if (document.hidden) {
                 console.log('[ModelLifecycle] 页面进入后台');
-                // 可选：在页面进入后台时卸载模型以节省资源
-                // 暂时不自动卸载，由用户手动控制
+                // 页面进入后台时不自动卸载，保持模型状态
+            } else {
+                console.log('[ModelLifecycle] 页面恢复前台');
+                // 页面恢复前台时，如果模型未加载且配置了自动加载，则尝试加载
+                if (config.autoLoad && !state.loaded && !state.loading) {
+                    var modelId = getConfiguredModelId();
+                    if (modelId) {
+                        console.log('[ModelLifecycle] 页面恢复，检查是否需要重新加载模型');
+                        // 检查 HFModelManager 的实际状态
+                        if (typeof HFModelManager !== 'undefined') {
+                            var managerState = HFModelManager.getState();
+                            if (!managerState.loaded) {
+                                autoLoadModel();
+                            } else {
+                                // 同步状态
+                                updateState({
+                                    loaded: true,
+                                    modelType: managerState.type,
+                                    modelId: managerState.modelId
+                                });
+                                updateUI('loaded');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 监听页面 pagehide 事件（移动端/Safari 更可靠）
+        window.addEventListener('pagehide', function (event) {
+            if (config.autoUnload && state.loaded) {
+                console.log('[ModelLifecycle] 页面隐藏，卸载模型');
+                try {
+                    if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded()) {
+                        HFModelManager.unload();
+                    }
+                } catch (e) {
+                    // 忽略错误
+                }
             }
         });
     }
@@ -128,10 +362,7 @@ var ModelLifecycle = (function () {
 
         // 获取模型 ID
         if (!modelId) {
-            var configCard = document.getElementById('hf-model-config-card');
-            if (configCard) {
-                modelId = configCard.getAttribute('data-current-model-id');
-            }
+            modelId = getConfiguredModelId();
         }
 
         if (!modelId) {
@@ -366,12 +597,7 @@ var ModelLifecycle = (function () {
      * 检查是否有配置的模型
      */
     function hasConfiguredModel() {
-        var configCard = document.getElementById('hf-model-config-card');
-        if (configCard) {
-            var modelId = configCard.getAttribute('data-current-model-id');
-            return !!modelId && modelId.trim() !== '';
-        }
-        return false;
+        return !!getConfiguredModelId();
     }
 
     /**
@@ -425,6 +651,9 @@ var ModelLifecycle = (function () {
         unloadModel: unloadModel,
         checkModelStatus: checkModelStatus,
         autoLoadAfterDownload: autoLoadAfterDownload,
+        autoLoadModel: autoLoadModel,
+        getConfiguredModelId: getConfiguredModelId,
+        hasConfiguredModel: hasConfiguredModel,
         getState: getState,
         isLoaded: isLoaded,
         updateUI: updateUI

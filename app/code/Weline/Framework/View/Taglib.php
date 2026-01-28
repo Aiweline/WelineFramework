@@ -121,12 +121,20 @@ class Taglib
             $name = str_replace(array("\r\n", "\r", "\n", "\t", ' '), '', $name);
         }
         if (str_contains($name, $filter)) {
-            $name_arr = explode('|', $name);
-            $name = $name_arr[0];
-            if (w_get_string_between_quotes($name_arr[1])) {
-                $default = $name_arr[1];
-            } else {
-                $default = $this->varParser($name_arr[1]);
+            // 排除逻辑操作符 || 和 &&，它们不是默认值分隔符
+            // 使用正则表达式匹配单个 | 而不是 || 或 |=
+            // 匹配模式：| 前面不是 | 或 =，后面可以是引号（默认值可能是字符串）
+            $pattern = '/(?<![\|=])' . preg_quote($filter, '/') . '(?![\|])/';
+            if (preg_match($pattern, $name)) {
+                $name_arr = explode('|', $name, 2); // 只分割第一个 |，避免分割 ||
+                $name = $name_arr[0];
+                if (isset($name_arr[1])) {
+                    if (w_get_string_between_quotes($name_arr[1])) {
+                        $default = $name_arr[1];
+                    } else {
+                        $default = $this->varParser($name_arr[1]);
+                    }
+                }
             }
         }
         return [$name, $default];
@@ -204,7 +212,24 @@ class Taglib
                 $name_str .= $piece;
                 unset($pieces[$key]);
             }
-            $name_str = $has_piece ? "{$name_str}??{$default}) " : $name_str . ' ';
+            // 如果有嵌套属性，需要闭合括号并添加默认值
+            if ($has_piece) {
+                $name_str = "{$name_str}??{$default}) ";
+            } else {
+                // 检查是否是操作符（||, &&, ==, !=, >, <, >=, <= 等）
+                $isOperator = in_array(trim($var), ['||', '&&', '==', '!=', '!==', '===', '>', '<', '>=', '<=', 'or', 'and', 'xor']);
+                if ($isOperator) {
+                    // 操作符不需要添加默认值，直接添加空格
+                    $name_str = $name_str . ' ';
+                } else {
+                    // 对于简单变量，如果提供了默认值，也要添加默认值
+                    if ($default !== '\'\'') {
+                        $name_str = "{$name_str}??{$default} ";
+                    } else {
+                        $name_str = $name_str . ' ';
+                    }
+                }
+            }
         }
 
         // 替换操作符
@@ -1980,6 +2005,22 @@ class Taglib
                 $i = $end + 2;
                 continue;
             }
+            if ($text[$i] === '@') {
+                $tagToken = $this->tryParseInlineTagToken($text, $i, $line, 1);
+                if ($tagToken instanceof AstToken) {
+                    if ($buffer !== '') {
+                        $nodes[] = new TextNode($line, $buffer);
+                        $buffer = '';
+                    }
+                    $tag = new TagNode($line, $tagToken->meta['name'] ?? '', []);
+                    $tag->tagKey = $tagToken->meta['inlineKey'] ?? '@tag()';
+                    $tag->inlineContent = $tagToken->meta['value'] ?? '';
+                    $tag->raw = $tagToken->meta['raw'] ?? $tagToken->value;
+                    $nodes[] = $tag;
+                    $i += strlen($tagToken->value);
+                    continue;
+                }
+            }
             $buffer .= $text[$i];
             $i++;
         }
@@ -2068,11 +2109,12 @@ class Taglib
         // 使用属性解析器解析属性
         $attrMap = $this->parseAttributesWithTokenizer($attrPart);
         
-        // 检查是否有属性值包含框架标签
+        // 检查是否有属性值包含框架标签或内联标签
         $hasFrameworkTagInAttr = false;
+        $hasInlineTagInAttr = false;
         foreach ($attrMap as $attrValue) {
+            // 检查是否包含框架标签（<tag> 格式）
             if (strpos($attrValue, '<') !== false && strpos($attrValue, '>') !== false) {
-                // 检查是否包含框架标签
                 foreach ($frameworkTags as $ftName => $ftConfig) {
                     if (strpos($attrValue, '<' . $ftName) !== false || strpos($attrValue, '<' . $ftName . '>') !== false) {
                         $hasFrameworkTagInAttr = true;
@@ -2080,21 +2122,33 @@ class Taglib
                     }
                 }
             }
+            // 检查是否包含内联标签（@tag() 或 @tag{} 格式）
+            if (strpos($attrValue, '@') !== false) {
+                // 尝试解析内联标签以确认
+                $testToken = $this->tryParseInlineTagToken($attrValue, strpos($attrValue, '@'), $line, 1);
+                if ($testToken instanceof AstToken) {
+                    $hasInlineTagInAttr = true;
+                    break;
+                }
+            }
         }
         
-        if (!$hasFrameworkTagInAttr) {
-            // 没有框架标签在属性值中，使用原来的处理方式
+        if (!$hasFrameworkTagInAttr && !$hasInlineTagInAttr) {
+            // 没有框架标签或内联标签在属性值中，使用原来的处理方式
             return $this->parseTextWithInlineTags($markup, $line);
         }
         
-        // 有框架标签在属性值中，需要特殊处理
+        // 有框架标签或内联标签在属性值中，需要特殊处理
         // 构建新的标记，编译属性值中的标签
         $result = [];
         $result[] = new TextNode($line, '<' . $tagName);
         
         foreach ($attrMap as $attrName => $attrValue) {
-            // 检查属性值是否包含框架标签
+            // 检查属性值是否包含框架标签或内联标签
             $hasTag = false;
+            $hasInlineTag = false;
+            
+            // 检查框架标签
             foreach ($frameworkTags as $ftName => $ftConfig) {
                 if (strpos($attrValue, '<' . $ftName) !== false) {
                     $hasTag = true;
@@ -2102,8 +2156,16 @@ class Taglib
                 }
             }
             
-            if ($hasTag) {
-                // 属性值包含框架标签，解析并编译
+            // 检查内联标签
+            if (strpos($attrValue, '@') !== false) {
+                $testToken = $this->tryParseInlineTagToken($attrValue, strpos($attrValue, '@'), $line, 1);
+                if ($testToken instanceof AstToken) {
+                    $hasInlineTag = true;
+                }
+            }
+            
+            if ($hasTag || $hasInlineTag) {
+                // 属性值包含框架标签或内联标签，解析并编译
                 $attrNodes = $this->parseAttributeValueNodes($attrValue, $line, $frameworkTags);
                 $result[] = new TextNode($line, ' ' . $attrName . '="');
                 $result = array_merge($result, $attrNodes);
@@ -2188,6 +2250,26 @@ class Taglib
                 $nodes[] = new PhpNode($line, $raw, trim($parsedValue));
                 $i = $end + 2;
                 continue;
+            }
+            
+            // 检测 @static() 等内联标签
+            if ($text[$i] === '@') {
+                $tagToken = $this->tryParseInlineTagToken($text, $i, $line, 1);
+                if ($tagToken instanceof AstToken) {
+                    // 先保存之前的文本
+                    if ($buffer !== '') {
+                        $nodes = array_merge($nodes, $this->parseTextNodes($buffer, $line));
+                        $buffer = '';
+                    }
+                    // 创建内联标签节点
+                    $tag = new TagNode($line, $tagToken->meta['name'] ?? '', []);
+                    $tag->tagKey = $tagToken->meta['inlineKey'] ?? '@tag()';
+                    $tag->inlineContent = $tagToken->meta['value'] ?? '';
+                    $tag->raw = $tagToken->meta['raw'] ?? $tagToken->value;
+                    $nodes[] = $tag;
+                    $i += strlen($tagToken->value);
+                    continue;
+                }
             }
             
             $buffer .= $text[$i];
@@ -2733,7 +2815,8 @@ class Taglib
                 $contentExpr = $this->buildChildrenBufferExpression($node->children, $tags, $template, $fileName);
                 $rawAttrs = addslashes($node->rawAttributes ?? '');
                 $inlineContent = addslashes($node->inlineContent ?? '');
-                $output .= self::PHP_OPEN_TAG . 'php echo $this->getTaglib()->renderRuntimeTag($this, \'' .
+                // 将 $this 赋值给 $_template 变量，以便在闭包中使用
+                $output .= self::PHP_OPEN_TAG . 'php $_template = $this; echo $this->getTaglib()->renderRuntimeTag($this, \'' .
                     addslashes($node->name) . '\', \'' . $tagKey . '\', ' . $attrsExpr . ', ' . $contentExpr .
                     ', ' . var_export($fileName, true) . ', \'' . $rawAttrs . '\', \'' . $inlineContent . '\');' .
                     self::PHP_CLOSE_TAG;
@@ -2780,7 +2863,9 @@ class Taglib
     private function buildChildrenBufferExpression(array $children, array $tags, Template $template, string $fileName): string
     {
         $childPhp = $this->generatePhpFromNodes($children, $tags, $template, $fileName);
-        return '(function(){ ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })()';
+        // 在闭包内部提取模板数据，使变量可在闭包中访问
+        // 使用 $_template 变量（在调用 renderRuntimeTag 之前已赋值），因为不能使用 use ($this)
+        return '(function() use ($_template) { extract($_template->getData(), EXTR_SKIP); ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })()';
     }
 
     public function renderRuntimeTag(

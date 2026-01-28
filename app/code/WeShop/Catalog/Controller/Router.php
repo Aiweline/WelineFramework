@@ -53,14 +53,26 @@ class Router implements RouterInterface
         // 2. 标准化路径：去掉首尾斜杠
         $path = trim($path, '/');
 
-        // 3. 只处理以 catalog/category/ 开头的路径
+        // 3. 跳过货币/语言前缀（如 CNY/en_US/）
+        // 常见格式：{currency}/{locale}/catalog/category/... 或 {locale}/catalog/category/...
         $prefix = 'catalog/category/';
-        if (!str_starts_with($path, $prefix)) {
-            return;
+        $workingPath = $path;
+        
+        // 如果路径不是以 catalog/category/ 开头，尝试跳过前缀
+        if (!str_starts_with($workingPath, $prefix)) {
+            // 尝试查找 catalog/category/ 在路径中的位置
+            $catalogPos = strpos($workingPath, $prefix);
+            if ($catalogPos !== false) {
+                // 提取 catalog/category/ 及其后面的部分
+                $workingPath = substr($workingPath, $catalogPos);
+            } else {
+                // 路径中不包含 catalog/category/，跳过
+                return;
+            }
         }
 
         // 4. 取 catalog/category/ 后面的全部作为 handle（支持层级路径，如 men/shirts）
-        $categoryHandle = substr($path, strlen($prefix));
+        $categoryHandle = substr($workingPath, strlen($prefix));
         $categoryHandle = trim($categoryHandle, '/');
         if ($categoryHandle === '') {
             return;

@@ -12,6 +12,7 @@ $period = $this->getData('period') ?? 'month';
 $showSalesCount = (bool)($this->getData('show_sales_count') ?? false);
 $columns = $this->getData('columns') ?? '4';
 $layout = $this->getData('layout') ?? 'grid';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例产品数据
 $products = [];
@@ -20,7 +21,7 @@ for ($i = 1; $i <= $limit; $i++) {
         'id' => $i,
         'name' => __('热销产品 %d', $i),
         'url' => '/product/best-' . $i,
-        'image' => '/images/products/bestseller-' . $i . '.jpg',
+        'image' => $placeholder,
         'price' => rand(30, 400),
         'original_price' => rand(30, 400) * 1.15,
         'rating' => rand(42, 50) / 10,
@@ -66,9 +67,15 @@ $widgetId = 'bestsellers-' . uniqid();
                                 </span>
                             <?php endif; ?>
                             
-                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
-                                <img src="<?= htmlspecialchars($product['image']) ?>" 
-                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                            <?php
+                            // 确保所有产品字段都是字符串，避免null值
+                            $productUrl = (string)($product['url'] ?? '');
+                            $productImage = (string)($product['image'] ?? '');
+                            $productName = (string)($product['name'] ?? '');
+                            ?>
+                            <a href="<?= htmlspecialchars($productUrl) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($productImage) ?>" 
+                                     alt="<?= htmlspecialchars($productName) ?>"
                                      class="product-image"
                                      loading="lazy">
                             </a>
@@ -89,8 +96,8 @@ $widgetId = 'bestsellers-' . uniqid();
                         
                         <div class="product-info">
                             <h3 class="product-name">
-                                <a href="<?= htmlspecialchars($product['url']) ?>">
-                                    <?= htmlspecialchars($product['name']) ?>
+                                <a href="<?= htmlspecialchars($productUrl) ?>">
+                                    <?= htmlspecialchars($productName) ?>
                                 </a>
                             </h3>
                             

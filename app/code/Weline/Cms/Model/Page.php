@@ -21,6 +21,7 @@ class Page extends Model
     // 字段定义
     public const fields_ID = 'page_id';
     public const fields_HANDLE = 'handle';
+    public const fields_WEBSITE_ID = 'website_id';
     public const fields_TYPE = 'type';
     public const fields_NAME = 'name';
     public const fields_TITLE = 'title';
@@ -195,8 +196,15 @@ class Page extends Model
                 self::fields_HANDLE,
                 TableInterface::column_type_VARCHAR,
                 100,
-                'not null unique',
+                'not null',
                 '页面句柄'
+            )
+            ->addColumn(
+                self::fields_WEBSITE_ID,
+                TableInterface::column_type_INTEGER,
+                11,
+                'not null default 0',
+                '网站ID（0表示默认/全局）'
             )
             ->addColumn(
                 self::fields_TYPE,
@@ -345,7 +353,9 @@ class Page extends Model
                 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
                 '更新时间'
             )
+            ->addIndex(TableInterface::index_type_UNIQUE, 'UNQ_WEBSITE_HANDLE', [self::fields_WEBSITE_ID, self::fields_HANDLE], '网站+句柄唯一')
             ->addIndex(TableInterface::index_type_KEY, 'idx_handle', [self::fields_HANDLE], '句柄索引')
+            ->addIndex(TableInterface::index_type_KEY, 'idx_website_id', [self::fields_WEBSITE_ID], '网站ID索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_type', [self::fields_TYPE], '类型索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_parent_id', [self::fields_PARENT_ID], '父页面索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_status', [self::fields_STATUS], '状态索引')
@@ -357,8 +367,12 @@ class Page extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        if (!$setup->tableExist()) {
+            return;
+        }
+        
         // 添加 default_locale 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField('default_locale')) {
+        if (!$setup->hasField('default_locale')) {
             $setup->alterTable()->addColumn(
                 self::fields_DEFAULT_LOCALE,
                 '',
@@ -370,7 +384,7 @@ class Page extends Model
         }
         
         // 添加 cta_event_name 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->hasField('cta_event_name')) {
+        if (!$setup->hasField('cta_event_name')) {
             $setup->alterTable()->addColumn(
                 self::fields_CTA_EVENT_NAME,
                 '',
@@ -379,6 +393,55 @@ class Page extends Model
                 '',
                 'CTA转化事件名称'
             )->alter();
+        }
+        
+        // 添加 website_id 字段（如果不存在）
+        if (!$setup->hasField(self::fields_WEBSITE_ID)) {
+            try {
+                $setup->alterTable()->addColumn(
+                    self::fields_WEBSITE_ID,
+                    self::fields_HANDLE,
+                    TableInterface::column_type_INTEGER,
+                    11,
+                    'not null default 0',
+                    '网站ID（0表示默认/全局）'
+                )->alter();
+            } catch (\Exception $e) {
+                // 如果 ALTER 失败，尝试直接执行 SQL
+                if (!$setup->hasField(self::fields_WEBSITE_ID)) {
+                    $tableName = $setup->getTable();
+                    try {
+                        $setup->query("ALTER TABLE {$tableName} ADD COLUMN `" . self::fields_WEBSITE_ID . "` INT(11) NOT NULL DEFAULT 0 COMMENT '网站ID（0表示默认/全局）' AFTER `" . self::fields_HANDLE . "`");
+                    } catch (\Exception $e2) {
+                        // 静默失败，可能字段已存在
+                    }
+                }
+            }
+            
+            // 添加 website_id 普通索引
+            try {
+                $tableName = $setup->getTable();
+                $setup->query("CREATE INDEX idx_website_id ON {$tableName} (" . self::fields_WEBSITE_ID . ")");
+            } catch (\Exception $e) {
+                // 索引可能已存在
+            }
+        }
+        
+        // 删除旧的 handle 唯一索引（如果存在）
+        try {
+            $tableName = $setup->getTable();
+            // 尝试删除可能的唯一约束（MySQL 中 unique 可能是索引或约束）
+            $setup->query("DROP INDEX handle ON {$tableName}");
+        } catch (\Exception $e) {
+            // 索引可能不存在
+        }
+        
+        // 添加新的组合唯一索引：(website_id, handle)
+        try {
+            $tableName = $setup->getTable();
+            $setup->query("CREATE UNIQUE INDEX UNQ_WEBSITE_HANDLE ON {$tableName} (" . self::fields_WEBSITE_ID . ", " . self::fields_HANDLE . ")");
+        } catch (\Exception $e) {
+            // 索引可能已存在
         }
     }
 

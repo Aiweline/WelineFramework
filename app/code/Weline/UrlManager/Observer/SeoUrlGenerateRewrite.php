@@ -38,11 +38,33 @@ class SeoUrlGenerateRewrite implements ObserverInterface
         if (empty($real_uri)) {
             return;
         }
+        
+        // 获取当前网站ID（从 URL 解析结果或当前请求）
+        $websiteId = 0;
+        if (isset($parse['website']['website_id'])) {
+            $websiteId = (int)$parse['website']['website_id'];
+        } elseif (isset($parse['server']['WELINE_WEBSITE_ID']) && $parse['server']['WELINE_WEBSITE_ID'] !== '') {
+            $websiteId = (int)$parse['server']['WELINE_WEBSITE_ID'];
+        } else {
+            $websiteId = UrlRewrite::getCurrentWebsiteId();
+        }
+        
         $match_uri = strtolower($uri);
+        // 按 website_id 查询重写规则（不回退到 website_id=0）
+        // 先尝试 match_uri，再尝试 real_uri
         $rewrite = $this->urlRewrite->reset()
-            ->where('path', $match_uri, '=', 'or')
-            ->where('path', $real_uri)
+            ->clearQuery()
+            ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
+            ->where(UrlRewrite::fields_PATH, $match_uri)
             ->find()->fetch();
+        
+        if (!$rewrite->getId() && $match_uri !== $real_uri) {
+            $rewrite = $this->urlRewrite->reset()
+                ->clearQuery()
+                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
+                ->where(UrlRewrite::fields_PATH, $real_uri)
+                ->find()->fetch();
+        }
         if ($rewrite->getId()) {
             $rewrite_path = $rewrite->getData('rewrite');
             // FIXME 可能出现替换失败，导致无法访问

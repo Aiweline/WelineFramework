@@ -79,7 +79,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <div class='row'>
                     <div class='col-12'>
                         <nav class='dashboard-tabs mb-3' role='tablist'>
-                            <button class='dashboard-tab active' 
+                            <button class='btn dashboard-tab active' 
                                     type='button'
                                     id='dashboard-main-overview-tab'
                                     data-bs-toggle='tab'
@@ -89,18 +89,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     aria-selected='true'>
                                 <span class='d-none d-sm-inline-block'>
                                     <lang>概览</lang>
-                                </span>
-                            </button>
-                            <button class='dashboard-tab' 
-                                    type='button'
-                                    id='dashboard-pixel-statistics-tab'
-                                    data-bs-toggle='tab'
-                                    data-bs-target='#dashboard-pixel-statistics'
-                                    role='tab'
-                                    aria-controls='dashboard-pixel-statistics'
-                                    aria-selected='false'>
-                                <span class='d-none d-sm-inline-block'>
-                                    <lang>像素</lang>
                                 </span>
                             </button>
                             <!-- 通过 hook 动态追加更多 Tab -->
@@ -800,34 +788,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <!-- end row -->
                     </div>
                     <!-- 默认概览 Tab 内容结束 -->
-
-                    <!-- 像素统计 Tab 内容 -->
-                    <div class='tab-pane fade' id='dashboard-pixel-statistics' role='tabpanel' aria-labelledby='dashboard-pixel-statistics-tab'>
-                        <?php
-                        // 包含像素统计顶部数据
-                        try {
-                            $topStatsFile = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Visitor' . DS . 'view' . DS . 'hooks' . DS . 'Weline_Admin' . DS . 'backend' . DS . 'layouts' . DS . 'dashboard' . DS . 'top-statistics.phtml';
-                            if (file_exists($topStatsFile)) {
-                                include $topStatsFile;
-                            }
-                        } catch (\Throwable $e) {
-                            // 忽略错误
-                        }
-                        ?>
-
-                        <?php
-                        // 包含像素统计概览数据
-                        try {
-                            $mainOverviewFile = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Visitor' . DS . 'view' . DS . 'hooks' . DS . 'Weline_Admin' . DS . 'backend' . DS . 'layouts' . DS . 'dashboard' . DS . 'main-overview.phtml';
-                            if (file_exists($mainOverviewFile)) {
-                                include $mainOverviewFile;
-                            }
-                        } catch (\Throwable $e) {
-                            // 忽略错误
-                        }
-                        ?>
-                    </div>
-                    <!-- 像素统计 Tab 内容结束 -->
 
                     <!-- 通过 hook 动态追加更多 Tab 内容 -->
                     <w:hook>Weline_Admin::backend::layouts::dashboard::main-tabs-content</w:hook>

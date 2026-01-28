@@ -6,11 +6,13 @@
  * - $category       Category|null  分类对象（编辑时）
  * - $action         string         表单提交地址
  * - $parent_options array          父级分类选项
+ * - $sites          array          站点列表
  */
 
 use GuoLaiRen\Blog\Model\Category;
 
 $isEdit = $category && $category->getId();
+$sites = $this->getData('sites') ?? [];
 ?>
 <w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
@@ -76,6 +78,24 @@ $isEdit = $category && $category->getId();
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
+                                <label for="site_id" class="form-label">
+                                    <lang>所属站点</lang> <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" id="site_id" name="site_id" required>
+                                    <option value=""><lang>请选择</lang></option>
+                                    <?php foreach ($sites as $site): ?>
+                                        <option value="<?= $site['site_id'] ?>"
+                                            <?= ($category && (int)$category->getData(Category::fields_SITE_ID) == $site['site_id']) ? 'selected' : '' ?>
+                                            <?= (!$category && empty($category)) ? '' : '' ?>>
+                                            <?= htmlspecialchars($site['site_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="invalid-feedback"><lang>请选择所属站点</lang></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
                                 <label for="parent_id" class="form-label">
                                     <lang>父级分类</lang>
                                 </label>
@@ -90,7 +110,10 @@ $isEdit = $category && $category->getId();
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="sort_order" class="form-label">
                                     <lang>排序</lang>
@@ -101,7 +124,7 @@ $isEdit = $category && $category->getId();
                                 <small class="text-muted"><lang>数字越小越靠前</lang></small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="status" class="form-label">
                                     <lang>状态</lang>
@@ -223,6 +246,12 @@ document.getElementById('name').addEventListener('blur', function() {
         // 如果是中文，进行简单的拼音转换（这里只是移除中文字符）
         slugInput.value = name.replace(/[\u4e00-\u9fa5]/g, '');
     }
+});
+
+// 站点选择变化时，更新父级分类列表（可选功能，如果需要可以添加 AJAX 请求）
+document.getElementById('site_id')?.addEventListener('change', function() {
+    // 如果需要根据站点动态加载父级分类，可以在这里添加 AJAX 请求
+    // 目前父级分类列表在页面加载时已经根据当前站点过滤了
 });
 </script>
 

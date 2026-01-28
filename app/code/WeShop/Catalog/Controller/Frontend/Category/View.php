@@ -6,6 +6,8 @@ namespace WeShop\Catalog\Controller\Frontend\Category;
 
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Catalog\Service\CategoryService;
+use WeShop\Product\Model\Product;
+use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -143,8 +145,71 @@ class View extends BaseController
             ]);
         }
         
+        // 获取该分类下的产品（包括所有子分类的产品）
+        $products = [];
+        /** @var ProductCategory $productCategory */
+        $productCategory = ObjectManager::getInstance(ProductCategory::class);
+        
+        // 获取当前分类及所有子孙分类的ID
+        $categoryIds = $this->getAllDescendantCategoryIds($categoryService, $category->getId());
+        $categoryIds[] = $category->getId(); // 包含当前分类本身
+        
+        // 查询关联到当前分类或其任何子分类的产品
+        $productCategory->reset()
+            ->where(ProductCategory::fields_category_id, $categoryIds, 'in')
+            ->joinProduct()
+            ->where('product.' . Product::fields_status, 1); // status = 1 表示启用
+        
+        // 获取产品关联数据
+        $productCategoryList = $productCategory->select()->fetchArray();
+        
+        // 用于去重的产品ID集合（防止同一产品重复显示）
+        $productIdsSeen = [];
+        
+        if (!empty($productCategoryList) && is_array($productCategoryList)) {
+            foreach ($productCategoryList as $row) {
+                // 从关联结果中获取产品数据（joinProduct 后，产品数据在 'product' 键下）
+                $productData = $row['product'] ?? $row;
+                
+                // 确保产品状态为启用（status = 1）
+                $productStatus = (int)($productData['status'] ?? $productData[Product::fields_status] ?? 0);
+                if ($productStatus !== 1) {
+                    continue;
+                }
+                
+                // 获取产品ID（优先从product表，否则从主表）
+                $productId = (int)($productData['product_id'] ?? $productData[Product::fields_ID] ?? $row[ProductCategory::fields_product_id] ?? 0);
+                if ($productId <= 0) {
+                    continue;
+                }
+                
+                // 去重：如果产品已经处理过，跳过（虽然理论上不应该有重复，但为了安全）
+                if (isset($productIdsSeen[$productId])) {
+                    continue;
+                }
+                $productIdsSeen[$productId] = true;
+                
+                $products[] = [
+                    'product_id' => $productId,
+                    'name' => $productData['name'] ?? $productData[Product::fields_name] ?? '',
+                    'short_description' => $productData['short_description'] ?? $productData[Product::fields_short_description] ?? '',
+                    'price' => (float)($productData['price'] ?? $productData[Product::fields_price] ?? 0),
+                    'image' => $productData['image'] ?? $productData[Product::fields_image] ?? '',
+                    'sku' => $productData['sku'] ?? $productData[Product::fields_sku] ?? '',
+                    'handle' => $productData['handle'] ?? $productData[Product::fields_HANDLE] ?? '',
+                    'stock' => (int)($productData['stock'] ?? $productData[Product::fields_stock] ?? 0),
+                    'in_stock' => ((int)($productData['stock'] ?? $productData[Product::fields_stock] ?? 0)) > 0,
+                ];
+            }
+        }
+        
         // 准备模板数据
         $this->assign('category', $categoryData);
+        $this->assign('products', $products);
+        
+        // 将分类和产品数据设置到 Request 对象，供 Hook 模板访问
+        $this->request->setData('category', $categoryData);
+        $this->request->setData('products', $products);
         
         // SEO数据
         $this->assign('title', $categoryData['name']);
@@ -155,5 +220,32 @@ class View extends BaseController
         // 直接返回内容模板，Theme 的 ControllerFetchFileAfter 观察者会自动将内容渲染到 meta.content 中
         // Theme模块会根据 layoutType 和主题配置自动加载对应的布局，并将此模板内容放入布局的 {{meta.content}} 中
         return $this->fetch('WeShop_Catalog::Frontend/Category/content.phtml');
+    }
+    
+    /**
+     * 递归获取所有子孙分类的ID
+     * 
+     * @param CategoryService $categoryService
+     * @param int $parentId 父分类ID
+     * @return array 所有子孙分类ID的数组
+     */
+    private function getAllDescendantCategoryIds(CategoryService $categoryService, int $parentId): array
+    {
+        $ids = [];
+        $children = $categoryService->getChildCategories($parentId);
+        
+        if (!empty($children)) {
+            foreach ($children as $child) {
+                $childId = (int)($child['category_id'] ?? 0);
+                if ($childId > 0) {
+                    $ids[] = $childId;
+                    // 递归获取子分类的子分类
+                    $grandchildIds = $this->getAllDescendantCategoryIds($categoryService, $childId);
+                    $ids = array_merge($ids, $grandchildIds);
+                }
+            }
+        }
+        
+        return $ids;
     }
 }

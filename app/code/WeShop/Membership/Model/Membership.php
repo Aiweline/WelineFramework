@@ -15,6 +15,7 @@ class Membership extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_membership';
     public const primary_key = 'membership_id';
+    public string $indexer = 'membership_indexer';
     
     public const fields_ID = 'membership_id';
     public const fields_CUSTOMER_ID = 'customer_id';

@@ -93,8 +93,21 @@ $this->assign('title', $title);
                     <div class="category-filter-overlay" id="category-filter-overlay"></div>
 
                     <section class="category-grid-content">
-                        <div class="category-grid-container">
-                            {{meta.content ?: content}}
+                        <div class="category-grid-container"
+                             data-wslot="category-products"
+                             data-wslot-name="分类产品区域"
+                             data-wslot-accept="product-grid,product-list-view"
+                             data-wslot-multiple="true">
+                            <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
+                                <if condition="meta.content || content">
+                                    {{meta.content ?: content}}
+                                <else/>
+                                    <div class="slot-placeholder" data-placeholder="category-products">
+                                        <span class="placeholder-icon">📦</span>
+                                        <span class="placeholder-text">分类产品区域 - 展示该分类下的产品</span>
+                                    </div>
+                                </if>
+                            </w:hook>
                         </div>
                     </section>
                 </div>

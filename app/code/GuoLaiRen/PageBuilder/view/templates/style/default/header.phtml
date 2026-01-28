@@ -35,8 +35,10 @@ $styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: 
 $isPreview = $this->getData('is_preview');
 
 // 获取配置值的辅助函数
-function getConfig($settings, $key, $default = '') {
-    return $settings[$key] ?? $default;
+if (!function_exists('getConfig')) {
+    function getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
 }
 
 /**
@@ -49,6 +51,7 @@ function getConfig($settings, $key, $default = '') {
  * @param string $value 配置值
  * @return array ['mobile' => 60, 'tablet' => 70, 'desktop' => 80, 'unit' => 'px']
  */
+if (!function_exists('parseResponsiveValue')) {
 function parseResponsiveValue($value) {
     if (empty($value)) {
         return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
@@ -100,6 +103,7 @@ function parseResponsiveValue($value) {
     
     return $result;
 }
+}
 
 // 从页面配置中读取 Logo 信息
 $logoUrl = $page ? $page->getData('logo') : '';
@@ -131,24 +135,26 @@ $paddingH = parseResponsiveValue($paddingHValue . 'px');
  * @param array $parsed 解析后的响应式值数组
  * @return string CSS值
  */
-function generateResponsiveCSS($parsed) {
-    $mobile = floatval($parsed['mobile']);
-    $desktop = floatval($parsed['desktop']);
-    $unit = $parsed['unit'];
-    
-    // 如果移动端和PC端值相同，直接返回固定值
-    if ($mobile === $desktop) {
-        return $mobile . $unit;
+if (!function_exists('generateResponsiveCSS')) {
+    function generateResponsiveCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        
+        // 如果移动端和PC端值相同，直接返回固定值
+        if ($mobile === $desktop) {
+            return $mobile . $unit;
+        }
+        
+        // 断点定义
+        $minVw = 375;  // 移动端最小宽度
+        $maxVw = 1280; // PC端最大宽度
+        $vwDiff = $maxVw - $minVw;
+        $diff = $desktop - $mobile;
+        
+        // 生成 clamp() 函数
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - {$minVw}px) / {$vwDiff})), {$desktop}{$unit})";
     }
-    
-    // 断点定义
-    $minVw = 375;  // 移动端最小宽度
-    $maxVw = 1280; // PC端最大宽度
-    $vwDiff = $maxVw - $minVw;
-    $diff = $desktop - $mobile;
-    
-    // 生成 clamp() 函数
-    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - {$minVw}px) / {$vwDiff})), {$desktop}{$unit})";
 }
 
 $heightResponsive = generateResponsiveCSS($height);

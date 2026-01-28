@@ -17,22 +17,23 @@ $link = $this->getData('link') ?? '';
 $altText = $this->getData('alt_text') ?? __('广告');
 $openNewTab = (bool)($this->getData('open_new_tab') ?? false);
 $borderRadius = $this->getData('border_radius') ?? '8px';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 // 示例图片
 if (empty($image)) {
-    $image = '/images/banners/ad-placeholder.jpg';
+    $image = $placeholder;
 }
 ?>
 
-<div class="widget-ad-banner" style="border-radius: <?= htmlspecialchars($borderRadius) ?>;">
+<div class="widget-ad-banner" style="border-radius: <?= htmlspecialchars($borderRadius ?? '') ?>;">
     <?php if ($link): ?>
-        <a href="<?= htmlspecialchars($link) ?>" 
+        <a href="<?= htmlspecialchars($link ?? '') ?>" 
            class="ad-link"
            <?= $openNewTab ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>
     <?php endif; ?>
     
-    <img src="<?= htmlspecialchars($image) ?>" 
-         alt="<?= htmlspecialchars($altText) ?>" 
+    <img src="<?= htmlspecialchars($image ?? '') ?>" 
+         alt="<?= htmlspecialchars($altText ?? '') ?>" 
          class="ad-image"
          loading="lazy">
     

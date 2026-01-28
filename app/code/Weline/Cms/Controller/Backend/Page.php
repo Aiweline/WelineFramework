@@ -250,8 +250,17 @@ class Page extends BackendController
                 $ctaEventName = 'cta_' . $data['handle'] . '_click';
             }
             
+            // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
+            $websiteId = $data['website_id'] ?? '';
+            if ($websiteId === '' || $websiteId === null) {
+                $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            } else {
+                $websiteId = (int)$websiteId;
+            }
+            
             $page->clearData()
                 ->setData(PageModel::fields_HANDLE, $data['handle'])
+                ->setData(PageModel::fields_WEBSITE_ID, $websiteId)
                 ->setData(PageModel::fields_TYPE, $data['type'])
                 ->setData(PageModel::fields_NAME, $data['name'])
                 ->setData(PageModel::fields_TITLE, $data['title'])
@@ -552,6 +561,12 @@ class Page extends BackendController
             $ctaEventName = $data['cta_event_name'] ?? '';
             if (empty($ctaEventName) && !empty($data['handle'])) {
                 $ctaEventName = 'cta_' . $data['handle'] . '_click';
+            }
+            
+            // 处理 website_id：如果提供了则更新，否则保持原值
+            $websiteId = $data['website_id'] ?? null;
+            if ($websiteId !== null && $websiteId !== '') {
+                $page->setData(PageModel::fields_WEBSITE_ID, (int)$websiteId);
             }
             
             // 更新页面
@@ -986,6 +1001,8 @@ class Page extends BackendController
     
     /**
      * 检查 handle 是否已存在（AJAX接口）
+     * 
+     * 注意：handle 在同一 website_id 内必须唯一，不同 website_id 可以重复
      */
     #[\Weline\Framework\Acl\Acl('Weline_Cms::page_builder_check_handle', '检查句柄', '', '检查页面句柄是否重复')]
     public function getCheckHandle()
@@ -993,6 +1010,13 @@ class Page extends BackendController
         try {
             $handle = trim($this->request->getGet('handle', ''));
             $pageId = (int)$this->request->getGet('page_id', 0);
+            // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
+            $websiteId = $this->request->getGet('website_id');
+            if ($websiteId === null || $websiteId === '') {
+                $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            } else {
+                $websiteId = (int)$websiteId;
+            }
             
             if (empty($handle)) {
                 return $this->fetchJson([
@@ -1011,9 +1035,10 @@ class Page extends BackendController
                 ]);
             }
             
-            // 查询数据库检查是否已存在
+            // 查询数据库检查是否已存在（在同一 website_id 内）
             $existingPage = clone $this->pageModel;
             $existingPage->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
@@ -1028,7 +1053,7 @@ class Page extends BackendController
                         'message' => __('当前页面的句柄')
                     ]);
                 } else {
-                    // 被其他页面占用
+                    // 被同网站的其他页面占用
                     return $this->fetchJson([
                         'success' => true,
                         'available' => false,
@@ -1061,12 +1086,21 @@ class Page extends BackendController
     /**
      * 通过 handle 获取页面信息（AJAX接口）
      * 用于可视化配置组件初始化
+     * 
+     * 注意：handle 在同一 website_id 内唯一，查询时需指定 website_id
      */
     #[\Weline\Framework\Acl\Acl('Weline_Cms::page_builder_get_page_by_handle', '通过句柄获取页面', '', '通过句柄获取页面信息')]
     public function getPageByHandle()
     {
         try {
             $handle = trim($this->request->getGet('handle', ''));
+            // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
+            $websiteId = $this->request->getGet('website_id');
+            if ($websiteId === null || $websiteId === '') {
+                $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+            } else {
+                $websiteId = (int)$websiteId;
+            }
             
             if (empty($handle)) {
                 return $this->fetchJson([
@@ -1075,9 +1109,10 @@ class Page extends BackendController
                 ]);
             }
             
-            // 查询页面
+            // 查询页面（按 website_id + handle）
             $page = clone $this->pageModel;
             $page->clear()
+                ->where(PageModel::fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
@@ -1246,6 +1281,8 @@ class Page extends BackendController
      * 自动创建或更新页面的 URL 重写规则
      * @param PageModel $page 页面模型
      * @return void
+     * 
+     * 注意：URL 重写按 website_id 隔离，同 website_id 下 handle 唯一
      */
     private function createOrUpdateUrlRewrite(PageModel $page): void
     {
@@ -1255,19 +1292,23 @@ class Page extends BackendController
                 return;
             }
             
+            // 获取页面的 website_id
+            $websiteId = (int)($page->getData(PageModel::fields_WEBSITE_ID) ?? 0);
+            
             // 原始路径
             $originalPath = "cms/frontend/page/view?handle={$handle}";
             
             // 重写路径（使用 handle 作为友好 URL）
             $rewritePath = "/{$handle}";
             
-            // URL 指纹（用于唯一标识）
-            $urlIdentify = "cms_page_{$handle}";
+            // URL 指纹（用于唯一标识，包含 website_id 以支持不同站点同 handle）
+            $urlIdentify = "cms_page_{$websiteId}_{$handle}";
             
-            // 查找是否已存在重写规则
+            // 查找是否已存在重写规则（按 website_id + url_identify）
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
             $existingRewrite = $urlRewriteModel->clear()
+                ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
                 ->where(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
                 ->find()
                 ->fetch();
@@ -1281,6 +1322,7 @@ class Page extends BackendController
                 // 创建新规则
                 $newRewrite = clone $urlRewriteModel;
                 $newRewrite->clearData()
+                    ->setData(UrlRewrite::fields_WEBSITE_ID, $websiteId)
                     ->setData(UrlRewrite::fields_URL_ID, "cms_page_{$page->getId()}")
                     ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
                     ->setData(UrlRewrite::fields_PATH, $originalPath)

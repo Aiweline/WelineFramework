@@ -125,7 +125,11 @@ $colors = $this->getData('colors') ?? [];
         ?>
         <w:hook>Weline_Theme::frontend::partials::footer::links<else/>
         <?php if (!empty($links) && is_array($links)): ?>
-            <div class="footer-content">
+            <div class="footer-content"
+                 data-wslot="links"
+                 data-wslot-name="链接区"
+                 data-wslot-accept="footer-links"
+                 data-wslot-multiple="true">
                 <w:hook>Weline_Theme::frontend::partials::footer::section-before</w:hook>
                 
                 <?php foreach ($links as $section): ?>
@@ -174,7 +178,11 @@ $colors = $this->getData('colors') ?? [];
         <w:hook>Weline_Theme::frontend::partials::footer::social-media<else/>
         <?php if ($showSocialMedia && !empty($socialMedia) && is_array($socialMedia)): ?>
             <w:hook>Weline_Theme::frontend::partials::footer::social-media-before</w:hook>
-            <div class="footer-social-media">
+            <div class="footer-social-media"
+                 data-wslot="social"
+                 data-wslot-name="社交媒体"
+                 data-wslot-accept="footer-social"
+                 data-wslot-exclusive="true">
                 <div class="social-media-title"><?= __('关注我们') ?></div>
                 <div class="social-media-links">
                     <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-before</w:hook>
@@ -200,7 +208,12 @@ $colors = $this->getData('colors') ?? [];
         <?php endif; ?>
         </w:hook>
         
-        <div class="footer-bottom">
+        <!-- 版权区域 Widget Slot -->
+        <div class="footer-bottom"
+             data-wslot="copyright"
+             data-wslot-name="版权信息"
+             data-wslot-accept="footer-copyright"
+             data-wslot-exclusive="true">
             <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
             <p><?= htmlspecialchars($copyright) ?></p>
             <w:hook>Weline_Theme::frontend::partials::footer::copyright-after</w:hook>

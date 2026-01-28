@@ -5,10 +5,11 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$title = $this->getData('title') ?? __('您可能还喜欢');
+$title = (string)($this->getData('title') ?? __('您可能还喜欢'));
 $limit = (int)($this->getData('limit') ?? 4);
-$columns = $this->getData('columns') ?? '4';
-$layout = $this->getData('layout') ?? 'carousel';
+$columns = (string)($this->getData('columns') ?? '4');
+$layout = (string)($this->getData('layout') ?? 'carousel');
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例产品数据
 $products = [];
@@ -17,7 +18,7 @@ for ($i = 1; $i <= $limit; $i++) {
         'id' => $i,
         'name' => __('升级产品 %d', $i),
         'url' => '/product/upsell-' . $i,
-        'image' => '/images/products/upsell-' . $i . '.jpg',
+        'image' => $placeholder,
         'price' => rand(200, 800),
         'original_price' => rand(200, 800) * 1.1,
         'rating' => rand(42, 50) / 10,
@@ -47,11 +48,18 @@ $widgetId = 'up-sell-' . uniqid();
         <div class="products-wrapper">
             <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
                 <?php foreach ($products as $product): ?>
+                    <?php
+                    // 确保所有产品字段都是字符串，避免null值
+                    $productUrl = (string)($product['url'] ?? '');
+                    $productImage = (string)($product['image'] ?? '');
+                    $productName = (string)($product['name'] ?? '');
+                    $productHighlight = (string)($product['highlight'] ?? '');
+                    ?>
                     <div class="product-card">
                         <div class="product-image-wrapper">
-                            <a href="<?= htmlspecialchars($product['url']) ?>" class="product-image-link">
-                                <img src="<?= htmlspecialchars($product['image']) ?>" 
-                                     alt="<?= htmlspecialchars($product['name']) ?>"
+                            <a href="<?= htmlspecialchars($productUrl) ?>" class="product-image-link">
+                                <img src="<?= htmlspecialchars($productImage) ?>" 
+                                     alt="<?= htmlspecialchars($productName) ?>"
                                      class="product-image"
                                      loading="lazy">
                             </a>
@@ -73,15 +81,15 @@ $widgetId = 'up-sell-' . uniqid();
                         
                         <div class="product-info">
                             <h3 class="product-name">
-                                <a href="<?= htmlspecialchars($product['url']) ?>">
-                                    <?= htmlspecialchars($product['name']) ?>
+                                <a href="<?= htmlspecialchars($productUrl) ?>">
+                                    <?= htmlspecialchars($productName) ?>
                                 </a>
                             </h3>
                             
-                            <?php if (!empty($product['highlight'])): ?>
+                            <?php if (!empty($productHighlight)): ?>
                                 <p class="product-highlight">
                                     <i class="ri-checkbox-circle-fill"></i>
-                                    <?= htmlspecialchars($product['highlight']) ?>
+                                    <?= htmlspecialchars($productHighlight) ?>
                                 </p>
                             <?php endif; ?>
                             

@@ -14,16 +14,37 @@
  * 
  * @fields_start
  * 
- * group:games => 游戏区域设置
- * games.display => 显示游戏区域:select:yes|yes,no
- * games.title => 标题:text:Multiples Game
- * games.bg_color => 背景颜色:color:#0f0f1e
- * games.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地图片
- * games.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地图片
- * games.image_2 => 游戏2图片:textarea:|默认使用本地图片
- * games.image_3 => 游戏3图片:textarea:|默认使用本地图片
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ * 
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0f0f1e
+ * style.title_color => 标题颜色:color:#ffd700
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.05)
+ * style.card_border_radius => 卡片圆角:number:12|px
+ * style.card_border_color => 卡片边框色:color:rgba(255,255,255,0.1)
+ * style.card_title_color => 卡片标题颜色:color:#ffd700
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#ffffff
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:30|px
+ * style.card_content_padding => 卡片内容内边距:number:20|px
+ * style.hover_transform => 悬停上移距离:number:5|px
+ * 
+ * group:images => 图片配置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地图片
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地图片
+ * images.image_2 => 游戏2图片:textarea:|默认使用本地图片
+ * images.image_3 => 游戏3图片:textarea:|默认使用本地图片
  * 
  * group:texts => 游戏文本
+ * texts.title => 区域标题:text:Multiples Game
  * texts.game_1_title => 游戏1标题:text:Teen Patti Master
  * texts.game_1_desc => 游戏1描述:textarea:A thrilling card game that combines strategy and luck.
  * texts.game_2_title => 游戏2标题:text:Rummy
@@ -45,22 +66,43 @@ $getConfig = function($key, $default = '') use ($config) {
     return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
 };
 
-$display = $getConfig('games.display', 'yes') !== 'no';
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
 if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
 
-$title = $getConfig('games.title', 'Multiples Game');
-$bgColor = $getConfig('games.bg_color', '#0f0f1e');
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('games.bg_color', '#0f0f1e'));
+$titleColor = $getConfig('style.title_color', '#ffd700');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.05)');
+$cardBorderRadius = $getConfig('style.card_border_radius', '12');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,255,255,0.1)');
+$cardTitleColor = $getConfig('style.card_title_color', '#ffd700');
+$cardTitleFontSize = $getConfig('style.card_title_font_size', '20');
+$cardDescColor = $getConfig('style.card_desc_color', '#ffffff');
+$cardDescFontSize = $getConfig('style.card_desc_font_size', '14');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+$cardGap = $getConfig('style.card_gap', '30');
+$cardContentPadding = $getConfig('style.card_content_padding', '20');
+$hoverTransform = $getConfig('style.hover_transform', '5');
 
+// 图片配置
 $defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1.webp');
 $defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i1-m.webp');
 $defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i2.webp');
 $defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/img/game/game-i3.webp');
 
-$image1Desktop = $getConfig('games.image_1_desktop', '') ?: $defaultImage1Desktop;
-$image1Mobile = $getConfig('games.image_1_mobile', '') ?: $defaultImage1Mobile;
-$image2 = $getConfig('games.image_2', '') ?: $defaultImage2;
-$image3 = $getConfig('games.image_3', '') ?: $defaultImage3;
+$image1Desktop = $getConfig('images.image_1_desktop', $getConfig('games.image_1_desktop', '')) ?: $defaultImage1Desktop;
+$image1Mobile = $getConfig('images.image_1_mobile', $getConfig('games.image_1_mobile', '')) ?: $defaultImage1Mobile;
+$image2 = $getConfig('images.image_2', $getConfig('games.image_2', '')) ?: $defaultImage2;
+$image3 = $getConfig('images.image_3', $getConfig('games.image_3', '')) ?: $defaultImage3;
 
+// 文本内容
+$title = $getConfig('texts.title', $getConfig('games.title', 'Multiples Game'));
 $title1 = $getConfig('texts.game_1_title', 'Teen Patti Master');
 $desc1 = $getConfig('texts.game_1_desc', 'Teen Patti Master is a thrilling card game that combines strategy and luck. Players aim to create the best three-card hand.');
 $title2 = $getConfig('texts.game_2_title', 'Rummy');
@@ -72,18 +114,20 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
 <style>
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
-    padding: 60px 20px;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    width: 100%;
 }
 
-#<?= $componentId ?> .tpmst-games-container {
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 1200px;
     margin: 0 auto;
+    padding: 0 20px;
 }
 
 #<?= $componentId ?> .tpmst-games-title {
     text-align: center;
-    font-size: clamp(24px, 5vw, 36px);
-    color: #ffd700;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 5vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    color: <?= htmlspecialchars($titleColor) ?>;
     margin-bottom: 40px;
     font-weight: 700;
 }
@@ -91,19 +135,19 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
 #<?= $componentId ?> .tpmst-games-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 30px;
+    gap: <?= htmlspecialchars($cardGap) ?>px;
 }
 
 #<?= $componentId ?> .tpmst-game-card {
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    border-radius: <?= htmlspecialchars($cardBorderRadius) ?>px;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
     transition: transform 0.3s, box-shadow 0.3s;
 }
 
 #<?= $componentId ?> .tpmst-game-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-<?= htmlspecialchars($hoverTransform) ?>px);
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
@@ -120,26 +164,30 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
 }
 
 #<?= $componentId ?> .tpmst-game-content {
-    padding: 20px;
+    padding: <?= htmlspecialchars($cardContentPadding) ?>px;
 }
 
 #<?= $componentId ?> .tpmst-game-card-title {
-    font-size: 20px;
-    color: #ffd700;
+    font-size: <?= htmlspecialchars($cardTitleFontSize) ?>px;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
     margin-bottom: 10px;
     font-weight: 600;
 }
 
 #<?= $componentId ?> .tpmst-game-card-desc {
-    font-size: 14px;
-    color: #ffffff;
+    font-size: <?= htmlspecialchars($cardDescFontSize) ?>px;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
     line-height: 1.6;
     opacity: 0.9;
 }
 
 @media (max-width: 767px) {
     #<?= $componentId ?> {
-        padding: 40px 15px;
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+    
+    #<?= $componentId ?> .tpmst-section-inner {
+        padding: 0 15px;
     }
     
     #<?= $componentId ?> .tpmst-games-grid {
@@ -148,9 +196,11 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
 }
 </style>
 
-<section id="<?= $componentId ?>" class="tpmst-games-component">
-    <div class="tpmst-games-container">
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-games-component">
+    <div class="tpmst-section-inner">
+        <?php if ($showTitle): ?>
         <h2 class="tpmst-games-title"><?= htmlspecialchars($title) ?></h2>
+        <?php endif; ?>
         <div class="tpmst-games-grid">
             <div class="tpmst-game-card">
                 <div class="tpmst-game-image">
@@ -162,7 +212,9 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
                 </div>
                 <div class="tpmst-game-content">
                     <h3 class="tpmst-game-card-title"><?= htmlspecialchars($title1) ?></h3>
+                    <?php if ($showDescription): ?>
                     <p class="tpmst-game-card-desc"><?= htmlspecialchars($desc1) ?></p>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="tpmst-game-card">
@@ -171,7 +223,9 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
                 </div>
                 <div class="tpmst-game-content">
                     <h3 class="tpmst-game-card-title"><?= htmlspecialchars($title2) ?></h3>
+                    <?php if ($showDescription): ?>
                     <p class="tpmst-game-card-desc"><?= htmlspecialchars($desc2) ?></p>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="tpmst-game-card">
@@ -180,7 +234,9 @@ $desc3 = $getConfig('texts.game_3_desc', 'Slots are games of chance where player
                 </div>
                 <div class="tpmst-game-content">
                     <h3 class="tpmst-game-card-title"><?= htmlspecialchars($title3) ?></h3>
+                    <?php if ($showDescription): ?>
                     <p class="tpmst-game-card-desc"><?= htmlspecialchars($desc3) ?></p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

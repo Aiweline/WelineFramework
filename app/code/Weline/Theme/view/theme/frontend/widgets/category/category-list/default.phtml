@@ -11,6 +11,7 @@ $maxDepth = (int)($this->getData('max_depth') ?? 2);
 $showCount = (bool)($this->getData('show_count') ?? true);
 $showImage = (bool)($this->getData('show_image') ?? false);
 $collapsed = (bool)($this->getData('collapsed') ?? false);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例分类数据
 $categories = [
@@ -18,7 +19,7 @@ $categories = [
         'id' => 1,
         'name' => __('电子产品'),
         'url' => '/category/electronics',
-        'image' => '/images/categories/electronics.jpg',
+        'image' => $placeholder,
         'count' => 156,
         'children' => [
             ['id' => 11, 'name' => __('手机'), 'url' => '/category/phones', 'count' => 45],
@@ -30,7 +31,7 @@ $categories = [
         'id' => 2,
         'name' => __('服装鞋帽'),
         'url' => '/category/fashion',
-        'image' => '/images/categories/fashion.jpg',
+        'image' => $placeholder,
         'count' => 243,
         'children' => [
             ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
@@ -42,7 +43,7 @@ $categories = [
         'id' => 3,
         'name' => __('家居生活'),
         'url' => '/category/home',
-        'image' => '/images/categories/home.jpg',
+        'image' => $placeholder,
         'count' => 178,
         'children' => [
             ['id' => 31, 'name' => __('家具'), 'url' => '/category/furniture', 'count' => 56],

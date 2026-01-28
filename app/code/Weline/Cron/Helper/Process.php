@@ -45,19 +45,29 @@ class Process
         }
 
         Process::setProcessOutput($process_name, $command . PHP_EOL);
+
+        // 部分主机/环境禁用了 proc_open，这里做降级处理，避免致命错误
+        if (!\function_exists('proc_open')) {
+            // 同步执行一遍命令，将输出写入日志文件，但无法获取真实 PID
+            // Windows / *nix 都复用同一条命令（上面已根据系统拼接好了）
+            @\exec($command . ' 2>&1', $output, $exitCode);
+            Process::setProcessOutput($process_name, implode(PHP_EOL, $output) . PHP_EOL);
+            return 0;
+        }
+
         $procPipes = [];
-        $process = proc_open($command, $descriptorspec, $procPipes);
+        $process = \proc_open($command, $descriptorspec, $procPipes);
         Process::setProcessOutput($process_name, json_encode($process) . PHP_EOL);
-        # 设置进程非阻塞
-//        stream_set_blocking($procPipes[1], false);
-        stream_set_blocking($procPipes[1], true);
-        if (is_resource($process)) {
-            $pid = proc_get_status($process)['pid'];
+        // 设置进程阻塞读取（这里仅用于获取 PID，随后就关闭）
+        \stream_set_blocking($procPipes[1], true);
+        if (\is_resource($process)) {
+            $status = \proc_get_status($process);
+            $pid = $status['pid'] ?? 0;
             // 关闭文件指针
-            fclose($procPipes[0]);
-            fclose($procPipes[1]);
-            fclose($procPipes[2]);
-            return $pid;
+            \fclose($procPipes[0]);
+            \fclose($procPipes[1]);
+            \fclose($procPipes[2]);
+            return (int)$pid;
         }
         return 0;
     }
@@ -158,23 +168,41 @@ class Process
     {
         # 分系统环境
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // Windows 10/11 环境中 wmic 可能不存在，这里统一使用 tasklist 兼容实现
+            // 通过 tasklist /V 获取带命令行信息的 php.exe 进程，然后按命令行前缀匹配 $pname
             $pname = str_replace(PHP_BINARY, '', $pname);
-            # 查询所有包含php.exe的进程信息，然后从详情中过滤对应$pname的进程ID
-            $command = "wmic process where name='php.exe' get CommandLine,ProcessId";
-            $res = [];
-            exec($command, $res);
-            # 查询进程详情
-            array_shift($res);
-            foreach ($res as $value) {
-                if (empty($value)) {
+            $pname = trim($pname);
+            $command = 'tasklist /FI "IMAGENAME eq php.exe" /V /FO LIST 2>NUL';
+            $output = [];
+            exec($command, $output);
+
+            $currentCmdLine = '';
+            $currentPid = 0;
+
+            foreach ($output as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    // 一条进程记录结束，判断是否匹配
+                    if ($currentPid > 0 && $currentCmdLine !== '') {
+                        // 去掉 php.exe 路径，只看其后面的命令行是否以 $pname 开头
+                        $normalized = str_replace('"'.PHP_BINARY.'"', '', $currentCmdLine);
+                        $normalized = trim($normalized);
+                        if ($normalized !== '' && str_starts_with($normalized, $pname)) {
+                            return $currentPid;
+                        }
+                    }
+                    $currentCmdLine = '';
+                    $currentPid = 0;
                     continue;
                 }
-                $value = str_replace('"' . PHP_BINARY . '"', '', $value);
-                if (str_starts_with($value, $pname)) {
-                    $value = explode(' ', $value);
-                    return (int)end($value);
+
+                if (stripos($line, 'PID:') === 0) {
+                    $currentPid = (int)trim(substr($line, 4));
+                } elseif (stripos($line, 'Command Line:') === 0) {
+                    $currentCmdLine = trim(substr($line, strlen('Command Line:')));
                 }
             }
+
             return 0;
         } else {
             return (int)exec('ps aux | egrep "' . $pname . '" | grep -v grep | tail -n 1 | awk \'{print $2}\'');

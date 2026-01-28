@@ -14,41 +14,42 @@ $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Ht
     @template(Weline_Admin::common/head.phtml)
     <title><?= __('主题管理') ?> - <?= __('Weline Admin 管理面板') ?></title>
     <style>
-        /* 暗色主题卡片样式 */
+        /* 主题卡片样式 - 自动跟随后台主题 */
         .theme-card {
-            border: 1px solid #2e2e3e;
+            border: 1px solid var(--vz-border-color, #e9ebec);
             border-radius: 12px;
             overflow: hidden;
             transition: all 0.3s ease;
-            background: #1e1e2d;
+            background: var(--vz-card-bg, #fff);
         }
         .theme-card:hover {
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             transform: translateY(-2px);
-            border-color: #3699ff;
+            border-color: var(--vz-primary, #3699ff);
         }
         .theme-card.active {
-            border-color: #1bc5bd;
+            border-color: var(--vz-success, #1bc5bd);
             box-shadow: 0 0 0 2px rgba(27, 197, 189, 0.3);
         }
         .theme-preview {
             height: 180px;
-            background: linear-gradient(135deg, #252531 0%, #1a1a27 100%);
+            background: var(--vz-light, #f3f6f9);
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-            border-bottom: 1px solid #2e2e3e;
+            border-bottom: 1px solid var(--vz-border-color, #e9ebec);
         }
         .theme-preview .theme-icon {
             font-size: 64px;
-            color: rgba(54, 153, 255, 0.3);
+            color: var(--vz-primary, #3699ff);
+            opacity: 0.4;
         }
         .theme-preview .active-badge {
             position: absolute;
             top: 12px;
             right: 12px;
-            background: #1bc5bd;
+            background: var(--vz-success, #1bc5bd);
             color: #fff;
             padding: 4px 12px;
             border-radius: 20px;
@@ -57,28 +58,28 @@ $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Ht
         }
         .theme-info {
             padding: 20px;
-            background: #1e1e2d;
+            background: var(--vz-card-bg, #fff);
         }
         .theme-name {
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 8px;
-            color: #ffffff;
+            color: var(--vz-heading-color, #495057);
         }
         .theme-meta {
             font-size: 13px;
-            color: #a2a3b7;
+            color: var(--vz-secondary-color, #878a99);
             margin-bottom: 4px;
         }
         .theme-meta i {
             width: 16px;
             margin-right: 6px;
-            color: #6c6c80;
+            color: var(--vz-secondary-color, #878a99);
         }
         .theme-actions {
             padding: 16px 20px;
-            background: #252531;
-            border-top: 1px solid #2e2e3e;
+            background: var(--vz-tertiary-bg, #f3f6f9);
+            border-top: 1px solid var(--vz-border-color, #e9ebec);
             display: flex;
             gap: 10px;
         }
@@ -89,46 +90,79 @@ $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Ht
             justify-content: center;
             gap: 6px;
         }
-        .theme-actions .btn-outline-primary {
-            color: #3699ff;
-            border-color: #3699ff;
-        }
-        .theme-actions .btn-outline-primary:hover {
-            background-color: #3699ff;
-            color: #fff;
-        }
-        .theme-actions .btn-outline-info {
-            color: #8950fc;
-            border-color: #8950fc;
-        }
-        .theme-actions .btn-outline-info:hover {
-            background-color: #8950fc;
-            color: #fff;
-        }
-        .theme-actions .btn-outline-success {
-            color: #1bc5bd;
-            border-color: #1bc5bd;
-        }
-        .theme-actions .btn-outline-success:hover {
-            background-color: #1bc5bd;
-            color: #fff;
-        }
-        .theme-actions .btn-success {
-            background-color: #1bc5bd;
-            border-color: #1bc5bd;
-        }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #a2a3b7;
+            color: var(--vz-secondary-color, #878a99);
         }
         .empty-state i {
             font-size: 64px;
-            color: #363645;
+            color: var(--vz-border-color, #e9ebec);
             margin-bottom: 20px;
         }
         .empty-state h5 {
-            color: #ffffff;
+            color: var(--vz-heading-color, #495057);
+        }
+
+        /* 暗色模式下的样式调整 */
+        [data-theme-mode="dark"] .theme-card,
+        [data-layout-mode="dark"] .theme-card,
+        [data-bs-theme="dark"] .theme-card {
+            background: #212529;
+            border-color: #343a40;
+        }
+        [data-theme-mode="dark"] .theme-card:hover,
+        [data-layout-mode="dark"] .theme-card:hover,
+        [data-bs-theme="dark"] .theme-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border-color: #3699ff;
+        }
+        [data-theme-mode="dark"] .theme-preview,
+        [data-layout-mode="dark"] .theme-preview,
+        [data-bs-theme="dark"] .theme-preview {
+            background: linear-gradient(135deg, #2b2f38 0%, #1e2125 100%);
+            border-bottom-color: #343a40;
+        }
+        [data-theme-mode="dark"] .theme-preview .theme-icon,
+        [data-layout-mode="dark"] .theme-preview .theme-icon,
+        [data-bs-theme="dark"] .theme-preview .theme-icon {
+            color: rgba(54, 153, 255, 0.5);
+        }
+        [data-theme-mode="dark"] .theme-info,
+        [data-layout-mode="dark"] .theme-info,
+        [data-bs-theme="dark"] .theme-info {
+            background: #212529;
+        }
+        [data-theme-mode="dark"] .theme-name,
+        [data-layout-mode="dark"] .theme-name,
+        [data-bs-theme="dark"] .theme-name {
+            color: #e9ecef;
+        }
+        [data-theme-mode="dark"] .theme-meta,
+        [data-layout-mode="dark"] .theme-meta,
+        [data-bs-theme="dark"] .theme-meta {
+            color: #adb5bd;
+        }
+        [data-theme-mode="dark"] .theme-actions,
+        [data-layout-mode="dark"] .theme-actions,
+        [data-bs-theme="dark"] .theme-actions {
+            background: #2b2f38;
+            border-top-color: #343a40;
+        }
+        [data-theme-mode="dark"] .empty-state,
+        [data-layout-mode="dark"] .empty-state,
+        [data-bs-theme="dark"] .empty-state {
+            color: #adb5bd;
+        }
+        [data-theme-mode="dark"] .empty-state i,
+        [data-layout-mode="dark"] .empty-state i,
+        [data-bs-theme="dark"] .empty-state i {
+            color: #495057;
+        }
+        [data-theme-mode="dark"] .empty-state h5,
+        [data-layout-mode="dark"] .empty-state h5,
+        [data-bs-theme="dark"] .empty-state h5 {
+            color: #e9ecef;
         }
     </style>
 </head>

@@ -73,6 +73,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <input type="hidden" name="url_id" value="{{url.url_id}}">
                                     <input type="hidden" name="origin_path" value="{{url.path}}">
                                     <div class='row'>
+                                        <div class='col-md-3'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='website_id'>
+                                                    <lang>网站ID</lang>
+                                                </label>
+                                                <input type='number' class='form-control' id='website_id' name="website_id"
+                                                       placeholder='@lang{输入网站ID，0表示默认}' 
+                                                       value='@if{url.website_id=>url.website_id}@else{current_website_id}@endif'
+                                                       min="0" required>
+                                                <div class='valid-tooltip'>
+                                                    <lang>网站ID正确</lang>
+                                                </div>
+                                                <div class='invalid-tooltip'>
+                                                    <lang>请输入网站ID</lang>
+                                                </div>
+                                                <small class="text-muted"><lang>同一网站ID下重写路径必须唯一</lang></small>
+                                            </div>
+                                        </div>
                                         <div class='col-md-4'>
                                             <div class='mb-3 position-relative'>
                                                 <label class='form-label' for='path'>
@@ -105,13 +123,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 </div>
                                             </div>
                                         </div>
-                                        <!--                                        <div class='col-md-4'>-->
-                                        <!--                                            <div class='mb-3 position-relative'>-->
-                                        <!--                                                <input class='form-check form-switch' type='checkbox' id='keep_origin' switch='bool' checked>-->
-                                        <!--                                                <label class='form-label' for='switch3' data-on-label='Yes'-->
-                                        <!--                                                       data-off-label='No'></label>-->
-                                        <!--                                            </div>-->
-                                        <!--                                        </div>-->
                                     </div>
                                     <button class='btn btn-primary' type='submit'>
                                         <lang>重写路由</lang>

@@ -351,6 +351,84 @@ class PageLayout extends Model
         $this->setData(self::fields_HEADER_COMPONENT, $headerComponent);
         $this->setData(self::fields_FOOTER_COMPONENT, $footerComponent);
         
+        // 获取页面类型
+        $pageType = $page->getData(Page::fields_TYPE);
+        
+        // 如果是博客类型页面，设置对应的默认组件
+        if (in_array($pageType, [Page::TYPE_BLOG, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG_LIST])) {
+            $blogComponent = null;
+            
+            // 根据页面类型选择对应的博客组件
+            switch ($pageType) {
+                case Page::TYPE_BLOG:
+                    // 博客文章详情页 -> blog-detail
+                    $blogComponent = 'blog-detail';
+                    break;
+                case Page::TYPE_BLOG_CATEGORY:
+                    // 博客分类页 -> blog-category
+                    $blogComponent = 'blog-category';
+                    break;
+                case Page::TYPE_BLOG_LIST:
+                    // 博客列表页 -> blog-list
+                    $blogComponent = 'blog-list';
+                    break;
+            }
+            
+            // 如果找到了对应的博客组件，只添加该组件
+            if ($blogComponent) {
+                // 检查组件是否存在
+                $components = Component::getByStyleCode($styleCode, false, true);
+                $componentExists = false;
+                $actualComponentCode = null;
+                
+                foreach ($components['own'] as $component) {
+                    $componentCode = $component->getData(Component::fields_CODE);
+                    if ($componentCode === $blogComponent || 
+                        $componentCode === $styleCode . '-' . $blogComponent) {
+                        $componentExists = true;
+                        $actualComponentCode = $componentCode;
+                        break;
+                    }
+                }
+                
+                // 如果组件不存在，尝试不带前缀的组件代码
+                if (!$componentExists) {
+                    foreach ($components['own'] as $component) {
+                        $componentCode = $component->getData(Component::fields_CODE);
+                        // 去掉模板前缀后比较
+                        $codeWithoutPrefix = strpos($componentCode, $styleCode . '-') === 0 
+                            ? substr($componentCode, strlen($styleCode) + 1) 
+                            : $componentCode;
+                        if ($codeWithoutPrefix === $blogComponent) {
+                            $componentExists = true;
+                            $actualComponentCode = $componentCode;
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果还是找不到，尝试直接使用组件代码（可能模板中没有前缀）
+                if (!$componentExists) {
+                    $actualComponentCode = $blogComponent;
+                }
+                
+                if ($actualComponentCode) {
+                    $contentComponents = [
+                        [
+                            'id' => uniqid('comp_'),
+                            'component' => $actualComponentCode,
+                            'config' => [],
+                            'from_template' => $styleCode,
+                            'sort_order' => 10,
+                        ]
+                    ];
+                    $this->setContentComponents($contentComponents);
+                    return $this;
+                }
+            }
+        }
+        
+        // 非博客类型页面或博客组件不存在时，使用默认逻辑
         // 获取内容组件
         $components = Component::getByStyleCode($styleCode, false, true);
         $contentComponents = [];
@@ -381,9 +459,27 @@ class PageLayout extends Model
     
     /**
      * 导出布局配置为完整的JSON结构
+     * 
+     * 注意：content 数组中的组件会被规范化为使用 'code' 字段
+     * 以保持与前端模板（layout.phtml）和默认JSON配置的一致性
      */
     public function exportConfig(): array
     {
+        // 规范化 content 组件，确保使用 'code' 字段名
+        $contentComponents = $this->getContentComponents();
+        $normalizedContent = [];
+        
+        foreach ($contentComponents as $comp) {
+            $normalizedContent[] = [
+                'code' => $comp['component'] ?? $comp['code'] ?? '',
+                'enabled' => $comp['enabled'] ?? true,
+                'config' => $comp['config'] ?? [],
+                'instance_id' => $comp['id'] ?? $comp['instance_id'] ?? '',
+                'from_template' => $comp['from_template'] ?? '',
+                'sort_order' => $comp['sort_order'] ?? 0,
+            ];
+        }
+        
         return [
             'version' => '1.0',
             'page_id' => $this->getData(self::fields_PAGE_ID),
@@ -392,7 +488,7 @@ class PageLayout extends Model
                 'component' => $this->getData(self::fields_HEADER_COMPONENT),
                 'config' => $this->getHeaderConfig(),
             ],
-            'content' => $this->getContentComponents(),
+            'content' => $normalizedContent,
             'footer' => [
                 'component' => $this->getData(self::fields_FOOTER_COMPONENT),
                 'config' => $this->getFooterConfig(),
@@ -402,6 +498,8 @@ class PageLayout extends Model
     
     /**
      * 从JSON配置导入布局
+     * 
+     * 注意：content 数组会被转换为数据库存储格式（使用 'component' 字段）
      */
     public function importConfig(array $config): self
     {
@@ -420,7 +518,19 @@ class PageLayout extends Model
         }
         
         if (isset($config['content'])) {
-            $this->setContentComponents($config['content']);
+            // 规范化为数据库存储格式（使用 'component' 字段）
+            $normalizedContent = [];
+            foreach ($config['content'] as $comp) {
+                $normalizedContent[] = [
+                    'id' => $comp['instance_id'] ?? $comp['id'] ?? uniqid('comp_'),
+                    'component' => $comp['code'] ?? $comp['component'] ?? '',
+                    'config' => $comp['config'] ?? [],
+                    'from_template' => $comp['from_template'] ?? '',
+                    'sort_order' => $comp['sort_order'] ?? 0,
+                    'enabled' => $comp['enabled'] ?? true,
+                ];
+            }
+            $this->setContentComponents($normalizedContent);
         }
         
         return $this;

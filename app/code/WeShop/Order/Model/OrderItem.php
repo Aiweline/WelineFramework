@@ -15,6 +15,7 @@ class OrderItem extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_order_item';
     public const primary_key = 'item_id';
+    public string $indexer = 'order_item_indexer';
     
     public const fields_ID = 'item_id';
     public const fields_ORDER_ID = 'order_id';
