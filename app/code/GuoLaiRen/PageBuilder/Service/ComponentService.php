@@ -22,6 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
 class ComponentService
 {
     private Component $componentModel;
+    private ComponentValidator $componentValidator;
     
     // 共享组件模板代码
     public const SHARED_STYLE_CODE = '_shared';
@@ -29,16 +30,79 @@ class ComponentService
     public function __construct()
     {
         $this->componentModel = ObjectManager::getInstance(Component::class);
+        $this->componentValidator = ObjectManager::getInstance(ComponentValidator::class);
     }
     
     /**
-     * 扫描并注册模板组件
+     * 扫描并注册模板组件（包含验证）
+     * 
+     * @param string $styleCode 模板代码
+     * @param bool $validateFirst 是否先验证后扫描
+     * @param bool $throwOnError 验证失败时是否抛出异常
+     * @return array 扫描结果，包含验证信息
      */
-    public function scanAndRegister(string $styleCode): void
+    public function scanAndRegister(string $styleCode, bool $validateFirst = true, bool $throwOnError = false): array
     {
-        if (!empty($styleCode)) {
-            Component::scanAndRegister($styleCode);
+        $result = [
+            'validation' => null,
+            'scan' => null,
+        ];
+        
+        if (empty($styleCode)) {
+            return $result;
         }
+        
+        // 先进行验证
+        if ($validateFirst) {
+            $validation = $this->componentValidator->validateTemplate($styleCode, $throwOnError);
+            $result['validation'] = $validation;
+            
+            // 如果有错误且不是强制模式，返回警告但仍继续扫描
+            if (!$validation['valid'] && !$throwOnError) {
+                error_log("[ComponentService] 模板 {$styleCode} 组件验证有错误: " . implode('; ', $validation['errors']));
+            }
+        }
+        
+        // 执行扫描
+        $result['scan'] = Component::scanAndRegister($styleCode);
+        
+        return $result;
+    }
+    
+    /**
+     * 验证模板组件配置
+     * 
+     * @param string $styleCode 模板代码
+     * @param bool $throwOnError 是否在出错时抛出异常
+     * @return array 验证结果
+     */
+    public function validateTemplate(string $styleCode, bool $throwOnError = false): array
+    {
+        return $this->componentValidator->validateTemplate($styleCode, $throwOnError);
+    }
+    
+    /**
+     * 验证布局配置中的组件引用
+     * 
+     * @param array $layoutConfig 布局配置
+     * @param string $styleCode 模板代码
+     * @param bool $throwOnError 是否在出错时抛出异常
+     * @return array 验证结果
+     */
+    public function validateLayoutConfig(array $layoutConfig, string $styleCode, bool $throwOnError = false): array
+    {
+        return $this->componentValidator->validateLayoutConfig($layoutConfig, $styleCode, $throwOnError);
+    }
+    
+    /**
+     * 生成验证报告
+     * 
+     * @param string $styleCode 模板代码
+     * @return string 格式化的验证报告
+     */
+    public function generateValidationReport(string $styleCode): string
+    {
+        return $this->componentValidator->generateReport($styleCode);
     }
     
     /**

@@ -350,8 +350,24 @@ class LayoutAssembler
                 $componentFile = $componentFiles[$code] ?? null;
                 $actualCode = $code;
                 
-                // 特殊处理：tpmst-footer 映射到 footer-links（默认 footer 组件）
-                if ($code === 'tpmst-footer' || $code === $styleCode . '-footer') {
+                // 特殊处理：{styleCode}-header 映射到 header-nav（默认 header 组件）
+                if (!$componentFile && (
+                    $code === $styleCode . '-header' || 
+                    $code === 'tpmst-header' ||
+                    $code === 'sattaking-header' ||
+                    $code === 'header'
+                )) {
+                    $actualCode = 'header-nav';
+                    $componentFile = $componentFiles[$actualCode] ?? null;
+                }
+                
+                // 特殊处理：{styleCode}-footer 映射到 footer-links（默认 footer 组件）
+                if (!$componentFile && (
+                    $code === $styleCode . '-footer' || 
+                    $code === 'tpmst-footer' ||
+                    $code === 'sattaking-footer' ||
+                    $code === 'footer'
+                )) {
                     $actualCode = 'footer-links';
                     $componentFile = $componentFiles[$actualCode] ?? null;
                 }
@@ -483,10 +499,29 @@ class LayoutAssembler
         // 实际使用的组件代码（可能去掉前缀后的）
         $actualCode = $componentCode;
         
-        // 特殊处理：tpmst-footer 映射到 footer-links（默认 footer 组件）
-        if ($componentCode === 'tpmst-footer' || $componentCode === $styleCode . '-footer') {
-            $actualCode = 'footer-links';
-            $componentFile = $componentFiles[$actualCode] ?? null;
+        // 特殊处理：{styleCode}-header 或 header 映射到 header-nav（默认 header 组件）
+        // 注意：必须在 footer 处理之前，因为条件判断顺序很重要
+        if (!$componentFile) {
+            // 匹配 {styleCode}-header 或 tpmst-header 格式
+            if ($componentCode === $styleCode . '-header' || 
+                $componentCode === 'tpmst-header' ||
+                $componentCode === 'sattaking-header' ||
+                $componentCode === 'header') {
+                $actualCode = 'header-nav';
+                $componentFile = $componentFiles[$actualCode] ?? null;
+            }
+        }
+        
+        // 特殊处理：{styleCode}-footer 或 footer 映射到 footer-links（默认 footer 组件）
+        if (!$componentFile) {
+            // 匹配 {styleCode}-footer 或 tpmst-footer 格式
+            if ($componentCode === $styleCode . '-footer' || 
+                $componentCode === 'tpmst-footer' ||
+                $componentCode === 'sattaking-footer' ||
+                $componentCode === 'footer') {
+                $actualCode = 'footer-links';
+                $componentFile = $componentFiles[$actualCode] ?? null;
+            }
         }
         
         // 如果直接查找失败，尝试去掉模板前缀再查找
@@ -499,7 +534,21 @@ class LayoutAssembler
             }
         }
         
+        // 如果还是找不到，尝试在所有组件中模糊匹配
         if (!$componentFile) {
+            // 尝试匹配部分名称（如 slider 匹配 hero-slider）
+            foreach ($componentFiles as $code => $file) {
+                if (str_contains($code, $componentCode) || str_contains($componentCode, $code)) {
+                    $actualCode = $code;
+                    $componentFile = $file;
+                    break;
+                }
+            }
+        }
+        
+        if (!$componentFile) {
+            // 记录日志帮助调试
+            error_log("[LayoutAssembler::getComponentMetadata] 组件未找到: code={$componentCode}, style={$styleCode}, available=" . implode(',', array_keys($componentFiles)));
             return null;
         }
         

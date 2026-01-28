@@ -44,6 +44,8 @@ if (empty($footerComponents)) {
 }
 
 // 组件代码到文件的映射
+// 注意：此映射必须与 component.json 保持同步
+// 所有组件文件必须实际存在于 components/ 目录下
 $componentFiles = [
     // Header 组件
     'header-nav' => 'header/nav.phtml',
@@ -58,15 +60,9 @@ $componentFiles = [
     'games' => 'content/games.phtml',
     'testimonials' => 'content/testimonials.phtml',
     'faq' => 'content/faq.phtml',
-    'app-info' => 'content/app-info.phtml',
-    'blog-content' => 'content/blog.phtml',
     'blog-list' => 'content/blog-list.phtml',
     'blog-detail' => 'content/blog-detail.phtml',
-    'strategy' => 'content/strategy.phtml',
-    'hindi-content' => 'content/hindi.phtml',
-    'disclaimer' => 'content/disclaimer.phtml',
-    'floating-download' => 'content/floating-download.phtml',
-    'mobile-nav' => 'content/mobile-nav.phtml',
+    'blog-category' => 'content/blog-category.phtml',
     'legal-content' => 'content/legal-content.phtml',
     'about-content' => 'content/about-content.phtml',
     'contact-content' => 'content/contact-content.phtml',
