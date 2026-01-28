@@ -121,11 +121,12 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            // 清理模型状态
-            $this->clear()->reset();
+            // 使用新模型实例，避免复用旧实例可能残留的事务状态
+            /** @var SystemConfig $config */
+            $config = ObjectManager::getInstance(SystemConfig::class);
             
             // 直接设置数据，save(true) 会根据 $_unit_primary_keys 自动判断 insert/update
-            $this->setData([
+            $config->setData([
                 self::fields_KEY => $key,
                 self::fields_VALUE => $value,
                 self::fields_MODULE => $module,
