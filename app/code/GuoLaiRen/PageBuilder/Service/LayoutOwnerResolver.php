@@ -107,9 +107,10 @@ class LayoutOwnerResolver
      * 5. 虚拟页面（id=0）直接使用默认布局配置，不访问数据库
      * 
      * @param Page $page 当前页面
+     * @param bool $forBackend 是否为后台编辑场景（true时不检查首页发布状态）
      * @return array 完整布局配置
      */
-    public function getFullLayoutConfig(Page $page): array
+    public function getFullLayoutConfig(Page $page, bool $forBackend = false): array
     {
         $layoutOwnerPageId = $this->resolveLayoutOwnerPageId($page);
         $pageType = $page->getData(Page::fields_TYPE);
@@ -148,7 +149,8 @@ class LayoutOwnerResolver
         }
         
         // 非首页：header/footer 从首页继承
-        $homePage = $page->getHomePage();
+        // 后台编辑时不检查首页发布状态，允许预览/编辑草稿状态首页的配置
+        $homePage = $page->getHomePage(null, !$forBackend);
         if ($homePage && $homePage->getId()) {
             $homeLayout = $this->layoutService->getOrCreate((int)$homePage->getId());
             $homeConfig = $homeLayout->exportConfig();
@@ -286,9 +288,10 @@ class LayoutOwnerResolver
      * 根据页面ID获取完整布局配置
      * 
      * @param int $pageId 页面ID
+     * @param bool $forBackend 是否为后台编辑场景（true时不检查首页发布状态）
      * @return array 完整布局配置
      */
-    public function getFullLayoutConfigByPageId(int $pageId): array
+    public function getFullLayoutConfigByPageId(int $pageId, bool $forBackend = false): array
     {
         $page = clone $this->pageModel;
         $page->load($pageId);
@@ -297,7 +300,7 @@ class LayoutOwnerResolver
             return [];
         }
         
-        return $this->getFullLayoutConfig($page);
+        return $this->getFullLayoutConfig($page, $forBackend);
     }
     
     /**
@@ -358,7 +361,8 @@ class LayoutOwnerResolver
         
         // 处理 header/footer：始终保存到首页
         if ($pageType !== Page::TYPE_HOME) {
-            $homePage = $page->getHomePage();
+            // 后台编辑时不检查首页发布状态（传入 false），允许保存到草稿状态的首页
+            $homePage = $page->getHomePage(null, false);
             if ($homePage && $homePage->getId()) {
                 $homePageId = (int)$homePage->getId();
                 
