@@ -2867,6 +2867,22 @@ class Taglib
         if ($tagKey === 'tag-start' && !empty($config['tag-end'])) {
             $start = $config['callback']('tag-start', $config, $tagData, $attributes);
             $end = $config['callback']('tag-end', $config, $tagData, $attributes);
+            
+            // 对于 if 标签，需要将内容中的 <else/> 和 <elseif .../> 转换为 PHP 代码
+            if ($node->name === 'if' || $node->name === 'w:if') {
+                // 处理 <elseif condition="..."/>
+                $content = preg_replace_callback(
+                    '/<(?:w:)?elseif\s+condition\s*=\s*["\']([^"\']+)["\']\s*\/?>/i',
+                    function ($matches) {
+                        $condition = $this->varParser($this->checkVar($matches[1]));
+                        return self::PHP_OPEN_TAG . 'php elseif(' . $condition . '):' . self::PHP_CLOSE_TAG;
+                    },
+                    $content
+                );
+                // 处理 <else/> 和 <else />
+                $content = preg_replace('/<(?:w:)?else\s*\/?>/i', self::PHP_OPEN_TAG . 'php else:' . self::PHP_CLOSE_TAG, $content);
+            }
+            
             return $start . $content . $end;
         }
 
