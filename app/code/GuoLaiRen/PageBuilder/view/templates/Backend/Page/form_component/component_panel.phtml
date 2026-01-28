@@ -699,9 +699,14 @@ html[data-theme="dark"] .component-tag.other,
 <div class="component-panel" id="componentPanel">
     <div class="component-panel-header">
         <h6><i class="mdi mdi-puzzle"></i> <?= __('组件库') ?></h6>
-        <button type="button" class="component-panel-toggle" onclick="toggleComponentPanel()" title="<?= __('收起/展开') ?>">
-            <i class="mdi mdi-chevron-right"></i>
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 4px 8px; font-size: 11px;" onclick="openAiGenerateComponent()" title="<?= __('AI生成组件') ?>">
+                <i class="mdi mdi-auto-fix"></i>
+            </button>
+            <button type="button" class="component-panel-toggle" onclick="toggleComponentPanel()" title="<?= __('收起/展开') ?>">
+                <i class="mdi mdi-chevron-right"></i>
+            </button>
+        </div>
     </div>
     
     <div class="component-search">
@@ -1584,6 +1589,247 @@ async function saveComponentConfig() {
     // TODO: 调用API保存
     
     closeComponentConfig();
+}
+
+// ========== AI 生成组件功能 ==========
+
+// 打开AI生成组件弹窗
+function openAiGenerateComponent() {
+    if (typeof Swal === 'undefined') {
+        alert('<?= __('SweetAlert2 未加载') ?>');
+        return;
+    }
+    
+    Swal.fire({
+        title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 生成组件') ?>',
+        html: `
+            <div style="text-align: left;">
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('组件类型') ?></label>
+                    <select id="aiComponentRegion" class="form-select">
+                        <option value="header"><?= __('头部组件 (Header)') ?></option>
+                        <option value="content" selected><?= __('内容组件 (Content)') ?></option>
+                        <option value="footer"><?= __('底部组件 (Footer)') ?></option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('组件名称') ?></label>
+                    <input type="text" id="aiComponentName" class="form-control" placeholder="<?= __('例如：产品展示卡片') ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('组件描述') ?></label>
+                    <textarea id="aiComponentDesc" class="form-control" rows="3" placeholder="<?= __('详细描述组件的功能、样式和内容要求...') ?>"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('参考样式') ?></label>
+                    <select id="aiComponentStyle" class="form-select">
+                        <option value="modern"><?= __('现代简约') ?></option>
+                        <option value="card"><?= __('卡片式') ?></option>
+                        <option value="gradient"><?= __('渐变背景') ?></option>
+                        <option value="dark"><?= __('深色主题') ?></option>
+                        <option value="minimal"><?= __('极简风格') ?></option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('配置字段') ?> <small class="text-muted">(<?= __('可选，每行一个') ?>)</small></label>
+                    <textarea id="aiComponentFields" class="form-control" rows="3" placeholder="<?= __('标题:text:默认标题\\n描述:textarea:默认描述\\n按钮文字:text:立即下载') ?>"></textarea>
+                    <small class="text-muted"><?= __('格式：字段名:类型:默认值，类型可选：text, textarea, select, color, image') ?></small>
+                </div>
+            </div>
+        `,
+        width: '600px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="mdi mdi-robot"></i> <?= __('生成组件') ?>',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonColor: '#667eea',
+        customClass: { container: 'swal2-dark-theme' },
+        preConfirm: () => {
+            const name = document.getElementById('aiComponentName').value.trim();
+            const desc = document.getElementById('aiComponentDesc').value.trim();
+            
+            if (!name) {
+                Swal.showValidationMessage('<?= __('请输入组件名称') ?>');
+                return false;
+            }
+            if (!desc) {
+                Swal.showValidationMessage('<?= __('请输入组件描述') ?>');
+                return false;
+            }
+            
+            return {
+                region: document.getElementById('aiComponentRegion').value,
+                name: name,
+                description: desc,
+                style: document.getElementById('aiComponentStyle').value,
+                fields: document.getElementById('aiComponentFields').value
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            generateComponentWithAi(result.value);
+        }
+    });
+}
+
+// 使用AI生成组件
+async function generateComponentWithAi(params) {
+    // 显示生成中状态
+    Swal.fire({
+        title: '<?= __('AI 正在生成组件...') ?>',
+        html: `
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="mb-1"><?= __('正在分析需求并生成代码...') ?></p>
+                <p class="text-muted small"><?= __('这可能需要 10-30 秒') ?></p>
+            </div>
+        `,
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        customClass: { container: 'swal2-dark-theme' }
+    });
+    
+    try {
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/component') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                style_code: currentStyleCode,
+                region: params.region,
+                name: params.name,
+                description: params.description,
+                style: params.style,
+                fields: params.fields
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || '<?= __('生成失败') ?>');
+        }
+        
+        // 显示生成结果
+        showGeneratedComponent(result);
+        
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('生成失败') ?>',
+            text: error.message || '<?= __('未知错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+    }
+}
+
+// 显示生成的组件结果
+function showGeneratedComponent(result) {
+    const component = result.component || {};
+    const validation = result.validation || {};
+    const preview = result.preview || '';
+    
+    let validationHtml = '';
+    if (validation.valid) {
+        validationHtml = '<div class="alert alert-success mb-3"><i class="mdi mdi-check-circle"></i> <?= __('组件验证通过') ?></div>';
+    } else {
+        const errors = (validation.errors || []).map(e => `<li>${e}</li>`).join('');
+        validationHtml = `<div class="alert alert-danger mb-3"><i class="mdi mdi-alert-circle"></i> <?= __('验证失败') ?>:<ul class="mb-0 mt-2">${errors}</ul></div>`;
+    }
+    
+    Swal.fire({
+        title: '<i class="mdi mdi-check-circle text-success"></i> <?= __('组件生成完成') ?>',
+        html: `
+            <div style="text-align: left; max-height: 60vh; overflow-y: auto;">
+                ${validationHtml}
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><strong>${component.name || '<?= __('新组件') ?>'}</strong></span>
+                        <span class="badge bg-primary">${component.region || 'content'}</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">${component.description || ''}</p>
+                        <p class="mb-1"><strong><?= __('组件代码') ?>:</strong> <code>${component.code || ''}</code></p>
+                        <p class="mb-1"><strong><?= __('文件路径') ?>:</strong> <code>${component.file || ''}</code></p>
+                    </div>
+                </div>
+                ${preview ? `
+                <div class="card">
+                    <div class="card-header"><?= __('预览') ?></div>
+                    <div class="card-body p-0">
+                        <iframe srcdoc="${preview.replace(/"/g, '&quot;')}" style="width: 100%; height: 200px; border: none;"></iframe>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        `,
+        width: '700px',
+        showCancelButton: true,
+        confirmButtonText: validation.valid ? '<i class="mdi mdi-content-save"></i> <?= __('保存组件') ?>' : '<?= __('修复问题') ?>',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonColor: validation.valid ? '#28a745' : '#ffc107',
+        customClass: { container: 'swal2-dark-theme' }
+    }).then((confirmResult) => {
+        if (confirmResult.isConfirmed) {
+            if (validation.valid) {
+                saveGeneratedComponent(component);
+            } else {
+                // 重新打开生成弹窗
+                openAiGenerateComponent();
+            }
+        }
+    });
+}
+
+// 保存生成的组件
+async function saveGeneratedComponent(component) {
+    Swal.fire({
+        title: '<?= __('保存中...') ?>',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); },
+        customClass: { container: 'swal2-dark-theme' }
+    });
+    
+    try {
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/saveComponent') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                style_code: currentStyleCode,
+                component: component
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || '<?= __('保存失败') ?>');
+        }
+        
+        Swal.fire({
+            icon: 'success',
+            title: '<?= __('保存成功') ?>',
+            text: '<?= __('组件已保存，正在刷新组件库...') ?>',
+            timer: 1500,
+            showConfirmButton: false,
+            customClass: { container: 'swal2-dark-theme' }
+        }).then(() => {
+            // 刷新组件面板
+            initComponentPanel();
+        });
+        
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('保存失败') ?>',
+            text: error.message || '<?= __('未知错误') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+    }
 }
 
 // 页面加载时初始化

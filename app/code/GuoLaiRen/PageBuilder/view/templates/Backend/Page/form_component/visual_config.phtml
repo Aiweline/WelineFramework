@@ -27,7 +27,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 $themeModel = $themeConfig->getThemeModel();
 $themeMode = $themeModel ?: 'light'; // 默认为light
 ?>
-
 <style>
 /* 可视化配置容器 - 使用CSS变量支持主题 */
 .visual-config-wrapper {
@@ -1018,8 +1017,21 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     border-color: transparent !important;
     background: transparent !important;
 }
-</style>
 
+/* AI 生成 toast 动画 */
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* AI 生成条样式 */
+.swal2-dark-theme .ai-generate-bar {
+    background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%) !important;
+    border-color: rgba(102,126,234,0.3) !important;
+}
+</style>
 <!-- 可视化配置容器 -->
 <div class="visual-config-wrapper" id="visualConfigWrapper" data-theme="<?= htmlspecialchars($themeMode) ?>">
     <!-- 顶部工具栏 -->
@@ -1520,10 +1532,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
-                <iframe id="previewIframe" 
-                        class="preview-iframe" 
-                        src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
-                
+                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
@@ -1561,12 +1570,10 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
 </div>
-
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-
 <!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
 <script>
 if (typeof window.openVisualConfig === 'undefined') {
@@ -1621,7 +1628,6 @@ if (typeof window.openVisualConfig === 'undefined') {
     };
 }
 </script>
-
 <script>
 // ========== 组件初始化：支持通过 handle 或 page_id 初始化 ==========
 // 使用唯一的初始化标识，避免在 iframe 环境中重复初始化导致内存耗尽
@@ -5284,8 +5290,34 @@ window.editComponentInPreview = async function(wrapper) {
         const metadata = metaResult.metadata;
         const fields = metadata.fields || {};
         
+        // 检查是否有文字类型的配置项（用于判断是否显示AI按钮）
+        let hasTextFields = false;
+        for (const [groupKey, group] of Object.entries(fields)) {
+            for (const [fieldKey, field] of Object.entries(group.fields || {})) {
+                if (['text', 'textarea'].includes(field.type || 'text')) {
+                    hasTextFields = true;
+                    break;
+                }
+            }
+            if (hasTextFields) break;
+        }
+        
         // 构建配置表单HTML
         let formHtml = '<div class="component-config-form" style="text-align: left; max-height: 60vh; overflow-y: auto; padding: 0 4px;">';
+        
+        // 添加 AI 生成按钮（仅当有文字配置项且AI功能开启时显示）
+        <?php if (($ai_enabled ?? '0') === '1'): ?>
+        if (hasTextFields && Object.keys(fields).length > 0) {
+            formHtml += '<div class="ai-generate-bar" style="margin-bottom: 16px; padding: 10px; background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%); border-radius: 8px; border: 1px solid rgba(102,126,234,0.2);">';
+            formHtml += '<div style="display: flex; align-items: center; justify-content: space-between;">';
+            formHtml += '<span style="font-size: 12px; opacity: 0.8;"><i class="mdi mdi-robot" style="margin-right: 4px;"></i><?= __('AI可根据页面信息自动生成此组件的文字配置') ?></span>';
+            formHtml += '<button type="button" id="aiGenerateComponentConfigBtn" class="btn btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 4px 12px; font-size: 12px;">';
+            formHtml += '<i class="mdi mdi-auto-fix"></i> <?= __('AI生成') ?>';
+            formHtml += '</button>';
+            formHtml += '</div>';
+            formHtml += '</div>';
+        }
+        <?php endif; ?>
         
         if (Object.keys(fields).length === 0) {
             formHtml += '<div class="text-center text-muted py-4">';
@@ -5380,6 +5412,77 @@ window.editComponentInPreview = async function(wrapper) {
                         });
                     }
                 });
+                
+                // AI 生成按钮点击事件
+                const aiBtn = document.getElementById('aiGenerateComponentConfigBtn');
+                if (aiBtn) {
+                    aiBtn.addEventListener('click', async () => {
+                        const originalHtml = aiBtn.innerHTML;
+                        aiBtn.disabled = true;
+                        aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= __('生成中...') ?>';
+                        
+                        try {
+                            const formData = new FormData();
+                            formData.append('page_id', pageId);
+                            formData.append('style_code', styleCode);
+                            formData.append('component_code', componentCode);
+                            formData.append('region', region);
+                            formData.append('index', index);
+                            
+                            const response = await fetch('<?= $this->getBackendUrl("pagebuilder/backend/ai-generate/component-config") ?>', {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.success && data.data) {
+                                // 填充生成的配置到表单
+                                let filledCount = 0;
+                                for (const [key, value] of Object.entries(data.data)) {
+                                    const inputId = 'comp_config_' + key.replace(/\./g, '_');
+                                    const input = document.getElementById(inputId);
+                                    if (input) {
+                                        input.value = value;
+                                        input.style.borderColor = '#667eea';
+                                        input.style.boxShadow = '0 0 0 2px rgba(102,126,234,0.2)';
+                                        // 触发 change 事件
+                                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                                        filledCount++;
+                                        
+                                        // 2秒后恢复样式
+                                        setTimeout(() => {
+                                            input.style.borderColor = '';
+                                            input.style.boxShadow = '';
+                                        }, 2000);
+                                    }
+                                }
+                                
+                                if (filledCount > 0) {
+                                    // 显示成功提示
+                                    const toast = document.createElement('div');
+                                    toast.className = 'ai-success-toast';
+                                    toast.innerHTML = '<i class="mdi mdi-check-circle"></i> <?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>';
+                                    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 99999; animation: fadeInOut 3s ease-in-out;';
+                                    document.body.appendChild(toast);
+                                    setTimeout(() => toast.remove(), 3000);
+                                }
+                            } else {
+                                alert(data.message || '<?= __('生成失败') ?>');
+                            }
+                        } catch (error) {
+                            console.error('AI生成组件配置错误:', error);
+                            alert('<?= __('生成请求失败，请稍后重试') ?>');
+                        } finally {
+                            aiBtn.disabled = false;
+                            aiBtn.innerHTML = originalHtml;
+                        }
+                    });
+                }
             }
         });
         
@@ -5566,6 +5669,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
 </script>
 
 <!-- 恢复默认值确认模态框 -->
@@ -5602,6 +5706,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- 文件管理器组件 -->
 <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/asset_manager.phtml</w:template>
-
-</script>
-

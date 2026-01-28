@@ -5550,6 +5550,7 @@ window.generatePageContent = function() {
     const metaKeywords = document.getElementById('meta_keywords')?.value || '';
     const handle = document.getElementById('handle')?.value || '';
     const styleCode = document.getElementById('style')?.value || '';
+    const defaultLocale = document.getElementById('default_locale')?.value || '';
 
     // 准备请求数据
     const formData = new FormData();
@@ -5564,6 +5565,7 @@ window.generatePageContent = function() {
     if (metaKeywords) formData.append('meta_keywords', metaKeywords);
     if (handle) formData.append('handle', handle);
     if (styleCode) formData.append('style_code', styleCode);
+    if (defaultLocale) formData.append('default_locale', defaultLocale);
 
     // 发送请求
     fetch('<?= $this->getBackendUrl("*/backend/ai-generate/page-content") ?>', {
