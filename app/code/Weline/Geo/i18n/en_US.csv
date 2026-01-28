@@ -28,13 +28,13 @@ geojs.io返回空数据,"geojs.io returned empty data"
 "ipwhois.app返回数据解析失败: %{1}","ipwhois.app response data parsing failed: %{1}"
 "ipwhois.app定位失败: %{1}","ipwhois.app location failed: %{1}"
 本地定位服务暂未实现，将使用备用通道,"Local location service not implemented, will use fallback channels"
+定位中...,定位中...
 中国大陆,中国大陆
 配送至,配送至
 选择配送地址,选择配送地址
 自动定位,自动定位
 手动选择,手动选择
 关闭,关闭
-定位中...,定位中...
 Geo模块未加载,Geo模块未加载
 获取地址信息失败,获取地址信息失败
 定位失败，请稍后重试,定位失败，请稍后重试

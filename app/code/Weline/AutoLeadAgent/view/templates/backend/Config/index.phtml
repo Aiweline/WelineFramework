@@ -429,6 +429,27 @@ if (is_array($targetSites)) {
                                             <i class="mdi mdi-memory me-1"></i>
                                             <?= __('内存使用') ?>: <span id="hf-runtime-memory-value">--</span>
                                         </div>
+                                        <!-- 模型加载进度 -->
+                                        <div class="mt-2" id="hf-model-loading-progress" style="display: none;">
+                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                <small class="text-muted">
+                                                    <i class="mdi mdi-download me-1"></i>
+                                                    <span id="hf-loading-status-text"><?= __('加载模型中...') ?></span>
+                                                </small>
+                                                <small class="text-primary fw-bold" id="hf-loading-percent">0%</small>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                     role="progressbar" 
+                                                     id="hf-loading-progress-bar"
+                                                     style="width: 0%;" 
+                                                     aria-valuenow="0" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted" id="hf-loading-file-name" style="font-size: 11px;"></small>
+                                        </div>
                                     </div>
                                     
                                     <!-- 状态与缓存设置 -->
@@ -726,7 +747,7 @@ if (is_array($targetSites)) {
                         <div class="ms-4 small text-muted">
                             <?= __('点击') ?> <strong><?= __('“加载已解压的扩展程序”') ?></strong> <?= __('按钮，并选择以下目录：') ?>
                             <div class="mt-2 p-2 bg-light rounded border border-dashed text-break user-select-all font-monospace" style="font-size: 0.75rem;">
-                                <?= str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (defined('BP') ? BP : getcwd().DIRECTORY_SEPARATOR) . 'app/code/Weline/AutoLeadAgent/browser-extension') ?>
+                                <a href="<?= $this->getModuleStaticUrl('Weline_AutoLeadAgent', 'downloads/AutoLeadAgent-Extension.zip') ?>" class="btn btn-success btn-sm" download><i class="mdi mdi-download me-1"></i><?= __('下载扩展') ?></a> <?= __('解压后选择该文件夹') ?>
                             </div>
                         </div>
                     </div>
@@ -1144,12 +1165,90 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             onLoadComplete: function(info) {
                 console.log('[Config] 模型加载完成:', info);
+                // 隐藏加载进度
+                var progressContainer = document.getElementById('hf-model-loading-progress');
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
             },
             onUnload: function() {
                 console.log('[Config] 模型已卸载');
             }
         });
     }
+    
+    // 监听模型加载进度事件
+    window.addEventListener('hf-model-loading-progress', function(event) {
+        var detail = event.detail || {};
+        var progressContainer = document.getElementById('hf-model-loading-progress');
+        var progressBar = document.getElementById('hf-loading-progress-bar');
+        var percentText = document.getElementById('hf-loading-percent');
+        var statusText = document.getElementById('hf-loading-status-text');
+        var fileNameText = document.getElementById('hf-loading-file-name');
+        
+        if (!progressContainer) return;
+        
+        if (detail.status === 'start') {
+            // 开始加载，显示进度条
+            progressContainer.style.display = 'block';
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.setAttribute('aria-valuenow', '0');
+            }
+            if (percentText) percentText.textContent = '0%';
+            if (statusText) statusText.textContent = '<?= __('正在初始化模型...') ?>';
+            if (fileNameText) fileNameText.textContent = '';
+        } else if (detail.status === 'ready' || detail.percent >= 100) {
+            // 加载完成
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.setAttribute('aria-valuenow', '100');
+                progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.add('bg-success');
+            }
+            if (percentText) percentText.textContent = '100%';
+            if (statusText) statusText.textContent = '<?= __('加载完成') ?>';
+            if (fileNameText) fileNameText.textContent = '';
+            
+            // 延迟隐藏进度条
+            setTimeout(function() {
+                progressContainer.style.display = 'none';
+                // 重置进度条样式
+                if (progressBar) {
+                    progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                    progressBar.classList.remove('bg-success');
+                }
+            }, 1500);
+        } else if (detail.status === 'progress' || detail.status === 'download' || detail.status === 'initiate') {
+            // 加载中
+            progressContainer.style.display = 'block';
+            var percent = detail.percent || 0;
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                progressBar.setAttribute('aria-valuenow', percent);
+            }
+            if (percentText) percentText.textContent = percent + '%';
+            
+            // 更新状态文本
+            if (statusText) {
+                if (detail.status === 'download' || detail.status === 'initiate') {
+                    statusText.textContent = '<?= __('下载模型文件...') ?>';
+                } else {
+                    statusText.textContent = '<?= __('加载模型中...') ?>';
+                }
+            }
+            
+            // 显示当前文件名
+            if (fileNameText && detail.file) {
+                var fileName = detail.file;
+                // 缩短文件名显示
+                if (fileName.length > 50) {
+                    fileName = '...' + fileName.slice(-47);
+                }
+                fileNameText.textContent = fileName;
+            }
+        }
+    });
     
     // 智能体测试功能
     var testBtn = document.getElementById('hf_agent_test_btn');
@@ -1194,8 +1293,8 @@ document.addEventListener('DOMContentLoaded', function() {
         testBtn.addEventListener('click', async function() {
             var input = testInput ? testInput.value.trim() : '';
             if (!input) {
-                if (typeof showToast === 'function') {
-                    showToast('warning', '<?= __('请输入测试指令') ?>');
+                if (typeof ConfigUtils !== 'undefined') {
+                    ConfigUtils.safeToast('warning', '<?= __('请输入测试指令') ?>');
                 }
                 return;
             }
@@ -1209,10 +1308,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (!modelLoaded) {
-                if (typeof showToast === 'function') {
-                    showToast('warning', '<?= __('请先加载模型') ?>');
+                if (typeof ConfigUtils !== 'undefined') {
+                    ConfigUtils.safeToast('warning', '<?= __('请先加载模型') ?>');
                 }
                 return;
+            }
+            
+            // 检查 MCP 是否可用
+            var mcpAvailable = false;
+            var mcpStatus = null;
+            if (typeof MCPClient !== 'undefined' && MCPClient.isMCPAvailable) {
+                try {
+                    mcpAvailable = await MCPClient.isMCPAvailable();
+                    if (MCPClient.getMCPStatus) {
+                        mcpStatus = MCPClient.getMCPStatus();
+                        console.log('[Config] MCP 状态:', mcpStatus);
+                    }
+                } catch (e) {
+                    console.warn('[Config] MCP 检查失败:', e);
+                }
+            }
+            
+            if (!mcpAvailable) {
+                // 显示扩展安装引导，附带检测状态
+                showExtensionInstallGuide(mcpStatus);
+                return;
+            }
+            
+            // 显示 MCP 连接成功信息
+            if (mcpStatus && mcpStatus.mcpType) {
+                console.log('[Config] MCP 已连接，类型:', mcpStatus.mcpType);
             }
             
             // 显示加载状态
@@ -1221,37 +1346,127 @@ document.addEventListener('DOMContentLoaded', function() {
             testBtn.disabled = true;
             
             var startTime = performance.now();
+            var steps = []; // 记录执行步骤
             
             try {
-                var response = '';
+                // Step 1: 使用模型分析用户指令，确定要执行的操作
+                steps.push({ step: 1, action: '分析指令', status: 'running' });
+                updateStepsDisplay(steps);
                 
-                // 使用 HFModelManager 进行推理
+                var analysisPrompt = '你是一个浏览器自动化助手。分析用户指令并返回要执行的操作。\n\n' +
+                    '可用的操作：\n' +
+                    '1. browser_navigate: 导航到URL (参数: url)\n' +
+                    '2. browser_click: 点击元素 (参数: selector)\n' +
+                    '3. browser_type: 在输入框输入文本 (参数: selector, text)\n' +
+                    '4. browser_snapshot: 获取页面快照\n' +
+                    '5. browser_extract: 提取页面信息（邮箱、电话等）\n\n' +
+                    '用户指令: "' + input + '"\n\n' +
+                    '请以JSON格式返回要执行的操作，格式如下：\n' +
+                    '{"action": "操作名称", "params": {参数对象}, "reason": "执行原因"}\n\n' +
+                    '如果是访问网页，返回例如: {"action": "browser_navigate", "params": {"url": "https://www.google.com"}, "reason": "用户要求访问Google"}\n' +
+                    '如果是搜索，返回例如: {"action": "browser_navigate", "params": {"url": "https://www.google.com/search?q=搜索词"}, "reason": "用户要求搜索"}\n\n' +
+                    '只返回JSON，不要其他内容。';
+                
+                var analysisResult = '';
                 if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded()) {
-                    response = await HFModelManager.generate(input, {
+                    analysisResult = await HFModelManager.generate(analysisPrompt, {
                         maxTokens: 256,
-                        temperature: 0.7
+                        temperature: 0.3
                     });
-                } else if (typeof ReactAgent !== 'undefined') {
-                    // 使用 ReactAgent（如果可用）
-                    var result = await ReactAgent.run(input);
-                    response = result.response || result.output || JSON.stringify(result);
-                } else {
-                    throw new Error('<?= __('模型未加载或不可用') ?>');
                 }
+                
+                steps[0].status = 'done';
+                steps[0].result = analysisResult.substring(0, 100) + '...';
+                updateStepsDisplay(steps);
+                
+                // Step 2: 解析模型返回的操作
+                steps.push({ step: 2, action: '解析操作', status: 'running' });
+                updateStepsDisplay(steps);
+                
+                var actionPlan = null;
+                try {
+                    // 尝试从响应中提取 JSON
+                    var jsonMatch = analysisResult.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        actionPlan = JSON.parse(jsonMatch[0]);
+                    }
+                } catch (parseError) {
+                    console.warn('[Config] JSON解析失败，尝试智能匹配:', parseError);
+                }
+                
+                // 如果模型返回的不是有效JSON，尝试智能匹配常见指令
+                if (!actionPlan || !actionPlan.action) {
+                    actionPlan = smartParseCommand(input);
+                }
+                
+                if (!actionPlan || !actionPlan.action) {
+                    throw new Error('无法解析指令，请尝试更明确的命令，如"访问 https://www.google.com" 或 "搜索 AI"');
+                }
+                
+                steps[1].status = 'done';
+                steps[1].result = '操作: ' + actionPlan.action + ', 原因: ' + (actionPlan.reason || '用户指令');
+                updateStepsDisplay(steps);
+                
+                // Step 3: 执行浏览器操作
+                steps.push({ step: 3, action: '执行操作: ' + actionPlan.action, status: 'running' });
+                updateStepsDisplay(steps);
+                
+                var toolResult = null;
+                if (typeof MCPClient !== 'undefined') {
+                    // 确保连接到 MCP
+                    if (!MCPClient.isConnected()) {
+                        await MCPClient.connectMCP();
+                    }
+                    
+                    // 调用工具
+                    toolResult = await MCPClient.callTool(actionPlan.action, actionPlan.params || {});
+                }
+                
+                steps[2].status = 'done';
+                steps[2].result = toolResult ? JSON.stringify(toolResult).substring(0, 200) : '执行完成';
+                updateStepsDisplay(steps);
                 
                 var endTime = performance.now();
                 var duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                // 构建响应文本
+                var responseText = '✅ 操作执行成功！\n\n';
+                responseText += '📋 执行的操作: ' + actionPlan.action + '\n';
+                if (actionPlan.params) {
+                    responseText += '📝 参数: ' + JSON.stringify(actionPlan.params) + '\n';
+                }
+                if (actionPlan.reason) {
+                    responseText += '💡 原因: ' + actionPlan.reason + '\n';
+                }
+                if (toolResult) {
+                    responseText += '\n📊 执行结果:\n';
+                    if (toolResult.url) responseText += '  - URL: ' + toolResult.url + '\n';
+                    if (toolResult.title) responseText += '  - 页面标题: ' + toolResult.title + '\n';
+                    if (toolResult.tabId) responseText += '  - 标签页ID: ' + toolResult.tabId + '\n';
+                    if (toolResult.success !== undefined) responseText += '  - 成功: ' + (toolResult.success ? '是' : '否') + '\n';
+                }
                 
                 // 显示结果
                 if (testLoading) testLoading.style.display = 'none';
                 if (testResult) testResult.style.display = 'block';
                 if (testInputDisplay) testInputDisplay.textContent = input;
-                if (testOutput) testOutput.textContent = response;
+                if (testOutput) testOutput.innerHTML = '<pre style="white-space: pre-wrap; margin: 0;">' + escapeHtml(responseText) + '</pre>';
                 if (testTime) testTime.textContent = duration + ' <?= __('秒') ?>';
                 if (testError) testError.style.display = 'none';
+                if (testSteps) testSteps.style.display = 'block';
                 
             } catch (error) {
                 console.error('[Config] 智能体测试失败:', error);
+                
+                // 更新失败步骤
+                if (steps.length > 0) {
+                    var lastStep = steps[steps.length - 1];
+                    if (lastStep.status === 'running') {
+                        lastStep.status = 'error';
+                        lastStep.result = error.message;
+                        updateStepsDisplay(steps);
+                    }
+                }
                 
                 if (testLoading) testLoading.style.display = 'none';
                 if (testResult) testResult.style.display = 'block';
@@ -1261,12 +1476,256 @@ document.addEventListener('DOMContentLoaded', function() {
                     testError.style.display = 'block';
                     testError.textContent = '<?= __('测试失败') ?>: ' + error.message;
                 }
+                if (testSteps) testSteps.style.display = 'block';
             } finally {
                 testBtn.disabled = false;
                 updateTestButtonState();
             }
         });
     }
+    
+    // 智能解析常见指令
+    function smartParseCommand(input) {
+        var lowerInput = input.toLowerCase();
+        
+        // 访问网站
+        if (lowerInput.includes('访问') || lowerInput.includes('打开') || lowerInput.includes('去')) {
+            // 提取URL
+            var urlMatch = input.match(/https?:\/\/[^\s]+/i);
+            if (urlMatch) {
+                return { action: 'browser_navigate', params: { url: urlMatch[0] }, reason: '用户要求访问指定URL' };
+            }
+            
+            // 常见网站映射
+            if (lowerInput.includes('google') || lowerInput.includes('谷歌')) {
+                return { action: 'browser_navigate', params: { url: 'https://www.google.com' }, reason: '用户要求访问Google' };
+            }
+            if (lowerInput.includes('baidu') || lowerInput.includes('百度')) {
+                return { action: 'browser_navigate', params: { url: 'https://www.baidu.com' }, reason: '用户要求访问百度' };
+            }
+            if (lowerInput.includes('bing') || lowerInput.includes('必应')) {
+                return { action: 'browser_navigate', params: { url: 'https://www.bing.com' }, reason: '用户要求访问Bing' };
+            }
+            if (lowerInput.includes('linkedin')) {
+                return { action: 'browser_navigate', params: { url: 'https://www.linkedin.com' }, reason: '用户要求访问LinkedIn' };
+            }
+            if (lowerInput.includes('twitter') || lowerInput.includes('x.com')) {
+                return { action: 'browser_navigate', params: { url: 'https://twitter.com' }, reason: '用户要求访问Twitter' };
+            }
+            if (lowerInput.includes('facebook')) {
+                return { action: 'browser_navigate', params: { url: 'https://www.facebook.com' }, reason: '用户要求访问Facebook' };
+            }
+        }
+        
+        // 搜索
+        if (lowerInput.includes('搜索') || lowerInput.includes('search') || lowerInput.includes('查找') || lowerInput.includes('找')) {
+            // 提取搜索关键词
+            var searchMatch = input.match(/(?:搜索|search|查找|找)\s*[：:"]?\s*(.+)/i);
+            var keyword = searchMatch ? searchMatch[1].trim().replace(/["""]/g, '') : '';
+            
+            if (keyword) {
+                // 根据上下文选择搜索引擎
+                if (lowerInput.includes('google') || lowerInput.includes('谷歌')) {
+                    return { action: 'browser_navigate', params: { url: 'https://www.google.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Google搜索关键词' };
+                }
+                if (lowerInput.includes('baidu') || lowerInput.includes('百度')) {
+                    return { action: 'browser_navigate', params: { url: 'https://www.baidu.com/s?wd=' + encodeURIComponent(keyword) }, reason: '使用百度搜索关键词' };
+                }
+                if (lowerInput.includes('bing') || lowerInput.includes('必应')) {
+                    return { action: 'browser_navigate', params: { url: 'https://www.bing.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Bing搜索关键词' };
+                }
+                // 默认使用Google
+                return { action: 'browser_navigate', params: { url: 'https://www.google.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Google搜索关键词' };
+            }
+        }
+        
+        // 获取页面信息
+        if (lowerInput.includes('快照') || lowerInput.includes('截图') || lowerInput.includes('页面内容')) {
+            return { action: 'browser_snapshot', params: {}, reason: '获取当前页面快照' };
+        }
+        
+        // 提取联系方式
+        if (lowerInput.includes('提取') || lowerInput.includes('获取') || lowerInput.includes('联系方式') || lowerInput.includes('邮箱') || lowerInput.includes('电话')) {
+            return { action: 'browser_extract', params: { selectors: { email: true, phone: true, social: ['linkedin', 'twitter', 'facebook'] } }, reason: '提取页面联系方式' };
+        }
+        
+        return null;
+    }
+    
+    // 更新步骤显示
+    function updateStepsDisplay(steps) {
+        if (!testStepsContent) return;
+        
+        var html = '<ol class="mb-0">';
+        for (var i = 0; i < steps.length; i++) {
+            var s = steps[i];
+            var statusClass = s.status === 'done' ? 'text-success' : (s.status === 'error' ? 'text-danger' : 'text-info');
+            var statusIcon = s.status === 'done' ? 'mdi-check-circle' : (s.status === 'error' ? 'mdi-alert-circle' : 'mdi-loading mdi-spin');
+            html += '<li class="' + statusClass + '">';
+            html += '<i class="mdi ' + statusIcon + ' me-1"></i>';
+            html += escapeHtml(s.action);
+            if (s.result) {
+                html += '<div class="small text-muted ms-3">' + escapeHtml(s.result) + '</div>';
+            }
+            html += '</li>';
+        }
+        html += '</ol>';
+        testStepsContent.innerHTML = html;
+        
+        if (testSteps) testSteps.style.display = 'block';
+    }
+    
+    // HTML转义
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // 显示扩展安装引导
+    function showExtensionInstallGuide(mcpStatus) {
+        mcpStatus = mcpStatus || {};
+        var statusHtml = '';
+        if (mcpStatus.autoLeadAgentDetected) {
+            statusHtml = '<div class="alert alert-warning mb-3">' +
+                '<i class="mdi mdi-alert me-2"></i>' +
+                '<strong><?= __('检测状态') ?>:</strong> <?= __('已检测到扩展，但连接失败。请刷新页面重试。') ?>' +
+                '</div>';
+        } else if (mcpStatus.playwrightMCPDetected) {
+            statusHtml = '<div class="alert alert-info mb-3">' +
+                '<i class="mdi mdi-information me-2"></i>' +
+                '<strong><?= __('检测状态') ?>:</strong> <?= __('检测到 Playwright MCP，建议安装 AutoLeadAgent 扩展以获得更好体验。') ?>' +
+                '</div>';
+        } else {
+            statusHtml = '<div class="alert alert-danger mb-3">' +
+                '<i class="mdi mdi-close-circle me-2"></i>' +
+                '<strong><?= __('检测状态') ?>:</strong> <?= __('未检测到 AutoLeadAgent 浏览器扩展') ?>' +
+                '</div>';
+        }
+        var downloadUrl = '<?= $this->getModuleStaticUrl('Weline_AutoLeadAgent', 'downloads/AutoLeadAgent-Extension.zip') ?>';
+        var modalHtml = '<div class="modal fade" id="mcpExtensionInstallModal" tabindex="-1">' +
+            '<div class="modal-dialog modal-lg">' +
+            '<div class="modal-content">' +
+            '<div class="modal-header bg-primary text-white">' +
+            '<h5 class="modal-title"><i class="mdi mdi-robot me-2"></i><?= __('安装 AutoLeadAgent 智能寻客扩展') ?></h5>' +
+            '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+            
+            '<div class="alert alert-info mb-3">' +
+            '<i class="mdi mdi-information me-2"></i>' +
+            '<strong><?= __('AutoLeadAgent 扩展 - AI 驱动的浏览器自动化') ?></strong><br>' +
+            '<?= __('基于 Nanobrowser 开源项目，支持自然语言指令控制浏览器，自动寻找潜在客户。') ?>' +
+            '</div>' +
+            
+            statusHtml +
+            
+            '<!-- 安装步骤 -->' +
+            '<div class="card border-success mb-3">' +
+            '<div class="card-header bg-success text-white py-2">' +
+            '<i class="mdi mdi-puzzle me-1"></i><?= __('安装步骤（只需3步）') ?>' +
+            '</div>' +
+            '<div class="card-body">' +
+            
+            '<div class="mb-3 pb-3 border-bottom">' +
+            '<div class="d-flex align-items-center mb-2">' +
+            '<span class="badge bg-primary rounded-circle me-2" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">1</span>' +
+            '<strong><?= __('下载并解压扩展包') ?></strong>' +
+            '</div>' +
+            '<div class="ms-4">' +
+            '<a href="' + downloadUrl + '" class="btn btn-success" download>' +
+            '<i class="mdi mdi-download me-1"></i><?= __('下载 AutoLeadAgent 扩展') ?> (ZIP)' +
+            '</a>' +
+            '<p class="small text-muted mt-2 mb-0"><?= __('下载后解压到任意目录') ?></p>' +
+            '</div>' +
+            '</div>' +
+            
+            '<div class="mb-3 pb-3 border-bottom">' +
+            '<div class="d-flex align-items-center mb-2">' +
+            '<span class="badge bg-primary rounded-circle me-2" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">2</span>' +
+            '<strong><?= __('打开 Chrome 扩展管理页面') ?></strong>' +
+            '</div>' +
+            '<div class="ms-4">' +
+            '<button class="btn btn-sm btn-outline-primary" onclick="window.openExtensionsPage()">' +
+            '<i class="mdi mdi-open-in-new me-1"></i>chrome://extensions/' +
+            '</button>' +
+            '<p class="small text-muted mt-2 mb-0"><?= __('在页面右上角开启') ?> <strong>"<?= __('开发者模式') ?>"</strong></p>' +
+            '</div>' +
+            '</div>' +
+            
+            '<div class="mb-0">' +
+            '<div class="d-flex align-items-center mb-2">' +
+            '<span class="badge bg-primary rounded-circle me-2" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">3</span>' +
+            '<strong><?= __('加载扩展程序') ?></strong>' +
+            '</div>' +
+            '<div class="ms-4">' +
+            '<p class="small text-muted mb-0"><?= __('点击') ?> <strong>"<?= __('加载已解压的扩展程序') ?>"</strong><?= __('，选择解压后的文件夹即可') ?></p>' +
+            '</div>' +
+            '</div>' +
+            
+            '</div>' +
+            '</div>' +
+            
+            '<!-- 配置 API 密钥 -->' +
+            '<div class="card border-warning mb-3">' +
+            '<div class="card-header bg-warning text-dark py-2">' +
+            '<i class="mdi mdi-key me-1"></i><?= __('配置 LLM API 密钥（必须）') ?>' +
+            '</div>' +
+            '<div class="card-body small">' +
+            '<p class="mb-2"><?= __('扩展安装后，需要配置 LLM 提供商的 API 密钥才能使用：') ?></p>' +
+            '<ol class="mb-0">' +
+            '<li><?= __('点击扩展图标，打开侧边栏') ?></li>' +
+            '<li><?= __('点击设置图标，进入 Models 标签页') ?></li>' +
+            '<li><?= __('添加 LLM 提供商（如 OpenAI、Gemini、Claude 或本地 Ollama）') ?></li>' +
+            '</ol>' +
+            '</div>' +
+            '</div>' +
+            
+            '<div class="alert alert-success mb-0">' +
+            '<i class="mdi mdi-check-circle me-2"></i>' +
+            '<strong><?= __('安装完成后') ?></strong>: <?= __('刷新此页面，然后在测试框中输入自然语言指令（如"去百度搜索 AI"），智能体将自动执行。') ?>' +
+            '</div>' +
+            
+            '</div>' + // modal-body
+            '<div class="modal-footer">' +
+            '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>' +
+            '<button type="button" class="btn btn-primary" onclick="window.location.reload()">' +
+            '<i class="mdi mdi-refresh me-1"></i><?= __('刷新页面') ?>' +
+            '</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        
+        // 移除旧弹窗
+        var oldModal = document.getElementById('mcpExtensionInstallModal');
+        if (oldModal) oldModal.remove();
+        
+        // 添加并显示弹窗
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        var modal = new bootstrap.Modal(document.getElementById('mcpExtensionInstallModal'));
+        modal.show();
+    }
+    
+    // 打开扩展管理页面（挂载到window使其全局可用）
+    window.openExtensionsPage = function() {
+        var ua = navigator.userAgent;
+        var url = 'chrome://extensions/';
+        if (ua.indexOf('Edg') !== -1) {
+            url = 'edge://extensions/';
+        } else if (ua.indexOf('Firefox') !== -1) {
+            url = 'about:debugging#/runtime/this-firefox';
+        }
+        
+        var win = window.open(url, '_blank');
+        if (!win || win.closed) {
+            navigator.clipboard.writeText(url).then(function() {
+                alert('<?= __('浏览器限制无法自动打开，地址已复制：') ?>\n' + url + '\n\n<?= __('请手动粘贴到地址栏访问') ?>');
+            }).catch(function() {
+                alert('<?= __('请手动访问：') ?>' + url);
+            });
+        }
+    };
     
     if (testClearBtn) {
         testClearBtn.addEventListener('click', function() {

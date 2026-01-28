@@ -1,6 +1,7 @@
 /**
  * Browser MCP 客户端
  * 连接和工具调用
+ * 支持 AutoLeadAgent 扩展（基于 Nanobrowser）、Playwright MCP 和自定义扩展
  */
 
 var MCPClient = (function () {
@@ -10,6 +11,251 @@ var MCPClient = (function () {
     var tools = [];
     var connectionId = null;
     var extensionId = null;
+    var playwrightMCPDetected = false;
+    var autoLeadAgentDetected = false;
+    var mcpType = null; // 'autoleadagent' | 'playwright' | 'playwright-server' | 'custom' | null
+
+    // Playwright MCP 服务器默认端口
+    var PLAYWRIGHT_MCP_PORTS = [8931, 3000, 8080];
+    var playwrightMCPServerUrl = null;
+    
+    // AutoLeadAgent 扩展 ID 存储键
+    var AUTOLEADAGENT_EXTENSION_ID_KEY = 'autoLeadAgentExtensionId';
+
+    /**
+     * 检测 AutoLeadAgent 扩展
+     * @returns {Promise<boolean>}
+     */
+    async function detectAutoLeadAgentExtension() {
+        // 如果已检测到，直接返回
+        if (autoLeadAgentDetected && extensionId) {
+            return true;
+        }
+
+        // 方法1: 尝试从 localStorage 获取保存的扩展 ID
+        try {
+            var savedId = localStorage.getItem(AUTOLEADAGENT_EXTENSION_ID_KEY);
+            if (savedId) {
+                var pingResult = await pingExtension(savedId);
+                if (pingResult) {
+                    extensionId = savedId;
+                    autoLeadAgentDetected = true;
+                    mcpType = 'autoleadagent';
+                    console.log('[MCPClient] AutoLeadAgent extension detected (from saved ID):', savedId);
+                    return true;
+                }
+            }
+        } catch (e) {
+            // 忽略 localStorage 错误
+        }
+
+        // 方法2: 尝试已知的扩展 ID 列表
+        if (typeof window !== 'undefined' && window.AUTOLEADAGENT_EXTENSION_IDS) {
+            for (var i = 0; i < window.AUTOLEADAGENT_EXTENSION_IDS.length; i++) {
+                var testId = window.AUTOLEADAGENT_EXTENSION_IDS[i];
+                var pingResult = await pingExtension(testId);
+                if (pingResult) {
+                    extensionId = testId;
+                    autoLeadAgentDetected = true;
+                    mcpType = 'autoleadagent';
+                    // 保存到 localStorage
+                    try {
+                        localStorage.setItem(AUTOLEADAGENT_EXTENSION_ID_KEY, testId);
+                    } catch (e) {}
+                    console.log('[MCPClient] AutoLeadAgent extension detected:', testId);
+                    return true;
+                }
+            }
+        }
+
+        // 方法3: 检查 chrome.runtime 是否可用并尝试发现
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            // 尝试通过 content script 与扩展通信
+            var discovered = await discoverExtensionViaContentScript();
+            if (discovered) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 通过 ping 测试扩展是否响应
+     * @param {string} extId 扩展 ID
+     * @returns {Promise<boolean>}
+     */
+    async function pingExtension(extId) {
+        if (!extId || typeof chrome === 'undefined' || !chrome.runtime) {
+            return false;
+        }
+
+        return new Promise(function(resolve) {
+            try {
+                chrome.runtime.sendMessage(extId, { type: 'PING' }, function(response) {
+                    if (chrome.runtime.lastError) {
+                        resolve(false);
+                    } else {
+                        resolve(response && (response.success || response.pong || response.type === 'PONG'));
+                    }
+                });
+                // 超时处理
+                setTimeout(function() { resolve(false); }, 2000);
+            } catch (e) {
+                resolve(false);
+            }
+        });
+    }
+
+    /**
+     * 通过 content script 发现扩展
+     * @returns {Promise<boolean>}
+     */
+    async function discoverExtensionViaContentScript() {
+        return new Promise(function(resolve) {
+            var timeout = null;
+            var messageHandler = function(event) {
+                if (event.data && 
+                    (event.data.type === 'AUTOLEADAGENT_DISCOVERED' || 
+                     event.data.type === 'EXTENSION_DISCOVERED') &&
+                    event.data.extensionId) {
+                    window.removeEventListener('message', messageHandler);
+                    clearTimeout(timeout);
+                    extensionId = event.data.extensionId;
+                    autoLeadAgentDetected = true;
+                    mcpType = 'autoleadagent';
+                    // 保存到 localStorage
+                    try {
+                        localStorage.setItem(AUTOLEADAGENT_EXTENSION_ID_KEY, event.data.extensionId);
+                    } catch (e) {}
+                    console.log('[MCPClient] AutoLeadAgent extension discovered via content script:', event.data.extensionId);
+                    resolve(true);
+                }
+            };
+
+            window.addEventListener('message', messageHandler);
+
+            // 发送发现请求
+            window.postMessage({ type: 'DISCOVER_AUTOLEADAGENT_EXTENSION' }, '*');
+            window.postMessage({ type: 'DISCOVER_EXTENSION' }, '*');
+
+            // 超时
+            timeout = setTimeout(function() {
+                window.removeEventListener('message', messageHandler);
+                resolve(false);
+            }, 2000);
+        });
+    }
+
+    /**
+     * 检测 Playwright MCP（扩展或服务器）
+     * @returns {Promise<boolean>}
+     */
+    async function detectPlaywrightMCP() {
+        // 方法1: 检查全局变量（扩展注入）
+        if (typeof window !== 'undefined') {
+            if (window.__playwright_mcp__ || window.playwrightMCP || window.PlaywrightMCPBridge) {
+                console.log('[MCPClient] Playwright MCP detected via global variable');
+                playwrightMCPDetected = true;
+                mcpType = 'playwright';
+                return true;
+            }
+        }
+
+        // 方法2: 检测 Playwright MCP 服务器（HTTP 端点）
+        for (var i = 0; i < PLAYWRIGHT_MCP_PORTS.length; i++) {
+            var port = PLAYWRIGHT_MCP_PORTS[i];
+            var detected = await checkPlaywrightMCPServer(port);
+            if (detected) {
+                console.log('[MCPClient] Playwright MCP server detected on port', port);
+                playwrightMCPDetected = true;
+                mcpType = 'playwright-server';
+                playwrightMCPServerUrl = 'http://localhost:' + port;
+                return true;
+            }
+        }
+
+        // 方法3: 检查 DOM 标记
+        if (typeof document !== 'undefined') {
+            var mcpIndicator = document.querySelector('[data-playwright-mcp]') || 
+                               document.querySelector('#playwright-mcp-bridge');
+            if (mcpIndicator) {
+                console.log('[MCPClient] Playwright MCP detected via DOM');
+                playwrightMCPDetected = true;
+                mcpType = 'playwright';
+                return true;
+            }
+        }
+
+        // 方法4: 通过 postMessage 探测（扩展 content script）
+        var postMessageDetected = await detectViaPostMessage();
+        if (postMessageDetected) {
+            return true;
+        }
+
+        console.log('[MCPClient] Playwright MCP not detected');
+        return false;
+    }
+
+    /**
+     * 检测 Playwright MCP 服务器
+     * @param {number} port 端口号
+     * @returns {Promise<boolean>}
+     */
+    async function checkPlaywrightMCPServer(port) {
+        try {
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function() { controller.abort(); }, 2000);
+
+            var response = await fetch('http://localhost:' + port + '/mcp', {
+                method: 'OPTIONS',
+                signal: controller.signal
+            }).catch(function() { return null; });
+
+            clearTimeout(timeoutId);
+
+            if (response && (response.ok || response.status === 204 || response.status === 405)) {
+                return true;
+            }
+        } catch (e) {
+            // 忽略错误
+        }
+        return false;
+    }
+
+    /**
+     * 通过 postMessage 探测扩展
+     * @returns {Promise<boolean>}
+     */
+    async function detectViaPostMessage() {
+        return new Promise(function(resolve) {
+            var timeout = null;
+            var messageHandler = function(event) {
+                if (event.data && (event.data.type === 'PLAYWRIGHT_MCP_PONG' || 
+                                   event.data.type === 'MCP_PONG' ||
+                                   event.data.source === 'playwright-mcp')) {
+                    window.removeEventListener('message', messageHandler);
+                    clearTimeout(timeout);
+                    console.log('[MCPClient] Playwright MCP detected via postMessage');
+                    playwrightMCPDetected = true;
+                    mcpType = 'playwright';
+                    resolve(true);
+                }
+            };
+
+            window.addEventListener('message', messageHandler);
+
+            // 发送探测消息
+            window.postMessage({ type: 'PLAYWRIGHT_MCP_PING' }, '*');
+            window.postMessage({ type: 'MCP_PING' }, '*');
+
+            // 超时
+            timeout = setTimeout(function() {
+                window.removeEventListener('message', messageHandler);
+                resolve(false);
+            }, 1000);
+        });
+    }
 
     /**
      * 获取扩展 ID
@@ -18,6 +264,11 @@ var MCPClient = (function () {
     async function getExtensionId() {
         if (extensionId) {
             return extensionId;
+        }
+
+        // 如果已检测到 Playwright MCP，使用 content script 方式
+        if (playwrightMCPDetected) {
+            return 'playwright-mcp';
         }
 
         // 尝试从全局函数获取（如果 config-models.js 已加载）
@@ -77,25 +328,94 @@ var MCPClient = (function () {
 
     /**
      * 连接到 Browser MCP 扩展
+     * 支持 AutoLeadAgent 扩展、Playwright MCP 和自定义扩展
      * @returns {Promise<boolean>} 连接是否成功
      */
     async function connectMCP() {
         try {
-            // 检查扩展是否可用
+            // 首先检测 AutoLeadAgent 扩展
+            if (!autoLeadAgentDetected) {
+                await detectAutoLeadAgentExtension();
+            }
+
+            // 如果检测到 AutoLeadAgent 扩展，通过 chrome.runtime.sendMessage 连接
+            if (autoLeadAgentDetected && extensionId) {
+                console.log('[MCPClient] Connecting to AutoLeadAgent extension:', extensionId);
+                connected = true;
+                mcpType = 'autoleadagent';
+                connectionId = 'autoleadagent-' + Date.now();
+                
+                // AutoLeadAgent 扩展的工具列表（基于 Nanobrowser）
+                tools = [
+                    { name: 'search_google', description: '在 Google 搜索' },
+                    { name: 'go_to_url', description: '导航到 URL' },
+                    { name: 'go_back', description: '返回上一页' },
+                    { name: 'click_element', description: '点击元素' },
+                    { name: 'input_text', description: '输入文本' },
+                    { name: 'switch_tab', description: '切换标签页' },
+                    { name: 'open_tab', description: '打开新标签页' },
+                    { name: 'close_tab', description: '关闭标签页' },
+                    { name: 'cache_content', description: '缓存内容' },
+                    { name: 'scroll_to_percent', description: '滚动到百分比位置' },
+                    { name: 'scroll_to_text', description: '滚动到文本位置' },
+                    { name: 'send_keys', description: '发送按键' },
+                    { name: 'get_dropdown_options', description: '获取下拉选项' },
+                    { name: 'select_dropdown_option', description: '选择下拉选项' },
+                    { name: 'wait', description: '等待' },
+                    { name: 'done', description: '完成任务' }
+                ];
+                
+                console.log('[MCPClient] Connected to AutoLeadAgent extension, tools:', tools.length);
+                return true;
+            }
+
+            // 检测 Playwright MCP
+            if (!playwrightMCPDetected) {
+                await detectPlaywrightMCP();
+            }
+
+            // 如果检测到 Playwright MCP，使用 postMessage 方式连接
+            if (playwrightMCPDetected) {
+                console.log('[MCPClient] Connecting to Playwright MCP via postMessage');
+                connected = true;
+                mcpType = 'playwright';
+                connectionId = 'playwright-' + Date.now();
+                
+                // Playwright MCP 的工具列表
+                tools = [
+                    { name: 'browser_navigate', description: '导航到URL' },
+                    { name: 'browser_snapshot', description: '获取页面快照' },
+                    { name: 'browser_click', description: '点击元素' },
+                    { name: 'browser_type', description: '输入文本' },
+                    { name: 'browser_fill_form', description: '填写表单' },
+                    { name: 'browser_select_option', description: '选择下拉选项' },
+                    { name: 'browser_hover', description: '鼠标悬停' },
+                    { name: 'browser_press_key', description: '按键' },
+                    { name: 'browser_wait_for', description: '等待元素' },
+                    { name: 'browser_take_screenshot', description: '截图' },
+                    { name: 'browser_tabs', description: '管理标签页' },
+                    { name: 'browser_close', description: '关闭页面' }
+                ];
+                
+                console.log('[MCPClient] Connected to Playwright MCP, tools:', tools.length);
+                return true;
+            }
+
+            // 检查自定义扩展
             if (typeof chrome === 'undefined' || !chrome.runtime) {
                 throw new Error('Chrome Extension API is not available');
             }
 
             // 获取扩展 ID
             const extId = await getExtensionId();
-            if (!extId || extId === 'content-script') {
+            if (!extId || extId === 'content-script' || extId === 'playwright-mcp' || extId === 'autoleadagent') {
                 console.warn('[MCPClient] Extension ID not available, MCP connection not possible');
                 console.warn('[MCPClient] MCP tools will not be available, but agent can still work without tools');
                 connected = false;
                 return false;
             }
 
-            // 尝试连接扩展
+            // 尝试连接自定义扩展
             const response = await new Promise((resolve, reject) => {
                 chrome.runtime.sendMessage(extId, {
                     type: 'MCP_CONNECT',
@@ -111,9 +431,10 @@ var MCPClient = (function () {
 
             if (response && response.success) {
                 connected = true;
+                mcpType = 'custom';
                 connectionId = response.connectionId;
                 tools = response.tools || [];
-                console.log('[MCPClient] Connected to Browser MCP, tools:', tools.length);
+                console.log('[MCPClient] Connected to Custom MCP, tools:', tools.length);
                 return true;
             } else {
                 throw new Error('Failed to connect to MCP');
@@ -149,17 +470,40 @@ var MCPClient = (function () {
 
     /**
      * 检查 Browser MCP 扩展是否可用
+     * 优先检测 AutoLeadAgent 扩展，然后是 Playwright MCP
      * @returns {Promise<boolean>} 是否可用
      */
     async function isMCPAvailable() {
         try {
+            // 首先检测 AutoLeadAgent 扩展
+            var autoLeadAgentDetected = await detectAutoLeadAgentExtension();
+            if (autoLeadAgentDetected) {
+                console.log('[MCPClient] AutoLeadAgent extension is available');
+                return true;
+            }
+
+            // 然后检测 Playwright MCP
+            var playwrightDetected = await detectPlaywrightMCP();
+            if (playwrightDetected) {
+                console.log('[MCPClient] Playwright MCP is available');
+                return true;
+            }
+
+            // 检测自定义扩展
             if (typeof chrome === 'undefined' || !chrome.runtime) {
+                console.log('[MCPClient] Chrome runtime not available');
                 return false;
             }
 
             const extId = await getExtensionId();
             if (!extId || extId === 'content-script') {
+                console.log('[MCPClient] No extension ID found');
                 return false;
+            }
+
+            // 如果是特殊标记，已经在上面检测过了
+            if (extId === 'playwright-mcp' || extId === 'autoleadagent') {
+                return true;
             }
 
             const response = await new Promise((resolve) => {
@@ -176,6 +520,7 @@ var MCPClient = (function () {
 
             return response === true;
         } catch (error) {
+            console.warn('[MCPClient] MCP availability check error:', error);
             return false;
         }
     }
@@ -232,6 +577,7 @@ var MCPClient = (function () {
 
     /**
      * 调用 MCP 工具
+     * 支持 AutoLeadAgent 扩展、Playwright MCP（postMessage）和自定义扩展
      * @param {string} toolName 工具名称
      * @param {Object} args 工具参数
      * @returns {Promise<Object>} 工具执行结果
@@ -242,8 +588,19 @@ var MCPClient = (function () {
         }
 
         try {
+            // AutoLeadAgent 扩展使用 chrome.runtime.sendMessage
+            if (mcpType === 'autoleadagent' && extensionId) {
+                return await callAutoLeadAgentTool(toolName, args);
+            }
+
+            // Playwright MCP 使用 postMessage
+            if (mcpType === 'playwright' || mcpType === 'playwright-server' || playwrightMCPDetected) {
+                return await callPlaywrightMCPTool(toolName, args);
+            }
+
+            // 自定义扩展使用 chrome.runtime.sendMessage
             const extId = await getExtensionId();
-            if (!extId || extId === 'content-script') {
+            if (!extId || extId === 'content-script' || extId === 'playwright-mcp' || extId === 'autoleadagent') {
                 throw new Error('Extension ID not available');
             }
 
@@ -271,6 +628,185 @@ var MCPClient = (function () {
             console.error('[MCPClient] Tool call failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * 调用 AutoLeadAgent 扩展工具
+     * 通过 chrome.runtime.sendMessage 发送任务给扩展
+     * @param {string} toolName 工具名称
+     * @param {Object} args 工具参数
+     * @returns {Promise<Object>} 工具执行结果
+     */
+    async function callAutoLeadAgentTool(toolName, args) {
+        return new Promise(function(resolve, reject) {
+            if (!extensionId) {
+                reject(new Error('AutoLeadAgent extension ID not available'));
+                return;
+            }
+
+            try {
+                chrome.runtime.sendMessage(extensionId, {
+                    type: 'EXECUTE_TASK',
+                    command: 'newTask',
+                    task: formatTaskFromTool(toolName, args)
+                }, function(response) {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else if (response && response.error) {
+                        reject(new Error(response.error));
+                    } else {
+                        resolve(response || { success: true });
+                    }
+                });
+
+                // 超时处理
+                setTimeout(function() {
+                    reject(new Error('AutoLeadAgent tool call timeout (60s)'));
+                }, 60000);
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    /**
+     * 将工具调用转换为自然语言任务描述
+     * @param {string} toolName 工具名称
+     * @param {Object} args 工具参数
+     * @returns {string} 任务描述
+     */
+    function formatTaskFromTool(toolName, args) {
+        switch (toolName) {
+            case 'search_google':
+                return '在 Google 搜索: ' + (args.query || args.text || '');
+            case 'go_to_url':
+                return '导航到: ' + (args.url || '');
+            case 'go_back':
+                return '返回上一页';
+            case 'click_element':
+                return '点击元素: ' + (args.index !== undefined ? '索引 ' + args.index : (args.selector || args.text || ''));
+            case 'input_text':
+                return '在元素 ' + (args.index !== undefined ? '索引 ' + args.index : args.selector) + ' 输入: ' + (args.text || '');
+            case 'switch_tab':
+                return '切换到标签页: ' + (args.tab_id || args.index || '');
+            case 'open_tab':
+                return '在新标签页打开: ' + (args.url || '');
+            case 'close_tab':
+                return '关闭标签页: ' + (args.tab_id || '当前');
+            case 'cache_content':
+                return '缓存内容: ' + (args.content || '');
+            case 'scroll_to_percent':
+                return '滚动到 ' + (args.yPercent || 0) + '%';
+            case 'scroll_to_text':
+                return '滚动到文本: ' + (args.text || '');
+            case 'send_keys':
+                return '发送按键: ' + (args.keys || '');
+            case 'get_dropdown_options':
+                return '获取下拉选项: 元素索引 ' + (args.index || 0);
+            case 'select_dropdown_option':
+                return '选择下拉选项: ' + (args.text || args.value || '');
+            case 'wait':
+                return '等待 ' + (args.seconds || 3) + ' 秒';
+            case 'done':
+                return '任务完成: ' + (args.text || '');
+            default:
+                return toolName + ': ' + JSON.stringify(args);
+        }
+    }
+
+    /**
+     * 调用 Playwright MCP 工具
+     * 支持服务器模式（HTTP）和扩展模式（postMessage）
+     * @param {string} toolName 工具名称
+     * @param {Object} args 工具参数
+     * @returns {Promise<Object>} 工具执行结果
+     */
+    async function callPlaywrightMCPTool(toolName, args) {
+        // 服务器模式：通过 HTTP API 调用
+        if (mcpType === 'playwright-server' && playwrightMCPServerUrl) {
+            return await callPlaywrightMCPViaHTTP(toolName, args);
+        }
+
+        // 扩展模式：通过 postMessage 调用
+        return await callPlaywrightMCPViaPostMessage(toolName, args);
+    }
+
+    /**
+     * 通过 HTTP API 调用 Playwright MCP 服务器
+     */
+    async function callPlaywrightMCPViaHTTP(toolName, args) {
+        try {
+            var response = await fetch(playwrightMCPServerUrl + '/mcp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: Date.now(),
+                    method: 'tools/call',
+                    params: {
+                        name: toolName,
+                        arguments: args || {}
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+
+            var result = await response.json();
+            if (result.error) {
+                throw new Error(result.error.message || 'MCP error');
+            }
+
+            return result.result || {};
+        } catch (error) {
+            console.error('[MCPClient] HTTP call failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 通过 postMessage 调用 Playwright MCP 扩展
+     */
+    async function callPlaywrightMCPViaPostMessage(toolName, args) {
+        return new Promise(function(resolve, reject) {
+            var callId = 'mcp_call_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            var timeout = null;
+
+            var messageHandler = function(event) {
+                if (event.data && 
+                    (event.data.type === 'PLAYWRIGHT_MCP_RESULT' || event.data.type === 'MCP_RESULT') && 
+                    event.data.callId === callId) {
+                    window.removeEventListener('message', messageHandler);
+                    clearTimeout(timeout);
+
+                    if (event.data.error) {
+                        reject(new Error(event.data.error));
+                    } else {
+                        resolve(event.data.result || {});
+                    }
+                }
+            };
+
+            window.addEventListener('message', messageHandler);
+
+            // 发送工具调用请求
+            window.postMessage({
+                type: 'PLAYWRIGHT_MCP_CALL',
+                callId: callId,
+                tool: toolName,
+                arguments: args || {}
+            }, '*');
+
+            // 超时处理
+            timeout = setTimeout(function() {
+                window.removeEventListener('message', messageHandler);
+                reject(new Error('Playwright MCP tool call timeout (30s). Please ensure the MCP server is running: npx @playwright/mcp@latest --port 8931'));
+            }, 30000);
+        });
     }
 
     /**
@@ -388,6 +924,97 @@ var MCPClient = (function () {
         }
     }
 
+    /**
+     * 获取 MCP 状态信息
+     * @returns {Object} 状态信息
+     */
+    function getMCPStatus() {
+        return {
+            connected: connected,
+            mcpType: mcpType,
+            autoLeadAgentDetected: autoLeadAgentDetected,
+            playwrightMCPDetected: playwrightMCPDetected,
+            playwrightMCPServerUrl: playwrightMCPServerUrl,
+            extensionId: extensionId,
+            toolsCount: tools.length
+        };
+    }
+
+    /**
+     * 重新检测 MCP
+     * @returns {Promise<boolean>}
+     */
+    async function redetectMCP() {
+        // 重置状态
+        autoLeadAgentDetected = false;
+        playwrightMCPDetected = false;
+        mcpType = null;
+        playwrightMCPServerUrl = null;
+        connected = false;
+        extensionId = null;
+        
+        // 重新检测
+        return await isMCPAvailable();
+    }
+
+    /**
+     * 发送任务给 AutoLeadAgent 扩展
+     * 这是一个高级接口，直接发送自然语言任务
+     * @param {string} task 任务描述（自然语言）
+     * @returns {Promise<Object>} 任务执行结果
+     */
+    async function sendTaskToExtension(task) {
+        if (!autoLeadAgentDetected || !extensionId) {
+            await detectAutoLeadAgentExtension();
+        }
+
+        if (!extensionId) {
+            throw new Error('AutoLeadAgent extension not found. Please install and enable the extension.');
+        }
+
+        return new Promise(function(resolve, reject) {
+            chrome.runtime.sendMessage(extensionId, {
+                type: 'EXECUTE_TASK',
+                command: 'newTask',
+                task: task
+            }, function(response) {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (response && response.error) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response || { success: true });
+                }
+            });
+        });
+    }
+
+    /**
+     * 打开 AutoLeadAgent 扩展的侧边栏
+     * @returns {Promise<boolean>}
+     */
+    async function openExtensionSidePanel() {
+        if (!autoLeadAgentDetected || !extensionId) {
+            await detectAutoLeadAgentExtension();
+        }
+
+        if (!extensionId) {
+            throw new Error('AutoLeadAgent extension not found');
+        }
+
+        return new Promise(function(resolve, reject) {
+            chrome.runtime.sendMessage(extensionId, {
+                type: 'OPEN_SIDE_PANEL'
+            }, function(response) {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    resolve(true);
+                }
+            });
+        });
+    }
+
     // 导出公共 API
     return {
         // 标准 MCP 接口
@@ -398,6 +1025,16 @@ var MCPClient = (function () {
         callTool: callTool,
         getToolSchema: getToolSchema,
         isConnected: isConnected,
+
+        // AutoLeadAgent 扩展专用
+        detectAutoLeadAgentExtension: detectAutoLeadAgentExtension,
+        sendTaskToExtension: sendTaskToExtension,
+        openExtensionSidePanel: openExtensionSidePanel,
+
+        // Playwright MCP 专用
+        detectPlaywrightMCP: detectPlaywrightMCP,
+        redetectMCP: redetectMCP,
+        getMCPStatus: getMCPStatus,
 
         // WASM 智能体直接调用接口
         executeToolForWasm: executeToolForWasm,

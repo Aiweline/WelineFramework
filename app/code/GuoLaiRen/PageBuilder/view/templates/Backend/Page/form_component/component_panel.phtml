@@ -16,17 +16,169 @@
 $page = $this->getData('page');
 $pageId = $page && $page->getId() ? $page->getId() : 0;
 $styleCode = $this->getData('style_code') ?: ($page ? $page->getData('style') : 'default');
-$layoutCode = $this->getData('layout_code') ?: 'default';
 
-// 获取组件数据的URL
+// 获取页面类型（用于加载对应的默认布局配置）
+$pageType = $page ? $page->getData('type') : '';
+
+// 根据页面类型自动选择布局类型：博客类型页面使用blog布局
+$layoutCode = $this->getData('layout_code');
+if (empty($layoutCode) && $page) {
+    // 博客类型页面使用blog布局
+    if (in_array($pageType, [
+        \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG,
+        \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY,
+        \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST
+    ])) {
+        $layoutCode = 'blog';
+    } else {
+        $layoutCode = 'default';
+    }
+}
+$layoutCode = $layoutCode ?: 'default';
+
+// 获取组件数据的URL（传递页面类型以加载对应的默认布局配置）
+// include_preview=1 启用组件预览HTML生成
 $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/component/list', [
     'style_code' => $styleCode,
     'layout_code' => $layoutCode,
+    'page_type' => $pageType, // 传递页面类型
     'group_by_region' => 'true',
+    'include_preview' => '1', // 启用组件预览
+    'include_compatible' => '1', // 包含兼容组件（跨模板）
 ]);
+
+// 获取模板CSS的基础URL（用于组件预览）
+$templateCssBaseUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
 ?>
 
 <style>
+/* 使用后端主题的字体颜色变量 */
+:root {
+    /* 使用后端主题的文本颜色变量，如果没有则使用默认值 */
+    --visual-config-text: var(--backend-color-text-primary, #212529);
+    --visual-config-text-muted: var(--backend-color-text-muted, #6c757d);
+}
+
+/* 暗色模式 CSS 变量 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --visual-config-panel-bg: #1e1e2e;
+        --visual-config-panel-header-bg: #252536;
+        --visual-config-card-bg: #2d2d3f;
+        --visual-config-input-bg: #363649;
+        --visual-config-border: #3d3d52;
+        --visual-config-text: var(--backend-color-text-primary, #e9ecef);
+        --visual-config-text-muted: var(--backend-color-text-muted, #adb5bd);
+        --visual-config-section-bg: #252536;
+        --visual-config-section-hover: #2d2d3f;
+    }
+}
+
+/* 后台暗色主题支持 - 多种选择器覆盖各种暗色模式触发方式 */
+body.dark-mode,
+body[data-theme="dark"],
+body[data-bs-theme="dark"],
+html[data-theme="dark"],
+html[data-bs-theme="dark"],
+.dark-theme,
+.visual-config-wrapper[data-theme="dark"],
+.visual-config-wrapper[data-theme="dark"] .component-panel {
+    --visual-config-panel-bg: #1e1e2e;
+    --visual-config-panel-header-bg: #252536;
+    --visual-config-card-bg: #2d2d3f;
+    --visual-config-input-bg: #363649;
+    --visual-config-border: #3d3d52;
+    --visual-config-text: var(--backend-color-text-primary, #e9ecef);
+    --visual-config-text-muted: var(--backend-color-text-muted, #adb5bd);
+    --visual-config-section-bg: #252536;
+    --visual-config-section-hover: #2d2d3f;
+}
+
+/* 直接针对暗色主题下的组件面板 */
+.visual-config-wrapper[data-theme="dark"] .component-panel {
+    background: #1e1e2e;
+    border-color: #3d3d52;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-panel-header {
+    background: #252536;
+    border-color: #3d3d52;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-panel-header h6 {
+    color: #e4e4e7;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-card {
+    background: #2d2d3f;
+    border-color: #3d3d52;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-card-thumb {
+    background: #363649;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-card-thumb i {
+    color: #9ca3af;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-card-template {
+    color: #9ca3af;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-region-header {
+    background: #252536;
+    color: #e4e4e7;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-region-header:hover {
+    background: #2d2d3f;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-region-body {
+    background: #252536;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-search {
+    background: #363649;
+    border-color: #3d3d52;
+    color: #e4e4e7;
+}
+
+.visual-config-wrapper[data-theme="dark"] .component-search::placeholder {
+    color: #9ca3af;
+}
+
+/* 暗色模式徽章调整 */
+@media (prefers-color-scheme: dark) {
+    .component-region-header .region-info .badge-warning {
+        background: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+    }
+    .component-region-header .region-info .badge-info {
+        background: rgba(52, 152, 219, 0.2);
+        color: #69b1ff;
+    }
+}
+
+body.dark-mode .component-region-header .region-info .badge-warning,
+body[data-theme="dark"] .component-region-header .region-info .badge-warning,
+html[data-theme="dark"] .component-region-header .region-info .badge-warning,
+.dark-theme .component-region-header .region-info .badge-warning,
+.visual-config-wrapper[data-theme="dark"] .component-region-header .region-info .badge-warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+}
+
+body.dark-mode .component-region-header .region-info .badge-info,
+body[data-theme="dark"] .component-region-header .region-info .badge-info,
+html[data-theme="dark"] .component-region-header .region-info .badge-info,
+.dark-theme .component-region-header .region-info .badge-info,
+.visual-config-wrapper[data-theme="dark"] .component-region-header .region-info .badge-info {
+    background: rgba(52, 152, 219, 0.2);
+    color: #69b1ff;
+}
+
 /* 组件面板样式 - 按区域分组 */
 .component-panel {
     width: 320px;
@@ -107,22 +259,29 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
     padding: 0;
 }
 
-/* 滚动条样式 */
+/* 滚动条样式 - 极细滚动条 */
 .component-panel-body::-webkit-scrollbar {
-    width: 6px;
+    width: 3px;
 }
 
 .component-panel-body::-webkit-scrollbar-track {
-    background: var(--visual-config-scrollbar-track, #f1f1f1);
+    background: transparent;
 }
 
 .component-panel-body::-webkit-scrollbar-thumb {
-    background: var(--visual-config-scrollbar-thumb, #c1c1c1);
+    background: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4));
     border-radius: 3px;
+    transition: background 0.2s ease;
 }
 
 .component-panel-body::-webkit-scrollbar-thumb:hover {
-    background: var(--visual-config-scrollbar-thumb-hover, #a8a8a8);
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(148, 163, 184, 0.6));
+}
+
+/* Firefox 滚动条样式 */
+.component-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4)) transparent;
 }
 
 .component-panel.collapsed .component-panel-body {
@@ -265,7 +424,7 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
 
 .component-card-thumb {
     width: 100%;
-    height: 60px;
+    height: 80px;
     background: var(--visual-config-input-bg, #f8f9fa);
     border-radius: 4px;
     margin-bottom: 8px;
@@ -273,6 +432,7 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    position: relative;
 }
 
 .component-card-thumb img {
@@ -286,10 +446,58 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
     color: var(--visual-config-text-muted, #adb5bd);
 }
 
+/* 组件预览容器样式 */
+.component-card-thumb .component-preview-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* 预览iframe填满容器 */
+.component-card-thumb .component-preview-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 800%;
+    height: 800%;
+    transform: scale(0.125);
+    transform-origin: top left;
+    border: none;
+}
+
+/* 预览容器内的所有元素样式隔离 */
+.component-card-thumb .component-preview-container .component-preview-wrapper {
+    background: #fff;
+    min-height: 400px;
+}
+
+/* 预览加载占位 */
+.component-card-thumb .preview-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--visual-config-text-muted, #6c757d);
+}
+
+.component-card-thumb .preview-loading .spinner-border {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+}
+
 .component-card-name {
     font-size: 12px;
     font-weight: 500;
-    color: var(--visual-config-text, #333);
+    /* 使用后端主题的文本颜色变量，自动适配亮色/暗色主题 */
+    color: var(--backend-color-text-primary, var(--visual-config-text, #212529));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -323,6 +531,49 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
 .component-tag.other {
     background: #fff3cd;
     color: #856404;
+}
+
+/* 暗色模式标签调整 */
+@media (prefers-color-scheme: dark) {
+    .component-tag.own {
+        background: rgba(40, 167, 69, 0.2);
+        color: #52c41a;
+    }
+    .component-tag.shared {
+        background: rgba(52, 152, 219, 0.2);
+        color: #69b1ff;
+    }
+    .component-tag.other {
+        background: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+    }
+}
+
+body.dark-mode .component-tag.own,
+body[data-theme="dark"] .component-tag.own,
+html[data-theme="dark"] .component-tag.own,
+.dark-theme .component-tag.own,
+.visual-config-wrapper[data-theme="dark"] .component-tag.own {
+    background: rgba(40, 167, 69, 0.2);
+    color: #52c41a;
+}
+
+body.dark-mode .component-tag.shared,
+body[data-theme="dark"] .component-tag.shared,
+html[data-theme="dark"] .component-tag.shared,
+.dark-theme .component-tag.shared,
+.visual-config-wrapper[data-theme="dark"] .component-tag.shared {
+    background: rgba(52, 152, 219, 0.2);
+    color: #69b1ff;
+}
+
+body.dark-mode .component-tag.other,
+body[data-theme="dark"] .component-tag.other,
+html[data-theme="dark"] .component-tag.other,
+.dark-theme .component-tag.other,
+.visual-config-wrapper[data-theme="dark"] .component-tag.other {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
 }
 
 /* 放置区域提示 */
@@ -389,16 +640,27 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
 }
 
 .component-config-body::-webkit-scrollbar {
-    width: 6px;
+    width: 3px;
 }
 
 .component-config-body::-webkit-scrollbar-track {
-    background: var(--visual-config-scrollbar-track, #f1f1f1);
+    background: transparent;
 }
 
 .component-config-body::-webkit-scrollbar-thumb {
-    background: var(--visual-config-scrollbar-thumb, #c1c1c1);
+    background: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4));
     border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.component-config-body::-webkit-scrollbar-thumb:hover {
+    background: var(--visual-config-scrollbar-thumb-hover, rgba(148, 163, 184, 0.6));
+}
+
+/* Firefox 滚动条样式 */
+.component-config-body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(148, 163, 184, 0.4)) transparent;
 }
 
 .component-config-footer {
@@ -477,19 +739,37 @@ let componentData = null;
 let currentStyleCode = '<?= htmlspecialchars($styleCode) ?>';
 let currentEditingComponent = null;
 
-// 区域配置
-const regionConfig = {
+// 区域配置（默认配置，可被 API 返回的数据覆盖）
+const defaultRegionConfig = {
     header: {
         label: '<?= __('头部组件 (Header)') ?>',
         icon: 'mdi-page-layout-header',
         multiple: false,
         hint: '<?= __('Header 区域只能放置一个组件') ?>'
     },
+    sidebar: {
+        label: '<?= __('侧边栏组件 (Sidebar)') ?>',
+        icon: 'mdi-page-layout-sidebar-left',
+        multiple: true,
+        hint: '<?= __('Sidebar 区域可放置多个组件') ?>'
+    },
     content: {
         label: '<?= __('内容组件 (Content)') ?>',
         icon: 'mdi-text-box-multiple',
         multiple: true,
         hint: '<?= __('Content 区域可放置多个组件，按顺序排列') ?>'
+    },
+    hero: {
+        label: '<?= __('Hero 区域 (Hero)') ?>',
+        icon: 'mdi-image-area',
+        multiple: false,
+        hint: '<?= __('Hero 区域通常只放置一个大型横幅组件') ?>'
+    },
+    cta: {
+        label: '<?= __('行动号召区域 (CTA)') ?>',
+        icon: 'mdi-call-made',
+        multiple: true,
+        hint: '<?= __('CTA 区域用于放置号召行动的组件') ?>'
     },
     footer: {
         label: '<?= __('底部组件 (Footer)') ?>',
@@ -499,26 +779,84 @@ const regionConfig = {
     }
 };
 
+// 当前布局的区域配置（初始化后由 API 返回的数据更新）
+let regionConfig = { ...defaultRegionConfig };
+// 当前布局的区域顺序（初始化后由 API 返回的数据更新）
+let regionOrder = ['header', 'content', 'footer'];
+
 // 初始化组件面板
 async function initComponentPanel() {
+    const apiUrl = '<?= $componentsApiUrl ?>';
+    console.log('[组件面板] 开始加载组件，API URL:', apiUrl);
+    
     try {
-        const response = await fetch('<?= $componentsApiUrl ?>', {
+        const response = await fetch(apiUrl, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
             }
         });
         
-        const result = await response.json();
+        console.log('[组件面板] HTTP 响应状态:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[组件面板] HTTP 错误响应:', errorText.substring(0, 500));
+            showComponentError('HTTP错误: ' + response.status + ' ' + response.statusText);
+            return;
+        }
+        
+        const responseText = await response.text();
+        console.log('[组件面板] 响应长度:', responseText.length, '字符');
+        
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('[组件面板] JSON解析失败:', parseError);
+            console.error('[组件面板] 响应内容前500字符:', responseText.substring(0, 500));
+            showComponentError('JSON解析失败: ' + parseError.message);
+            return;
+        }
+        
+        console.log('[组件面板] 解析结果 success:', result.success);
         
         if (result.success) {
             componentData = result.data;
+            console.log('[组件面板] 组件数据已加载');
+            
+            // 从 API 返回的 by_region 数据更新区域配置
+            if (componentData.by_region) {
+                // 获取区域顺序（API 返回的区域数据的键）
+                regionOrder = Object.keys(componentData.by_region);
+                console.log('[组件面板] 区域顺序:', regionOrder);
+                
+                // 更新区域配置
+                Object.entries(componentData.by_region).forEach(([regionCode, regionData]) => {
+                    if (!regionConfig[regionCode]) {
+                        // 如果是未知区域，使用默认配置
+                        regionConfig[regionCode] = {
+                            label: regionData.label || regionCode,
+                            icon: 'mdi-puzzle',
+                            multiple: true,
+                            hint: '<?= __('可放置组件') ?>'
+                        };
+                    } else if (regionData.label) {
+                        // 更新已知区域的标签
+                        regionConfig[regionCode].label = regionData.label;
+                    }
+                });
+            }
+            
             renderComponentPanelByRegion();
+            console.log('[组件面板] 组件面板渲染完成');
         } else {
+            console.error('[组件面板] API 返回失败:', result.message);
             showComponentError(result.message || '<?= __('加载组件失败') ?>');
         }
     } catch (error) {
-        console.error('加载组件失败:', error);
-        showComponentError('<?= __('加载组件失败') ?>');
+        console.error('[组件面板] 加载组件异常:', error);
+        console.error('[组件面板] 错误堆栈:', error.stack);
+        showComponentError('<?= __('加载组件失败') ?>: ' + error.message);
     }
 }
 
@@ -527,9 +865,16 @@ function renderComponentPanelByRegion() {
     const container = document.getElementById('componentPanelBody');
     let html = '';
     
-    // 遍历三个区域
-    ['header', 'content', 'footer'].forEach(region => {
-        const config = regionConfig[region];
+    // 使用动态区域列表（如果 API 返回了 by_region 数据，则使用 regionOrder）
+    const regionsToRender = componentData.by_region ? regionOrder : ['header', 'content', 'footer'];
+    
+    regionsToRender.forEach(region => {
+        const config = regionConfig[region] || defaultRegionConfig[region] || {
+            label: region,
+            icon: 'mdi-puzzle',
+            multiple: true,
+            hint: '<?= __('可放置组件') ?>'
+        };
         const components = getComponentsForRegion(region);
         
         if (components.length === 0) return;
@@ -576,13 +921,31 @@ function renderComponentPanelByRegion() {
 function getComponentsForRegion(region) {
     if (!componentData) return [];
     
+    // 如果 API 返回了 by_region 数据，优先使用它
+    if (componentData.by_region && componentData.by_region[region]) {
+        const regionData = componentData.by_region[region];
+        if (regionData.components && regionData.components.length > 0) {
+            return regionData.components.map(comp => ({
+                ...comp,
+                isOwn: comp.isOwn || false,
+                isShared: comp.isShared || false,
+                templateCode: comp.templateCode || currentStyleCode,
+                templateName: comp.templateName || currentStyleCode
+            }));
+        }
+    }
+    
+    // 回退到传统方式
     const components = [];
     const categoryMap = {
         header: ['header'],
+        sidebar: ['sidebar', 'widget'],
         content: ['content', 'widget'],
+        hero: ['hero', 'banner', 'content'],
+        cta: ['cta', 'content'],
         footer: ['footer']
     };
-    const allowedCategories = categoryMap[region] || [];
+    const allowedCategories = categoryMap[region] || [region];
     
     // 收集推荐组件（当前模板）
     if (componentData.recommended && componentData.recommended.components) {
@@ -688,11 +1051,50 @@ function renderTemplateGroup(group, region) {
     `;
 }
 
+// 解码 Base64 编码的预览HTML
+function decodePreviewHtml(component) {
+    if (!component.preview_html || !component.preview_html.trim()) {
+        return '';
+    }
+    
+    // 如果标记为已编码，则进行Base64解码
+    if (component.preview_html_encoded) {
+        try {
+            return atob(component.preview_html);
+        } catch (e) {
+            console.error('[组件面板] Base64解码失败:', e, component.code);
+            return '';
+        }
+    }
+    
+    // 未编码则直接返回
+    return component.preview_html;
+}
+
 // 渲染组件卡片
 function renderComponentCard(component, region) {
-    const thumbHtml = component.thumbnail_url 
-        ? `<img src="${component.thumbnail_url}" alt="${component.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-puzzle\\'></i>'">`
-        : `<i class="mdi mdi-${getRegionIcon(region)}"></i>`;
+    // 优先使用预览HTML，其次使用缩略图，最后使用图标
+    let thumbHtml = '';
+    
+    // 解码预览HTML（如果已编码）
+    const decodedPreviewHtml = decodePreviewHtml(component);
+    
+    if (decodedPreviewHtml && decodedPreviewHtml.trim()) {
+        // 直接渲染预览 HTML（带样式隔离的容器）
+        // 使用 iframe 来完全隔离样式
+        const previewHtml = decodedPreviewHtml.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        thumbHtml = `<div class="component-preview-container">
+            <iframe 
+                srcdoc="<!DOCTYPE html><html><head><meta charset='utf-8'><style>*{box-sizing:border-box;}body{margin:0;padding:0;overflow:hidden;background:#fff;min-height:100vh;}</style></head><body>${previewHtml}</body></html>"
+                frameborder="0"
+                scrolling="no">
+            </iframe>
+        </div>`;
+    } else if (component.thumbnail_url) {
+        thumbHtml = `<img src="${component.thumbnail_url}" alt="${component.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-puzzle\\'></i>'">`;
+    } else {
+        thumbHtml = `<i class="mdi mdi-${getRegionIcon(region)}"></i>`;
+    }
     
     const recommendedClass = component.isOwn ? 'recommended' : '';
     const tagHtml = component.isOwn 
@@ -701,13 +1103,16 @@ function renderComponentCard(component, region) {
             ? '<span class="component-tag shared"><?= __('通用') ?></span>'
             : '<span class="component-tag other"><?= __('兼容') ?></span>');
     
+    // 来源标识
+    const sourceLabel = component.isOwn ? '' : (component.isShared ? '<?= __('通用') ?>' : component.templateName);
+    
     return `
         <div class="component-card ${recommendedClass}" 
              draggable="true"
              data-component-code="${component.code}"
              data-component-name="${component.name}"
              data-component-region="${region}"
-             data-component-template="${component.templateCode}"
+             data-component-template="${component.style_code || component.templateCode}"
              data-component-is-own="${component.isOwn ? 'true' : 'false'}"
              ondragstart="handleDragStart(event)"
              ondragend="handleDragEnd(event)"
@@ -716,7 +1121,7 @@ function renderComponentCard(component, region) {
                 ${thumbHtml}
             </div>
             <div class="component-card-name" title="${component.name}">${component.name}</div>
-            ${!component.isOwn ? `<div class="component-card-template">${component.templateName}</div>` : ''}
+            ${sourceLabel ? `<div class="component-card-template">${sourceLabel}</div>` : ''}
             ${tagHtml}
         </div>
     `;
@@ -911,7 +1316,6 @@ function setupDropZones(doc) {
 // 添加组件到区域
 function addComponentToRegion(componentData, region, targetZone) {
     // 这里需要调用后端API保存组件配置
-    console.log('Adding component:', componentData, 'to region:', region);
     
     // TODO: 调用API保存
     // TODO: 刷新预览
@@ -922,14 +1326,203 @@ function addComponentToRegion(componentData, region, targetZone) {
 }
 
 // 预览组件
-function previewComponent(componentCode) {
-    console.log('预览组件:', componentCode);
-    // TODO: 打开组件预览
+async function previewComponent(componentCode) {
+    
+    // 显示加载中
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __('加载预览...') ?>',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+    }
+    
+    try {
+        // 获取当前样式代码
+        const styleSelect = document.getElementById('style');
+        const styleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
+        
+        // 调用预览 API（不传config，使用默认配置）
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'component_code=' + encodeURIComponent(componentCode) + '&style_code=' + encodeURIComponent(styleCode)
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || '<?= __('预览失败') ?>');
+        }
+        
+        const componentInfo = result.component || {};
+        const previewHtml = result.html || '';
+        
+        // 构建预览弹窗内容（使用 iframe 隔离样式）
+        const templateCssUrl = '<?= htmlspecialchars($templateCssBaseUrl) ?>';
+        const iframeContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>组件预览</title>
+                ${templateCssUrl ? `<link rel="stylesheet" href="${templateCssUrl}" onerror="console.warn('CSS加载失败:', this.href)">` : ''}
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    html, body { 
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        background: #f5f5f5;
+                        min-height: 100%;
+                        line-height: 1.5;
+                    }
+                    body {
+                        padding: 0;
+                    }
+                    .preview-container {
+                        background: #fff;
+                        overflow: hidden;
+                        width: 100%;
+                        min-height: 100px;
+                    }
+                    /* 确保组件内容可见 */
+                    .preview-container * {
+                        visibility: visible;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="preview-container">
+                    ${previewHtml || '<div style="padding: 40px; text-align: center; color: #999;">预览内容为空</div>'}
+                </div>
+                <scr` + `ipt>
+                    // 通知父窗口内容高度
+                    function reportHeight() {
+                        try {
+                            const height = Math.max(
+                                document.body.scrollHeight,
+                                document.documentElement.scrollHeight,
+                                document.querySelector('.preview-container')?.scrollHeight || 0
+                            );
+                            parent.postMessage({ type: 'previewHeight', height: height }, '*');
+                        } catch (e) {
+                            console.warn('报告高度失败:', e);
+                        }
+                    }
+                    // 多种方式触发高度报告
+                    if (document.readyState === 'complete') {
+                        reportHeight();
+                    } else {
+                        window.onload = reportHeight;
+                    }
+                    setTimeout(reportHeight, 100);
+                    setTimeout(reportHeight, 300);
+                    setTimeout(reportHeight, 500);
+                    setTimeout(reportHeight, 1000);
+                    
+                    // 监听图片加载完成
+                    const images = document.querySelectorAll('img');
+                    let loadedCount = 0;
+                    images.forEach(img => {
+                        if (img.complete) {
+                            loadedCount++;
+                        } else {
+                            img.onload = () => {
+                                loadedCount++;
+                                if (loadedCount === images.length) {
+                                    reportHeight();
+                                }
+                            };
+                            img.onerror = () => {
+                                loadedCount++;
+                                if (loadedCount === images.length) {
+                                    reportHeight();
+                                }
+                            };
+                        }
+                    });
+                    if (images.length === 0 || loadedCount === images.length) {
+                        setTimeout(reportHeight, 200);
+                    }
+                </scr` + `ipt>
+            </body>
+            </html>
+        `;
+        
+        // 显示预览弹窗
+        if (typeof Swal !== 'undefined') {
+            // 监听 iframe 内容高度变化
+            let heightHandler = null;
+            
+            Swal.fire({
+                title: (componentInfo.name || componentCode) + ' - <?= __('预览') ?>',
+                html: `
+                    <div style="display: flex; flex-direction: column; height: 70vh;">
+                        <div style="text-align: left; margin-bottom: 12px; flex-shrink: 0;">
+                            <span class="badge bg-primary">${componentInfo.region || 'content'}</span>
+                            ${componentInfo.category ? `<span class="badge bg-secondary">${componentInfo.category}</span>` : ''}
+                        </div>
+                        <iframe id="componentPreviewFrame" style="width: 100%; flex: 1; border: none; border-radius: 8px; background: #f5f5f5; display: block;"></iframe>
+                        <p style="margin-top: 12px; font-size: 12px; color: #666; text-align: center; flex-shrink: 0;">
+                            <?= __('双击组件卡片预览，拖拽到预览区域添加') ?>
+                        </p>
+                    </div>
+                `,
+                width: '90%',
+                maxWidth: '1200px',
+                showConfirmButton: true,
+                confirmButtonText: '<?= __('关闭') ?>',
+                didOpen: () => {
+                    const iframe = document.getElementById('componentPreviewFrame');
+                    if (iframe) {
+                        // 使用flex布局，iframe自动填充容器，不需要设置固定高度
+                        
+                        // 监听高度变化（可选，用于内容自适应）
+                        heightHandler = (event) => {
+                            if (event.data && event.data.type === 'previewHeight') {
+                                // flex布局下不需要手动设置高度，iframe会自动填满容器
+                            }
+                        };
+                        window.addEventListener('message', heightHandler);
+                        
+                        // 写入 iframe 内容
+                        try {
+                            const doc = iframe.contentDocument || iframe.contentWindow.document;
+                            doc.open();
+                            doc.write(iframeContent);
+                            doc.close();
+                        } catch (e) {
+                            console.error('写入 iframe 内容失败:', e);
+                            iframe.srcdoc = iframeContent;
+                        }
+                    }
+                },
+                didClose: () => {
+                    // 移除监听器
+                    if (heightHandler) {
+                        window.removeEventListener('message', heightHandler);
+                        heightHandler = null;
+                    }
+                }
+            });
+        }
+        
+    } catch (error) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('预览失败') ?>',
+                text: error.message || '<?= __('未知错误') ?>'
+            });
+        }
+    }
 }
 
 // 编辑组件配置
 function editComponent(instanceId) {
-    console.log('编辑组件:', instanceId);
     // TODO: 打开组件配置编辑器
 }
 
@@ -939,7 +1532,6 @@ function removeComponent(instanceId, regionCode) {
         return;
     }
     
-    console.log('移除组件:', instanceId, regionCode);
     // TODO: 调用API移除
 }
 
@@ -988,7 +1580,6 @@ async function saveComponentConfig() {
         config[input.name] = input.value;
     });
     
-    console.log('保存组件配置:', currentEditingComponent.code, config);
     
     // TODO: 调用API保存
     

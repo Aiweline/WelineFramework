@@ -147,13 +147,57 @@
                                                     </span>
                                                 </div>
                                             <?php endif; ?>
+                                            <?php
+                                            // 获取站点信息
+                                            $websiteId = (int)($page->getData('website_id') ?? 0);
+                                            $websiteName = '';
+                                            $websiteUrl = '';
+                                            if ($websiteId > 0) {
+                                                try {
+                                                    $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                                                    $website = clone $websiteModel;
+                                                    $website->load($websiteId);
+                                                    if ($website->getId()) {
+                                                        $websiteName = $website->getData(\Weline\Websites\Model\Website::fields_NAME);
+                                                        $websiteUrl = $website->getData(\Weline\Websites\Model\Website::fields_URL);
+                                                    }
+                                                } catch (\Exception $e) {
+                                                    // 忽略错误
+                                                }
+                                            }
+                                            if ($websiteName): ?>
+                                                <div>
+                                                    <span class="badge bg-secondary">
+                                                        <i class="mdi mdi-web"></i> 
+                                                        <?= htmlspecialchars($websiteName) ?>
+                                                    </span>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if ($websiteUrl): ?>
+                                                <div>
+                                                    <a href="<?= htmlspecialchars($websiteUrl) ?>" 
+                                                       target="_blank" 
+                                                       class="badge bg-light text-dark text-decoration-none"
+                                                       title="<?= __('访问站点') ?>">
+                                                        <i class="mdi mdi-open-in-new"></i> 
+                                                        <?= htmlspecialchars($websiteUrl) ?>
+                                                    </a>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
                                         
                                         <!-- 操作按钮 -->
                                         <div class="d-flex gap-1 ms-3 flex-nowrap">
                                             <?php
-                                            // 生成前端访问链接（使用 URL 重写后的地址）
-                                            $frontendUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . ltrim($page->getData('handle'), '/');
+                                            // 生成前端访问链接（使用页面关联的网站地址，而不是当前访问的网站地址）
+                                            $baseUrl = $websiteUrl ? rtrim($websiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                                            $pageHandle = $page->getData('handle') ?? '';
+                                            // 首页类型且没有handle时，直接使用网站地址
+                                            if ($isHomePage && empty($pageHandle)) {
+                                                $frontendUrl = $baseUrl;
+                                            } else {
+                                                $frontendUrl = $baseUrl . '/' . ltrim($pageHandle, '/');
+                                            }
                                             $previewUrl = $frontendUrl . '?preview=1';
                                             $isPublished = $page->getData('status') == 1;
                                             ?>
@@ -312,13 +356,51 @@
                                                                         <span class="badge bg-secondary"><i class="mdi mdi-clock-outline"></i> <?= __('草稿') ?></span>
                                                                     <?php endif; ?>
                                                                 </div>
+                                                                <?php
+                                                                // 获取子页面的站点信息
+                                                                $childWebsiteId = (int)($childPage->getData('website_id') ?? 0);
+                                                                $childWebsiteName = '';
+                                                                $childWebsiteUrl = '';
+                                                                if ($childWebsiteId > 0) {
+                                                                    try {
+                                                                        $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                                                                        $website = clone $websiteModel;
+                                                                        $website->load($childWebsiteId);
+                                                                        if ($website->getId()) {
+                                                                            $childWebsiteName = $website->getData(\Weline\Websites\Model\Website::fields_NAME);
+                                                                            $childWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::fields_URL);
+                                                                        }
+                                                                    } catch (\Exception $e) {
+                                                                        // 忽略错误
+                                                                    }
+                                                                }
+                                                                if ($childWebsiteName): ?>
+                                                                    <div>
+                                                                        <span class="badge bg-secondary">
+                                                                            <i class="mdi mdi-web"></i> 
+                                                                            <?= htmlspecialchars($childWebsiteName) ?>
+                                                                        </span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                                <?php if ($childWebsiteUrl): ?>
+                                                                    <div>
+                                                                        <a href="<?= htmlspecialchars($childWebsiteUrl) ?>" 
+                                                                           target="_blank" 
+                                                                           class="badge bg-light text-dark text-decoration-none"
+                                                                           title="<?= __('访问站点') ?>">
+                                                                            <i class="mdi mdi-open-in-new"></i> 
+                                                                            <?= htmlspecialchars($childWebsiteUrl) ?>
+                                                                        </a>
+                                                                    </div>
+                                                                <?php endif; ?>
                                                             </div>
                                                             
                                                             <!-- 子页面操作 -->
                                                             <div class="d-flex gap-1 ms-3 flex-nowrap">
                                                                 <?php
-                                                                // 生成子页面前端访问链接（使用 URL 重写后的地址）
-                                                                $childFrontendUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . ltrim($childPage->getData('handle'), '/');
+                                                                // 生成子页面前端访问链接（使用页面关联的网站地址，而不是当前访问的网站地址）
+                                                                $childBaseUrl = $childWebsiteUrl ? rtrim($childWebsiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                                                                $childFrontendUrl = $childBaseUrl . '/' . ltrim($childPage->getData('handle'), '/');
                                                                 $childPreviewUrl = $childFrontendUrl . '?preview=1';
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
@@ -489,7 +571,11 @@
                             </li>
                         </ul>
                         <div class="text-center mt-2 text-muted small">
-                            <?= __('共 %1 个站点，第 %2/%3 页', $pagination['totalRecords'] ?? 0, $currentPage, $totalPages) ?>
+                            <?= __('共 %{total} 个站点，第 %{page}/%{pages} 页', [
+                                'total' => $pagination['totalRecords'] ?? 0,
+                                'page'  => $currentPage,
+                                'pages' => $totalPages,
+                            ]) ?>
                         </div>
                     </nav>
                     <?php endif; ?>
@@ -686,6 +772,10 @@
                                         <input class="form-check-input" type="checkbox" name="page_types[]" value="refund_policy" id="ptRefund" checked>
                                         <label class="form-check-label" for="ptRefund"><?= __('退款政策') ?></label>
                                     </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="cookie_policy" id="ptCookie" checked>
+                                        <label class="form-check-label" for="ptCookie"><?= __('Cookie政策') ?> <span class="badge bg-success"><?= __('GDPR') ?></span></label>
+                                    </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-check">
@@ -693,8 +783,12 @@
                                         <label class="form-check-label" for="ptBlogList"><?= __('博客列表') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
                                     </div>
                                     <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="page_types[]" value="blog_category" id="ptBlogCategory" checked>
+                                        <label class="form-check-label" for="ptBlogCategory"><?= __('博客分类') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
+                                    </div>
+                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="page_types[]" value="blog_post" id="ptBlogPost" checked>
-                                        <label class="form-check-label" for="ptBlogPost"><?= __('博客文章') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
+                                        <label class="form-check-label" for="ptBlogPost"><?= __('博客文章详情') ?> <span class="badge bg-info"><?= __('博客') ?></span></label>
                                     </div>
                                 </div>
                             </div>
@@ -807,8 +901,16 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    position: relative;
 }
 .template-card .template-preview img { max-width: 100%; max-height: 100%; object-fit: cover; }
+.template-card .template-preview .preview-generating {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-secondary-color, #6c757d);
+}
 .template-card .template-info { padding: 8px; }
 .template-card .template-name { 
     font-weight: 600; 
@@ -1131,6 +1233,11 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedWebsiteName = '';
     let selectedTemplateName = '';
     
+    // 预览图生成队列
+    let previewGenerationQueue = [];
+    let isGeneratingPreviews = false;
+    let globalUploadUrl = '';
+    
     // 加载模板列表
     function loadTemplates() {
         const container = document.getElementById('templateSelector');
@@ -1138,17 +1245,37 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data && data.data.length > 0) {
+                    globalUploadUrl = data.upload_url || '';
                     let html = '';
+                    previewGenerationQueue = []; // 清空队列
+                    
                     data.data.forEach(style => {
                         const thumbnail = style.preview_image || '';
-                        const thumbnailHtml = thumbnail 
-                            ? `<img src="${thumbnail}" alt="${style.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-palette-outline\\' style=\\'font-size:32px;color:#6c757d;\\'></i>'">`
-                            : '<i class="mdi mdi-palette-outline" style="font-size:32px;color:#6c757d;"></i>';
+                        const needsPreview = style.needs_preview || false;
+                        
+                        let thumbnailHtml;
+                        if (thumbnail) {
+                            thumbnailHtml = `<img src="${thumbnail}" alt="${style.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-palette-outline\\' style=\\'font-size:32px;color:#6c757d;\\'></i>'">`; 
+                        } else if (needsPreview) {
+                            // 需要生成预览图 - 显示加载中状态
+                            thumbnailHtml = `<div class="preview-generating" data-style-code="${style.code}">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                <small class="d-block mt-1" style="font-size:10px;"><?= __('生成中...') ?></small>
+                            </div>`;
+                            // 加入队列
+                            previewGenerationQueue.push({
+                                code: style.code,
+                                name: style.name,
+                                preview_page_url: style.preview_page_url
+                            });
+                        } else {
+                            thumbnailHtml = '<i class="mdi mdi-palette-outline" style="font-size:32px;color:#6c757d;"></i>';
+                        }
                         
                         html += `
                             <div class="col-6 col-lg-4">
                                 <div class="template-card" data-style-code="${style.code}" data-style-name="${style.name}" onclick="selectTemplate(this)">
-                                    <div class="template-preview">${thumbnailHtml}</div>
+                                    <div class="template-preview" id="preview-${style.code}">${thumbnailHtml}</div>
                                     <div class="template-info">
                                         <div class="template-name">${style.name}</div>
                                         <div class="template-desc text-truncate">${style.description || '<?= __("暂无描述") ?>'}</div>
@@ -1158,6 +1285,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         `;
                     });
                     container.innerHTML = html;
+                    
+                    // 开始自动生成预览图
+                    if (previewGenerationQueue.length > 0) {
+                        processPreviewQueue();
+                    }
                 } else {
                     container.innerHTML = `
                         <div class="col-12 text-center py-4">
@@ -1176,6 +1308,115 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
             });
+    }
+    
+    // 处理预览图生成队列
+    async function processPreviewQueue() {
+        if (isGeneratingPreviews || previewGenerationQueue.length === 0) return;
+        
+        isGeneratingPreviews = true;
+        
+        // 动态加载 html2canvas
+        if (typeof html2canvas === 'undefined') {
+            await loadHtml2Canvas();
+        }
+        
+        while (previewGenerationQueue.length > 0) {
+            const task = previewGenerationQueue.shift();
+            try {
+                await generateSinglePreview(task);
+            } catch (error) {
+                console.error(`生成预览图失败 (${task.code}):`, error);
+                // 更新UI显示失败状态
+                const previewContainer = document.getElementById('preview-' + task.code);
+                if (previewContainer) {
+                    previewContainer.innerHTML = '<i class="mdi mdi-image-off text-muted" style="font-size:32px;"></i>';
+                }
+            }
+            // 添加延迟避免过快请求
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        isGeneratingPreviews = false;
+    }
+    
+    // 动态加载 html2canvas
+    function loadHtml2Canvas() {
+        return new Promise((resolve, reject) => {
+            if (typeof html2canvas !== 'undefined') {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+    
+    // 生成单个模板预览图
+    async function generateSinglePreview(task) {
+        return new Promise((resolve, reject) => {
+            // 创建隐藏的 iframe 来加载预览页面
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:fixed;top:-10000px;left:-10000px;width:1200px;height:800px;border:none;';
+            document.body.appendChild(iframe);
+            
+            iframe.onload = async function() {
+                try {
+                    // 等待页面完全渲染
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    // 截图
+                    const canvas = await html2canvas(iframe.contentDocument.body, {
+                        width: 1200,
+                        height: 800,
+                        scale: 0.5,
+                        useCORS: true,
+                        allowTaint: true,
+                        logging: false
+                    });
+                    
+                    // 转换为 Base64
+                    const imageData = canvas.toDataURL('image/png');
+                    
+                    // 上传到服务器
+                    const formData = new FormData();
+                    formData.append('style_code', task.code);
+                    formData.append('image_data', imageData);
+                    
+                    const response = await fetch(globalUploadUrl, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success && result.preview_url) {
+                        // 更新预览图显示
+                        const previewContainer = document.getElementById('preview-' + task.code);
+                        if (previewContainer) {
+                            previewContainer.innerHTML = `<img src="${result.preview_url}" alt="${task.name}" style="max-width:100%;max-height:100%;object-fit:cover;">`;
+                        }
+                    }
+                    
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                } finally {
+                    // 清理 iframe
+                    document.body.removeChild(iframe);
+                }
+            };
+            
+            iframe.onerror = function() {
+                document.body.removeChild(iframe);
+                reject(new Error('Failed to load preview page'));
+            };
+            
+            iframe.src = task.preview_page_url;
+        });
     }
     
     // 选择站点
@@ -1234,7 +1475,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('url', url);
         formData.append('default_timezone', 'Asia/Shanghai');
         
-        fetch('<?= $this->getBackendUrl("*/admin/website/quickSave") ?>', {
+        fetch('<?= $this->getBackendUrl("websites/admin/website/quickSave") ?>', {
             method: 'POST',
             body: formData
         })

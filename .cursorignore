@@ -1,8 +1,161 @@
-# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
-tpl
+# ============================================
+# Cursor Editor Performance Optimization
+# Reduce indexing burden and improve editor response speed
+# ============================================
 
-# 排除 dev 目录，但保留 dev/ai 目录和 dev/.gitignore
+# ============================================
+# Dependencies and Environment
+# ============================================
+# Composer dependencies (PHP)
+vendor/
+# Node.js dependencies
+node_modules/
+**/node_modules/
+.venv/
+venv/
+.env/
+.env.local
+.env.production
+.env.development
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ============================================
+# Generated Files and Cache
+# ============================================
+# System auto-generated files (do not edit manually)
+generated/
+# Runtime cache and logs
+var/
+# Build output
+dist/
+build/
+out/
+.next/
+.turbo/
+.cache/
+
+# ============================================
+# Large Static Data Files
+# ============================================
+# Data files
+*.csv
+*.tsv
+*.xlsx
+*.xls
+# Log files
+*.log
+*.log.*
+# Database files
+*.sqlite
+*.db
+*.sql
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# ============================================
+# Test Related Files
+# ============================================
+# Test coverage
+coverage/
+.nyc_output/
+# Test snapshots
+*.snap
+# Test result cache
+.phpunit.result.cache
+.php_cs.cache
+.php-cs-fixer.cache
+
+# ============================================
+# Public Resources and Media Files
+# ============================================
+# Static resources (usually large, no need for AI analysis)
+pub/static/
+pub/media/
+# Image files (large projects may have many)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.svg
+*.ico
+*.bmp
+# Video files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+# Audio files
+*.mp3
+*.wav
+*.ogg
+*.m4a
+# Font files
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.eot
+
+# ============================================
+# Development Tools and Temporary Files
+# ============================================
+# IDE configuration
+.idea/
+.vscode/
+.cursor/
+.trae/
+# Temporary files
+temp_*.json
+temp_*.txt
+temp_*.php
+debug_*.json
+debug_*.txt
+debug_*.php
+response_*.html
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# ============================================
+# System Files
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# ============================================
+# Project Specific Exclusions
+# ============================================
+# Exclude dev directory, but keep dev/ai directory
 dev/*
 !dev/ai/
 !dev/.gitignore
+!dev/.gitkeep
 
+# Template compilation files (if exists)
+tpl/
+
+# Workflow files
+.workflow/
+
+# ============================================
+# Test directory node_modules
+# ============================================
+tests/**/node_modules/
+tests/**/package-lock.json
+tests/**/yarn.lock
+tests/**/pnpm-lock.yaml

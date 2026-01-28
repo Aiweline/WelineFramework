@@ -6,7 +6,9 @@
  *   使用 w:widget type="sidebar" name="category-filters" 标签
  *   支持 params='{"html":"..."}' 参数传入业务渲染的筛选结构
  * - 支持通过参数 html 传入业务渲染的筛选结构；
- *   未传入 html 时，使用内置的亚马逊风格 Mock 内容，方便可视化编辑与设计预览。
+ *   未传入 html 时：
+ *   1. 尝试使用 WeShop_Filters 模块的 Hook 渲染真实筛选数据
+ *   2. 如果 Hook 不可用，使用内置的亚马逊风格 Mock 内容，方便可视化编辑与设计预览。
  *
  * 样式类说明（由主题 layouts 提供样式）：
  * - .category-filter-mock
@@ -19,14 +21,21 @@
 /** @var array $meta */
 $meta = $this->getData('meta') ?? [];
 
-// 优先使用 Widget 参数 html，其次 meta.filters，最后使用内置 Mock
+// 优先使用 Widget 参数 html，其次 meta.filters
 $filtersHtml = $this->getData('html') ?? ($meta['filters'] ?? '');
 
 if (!empty($filtersHtml) && is_string($filtersHtml)) {
     // 如果传入了 html，直接输出
     echo $filtersHtml;
 } else {
-    // 否则输出默认模板内容
+    // 尝试使用 WeShop_Filters Hook 渲染真实筛选
+    $hookContent = $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar');
+    
+    if (!empty($hookContent)) {
+        // 使用 Hook 渲染的筛选内容
+        echo $hookContent;
+    } else {
+        // 否则输出默认 Mock 模板内容
 ?>
 <div class="category-filter-mock">
     <div class="category-filter-header">
@@ -99,5 +108,6 @@ if (!empty($filtersHtml) && is_string($filtersHtml)) {
     </div>
 </div>
 <?php
+    }
 }
 ?>

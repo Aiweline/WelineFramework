@@ -1,6 +1,6 @@
 /**
- * 本地文件系统存储管理
- * 使用 File System Access API 或下载到本地文件系统
+ * 本地文件存储管理
+ * 使用 IndexedDB 存储模型文件，无需本地文件系统权限
  * 模型文件持久化存储在 IndexedDB 中，下次打开页面可直接使用
  */
 
@@ -9,39 +9,42 @@ var LocalFileStorage = (function () {
 
     // IndexedDB 数据库名称和版本
     const DB_NAME = 'AutoLeadAgentModels';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
-    // 存储模型目录句柄（使用 File System Access API，仅内存中）
-    var modelDirectories = new Map();
-
-    // 存储缓存的目录句柄（仅内存中，用于同一会话）
-    var cachedDirectoryHandle = null;
-
-    // 存储当前正在写入的文件流
+    // 存储当前正在写入的文件流（用于分块写入）
     var activeWritables = new Map();
 
-    // 存储父目录句柄（用于记住用户选择的项目目录）
-    var parentDirectoryHandle = null;
-
-    // 存储 pub/models 目录句柄（用于下次默认打开）
-    var pubModelsDirectoryHandle = null;
-
-    // 存储模型元数据（使用 localStorage）
+    // 存储模型元数据（使用 localStorage 作为快速索引）
     const METADATA_KEY = 'autoleadagent_model_metadata';
 
-    // 存储目录路径映射（使用 localStorage）
-    const DIRECTORY_PATH_KEY = 'autoleadagent_model_directory_path';
+    // 数据库实例缓存
+    var dbInstance = null;
 
     /**
      * 打开 IndexedDB 数据库
      * @returns {Promise<IDBDatabase>}
      */
-    function openModelDB() {
+    async function openModelDB() {
+        if (dbInstance) {
+            return dbInstance;
+        }
+
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => {
+                console.error('[LocalFileStorage] IndexedDB 打开失败:', request.error);
+                reject(request.error);
+            };
+
+            request.onsuccess = () => {
+                dbInstance = request.result;
+                // 监听数据库关闭事件
+                dbInstance.onclose = () => {
+                    dbInstance = null;
+                };
+                resolve(dbInstance);
+            };
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
@@ -65,12 +68,21 @@ var LocalFileStorage = (function () {
      * 保存文件到 IndexedDB
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
-     * @param {ArrayBuffer} data 文件数据
+     * @param {ArrayBuffer|Blob} data 文件数据
      * @returns {Promise<void>}
      */
     async function saveFileToIndexedDB(modelId, filename, data) {
         const db = await openModelDB();
         const id = `${modelId}/${filename}`;
+
+        // 如果是 Blob，转换为 ArrayBuffer
+        let arrayBuffer = data;
+        if (data instanceof Blob) {
+            arrayBuffer = await data.arrayBuffer();
+        }
+
+        const fileSize = arrayBuffer ? arrayBuffer.byteLength : 0;
+        const fileSizeMB = (fileSize / 1024 / 1024).toFixed(2);
 
         return new Promise((resolve, reject) => {
             const transaction = db.transaction(['modelFiles'], 'readwrite');
@@ -80,17 +92,36 @@ var LocalFileStorage = (function () {
                 id: id,
                 modelId: modelId,
                 filename: filename,
-                data: data,
-                size: data ? data.byteLength : 0,
+                data: arrayBuffer,
+                size: fileSize,
                 savedAt: Date.now()
             };
 
             const request = store.put(record);
-            request.onsuccess = () => {
-                console.log('[LocalFileStorage] 文件已保存到 IndexedDB:', filename);
+
+            // 监听事务完成以确保数据持久化
+            transaction.oncomplete = () => {
+                console.log('[LocalFileStorage] 文件已持久化到 IndexedDB:', filename, fileSizeMB, 'MB');
                 resolve();
             };
-            request.onerror = () => reject(request.error);
+
+            transaction.onerror = (event) => {
+                const error = transaction.error || event.target.error;
+                console.error('[LocalFileStorage] IndexedDB 事务失败:', error);
+
+                // 检查是否是配额问题
+                if (error && (error.name === 'QuotaExceededError' || (error.message && error.message.includes('quota')))) {
+                    reject(new Error('存储空间不足，无法保存文件 ' + filename + '。请清理浏览器缓存或使用较小的模型。'));
+                } else {
+                    reject(error);
+                }
+            };
+
+            request.onerror = (event) => {
+                const error = request.error || event.target.error;
+                console.error('[LocalFileStorage] 保存文件到 IndexedDB 失败:', error);
+                // 不在这里 reject，让 transaction.onerror 处理
+            };
         });
     }
 
@@ -110,7 +141,7 @@ var LocalFileStorage = (function () {
             const request = store.get(id);
 
             request.onsuccess = () => {
-                if (request.result) {
+                if (request.result && request.result.data) {
                     resolve(request.result.data);
                 } else {
                     resolve(null);
@@ -136,7 +167,7 @@ var LocalFileStorage = (function () {
             const request = store.get(id);
 
             request.onsuccess = () => {
-                resolve(!!request.result);
+                resolve(!!(request.result && request.result.data));
             };
             request.onerror = () => reject(request.error);
         });
@@ -157,9 +188,9 @@ var LocalFileStorage = (function () {
             const request = index.getAll(modelId);
 
             request.onsuccess = () => {
-                const files = request.result.map(r => ({
+                const files = (request.result || []).map(r => ({
                     filename: r.filename,
-                    size: r.size
+                    size: r.size || 0
                 }));
                 resolve(files);
             };
@@ -182,8 +213,13 @@ var LocalFileStorage = (function () {
             const request = index.getAllKeys(modelId);
 
             request.onsuccess = () => {
-                const keys = request.result;
+                const keys = request.result || [];
                 let deletedCount = 0;
+
+                if (keys.length === 0) {
+                    resolve(0);
+                    return;
+                }
 
                 keys.forEach(key => {
                     const deleteRequest = store.delete(key);
@@ -196,57 +232,176 @@ var LocalFileStorage = (function () {
                     console.log('[LocalFileStorage] 已从 IndexedDB 删除', deletedCount, '个文件');
                     resolve(deletedCount);
                 };
+
+                transaction.onerror = () => {
+                    reject(transaction.error);
+                };
             };
             request.onerror = () => reject(request.error);
         });
     }
 
     /**
-     * 保存目录路径到 localStorage
-     * @param {string} directoryPath 目录路径
-     */
-    function saveDirectoryPath(directoryPath) {
-        try {
-            localStorage.setItem(DIRECTORY_PATH_KEY, directoryPath);
-            console.log('[LocalFileStorage] 目录路径已保存:', directoryPath);
-        } catch (error) {
-            console.warn('[LocalFileStorage] 保存目录路径失败:', error);
-        }
-    }
-
-    /**
-     * 获取保存的目录路径
-     * @returns {string|null}
-     */
-    function getDirectoryPath() {
-        try {
-            return localStorage.getItem(DIRECTORY_PATH_KEY);
-        } catch (error) {
-            return null;
-        }
-    }
-
-    /**
-     * 清理模型ID，使其可以作为文件系统目录名
+     * 清理模型ID，使其可以作为存储键
      * @param {string} modelId 原始模型ID（如 "sentence-transformers/all-MiniLM-L6-v2"）
-     * @returns {string} 清理后的目录名（如 "sentence-transformers_all-MiniLM-L6-v2"）
+     * @returns {string} 清理后的ID
      */
     function sanitizeModelIdForPath(modelId) {
         if (!modelId) return '';
-        // 替换文件系统不允许的字符：/ \ : * ? " < > |
-        // 将 / 替换为 _，其他非法字符也替换为 _
-        return modelId.replace(/[\/\\:*?"<>|]/g, '_');
+        // 保持原始格式，IndexedDB 支持任意字符串作为键
+        return modelId;
     }
 
     /**
-     * 检查是否支持 File System Access API
+     * 检查是否支持 IndexedDB
      */
     function supportsFileSystemAccess() {
-        return 'showDirectoryPicker' in window;
+        // 改为检查 IndexedDB 支持
+        return typeof indexedDB !== 'undefined';
     }
 
     /**
-     * 检查文件系统权限
+     * 验证文件是否已正确保存到 IndexedDB
+     * @param {string} modelId 模型ID
+     * @param {string} filename 文件名
+     * @param {number} expectedSize 预期大小（可选）
+     * @returns {Promise<{saved: boolean, size: number, verified: boolean}>}
+     */
+    async function verifyFileSaved(modelId, filename, expectedSize) {
+        try {
+            const data = await getFileFromIndexedDB(modelId, filename);
+            if (!data) {
+                return { saved: false, size: 0, verified: false };
+            }
+
+            const actualSize = data.byteLength || 0;
+            const verified = expectedSize ? actualSize === expectedSize : actualSize > 0;
+
+            console.log('[LocalFileStorage] 文件验证:', filename, 'saved:', !!data, 'size:', actualSize, 'verified:', verified);
+
+            return {
+                saved: true,
+                size: actualSize,
+                verified: verified
+            };
+        } catch (error) {
+            console.error('[LocalFileStorage] 文件验证失败:', error);
+            return { saved: false, size: 0, verified: false };
+        }
+    }
+
+    /**
+     * 获取存储统计信息
+     * @returns {Promise<{totalSize: number, fileCount: number, models: Array}>}
+     */
+    async function getStorageStats() {
+        try {
+            const db = await openModelDB();
+            const transaction = db.transaction(['modelFiles'], 'readonly');
+            const store = transaction.objectStore('modelFiles');
+
+            return new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => {
+                    const records = request.result || [];
+                    const modelMap = new Map();
+
+                    let totalSize = 0;
+                    for (const record of records) {
+                        totalSize += record.size || 0;
+                        const modelId = record.modelId;
+                        if (!modelMap.has(modelId)) {
+                            modelMap.set(modelId, { files: [], totalSize: 0 });
+                        }
+                        const model = modelMap.get(modelId);
+                        model.files.push({
+                            filename: record.filename,
+                            size: record.size || 0
+                        });
+                        model.totalSize += record.size || 0;
+                    }
+
+                    const models = [];
+                    for (const [modelId, data] of modelMap) {
+                        models.push({
+                            modelId: modelId,
+                            fileCount: data.files.length,
+                            totalSize: data.totalSize,
+                            files: data.files
+                        });
+                    }
+
+                    resolve({
+                        totalSize: totalSize,
+                        fileCount: records.length,
+                        models: models
+                    });
+                };
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('[LocalFileStorage] 获取存储统计失败:', error);
+            return { totalSize: 0, fileCount: 0, models: [] };
+        }
+    }
+
+    /**
+     * 请求持久化存储权限（防止浏览器清理缓存）
+     * @returns {Promise<boolean>}
+     */
+    async function requestPersistentStorage() {
+        if (navigator.storage && navigator.storage.persist) {
+            try {
+                const isPersisted = await navigator.storage.persist();
+                console.log('[LocalFileStorage] 持久化存储:', isPersisted ? '已授权' : '未授权');
+                return isPersisted;
+            } catch (error) {
+                console.warn('[LocalFileStorage] 请求持久化存储失败:', error);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 检查存储是否已持久化
+     * @returns {Promise<boolean>}
+     */
+    async function isStoragePersisted() {
+        if (navigator.storage && navigator.storage.persisted) {
+            try {
+                return await navigator.storage.persisted();
+            } catch (error) {
+                console.warn('[LocalFileStorage] 检查持久化状态失败:', error);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取存储配额信息
+     * @returns {Promise<{usage: number, quota: number, percentUsed: number}>}
+     */
+    async function getStorageQuota() {
+        if (navigator.storage && navigator.storage.estimate) {
+            try {
+                const estimate = await navigator.storage.estimate();
+                return {
+                    usage: estimate.usage || 0,
+                    quota: estimate.quota || 0,
+                    percentUsed: estimate.quota > 0 ? ((estimate.usage / estimate.quota) * 100).toFixed(2) : 0
+                };
+            } catch (error) {
+                console.warn('[LocalFileStorage] 获取存储配额失败:', error);
+                return { usage: 0, quota: 0, percentUsed: 0 };
+            }
+        }
+        return { usage: 0, quota: 0, percentUsed: 0 };
+    }
+
+    /**
+     * 检查存储权限（IndexedDB 无需特殊权限）
      * @param {string} modelId 模型ID
      * @returns {Promise<{granted: boolean, needsPermission: boolean, message?: string}>} 权限状态
      */
@@ -255,240 +410,21 @@ var LocalFileStorage = (function () {
             return {
                 granted: false,
                 needsPermission: false,
-                message: '浏览器不支持 File System Access API。请使用 Chrome 86+ 或 Edge 86+ 浏览器。'
+                message: '浏览器不支持 IndexedDB。请使用现代浏览器。'
             };
         }
 
-        // 如果已缓存目录句柄，检查权限
-        if (modelDirectories.has(modelId)) {
-            try {
-                const directoryHandle = modelDirectories.get(modelId);
-                // 尝试访问目录以验证权限
-                await directoryHandle.getFileHandle('__permission_check__', { create: false }).catch(() => {
-                    // 文件不存在是正常的，说明权限有效
-                });
-                return {
-                    granted: true,
-                    needsPermission: false
-                };
-            } catch (error) {
-                // 权限可能已失效，需要重新获取
-                modelDirectories.delete(modelId);
-                return {
-                    granted: false,
-                    needsPermission: true,
-                    message: '文件系统权限已失效，需要重新选择目录'
-                };
-            }
-        }
-
+        // IndexedDB 不需要用户权限
         return {
-            granted: false,
-            needsPermission: true,
-            message: '需要选择文件系统目录以保存模型文件'
+            granted: true,
+            needsPermission: false
         };
     }
 
     /**
-     * 获取或创建模型目录
-     * @param {string} modelId 模型ID
-     * @param {boolean} requestPermission 如果需要权限，是否请求用户选择目录
-     * @returns {Promise<FileSystemDirectoryHandle>} 目录句柄
-     */
-    async function getModelDirectory(modelId, requestPermission) {
-        requestPermission = requestPermission !== false; // 默认请求权限
-
-        // 如果已缓存，直接返回
-        if (modelDirectories.has(modelId)) {
-            try {
-                const directoryHandle = modelDirectories.get(modelId);
-                // 验证权限是否仍然有效
-                await directoryHandle.getFileHandle('__permission_check__', { create: false }).catch(() => {
-                    // 文件不存在是正常的，说明权限有效
-                });
-                return directoryHandle;
-            } catch (error) {
-                // 权限可能已失效，清除缓存
-                console.warn('[LocalFileStorage] 目录句柄权限已失效，需要重新选择:', error);
-                modelDirectories.delete(modelId);
-            }
-        }
-
-        // 检查是否支持 File System Access API
-        if (!supportsFileSystemAccess()) {
-            throw new Error('浏览器不支持 File System Access API。请使用 Chrome 86+ 或 Edge 86+ 浏览器。');
-        }
-
-        // 首先检查是否有配置的缓存目录句柄（内存中）
-        if (cachedDirectoryHandle) {
-            console.log('[LocalFileStorage] 使用配置的缓存目录（内存中）:', cachedDirectoryHandle.name);
-            try {
-                // 验证句柄是否仍然有效
-                await cachedDirectoryHandle.getDirectoryHandle('__permission_check__', { create: false }).catch(() => {
-                    // 目录不存在是正常的，说明句柄有效
-                });
-
-                // 在配置的缓存目录中创建模型子目录
-                const sanitizedModelId = sanitizeModelIdForPath(modelId);
-                const modelDirHandle = await cachedDirectoryHandle.getDirectoryHandle(sanitizedModelId, { create: true });
-
-                // 缓存目录句柄
-                modelDirectories.set(modelId, modelDirHandle);
-
-                // 保存目录句柄（使用 Storage API）
-                try {
-                    await navigator.storage.persist();
-                } catch (error) {
-                    console.warn('[LocalFileStorage] 无法持久化存储权限:', error);
-                }
-
-                return modelDirHandle;
-            } catch (error) {
-                console.warn('[LocalFileStorage] 使用配置的缓存目录失败:', error);
-                // 句柄可能已失效，清除内存中的句柄
-                cachedDirectoryHandle = null;
-                console.log('[LocalFileStorage] 已清除失效的目录句柄');
-                // 继续执行后续逻辑，让用户重新选择目录
-            }
-        }
-
-        // 如果不需要请求权限，但也没有缓存的句柄，抛出友好的错误
-        if (!requestPermission) {
-            throw new Error('需要先选择文件保存位置。请在点击"保存"按钮时选择保存目录。');
-        }
-
-        try {
-            // File System Access API 不支持持久化目录句柄
-            // 每次都需要用户重新选择目录
-            // 这是浏览器的安全限制
-
-            // 提示用户选择或创建目录
-            // 优先使用之前保存的 pub/models 目录句柄作为起始位置
-            let directoryHandle;
-            let startInOption = null; // 默认让浏览器决定，优先使用保存的句柄
-
-            // 如果之前保存了 pub/models 目录句柄，优先使用它作为起始位置
-            if (pubModelsDirectoryHandle) {
-                try {
-                    // 验证句柄是否仍然有效（尝试访问目录）
-                    await pubModelsDirectoryHandle.getDirectoryHandle('__test__', { create: false }).catch(() => {
-                        // 文件不存在是正常的，说明句柄有效
-                    });
-                    // 使用保存的 pub/models 目录句柄作为起始位置
-                    startInOption = pubModelsDirectoryHandle;
-                    console.log('[LocalFileStorage] 使用之前保存的 pub/models 目录作为起始位置');
-                } catch (error) {
-                    // 句柄已失效，清除缓存
-                    console.warn('[LocalFileStorage] pub/models 目录句柄已失效，重新选择:', error);
-                    pubModelsDirectoryHandle = null;
-                }
-            }
-
-            // 如果之前保存了父目录句柄，也尝试使用它
-            if (!startInOption) {
-                if (parentDirectoryHandle) {
-                    try {
-                        // 验证句柄是否仍然有效
-                        await parentDirectoryHandle.getDirectoryHandle('__test__', { create: false }).catch(() => {
-                            // 文件不存在是正常的，说明句柄有效
-                        });
-                        startInOption = parentDirectoryHandle;
-                        console.log('[LocalFileStorage] 使用之前保存的父目录作为起始位置');
-                    } catch (error) {
-                        // 句柄已失效，清除缓存
-                        console.warn('[LocalFileStorage] 父目录句柄已失效，重新选择:', error);
-                        parentDirectoryHandle = null;
-                    }
-                }
-            }
-
-            // 如果没有保存的句柄，使用 'documents' 作为默认起始位置
-            // 用户可以在对话框中选择包含 pub/models 的项目目录
-            if (!startInOption) {
-                startInOption = 'documents';
-            }
-
-            // 打开文件选择对话框
-            directoryHandle = await window.showDirectoryPicker({
-                mode: 'readwrite',
-                startIn: startInOption
-            });
-
-            // 记住父目录句柄
-            parentDirectoryHandle = directoryHandle;
-
-            // 在选择的目录中查找或创建 pub/models 目录
-            let modelsDirHandle;
-            try {
-                // 首先尝试查找 pub/models 目录
-                const pubDirHandle = await directoryHandle.getDirectoryHandle('pub', { create: false });
-                modelsDirHandle = await pubDirHandle.getDirectoryHandle('models', { create: true });
-                // 保存 pub/models 目录句柄，下次默认打开这个目录
-                pubModelsDirectoryHandle = modelsDirHandle;
-                // 也保存父目录句柄（包含 pub 的目录），以便后续使用
-                parentDirectoryHandle = directoryHandle;
-                console.log('[LocalFileStorage] 找到 pub/models 目录，已保存句柄，下次将默认打开此目录');
-            } catch (error) {
-                // 如果 pub 目录不存在，检查用户是否直接选择了 pub/models 目录
-                try {
-                    // 检查当前目录是否是 models 目录（可能是用户直接选择了 pub/models）
-                    const currentDirName = directoryHandle.name;
-                    if (currentDirName === 'models') {
-                        // 用户可能直接选择了 models 目录（可能是 pub/models）
-                        modelsDirHandle = directoryHandle;
-                        // 如果当前就是 models 目录，直接使用并保存
-                        pubModelsDirectoryHandle = modelsDirHandle;
-                        // 也保存父目录句柄
-                        parentDirectoryHandle = directoryHandle;
-                        console.log('[LocalFileStorage] 用户直接选择了 models 目录，已保存句柄，下次将默认打开此目录');
-                    } else {
-                        // 在选择的目录下创建 models 目录
-                        modelsDirHandle = await directoryHandle.getDirectoryHandle('models', { create: true });
-                        console.log('[LocalFileStorage] 在选择的目录下创建了 models 目录');
-                    }
-                } catch (e) {
-                    // 如果都失败，直接在选择的目录下创建模型子目录
-                    modelsDirHandle = directoryHandle;
-                    console.warn('[LocalFileStorage] 无法创建 models 目录，直接在选择的目录下创建模型子目录');
-                }
-            }
-
-            // 在 models 目录中创建模型子目录
-            // 清理模型ID，将特殊字符（如 /）替换为安全的字符
-            const sanitizedModelId = sanitizeModelIdForPath(modelId);
-            const modelDirHandle = await modelsDirHandle.getDirectoryHandle(sanitizedModelId, { create: true });
-
-            // 缓存目录句柄（使用原始 modelId 作为键，以便后续查找）
-            modelDirectories.set(modelId, modelDirHandle);
-
-            // 同时更新 cachedDirectoryHandle（用于 getCachedDirectoryHandle 检查）
-            cachedDirectoryHandle = modelsDirHandle;
-            console.log('[LocalFileStorage] 已更新 cachedDirectoryHandle:', modelsDirHandle.name);
-
-            // 保存目录句柄（使用 Storage API）
-            try {
-                await navigator.storage.persist();
-            } catch (error) {
-                console.warn('[LocalFileStorage] 无法持久化存储权限:', error);
-            }
-
-            return modelDirHandle;
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                throw new Error('用户取消了目录选择');
-            }
-            if (error.name === 'SecurityError' || (error.message && error.message.includes('user gesture'))) {
-                throw new Error('需要用户交互才能选择文件保存位置。请点击"保存"按钮后，在弹出的对话框中选择保存目录。');
-            }
-            throw error;
-        }
-    }
-
-    /**
      * 保存模型文件块（用于流式下载）
-     * 优先存储到 IndexedDB 以实现持久化
      * @param {string} modelId 模型ID
-     * @param {string} filename 文件名（可能包含子目录，如 "1_Pooling/config.json"）
+     * @param {string} filename 文件名
      * @param {ArrayBuffer} data 数据块
      * @param {number} offset 偏移量
      * @param {boolean} isComplete 是否是最后一块
@@ -497,66 +433,61 @@ var LocalFileStorage = (function () {
         try {
             const cacheKey = `${modelId}/${filename}`;
 
-            console.log('[LocalFileStorage] 保存文件块:', modelId, filename, '偏移:', offset, '大小:', data ? data.byteLength : 0, '完成:', isComplete);
+            console.log('[LocalFileStorage] 保存文件块:', filename, '偏移:', offset, '大小:', data ? data.byteLength : 0, '完成:', isComplete);
 
-            // 检查是否已经有缓存的数据
-            var cachedData = null;
-            var cachedBuffers = null;
-
-            if (!activeWritables.has(cacheKey)) {
+            // 获取或创建缓存
+            let cached = activeWritables.get(cacheKey);
+            if (!cached) {
                 // 检查 IndexedDB 中是否已有部分数据
-                cachedData = await getFileFromIndexedDB(modelId, filename);
-                if (cachedData && cachedData.byteLength > 0) {
-                    console.log('[LocalFileStorage] 从 IndexedDB 读取已存在的文件数据，大小:', cachedData.byteLength);
-                    cachedBuffers = [cachedData];
+                const existingData = await getFileFromIndexedDB(modelId, filename);
+                if (existingData && existingData.byteLength > 0 && offset > 0) {
+                    cached = {
+                        buffer: existingData,
+                        totalSize: existingData.byteLength
+                    };
+                    console.log('[LocalFileStorage] 从 IndexedDB 恢复已有数据，大小:', existingData.byteLength);
+                } else {
+                    cached = {
+                        buffer: null,
+                        totalSize: 0
+                    };
                 }
             }
 
             // 合并数据块
             if (data && data.byteLength > 0) {
-                if (cachedBuffers) {
+                if (cached.buffer && offset > 0) {
                     // 合并现有数据和新数据
-                    const newData = new Uint8Array(offset + data.byteLength);
-                    newData.set(new Uint8Array(cachedData), 0);
-                    newData.set(new Uint8Array(data), offset);
-                    cachedData = newData.buffer;
-                    cachedBuffers = [cachedData];
-                    console.log('[LocalFileStorage] 合并数据后大小:', cachedData.byteLength);
-                } else if (offset === 0) {
-                    // 新文件，直接使用
-                    cachedData = data;
-                    cachedBuffers = [data];
+                    const newSize = Math.max(cached.buffer.byteLength, offset + data.byteLength);
+                    const newBuffer = new Uint8Array(newSize);
+                    newBuffer.set(new Uint8Array(cached.buffer), 0);
+                    newBuffer.set(new Uint8Array(data), offset);
+                    cached.buffer = newBuffer.buffer;
+                    cached.totalSize = newSize;
                 } else {
-                    // 偏移不为0但没有缓存数据，这可能是第一个块
-                    cachedData = data;
-                    cachedBuffers = [data];
+                    // 新文件或从头开始
+                    cached.buffer = data;
+                    cached.totalSize = data.byteLength;
                 }
             }
 
             // 如果是最后一块，保存到 IndexedDB
-            if (isComplete && cachedData) {
-                await saveFileToIndexedDB(modelId, filename, cachedData);
-                console.log('[LocalFileStorage] 文件已保存到 IndexedDB:', filename, '大小:', cachedData.byteLength);
+            if (isComplete && cached.buffer) {
+                await saveFileToIndexedDB(modelId, filename, cached.buffer);
+                console.log('[LocalFileStorage] 文件已完整保存:', filename, '大小:', cached.totalSize);
 
                 // 更新元数据
-                await updateModelMetadata(modelId, filename, cachedData.byteLength);
+                await updateModelMetadata(modelId, filename, cached.totalSize);
 
                 // 清除内存缓存
                 activeWritables.delete(cacheKey);
-            } else if (cachedData) {
-                // 临时存储到内存（下次调用会继续合并）
-                // 使用 Map 存储 ArrayBuffer
-                if (!cachedBuffers) {
-                    cachedBuffers = [cachedData];
-                }
-                activeWritables.set(cacheKey, {
-                    buffers: cachedBuffers,
-                    totalSize: cachedData.byteLength
-                });
+            } else {
+                // 临时存储到内存
+                activeWritables.set(cacheKey, cached);
             }
 
         } catch (error) {
-            console.error('[LocalFileStorage] 保存文件块失败:', modelId, filename, error);
+            console.error('[LocalFileStorage] 保存文件块失败:', filename, error);
             const cacheKey = `${modelId}/${filename}`;
             activeWritables.delete(cacheKey);
             throw error;
@@ -564,7 +495,7 @@ var LocalFileStorage = (function () {
     }
 
     /**
-     * 保存模型文件到本地文件系统
+     * 保存模型文件
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
      * @param {ArrayBuffer|Blob} data 文件数据
@@ -573,66 +504,15 @@ var LocalFileStorage = (function () {
     async function saveModelFile(modelId, filename, data) {
         try {
             const fileSize = data instanceof Blob ? data.size : data.byteLength;
-            console.log('[LocalFileStorage] 保存文件到本地:', modelId, filename, (fileSize / 1024 / 1024).toFixed(2), 'MB');
+            console.log('[LocalFileStorage] 保存文件:', filename, (fileSize / 1024 / 1024).toFixed(2), 'MB');
 
-            if (supportsFileSystemAccess()) {
-                // 检查权限
-                const permission = await checkFileSystemPermission(modelId);
-                if (!permission.granted && permission.needsPermission) {
-                    // 需要请求权限，但此时可能不在用户手势上下文中
-                    console.log('[LocalFileStorage] 需要文件系统权限，尝试获取目录句柄...');
-                }
+            // 直接保存到 IndexedDB
+            await saveFileToIndexedDB(modelId, filename, data);
 
-                // 尝试获取目录句柄（如果已缓存则直接使用，否则会抛出友好的错误）
-                let directoryHandle;
-                try {
-                    directoryHandle = await getModelDirectory(modelId, false);
-                } catch (error) {
-                    // 如果获取失败，说明需要用户先选择目录
-                    var errorMsg = error.message || error.toString();
-                    if (errorMsg.includes('需要先选择') || errorMsg.includes('需要用户交互') || errorMsg.includes('user gesture')) {
-                        throw new Error('需要先选择文件保存位置。请重新点击"保存"按钮，然后在弹出的对话框中选择保存目录。');
-                    }
-                    throw error;
-                }
-                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
-                const writable = await fileHandle.createWritable();
+            // 更新元数据
+            await updateModelMetadata(modelId, filename, fileSize);
 
-                if (data instanceof Blob) {
-                    await writable.write(data);
-                } else {
-                    await writable.write(data);
-                }
-
-                await writable.close();
-
-                console.log('[LocalFileStorage] 文件已保存:', filename);
-
-                // 验证文件大小
-                const savedFile = await fileHandle.getFile();
-                if (savedFile.size !== fileSize) {
-                    console.warn('[LocalFileStorage] 文件大小不匹配: 期望', fileSize, '实际', savedFile.size);
-                }
-
-                // 更新元数据
-                await updateModelMetadata(modelId, filename, fileSize);
-            } else {
-                // 降级方案：下载文件到本地
-                const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${modelId}/${filename}`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                console.log('[LocalFileStorage] 文件已下载到本地:', filename);
-
-                // 更新元数据
-                await updateModelMetadata(modelId, filename, fileSize);
-            }
+            console.log('[LocalFileStorage] 文件保存完成:', filename);
         } catch (error) {
             console.error('[LocalFileStorage] 保存文件失败:', error);
             throw error;
@@ -640,62 +520,26 @@ var LocalFileStorage = (function () {
     }
 
     /**
-     * 从本地文件系统读取模型文件
+     * 读取模型文件
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
      * @returns {Promise<ArrayBuffer|null>} 文件数据
      */
     async function getModelFile(modelId, filename) {
         try {
-            // 首先尝试从 IndexedDB 读取（持久化存储）
-            console.log('[LocalFileStorage] 尝试从 IndexedDB 读取文件:', modelId, filename);
-            const indexedDBData = await getFileFromIndexedDB(modelId, filename);
-            if (indexedDBData && indexedDBData.byteLength > 0) {
-                console.log('[LocalFileStorage] 从 IndexedDB 读取成功:', filename, (indexedDBData.byteLength / 1024 / 1024).toFixed(2), 'MB');
-                return indexedDBData;
+            console.log('[LocalFileStorage] 读取文件:', modelId, filename);
+            const data = await getFileFromIndexedDB(modelId, filename);
+
+            if (data && data.byteLength > 0) {
+                console.log('[LocalFileStorage] 文件读取成功:', filename, (data.byteLength / 1024 / 1024).toFixed(2), 'MB');
+                return data;
             }
 
-            // 如果 IndexedDB 中没有，尝试从文件系统读取
-            console.log('[LocalFileStorage] IndexedDB 中没有文件，尝试从文件系统读取:', filename);
-
-            if (supportsFileSystemAccess()) {
-                // 检查权限
-                const permission = await checkFileSystemPermission(modelId);
-                if (!permission.granted && permission.needsPermission) {
-                    throw new Error('文件系统权限未授予。请先选择目录以授予权限。');
-                }
-
-                const directoryHandle = await getModelDirectory(modelId, false);
-                if (!directoryHandle) {
-                    throw new Error('无法获取模型目录句柄');
-                }
-
-                const fileHandle = await directoryHandle.getFileHandle(filename, { create: false });
-                const file = await fileHandle.getFile();
-
-                // 验证文件大小
-                if (file.size === 0) {
-                    console.warn('[LocalFileStorage] 文件大小为0:', filename);
-                }
-
-                const arrayBuffer = await file.arrayBuffer();
-                console.log('[LocalFileStorage] 从文件系统读取成功:', filename, (arrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
-                return arrayBuffer;
-            } else {
-                // 降级方案：提示用户选择文件
-                throw new Error('浏览器不支持 File System Access API，无法自动读取文件。请使用 Chrome 86+ 或 Edge 86+ 浏览器。');
-            }
+            console.log('[LocalFileStorage] 文件不存在:', filename);
+            return null;
         } catch (error) {
-            if (error.name === 'NotFoundError') {
-                console.log('[LocalFileStorage] 文件不存在:', filename);
-                return null;
-            }
-            if (error.name === 'NotAllowedError' || error.message.includes('权限')) {
-                console.error('[LocalFileStorage] 文件系统权限错误:', error.message);
-                throw new Error('文件系统权限被拒绝。请重新选择目录并授予权限。');
-            }
             console.error('[LocalFileStorage] 读取文件失败:', error);
-            throw error;
+            return null;
         }
     }
 
@@ -707,26 +551,7 @@ var LocalFileStorage = (function () {
      */
     async function hasModelFile(modelId, filename) {
         try {
-            if (supportsFileSystemAccess()) {
-                const directoryHandle = await getModelDirectory(modelId);
-                try {
-                    await directoryHandle.getFileHandle(filename, { create: false });
-                    return true;
-                } catch (error) {
-                    if (error.name === 'NotFoundError') {
-                        return false;
-                    }
-                    throw error;
-                }
-            } else {
-                // 降级方案：检查元数据
-                const metadata = getModelMetadata();
-                const modelData = metadata[modelId];
-                if (!modelData || !modelData.files) {
-                    return false;
-                }
-                return modelData.files.some(file => file.filename === filename);
-            }
+            return await hasFileInIndexedDB(modelId, filename);
         } catch (error) {
             console.error('[LocalFileStorage] 检查文件是否存在失败:', error);
             return false;
@@ -740,23 +565,20 @@ var LocalFileStorage = (function () {
      */
     async function hasModelFiles(modelId) {
         try {
-            const metadata = getModelMetadata();
-            const modelData = metadata[modelId];
-
-            if (!modelData || !modelData.files || modelData.files.length === 0) {
+            const files = await getModelFilesFromIndexedDB(modelId);
+            if (!files || files.length === 0) {
                 return false;
             }
 
-            // 检查所有文件是否都存在
-            for (const file of modelData.files) {
-                const exists = await hasModelFile(modelId, file.filename);
-                if (!exists) {
-                    console.log('[LocalFileStorage] 文件不存在:', modelId, file.filename);
-                    return false;
-                }
-            }
+            // 检查是否有关键文件
+            const hasConfig = files.some(f => f.filename === 'config.json' || f.filename.endsWith('/config.json'));
+            const hasModel = files.some(f =>
+                f.filename.includes('.safetensors') ||
+                f.filename.includes('.bin') ||
+                f.filename.includes('.onnx')
+            );
 
-            return true;
+            return hasConfig || hasModel;
         } catch (error) {
             console.error('[LocalFileStorage] 检查模型文件失败:', error);
             return false;
@@ -786,12 +608,11 @@ var LocalFileStorage = (function () {
             localStorage.setItem(METADATA_KEY, JSON.stringify(metadata));
         } catch (error) {
             console.error('[LocalFileStorage] 保存元数据失败:', error);
-            throw error;
         }
     }
 
     /**
-     * 更新模型元数据（添加或更新文件信息）
+     * 更新模型元数据
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
      * @param {number} size 文件大小
@@ -817,10 +638,10 @@ var LocalFileStorage = (function () {
 
         if (existingFileIndex >= 0) {
             // 更新现有文件
-            const oldSize = modelData.files[existingFileIndex].size;
+            const oldSize = modelData.files[existingFileIndex].size || 0;
             modelData.files[existingFileIndex].size = size;
             modelData.files[existingFileIndex].updatedAt = Date.now();
-            modelData.totalSize = modelData.totalSize - oldSize + size;
+            modelData.totalSize = (modelData.totalSize || 0) - oldSize + size;
         } else {
             // 添加新文件
             modelData.files.push({
@@ -828,7 +649,7 @@ var LocalFileStorage = (function () {
                 size: size,
                 savedAt: Date.now()
             });
-            modelData.totalSize += size;
+            modelData.totalSize = (modelData.totalSize || 0) + size;
             modelData.fileCount = modelData.files.length;
         }
 
@@ -836,21 +657,20 @@ var LocalFileStorage = (function () {
 
         saveModelMetadata(metadata);
 
-        console.log('[LocalFileStorage] 元数据已更新:', modelId, '文件数:', modelData.fileCount, '总大小:', (modelData.totalSize / 1024 / 1024).toFixed(2), 'MB');
+        console.log('[LocalFileStorage] 元数据已更新:', modelId, '文件数:', modelData.fileCount, '总大小:', ((modelData.totalSize || 0) / 1024 / 1024).toFixed(2), 'MB');
     }
 
     /**
      * 收集模型的所有文件
      * @param {string} modelId 模型ID
-     * @returns {Promise<Array>} 文件列表 [{filename, size}, ...]
+     * @returns {Promise<Array>} 文件列表
      */
     async function collectModelFiles(modelId) {
-        // 首先尝试从 IndexedDB 获取文件列表
         try {
-            const indexedDBFiles = await getModelFilesFromIndexedDB(modelId);
-            if (indexedDBFiles && indexedDBFiles.length > 0) {
-                console.log('[LocalFileStorage] 从 IndexedDB 获取文件列表:', indexedDBFiles.length, '个文件');
-                return indexedDBFiles;
+            const files = await getModelFilesFromIndexedDB(modelId);
+            if (files && files.length > 0) {
+                console.log('[LocalFileStorage] 获取模型文件列表:', files.length, '个文件');
+                return files;
             }
         } catch (error) {
             console.warn('[LocalFileStorage] 从 IndexedDB 获取文件列表失败:', error);
@@ -866,12 +686,12 @@ var LocalFileStorage = (function () {
 
         return modelData.files.map(file => ({
             filename: file.filename,
-            size: file.size
+            size: file.size || 0
         }));
     }
 
     /**
-     * 删除模型（包括所有文件）
+     * 删除模型
      * @param {string} modelId 模型ID
      * @returns {Promise<{deletedFiles: number, deletedSize: number}>}
      */
@@ -880,61 +700,25 @@ var LocalFileStorage = (function () {
             const metadata = getModelMetadata();
             const modelData = metadata[modelId];
 
-            if (!modelData) {
-                return { deletedFiles: 0, deletedSize: 0 };
-            }
-
             let deletedFiles = 0;
             let deletedSize = 0;
 
-            // 首先从 IndexedDB 删除文件（持久化存储）
+            // 从 IndexedDB 删除文件
             try {
-                const indexedDBFiles = await getModelFilesFromIndexedDB(modelId);
-                if (indexedDBFiles && indexedDBFiles.length > 0) {
-                    const deletedFromIndexedDB = await deleteModelFilesFromIndexedDB(modelId);
-                    deletedFiles = deletedFromIndexedDB;
-                    deletedSize = indexedDBFiles.reduce((sum, f) => sum + f.size, 0);
-                    console.log('[LocalFileStorage] 已从 IndexedDB 删除', deletedFromIndexedDB, '个文件');
+                const files = await getModelFilesFromIndexedDB(modelId);
+                if (files && files.length > 0) {
+                    deletedSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
+                    deletedFiles = await deleteModelFilesFromIndexedDB(modelId);
                 }
             } catch (error) {
                 console.warn('[LocalFileStorage] 从 IndexedDB 删除文件失败:', error);
             }
 
-            // 尝试从文件系统删除
-            if (supportsFileSystemAccess()) {
-                try {
-                    const directoryHandle = await getModelDirectory(modelId);
-
-                    // 删除所有文件
-                    for (const file of modelData.files) {
-                        try {
-                            await directoryHandle.removeEntry(file.filename);
-                            deletedFiles++;
-                            deletedSize += file.size;
-                        } catch (error) {
-                            console.warn('[LocalFileStorage] 删除文件失败:', file.filename, error);
-                        }
-                    }
-
-                    // 尝试删除目录（如果为空）
-                    try {
-                        const parentHandle = await directoryHandle.getParent();
-                        await parentHandle.removeEntry(modelId);
-                    } catch (error) {
-                        // 目录可能不为空或无法删除，忽略错误
-                        console.warn('[LocalFileStorage] 删除目录失败:', error);
-                    }
-                } catch (error) {
-                    console.warn('[LocalFileStorage] 无法访问目录，可能已被删除:', error);
-                }
-            }
-
             // 从元数据中删除
-            delete metadata[modelId];
-            saveModelMetadata(metadata);
-
-            // 清除缓存的目录句柄
-            modelDirectories.delete(modelId);
+            if (metadata[modelId]) {
+                delete metadata[modelId];
+                saveModelMetadata(metadata);
+            }
 
             console.log('[LocalFileStorage] 模型已删除:', modelId, '文件数:', deletedFiles, '总大小:', (deletedSize / 1024 / 1024).toFixed(2), 'MB');
 
@@ -975,32 +759,12 @@ var LocalFileStorage = (function () {
      * 获取文件大小
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
-     * @returns {Promise<number>} 文件大小（字节），如果文件不存在返回0
+     * @returns {Promise<number>} 文件大小（字节）
      */
     async function getFileSize(modelId, filename) {
         try {
-            if (supportsFileSystemAccess()) {
-                const directoryHandle = await getModelDirectory(modelId);
-                try {
-                    const fileHandle = await directoryHandle.getFileHandle(filename, { create: false });
-                    const file = await fileHandle.getFile();
-                    return file.size;
-                } catch (error) {
-                    if (error.name === 'NotFoundError') {
-                        return 0;
-                    }
-                    throw error;
-                }
-            } else {
-                // 降级方案：从元数据获取
-                const metadata = getModelMetadata();
-                const modelData = metadata[modelId];
-                if (modelData && modelData.files) {
-                    const fileInfo = modelData.files.find(f => f.filename === filename);
-                    return fileInfo ? (fileInfo.size || 0) : 0;
-                }
-                return 0;
-            }
+            const data = await getFileFromIndexedDB(modelId, filename);
+            return data ? data.byteLength : 0;
         } catch (error) {
             console.error('[LocalFileStorage] 获取文件大小失败:', error);
             return 0;
@@ -1011,8 +775,8 @@ var LocalFileStorage = (function () {
      * 检查文件完整性
      * @param {string} modelId 模型ID
      * @param {string} filename 文件名
-     * @param {number} expectedSize 预期文件大小（字节）
-     * @returns {Promise<{complete: boolean, actualSize: number, expectedSize: number, match: boolean}>} 完整性检查结果
+     * @param {number} expectedSize 预期文件大小
+     * @returns {Promise<Object>} 完整性检查结果
      */
     async function checkFileIntegrity(modelId, filename, expectedSize) {
         try {
@@ -1059,9 +823,9 @@ var LocalFileStorage = (function () {
     }
 
     /**
-     * 检查模型是否已下载（通过元数据快速检查，不需要文件系统权限）
+     * 检查模型是否已下载（通过元数据快速检查）
      * @param {string} modelId 模型ID
-     * @returns {Object} 检查结果 { downloaded: boolean, fileCount: number, totalSize: number }
+     * @returns {Object} 检查结果
      */
     function checkModelDownloadedByMetadata(modelId) {
         if (!modelId) {
@@ -1069,15 +833,13 @@ var LocalFileStorage = (function () {
         }
 
         const metadata = getModelMetadata();
-        // 尝试原始 modelId 和清理后的 modelId
-        const sanitizedId = sanitizeModelIdForPath(modelId);
-        const modelData = metadata[modelId] || metadata[sanitizedId];
+        const modelData = metadata[modelId];
 
         if (!modelData || !modelData.files || modelData.files.length === 0) {
             return { downloaded: false, fileCount: 0, totalSize: 0 };
         }
 
-        // 检查是否有关键文件（config.json 或 model.safetensors/pytorch_model.bin）
+        // 检查是否有关键文件
         const hasConfigFile = modelData.files.some(f =>
             f.filename === 'config.json' ||
             f.filename.endsWith('/config.json')
@@ -1089,7 +851,7 @@ var LocalFileStorage = (function () {
         );
 
         return {
-            downloaded: hasConfigFile && hasModelFile,
+            downloaded: hasConfigFile || hasModelFile,
             fileCount: modelData.fileCount || modelData.files.length,
             totalSize: modelData.totalSize || 0,
             files: modelData.files
@@ -1097,98 +859,47 @@ var LocalFileStorage = (function () {
     }
 
     /**
-     * 保存选择的目录路径（用于提示用户下次选择同一目录）
-     * @param {string} directoryPath 目录路径描述
+     * 保存选择的目录路径（兼容性保留）
      */
     function saveSelectedDirectoryPath(directoryPath) {
-        try {
-            localStorage.setItem('autoleadagent_model_directory_path', directoryPath);
-        } catch (e) {
-            console.warn('[LocalFileStorage] 保存目录路径失败:', e);
-        }
+        // 兼容性保留，实际不再使用
     }
 
     /**
-     * 获取保存的目录路径
-     * @returns {string|null} 目录路径
+     * 获取保存的目录路径（兼容性保留）
      */
     function getSelectedDirectoryPath() {
-        try {
-            return localStorage.getItem('autoleadagent_model_directory_path');
-        } catch (e) {
-            return null;
-        }
-    }
-
-    /**
-     * 检查是否有有效的目录权限（用于判断是否需要重新选择目录）
-     * @param {string} modelId 模型ID
-     * @returns {boolean} 是否有权限
-     */
-    function hasValidDirectoryPermission(modelId) {
-        const sanitizedId = sanitizeModelIdForPath(modelId);
-        return modelDirectories.has(modelId) || modelDirectories.has(sanitizedId);
-    }
-
-    /**
-     * 获取缓存的目录句柄（从内存）
-     * 优先返回内存中的句柄，如果没有则返回 null
-     * @returns {FileSystemDirectoryHandle|null} 目录句柄
-     */
-    async function getCachedDirectoryHandle() {
-        // 首先返回内存中的句柄
-        if (cachedDirectoryHandle) {
-            return cachedDirectoryHandle;
-        }
-
-        // 由于 FileSystemDirectoryHandle 不能被序列化存储到 IndexedDB，
-        // 这个函数现在总是返回 null
-        // 目录句柄需要在每次会话中重新选择
-        console.log('[LocalFileStorage] 注意：目录句柄不能持久化存储，请重新选择目录');
         return null;
     }
 
     /**
-     * 设置缓存的目录句柄（仅内存中）
-     * 用于在同一会话中保存目录句柄
-     * @param {FileSystemDirectoryHandle} handle 目录句柄
+     * 检查是否有有效的目录权限（兼容性保留）
+     */
+    function hasValidDirectoryPermission(modelId) {
+        // IndexedDB 不需要权限
+        return true;
+    }
+
+    /**
+     * 获取缓存的目录句柄（兼容性保留）
+     */
+    async function getCachedDirectoryHandle() {
+        return null;
+    }
+
+    /**
+     * 设置缓存的目录句柄（兼容性保留）
      */
     function setCachedDirectoryHandle(handle) {
-        if (handle) {
-            cachedDirectoryHandle = handle;
-            console.log('[LocalFileStorage] 目录句柄已保存到内存:', handle.name);
-        }
+        // 兼容性保留，实际不再使用
     }
 
     /**
-     * 打开缓存目录数据库
-     * @returns {Promise<IDBDatabase>} 数据库实例
-     */
-    async function openCacheDirDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open('AutoLeadAgentCacheDir', 1);
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains('cacheDir')) {
-                    db.createObjectStore('cacheDir');
-                }
-            };
-        });
-    }
-
-    /**
-     * 预先请求文件系统权限（必须在用户手势上下文中调用）
-     * @param {string} modelId 模型ID
-     * @returns {Promise<boolean>} 是否成功获取权限
+     * 请求模型目录权限（兼容性保留）
      */
     async function requestModelDirectoryPermission(modelId) {
-        return await getModelDirectory(modelId, true).then(() => true).catch((error) => {
-            throw error;
-        });
+        // IndexedDB 不需要权限
+        return true;
     }
 
     // 导出公共 API
@@ -1216,7 +927,13 @@ var LocalFileStorage = (function () {
         sanitizeModelIdForPath: sanitizeModelIdForPath,
         getCachedDirectoryHandle: getCachedDirectoryHandle,
         setCachedDirectoryHandle: setCachedDirectoryHandle,
-        cachedDirectoryHandle: cachedDirectoryHandle
+        cachedDirectoryHandle: null,
+        // 新增的存储验证和统计功能
+        verifyFileSaved: verifyFileSaved,
+        getStorageStats: getStorageStats,
+        requestPersistentStorage: requestPersistentStorage,
+        isStoragePersisted: isStoragePersisted,
+        getStorageQuota: getStorageQuota
     };
 
 })();
@@ -1225,4 +942,3 @@ var LocalFileStorage = (function () {
 if (typeof window !== 'undefined') {
     window.LocalFileStorage = LocalFileStorage;
 }
-

@@ -15,6 +15,7 @@ class Company extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_b2b_company';
     public const primary_key = 'company_id';
+    public string $indexer = 'b2b_company_indexer';
     
     public const fields_ID = 'company_id';
     public const fields_NAME = 'name';

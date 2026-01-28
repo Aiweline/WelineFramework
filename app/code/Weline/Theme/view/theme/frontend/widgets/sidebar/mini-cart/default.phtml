@@ -10,12 +10,13 @@ $maxItems = (int)($this->getData('max_items') ?? 5);
 $showSubtotal = (bool)($this->getData('show_subtotal') ?? true);
 $showCheckoutButton = (bool)($this->getData('show_checkout_button') ?? true);
 $showViewCartButton = (bool)($this->getData('show_view_cart_button') ?? true);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例购物车数据
 $cartItems = [
-    ['id' => 1, 'name' => __('示例商品 1'), 'image' => '/images/products/1.jpg', 'price' => 99.00, 'qty' => 2],
-    ['id' => 2, 'name' => __('示例商品 2'), 'image' => '/images/products/2.jpg', 'price' => 149.00, 'qty' => 1],
-    ['id' => 3, 'name' => __('示例商品 3'), 'image' => '/images/products/3.jpg', 'price' => 79.00, 'qty' => 1],
+    ['id' => 1, 'name' => __('示例商品 1'), 'image' => $placeholder, 'price' => 99.00, 'qty' => 2],
+    ['id' => 2, 'name' => __('示例商品 2'), 'image' => $placeholder, 'price' => 149.00, 'qty' => 1],
+    ['id' => 3, 'name' => __('示例商品 3'), 'image' => $placeholder, 'price' => 79.00, 'qty' => 1],
 ];
 
 $cartItems = array_slice($cartItems, 0, $maxItems);
@@ -44,12 +45,12 @@ $widgetId = 'mini-cart-' . uniqid();
         <div class="cart-items">
             <?php foreach ($cartItems as $item): ?>
                 <div class="cart-item" data-item-id="<?= $item['id'] ?>">
-                    <img src="<?= htmlspecialchars($item['image']) ?>" 
-                         alt="<?= htmlspecialchars($item['name']) ?>"
+                    <img src="<?= htmlspecialchars($item['image'] ?? '') ?>" 
+                         alt="<?= htmlspecialchars($item['name'] ?? '') ?>"
                          class="item-image">
                     
                     <div class="item-details">
-                        <h4 class="item-name"><?= htmlspecialchars($item['name']) ?></h4>
+                        <h4 class="item-name"><?= htmlspecialchars($item['name'] ?? '') ?></h4>
                         <div class="item-meta">
                             <span class="item-price">¥<?= number_format($item['price'], 2) ?></span>
                             <span class="item-qty">× <?= $item['qty'] ?></span>

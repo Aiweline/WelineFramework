@@ -54,9 +54,9 @@ $isEdit = $config && $config->getId();
                                 <label for="region" class="form-label"><lang>AWS 区域</lang></label>
                                 <select class="form-select" id="region" name="region">
                                     <?php foreach ($regions as $code => $name): ?>
-                                        <option value="<?= htmlspecialchars($code, ENT_QUOTES) ?>"
+                                        <option value="<?= htmlspecialchars($code??'', ENT_QUOTES) ?>"
                                             <?= ($config?->getData('region') ?? 'us-east-1') === $code ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($name, ENT_QUOTES) ?> (<?= htmlspecialchars($code, ENT_QUOTES) ?>)
+                                            <?= htmlspecialchars($name??'', ENT_QUOTES) ?> (<?= htmlspecialchars($code??'', ENT_QUOTES) ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>

@@ -194,18 +194,31 @@ var ConfigDownloadManager = (function () {
                 // 流式保存文件块
                 console.log('[DownloadManager] 收到文件块:', message.filename, '偏移:', message.offset, '大小:', message.data ? message.data.byteLength : 0, '完成:', message.isComplete);
                 try {
-                    if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.saveModelFileChunk) {
+                    if (message.data && message.data.byteLength > 0) {
                         // 兼容两种消息格式
                         const offset = message.offset !== undefined ? message.offset : 0;
-                        const isComplete = message.isComplete !== undefined ? message.isComplete : (message.size > 0 && message.data && message.data.byteLength >= message.size);
+                        const isComplete = message.isComplete !== undefined ? message.isComplete : (message.size > 0 && message.data.byteLength >= message.size);
 
-                        await LocalFileStorage.saveModelFileChunk(
-                            message.modelId,
-                            message.filename,
-                            message.data, // ArrayBuffer
-                            offset,
-                            isComplete
-                        );
+                        // 保存到 LocalFileStorage
+                        if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.saveModelFileChunk) {
+                            await LocalFileStorage.saveModelFileChunk(
+                                message.modelId,
+                                message.filename,
+                                message.data, // ArrayBuffer
+                                offset,
+                                isComplete
+                            );
+                        }
+
+                        // 同时保存到 ModelStorage（用于备份和兼容）
+                        if (isComplete && typeof ModelStorage !== 'undefined' && ModelStorage.saveModelFile) {
+                            try {
+                                await ModelStorage.saveModelFile(message.modelId, message.filename, message.data);
+                                console.log('[DownloadManager] 文件已同步到 ModelStorage:', message.filename);
+                            } catch (msError) {
+                                console.warn('[DownloadManager] ModelStorage 保存失败:', msError);
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error('[DownloadManager] 保存文件块失败:', e);
@@ -221,12 +234,52 @@ var ConfigDownloadManager = (function () {
                 console.log('[DownloadManager] 文件下载完成:', message.filename);
                 downloadState.currentFileProgress = 100;
                 if (onProgress) onProgress(downloadState);
+
+                // 确保文件已完整保存（强制标记为完成）
+                try {
+                    if (message.data && message.data.byteLength > 0) {
+                        // 如果消息中包含完整文件数据，保存它
+                        if (typeof LocalFileStorage !== 'undefined' && LocalFileStorage.saveModelFile) {
+                            await LocalFileStorage.saveModelFile(message.modelId, message.filename, message.data);
+                            console.log('[DownloadManager] 完整文件已保存到 LocalFileStorage:', message.filename);
+                        }
+                        if (typeof ModelStorage !== 'undefined' && ModelStorage.saveModelFile) {
+                            await ModelStorage.saveModelFile(message.modelId, message.filename, message.data);
+                            console.log('[DownloadManager] 完整文件已保存到 ModelStorage:', message.filename);
+                        }
+                    }
+                } catch (saveError) {
+                    console.warn('[DownloadManager] 保存完整文件失败:', saveError);
+                }
                 break;
 
             case 'download-complete':
                 downloadState.isDownloading = false;
                 downloadState.progress = 100;
                 if (onProgress) onProgress(downloadState);
+
+                // 验证文件是否已正确保存
+                console.log('[DownloadManager] 下载完成，验证缓存...');
+                try {
+                    if (typeof LocalFileStorage !== 'undefined') {
+                        const stats = await LocalFileStorage.getStorageStats();
+                        console.log('[DownloadManager] 缓存统计:', stats);
+
+                        // 检查模型是否已缓存
+                        const hasFiles = await LocalFileStorage.hasModelFiles(downloadState.currentModelId);
+                        if (hasFiles) {
+                            console.log('[DownloadManager] 模型已成功缓存到 IndexedDB');
+                        } else {
+                            console.warn('[DownloadManager] 警告：模型可能未完整缓存');
+                        }
+
+                        // 显示存储配额信息
+                        const quota = await LocalFileStorage.getStorageQuota();
+                        console.log('[DownloadManager] 存储配额:', (quota.usage / 1024 / 1024).toFixed(2), 'MB /', (quota.quota / 1024 / 1024 / 1024).toFixed(2), 'GB');
+                    }
+                } catch (verifyError) {
+                    console.warn('[DownloadManager] 缓存验证失败:', verifyError);
+                }
 
                 // 下载完成后，更新模型列表中的下载状态
                 if (typeof document !== 'undefined') {
@@ -252,7 +305,7 @@ var ConfigDownloadManager = (function () {
                     window.dispatchEvent(refreshEvent);
                 }
 
-                ConfigUtils.safeToast('success', '模型下载完成');
+                ConfigUtils.safeToast('success', '模型下载完成，已缓存到本地');
                 if (cleanup) cleanup();
                 resolve(message);
                 break;

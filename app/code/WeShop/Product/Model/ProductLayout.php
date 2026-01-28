@@ -22,7 +22,12 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class ProductLayout extends Model
 {
+    public const table = 'weshop_product_layout';
+    public const primary_key = 'layout_id';
     public const indexer = 'weshop_product_layout';
+    public array $_unit_primary_keys = ['layout_id'];
+    public array $_index_sort_keys = ['product_id', 'layout_type', 'is_active'];
+    
     public const fields_ID = 'layout_id';
     public const fields_PRODUCT_ID = 'product_id';
     public const fields_LAYOUT_TYPE = 'layout_type';
@@ -31,9 +36,6 @@ class ProductLayout extends Model
     public const fields_CONFIG = 'config';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
-
-    public array $_unit_primary_keys = ['product_id', 'layout_type'];
-    public array $_index_sort_keys = ['product_id', 'layout_type'];
 
     /**
      * @inheritDoc

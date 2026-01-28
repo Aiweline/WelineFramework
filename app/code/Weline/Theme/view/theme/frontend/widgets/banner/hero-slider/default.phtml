@@ -21,12 +21,13 @@ $showDots = (bool)($this->getData('show_dots') ?? true);
 $showArrows = (bool)($this->getData('show_arrows') ?? true);
 $effect = $this->getData('effect') ?? 'slide';
 $height = $this->getData('height') ?? '500px';
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 // 示例数据
 if (empty($slides)) {
     $slides = [
         [
-            'image' => '/images/banners/slide1.jpg',
+            'image' => $placeholder,
             'title' => __('2026春季新品上市'),
             'subtitle' => __('探索最新时尚潮流'),
             'button_text' => __('立即选购'),
@@ -34,7 +35,7 @@ if (empty($slides)) {
             'text_position' => 'left', // left/center/right
         ],
         [
-            'image' => '/images/banners/slide2.jpg',
+            'image' => $placeholder,
             'title' => __('限时特惠'),
             'subtitle' => __('全场满300减50'),
             'button_text' => __('查看详情'),
@@ -42,7 +43,7 @@ if (empty($slides)) {
             'text_position' => 'center',
         ],
         [
-            'image' => '/images/banners/slide3.jpg',
+            'image' => $placeholder,
             'title' => __('品质生活'),
             'subtitle' => __('精选优质好物'),
             'button_text' => __('开始探索'),
@@ -55,8 +56,8 @@ if (empty($slides)) {
 $sliderId = 'hero-slider-' . uniqid();
 ?>
 
-<div class="widget-hero-slider" id="<?= $sliderId ?>" style="height: <?= htmlspecialchars($height) ?>;">
-    <div class="slider-container effect-<?= htmlspecialchars($effect) ?>">
+<div class="widget-hero-slider" id="<?= $sliderId ?>" style="height: <?= htmlspecialchars($height ?? '') ?>;">
+    <div class="slider-container effect-<?= htmlspecialchars($effect ?? '') ?>">
         <div class="slider-wrapper">
             <?php foreach ($slides as $index => $slide): ?>
                 <div class="slide <?= $index === 0 ? 'active' : '' ?>" 
@@ -66,14 +67,14 @@ $sliderId = 'hero-slider-' . uniqid();
                     <div class="slide-content text-<?= htmlspecialchars($slide['text_position'] ?? 'left') ?>">
                         <div class="slide-text">
                             <?php if (!empty($slide['title'])): ?>
-                                <h2 class="slide-title"><?= htmlspecialchars($slide['title']) ?></h2>
+                                <h2 class="slide-title"><?= htmlspecialchars($slide['title'] ?? '') ?></h2>
                             <?php endif; ?>
                             <?php if (!empty($slide['subtitle'])): ?>
-                                <p class="slide-subtitle"><?= htmlspecialchars($slide['subtitle']) ?></p>
+                                <p class="slide-subtitle"><?= htmlspecialchars($slide['subtitle'] ?? '') ?></p>
                             <?php endif; ?>
                             <?php if (!empty($slide['button_text'])): ?>
                                 <a href="<?= htmlspecialchars($slide['link'] ?? '#') ?>" class="slide-button">
-                                    <?= htmlspecialchars($slide['button_text']) ?>
+                                    <?= htmlspecialchars($slide['button_text'] ?? '') ?>
                                 </a>
                             <?php endif; ?>
                         </div>

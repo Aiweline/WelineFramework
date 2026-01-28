@@ -7,18 +7,19 @@
 
 $ads = $this->getData('ads') ?? [];
 $showLabel = (bool)($this->getData('show_label') ?? true);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
 // 示例广告数据
 if (empty($ads)) {
     $ads = [
         [
-            'image' => '/images/ads/sidebar-ad-1.jpg',
+            'image' => $placeholder,
             'link' => '/promotions/summer',
             'alt' => __('夏季促销'),
             'open_new_tab' => false,
         ],
         [
-            'image' => '/images/ads/sidebar-ad-2.jpg',
+            'image' => $placeholder,
             'link' => '/promotions/new-arrivals',
             'alt' => __('新品上市'),
             'open_new_tab' => false,
@@ -35,7 +36,7 @@ $widgetId = 'sidebar-ads-' . uniqid();
             <a href="<?= htmlspecialchars($ad['link'] ?? '#') ?>" 
                class="ad-link"
                <?= !empty($ad['open_new_tab']) ? 'target="_blank" rel="noopener"' : '' ?>>
-                <img src="<?= htmlspecialchars($ad['image']) ?>" 
+                <img src="<?= htmlspecialchars($ad['image'] ?? '') ?>" 
                      alt="<?= htmlspecialchars($ad['alt'] ?? __('广告')) ?>"
                      class="ad-image"
                      loading="lazy">

@@ -88,10 +88,13 @@ module.exports = defineConfig({
   // 如果收集到了测试文件，使用 testMatch 或 testDir；否则使用默认 testDir
   // 注意：testMatch 和 testDir 都需要相对于 rootDir 的路径
   // 在 Windows 上，Playwright 可能对路径格式敏感，确保使用正斜杠
+  // 同时支持 specs 目录下的测试文件
   ...(testMatch.length > 0 ? { 
     testMatch: testMatch.map(p => p.replace(/\\/g, '/'))
   } : { 
-    testDir: testDir.replace(/\\/g, '/')
+    testDir: testDir.replace(/\\/g, '/'),
+    // 同时匹配 specs 目录下的测试文件
+    testMatch: ['**/specs/**/*.spec.js']
   }),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -99,7 +102,7 @@ module.exports = defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://127.0.0.1:81',
+    baseURL: 'http://127.0.0.1:9981',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },

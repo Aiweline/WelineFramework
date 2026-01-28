@@ -55,9 +55,14 @@ class Page extends FrontendController
         // 获取当前使用的语言（从Cookie或URL参数）
         $currentLocale = $requestedLocale ?: \Weline\Framework\Http\Cookie::getLang();
 
-        // 加载页面
+        // 获取当前网站ID
+        $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+        
+        // 加载页面（按 website_id + handle 查询）
         $page = clone $this->pageModel;
-        $page->clear()->where(PageModel::fields_HANDLE, $handle);
+        $page->clear()
+            ->where(PageModel::fields_WEBSITE_ID, $websiteId)
+            ->where(PageModel::fields_HANDLE, $handle);
         
         // 如果不是预览模式，只显示已发布的页面
         if (!$isPreview) {

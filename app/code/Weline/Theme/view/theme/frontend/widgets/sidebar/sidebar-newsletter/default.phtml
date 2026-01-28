@@ -30,7 +30,7 @@ $widgetId = 'sidebar-newsletter-' . uniqid();
         <input type="email" 
                name="email" 
                class="newsletter-input" 
-               placeholder="<?= htmlspecialchars($placeholder) ?>"
+               placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
                required>
         <button type="submit" class="newsletter-submit">
             <?= htmlspecialchars($buttonText) ?>

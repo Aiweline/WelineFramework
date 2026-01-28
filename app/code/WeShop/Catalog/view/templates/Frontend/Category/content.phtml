@@ -105,7 +105,7 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
                     <div class="category-grid-item__meta">
                         <?php if ($hasGrandChildren && $grandChildrenCount > 0): ?>
                             <span class="category-grid-item__badge">
-                                <?= __('%1 个子分类', $grandChildrenCount) ?>
+                                <?= __('%{count} 个子分类', ['count' => $grandChildrenCount]) ?>
                             </span>
                         <?php endif; ?>
                     </div>
@@ -114,108 +114,71 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
         <?php endforeach; ?>
     </div>
 <?php else: ?>
-    <!-- 没有子分类时显示示例产品 -->
+    <!-- 没有子分类时显示产品列表 -->
     <?php
-    // 示例产品数据
-    $sampleProducts = [
-        [
-            'name' => __('无线蓝牙耳机'),
-            'description' => __('高品质音质，舒适佩戴，长续航时间'),
-            'price' => 299.00,
-            'original_price' => 399.00,
-            'image' => 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop',
-            'rating' => 4.5,
-            'reviews' => 128
-        ],
-        [
-            'name' => __('智能手表'),
-            'description' => __('健康监测，运动追踪，智能通知'),
-            'price' => 1299.00,
-            'original_price' => 1599.00,
-            'image' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop',
-            'rating' => 4.8,
-            'reviews' => 256
-        ],
-        [
-            'name' => __('便携式充电宝'),
-            'description' => __('大容量，快充技术，多设备兼容'),
-            'price' => 89.00,
-            'original_price' => 129.00,
-            'image' => 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1a8?w=400&h=400&fit=crop',
-            'rating' => 4.6,
-            'reviews' => 89
-        ],
-        [
-            'name' => __('无线鼠标'),
-            'description' => __('精准定位，人体工学设计，静音按键'),
-            'price' => 159.00,
-            'original_price' => 199.00,
-            'image' => 'https://images.unsplash.com/photo-1527814050087-3793815479db?w=400&h=400&fit=crop',
-            'rating' => 4.7,
-            'reviews' => 342
-        ],
-        [
-            'name' => __('机械键盘'),
-            'description' => __('青轴手感，RGB背光，全键无冲'),
-            'price' => 459.00,
-            'original_price' => 599.00,
-            'image' => 'https://images.unsplash.com/photo-1541140532154-b024d705b90a?w=400&h=400&fit=crop',
-            'rating' => 4.9,
-            'reviews' => 567
-        ],
-        [
-            'name' => __('USB-C 扩展坞'),
-            'description' => __('多接口扩展，4K输出，快速传输'),
-            'price' => 199.00,
-            'original_price' => 299.00,
-            'image' => 'https://images.unsplash.com/photo-1591488320449-011701bb6704?w=400&h=400&fit=crop',
-            'rating' => 4.5,
-            'reviews' => 203
-        ]
-    ];
-    ?>
-    <div class="category-products-grid">
-        <?php foreach ($sampleProducts as $product): ?>
-            <div class="product-card">
-                <a href="#" class="product-card__link">
-                    <div class="product-card__image-wrapper">
-                        <img src="<?= htmlspecialchars($product['image']) ?>" 
-                             alt="<?= htmlspecialchars($product['name']) ?>" 
-                             class="product-card__image"
-                             loading="lazy">
-                        <?php if (isset($product['original_price']) && $product['original_price'] > $product['price']): ?>
-                            <span class="product-card__discount">
-                                <?= round((1 - $product['price'] / $product['original_price']) * 100) ?>% <?= __('OFF') ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="product-card__content">
-                        <h3 class="product-card__title"><?= htmlspecialchars($product['name']) ?></h3>
-                        <p class="product-card__description"><?= htmlspecialchars($product['description']) ?></p>
-                        
-                        <div class="product-card__rating">
-                            <?php
-                            $rating = $product['rating'] ?? 0;
-                            for ($i = 1; $i <= 5; $i++):
-                            ?>
-                                <span class="star <?= $i <= $rating ? 'star-filled' : '' ?>">★</span>
-                            <?php endfor; ?>
-                            <span class="product-card__reviews">(<?= $product['reviews'] ?>)</span>
-                        </div>
-                        
-                        <div class="product-card__price">
-                            <?php if (isset($product['original_price']) && $product['original_price'] > $product['price']): ?>
-                                <span class="product-card__price-current">¥<?= number_format($product['price'], 2) ?></span>
-                                <span class="product-card__price-original">¥<?= number_format($product['original_price'], 2) ?></span>
+    // 从模板数据中获取产品列表
+    $products = $this->getData('products') ?? [];
+    
+    if (empty($products) || !is_array($products) || count($products) === 0): ?>
+        <div class="category-empty">
+            <p><?= __('该分类下暂无产品') ?></p>
+        </div>
+    <?php else: ?>
+        <div class="category-products-grid">
+            <?php foreach ($products as $product): ?>
+                <?php
+                $productId = (int)($product['product_id'] ?? 0);
+                $productName = htmlspecialchars($product['name'] ?? '');
+                $productDescription = htmlspecialchars($product['short_description'] ?? '');
+                $productPrice = (float)($product['price'] ?? 0);
+                $productImage = $product['image'] ?? '';
+                $productHandle = $product['handle'] ?? '';
+                $productSku = htmlspecialchars($product['sku'] ?? '');
+                $inStock = (bool)($product['in_stock'] ?? false);
+                
+                // 构建产品URL
+                $productUrl = $productHandle ? $this->getUrl('product/' . $productHandle) : $this->getUrl('product/view', ['id' => $productId]);
+                ?>
+                <div class="product-card">
+                    <a href="<?= htmlspecialchars($productUrl) ?>" class="product-card__link">
+                        <div class="product-card__image-wrapper">
+                            <?php if ($productImage): ?>
+                                <img src="<?= htmlspecialchars($productImage) ?>" 
+                                     alt="<?= $productName ?>" 
+                                     class="product-card__image"
+                                     loading="lazy">
                             <?php else: ?>
-                                <span class="product-card__price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                <div class="product-card__image-placeholder">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 7V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V7M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21M7 11H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!$inStock): ?>
+                                <span class="product-card__out-of-stock"><?= __('缺货') ?></span>
                             <?php endif; ?>
                         </div>
-                    </div>
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
+                        <div class="product-card__content">
+                            <h3 class="product-card__title"><?= $productName ?></h3>
+                            <?php if ($productDescription): ?>
+                                <p class="product-card__description"><?= $productDescription ?></p>
+                            <?php endif; ?>
+                            
+                            <div class="product-card__price">
+                                <span class="product-card__price-current">¥<?= number_format($productPrice, 2) ?></span>
+                            </div>
+                            
+                            <?php if ($productSku): ?>
+                                <div class="product-card__sku">
+                                    <small><?= __('SKU: %{sku}', ['sku' => $productSku]) ?></small>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>
 
 <style>
@@ -450,6 +413,44 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
     font-size: 0.875rem;
     color: var(--color-text-secondary, #9ca3af);
     text-decoration: line-through;
+}
+
+.product-card__image-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg-secondary, #f3f4f6);
+    color: var(--color-text-tertiary, #d1d5db);
+}
+
+.product-card__out-of-stock {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: #6b7280;
+    color: #fff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 1;
+}
+
+.product-card__sku {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.category-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--color-text-secondary, #6b7280);
 }
 
 /* 移动端适配 */

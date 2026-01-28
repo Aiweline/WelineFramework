@@ -11,18 +11,19 @@ $columns = $this->getData('columns') ?? '6';
 $layout = $this->getData('layout') ?? 'grid';
 $grayscale = (bool)($this->getData('grayscale') ?? true);
 $hoverColor = (bool)($this->getData('hover_color') ?? true);
+$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例品牌数据
 if (empty($brands)) {
     $brands = [
-        ['name' => 'Apple', 'image' => '/images/brands/apple.png', 'link' => '/brand/apple'],
-        ['name' => 'Samsung', 'image' => '/images/brands/samsung.png', 'link' => '/brand/samsung'],
-        ['name' => 'Nike', 'image' => '/images/brands/nike.png', 'link' => '/brand/nike'],
-        ['name' => 'Adidas', 'image' => '/images/brands/adidas.png', 'link' => '/brand/adidas'],
-        ['name' => 'Sony', 'image' => '/images/brands/sony.png', 'link' => '/brand/sony'],
-        ['name' => 'LG', 'image' => '/images/brands/lg.png', 'link' => '/brand/lg'],
-        ['name' => 'Huawei', 'image' => '/images/brands/huawei.png', 'link' => '/brand/huawei'],
-        ['name' => 'Xiaomi', 'image' => '/images/brands/xiaomi.png', 'link' => '/brand/xiaomi'],
+        ['name' => 'Apple', 'image' => $placeholder, 'link' => '/brand/apple'],
+        ['name' => 'Samsung', 'image' => $placeholder, 'link' => '/brand/samsung'],
+        ['name' => 'Nike', 'image' => $placeholder, 'link' => '/brand/nike'],
+        ['name' => 'Adidas', 'image' => $placeholder, 'link' => '/brand/adidas'],
+        ['name' => 'Sony', 'image' => $placeholder, 'link' => '/brand/sony'],
+        ['name' => 'LG', 'image' => $placeholder, 'link' => '/brand/lg'],
+        ['name' => 'Huawei', 'image' => $placeholder, 'link' => '/brand/huawei'],
+        ['name' => 'Xiaomi', 'image' => $placeholder, 'link' => '/brand/xiaomi'],
     ];
 }
 
@@ -48,11 +49,11 @@ $widgetId = 'brand-logos-' . uniqid();
         <div class="brands-wrapper">
             <div class="brands-grid columns-<?= htmlspecialchars($columns) ?>">
                 <?php foreach ($brands as $brand): ?>
-                    <<?= !empty($brand['link']) ? 'a href="' . htmlspecialchars($brand['link']) . '"' : 'div' ?> 
-                       class="brand-item"
-                       <?= !empty($brand['link']) ? 'title="' . htmlspecialchars($brand['name']) . '"' : '' ?>>
-                        <img src="<?= htmlspecialchars($brand['image']) ?>" 
-                             alt="<?= htmlspecialchars($brand['name']) ?>"
+                    <<?= !empty($brand['link']) ? 'a href="' . htmlspecialchars($brand['link'] ?? '') . '"' : 'div' ?> 
+                    class="brand-item"
+                       <?= !empty($brand['link']) ? 'title="' . htmlspecialchars($brand['name'] ?? '') . '"' : '' ?>>
+                        <img src="<?= htmlspecialchars($brand['image'] ?? '') ?>" 
+                             alt="<?= htmlspecialchars($brand['name'] ?? '') ?>"
                              class="brand-logo"
                              loading="lazy">
                     </<?= !empty($brand['link']) ? 'a' : 'div' ?>>
