@@ -1261,7 +1261,14 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $identity_inserts_sql .= "INSERT INTO {$table} ({$insert_fields_str}) VALUES (";
                 foreach ($insert as $insert_field => $insert_value) {
                     $insert_bound_key = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
-                    $this->bound_values[$insert_bound_key] = (string)$insert_value;
+                    // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
+                    if (is_array($insert_value)) {
+                        $this->bound_values[$insert_bound_key] = json_encode($insert_value, JSON_UNESCAPED_UNICODE);
+                    } elseif (is_null($insert_value)) {
+                        $this->bound_values[$insert_bound_key] = null;
+                    } else {
+                        $this->bound_values[$insert_bound_key] = (string)$insert_value;
+                    }
                     $identity_inserts_sql .= "$insert_bound_key , ";
                 }
                 $identity_inserts_sql = rtrim($identity_inserts_sql, ', ');
@@ -1455,7 +1462,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 foreach ($this->updates[0] as $update_field => $field_value) {
                     $update_key = ':' . md5($update_field);
                     $update_field_quoted = '"' . $update_field . '"';
-                    $this->bound_values[$update_key] = (string)$field_value;
+                    // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
+                    $this->bound_values[$update_key] = $field_value === null ? null : (string)$field_value;
                     // 单条更新时也通过数组覆盖，确保同一字段只有一个赋值
                     $updateExpressions[$update_field] = "{$update_field_quoted} = $update_key";
                 }
@@ -1467,7 +1475,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             foreach ($this->single_updates as $update_field => $update_value) {
                 $update_field_quoted = '"' . $update_field . '"';
                 $update_key = ':' . md5($update_field);
-                $this->bound_values[$update_key] = (string)$update_value;
+                // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
+                $this->bound_values[$update_key] = $update_value === null ? null : (string)$update_value;
                 // single_updates 的值优先级最高，覆盖前面的表达式
                 $updateExpressions[$update_field] = "{$update_field_quoted}=$update_key";
             }
