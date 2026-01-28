@@ -2989,8 +2989,14 @@ class Taglib
         // 在闭包内部提取模板数据和当前作用域的局部变量，使变量可在闭包中访问
         // 使用 $_template 变量（在调用 renderRuntimeTag 之前已赋值），因为不能使用 use ($this)
         // 使用 get_defined_vars() 捕获当前作用域的所有变量（包括 foreach 循环变量如 $page, $index 等）
-        // 先提取局部变量再提取模板数据，模板数据优先级更高（EXTR_OVERWRITE）
-        return '(function($_local_vars) use ($_template) { extract($_local_vars, EXTR_SKIP); extract($_template->getData(), EXTR_OVERWRITE); ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })(get_defined_vars())';
+        // 注意：先提取模板数据，再提取局部变量（EXTR_SKIP 确保模板数据优先不被覆盖）
+        // 过滤掉可能导致问题的特殊变量（如 $this, $_template 等）
+        return '(function($_local_vars) use ($_template) { ' .
+            '$_excluded = [\'this\', \'_template\', \'_local_vars\']; ' .
+            '$_local_vars = array_diff_key($_local_vars, array_flip($_excluded)); ' .
+            'extract($_template->getData(), EXTR_SKIP); ' .
+            'extract($_local_vars, EXTR_SKIP); ' .
+            'ob_start(); ' . self::PHP_CLOSE_TAG . $childPhp . self::PHP_OPEN_TAG . 'php return ob_get_clean(); })(get_defined_vars())';
     }
 
     public function renderRuntimeTag(
