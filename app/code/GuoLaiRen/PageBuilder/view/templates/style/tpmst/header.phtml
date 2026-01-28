@@ -28,16 +28,16 @@
  * header.download_button.border_radius => 按钮圆角:number:8|px
  * header.download_button.extra_classes => 按钮额外CSS类:textarea:common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder|可配置额外的CSS类名，多个类名用空格分隔
  * 
- * group:banner => Banner横幅区域设置（Hero/Banner）
- * banner.display => 显示Banner区域:select:yes|yes,no
- * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地banner-2.jpg
- * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地banner-03.webp
- * banner.alt => Banner图片描述:text:100000 earn on teenpatti master
- * banner.download_btn_image => Banner中下载按钮图片:textarea:|默认使用本地download-btn-m.webp
- * banner.download_btn_alt => Banner中下载按钮描述:text:DOWNLOAD APP
- * banner.bg_color => Banner背景颜色:color:#0c0060
- * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]
- * banner.slider_classes => Banner轮播区域CSS类:textarea:rs-slider slider-style2 md-mt--75|可配置轮播区域的CSS类名，多个类名用空格分隔
+ * group:banner => Banner横幅区域设置（Hero/Banner）【已独立为组件hero-slider】
+ * banner.display => 显示Banner区域:select:no|yes,no【建议使用hero-slider组件代替】
+ * banner.image_mobile => 移动端Banner图片:textarea:|【已迁移到hero-slider组件】
+ * banner.image_desktop => PC端Banner图片:textarea:|【已迁移到hero-slider组件】
+ * banner.alt => Banner图片描述:text:100000 earn on teenpatti master|【已迁移到hero-slider组件】
+ * banner.download_btn_image => Banner中下载按钮图片:textarea:|【已迁移到hero-slider组件】
+ * banner.download_btn_alt => Banner中下载按钮描述:text:DOWNLOAD APP|【已迁移到hero-slider组件】
+ * banner.bg_color => Banner背景颜色:color:#0c0060|【已迁移到hero-slider组件】
+ * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]|【已迁移到hero-slider组件】
+ * banner.slider_classes => Banner轮播区域CSS类:textarea:rs-slider slider-style2 md-mt--75|【已迁移到hero-slider组件】
  * 
  * group:color_scheme => 全局色系设置
  * color_scheme.scheme => 选择色系:select:default|default,blue,purple,green,red
@@ -147,6 +147,8 @@ if (!empty($pageLogo)) {
 if (empty($logoUrl)) {
     $logoUrl = $defaultLogoUrl;
 }
+// 确保 $logoUrl 始终是字符串，不会是 null
+$logoUrl = (string)($logoUrl ?? '');
 // Logo显示配置 - 数据库存储：0=yes(显示), 1=no(不显示)
 // 注意：这里的逻辑是反的，0表示显示，1表示不显示
 $logoDisplayRaw = tpmst_getConfig($styleSettings, 'header.logo.display', 'yes');
@@ -299,18 +301,19 @@ foreach ($navItems as &$item) {
 unset($item);
 
 // Banner配置（优先使用颜色配置）
-$bannerDisplayRaw = tpmst_getConfig($styleSettings, 'banner.display', 'yes');
+// 注意：Banner已独立为组件（hero-slider等），header中的banner默认关闭
+$bannerDisplayRaw = tpmst_getConfig($styleSettings, 'banner.display', 'no');
 // 处理显示配置：支持 yes/no 或兼容旧的 0/1 值
-// 统一转换为 yes/no 格式
+// 统一转换为 yes/no 格式（Banner已独立为组件，默认关闭）
 if ($bannerDisplayRaw === 'yes' || $bannerDisplayRaw === true || $bannerDisplayRaw === 'true' || $bannerDisplayRaw === 1 || $bannerDisplayRaw === '1') {
     $bannerDisplay = 'yes'; // yes 或 1 = 显示
 } elseif ($bannerDisplayRaw === 'no' || $bannerDisplayRaw === false || $bannerDisplayRaw === 'false' || $bannerDisplayRaw === 0 || $bannerDisplayRaw === '0') {
     $bannerDisplay = 'no'; // no 或 0 = 不显示
 } else {
-    $bannerDisplay = 'yes'; // 默认显示
+    $bannerDisplay = 'no'; // 默认不显示（Banner已独立为hero-slider等组件）
 }
-$bannerAlt = tpmst_getConfig($styleSettings, 'banner.alt', '100000 earn on teenpatti master');
-$bannerDownloadBtnAlt = tpmst_getConfig($styleSettings, 'banner.download_btn_alt', 'DOWNLOAD APP');
+$bannerAlt = (string)(tpmst_getConfig($styleSettings, 'banner.alt', '100000 earn on teenpatti master') ?? '100000 earn on teenpatti master');
+$bannerDownloadBtnAlt = (string)(tpmst_getConfig($styleSettings, 'banner.download_btn_alt', 'DOWNLOAD APP') ?? 'DOWNLOAD APP');
 $bannerBgColor = tpmst_color($colors, 'hero_bg', tpmst_getConfig($styleSettings, 'banner.bg_color', '#0c0060'));
 $bannerBgGradientEnd = tpmst_color($colors, 'hero_bg_gradient_end', '#1d1850');
 $bannerSliderClasses = tpmst_getConfig($styleSettings, 'banner.slider_classes', 'rs-slider slider-style2 md-mt--75');
@@ -345,16 +348,16 @@ $bannerDownloadBtnImage = $getBannerImage('banner.download_btn_image');
 // 确保总是有值：如果配置值为null或空字符串，使用默认值
 $finalBannerMobile = (!empty($bannerImageMobile) && trim((string)$bannerImageMobile) !== '') 
     ? trim((string)$bannerImageMobile) 
-    : $defaultBannerMobile;
+    : (string)($defaultBannerMobile ?? '');
 $finalBannerDesktop = (!empty($bannerImageDesktop) && trim((string)$bannerImageDesktop) !== '') 
     ? trim((string)$bannerImageDesktop) 
-    : $defaultBannerDesktop;
+    : (string)($defaultBannerDesktop ?? '');
 $finalDownloadBtn = (!empty($bannerDownloadBtnImage) && trim((string)$bannerDownloadBtnImage) !== '') 
     ? trim((string)$bannerDownloadBtnImage) 
-    : $defaultDownloadBtn;
+    : (string)($defaultDownloadBtn ?? '');
 
 // 下载按钮配置（优先使用颜色配置）
-$downloadBtnText = tpmst_getConfig($styleSettings, 'header.download_button.text', 'DOWNLOAD APP');
+$downloadBtnText = (string)(tpmst_getConfig($styleSettings, 'header.download_button.text', 'DOWNLOAD APP') ?? 'DOWNLOAD APP');
 
 $downloadBtnDisplay = tpmst_getConfig($styleSettings, 'header.download_button.display', 'yes');
 $downloadBtnExtraClasses = tpmst_getConfig($styleSettings, 'header.download_button.extra_classes', 'common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder');
@@ -368,9 +371,9 @@ $downloadBtnPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConf
 $downloadBtnRadius = tpmst_getConfig($styleSettings, 'header.download_button.border_radius', '8');
 
 // SEO信息
-$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : 'Teen Patti Master');
-$metaDescription = $page ? $page->getData('meta_description') : 'India\'s Best Real Cash Card Game - Play Teen Patti, Rummy, and Slots';
-$metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, slots, card game, real cash';
+$metaTitle = ($page ? ($page->getData('meta_title') ?: $page->getData('title')) : null) ?: 'Teen Patti Master';
+$metaDescription = ($page ? $page->getData('meta_description') : null) ?: 'India\'s Best Real Cash Card Game - Play Teen Patti, Rummy, and Slots';
+$metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti, rummy, slots, card game, real cash';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -443,6 +446,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, sl
     <!-- 本地CSS资源 -->
     <?php 
     $localCssUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/css/home.css');
+    $localCssUrl = $localCssUrl ?: '';
     ?>
     <link rel="stylesheet" type="text/css" href="<?= htmlspecialchars($localCssUrl) ?>">
     
@@ -458,6 +462,8 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, sl
             background: <?= htmlspecialchars(tpmst_color($colors, 'body_bg', $bannerBgColor)) ?>;
             color: <?= htmlspecialchars(tpmst_color($colors, 'text_primary', '#ffffff')) ?>;
             line-height: 1.6;
+            padding: 0 !important;
+            margin: 0 !important;
         }
         
         /* CSS变量定义（用于兼容原始CSS） */
@@ -711,8 +717,10 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, sl
     
     // 如果像素名称为空，使用页面的 handle
     if (empty($pixelName) && $page) {
-        $pixelName = $page->getData('handle') ?? '';
+        $pixelName = (string)($page->getData('handle') ?? '');
     }
+    // 确保 $pixelName 始终是字符串，不会是 null
+    $pixelName = (string)($pixelName ?? '');
     
     // 直接从页面对象获取 website_id（页面已有此字段，无需配置）
     $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
@@ -747,8 +755,8 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, sl
         }
         
         // 使用变量传递方式，避免在标签属性中使用 PHP 标签
-        $this->assign('pixel_name', htmlspecialchars($pixelName));
-        $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+        $this->assign('pixel_name', htmlspecialchars((string)($pixelName ?? '')));
+        $this->assign('pixel_enabled', htmlspecialchars((string)($pixelEnabled ?? 'yes')));
     ?>
         <!-- Weline Visitor Pixel - 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
         <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
@@ -768,24 +776,24 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : 'teen patti, rummy, sl
             <ul class="tpmst-nav-links">
                 <?php foreach ($navItems as $navItem): ?>
                     <?php 
-                    $navHref = $navItem['href'] ?? '#';
-                    $navText = $navItem['text'] ?? '';
+                    $navHref = (string)($navItem['href'] ?? '#');
+                    $navText = (string)($navItem['text'] ?? '');
                     $isActive = isset($navItem['active']) && $navItem['active'] === true;
-                    $navClass = $isActive ? 'active' : '';
+                    $navClass = (string)($isActive ? 'active' : '');
                     ?>
                     <li><a href="<?= htmlspecialchars($navHref) ?>" class="<?= htmlspecialchars($navClass) ?>"><?= htmlspecialchars($navText) ?></a></li>
                 <?php endforeach; ?>
             </ul>
             
             <?php if ($downloadBtnDisplay === 'yes'): ?>
-            <a href="#download" class="tpmst-nav-download-btn <?= htmlspecialchars(trim($downloadBtnExtraClasses)) ?>"><?= htmlspecialchars($downloadBtnText) ?></a>
+            <a href="#download" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?>"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
             <?php endif; ?>
         </div>
     </nav>
     
     <!-- Hero/Banner Slider区域 -->
     <?php if ($bannerDisplay === 'yes'): ?>
-    <div class="<?= htmlspecialchars(trim($bannerSliderClasses)) ?>">
+    <div class="<?= htmlspecialchars(trim((string)($bannerSliderClasses ?? ''))) ?>">
         <div class="slider slider-slide-1">
             <div class="slider-item">
                 <div class="container">

@@ -226,6 +226,33 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <div class="invalid-feedback"><?= __('请选择页面类型') ?></div>
                     </div>
 
+                    <!-- 布局页面（引用其他页面的布局配置） -->
+                    <div class="mb-3">
+                        <label for="layout_page_id" class="form-label">
+                            <i class="mdi mdi-page-layout-body"></i> <?= __('布局页面') ?>
+                        </label>
+                        <select class="form-select" id="layout_page_id" name="layout_page_id">
+                            <option value=""><?= __('使用自身布局（默认）') ?></option>
+                            <?php 
+                            $layoutPages = $this->getData('layout_pages') ?? [];
+                            $currentLayoutPageId = $page ? (int)($page->getData('layout_page_id') ?? 0) : 0;
+                            foreach ($layoutPages as $layoutPage): 
+                                $lpId = (int)($layoutPage['page_id'] ?? 0);
+                                if ($lpId <= 0) continue;
+                                $lpName = htmlspecialchars($layoutPage['name'] ?? '');
+                                $lpType = htmlspecialchars($layoutPage['type_name'] ?? '');
+                                $lpHandle = htmlspecialchars($layoutPage['handle'] ?? '');
+                            ?>
+                                <option value="<?= $lpId ?>" <?= $currentLayoutPageId === $lpId ? 'selected' : '' ?>>
+                                    <?= $lpName ?> (<?= $lpType ?>) - /<?= $lpHandle ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">
+                            <?= __('选择一个已有页面作为布局模板。选择后，本页面将使用目标页面的 header/content/footer 组件配置进行渲染，并可在可视化编辑器中编辑该布局。') ?>
+                        </div>
+                    </div>
+
                     <!-- 页面名称 -->
                     <div class="mb-3">
                         <label for="name" class="form-label">
@@ -3059,7 +3086,9 @@ function updateLocalesHint() {
  * 默认语言的删除按钮应该被禁用
  */
 function updateLocaleTagsDeleteButton() {
-    const defaultLocale = document.getElementById('default_locale').value;
+    const defaultLocaleEl = document.getElementById('default_locale');
+    if (!defaultLocaleEl) return; // 元素不存在时直接返回
+    const defaultLocale = defaultLocaleEl.value;
     const allTags = document.querySelectorAll('.selected-locale-tag');
     
     allTags.forEach(tag => {
@@ -5723,8 +5752,12 @@ window.generatePageContent = function() {
 window.openFrontendPreview = function() {
     const handleInput = document.getElementById('handle');
     const handle = handleInput ? handleInput.value.trim() : '';
+    const typeInput = document.getElementById('type');
+    const pageType = typeInput ? typeInput.value : '';
+    const isHomePage = (pageType === '<?= \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME ?>');
     
-    if (!handle) {
+    // 首页类型且没有handle时，允许预览（直接使用网站地址）
+    if (!handle && !isHomePage) {
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
@@ -5744,12 +5777,35 @@ window.openFrontendPreview = function() {
     // 构建预览URL
     let previewUrl;
     if (pageId) {
-        // 编辑模式：使用后端预览控制器
+        // 编辑模式：使用后端预览控制器（后端会处理首页类型且无handle的情况）
         previewUrl = '<?= $this->getBackendUrl("*/backend/page/preview") ?>?id=' + pageId;
     } else {
-        // 新建模式：使用友好的重写URL格式：/handle?preview=1
-        const baseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
-        previewUrl = baseUrl + '/' + handle + '?preview=1';
+        // 新建模式
+        if (isHomePage && !handle) {
+            // 首页类型且没有handle：使用网站地址
+            const websiteSelect = document.getElementById('website_id');
+            const websiteId = websiteSelect ? websiteSelect.value : '';
+            
+            // 从网站列表获取网站URL
+            <?php 
+            $websites = $this->getData('websites') ?? [];
+            $websiteUrls = [];
+            foreach ($websites as $website) {
+                $wid = (int)($website['website_id'] ?? 0);
+                $wUrl = $website['url'] ?? '';
+                if ($wid > 0 && $wUrl) {
+                    $websiteUrls[$wid] = rtrim($wUrl, '/');
+                }
+            }
+            ?>
+            const websiteUrls = <?= json_encode($websiteUrls) ?>;
+            const baseUrl = websiteUrls[websiteId] || '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+            previewUrl = baseUrl + '?preview=1';
+        } else {
+            // 使用友好的重写URL格式：/handle?preview=1
+            const baseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+            previewUrl = baseUrl + '/' + handle + '?preview=1';
+        }
     }
     
     // 在新窗口打开前端预览

@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'WeShop_Product',
     __DIR__,
-    '1.0.0',
+    '1.0.1',
     '<a href="https://bbs.aiweline.com">商店产品</a>',
     [
         'Weline_Eav',

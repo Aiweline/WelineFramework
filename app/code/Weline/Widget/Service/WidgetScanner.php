@@ -32,7 +32,7 @@ class WidgetScanner
         'blog', 'product', 'category', 'search', 'filter', 'map',
         'video', 'audio', 'social', 'newsletter', 'faq', 'timeline',
         'stats', 'counter', 'progress', 'chart', 'table', 'calendar',
-        'chat', 'comment'
+        'chat', 'comment', 'container'  // container 类型用于 header-container, footer-container 等容器部件
     ];
 
     /**

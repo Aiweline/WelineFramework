@@ -143,8 +143,17 @@ class Website extends BackendController
                 }
                 
                 // 保存网站基本信息
-                $this->website->setData($data)->save();
-                $websiteId = $this->website->getWebsiteId();
+                // 确保清除 website_id，避免在添加时使用已有的 ID
+                if (isset($data['website_id'])) {
+                    unset($data['website_id']);
+                }
+                $this->website->clearData()->setData($data)->save();
+                $websiteId = $this->website->getId();
+                
+                // 检查是否成功保存（获取到新的 ID）
+                if (empty($websiteId)) {
+                    throw new \Exception(__('网站保存失败，未能获取网站ID'));
+                }
                 
                 // 保存关联货币
                 $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
@@ -163,8 +172,8 @@ class Website extends BackendController
             } catch (\Exception $e) {
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => __('网站添加失败: %{1}', $e->getMessage()),
-                    'url' => '*/admin/website/add',
-                    'reload' => '1',
+                    'url' => '/',
+                    'reload' => '0',
                     'time' => '3',
                 ]);
             }
@@ -194,8 +203,11 @@ class Website extends BackendController
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
-            MessageManager::error(__('网站ID不能为空'));
-            $this->redirect('*/admin/website');
+            $this->redirect('/component/offcanvas/error', [
+                'msg' => __('网站ID不能为空'),
+                'reload' => '0',
+                'time' => '3',
+            ]);
             return;
         }
         
@@ -206,26 +218,30 @@ class Website extends BackendController
         
         // 检查网站是否存在
         if (!$this->website->getWebsiteId()) {
-            MessageManager::error(__('网站不存在'));
-            $this->redirect('*/admin/website');
+            $this->redirect('/component/offcanvas/error', [
+                'msg' => __('网站不存在'),
+                'reload' => '0',
+                'time' => '3',
+            ]);
             return;
         }
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             
-            // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id
+            // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id，最后使用已加载的 websiteId
             $postWebsiteId = $data['website_id'] ?? null;
             if (empty($postWebsiteId)) {
                 $postWebsiteId = $this->request->getParam('id');
             }
+            if (empty($postWebsiteId)) {
+                $postWebsiteId = $websiteId;
+            }
             
             // 如果还是没有，说明是新增，不是编辑
             if (empty($postWebsiteId)) {
-                MessageManager::error(__('网站ID不能为空'));
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => __('网站ID不能为空'),
-                    'url' => '*/admin/website/edit',
                     'reload' => '0',
                     'time' => '3',
                 ]);
@@ -281,7 +297,11 @@ class Website extends BackendController
                         'time' => '3',
                     ]);
             } catch (\Exception $e) {
-                MessageManager::exception($e);
+                $this->redirect('/component/offcanvas/error', [
+                    'msg' => $e->getMessage(),
+                    'reload' => '0',
+                    'time' => '5',
+                ]);
             }
         }
 
@@ -372,13 +392,20 @@ class Website extends BackendController
             }
             
             // 创建站点
-            $newWebsite = clone $this->website;
-            $newWebsite->clearData()
+            // 使用新的模型实例，确保没有残留数据
+            $newWebsite = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $newWebsite->clearData()  // 清除所有数据
                 ->setData(\Weline\Websites\Model\Website::fields_NAME, $name)
                 ->setData(\Weline\Websites\Model\Website::fields_CODE, $code)
                 ->setData(\Weline\Websites\Model\Website::fields_URL, rtrim($url, '/'))
-                ->setData(\Weline\Websites\Model\Website::fields_DEFAULT_TIMEZONE, $defaultTimezone)
-                ->save(true);
+                ->setData(\Weline\Websites\Model\Website::fields_DEFAULT_TIMEZONE, $defaultTimezone);
+            
+            // 确保主键字段被清除（防止主键冲突）
+            if ($newWebsite->hasData(\Weline\Websites\Model\Website::fields_ID)) {
+                $newWebsite->unsetData(\Weline\Websites\Model\Website::fields_ID);
+            }
+            
+            $newWebsite->save(true);
             
             return $this->fetchJson([
                 'success' => true,

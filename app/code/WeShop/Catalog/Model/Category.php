@@ -18,6 +18,7 @@ class Category extends EavModel
 {
     public const table = 'weshop_category';
     public const primary_key = 'category_id';
+    public string $indexer = 'category_indexer';
     
     public const fields_ID = 'category_id';
     public const fields_PARENT_ID = 'parent_id';

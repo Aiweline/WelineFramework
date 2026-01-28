@@ -46,7 +46,14 @@ $textAlign = $getConfig('style.text_align', 'center');
 <style>
 #<?= $componentId ?> {
     background: <?= htmlspecialchars($bgColor) ?>;
-    padding: <?= $padding ?>px;
+    padding: <?= $padding ?>px 0;
+    width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
     text-align: <?= $textAlign ?>;
 }
 
@@ -55,9 +62,17 @@ $textAlign = $getConfig('style.text_align', 'center');
     font-size: 12px;
     margin: 0;
 }
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .tpmst-section-inner {
+        padding: 0 15px;
+    }
+}
 </style>
 
-<footer id="<?= $componentId ?>" class="tpmst-footer-simple-component">
-    <p class="tpmst-simple-footer-text"><?= htmlspecialchars($copyrightText) ?></p>
+<footer id="<?= $componentId ?>" class="tpmst-section tpmst-footer-simple-component">
+    <div class="tpmst-section-inner">
+        <p class="tpmst-simple-footer-text"><?= htmlspecialchars($copyrightText) ?></p>
+    </div>
 </footer>
 <!-- TPMST Simple Footer Component End: <?= $componentId ?> -->

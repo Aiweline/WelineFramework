@@ -80,9 +80,14 @@ class ResponseRedirectBefore implements ObserverInterface
                 if (!empty($path)) {
                     $path = ltrim($path, '/');
                     
-                    // 查找重写规则
+                    // 获取当前网站ID
+                    $websiteId = UrlRewrite::getCurrentWebsiteId();
+                    
+                    // 按 website_id 查找重写规则（不回退到 website_id=0）
                     $rewrite = $urlRewrite->reset()
-                        ->where('path', $path)
+                        ->clearQuery()
+                        ->where(UrlRewrite::fields_WEBSITE_ID, $websiteId)
+                        ->where(UrlRewrite::fields_PATH, $path)
                         ->find()
                         ->fetch();
                     

@@ -22,7 +22,12 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Source extends Model
 {
-    public const indexer = 'inventory_source';
+    public const table = 'weshop_inventory_source';
+    public const primary_key = 'source_id';
+    public const indexer = 'inventory_source_indexer';
+    public array $_unit_primary_keys = ['source_id'];
+    public array $_index_sort_keys = ['source_id', 'code', 'is_enabled', 'priority'];
+    
     public const fields_ID = 'source_id';
     public const fields_CODE = 'code';
     public const fields_NAME = 'name';
@@ -38,9 +43,6 @@ class Source extends Model
     public const fields_IS_ENABLED = 'is_enabled';
     public const fields_PRIORITY = 'priority';
     public const fields_USE_DEFAULT_CARRIER = 'use_default_carrier';
-
-    public array $_unit_primary_keys = ['source_id', 'code'];
-    public array $_index_sort_keys = ['source_id', 'code'];
 
     /**
      * @inheritDoc

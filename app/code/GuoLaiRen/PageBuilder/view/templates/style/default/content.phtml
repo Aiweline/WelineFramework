@@ -85,8 +85,10 @@ $page = $this->getData('page');
 $styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
 
 // 获取配置值
-function getContentConfig($settings, $key, $default = '') {
-    return $settings[$key] ?? $default;
+if (!function_exists('getContentConfig')) {
+    function getContentConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
 }
 
 // 布局配置

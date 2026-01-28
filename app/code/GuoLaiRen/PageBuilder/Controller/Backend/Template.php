@@ -662,6 +662,247 @@ class Template extends BackendController
     }
 
     /**
+     * 生成/刷新模板预览图片
+     * 
+     * 使用 Puppeteer/Chrome headless 或返回 URL 供前端截图
+     * 
+     * POST /pagebuilder/backend/template/generatePreview
+     * 
+     * 参数：
+     * - style_code: 模板代码（必填）
+     * - force: 是否强制刷新（可选，默认 false）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::template_management_generate_preview', '生成预览图', 'mdi mdi-image-plus', '生成或刷新模板预览图片')]
+    public function postGeneratePreview()
+    {
+        try {
+            $styleCode = $this->request->getPost('style_code');
+            $force = (bool)$this->request->getPost('force', false);
+            
+            if (empty($styleCode)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('模板代码不能为空')
+                ]);
+            }
+            
+            // 检查模板是否存在
+            $style = clone $this->styleModel;
+            $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            
+            if (!$style->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('模板不存在')
+                ]);
+            }
+            
+            // 预览图保存目录
+            $previewDir = BP . 'pub/static/pagebuilder/previews/';
+            if (!is_dir($previewDir)) {
+                mkdir($previewDir, 0755, true);
+            }
+            
+            // 预览图文件名（使用模板代码作为文件名）
+            $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $styleCode);
+            $previewFileName = $safeCode . '.png';
+            $previewFilePath = $previewDir . $previewFileName;
+            
+            // 检查是否已存在预览图且不强制刷新
+            if (!$force && file_exists($previewFilePath)) {
+                $previewUrl = '/static/pagebuilder/previews/' . $previewFileName . '?t=' . filemtime($previewFilePath);
+                
+                // 更新数据库中的预览图路径
+                $style->setData(Style::fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
+                $style->save();
+                
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('预览图已存在'),
+                    'preview_url' => $previewUrl,
+                    'exists' => true
+                ]);
+            }
+            
+            // 返回预览页面 URL，让前端使用 html2canvas 截图后上传
+            $previewPageUrl = $this->request->getUrlBuilder()->getBackendUrl(
+                'pagebuilder/backend/preview/stylePreview',
+                ['style_code' => $styleCode]
+            );
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('请在前端截图后上传'),
+                'preview_page_url' => $previewPageUrl,
+                'upload_url' => $this->request->getUrlBuilder()->getBackendUrl('pagebuilder/backend/template/uploadPreview'),
+                'style_code' => $styleCode,
+                'needs_capture' => true
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * 上传预览图片（由前端截图后调用）
+     * 
+     * POST /pagebuilder/backend/template/uploadPreview
+     * 
+     * 参数：
+     * - style_code: 模板代码（必填）
+     * - image_data: Base64 编码的图片数据（必填）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::template_management_upload_preview', '上传预览图', 'mdi mdi-upload', '上传模板预览图片')]
+    public function postUploadPreview()
+    {
+        try {
+            $styleCode = $this->request->getPost('style_code');
+            $imageData = $this->request->getPost('image_data');
+            
+            if (empty($styleCode)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('模板代码不能为空')
+                ]);
+            }
+            
+            if (empty($imageData)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('图片数据不能为空')
+                ]);
+            }
+            
+            // 检查模板是否存在
+            $style = clone $this->styleModel;
+            $style->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            
+            if (!$style->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('模板不存在')
+                ]);
+            }
+            
+            // 解析 Base64 图片数据
+            if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $matches)) {
+                $imageType = $matches[1];
+                $imageData = substr($imageData, strpos($imageData, ',') + 1);
+            } else {
+                $imageType = 'png';
+            }
+            
+            $imageData = base64_decode($imageData);
+            if ($imageData === false) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('图片数据解码失败')
+                ]);
+            }
+            
+            // 预览图保存目录
+            $previewDir = BP . 'pub/static/pagebuilder/previews/';
+            if (!is_dir($previewDir)) {
+                mkdir($previewDir, 0755, true);
+            }
+            
+            // 预览图文件名
+            $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $styleCode);
+            $previewFileName = $safeCode . '.' . $imageType;
+            $previewFilePath = $previewDir . $previewFileName;
+            
+            // 保存图片
+            if (file_put_contents($previewFilePath, $imageData) === false) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('图片保存失败')
+                ]);
+            }
+            
+            // 更新数据库中的预览图路径
+            $style->setData(Style::fields_PREVIEW_IMAGE, 'pagebuilder/previews/' . $previewFileName);
+            $style->save();
+            
+            $previewUrl = '/static/pagebuilder/previews/' . $previewFileName . '?t=' . time();
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('预览图上传成功'),
+                'preview_url' => $previewUrl
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * 批量生成所有模板的预览图
+     * 
+     * POST /pagebuilder/backend/template/generateAllPreviews
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::template_management_generate_all_previews', '批量生成预览', 'mdi mdi-image-multiple', '批量生成所有模板的预览图')]
+    public function postGenerateAllPreviews()
+    {
+        try {
+            $force = (bool)$this->request->getPost('force', false);
+            
+            // 获取所有模板
+            $styles = clone $this->styleModel;
+            $styleList = $styles->clear()
+                ->order(Style::fields_CODE, 'ASC')
+                ->select()
+                ->fetch()
+                ->getItems();
+            
+            $results = [];
+            foreach ($styleList as $style) {
+                $styleCode = $style->getData(Style::fields_CODE);
+                $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                
+                // 检查是否已有预览图
+                $hasPreview = false;
+                if ($previewImage) {
+                    $previewPath = BP . 'pub/static/' . $previewImage;
+                    $hasPreview = file_exists($previewPath);
+                }
+                
+                $results[] = [
+                    'code' => $styleCode,
+                    'name' => $style->getData(Style::fields_NAME),
+                    'has_preview' => $hasPreview,
+                    'needs_generate' => !$hasPreview || $force,
+                    'preview_page_url' => $this->request->getUrlBuilder()->getBackendUrl(
+                        'pagebuilder/backend/preview/stylePreview',
+                        ['style_code' => $styleCode]
+                    )
+                ];
+            }
+            
+            return $this->fetchJson([
+                'success' => true,
+                'data' => $results,
+                'upload_url' => $this->request->getUrlBuilder()->getBackendUrl('pagebuilder/backend/template/uploadPreview'),
+                'total' => count($results),
+                'needs_generate' => count(array_filter($results, fn($r) => $r['needs_generate']))
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * 一键读取所有文字配置项
      * 
      * 用于AI翻译功能，提取模板中所有 texts 分组的配置项

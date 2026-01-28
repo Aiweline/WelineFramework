@@ -23,7 +23,13 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Product extends EavModel
 {
-    public const indexer = 'product';
+    public const table = "weshop_product";
+    public const primary_key = "product_id";
+    public string $indexer = "product_indexer";
+    public array $_unit_primary_keys = ["product_id"];
+    public array $_index_sort_keys = ["product_id", "name", "sku", "stock", "cost", "price", "set_id"];
+
+    // 字段定义
     public const fields_ID = 'product_id';
     public const fields_name = 'name';
     public const fields_short_description = 'short_description';
@@ -555,10 +561,11 @@ class Product extends EavModel
     {
         parent::save_before();
         // 触发产品保存前事件
-        $this->getEventManager()->dispatch('WeShop_Product::product_save_before', [
+        $eventData = [
             'product' => $this,
             'is_new' => empty($this->getId())
-        ]);
+        ];
+        $this->getEventManager()->dispatch('WeShop_Product::product_save_before', $eventData);
     }
 
     /**
@@ -568,10 +575,11 @@ class Product extends EavModel
     {
         parent::save_after();
         // 触发产品保存后事件
-        $this->getEventManager()->dispatch('WeShop_Product::product_save_after', [
+        $eventData = [
             'product' => $this,
             'product_id' => $this->getId()
-        ]);
+        ];
+        $this->getEventManager()->dispatch('WeShop_Product::product_save_after', $eventData);
     }
 
     /**

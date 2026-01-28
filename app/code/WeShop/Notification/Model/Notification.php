@@ -15,6 +15,7 @@ class Notification extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_notification';
     public const primary_key = 'notification_id';
+    public string $indexer = 'notification_indexer';
     
     public const fields_ID = 'notification_id';
     public const fields_CUSTOMER_ID = 'customer_id';

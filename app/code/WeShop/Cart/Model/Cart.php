@@ -15,6 +15,7 @@ class Cart extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_cart';
     public const primary_key = 'cart_id';
+    public string $indexer = 'cart_indexer';
     
     public const fields_ID = 'cart_id';
     public const fields_CUSTOMER_ID = 'customer_id';

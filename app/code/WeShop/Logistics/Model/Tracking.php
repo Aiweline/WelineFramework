@@ -15,6 +15,9 @@ class Tracking extends \Weline\Framework\Database\Model
 {
     public const table = 'weshop_tracking';
     public const primary_key = 'tracking_id';
+    public string $indexer = 'tracking_indexer';
+    public array $_unit_primary_keys = ['tracking_id'];
+    public array $_index_sort_keys = ['order_id', 'tracking_number', 'carrier', 'status', 'tracked_at'];
     
     public const fields_ID = 'tracking_id';
     public const fields_order_id = 'order_id';
@@ -26,8 +29,6 @@ class Tracking extends \Weline\Framework\Database\Model
     public const fields_tracked_at = 'tracked_at';
     public const fields_created_at = 'created_at';
     public const fields_updated_at = 'updated_at';
-
-    public array $_unit_primary_keys = ['tracking_id'];
 
     public function setup(ModelSetup $setup, Context $context): void
     {

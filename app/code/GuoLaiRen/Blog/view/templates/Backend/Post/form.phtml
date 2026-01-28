@@ -100,12 +100,12 @@ $isEdit = $post && $post->getId();
                         <label for="content" class="form-label">
                             <?= __('文章内容') ?>
                         </label>
-                        <textarea class="form-control"
+                        <textarea class="form-control tinymce-editor"
                                   id="content"
                                   name="content"
                                   rows="15"
-                                  placeholder="<?= __('请输入文章内容（支持HTML）') ?>"><?= htmlspecialchars(($post ? ($post->getData('content') ?? '') : '')) ?></textarea>
-                        <div class="form-text"><?= __('支持HTML格式，可以使用富文本编辑器') ?></div>
+                                  placeholder="<?= __('请输入文章内容（支持富文本编辑和Markdown）') ?>"><?= htmlspecialchars(($post ? ($post->getData('content') ?? '') : '')) ?></textarea>
+                        <div class="form-text"><?= __('支持富文本编辑，所见即所得，支持Markdown语法') ?></div>
                     </div>
                 </div>
             </div>
@@ -473,6 +473,446 @@ document.getElementById('quickSiteForm')?.addEventListener('submit', async funct
         submitBtn.innerHTML = '<i class="mdi mdi-content-save"></i> <?= __("保存站点") ?>';
     }
 });
+</script>
+
+<!-- CKEditor 5 富文本编辑器 -->
+<script src="@static(GuoLaiRen_PageBuilder::libs/ckeditor5/ckeditor.js)"></script>
+<script src="@static(GuoLaiRen_PageBuilder::libs/ckeditor5/zh-cn.js)"></script>
+
+<style>
+/* CKEditor 5 后端主题兼容样式 */
+.ck-editor {
+    /* 使用后端主题的卡片背景色 */
+    background-color: var(--backend-color-bg-surface, #ffffff);
+    border-radius: var(--admin-border-radius, 0.5rem);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+
+.ck-editor__editable {
+    /* 编辑器内容区域背景 */
+    background-color: var(--backend-color-bg-surface, #ffffff) !important;
+    color: var(--backend-color-text-primary, #212529) !important;
+    min-height: 500px;
+}
+
+.ck-editor__editable:focus {
+    /* 聚焦时的边框颜色 */
+    border-color: var(--backend-color-primary, #556ee6) !important;
+    box-shadow: 0 0 0 0.2rem var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+}
+
+.ck-toolbar {
+    /* 工具栏背景 */
+    background-color: var(--backend-color-bg-secondary, #f8f9fa) !important;
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6) !important;
+    border-radius: var(--admin-border-radius, 0.5rem) var(--admin-border-radius, 0.5rem) 0 0 !important;
+}
+
+.ck-toolbar__separator {
+    background-color: var(--backend-color-border-default, #dee2e6) !important;
+}
+
+.ck-button {
+    color: var(--backend-color-text-primary, #212529) !important;
+}
+
+.ck-button:hover:not(.ck-disabled),
+.ck-button.ck-on {
+    background-color: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+    color: var(--backend-color-primary, #556ee6) !important;
+}
+
+.ck-button.ck-on {
+    border-color: var(--backend-color-primary, #556ee6) !important;
+}
+
+.ck-dropdown__panel {
+    background-color: var(--backend-color-bg-surface, #ffffff) !important;
+    border: 1px solid var(--backend-color-border-default, #dee2e6) !important;
+    box-shadow: var(--admin-shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1)) !important;
+}
+
+.ck-list__item {
+    color: var(--backend-color-text-primary, #212529) !important;
+}
+
+.ck-list__item:hover:not(.ck-disabled) {
+    background-color: var(--backend-color-bg-secondary, #f8f9fa) !important;
+}
+
+.ck-list__item.ck-on {
+    background-color: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
+    color: var(--backend-color-primary, #556ee6) !important;
+}
+
+/* 代码块样式 */
+.ck-content pre {
+    background-color: var(--backend-color-bg-secondary, #f8f9fa) !important;
+    border: 1px solid var(--backend-color-border-default, #dee2e6) !important;
+    color: var(--backend-color-text-primary, #212529) !important;
+}
+
+/* 表格样式 */
+.ck-content table {
+    border-color: var(--backend-color-border-default, #dee2e6) !important;
+}
+
+.ck-content table td,
+.ck-content table th {
+    border-color: var(--backend-color-border-default, #dee2e6) !important;
+}
+
+/* 引用块样式 */
+.ck-content blockquote {
+    border-left-color: var(--backend-color-primary, #556ee6) !important;
+    background-color: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.05)) !important;
+    color: var(--backend-color-text-secondary, #6c757d) !important;
+}
+
+/* 链接样式 */
+.ck-content a {
+    color: var(--backend-color-primary, #556ee6) !important;
+}
+
+.ck-content a:hover {
+    color: var(--backend-color-primary-hover, #4857d4) !important;
+}
+
+/* 占位符样式 */
+.ck-editor__editable[data-placeholder]::before {
+    color: var(--backend-color-text-placeholder, #adb5bd) !important;
+}
+
+/* 暗色主题兼容 - 使用多种选择器匹配后端主题的暗色模式 */
+[data-theme="dark"] .ck-editor,
+[data-theme-mode="dark"] .ck-editor,
+[data-layout-mode="dark"] .ck-editor,
+[data-sidebar="dark"] .ck-editor,
+[data-topbar="dark"] .ck-editor,
+[data-bs-theme="dark"] .ck-editor,
+.dark-mode .ck-editor,
+.theme-dark .ck-editor,
+body.dark-mode .ck-editor,
+body.theme-dark .ck-editor,
+.ck-editor-dark {
+    background-color: var(--backend-color-bg-dark-secondary, #343a40) !important;
+    border-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+
+[data-theme="dark"] .ck-editor__editable,
+[data-theme-mode="dark"] .ck-editor__editable,
+[data-layout-mode="dark"] .ck-editor__editable,
+[data-sidebar="dark"] .ck-editor__editable,
+[data-topbar="dark"] .ck-editor__editable,
+[data-bs-theme="dark"] .ck-editor__editable,
+.dark-mode .ck-editor__editable,
+.theme-dark .ck-editor__editable,
+body.dark-mode .ck-editor__editable,
+body.theme-dark .ck-editor__editable,
+.ck-editor-dark .ck-editor__editable {
+    background-color: var(--backend-color-bg-dark-secondary, #343a40) !important;
+    color: var(--backend-color-text-light, #f8f9fa) !important;
+}
+
+[data-theme="dark"] .ck-toolbar,
+[data-theme-mode="dark"] .ck-toolbar,
+[data-layout-mode="dark"] .ck-toolbar,
+[data-sidebar="dark"] .ck-toolbar,
+[data-topbar="dark"] .ck-toolbar,
+[data-bs-theme="dark"] .ck-toolbar,
+.dark-mode .ck-toolbar,
+.theme-dark .ck-toolbar,
+body.dark-mode .ck-toolbar,
+body.theme-dark .ck-toolbar,
+.ck-editor-dark .ck-toolbar {
+    background-color: var(--backend-color-bg-dark-tertiary, #495057) !important;
+    border-bottom-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+
+[data-theme="dark"] .ck-button,
+[data-theme-mode="dark"] .ck-button,
+[data-layout-mode="dark"] .ck-button,
+[data-sidebar="dark"] .ck-button,
+[data-topbar="dark"] .ck-button,
+[data-bs-theme="dark"] .ck-button,
+.dark-mode .ck-button,
+.theme-dark .ck-button,
+body.dark-mode .ck-button,
+body.theme-dark .ck-button,
+.ck-editor-dark .ck-button {
+    color: var(--backend-color-text-light, #f8f9fa) !important;
+}
+
+[data-theme="dark"] .ck-button:hover:not(.ck-disabled),
+[data-theme-mode="dark"] .ck-button:hover:not(.ck-disabled),
+.dark-mode .ck-button:hover:not(.ck-disabled),
+.ck-editor-dark .ck-button:hover:not(.ck-disabled) {
+    background-color: var(--backend-color-primary-bg-light, rgba(85, 110, 230, 0.2)) !important;
+    color: var(--backend-color-primary-light, #6c7ce8) !important;
+}
+
+[data-theme="dark"] .ck-dropdown__panel,
+[data-theme-mode="dark"] .ck-dropdown__panel,
+[data-layout-mode="dark"] .ck-dropdown__panel,
+[data-sidebar="dark"] .ck-dropdown__panel,
+[data-topbar="dark"] .ck-dropdown__panel,
+[data-bs-theme="dark"] .ck-dropdown__panel,
+.dark-mode .ck-dropdown__panel,
+.theme-dark .ck-dropdown__panel,
+body.dark-mode .ck-dropdown__panel,
+body.theme-dark .ck-dropdown__panel,
+.ck-editor-dark .ck-dropdown__panel {
+    background-color: var(--backend-color-bg-dark-secondary, #343a40) !important;
+    border-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+
+[data-theme="dark"] .ck-list__item,
+[data-theme-mode="dark"] .ck-list__item,
+.dark-mode .ck-list__item,
+.ck-editor-dark .ck-list__item {
+    color: var(--backend-color-text-light, #f8f9fa) !important;
+}
+
+[data-theme="dark"] .ck-list__item:hover:not(.ck-disabled),
+[data-theme-mode="dark"] .ck-list__item:hover:not(.ck-disabled),
+.dark-mode .ck-list__item:hover:not(.ck-disabled),
+.ck-editor-dark .ck-list__item:hover:not(.ck-disabled) {
+    background-color: var(--backend-color-bg-dark-tertiary, #495057) !important;
+}
+
+[data-theme="dark"] .ck-content pre,
+[data-theme-mode="dark"] .ck-content pre,
+.dark-mode .ck-content pre,
+.ck-editor-dark .ck-content pre {
+    background-color: var(--backend-color-bg-dark-tertiary, #495057) !important;
+    border-color: var(--backend-color-border-dark, #6c757d) !important;
+    color: var(--backend-color-text-light, #f8f9fa) !important;
+}
+
+[data-theme="dark"] .ck-content table,
+[data-theme-mode="dark"] .ck-content table,
+.dark-mode .ck-content table,
+.ck-editor-dark .ck-content table {
+    border-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+
+[data-theme="dark"] .ck-content table td,
+[data-theme="dark"] .ck-content table th,
+[data-theme-mode="dark"] .ck-content table td,
+[data-theme-mode="dark"] .ck-content table th,
+.dark-mode .ck-content table td,
+.dark-mode .ck-content table th,
+.ck-editor-dark .ck-content table td,
+.ck-editor-dark .ck-content table th {
+    border-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+
+[data-theme="dark"] .ck-content blockquote,
+[data-theme-mode="dark"] .ck-content blockquote,
+.dark-mode .ck-content blockquote,
+.ck-editor-dark .ck-content blockquote {
+    border-left-color: var(--backend-color-primary-light, #6c7ce8) !important;
+    background-color: var(--backend-color-primary-bg-light, rgba(85, 110, 230, 0.15)) !important;
+    color: var(--backend-color-text-light-secondary, #dee2e6) !important;
+}
+
+[data-theme="dark"] .ck-toolbar__separator,
+[data-theme-mode="dark"] .ck-toolbar__separator,
+.dark-mode .ck-toolbar__separator,
+.ck-editor-dark .ck-toolbar__separator {
+    background-color: var(--backend-color-border-dark, #6c757d) !important;
+}
+</style>
+
+<script>
+// 检测后端主题是否为暗色模式
+function isDarkMode() {
+    const body = document.body;
+    const html = document.documentElement;
+    
+    // 检查多种可能的主题标识方式
+    return (
+        body.getAttribute('data-theme-mode') === 'dark' ||
+        body.getAttribute('data-layout-mode') === 'dark' ||
+        body.getAttribute('data-sidebar') === 'dark' ||
+        body.getAttribute('data-topbar') === 'dark' ||
+        body.classList.contains('dark-mode') ||
+        body.classList.contains('theme-dark') ||
+        html.getAttribute('data-theme') === 'dark' ||
+        html.getAttribute('data-bs-theme') === 'dark'
+    );
+}
+
+// CKEditor 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 存储编辑器实例
+    window.blogContentEditor = null;
+    
+    // 检测当前主题模式
+    const darkMode = isDarkMode();
+    
+    // 初始化文章内容编辑器
+    const contentTextarea = document.getElementById('content');
+    if (contentTextarea && typeof ClassicEditor !== 'undefined') {
+        ClassicEditor
+            .create(contentTextarea, {
+                language: 'zh-cn',
+                // 根据主题模式设置 UI 主题
+                ui: {
+                    viewportOffset: {
+                        top: 0
+                    }
+                },
+                // 暗色模式配置
+                ...(darkMode ? {
+                    // CKEditor 5 暗色模式配置
+                    // 注意：CKEditor 5 的暗色模式需要通过 CSS 变量或自定义样式实现
+                    // 这里我们通过 CSS 变量和样式来实现
+                } : {}),
+                minHeight: '500px',
+                toolbar: [
+                    'heading', '|',
+                    'bold', 'italic', 'underline', 'strikethrough', '|',
+                    'link', 'blockQuote', 'code', 'codeBlock', '|',
+                    'bulletedList', 'numberedList', 'todoList', '|',
+                    'outdent', 'indent', '|',
+                    'insertTable', 'mediaEmbed', '|',
+                    'imageUpload', '|',
+                    'horizontalLine', '|',
+                    'undo', 'redo', '|',
+                    'sourceEditing', '|',
+                    'removeFormat'
+                ],
+                heading: {
+                    options: [
+                        { model: 'paragraph', title: '段落', class: 'ck-heading_paragraph' },
+                        { model: 'heading1', view: 'h1', title: '标题 1', class: 'ck-heading_heading1' },
+                        { model: 'heading2', view: 'h2', title: '标题 2', class: 'ck-heading_heading2' },
+                        { model: 'heading3', view: 'h3', title: '标题 3', class: 'ck-heading_heading3' },
+                        { model: 'heading4', view: 'h4', title: '标题 4', class: 'ck-heading_heading4' }
+                    ]
+                },
+                image: {
+                    toolbar: [
+                        'imageTextAlternative', 'imageStyle:inline', 'imageStyle:block', 'imageStyle:side'
+                    ]
+                },
+                table: {
+                    contentToolbar: [
+                        'tableColumn', 'tableRow', 'mergeTableCells'
+                    ]
+                },
+                codeBlock: {
+                    languages: [
+                        { language: 'plaintext', label: '纯文本' },
+                        { language: 'css', label: 'CSS' },
+                        { language: 'html', label: 'HTML' },
+                        { language: 'javascript', label: 'JavaScript' },
+                        { language: 'php', label: 'PHP' },
+                        { language: 'python', label: 'Python' },
+                        { language: 'java', label: 'Java' },
+                        { language: 'json', label: 'JSON' },
+                        { language: 'markdown', label: 'Markdown' },
+                        { language: 'sql', label: 'SQL' },
+                        { language: 'xml', label: 'XML' }
+                    ]
+                },
+                link: {
+                    decorators: {
+                        openInNewTab: {
+                            mode: 'manual',
+                            label: '在新标签页打开',
+                            attributes: {
+                                target: '_blank',
+                                rel: 'noopener noreferrer'
+                            }
+                        }
+                    }
+                }
+            })
+            .then(editor => {
+                // 保存编辑器实例
+                window.blogContentEditor = editor;
+                
+                // 设置编辑器最小高度
+                const editableElement = editor.ui.view.editable.element;
+                if (editableElement) {
+                    editableElement.style.minHeight = '500px';
+                }
+                
+                // 应用暗色模式样式
+                if (darkMode) {
+                    applyDarkModeStyles(editor);
+                }
+                
+                console.log('博客内容编辑器初始化成功', darkMode ? '(暗色模式)' : '(亮色模式)');
+            })
+            .catch(error => {
+                console.error('博客内容编辑器初始化失败:', error);
+            });
+    } else if (contentTextarea) {
+        console.warn('CKEditor 未加载，使用普通文本域');
+    }
+    
+    // 监听主题切换（如果后端主题支持动态切换）
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && 
+                (mutation.attributeName === 'data-theme-mode' || 
+                 mutation.attributeName === 'data-layout-mode' ||
+                 mutation.attributeName === 'data-theme' ||
+                 mutation.attributeName === 'data-bs-theme' ||
+                 mutation.attributeName === 'class')) {
+                const newDarkMode = isDarkMode();
+                if (window.blogContentEditor && newDarkMode !== darkMode) {
+                    // 主题切换了，重新应用样式
+                    if (newDarkMode) {
+                        applyDarkModeStyles(window.blogContentEditor);
+                    } else {
+                        removeDarkModeStyles(window.blogContentEditor);
+                    }
+                }
+            }
+        });
+    });
+    
+    // 监听 body 和 html 的属性变化
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-theme-mode', 'data-layout-mode', 'data-sidebar', 'data-topbar', 'class']
+    });
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme', 'data-bs-theme', 'class']
+    });
+    
+    // 表单提交前，确保编辑器内容同步到 textarea
+    const form = document.querySelector('form.needs-validation');
+    if (form && window.blogContentEditor) {
+        form.addEventListener('submit', function(e) {
+            // CKEditor 会自动同步内容到 textarea，但为了确保，我们手动同步一次
+            if (window.blogContentEditor) {
+                window.blogContentEditor.updateSourceElement();
+            }
+        });
+    }
+});
+
+// 应用暗色模式样式
+function applyDarkModeStyles(editor) {
+    const editorElement = editor.ui.getEditableElement().closest('.ck-editor');
+    if (editorElement) {
+        editorElement.classList.add('ck-editor-dark');
+    }
+}
+
+// 移除暗色模式样式
+function removeDarkModeStyles(editor) {
+    const editorElement = editor.ui.getEditableElement().closest('.ck-editor');
+    if (editorElement) {
+        editorElement.classList.remove('ck-editor-dark');
+    }
+}
 </script>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

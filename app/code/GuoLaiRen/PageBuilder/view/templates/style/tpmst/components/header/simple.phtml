@@ -50,17 +50,31 @@ $justify = $justifyMap[$logoPosition] ?? 'center';
 ?>
 <!-- TPMST Simple Header Component Start: <?= $componentId ?> -->
 <style>
-#<?= $componentId ?> {
-    background: <?= htmlspecialchars($bgColor) ?>;
-    padding: <?= $padding ?>px;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-#<?= $componentId ?> .tpmst-simple-header-container {
+body {
+    font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", sans-serif;
+    line-height: 1.6;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    padding: <?= $padding ?>px 0;
+    width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-section-inner {
     max-width: 1400px;
     margin: 0 auto;
     display: flex;
     justify-content: <?= $justify ?>;
     align-items: center;
+    padding: 0 20px;
 }
 
 #<?= $componentId ?> .tpmst-simple-header-logo img {
@@ -70,8 +84,8 @@ $justify = $justifyMap[$logoPosition] ?? 'center';
 }
 </style>
 
-<header id="<?= $componentId ?>" class="tpmst-header-simple-component">
-    <div class="tpmst-simple-header-container">
+<header id="<?= $componentId ?>" class="tpmst-section tpmst-header-simple-component">
+    <div class="tpmst-section-inner">
         <?php if ($logoDisplay && $logoUrl): ?>
         <div class="tpmst-simple-header-logo">
             <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo">

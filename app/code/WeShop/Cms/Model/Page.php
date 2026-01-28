@@ -18,6 +18,7 @@ class Page extends Model
 {
     public const table = 'weshop_cms_page';
     public const primary_key = 'page_id';
+    public string $indexer = 'cms_page_indexer';
     
     // 字段定义
     public const fields_ID = 'page_id';

@@ -45,8 +45,9 @@ class ExchangeRateImport implements CronTaskInterface
         // 创建API实例
         $apiKey = $this->config->getImportApiKey();
         $api = ObjectManager::getInstance(ExchangeRateApi::class, ['apiKey' => $apiKey]);
-        
-        $this->importService = ObjectManager::getInstance(CurrencyImportService::class, ['api' => $api]);
+
+        // 直接手动构造导入服务，避免通过接口类型自动注入导致的工厂缺失问题
+        $this->importService = new CurrencyImportService($api);
     }
 
     /**

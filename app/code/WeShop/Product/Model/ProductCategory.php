@@ -3,16 +3,20 @@
 namespace WeShop\Product\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 class ProductCategory extends Model
 {
+    public const table = "weshop_product_category";
+    public const primary_key = "product_category_id";
     public string $indexer = "product_category_indexer";
     public const fields_ID = "product_category_id";
     public const fields_product_id = "product_id";
     public const fields_category_id = "category_id";
+
+    public array $_unit_primary_keys = ["product_category_id"];
+    public array $_index_sort_keys = ["product_id", "category_id"];
 
     /**
      * @inheritDoc

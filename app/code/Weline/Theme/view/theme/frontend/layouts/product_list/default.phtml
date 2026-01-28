@@ -1,67 +1,400 @@
-<!--
-布局：产品页 - 列表页布局
-
-产品列表页布局，包含筛选、排序、产品网格等
-字段
-@meta.name {default="产品列表页布局",name="产品列表页布局",description="产品列表页布局，用于描述布局的名称"}
-@meta.description {default="产品列表页布局，包含筛选、排序、产品网格等",name="产品列表页布局，包含筛选、排序、产品网格等",description="产品列表页布局，包含筛选、排序、产品网格等，用于描述布局的用途"}
-@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
-@param title {default="产品列表",name="页面标题",description="页面标题，用于设置页面标题"}
-@param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
-@param filters {default="",name="筛选器内容（HTML字符串）",description="筛选器内容（HTML字符串），用于设置筛选器区域"}
-@param toolbar {default="",name="工具栏（排序、视图切换等）",description="工具栏（排序、视图切换等），用于设置工具栏内容"}
-@param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
--->
 <?php
-$title = $this->getData('title') ?? __('产品列表');
-$content = $this->getData('content') ?? '';
-$filters = $this->getData('filters') ?? '';
-$toolbar = $this->getData('toolbar') ?? '';
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-$this->assign('title', $title);
+/**
+ * 布局：产品页 - 列表页布局
+ *
+ * 产品列表页布局，包含筛选、排序、产品网格等区域
+ * 支持 widget slot 系统，允许通过后台可视化编辑器配置各个区域的部件
+ * 
+ * 字段
+ * @meta.name {default="产品列表页布局",name="产品列表页布局",description="产品列表页布局，用于描述布局的名称"}
+ * @meta.description {default="产品列表页布局，包含筛选、排序、产品网格等",name="产品列表页布局描述",description="产品列表页布局，包含筛选、排序、产品网格等，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
+ * @param title {default="产品列表",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
+ * @param showFilters {default=true,name="是否显示筛选器",description="是否显示左侧筛选器"}
+ * @param showToolbar {default=true,name="是否显示工具栏",description="是否显示排序/视图切换工具栏"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏（筛选器）"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+$colors = $this->getData('colors') ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product_list::head-after</w:hook>
 </head>
 <body>
-    @template(Weline_Frontend::templates/public/header.phtml)
-
-    <!-- 产品列表页布局的面包屑导航区域 -->
-    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-    <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-after</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::product_list::body-start</w:hook>
     
-    <main class="product-list-main <?= htmlspecialchars($class ?? '') ?>" id="product-list-main" data-layout="product_list">
-        <div class="product-list-container">
-            <?php if ($filters): ?>
-                <aside class="product-list-filters">
-                    {{filters}}
-                </aside>
-            <?php endif; ?>
+    <div class="weline-page-wrapper">
+        <!-- ========== HEADER 区域（使用 partials，内部已配置 widget slot） ========== -->
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product_list::header-before</w:hook>
             
-            <div class="product-list-content">
-                <?php if ($toolbar): ?>
-                    <div class="product-list-toolbar">
-                        {{toolbar}}
+            <!-- Header 通过 Partials Block 加载，slot 已在 partials/header/default.phtml 中配置 -->
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::product_list::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <!-- 面包屑导航区域 -->
+        <if condition="meta.showBreadcrumb">
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::product_list::breadcrumb-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+        </if>
+        
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product_list::content-before</w:hook>
+            
+            <!-- ========== 产品列表页主体区域 ========== -->
+            <main class="product-list-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product_list">
+                <div class="container">
+                    <div class="product-list-wrapper">
+                        <!-- ========== 筛选器侧边栏区域 ========== -->
+                        <if condition="meta.showFilters">
+                            <aside class="product-list-filters"
+                                   data-wslot="list-filters"
+                                   data-wslot-name="筛选器区域"
+                                   data-wslot-accept="attribute-filter,price-filter,category-filter,rating-filter"
+                                   data-wslot-multiple="true">
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::filters-before</w:hook>
+                                <div class="slot-placeholder" data-placeholder="list-filters">
+                                    <span class="placeholder-icon">🔍</span>
+                                    <span class="placeholder-text">筛选器区域 - 拖拽筛选部件到此处</span>
+                                </div>
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::filters-after</w:hook>
+                            </aside>
+                        </if>
+                        
+                        <!-- ========== 产品列表主内容区域 ========== -->
+                        <div class="product-list-content">
+                            <!-- ========== 工具栏区域 ========== -->
+                            <if condition="meta.showToolbar">
+                                <div class="product-list-toolbar"
+                                     data-wslot="list-toolbar"
+                                     data-wslot-name="工具栏区域"
+                                     data-wslot-accept="sort-options,view-switcher,page-size-selector,active-filters"
+                                     data-wslot-multiple="true">
+                                    <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-before</w:hook>
+                                    <w:hook>WeShop_Product::frontend::layouts::product_list::toolbar-content<else/>
+                                        <div class="slot-placeholder" data-placeholder="list-toolbar">
+                                            <span class="placeholder-icon">⚙️</span>
+                                            <span class="placeholder-text">工具栏区域 - 拖拽排序/视图部件到此处</span>
+                                        </div>
+                                    </w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-after</w:hook>
+                                </div>
+                            </if>
+                            
+                            <!-- ========== 产品网格区域 ========== -->
+                            <div class="product-list-grid"
+                                 data-wslot="list-grid"
+                                 data-wslot-name="产品网格区域"
+                                 data-wslot-accept="product-grid,product-list-view"
+                                 data-wslot-exclusive="true">
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::grid-before</w:hook>
+                                <w:hook>WeShop_Product::frontend::layouts::product_list::grid-content<else/>
+                                    <if condition="meta.content">
+                                        {{meta.content}}
+                                    <else/>
+                                        <div class="slot-placeholder" data-placeholder="list-grid">
+                                            <span class="placeholder-icon">📦</span>
+                                            <span class="placeholder-text">产品网格区域 - 控制器渲染产品列表</span>
+                                        </div>
+                                    </if>
+                                </w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::grid-after</w:hook>
+                            </div>
+                            
+                            <!-- ========== 分页区域 ========== -->
+                            <div class="product-list-pagination"
+                                 data-wslot="list-pagination"
+                                 data-wslot-name="分页区域"
+                                 data-wslot-accept="pagination,load-more"
+                                 data-wslot-exclusive="true">
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-before</w:hook>
+                                <w:hook>WeShop_Product::frontend::layouts::product_list::pagination-content<else/>
+                                    <div class="slot-placeholder" data-placeholder="list-pagination">
+                                        <span class="placeholder-icon">📄</span>
+                                        <span class="placeholder-text">分页区域 - 控制器渲染分页组件</span>
+                                    </div>
+                                </w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-after</w:hook>
+                            </div>
+                        </div>
                     </div>
-                <?php endif; ?>
-                
-                <div class="product-list-grid">
-                    {{content}}
                 </div>
-            </div>
+            </main>
+            
+            <!-- ========== 推荐产品区域 ========== -->
+            <section class="product-list-recommendations"
+                     data-wslot="list-recommendations"
+                     data-wslot-name="推荐产品区域"
+                     data-wslot-accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
+                     data-wslot-multiple="true">
+                <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-before</w:hook>
+                <div class="container">
+                    <div class="slot-placeholder" data-placeholder="list-recommendations">
+                        <span class="placeholder-icon">🛍️</span>
+                        <span class="placeholder-text">推荐产品区域 - 拖拽推荐部件到此处</span>
+                    </div>
+                </div>
+                <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-after</w:hook>
+            </section>
+            
+            <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
-    </main>
+        
+        <!-- ========== FOOTER 区域（使用 partials，内部已配置 widget slot） ========== -->
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::product_list::footer-before</w:hook>
+            
+            <!-- Footer 通过 Partials Block 加载，slot 已在 partials/footer/default.phtml 中配置 -->
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::product_list::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
     
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::product_list::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <style>
+    /* ========================================
+       产品列表页布局样式
+       ======================================== */
+    .product-list-main {
+        padding: 2rem 0;
+    }
+    
+    .product-list-wrapper {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .product-list-filters {
+        width: 250px;
+        flex-shrink: 0;
+    }
+    
+    .product-list-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .product-list-toolbar {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: var(--color-bg-secondary, #f8f9fa);
+        border-radius: 8px;
+    }
+    
+    .product-list-grid {
+        margin-bottom: 2rem;
+    }
+    
+    .product-list-pagination {
+        display: flex;
+        justify-content: center;
+        padding: 1rem 0;
+    }
+    
+    .product-list-recommendations {
+        padding: 2rem 0;
+        background: var(--color-bg-secondary, #f8f9fa);
+    }
+    
+    /* 插槽占位符 */
+    .slot-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        margin: 10px 0;
+        text-align: center;
+        color: #6c757d;
+    }
+    
+    .slot-placeholder .placeholder-icon {
+        font-size: 32px;
+        margin-bottom: 10px;
+    }
+    
+    .slot-placeholder .placeholder-text {
+        font-size: 14px;
+    }
+    
+    /* 编辑模式下的插槽样式 */
+    body.editor-mode [data-wslot] {
+        outline: 2px dashed transparent;
+        outline-offset: -2px;
+        transition: outline 0.3s ease, background-color 0.3s ease;
+        position: relative;
+    }
+    
+    body.editor-mode [data-wslot]:hover {
+        outline-color: #6366f1;
+        background-color: rgba(99, 102, 241, 0.05);
+    }
+    
+    body.editor-mode [data-wslot].drag-over {
+        outline-color: #10b981;
+        outline-style: solid;
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+    
+    body.editor-mode [data-wslot]::before {
+        content: attr(data-wslot-name);
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 100;
+        pointer-events: none;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+    }
+    
+    body.editor-mode [data-wslot]:hover::before,
+    body.editor-mode [data-wslot].drag-over::before {
+        opacity: 1;
+    }
+    
+    body.editor-mode .slot-placeholder {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    body.editor-mode .slot-placeholder:hover {
+        border-color: #007bff;
+        background: linear-gradient(135deg, #e7f1ff 0%, #cce5ff 100%);
+        color: #0056b3;
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 992px) {
+        .product-list-wrapper {
+            flex-direction: column;
+        }
+        
+        .product-list-filters {
+            width: 100%;
+            order: -1;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .product-list-main {
+            padding: 1rem 0;
+        }
+        
+        .product-list-toolbar {
+            padding: 0.75rem;
+        }
+        
+        .product-list-recommendations {
+            padding: 1.5rem 0;
+        }
+    }
+    </style>
+    
+    <!-- 编辑模式脚本 -->
+    <?php if ($this->getData('editor_mode')): ?>
+    <script>
+    (function() {
+        document.body.classList.add('editor-mode');
+        
+        document.querySelectorAll('[data-wslot]').forEach(slot => {
+            slot.addEventListener('click', function(e) {
+                e.stopPropagation();
+                
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                    multiple: this.dataset.wslotMultiple === 'true',
+                    exclusive: this.dataset.wslotExclusive === 'true'
+                };
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({ type: 'slot-selected', slot: slotData }, '*');
+                }
+                
+                document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
+                this.classList.add('slot-active');
+            });
+            
+            slot.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('drag-over');
+            });
+            
+            slot.addEventListener('dragleave', function(e) {
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('drag-over');
+                }
+            });
+            
+            slot.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                let widgetData;
+                try {
+                    const jsonData = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                    if (jsonData) widgetData = JSON.parse(jsonData);
+                } catch (err) { return; }
+                
+                if (!widgetData) return;
+                
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : []
+                };
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({ type: 'widget-dropped', widget: widgetData, slot: slotData }, '*');
+                }
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
 </body>
 </html>
-

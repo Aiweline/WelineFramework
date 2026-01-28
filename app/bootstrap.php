@@ -244,11 +244,11 @@ try {
 <body>
     <div class="error-container">
         <div class="error-title">🚨 应用启动失败</div>
-        <div class="error-message">' . htmlspecialchars($exception->getMessage()) . '</div>
+        <div class="error-message">' . htmlspecialchars($exception->getMessage()??'') . '</div>
         
         <div style="margin: 20px 0;">
             <strong style="color: #569cd6;">错误位置：</strong>
-            <div class="file-path">' . htmlspecialchars($exception->getFile()) . '</div>
+            <div class="file-path">' . htmlspecialchars($exception->getFile()??'') . '</div>
             <div class="line-number">第 ' . $exception->getLine() . ' 行</div>
         </div>
         
@@ -284,7 +284,7 @@ try {
                 $lineClass = 'style="background: #2d4a2d; padding: 5px; border-radius: 3px; border-left: 3px solid #4caf50;"';
             }
             
-            echo '<div class="stack-line ' . $lineClass . '" ' . ($isUserCode ? $lineClass : '') . '>' . htmlspecialchars($line) . '</div>';
+            echo '<div class="stack-line ' . $lineClass . '" ' . ($isUserCode ? $lineClass : '') . '>' . htmlspecialchars($line??'') . '</div>';
         }
         
         echo '</div></div>';
@@ -292,7 +292,7 @@ try {
         if (DEBUG) {
             echo '<div class="debug-info">
                 <strong style="color: #569cd6;">DEBUG 详细信息：</strong>
-                <pre style="margin: 10px 0; overflow-x: auto;">' . htmlspecialchars(print_r(debug_backtrace(), true)) . '</pre>
+                <pre style="margin: 10px 0; overflow-x: auto;">' . htmlspecialchars(print_r(debug_backtrace()??[], true)) . '</pre>
             </div>';
         }
         
