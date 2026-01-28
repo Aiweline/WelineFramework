@@ -185,17 +185,17 @@ class FieldBackupService
             
             // 查询备份数据
             $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
-            $collection = $backupModel->getCollection();
-            $collection->addFieldToFilter('module', $moduleName);
-            $collection->addFieldToFilter('table_name', $tableName);
-            $collection->addFieldToFilter('field_name', $fieldName);
-            $collection->addFieldToFilter('restored', 0);
+            $backupModel->reset()
+                ->where('module', $moduleName)
+                ->where('table_name', $tableName)
+                ->where('field_name', $fieldName)
+                ->where('restored', 0);
             
             if ($version !== null) {
-                $collection->addFieldToFilter('version', $version);
+                $backupModel->where('version', $version);
             }
             
-            $backups = $collection->getItems();
+            $backups = $backupModel->select()->fetchArray();
             
             if (empty($backups)) {
                 $this->printing->debug(__('字段 %{1}.%{2} 没有可恢复的备份数据', [$tableName, $fieldName]));
@@ -206,9 +206,11 @@ class FieldBackupService
             $restoredCount = 0;
             $conflictCount = 0;
             foreach ($backups as $backup) {
-                $primaryKey = $backup->getData('primary_key');
-                $primaryValue = $backup->getData('primary_value');
-                $fieldValueJson = $backup->getData('field_value');
+                $backupId = $backup['backup_id'] ?? null;
+                $primaryKey = $backup['primary_key'] ?? '';
+                $primaryValue = $backup['primary_value'] ?? '';
+                $fieldValueJson = $backup['field_value'] ?? null;
+                $backupVersion = $backup['version'] ?? '';
                 
                 // 解析字段值
                 $fieldValue = null;
@@ -246,7 +248,7 @@ class FieldBackupService
                                 ? json_encode($currentValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                                 : null
                         )
-                        ->setData('version', $version ?? ($backup->getData('version') ?: ''))
+                        ->setData('version', $version ?? ($backupVersion ?: ''))
                         ->setData('note', '当前记录已存在非空值，跳过备份数据覆盖')
                         ->save();
 
@@ -264,9 +266,13 @@ class FieldBackupService
                     ->fetchArray();
 
                 // 标记为已恢复
-                $backup->setData('restored', 1)
-                    ->setData('restore_time', date('Y-m-d H:i:s'))
-                    ->save();
+                if ($backupId !== null) {
+                    $updateBackupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Db\Model\FieldBackup::class);
+                    $updateBackupModel->load($backupId)
+                        ->setData('restored', 1)
+                        ->setData('restore_time', date('Y-m-d H:i:s'))
+                        ->save();
+                }
 
                 $restoredCount++;
             }
