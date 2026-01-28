@@ -43,7 +43,10 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     public static function getDomainKey(Request|RequestAbstract|null $request = null): string
     {
         if ($request === null) {
-            $request = ObjectManager::getInstance(Request::class);
+            // 避免创建 Request 实例时触发循环，直接从 $_SERVER 获取
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $website_code = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
+            return $website_code ?: $host;
         }
         $host = $request->getServer('HTTP_HOST') ?? '';
         $website_code = $request->getServer('WELINE_WEBSITE_CODE') ?? '';
@@ -155,9 +158,11 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
         // 获取完整URI（包含协议、域名、端口、路径、查询参数等所有信息）
         // WELINE_FULL_REQUEST_URI 在 App.php 中保存，包含完整的URL信息
         if ($request === null) {
-            $request = ObjectManager::getInstance(Request::class);
+            // 避免创建 Request 实例时触发循环，直接从 $_SERVER 获取
+            $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '/';
+        } else {
+            $fullUri = $request->getServer('WELINE_FULL_REQUEST_URI') ?? '/';
         }
-        $fullUri = $request->getServer('WELINE_FULL_REQUEST_URI') ?? '/';
         
         // 直接使用 WELINE_FULL_REQUEST_URI 构建缓存键，包含所有信息（域名、端口、查询参数等）
         // 格式：unified_request_cache_{full_uri}_{method}
