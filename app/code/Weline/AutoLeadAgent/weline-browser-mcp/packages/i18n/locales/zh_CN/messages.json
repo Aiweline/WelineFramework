@@ -1,0 +1,606 @@
+{
+  "app_metadata_description": {
+    "description": "Extension description",
+    "message": "AI驱动的智能寻客助手！支持本地离线AI推理或云端API，自动寻找潜在客户、提取数据、填写表单。完全自主可控，数据隐私有保障。"
+  },
+  "app_metadata_name": {
+    "description": "Extension name",
+    "message": "AutoLeadAgent 智能寻客助手"
+  },
+  "errors_unknown": {
+    "message": "发生未知错误"
+  },
+  "errors_conn_serviceWorker": {
+    "message": "无法连接到服务工作线程"
+  },
+  "errors_cmd_unknown": {
+    "message": "不支持的命令: $COMMAND$。\n\n可用命令: /state, /nohighlight, /replay <historySessionId>",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/unknown"
+      }
+    }
+  },
+  "nav_newChat_a11y": {
+    "message": "新建对话"
+  },
+  "nav_loadHistory_a11y": {
+    "message": "加载历史"
+  },
+  "nav_settings_a11y": {
+    "message": "设置"
+  },
+  "nav_back": {
+    "message": "← 返回"
+  },
+  "nav_back_a11y": {
+    "message": "返回对话"
+  },
+  "welcome_title": {
+    "message": "欢迎使用 AutoLeadAgent!"
+  },
+  "welcome_instruction": {
+    "message": "开始使用前，请在设置页面配置您的API密钥。"
+  },
+  "welcome_openSettings": {
+    "message": "打开设置"
+  },
+  "welcome_quickStart": {
+    "message": "快速入门指南"
+  },
+  "welcome_joinCommunity": {
+    "message": "加入我们的社区"
+  },
+  "status_checkingConfig": {
+    "message": "正在检查配置..."
+  },
+  "chat_buttons_stop": {
+    "message": "停止"
+  },
+  "chat_buttons_replay": {
+    "message": "重放"
+  },
+  "chat_buttons_send": {
+    "message": "发送"
+  },
+  "chat_input_placeholder": {
+    "message": "告诉我您想要完成什么任务？"
+  },
+  "chat_input_form": {
+    "message": "聊天输入表单"
+  },
+  "chat_input_editor": {
+    "message": "消息输入"
+  },
+  "chat_history_title": {
+    "message": "对话历史"
+  },
+  "chat_history_empty": {
+    "message": "暂无对话历史"
+  },
+  "chat_history_bookmark": {
+    "message": "收藏会话"
+  },
+  "chat_history_delete": {
+    "message": "删除会话"
+  },
+  "chat_bookmarks_header": {
+    "message": "快速开始"
+  },
+  "chat_bookmarks_saveEdit": {
+    "message": "保存更改"
+  },
+  "chat_bookmarks_cancelEdit": {
+    "message": "取消更改"
+  },
+  "chat_bookmarks_edit": {
+    "message": "编辑收藏标题"
+  },
+  "chat_bookmarks_delete": {
+    "message": "删除收藏"
+  },
+  "chat_replay_starting": {
+    "message": "开始重放任务:\n\n\"$TASK$\"",
+    "placeholders": {
+      "task": {
+        "content": "$1",
+        "example": "导航到example.com"
+      }
+    }
+  },
+  "chat_replay_failed": {
+    "message": "重放失败: $ERROR_MESSAGE$",
+    "placeholders": {
+      "error_message": {
+        "content": "$1",
+        "example": "连接超时"
+      }
+    }
+  },
+  "chat_replay_invalidArgs": {
+    "message": "参数无效。请使用格式: /replay <historySessionId>"
+  },
+  "chat_replay_disabled": {
+    "message": "重放功能已在常规设置中禁用。请在扩展设置中启用\"重放历史任务\"以使用此功能。"
+  },
+  "chat_replay_noHistory": {
+    "message": "未找到会话\"$SESSION_ID$...\"的操作历史。此会话可能不包含可重放的操作。\n\n它本身是一个重放会话（重放会话不能再次重放），或者它是在重放功能可用之前创建的。",
+    "placeholders": {
+      "session_id": {
+        "content": "$1",
+        "example": "abc123def456789"
+      }
+    }
+  },
+  "chat_stt_processing": {
+    "message": "正在处理语音..."
+  },
+  "chat_stt_recording_stop": {
+    "message": "停止录音"
+  },
+  "chat_stt_input_start": {
+    "message": "开始语音输入"
+  },
+  "chat_stt_processingFailed": {
+    "message": "语音录制处理失败"
+  },
+  "chat_stt_model_notFound": {
+    "message": "未配置语音转文字模型或不是Gemini模型。请在设置中配置Gemini模型。"
+  },
+  "chat_stt_recognitionFailed": {
+    "message": "语音识别失败"
+  },
+  "chat_stt_microphone_permissionDenied": {
+    "message": "麦克风访问被拒绝。请在浏览器设置中启用麦克风权限。"
+  },
+  "chat_stt_microphone_accessFailed": {
+    "message": "无法访问麦克风。"
+  },
+  "chat_stt_microphone_grantPermission": {
+    "message": "请授予麦克风权限。"
+  },
+  "chat_stt_microphone_notFound": {
+    "message": "未找到麦克风。"
+  },
+  "permissions_microphone_title": {
+    "message": "启用语音输入"
+  },
+  "permissions_microphone_description": {
+    "message": "AutoLeadAgent需要麦克风访问权限以将您的语音转换为文字。"
+  },
+  "permissions_microphone_grantButton": {
+    "message": "授予麦克风权限"
+  },
+  "permissions_microphone_requesting": {
+    "message": "正在请求麦克风权限..."
+  },
+  "permissions_microphone_grantedSuccess": {
+    "message": "✅ 麦克风权限已授予！您现在可以使用语音输入了。"
+  },
+  "permissions_microphone_grantedButton": {
+    "message": "权限已授予"
+  },
+  "permissions_microphone_denied": {
+    "message": "权限被拒绝。"
+  },
+  "permissions_microphone_allowHelp": {
+    "message": "请在提示麦克风访问时点击\"允许\"。"
+  },
+  "permissions_microphone_notFound": {
+    "message": "未找到麦克风。请检查您的音频设备。"
+  },
+  "permissions_microphone_alreadyGranted": {
+    "message": "✅ 麦克风权限已授予！"
+  },
+  "permissions_microphone_alreadyGrantedButton": {
+    "message": "权限已授予"
+  },
+  "options_nav_header": {
+    "message": "设置"
+  },
+  "options_tabs_general": {
+    "message": "常规"
+  },
+  "options_tabs_models": {
+    "message": "模型"
+  },
+  "options_tabs_firewall": {
+    "message": "防火墙"
+  },
+  "options_tabs_help": {
+    "message": "帮助"
+  },
+  "options_general_header": {
+    "message": "常规设置"
+  },
+  "options_general_maxSteps": {
+    "message": "每任务最大步骤数"
+  },
+  "options_general_maxSteps_desc": {
+    "message": "每个任务的步骤限制"
+  },
+  "options_general_maxActions": {
+    "message": "每步最大操作数"
+  },
+  "options_general_maxActions_desc": {
+    "message": "每个步骤的操作限制"
+  },
+  "options_general_maxFailures": {
+    "message": "失败容忍度"
+  },
+  "options_general_maxFailures_desc": {
+    "message": "停止前允许的连续失败次数"
+  },
+  "options_general_enableVision": {
+    "message": "启用视觉"
+  },
+  "options_general_enableVision_desc": {
+    "message": "使用LLM的视觉功能（消耗更多令牌以获得更好结果）"
+  },
+  "options_general_displayHighlights": {
+    "message": "显示高亮"
+  },
+  "options_general_displayHighlights_desc": {
+    "message": "在交互元素上显示视觉高亮（如按钮、链接等）"
+  },
+  "options_general_planningInterval": {
+    "message": "重新规划频率"
+  },
+  "options_general_planningInterval_desc": {
+    "message": "每[数字]步重新考虑和更新计划"
+  },
+  "options_general_minWaitPageLoad": {
+    "message": "页面加载等待时间"
+  },
+  "options_general_minWaitPageLoad_desc": {
+    "message": "页面加载后的最小等待时间（250-5000毫秒）"
+  },
+  "options_general_replayHistoricalTasks": {
+    "message": "重放历史任务（实验性）"
+  },
+  "options_general_replayHistoricalTasks_desc": {
+    "message": "启用存储和重放代理步骤历史（实验性，可能有问题）"
+  },
+  "options_models_providers_header": {
+    "message": "LLM提供商"
+  },
+  "options_models_providers_notConfigured": {
+    "message": "尚未配置提供商。添加一个提供商以开始使用。"
+  },
+  "options_models_providers_btnCancel": {
+    "message": "取消"
+  },
+  "options_models_providers_btnSave": {
+    "message": "保存"
+  },
+  "options_models_providers_btnDelete": {
+    "message": "删除"
+  },
+  "options_models_providers_setupInstructions": {
+    "message": "输入您的API密钥并点击保存以设置。"
+  },
+  "options_models_providers_custom_name": {
+    "message": "名称"
+  },
+  "options_models_providers_custom_name_desc": {
+    "message": "提供商名称（保存时不允许包含空格）"
+  },
+  "options_models_providers_custom_name_placeholder": {
+    "message": "提供商名称"
+  },
+  "options_models_providers_apiKey": {
+    "message": "API密钥"
+  },
+  "options_models_providers_apiKey_placeholder_optional": {
+    "message": "API密钥（可选）"
+  },
+  "options_models_providers_apiKey_placeholder_required": {
+    "message": "API密钥（必填）"
+  },
+  "options_models_providers_apiKey_placeholder_ollama": {
+    "message": "API密钥（Ollama留空）"
+  },
+  "options_models_providers_apiKey_hide": {
+    "message": "隐藏API密钥"
+  },
+  "options_models_providers_apiKey_show": {
+    "message": "显示API密钥"
+  },
+  "options_models_selection_header": {
+    "message": "模型选择"
+  },
+  "options_models_speechToText_header": {
+    "message": "语音转文字模型"
+  },
+  "options_models_agents_navigator": {
+    "message": "导航网站并执行操作"
+  },
+  "options_models_agents_planner": {
+    "message": "制定和完善完成任务的策略"
+  },
+  "options_models_labels_model": {
+    "message": "模型"
+  },
+  "options_models_labels_temperature": {
+    "message": "温度"
+  },
+  "options_models_labels_topP": {
+    "message": "Top P"
+  },
+  "options_models_labels_reasoning": {
+    "message": "推理"
+  },
+  "options_models_stt_desc": {
+    "message": "配置使用麦克风功能时用于语音转文字的Gemini模型。"
+  },
+  "options_models_chooseModel": {
+    "message": "选择模型"
+  },
+  "options_models_addNewProvider": {
+    "message": "添加新提供商"
+  },
+  "options_firewall_header": {
+    "message": "防火墙"
+  },
+  "options_firewall_enableToggle": {
+    "message": "启用防火墙"
+  },
+  "options_firewall_toggleFirewall_a11y": {
+    "message": "切换防火墙"
+  },
+  "options_firewall_allowList_header": {
+    "message": "允许列表"
+  },
+  "options_firewall_allowList_empty": {
+    "message": "允许列表为空。空允许列表意味着所有未被拒绝的域名都被允许。"
+  },
+  "options_firewall_denyList_header": {
+    "message": "拒绝列表"
+  },
+  "options_firewall_denyList_empty": {
+    "message": "拒绝列表为空"
+  },
+  "options_firewall_placeholders_domainUrl": {
+    "message": "输入域名或URL（例如 example.com, localhost, 127.0.0.1）"
+  },
+  "options_firewall_btnAdd": {
+    "message": "添加"
+  },
+  "options_firewall_btnRemove": {
+    "message": "移除"
+  },
+  "options_firewall_howItWorks_header": {
+    "message": "防火墙工作原理"
+  },
+  "options_firewall_howItWorks": {
+    "message": "防火墙包含拒绝列表和允许列表。\n如果两个列表都为空，则所有URL都被允许\n拒绝列表优先级更高 - 如果URL匹配任何拒绝列表条目，则被阻止\n当允许列表为空时，所有未被拒绝的URL都被允许\n当允许列表不为空时，只有匹配的URL被允许\n暂不支持通配符\n允许列表优先于拒绝列表"
+  },
+  "bg_errors_noTabId": {
+    "message": "未提供标签页ID"
+  },
+  "bg_errors_noTaskId": {
+    "message": "未提供任务ID"
+  },
+  "bg_errors_noRunningTask": {
+    "message": "没有正在运行的任务"
+  },
+  "bg_cmd_newTask_noTask": {
+    "message": "未提供任务"
+  },
+  "bg_cmd_followUpTask_noTask": {
+    "message": "未提供后续任务"
+  },
+  "bg_cmd_followUpTask_cleaned": {
+    "message": "执行器已清理，无法添加后续任务"
+  },
+  "bg_cmd_resumeTask_noTask": {
+    "message": "没有可恢复的任务"
+  },
+  "bg_setup_noApiKeys": {
+    "message": "请先在设置中配置API密钥"
+  },
+  "bg_setup_noNavigatorModel": {
+    "message": "请先在设置中为导航器选择模型"
+  },
+  "exec_errors_maxStepsReached": {
+    "message": "已达到最大步骤数"
+  },
+  "exec_errors_maxFailuresReached": {
+    "message": "已达到最大失败次数"
+  },
+  "exec_task_cancel": {
+    "message": "任务已取消"
+  },
+  "exec_task_pause": {
+    "message": "任务已暂停"
+  },
+  "exec_task_fail": {
+    "message": "任务失败: \n\n$ERROR_MESSAGE$",
+    "placeholders": {
+      "error_message": {
+        "content": "$1",
+        "example": "连接超时"
+      }
+    }
+  },
+  "act_searchGoogle_start": {
+    "message": "正在Google中搜索\"$QUERY$\"",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "今天天气"
+      }
+    }
+  },
+  "act_searchGoogle_ok": {
+    "message": "已在Google中搜索\"$QUERY$\"",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "今天天气"
+      }
+    }
+  },
+  "act_goToUrl_start": {
+    "message": "正在导航到 $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
+  "act_goToUrl_ok": {
+    "message": "已导航到 $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
+  "act_goBack_start": {
+    "message": "正在返回上一页"
+  },
+  "act_goBack_ok": {
+    "message": "已返回上一页"
+  },
+  "act_wait_start": {
+    "message": "等待 $SECONDS$ 秒",
+    "placeholders": {
+      "seconds": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "act_wait_ok": {
+    "message": "已等待 $SECONDS$ 秒",
+    "placeholders": {
+      "seconds": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "act_click_start": {
+    "message": "点击索引为 $INDEX$ 的元素",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "act_click_ok": {
+    "message": "已点击索引为 $INDEX$ 的按钮: $TEXT$",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      },
+      "text": {
+        "content": "$2",
+        "example": "提交按钮"
+      }
+    }
+  },
+  "act_click_newTabOpened": {
+    "message": "新标签页已打开 - 正在切换"
+  },
+  "act_inputText_start": {
+    "message": "在索引 $INDEX$ 处输入文本",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "act_inputText_ok": {
+    "message": "已在索引 $INDEX$ 处输入 $TEXT$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "你好世界"
+      },
+      "index": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
+  },
+  "act_switchTab_start": {
+    "message": "正在切换到标签页 $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
+  },
+  "act_switchTab_ok": {
+    "message": "已切换到标签页 $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
+  },
+  "act_openTab_start": {
+    "message": "正在新标签页中打开 $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
+  "act_openTab_ok": {
+    "message": "已在新标签页中打开 $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
+  "act_closeTab_start": {
+    "message": "正在关闭标签页 $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
+  },
+  "act_closeTab_ok": {
+    "message": "已关闭标签页 $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
+  },
+  "act_cache_start": {
+    "message": "正在缓存发现: $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "用户偏好已保存"
+      }
+    }
+  },
+  "act_cache_ok": {
+    "message": "已缓存发现: $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "用户偏好已保存"
+      }
+    }
+  }
+}
