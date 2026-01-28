@@ -85,6 +85,7 @@ $i18nEnabled = $i18n_enabled ?? '0';
                 <div class='row'>
                     <div class="col-12">
                         <template>Weline_Component::message.phtml</template>
+                        <div id="page-message-container"></div>
                     </div>
                 </div>
 
@@ -201,6 +202,41 @@ $i18nEnabled = $i18n_enabled ?? '0';
 </div>
 
 <script>
+// 消息类型映射
+const MESSAGE_TYPE_MAP = {
+    success: 'success',
+    error: 'danger',
+    warning: 'warning',
+    info: 'info'
+};
+
+// 显示页面消息
+function showPageMessage(type, message) {
+    const container = document.getElementById('page-message-container');
+    if (!container) {
+        console.warn('page message container not found');
+        alert(message);
+        return;
+    }
+    const alertType = MESSAGE_TYPE_MAP[type] || 'info';
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${alertType} alert-dismissible fade show`;
+    alert.setAttribute('role', 'alert');
+    alert.innerHTML = `
+        <span>${message}</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    container.appendChild(alert);
+    setTimeout(() => {
+        try {
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+            bsAlert.close();
+        } catch (e) {
+            alert.remove();
+        }
+    }, 4000);
+}
+
 function saveConfig(event) {
     event.preventDefault();
     const form = document.getElementById('configForm');
