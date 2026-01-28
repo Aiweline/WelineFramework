@@ -11,6 +11,9 @@
 
 /** @var \Weline\Framework\View\Template $this */
 
+// 将 Filters 模块添加到请求模块链，以便加载翻译
+$this->request->addModule('WeShop_Filters');
+
 use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Product\Model\ProductCategory;
@@ -36,11 +39,13 @@ try {
     
     /** @var ProductCategory $productCategory */
     $productCategory = ObjectManager::getInstance(ProductCategory::class);
+    // 使用框架默认的表别名 main_table
     $productCategory->reset()
-        ->fields('DISTINCT ' . ProductCategory::fields_product_id)
-        ->where(ProductCategory::fields_category_id, $categoryIds, 'in')
+        ->fields('main_table.' . ProductCategory::fields_product_id)
+        ->where('main_table.' . ProductCategory::fields_category_id, $categoryIds, 'in')
         ->joinProduct()
-        ->where('product.' . Product::fields_status, 1);
+        ->where('product.' . Product::fields_status, 1)
+        ->groupBy('main_table.' . ProductCategory::fields_product_id);
     
     $results = $productCategory->select()->fetchArray();
     $productIds = array_column($results, ProductCategory::fields_product_id);
@@ -72,10 +77,12 @@ try {
     $this->request->setData('filtered_product_ids', $filteredProductIds);
     
 } catch (\Throwable $e) {
-    // 筛选服务不可用，跳过
+    // 生产环境静默处理错误
     return;
 }
 
+// 只有在没有任何筛选条件且没有可用筛选器时才返回
+// 如果有已应用的筛选（appliedFilters），即使 filters 为空也要显示（允许用户清除筛选）
 if (empty($filters) && empty($appliedFilters)) {
     return;
 }
@@ -91,9 +98,14 @@ if (empty($filters) && empty($appliedFilters)) {
     <?php if (!empty($appliedFilters)): ?>
     <div class="category-filter-applied">
         <?php foreach ($appliedFilters as $filter): ?>
-        <span class="filter-chip is-active" data-filter-code="<?= htmlspecialchars($filter['filter_code'] ?? '') ?>" data-value="<?= htmlspecialchars($filter['value'] ?? '') ?>">
+        <?php 
+            $chipFilterCode = $filter['filter_code'] ?? '';
+            $chipValue = $filter['value'] ?? '';
+            $removeUrl = $urlService->getRemoveFilterUrl($chipFilterCode, (string)$chipValue);
+        ?>
+        <span class="filter-chip is-active" data-filter-code="<?= htmlspecialchars($chipFilterCode) ?>" data-value="<?= htmlspecialchars($chipValue) ?>">
             <?= htmlspecialchars($filter['label'] ?? '') ?>
-            <button type="button" class="chip-remove" aria-label="<lang>移除</lang>">×</button>
+            <a href="<?= htmlspecialchars($removeUrl) ?>" class="chip-remove" aria-label="<lang>移除</lang>">×</a>
         </span>
         <?php endforeach; ?>
     </div>
@@ -139,10 +151,15 @@ if (empty($filters) && empty($appliedFilters)) {
         <?php elseif ($displayType === 'swatch'): ?>
             <ul class="category-filter-list swatch-list">
                 <?php foreach ($options as $option): ?>
+                <?php 
+                    $optionValue = $option['value'] ?? '';
+                    $optionUrl = $urlService->getToggleFilterUrl($filterCode, (string)$optionValue);
+                ?>
                 <li>
-                    <a href="javascript:void(0)" 
+                    <a href="<?= htmlspecialchars($optionUrl) ?>" 
                        class="category-filter-item <?= ($option['selected'] ?? false) ? 'is-active' : '' ?>"
-                       data-value="<?= htmlspecialchars($option['value'] ?? '') ?>"
+                       data-value="<?= htmlspecialchars($optionValue) ?>"
+                       data-filter-code="<?= htmlspecialchars($filterCode) ?>"
                        title="<?= htmlspecialchars($option['label'] ?? '') ?>">
                         <?php if (isset($option['swatch'])): ?>
                             <?php if (($option['swatch']['type'] ?? '') === 'color'): ?>
@@ -165,10 +182,15 @@ if (empty($filters) && empty($appliedFilters)) {
         <?php else: ?>
             <ul class="category-filter-list">
                 <?php foreach ($options as $option): ?>
+                <?php 
+                    $optionValue = $option['value'] ?? '';
+                    $optionUrl = $urlService->getToggleFilterUrl($filterCode, (string)$optionValue);
+                ?>
                 <li>
-                    <a href="javascript:void(0)" 
+                    <a href="<?= htmlspecialchars($optionUrl) ?>" 
                        class="category-filter-item <?= ($option['selected'] ?? false) ? 'is-active' : '' ?>"
-                       data-value="<?= htmlspecialchars($option['value'] ?? '') ?>">
+                       data-value="<?= htmlspecialchars($optionValue) ?>"
+                       data-filter-code="<?= htmlspecialchars($filterCode) ?>">
                         <span class="label">
                             <?php if (isset($option['stars_filled'])): ?>
                             <span class="stars"><?= str_repeat('★', $option['stars_filled']) . str_repeat('☆', $option['stars_empty'] ?? 0) ?></span>
@@ -188,16 +210,3 @@ if (empty($filters) && empty($appliedFilters)) {
 </div>
 
 <div class="filter-mobile-overlay"></div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.WeShopFilters) {
-        window.weShopFilterController = WeShopFilters.init({
-            categoryId: <?= (int)$categoryId ?>,
-            filterContainer: '.category-filter-mock',
-            enableAjax: true,
-            updateUrl: true
-        });
-    }
-});
-</script>

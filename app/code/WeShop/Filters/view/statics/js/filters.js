@@ -18,8 +18,8 @@
                 productContainer: '.product-list-container',
                 paginationContainer: '.pagination-container',
                 
-                // API 端点
-                filterApiUrl: '/weshop/filters/ajax/filter',
+                // API 端点 (格式: /module/controller/action)
+                filterApiUrl: '/weshop/filters/frontend/ajax/filter',
                 
                 // 分类ID
                 categoryId: 0,
@@ -53,6 +53,8 @@
          * 初始化
          */
         init() {
+            console.log('[WeShop Filters] 初始化筛选控制器，配置:', this.options);
+            
             // 解析当前 URL 中的筛选参数
             this.parseUrlParams();
             
@@ -61,6 +63,8 @@
             
             // 初始化已选状态
             this.updateSelectedState();
+            
+            console.log('[WeShop Filters] 初始化完成，当前筛选:', this.currentFilters);
         }
         
         /**
@@ -68,28 +72,39 @@
          */
         bindEvents() {
             const container = document.querySelector(this.options.filterContainer);
-            if (!container) return;
+            if (!container) {
+                console.warn('[WeShop Filters] 未找到筛选容器:', this.options.filterContainer);
+                return;
+            }
+            
+            console.log('[WeShop Filters] 绑定事件到容器:', container);
             
             // 筛选项点击
             container.addEventListener('click', (e) => {
                 const filterItem = e.target.closest('.category-filter-item');
                 if (filterItem) {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.handleFilterClick(filterItem);
+                    return;
                 }
                 
                 // 清除单个筛选
                 const chipRemove = e.target.closest('.chip-remove');
                 if (chipRemove) {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.handleChipRemove(chipRemove);
+                    return;
                 }
                 
                 // 清除所有筛选
                 const clearAll = e.target.closest('.category-filter-clear');
                 if (clearAll) {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.clearAllFilters();
+                    return;
                 }
             });
             
@@ -145,10 +160,17 @@
             const filterCode = filterItem.dataset.filterCode || filterItem.closest('[data-filter-code]')?.dataset.filterCode;
             const filterValue = filterItem.dataset.value;
             
-            if (!filterCode || !filterValue) return;
+            console.log('[WeShop Filters] 点击筛选项:', { filterCode, filterValue, filterItem });
+            
+            if (!filterCode || !filterValue) {
+                console.warn('[WeShop Filters] 筛选项缺少必要属性:', { filterCode, filterValue });
+                return;
+            }
             
             // 切换筛选值
             this.toggleFilter(filterCode, filterValue);
+            
+            console.log('[WeShop Filters] 当前筛选条件:', this.currentFilters);
             
             // 更新 URL 和获取结果
             this.applyFilters();
@@ -227,8 +249,12 @@
          * 应用筛选
          */
         applyFilters() {
+            console.log('[WeShop Filters] 应用筛选:', this.currentFilters);
+            
             // 更新 URL
             if (this.options.updateUrl) {
+                const url = this.buildUrl();
+                console.log('[WeShop Filters] 更新 URL:', url);
                 this.updateUrl();
             }
             
@@ -237,9 +263,11 @@
             
             // AJAX 获取结果
             if (this.options.enableAjax) {
+                console.log('[WeShop Filters] 发送 AJAX 请求');
                 this.fetchFilteredProducts();
             } else {
                 // 刷新页面
+                console.log('[WeShop Filters] 刷新页面');
                 window.location.href = this.buildUrl();
             }
         }
@@ -359,11 +387,19 @@
                 this.options.onLoading();
             }
             
+            // 显示加载状态
+            this.showLoadingState();
+            
             try {
-                const params = new URLSearchParams({
-                    category_id: this.options.categoryId,
-                    ...this.currentFilters,
-                });
+                const params = new URLSearchParams();
+                params.set('category_id', this.options.categoryId);
+                
+                // 正确处理数组类型的筛选参数
+                for (const [key, values] of Object.entries(this.currentFilters)) {
+                    if (Array.isArray(values) && values.length > 0) {
+                        params.set(key, values.join(','));
+                    }
+                }
                 
                 // 保留分页和排序参数
                 const urlParams = new URLSearchParams(window.location.search);
@@ -393,11 +429,34 @@
                 if (this.options.onError) {
                     this.options.onError(error);
                 }
+                // AJAX 失败时回退到页面刷新
+                window.location.href = this.buildUrl();
             } finally {
                 this.isLoading = false;
+                this.hideLoadingState();
                 if (this.options.onLoaded) {
                     this.options.onLoaded();
                 }
+            }
+        }
+        
+        /**
+         * 显示加载状态
+         */
+        showLoadingState() {
+            const productContainer = document.querySelector(this.options.productContainer);
+            if (productContainer) {
+                productContainer.classList.add('is-loading');
+            }
+        }
+        
+        /**
+         * 隐藏加载状态
+         */
+        hideLoadingState() {
+            const productContainer = document.querySelector(this.options.productContainer);
+            if (productContainer) {
+                productContainer.classList.remove('is-loading');
             }
         }
         
@@ -557,22 +616,38 @@
         init(options = {}) {
             return new FilterController(options);
         },
-    };
-    
-    // 自动初始化（如果存在筛选容器）
-    document.addEventListener('DOMContentLoaded', () => {
-        const filterContainer = document.querySelector('.category-filter-mock');
-        if (filterContainer) {
-            // 从容器或页面数据中获取分类ID
-            const categoryId = filterContainer.dataset.categoryId 
-                || document.body.dataset.categoryId 
-                || 0;
+        
+        /**
+         * 自动初始化（用于确保在 JS 加载后初始化）
+         */
+        autoInit() {
+            if (window.weShopFilterController) return;
             
-            if (categoryId) {
-                window.weShopFilterController = WeShopFilters.init({
-                    categoryId: parseInt(categoryId),
-                });
+            const filterContainer = document.querySelector('.category-filter-mock');
+            if (filterContainer) {
+                const categoryId = filterContainer.dataset.categoryId 
+                    || document.body.dataset.categoryId 
+                    || 0;
+                
+                if (categoryId) {
+                    window.weShopFilterController = WeShopFilters.init({
+                        categoryId: parseInt(categoryId),
+                        filterContainer: '.category-filter-mock',
+                        productContainer: '.product-list-container, .category-products',
+                        enableAjax: true,
+                        updateUrl: true,
+                    });
+                    console.log('[WeShop Filters] 筛选控制器已初始化，分类ID:', categoryId);
+                }
             }
         }
-    });
+    };
+    
+    // 自动初始化 - 支持 DOMContentLoaded 和直接调用
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', WeShopFilters.autoInit);
+    } else {
+        // DOM 已加载，直接初始化
+        WeShopFilters.autoInit();
+    }
 })();

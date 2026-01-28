@@ -118,8 +118,13 @@
                 document.getElementById('assetListBody').innerHTML = '<div class="alert alert-warning m-3"><?= __('请先填写页面句柄 handle') ?></div>';
                 return;
             }
+            // 获取当前选中的网站ID
+            const websiteSelect = document.getElementById('website_id');
+            const websiteId = websiteSelect ? websiteSelect.value : '';
             const listUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/listAssets') ?>' +
-                '?handle=' + encodeURIComponent(handle) + (sub ? ('&sub=' + encodeURIComponent(sub)) : '');
+                '?handle=' + encodeURIComponent(handle) + 
+                (sub ? ('&sub=' + encodeURIComponent(sub)) : '') +
+                (websiteId ? ('&website_id=' + encodeURIComponent(websiteId)) : '');
             const res = await fetch(listUrl, { credentials: 'same-origin' });
             const data = await res.json();
             if (!data.success){
@@ -174,14 +179,17 @@
                     const isImage = isImageFile(it.name);
                     const fileSize = formatFileSize(it.size || 0);
                     const fileDate = new Date(it.mtime * 1000).toLocaleString('zh-CN');
+                    // 完整 URL 用于复制
                     const escapedUrl = escapeJs(it.url);
+                    // 相对路径用于预览（在当前后台页面显示）
+                    const escapedPreviewUrl = escapeJs(it.relative_url || it.url);
                     const escapedName = escapeJs(it.name);
                     const htmlName = escapeHtml(it.name);
                     
                     html += '<div class="asset-card">';
                     if (isImage) {
-                        html += '  <div class="thumb" onclick="previewImage(\'' + escapedUrl + '\', \'' + escapedName + '\')">'
-                              + '    <img src="' + escapeHtml(it.url) + '" alt="' + htmlName + '" loading="lazy">'
+                        html += '  <div class="thumb" onclick="previewImage(\'' + escapedPreviewUrl + '\', \'' + escapedName + '\')">'
+                              + '    <img src="' + escapeHtml(it.relative_url || it.url) + '" alt="' + htmlName + '" loading="lazy">'
                               + '    <div class="preview-overlay"><i class="mdi mdi-eye"></i></div>'
                               + '  </div>';
                     } else {
@@ -196,7 +204,7 @@
                     html += '  <div class="actions">'
                           + '    <button type="button" onclick="copyAssetUrl(\'' + escapedUrl + '\')"><i class="mdi mdi-content-copy"></i><span><?= __('复制URL') ?></span></button>';
                     if (isImage) {
-                        html += '    <button type="button" onclick="previewImage(\'' + escapedUrl + '\', \'' + escapedName + '\')"><i class="mdi mdi-eye"></i><span><?= __('预览') ?></span></button>';
+                        html += '    <button type="button" onclick="previewImage(\'' + escapedPreviewUrl + '\', \'' + escapedName + '\')"><i class="mdi mdi-eye"></i><span><?= __('预览') ?></span></button>';
                     }
                     html += '  </div>'
                           + '</div>';

@@ -315,7 +315,8 @@ class AttributeFilterService
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $attributeModel->reset()
             ->where(EavAttribute::fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::fields_is_enable, 1);
+            ->where(EavAttribute::fields_is_enable, 1)
+            ->where(EavAttribute::fields_is_filterable, 1); // 只获取可筛选的属性
         
         if (!empty($attributeCodes)) {
             $attributeModel->where(EavAttribute::fields_code, $attributeCodes, 'in');

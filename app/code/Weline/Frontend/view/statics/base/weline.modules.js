@@ -7,6 +7,12 @@
     // 一次性合并所有模块配置
     Object.assign(window.WelineModulesConfig.modules, {
         cart: {
+            origin_paths: ["app/code/WeShop/Cart/view/statics/statics/js/cart.js"],
+            paths: ["/WeShop/Cart/view/statics/statics/js/cart.js"],
+            globalVar: "WeShopCart",
+            description: "WeShop 购物车模块 - 处理加入购物车、规格选择等"
+        },
+        miniCart: {
             origin_paths: ["app/code/WeShop/Cart/view/statics/statics/js/mini-cart.js"],
             paths: ["/WeShop/Cart/view/statics/statics/js/mini-cart.js"],
             globalVar: null,
@@ -64,7 +70,7 @@
 
     // 一次性合并所有模块别名
     Object.assign(window.WelineModulesConfig.moduleAliases, {
-        miniCart: "cart",
+        shoppingCart: "cart",
         jq: "jquery",
         $: "jquery",
         api: "weline-api",

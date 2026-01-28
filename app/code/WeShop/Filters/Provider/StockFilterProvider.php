@@ -6,6 +6,7 @@ namespace WeShop\Filters\Provider;
 
 use WeShop\Product\Model\Product;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\State;
 
 /**
  * 库存筛选提供者
@@ -40,7 +41,9 @@ class StockFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        return __('库存状态');
+        $lang = State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        return $isEnglish ? 'Availability' : __('库存状态');
     }
     
     /**
@@ -158,5 +161,22 @@ class StockFilterProvider extends AbstractFilterProvider
     {
         $this->lowStockThreshold = $threshold;
         return $this;
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        $lang = State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        
+        $labels = [
+            self::STOCK_IN => $isEnglish ? 'In Stock' : __('有货'),
+            self::STOCK_OUT => $isEnglish ? 'Out of Stock' : __('缺货'),
+            self::STOCK_LOW => $isEnglish ? 'Low Stock' : __('库存紧张'),
+        ];
+        
+        return $labels[$value] ?? $value;
     }
 }

@@ -145,16 +145,15 @@ class Cli extends CliAbstract
         $this->printer->note('🔍 ' . __('命令查找功能'));
         $this->printer->separator('─', 0, 'NOTE');
         $this->printer->printing(__('用法') . ':');
-        $this->printer->success('  php bin/w find <关键词>');
-        $this->printer->success('  php bin/w -f <关键词>');
+        $this->printer->success('  php bin/w <关键词>');
         $this->printer->printing('');
         $this->printer->printing(__('说明') . ':');
-        $this->printer->note('  ' . __('在命令名称、描述中搜索包含关键词的命令'));
+        $this->printer->note('  ' . __('直接输入关键词即可在命令名称、描述中搜索'));
         $this->printer->printing('');
         $this->printer->printing(__('示例') . ':');
-        $this->printer->success('  php bin/w find cache      # ' . __('搜索包含 "cache" 的命令'));
-        $this->printer->success('  php bin/w -f module       # ' . __('搜索包含 "module" 的命令'));
-        $this->printer->success('  php bin/w find 清理       # ' . __('搜索描述中包含 "清理" 的命令'));
+        $this->printer->success('  php bin/w cache      # ' . __('搜索包含 "cache" 的命令'));
+        $this->printer->success('  php bin/w module     # ' . __('搜索包含 "module" 的命令'));
+        $this->printer->success('  php bin/w 清理       # ' . __('搜索描述中包含 "清理" 的命令'));
     }
     
     /**
