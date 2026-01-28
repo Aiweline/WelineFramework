@@ -1078,7 +1078,7 @@ function decodePreviewHtml(component) {
 
 // 渲染组件卡片
 function renderComponentCard(component, region) {
-    // 优先使用预览HTML，其次使用缩略图，最后使用图标
+    // 优先使用预览HTML，其次使用缩略图，然后使用组件自定义图标，最后使用区域默认图标
     let thumbHtml = '';
     
     // 解码预览HTML（如果已编码）
@@ -1097,6 +1097,12 @@ function renderComponentCard(component, region) {
         </div>`;
     } else if (component.thumbnail_url) {
         thumbHtml = `<img src="${component.thumbnail_url}" alt="${component.name}" onerror="this.parentNode.innerHTML='<i class=\\'mdi mdi-puzzle\\'></i>'">`;
+    } else if (component.icon) {
+        // 支持 Bootstrap Icons (bi-*) 和 MDI (mdi-*)
+        const iconClass = component.icon.startsWith('bi-') ? `bi ${component.icon}` : 
+                         component.icon.startsWith('mdi-') ? `mdi ${component.icon}` : 
+                         `mdi mdi-${component.icon}`;
+        thumbHtml = `<i class="${iconClass}"></i>`;
     } else {
         thumbHtml = `<i class="mdi mdi-${getRegionIcon(region)}"></i>`;
     }

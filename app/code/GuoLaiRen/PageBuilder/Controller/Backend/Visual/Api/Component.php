@@ -19,6 +19,8 @@ use Weline\Framework\Manager\ObjectManager;
 use GuoLaiRen\PageBuilder\Service\ComponentService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
+use GuoLaiRen\PageBuilder\Service\Component\SlotValidator;
+use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
 
@@ -27,6 +29,8 @@ class Component extends BackendController
     private ComponentService $componentService;
     private LayoutAssembler $layoutAssembler;
     private LayoutService $layoutService;
+    private SlotValidator $slotValidator;
+    private ComponentRenderer $componentRenderer;
     private Page $pageModel;
     
     public function __construct()
@@ -34,6 +38,8 @@ class Component extends BackendController
         $this->componentService = ObjectManager::getInstance(ComponentService::class);
         $this->layoutAssembler = ObjectManager::getInstance(LayoutAssembler::class);
         $this->layoutService = ObjectManager::getInstance(LayoutService::class);
+        $this->slotValidator = SlotValidator::getInstance();
+        $this->componentRenderer = ComponentRenderer::getInstance();
         $this->pageModel = ObjectManager::getInstance(Page::class);
     }
     
@@ -184,9 +190,10 @@ class Component extends BackendController
                 throw new \Exception('缺少组件代码');
             }
             
-            $component = $this->componentService->getByCode($componentCode);
+            // 使用 styleCode 进行精确查找
+            $component = $this->componentService->getByCode($componentCode, $styleCode ?: null);
             if (!$component) {
-                throw new \Exception('组件不存在: ' . $componentCode);
+                throw new \Exception('组件不存在: ' . $componentCode . ($styleCode ? " (模板: {$styleCode})" : ''));
             }
             
             // 检查组件文件是否存在
@@ -196,7 +203,9 @@ class Component extends BackendController
             }
             
             $configArray = json_decode($config, true) ?: [];
-            $html = $this->componentService->renderPreview($componentCode, $configArray);
+            // 传递组件所属的模板代码以确保正确渲染
+            $actualStyleCode = $component->getData(\GuoLaiRen\PageBuilder\Model\Component::fields_STYLE_CODE);
+            $html = $this->componentService->renderPreview($componentCode, $configArray, $actualStyleCode);
             
             // 如果渲染结果为空或只包含注释，尝试提供更详细的错误信息
             $htmlTrimmed = trim(strip_tags($html));
@@ -232,15 +241,17 @@ class Component extends BackendController
     {
         try {
             $componentCode = $this->request->getParam('component_code', '');
+            $styleCode = $this->request->getParam('style_code', '');
             
             if (!$componentCode) {
                 throw new \Exception('缺少组件代码');
             }
             
-            $component = $this->componentService->getByCode($componentCode);
+            // 使用 styleCode 进行精确查找
+            $component = $this->componentService->getByCode($componentCode, $styleCode ?: null);
             
             if (!$component) {
-                throw new \Exception('组件不存在');
+                throw new \Exception('组件不存在: ' . $componentCode . ($styleCode ? " (模板: {$styleCode})" : ''));
             }
             
             return $this->fetchJson([
@@ -277,6 +288,9 @@ class Component extends BackendController
             $replace = $body['replace'] ?? false;
             $templateCode = $body['template_code'] ?? '';
             $position = $body['position'] ?? null; // 插入位置（用于 content 排序）
+            $parentComponentId = $body['parent_component_id'] ?? null; // 父组件实例ID（嵌套时）
+            $targetSlot = $body['slot'] ?? null; // 目标 slot 名称（嵌套时）
+            $returnHtml = $body['return_html'] ?? true; // 是否返回渲染的 HTML（用于局部刷新）
             
             if (!$pageId) {
                 throw new \Exception('缺少页面ID');
@@ -298,9 +312,44 @@ class Component extends BackendController
                 throw new \Exception('页面不存在');
             }
             
+            $styleCode = $page->getData('style') ?: 'default';
             $pageType = $page->getData('type');
             $isHomePage = ($pageType === Page::TYPE_HOME);
             $isGlobalRegion = in_array($region, ['header', 'footer']);
+            
+            // ========== Slot 验证 ==========
+            // 验证组件是否可以放置到目标位置
+            if ($parentComponentId && $targetSlot) {
+                // 嵌套放置：验证 slot 规则
+                $parentComponentCode = $this->getComponentCodeByInstanceId($pageId, $parentComponentId);
+                if (!$parentComponentCode) {
+                    throw new \Exception('父组件不存在');
+                }
+                
+                $validation = $this->slotValidator->canPlaceInSlot(
+                    $componentCode,
+                    $parentComponentCode,
+                    $targetSlot,
+                    $styleCode,
+                    $parentComponentId
+                );
+            } else {
+                // 顶级放置：验证区域规则
+                $validation = $this->slotValidator->canPlaceInRegion(
+                    $componentCode,
+                    $region,
+                    $styleCode
+                );
+            }
+            
+            if (!$validation->isValid()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $validation->getMessage(),
+                    'error_code' => $validation->getErrorCode(),
+                    'validation_failed' => true,
+                ]);
+            }
             
             // 确定要更新的目标页面ID
             // - Content 区域：总是保存到当前页面
@@ -318,31 +367,55 @@ class Component extends BackendController
             // 使用 LayoutService 获取或创建 PageLayout
             $layout = $this->layoutService->getOrCreate($targetPageId);
             
+            // 生成组件实例ID
+            $instanceId = 'comp-' . uniqid();
+            
             // 创建新组件配置
             $newComponent = [
                 'code' => $componentCode,
+                'instance_id' => $instanceId,
                 'enabled' => true,
                 'config' => [],
                 'template_code' => $templateCode,
+                'children' => [], // 预留嵌套子组件
             ];
             
             // 根据区域类型处理
+            $actualPosition = null;
             if ($region === 'header') {
                 // Header 区域只能一个，直接替换
                 $layout->setData(PageLayout::fields_HEADER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::fields_HEADER_CONFIG, json_encode([]));
+                $actualPosition = 0;
             } elseif ($region === 'footer') {
                 // Footer 区域只能一个，直接替换
                 $layout->setData(PageLayout::fields_FOOTER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::fields_FOOTER_CONFIG, json_encode([]));
+                $actualPosition = 0;
             } else {
                 // Content 区域可以多个，按位置插入或添加到末尾
                 $contentComponents = $layout->getContentComponents();
-                if ($position !== null && $position >= 0 && $position < count($contentComponents)) {
-                    array_splice($contentComponents, $position, 0, [$newComponent]);
+                
+                if ($parentComponentId && $targetSlot) {
+                    // 嵌套放置：添加到父组件的 children 中
+                    $contentComponents = $this->addToParentSlot(
+                        $contentComponents,
+                        $parentComponentId,
+                        $targetSlot,
+                        $newComponent
+                    );
+                    $actualPosition = $position ?? 0;
                 } else {
-                    $contentComponents[] = $newComponent;
+                    // 顶级放置
+                    if ($position !== null && $position >= 0 && $position < count($contentComponents)) {
+                        array_splice($contentComponents, $position, 0, [$newComponent]);
+                        $actualPosition = $position;
+                    } else {
+                        $contentComponents[] = $newComponent;
+                        $actualPosition = count($contentComponents) - 1;
+                    }
                 }
+                
                 $layout->setContentComponents($contentComponents);
             }
             
@@ -356,13 +429,41 @@ class Component extends BackendController
             // 记录日志
             error_log("[Component API add()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
             error_log("[Component API add()] Target Page ID: {$targetPageId}, Region: {$region}, Component: {$componentCode}");
+            error_log("[Component API add()] Instance ID: {$instanceId}, Position: {$actualPosition}");
             error_log("[Component API add()] Saved to PageLayout successfully");
+            
+            // ========== 局部刷新：渲染组件 HTML ==========
+            $componentHtml = '';
+            if ($returnHtml) {
+                $renderResult = $this->componentRenderer->renderSingle(
+                    $componentCode,
+                    $instanceId,
+                    $styleCode,
+                    [],
+                    [
+                        'region' => $region,
+                        'index' => $actualPosition,
+                        'visual_mode' => true,
+                        'page' => $page,
+                    ]
+                );
+                
+                if ($renderResult->isSuccess()) {
+                    $componentHtml = $renderResult->getHtml();
+                } else {
+                    error_log("[Component API add()] Render warning: " . $renderResult->getMessage());
+                }
+            }
             
             return $this->fetchJson([
                 'success' => true,
                 'message' => $isGlobalRegion && !$isHomePage 
                     ? __('全局组件已保存到首页') 
                     : __('组件已添加'),
+                'instance_id' => $instanceId,
+                'component_html' => $componentHtml,
+                'position' => $actualPosition,
+                'partial' => true, // 标识为局部更新
                 'layout_config' => $layoutConfig,
                 'target_page_id' => $targetPageId,
                 'is_global' => $isGlobalRegion,
@@ -375,6 +476,109 @@ class Component extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+    
+    /**
+     * 根据实例ID获取组件代码
+     */
+    private function getComponentCodeByInstanceId(int $pageId, string $instanceId): ?string
+    {
+        $layout = $this->layoutService->getOrCreate($pageId);
+        $contentComponents = $layout->getContentComponents();
+        
+        foreach ($contentComponents as $comp) {
+            if (($comp['instance_id'] ?? $comp['id'] ?? '') === $instanceId) {
+                return $comp['code'] ?? null;
+            }
+            // 递归查找嵌套组件
+            if (!empty($comp['children'])) {
+                $found = $this->findComponentCodeInChildren($comp['children'], $instanceId);
+                if ($found) {
+                    return $found;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 在 children 中递归查找组件代码
+     */
+    private function findComponentCodeInChildren(array $children, string $instanceId): ?string
+    {
+        foreach ($children as $slotName => $slotComponents) {
+            if (!is_array($slotComponents)) {
+                continue;
+            }
+            foreach ($slotComponents as $comp) {
+                if (($comp['instance_id'] ?? $comp['id'] ?? '') === $instanceId) {
+                    return $comp['code'] ?? null;
+                }
+                if (!empty($comp['children'])) {
+                    $found = $this->findComponentCodeInChildren($comp['children'], $instanceId);
+                    if ($found) {
+                        return $found;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 将组件添加到父组件的 slot 中
+     */
+    private function addToParentSlot(array $components, string $parentInstanceId, string $slotName, array $newComponent): array
+    {
+        foreach ($components as &$comp) {
+            if (($comp['instance_id'] ?? $comp['id'] ?? '') === $parentInstanceId) {
+                // 找到父组件，添加到其 children 中
+                if (!isset($comp['children'])) {
+                    $comp['children'] = [];
+                }
+                if (!isset($comp['children'][$slotName])) {
+                    $comp['children'][$slotName] = [];
+                }
+                $comp['children'][$slotName][] = $newComponent;
+                return $components;
+            }
+            
+            // 递归查找
+            if (!empty($comp['children'])) {
+                $comp['children'] = $this->addToParentSlotInChildren($comp['children'], $parentInstanceId, $slotName, $newComponent);
+            }
+        }
+        
+        return $components;
+    }
+    
+    /**
+     * 在嵌套 children 中添加组件到 slot
+     */
+    private function addToParentSlotInChildren(array $children, string $parentInstanceId, string $slotName, array $newComponent): array
+    {
+        foreach ($children as $slot => &$slotComponents) {
+            if (!is_array($slotComponents)) {
+                continue;
+            }
+            foreach ($slotComponents as &$comp) {
+                if (($comp['instance_id'] ?? $comp['id'] ?? '') === $parentInstanceId) {
+                    if (!isset($comp['children'])) {
+                        $comp['children'] = [];
+                    }
+                    if (!isset($comp['children'][$slotName])) {
+                        $comp['children'][$slotName] = [];
+                    }
+                    $comp['children'][$slotName][] = $newComponent;
+                    return $children;
+                }
+                if (!empty($comp['children'])) {
+                    $comp['children'] = $this->addToParentSlotInChildren($comp['children'], $parentInstanceId, $slotName, $newComponent);
+                }
+            }
+        }
+        return $children;
     }
     
     /**
@@ -470,6 +674,220 @@ class Component extends BackendController
         $homePage->find()->fetch();
         
         return $homePage->getId() ? $homePage : null;
+    }
+    
+    /**
+     * API: 验证组件是否可以放置到目标位置
+     * POST /backend/visual/api/component/validate
+     * 
+     * 用于拖拽前预验证，提供即时反馈
+     * 
+     * 请求参数：
+     * - component_code: 组件代码
+     * - region: 目标区域
+     * - style_code: 模板代码
+     * - parent_component_code: 父组件代码（嵌套时）
+     * - slot: 目标 slot（嵌套时）
+     * - parent_instance_id: 父组件实例ID（用于数量检查）
+     * 
+     * 返回：
+     * - valid: 是否可以放置
+     * - message: 错误消息
+     * - error_code: 错误代码
+     * - compatible_components: 可放置的组件列表（如果验证失败）
+     */
+    public function postValidate()
+    {
+        try {
+            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            
+            $componentCode = $body['component_code'] ?? '';
+            $region = $body['region'] ?? '';
+            $styleCode = $body['style_code'] ?? '';
+            $parentComponentCode = $body['parent_component_code'] ?? null;
+            $targetSlot = $body['slot'] ?? null;
+            $parentInstanceId = $body['parent_instance_id'] ?? null;
+            
+            if (!$componentCode) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => '缺少组件代码',
+                    'error_code' => 'MISSING_COMPONENT_CODE',
+                ]);
+            }
+            
+            if (!$region && !$parentComponentCode) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => '缺少目标区域或父组件',
+                    'error_code' => 'MISSING_TARGET',
+                ]);
+            }
+            
+            // 执行验证
+            if ($parentComponentCode && $targetSlot) {
+                // 验证 slot 放置
+                $validation = $this->slotValidator->canPlaceInSlot(
+                    $componentCode,
+                    $parentComponentCode,
+                    $targetSlot,
+                    $styleCode,
+                    $parentInstanceId
+                );
+                
+                // 如果验证失败，返回可放置的组件列表
+                $compatibleComponents = [];
+                if (!$validation->isValid()) {
+                    $compatibleComponents = $this->slotValidator->getCompatibleComponentsForSlot(
+                        $parentComponentCode,
+                        $targetSlot,
+                        $styleCode
+                    );
+                }
+            } else {
+                // 验证区域放置
+                $validation = $this->slotValidator->canPlaceInRegion(
+                    $componentCode,
+                    $region,
+                    $styleCode
+                );
+                
+                // 如果验证失败，返回可放置的组件列表
+                $compatibleComponents = [];
+                if (!$validation->isValid()) {
+                    $compatibleComponents = $this->slotValidator->getCompatibleComponentsForRegion(
+                        $region,
+                        $styleCode
+                    );
+                }
+            }
+            
+            return $this->fetchJson([
+                'success' => true,
+                'valid' => $validation->isValid(),
+                'message' => $validation->getMessage(),
+                'error_code' => $validation->getErrorCode(),
+                'compatible_components' => $compatibleComponents ?? [],
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log("[Component API validate()] Error: " . $e->getMessage());
+            return $this->fetchJson([
+                'success' => false,
+                'valid' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'VALIDATION_ERROR',
+            ]);
+        }
+    }
+    
+    /**
+     * API: 获取区域/slot 的可放置组件列表
+     * GET /backend/visual/api/component/compatible
+     * 
+     * 用于智能筛选部件库
+     * 
+     * 请求参数：
+     * - region: 目标区域
+     * - style_code: 模板代码
+     * - parent_component_code: 父组件代码（查询 slot 时）
+     * - slot: slot 名称（查询 slot 时）
+     */
+    public function compatible()
+    {
+        try {
+            $region = $this->request->getParam('region', '');
+            $styleCode = $this->request->getParam('style_code', '');
+            $parentComponentCode = $this->request->getParam('parent_component_code', '');
+            $targetSlot = $this->request->getParam('slot', '');
+            
+            if ($parentComponentCode && $targetSlot) {
+                // 获取 slot 兼容组件
+                $components = $this->slotValidator->getCompatibleComponentsForSlot(
+                    $parentComponentCode,
+                    $targetSlot,
+                    $styleCode
+                );
+                
+                // 获取 slot 信息
+                $slotInfo = $this->slotValidator->getComponentSlots($parentComponentCode, $styleCode);
+                $slotConfig = $slotInfo[$targetSlot] ?? [];
+                
+                return $this->fetchJson([
+                    'success' => true,
+                    'type' => 'slot',
+                    'slot_name' => $targetSlot,
+                    'slot_type' => $slotConfig['slot_type'] ?? null,
+                    'accepts' => $slotConfig['accepts'] ?? [],
+                    'components' => $components,
+                ]);
+            } else {
+                // 获取区域兼容组件
+                $components = $this->slotValidator->getCompatibleComponentsForRegion(
+                    $region,
+                    $styleCode
+                );
+                
+                return $this->fetchJson([
+                    'success' => true,
+                    'type' => 'region',
+                    'region' => $region,
+                    'accepts' => $this->slotValidator->getRegionAccepts($region),
+                    'components' => $components,
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            error_log("[Component API compatible()] Error: " . $e->getMessage());
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * API: 获取组件的 slots 信息
+     * GET /backend/visual/api/component/slots
+     * 
+     * 用于查询组件是否是容器以及其 slot 定义
+     */
+    public function slots()
+    {
+        try {
+            $componentCode = $this->request->getParam('component_code', '');
+            $styleCode = $this->request->getParam('style_code', '');
+            
+            if (!$componentCode) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => '缺少组件代码',
+                ]);
+            }
+            
+            $slots = $this->slotValidator->getComponentSlots($componentCode, $styleCode);
+            $isContainer = !empty($slots);
+            $componentInfo = $this->slotValidator->getComponentInfo($componentCode, $styleCode);
+            
+            return $this->fetchJson([
+                'success' => true,
+                'component_code' => $componentCode,
+                'is_container' => $isContainer,
+                'slots' => $slots,
+                'region' => $componentInfo['region'] ?? 'content',
+                'category' => $componentInfo['category'] ?? 'content',
+                'placeable_in' => $componentInfo['placeable_in'] ?? [],
+            ]);
+            
+        } catch (\Exception $e) {
+            error_log("[Component API slots()] Error: " . $e->getMessage());
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
     
     /**

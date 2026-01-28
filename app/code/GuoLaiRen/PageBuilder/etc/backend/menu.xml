@@ -12,10 +12,10 @@
          icon="mdi mdi-file-document-multiple" 
          order="40"/>
     
-    <!-- 页面构建器子菜单 -->
+    <!-- 网站构建器子菜单 -->
     <add source="GuoLaiRen_PageBuilder::page_builder" 
          name="page_builder" 
-         title="页面构建器" 
+         title="网站构建器" 
          action="pagebuilder/backend/page/index"
          parent="GuoLaiRen_PageBuilder::menu_page_management" 
          icon="mdi mdi-file-document-edit" 
