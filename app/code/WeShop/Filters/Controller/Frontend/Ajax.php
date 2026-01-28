@@ -177,11 +177,13 @@ class Ajax extends PcController
         
         /** @var ProductCategory $productCategory */
         $productCategory = ObjectManager::getInstance(ProductCategory::class);
+        // 使用框架默认的表别名 main_table，避免 PostgreSQL SQL 语法问题
         $productCategory->reset()
-            ->fields('DISTINCT ' . ProductCategory::fields_product_id)
-            ->where(ProductCategory::fields_category_id, $categoryIds, 'in')
+            ->fields('main_table.' . ProductCategory::fields_product_id)
+            ->where('main_table.' . ProductCategory::fields_category_id, $categoryIds, 'in')
             ->joinProduct()
-            ->where('product.' . Product::fields_status, 1);
+            ->where('product.' . Product::fields_status, 1)
+            ->groupBy('main_table.' . ProductCategory::fields_product_id);
         
         $results = $productCategory->select()->fetchArray();
         

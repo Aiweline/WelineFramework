@@ -45,7 +45,9 @@ class RatingFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        return __('用户评分');
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        return $isEnglish ? 'Customer Reviews' : __('用户评分');
     }
     
     /**
@@ -121,7 +123,7 @@ class RatingFilterProvider extends AbstractFilterProvider
                 ->fields('COUNT(DISTINCT product_id) as count')
                 ->where('product_id', $productIds, 'in')
                 ->where('rating', $minRating, '>=')
-                ->where('status', 1); // 已审核的评论
+                ->where('status', Review::STATUS_APPROVED); // 已审核的评论
             
             $result = $reviewModel->find()->fetchArray();
             return (int)($result['count'] ?? 0);
@@ -144,7 +146,7 @@ class RatingFilterProvider extends AbstractFilterProvider
             $reviewModel->reset()
                 ->fields('product_id')
                 ->where('product_id', $productIds, 'in')
-                ->where('status', 1)
+                ->where('status', Review::STATUS_APPROVED)
                 ->groupBy('product_id')
                 ->having('AVG(rating)', $minRating, '>=');
             
@@ -177,5 +179,23 @@ class RatingFilterProvider extends AbstractFilterProvider
     {
         $this->maxRating = max(1, $rating);
         return $this;
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function getValueLabel(string $value): string
+    {
+        $rating = (int)$value;
+        if ($rating < 1 || $rating > $this->maxRating) {
+            return $value;
+        }
+        
+        $lang = \Weline\Framework\App\State::getLangLocal();
+        $isEnglish = str_starts_with($lang, 'en');
+        
+        $stars = str_repeat('★', $rating) . str_repeat('☆', $this->maxRating - $rating);
+        $suffix = $isEnglish ? 'and above' : __('及以上');
+        return $stars . ' ' . $suffix;
     }
 }

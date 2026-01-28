@@ -92,14 +92,12 @@ abstract class CliAbstract implements CommandInterface
             [
                 '-h, --help' => '显示帮助信息',
                 '-v, --version' => '显示版本信息',
-                '-f <关键词>' => '搜索包含关键词的命令',
             ],
             [],
             [
                 '显示所有可用命令' => 'php bin/w',
                 '查看命令帮助' => 'php bin/w <command> -h',
-                '搜索命令(方式1)' => 'php bin/w find <关键词>',
-                '搜索命令(方式2)' => 'php bin/w -f <关键词>',
+                '搜索命令' => 'php bin/w <关键词>',
             ]
         );
     }
