@@ -1027,9 +1027,11 @@ class Taglib
                             case '@tag()':
                                 $template_html = htmlentities($tag_data[0]);
                                 throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
-                            // <else/>
+                            // <else/> - 支持自闭合和非自闭合形式
                             case 'tag-self-close':
-                                $result = self::PHP_OPEN_TAG . 'php else:' . self::PHP_CLOSE_TAG;
+                                // 如果有子内容（标签被错误识别为非自闭合时），也一起输出
+                                $content = $tag_data[2] ?? '';
+                                $result = self::PHP_OPEN_TAG . 'php else:' . self::PHP_CLOSE_TAG . $content;
                                 break;
                             default:
                         }
@@ -2443,11 +2445,22 @@ class Taglib
                         $attrNodes[] = new AttrNode($token->line, $name, $this->parseAttributeValueNodes($value, $token->line, $frameworkTags));
                     }
                     $tag = new TagNode($token->line, $tagName, $attrNodes);
-                    $tag->selfClosing = $selfClosing;
+                    
+                    // 获取标签配置
+                    $tagConfig = $frameworkTags[$tagName] ?? $frameworkTags['w:' . $tagName] ?? [];
+                    
+                    // 对于只定义了 tag-self-close 的标签（如 <else/>），即使 token 中没有正确识别为自闭合，
+                    // 也应该强制将其视为自闭合标签
+                    $isSelfCloseOnlyTag = !empty($tagConfig['tag-self-close']) 
+                        && empty($tagConfig['tag']) 
+                        && empty($tagConfig['tag-start']) 
+                        && empty($tagConfig['tag-end']);
+                    
+                    $tag->selfClosing = $selfClosing || $isSelfCloseOnlyTag;
                     $tag->rawAttributes = $rawAttributes;
                     $tag->raw = $rawMarkup;
                     
-                    if ($selfClosing) {
+                    if ($tag->selfClosing) {
                         $current->children[] = $tag;
                     } else {
                         $stack[] = $tag;
@@ -2635,8 +2648,30 @@ class Taglib
         $result = [];
         foreach ($nodes as $node) {
             if ($node instanceof TagNode) {
-                // 控制流标签（else, elseif）直接输出为原始标记，不作为框架标签处理
+                // 控制流标签（else, elseif）需要正确处理，而不是直接输出为原始标记
                 if (in_array($node->name, self::PASSTHROUGH_TAGS, true)) {
+                    // 获取标签配置
+                    $tagConfig = $tags[$node->name] ?? $tags['w:' . $node->name] ?? [];
+                    
+                    // 如果标签只定义了 tag-self-close，应该作为自闭合标签处理
+                    $isSelfCloseOnlyTag = !empty($tagConfig['tag-self-close']) 
+                        && empty($tagConfig['tag']) 
+                        && empty($tagConfig['tag-start']) 
+                        && empty($tagConfig['tag-end']);
+                    
+                    if ($isSelfCloseOnlyTag || $node->selfClosing) {
+                        // 直接调用回调函数生成 PHP 代码
+                        if (!empty($tagConfig['callback'])) {
+                            $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
+                            $tagData = [$node->raw ?? '', $node->rawAttributes ?? '', $content];
+                            $attributes = $this->buildAttributesFromRaw($node->rawAttributes ?? '');
+                            $rendered = $tagConfig['callback']('tag-self-close', $tagConfig, $tagData, $attributes);
+                            $result = array_merge($result, $this->compileStringToNodes($rendered . $content, $tags, $template, $fileName));
+                            continue;
+                        }
+                    }
+                    
+                    // 其他情况保持原有逻辑
                     $result[] = new TextNode($node->line, $this->buildOriginalTagMarkup($node));
                     continue;
                 }
@@ -2748,6 +2783,11 @@ class Taglib
         }
         if (!empty($tagConfig['tag-start']) && !empty($tagConfig['tag-end'])) {
             return 'tag-start';
+        }
+        // 如果标签只定义了 tag-self-close（如 <else/>），但没有被识别为自闭合标签，
+        // 仍然应该使用 tag-self-close 类型，而不是默认的 'tag'
+        if (!empty($tagConfig['tag-self-close'])) {
+            return 'tag-self-close';
         }
         return 'tag';
     }
