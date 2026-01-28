@@ -27,6 +27,20 @@ use Weline\Taglib\TaglibInterface;
 
 class Acl implements TaglibInterface
 {
+    /**
+     * 防止权限检查重入的标志
+     */
+    private static bool $checkingPermission = false;
+    
+    /**
+     * 缓存的 Request 实例，避免重复获取
+     */
+    private static ?Request $cachedRequest = null;
+    
+    /**
+     * 缓存的 Session 实例
+     */
+    private static $cachedSession = null;
 
     /**
      * @inheritDoc
@@ -78,50 +92,74 @@ class Acl implements TaglibInterface
             if (empty($source)) {
                 throw new \Exception(__('acl标签缺少source属性'));
             }
-            // 判断当前前后后台环境
-            /**@var Request $request */
-            $request = ObjectManager::getInstance(Request::class);
-            /**@var BackendSession|FrontendSession $session */
-            $session = ObjectManager::getInstance($request->isBackend() ? BackendSession::class : FrontendSession::class);
-            // 获取对应用户
-            $user = $session->getLoginUser();
-            // 角色
-            $role = $user->getRoleModel();
-            if ($role->getId() === 1) {
-                return $tag_data[2] ?? '';
+            
+            // 防止权限检查重入导致的循环
+            if (self::$checkingPermission) {
+                // 如果正在检查权限，返回空内容避免循环
+                return '<!-- acl check in progress -->';
             }
-            /**@var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
-            $cacheKey = 'acl_' . $role->getId() . '_source';
-            $accesses = $cache->get($cacheKey);
-            if (!$accesses) {
-                if (empty($role->getId())) {
+            
+            try {
+                self::$checkingPermission = true;
+                
+                // 使用缓存的 Request 实例，避免重复获取触发循环
+                if (self::$cachedRequest === null) {
+                    self::$cachedRequest = ObjectManager::getInstance(Request::class);
+                }
+                $request = self::$cachedRequest;
+                
+                // 获取 session，使用缓存避免重复实例化
+                if (self::$cachedSession === null) {
+                    /**@var BackendSession|FrontendSession $session */
+                    self::$cachedSession = ObjectManager::getInstance(
+                        $request->isBackend() ? BackendSession::class : FrontendSession::class
+                    );
+                }
+                $session = self::$cachedSession;
+                
+                // 获取对应用户
+                $user = $session->getLoginUser();
+                // 角色
+                $role = $user->getRoleModel();
+                if ($role->getId() === 1) {
+                    return $tag_data[2] ?? '';
+                }
+                /**@var CacheInterface $cache */
+                $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+                $cacheKey = 'acl_' . $role->getId() . '_source';
+                $accesses = $cache->get($cacheKey);
+                if (!$accesses) {
+                    if (empty($role->getId())) {
+                        /**@var MessageManager $messageManager */
+                        $messageManager = ObjectManager::getInstance(MessageManager::class);
+                        $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
+                        $messageManager->addWarning($msg);
+                        return '<!-- ' . $msg . ' 资源 -->';
+                    }
+                    // 检查权限资源
+                    /**@var RoleAccess $roleAccess */
+                    $roleAccess = ObjectManager::getInstance(RoleAccess::class);
+                    $accesses = $roleAccess->getRoleAccessListArray($role);
+                    foreach ($accesses as &$access) {
+                        $access = $access['source_id'];
+                    }
+                    $cache->set($cacheKey, $accesses);
+                }
+                if (!in_array($source, $accesses)) {
                     /**@var MessageManager $messageManager */
                     $messageManager = ObjectManager::getInstance(MessageManager::class);
                     $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
                     $messageManager->addWarning($msg);
                     return '<!-- ' . $msg . ' 资源 -->';
                 }
-                // 检查权限资源
-                /**@var RoleAccess $roleAccess */
-                $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-                $accesses = $roleAccess->getRoleAccessListArray($role);
-                foreach ($accesses as &$access) {
-                    $access = $access['source_id'];
+                if (DEV) {
+                    return '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
                 }
-                $cache->set($cacheKey, $accesses);
+                return $tag_data[2] ?? '';
+            } finally {
+                // 确保标志被重置，避免影响后续正常的 ACL 检查
+                self::$checkingPermission = false;
             }
-            if (!in_array($source, $accesses)) {
-                /**@var MessageManager $messageManager */
-                $messageManager = ObjectManager::getInstance(MessageManager::class);
-                $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
-                $messageManager->addWarning($msg);
-                return '<!-- ' . $msg . ' 资源 -->';
-            }
-            if (DEV) {
-                return '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
-            }
-            return $tag_data[2] ?? '';
         };
     }
 
