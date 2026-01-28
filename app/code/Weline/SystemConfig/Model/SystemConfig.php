@@ -32,8 +32,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public const area_BACKEND = 'backend';
     public const area_FRONTEND = 'frontend';
 
+    public string $_primary_key = self::fields_KEY;
     public array $_index_sort_keys = ['key', 'module'];
     public array $_unit_primary_keys = ['key', 'module'];
+    public array $_unit_unique_fields = ['key', 'module', 'area'];
 
     static $configs = [];
 
@@ -121,9 +123,40 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            $this->setData(['key' => $key, 'area' => $area, 'module' => $module, 'v' => $value])
-                ->forceCheck()
-                ->save();
+            // 清理模型状态，避免前一次操作影响当前操作
+            $this->clear()->reset();
+            
+            // 先查询是否存在（使用完整的唯一条件）
+            $existing = $this->getQuery()
+                ->where(self::fields_KEY, $key)
+                ->where(self::fields_MODULE, $module)
+                ->where(self::fields_AREA, $area)
+                ->find()
+                ->fetch();
+            
+            // 清理查询状态
+            $this->clearQuery();
+            
+            if ($existing && isset($existing[self::fields_KEY])) {
+                // 存在则更新
+                $this->getQuery()
+                    ->where(self::fields_KEY, $key)
+                    ->where(self::fields_MODULE, $module)
+                    ->where(self::fields_AREA, $area)
+                    ->update([self::fields_VALUE => $value])
+                    ->fetch();
+            } else {
+                // 不存在则插入
+                $this->getQuery()
+                    ->insert([
+                        self::fields_KEY => $key,
+                        self::fields_VALUE => $value,
+                        self::fields_MODULE => $module,
+                        self::fields_AREA => $area
+                    ])
+                    ->fetch();
+            }
+            
             # 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);

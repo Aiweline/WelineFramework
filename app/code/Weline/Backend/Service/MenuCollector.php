@@ -64,10 +64,6 @@ class MenuCollector
                 $disabledModules[] = $moduleName;
             }
         }
-        // #region agent log
-        $weShopCmsStatus = $env->getModuleStatus('WeShop_Cms');
-        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'A', 'location' => 'MenuCollector.php:63', 'message' => 'WeShop_Cms模块状态检查', 'data' => ['WeShop_Cms_status' => $weShopCmsStatus, 'WeShop_Cms_in_active' => in_array('WeShop_Cms', $activeModuleNames, true), 'WeShop_Cms_in_disabled' => in_array('WeShop_Cms', $disabledModules, true), 'disabledModules' => $disabledModules], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-        // #endregion
 
         # 读取菜单配置（所有模块的菜单 XML，包括禁用的模块）
         $modules_xml_menus = $this->menuReader->read();
@@ -101,11 +97,6 @@ class MenuCollector
                     # 根据模块状态设置菜单 is_enable：禁用模块的菜单设置为 0，启用模块的菜单设置为 1
                     $isDisabled = in_array($module, $disabledModules, true);
                     $menu[Menu::fields_IS_ENABLE] = $isDisabled ? 0 : 1;
-                    // #region agent log
-                    if (strpos($menu[Menu::fields_SOURCE] ?? '', 'WeShop_Cms::cms_page_management') !== false || $module === 'WeShop_Cms') {
-                        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'B', 'location' => 'MenuCollector.php:95', 'message' => '顶层菜单处理前', 'data' => ['module' => $module, 'source' => $menu[Menu::fields_SOURCE] ?? '', 'isDisabled' => $isDisabled, 'is_enable_set' => $menu[Menu::fields_IS_ENABLE], 'module_in_disabled' => in_array($module, $disabledModules, true)], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                    }
-                    // #endregion
                     # 收集文件中的菜单 source
                     $file_menu_sources[] = $menu[Menu::fields_SOURCE];
                     # 先查询一遍
@@ -113,24 +104,11 @@ class MenuCollector
                     $this->menu->clear();
                     // 以唯一source索引为准检测，存在更新不存在新增
                     $result = $this->menu->setData($menu)->save(true, 'source');
-                    // #region agent log
-                    if (strpos($menu[Menu::fields_SOURCE] ?? '', 'WeShop_Cms::cms_page_management') !== false || $module === 'WeShop_Cms') {
-                        $savedIsEnable = $this->menu->getData(Menu::fields_IS_ENABLE);
-                        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'C', 'location' => 'MenuCollector.php:103', 'message' => 'save后检查', 'data' => ['source' => $menu[Menu::fields_SOURCE] ?? '', 'is_enable_in_data' => $menu[Menu::fields_IS_ENABLE], 'is_enable_after_save' => $savedIsEnable], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                    }
-                    // #endregion
                     $menu[Menu::fields_PATH] = $this->menu->getData(Menu::fields_ID);
                     // 确保 is_enable 字段也被更新（使用 update 确保所有字段都被更新）
                     $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_SOURCE])
                         ->update($menu)
                         ->fetch();
-                    // #region agent log
-                    if (strpos($menu[Menu::fields_SOURCE] ?? '', 'WeShop_Cms::cms_page_management') !== false || $module === 'WeShop_Cms') {
-                        $this->menu->clear()->where(Menu::fields_SOURCE, $menu[Menu::fields_SOURCE])->find();
-                        $afterUpdateIsEnable = $this->menu->getData(Menu::fields_IS_ENABLE);
-                        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'D', 'location' => 'MenuCollector.php:108', 'message' => 'update后检查', 'data' => ['source' => $menu[Menu::fields_SOURCE] ?? '', 'is_enable_in_update_data' => $menu[Menu::fields_IS_ENABLE], 'is_enable_after_update' => $afterUpdateIsEnable], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                    }
-                    // #endregion
                     unset($menus['data'][$key]);
                 }
             }
@@ -180,11 +158,6 @@ class MenuCollector
                 # 查找父菜单，获取父菜单的id
                 $parent = $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_PARENT_SOURCE])->find()->fetch();
                 if ($pid = $parent->getData(Menu::fields_ID)) {
-                    // #region agent log
-                    if (strpos($menu[Menu::fields_SOURCE] ?? '', 'WeShop_Cms::cms_page_management') !== false || ($menu[Menu::fields_MODULE] ?? '') === 'WeShop_Cms') {
-                        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'E', 'location' => 'MenuCollector.php:160', 'message' => '再次处理父菜单前', 'data' => ['source' => $menu[Menu::fields_SOURCE] ?? '', 'module' => $menu[Menu::fields_MODULE] ?? '', 'is_enable_before' => $menu[Menu::fields_IS_ENABLE] ?? null], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                    }
-                    // #endregion
                     // 保存当前的 is_enable 值，避免被覆盖
                     $currentIsEnable = $menu[Menu::fields_IS_ENABLE] ?? null;
                     $menu[Menu::fields_PID] = $pid;
@@ -195,13 +168,6 @@ class MenuCollector
                         $menu[Menu::fields_IS_ENABLE] = $currentIsEnable;
                     }
                     $this->menu->save($menu);
-                    // #region agent log
-                    if (strpos($menu[Menu::fields_SOURCE] ?? '', 'WeShop_Cms::cms_page_management') !== false || ($menu[Menu::fields_MODULE] ?? '') === 'WeShop_Cms') {
-                        $this->menu->clear()->where(Menu::fields_SOURCE, $menu[Menu::fields_SOURCE])->find();
-                        $afterSaveIsEnable = $this->menu->getData(Menu::fields_IS_ENABLE);
-                        file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'E', 'location' => 'MenuCollector.php:172', 'message' => '再次处理父菜单后', 'data' => ['source' => $menu[Menu::fields_SOURCE] ?? '', 'is_enable_preserved' => $currentIsEnable, 'is_enable_after_save' => $afterSaveIsEnable], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                    }
-                    // #endregion
                 }
             }
         }
@@ -266,13 +232,6 @@ class MenuCollector
 
         // 更新菜单到权限表
         $all_menus = $this->menu->reset()->order('order', 'ASC')->select()->fetchArray();
-        // #region agent log
-        foreach ($all_menus as $menuItem) {
-            if (strpos($menuItem['source'] ?? '', 'WeShop_Cms::cms_page_management') !== false || ($menuItem['module'] ?? '') === 'WeShop_Cms') {
-                file_put_contents('.cursor/debug.log', json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'F', 'location' => 'MenuCollector.php:230', 'message' => '最终查询结果', 'data' => ['source' => $menuItem['source'] ?? '', 'module' => $menuItem['module'] ?? '', 'is_enable_final' => $menuItem['is_enable'] ?? null], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-            }
-        }
-        // #endregion
 
         // 先收集所有应该存在的菜单 source，用于清理权限表中不存在的菜单权限
         $collected_menu_sources = [];
