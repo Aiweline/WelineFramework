@@ -90,25 +90,40 @@ class Component extends Model
      * @param string $name 组件名称
      * @return string 生成的组件代码
      */
+    /**
+     * 生成标准化的组件代码
+     * 
+     * 新规范：使用简单格式 {category}-{name}，不带模板前缀
+     * 模板区分通过 style_code 字段实现
+     * 
+     * @param string $styleCode 模板代码（保留参数以保持兼容，实际不使用）
+     * @param string $category 组件分类
+     * @param string $name 组件名称（可以是 component.json 中的 key，如 header-nav）
+     * @return string 标准化的组件代码
+     */
     public static function generateComponentCode(string $styleCode, string $category, string $name): string
     {
-        // 清理组件名称：移除路径分隔符，转换为下划线格式
-        $cleanName = str_replace(['/', '\\', '-'], '_', $name);
-        // 移除多余的下划线
-        $cleanName = preg_replace('/_+/', '_', $cleanName);
-        $cleanName = trim($cleanName, '_');
+        // 如果名称已经是标准格式（包含破折号），直接返回小写版本
+        if (strpos($name, '-') !== false && strpos($name, '_') === false) {
+            return strtolower($name);
+        }
+        
+        // 清理组件名称：移除路径分隔符，统一为破折号格式
+        $cleanName = str_replace(['/', '\\', '_'], '-', $name);
+        // 移除多余的破折号
+        $cleanName = preg_replace('/-+/', '-', $cleanName);
+        $cleanName = trim($cleanName, '-');
         
         // 如果名称以 category 开头，移除重复的前缀
-        // 例如：header_nav -> nav (当 category=header 时)
-        // 例如：footer_links -> links (当 category=footer 时)
-        // 例如：content_slider -> slider (当 category=content 时)
-        $categoryPrefix = strtolower($category) . '_';
+        // 例如：header-nav -> nav (当 category=header 时)
+        $categoryPrefix = strtolower($category) . '-';
         if (stripos($cleanName, $categoryPrefix) === 0) {
             $cleanName = substr($cleanName, strlen($categoryPrefix));
         }
-        // 也处理没有下划线的情况：header_header -> header（如果名称等于category）
+        
+        // 如果名称等于 category，保持原名
         if (strtolower($cleanName) === strtolower($category)) {
-            $cleanName = $category; // 保持原名
+            $cleanName = $category;
         }
         
         // 如果名称为空，使用 category 作为名称
@@ -116,8 +131,27 @@ class Component extends Model
             $cleanName = $category;
         }
         
-        // 生成组件代码：模板名_类型_名字
-        return strtolower($styleCode . '_' . $category . '_' . $cleanName);
+        // 生成组件代码：{category}-{name}（不带模板前缀）
+        return strtolower($category . '-' . $cleanName);
+    }
+    
+    /**
+     * 直接使用 component.json 中的组件代码
+     * 
+     * 这是推荐的方式：直接使用 component.json 中定义的 key 作为组件代码
+     * 
+     * @param string $code component.json 中的组件代码
+     * @return string 标准化的组件代码
+     */
+    public static function normalizeComponentCode(string $code): string
+    {
+        // 如果已经是标准格式，直接返回
+        if (strpos($code, '-') !== false && strpos($code, '_') === false) {
+            return strtolower($code);
+        }
+        
+        // 转换下划线为破折号
+        return strtolower(str_replace('_', '-', $code));
     }
     
     /**
@@ -138,6 +172,169 @@ class Component extends Model
     public function setConfigSchema(array $schema): self
     {
         return $this->setData(self::fields_CONFIG_SCHEMA, json_encode($schema, JSON_UNESCAPED_UNICODE));
+    }
+    
+    /**
+     * 获取组件的 slots 定义
+     * 
+     * Slots 定义了组件内部可以嵌套子组件的位置
+     * 
+     * @return array slots 配置数组
+     *   [
+     *     'slot_name' => [
+     *       'name' => '显示名称',
+     *       'accepts' => ['content', 'widget'],  // 可接受的组件类别
+     *       'slot_type' => 'filters-header',     // slot 类型标识
+     *       'max' => 10                          // 最大组件数
+     *     ]
+     *   ]
+     */
+    public function getSlots(): array
+    {
+        $configSchema = $this->getConfigSchema();
+        return $configSchema['slots'] ?? [];
+    }
+    
+    /**
+     * 设置组件的 slots 定义
+     */
+    public function setSlots(array $slots): self
+    {
+        $configSchema = $this->getConfigSchema();
+        $configSchema['slots'] = $slots;
+        return $this->setConfigSchema($configSchema);
+    }
+    
+    /**
+     * 检查组件是否是容器（有 slots 定义）
+     */
+    public function isContainer(): bool
+    {
+        return !empty($this->getSlots());
+    }
+    
+    /**
+     * 获取组件可放置的区域列表
+     * 
+     * @return array 可放置的区域，如 ['header'], ['content'], ['footer']
+     */
+    public function getPlaceableIn(): array
+    {
+        $configSchema = $this->getConfigSchema();
+        
+        // 优先使用 config_schema 中的 placeable_in
+        if (!empty($configSchema['placeable_in'])) {
+            return $configSchema['placeable_in'];
+        }
+        
+        // 回退到 region
+        if (!empty($configSchema['region'])) {
+            return [$configSchema['region']];
+        }
+        
+        // 最后回退到 category
+        $category = $this->getData(self::fields_CATEGORY) ?: self::CATEGORY_CONTENT;
+        return [$category];
+    }
+    
+    /**
+     * 设置组件可放置的区域
+     */
+    public function setPlaceableIn(array $regions): self
+    {
+        $configSchema = $this->getConfigSchema();
+        $configSchema['placeable_in'] = $regions;
+        return $this->setConfigSchema($configSchema);
+    }
+    
+    /**
+     * 获取组件兼容的 slot 类型列表
+     * 
+     * @return array slot 类型列表，['*'] 表示兼容所有 slot
+     */
+    public function getCompatibleSlotTypes(): array
+    {
+        $configSchema = $this->getConfigSchema();
+        return $configSchema['compatible_slot_types'] ?? ['*'];
+    }
+    
+    /**
+     * 设置组件兼容的 slot 类型
+     */
+    public function setCompatibleSlotTypes(array $types): self
+    {
+        $configSchema = $this->getConfigSchema();
+        $configSchema['compatible_slot_types'] = $types;
+        return $this->setConfigSchema($configSchema);
+    }
+    
+    /**
+     * 检查组件是否可以放置在指定区域
+     * 
+     * @param string $region 目标区域
+     * @return bool
+     */
+    public function canPlaceIn(string $region): bool
+    {
+        return in_array($region, $this->getPlaceableIn());
+    }
+    
+    /**
+     * 检查组件是否兼容指定的 slot 类型
+     * 
+     * @param string $slotType slot 类型
+     * @return bool
+     */
+    public function isCompatibleWithSlotType(string $slotType): bool
+    {
+        $compatibleTypes = $this->getCompatibleSlotTypes();
+        return in_array('*', $compatibleTypes) || in_array($slotType, $compatibleTypes);
+    }
+    
+    /**
+     * 检查指定 slot 是否接受某个组件类别
+     * 
+     * @param string $slotName slot 名称
+     * @param string $category 组件类别
+     * @return bool
+     */
+    public function slotAccepts(string $slotName, string $category): bool
+    {
+        $slots = $this->getSlots();
+        if (!isset($slots[$slotName])) {
+            return false;
+        }
+        
+        $slotConfig = $slots[$slotName];
+        $accepts = $slotConfig['accepts'] ?? [];
+        
+        // 如果没有定义 accepts，默认接受所有
+        if (empty($accepts)) {
+            return true;
+        }
+        
+        return in_array($category, $accepts);
+    }
+    
+    /**
+     * 获取组件的区域（region）
+     * 
+     * @return string 区域名称
+     */
+    public function getRegion(): string
+    {
+        $configSchema = $this->getConfigSchema();
+        return $configSchema['region'] ?? $this->getData(self::fields_CATEGORY) ?? self::CATEGORY_CONTENT;
+    }
+    
+    /**
+     * 设置组件的区域
+     */
+    public function setRegion(string $region): self
+    {
+        $configSchema = $this->getConfigSchema();
+        $configSchema['region'] = $region;
+        return $this->setConfigSchema($configSchema);
     }
     
     /**
@@ -365,8 +562,8 @@ class Component extends Model
             if (file_exists($filePath)) {
                 $result['scanned']++;
                 try {
-                    // 使用统一格式生成组件代码：模板名_类型_名字
-                    $componentCode = self::generateComponentCode($styleCode, $category, $category);
+                    // 系统组件代码：{category}-system（不带模板前缀）
+                    $componentCode = $category . '-system';
                     $registerResult = self::registerComponentFromFile(
                         $styleCode,
                         $componentCode,
@@ -411,8 +608,8 @@ class Component extends Model
                     try {
                         // 获取组件分类（优先使用 region，回退到 category）
                         $category = $config['region'] ?? $config['category'] ?? self::CATEGORY_CONTENT;
-                        // 使用统一格式生成组件代码：模板名_类型_名字
-                        $componentCode = self::generateComponentCode($styleCode, $category, $code);
+                        // 直接使用 component.json 中的组件代码（新规范：不带模板前缀）
+                        $componentCode = self::normalizeComponentCode($code);
                         
                         $registerResult = self::registerComponentFromJson(
                             $styleCode,
@@ -452,8 +649,8 @@ class Component extends Model
                 }
                 
                 // 组件名称：使用目录名和文件名
-                $componentName = ($dirName && $dirName !== '.') ? $dirName . '_' . $fileName : $fileName;
-                // 使用统一格式生成组件代码：模板名_类型_名字
+                $componentName = ($dirName && $dirName !== '.') ? $dirName . '-' . $fileName : $fileName;
+                // 生成标准组件代码：{category}-{name}（不带模板前缀）
                 $componentCode = self::generateComponentCode($styleCode, $category, $componentName);
                 
                 try {
@@ -536,10 +733,11 @@ class Component extends Model
         $relativePath = str_replace($basePath, '', $filePath);
         $relativePath = str_replace('\\', '/', $relativePath);
         
-        // 检查是否已存在
+        // 检查是否已存在（使用 code + style_code 作为唯一键）
         $existing = clone $componentModel;
         $existing->clear()
             ->where(self::fields_CODE, $componentCode)
+            ->where(self::fields_STYLE_CODE, $styleCode)
             ->find()
             ->fetch();
         
@@ -617,10 +815,11 @@ class Component extends Model
         // 从配置中获取分类（优先使用 region，回退到 category）
         $category = $config['region'] ?? $config['category'] ?? self::CATEGORY_CONTENT;
         
-        // 检查是否已存在
+        // 检查是否已存在（使用 code + style_code 作为唯一键）
         $existing = clone $componentModel;
         $existing->clear()
             ->where(self::fields_CODE, $componentCode)
+            ->where(self::fields_STYLE_CODE, $styleCode)
             ->find()
             ->fetch();
         
@@ -652,14 +851,17 @@ class Component extends Model
         $debugLog('Data prepared', ['data_keys' => array_keys($data), 'sort_order' => $data[self::fields_SORT_ORDER], 'is_system' => $data[self::fields_IS_SYSTEM], 'is_active' => $data[self::fields_IS_ACTIVE]], 'C');
         // #endregion
         
-        // 额外存储 region 信息到 config_schema
+        // 额外存储 region 和 icon 信息到 config_schema
+        $configSchema = [
+            'config_groups' => $config['config_groups'] ?? [],
+        ];
         if (isset($config['region'])) {
-            $configSchema = [
-                'region' => $config['region'],
-                'config_groups' => $config['config_groups'] ?? [],
-            ];
-            $data[self::fields_CONFIG_SCHEMA] = json_encode($configSchema, JSON_UNESCAPED_UNICODE);
+            $configSchema['region'] = $config['region'];
         }
+        if (isset($config['icon'])) {
+            $configSchema['icon'] = $config['icon'];
+        }
+        $data[self::fields_CONFIG_SCHEMA] = json_encode($configSchema, JSON_UNESCAPED_UNICODE);
         
         if ($existing->getId()) {
             // #region agent log

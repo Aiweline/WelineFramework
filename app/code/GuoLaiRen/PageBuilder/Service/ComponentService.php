@@ -404,26 +404,134 @@ class ComponentService
     
     /**
      * 根据组件代码获取组件
+     * 
+     * 查找顺序：
+     * 1. 如果指定了 styleCode，先精确匹配 code + style_code
+     * 2. 如果没有指定 styleCode 或没找到，尝试只用 code 查找
+     * 3. 如果组件代码是旧格式（带模板前缀），尝试解析并查找
+     * 
+     * @param string $componentCode 组件代码
+     * @param string|null $styleCode 模板代码（可选，推荐传入）
+     * @return Component|null
      */
-    public function getByCode(string $componentCode): ?Component
+    public function getByCode(string $componentCode, ?string $styleCode = null): ?Component
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:getByCode', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['componentCode' => $componentCode], 'H');
-        // #endregion
+        // 标准化组件代码（移除可能的模板前缀，转换下划线为破折号）
+        $normalizedCode = $this->normalizeComponentCode($componentCode, $styleCode);
         
+        // 1. 如果指定了 styleCode，先精确匹配
+        if ($styleCode) {
+            $component = clone $this->componentModel;
+            $component->clear()
+                ->where(Component::fields_CODE, $normalizedCode)
+                ->where(Component::fields_STYLE_CODE, $styleCode)
+                ->find()
+                ->fetch();
+            
+            if ($component->getId()) {
+                return $component;
+            }
+        }
+        
+        // 2. 尝试只用标准化后的 code 查找
         $component = clone $this->componentModel;
         $component->clear()
-            ->where(Component::fields_CODE, $componentCode)
+            ->where(Component::fields_CODE, $normalizedCode)
+            ->where(Component::fields_IS_ACTIVE, 1)
             ->find()
             ->fetch();
         
-        // #region agent log
-        $id = $component->getId();
-        $debugLog('After fetch', ['componentCode' => $componentCode, 'id' => $id, 'idType' => gettype($id)], 'H');
-        // #endregion
+        if ($component->getId()) {
+            return $component;
+        }
         
-        return $component->getId() ? $component : null;
+        // 3. 如果还没找到，尝试用原始代码查找（兼容旧格式）
+        if ($normalizedCode !== $componentCode) {
+            $component = clone $this->componentModel;
+            $component->clear()
+                ->where(Component::fields_CODE, $componentCode)
+                ->where(Component::fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            
+            if ($component->getId()) {
+                return $component;
+            }
+        }
+        
+        // 4. 尝试模糊匹配（处理可能的格式差异）
+        $component = $this->fuzzyFindComponent($componentCode, $styleCode);
+        
+        return $component;
+    }
+    
+    /**
+     * 标准化组件代码
+     * 
+     * 处理各种格式：
+     * - sattaking_header_nav -> header-nav
+     * - tpmst_content_hero -> content-hero
+     * - header-nav -> header-nav（已是标准格式）
+     */
+    private function normalizeComponentCode(string $code, ?string $styleCode = null): string
+    {
+        // 如果已经是标准格式（包含破折号，不包含下划线），直接返回
+        if (strpos($code, '-') !== false && strpos($code, '_') === false) {
+            return strtolower($code);
+        }
+        
+        // 如果有模板前缀，尝试移除
+        if ($styleCode && strpos($code, $styleCode . '_') === 0) {
+            $withoutPrefix = substr($code, strlen($styleCode) + 1);
+            return strtolower(str_replace('_', '-', $withoutPrefix));
+        }
+        
+        // 尝试检测并移除模板前缀（格式：{styleCode}_{category}_{name}）
+        if (preg_match('/^([a-z0-9]+)_([a-z]+)_(.+)$/i', $code, $matches)) {
+            $category = strtolower($matches[2]);
+            $name = str_replace('_', '-', strtolower($matches[3]));
+            return "{$category}-{$name}";
+        }
+        
+        // 只转换下划线为破折号
+        return strtolower(str_replace('_', '-', $code));
+    }
+    
+    /**
+     * 模糊查找组件
+     * 
+     * 尝试多种格式匹配
+     */
+    private function fuzzyFindComponent(string $componentCode, ?string $styleCode = null): ?Component
+    {
+        $possibleCodes = [];
+        
+        // 生成可能的代码格式
+        $normalizedCode = strtolower(str_replace('_', '-', $componentCode));
+        $possibleCodes[] = $normalizedCode;
+        
+        // 如果有模板前缀格式的代码，提取核心部分
+        if (preg_match('/^([a-z0-9]+)[-_]([a-z]+)[-_](.+)$/i', $componentCode, $matches)) {
+            $possibleCodes[] = strtolower($matches[2] . '-' . str_replace('_', '-', $matches[3]));
+        }
+        
+        // 尝试每种可能的代码
+        foreach (array_unique($possibleCodes) as $code) {
+            $component = clone $this->componentModel;
+            $query = $component->clear()->where(Component::fields_CODE, $code);
+            
+            if ($styleCode) {
+                $query->where(Component::fields_STYLE_CODE, $styleCode);
+            }
+            
+            $query->where(Component::fields_IS_ACTIVE, 1)->find()->fetch();
+            
+            if ($component->getId()) {
+                return $component;
+            }
+        }
+        
+        return null;
     }
     
     /**
@@ -435,16 +543,17 @@ class ComponentService
      * 
      * @param string $componentCode 组件代码
      * @param array $config 自定义配置（空则使用默认配置）
+     * @param string|null $styleCode 模板代码（可选，用于精确查找组件）
      * @return string 渲染后的 HTML
      */
-    public function renderPreview(string $componentCode, array $config = []): string
+    public function renderPreview(string $componentCode, array $config = [], ?string $styleCode = null): string
     {
         // #region agent log
         $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:renderPreview', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['componentCode' => $componentCode], 'H');
+        $debugLog('Entry', ['componentCode' => $componentCode, 'styleCode' => $styleCode], 'H');
         // #endregion
         
-        $component = $this->getByCode($componentCode);
+        $component = $this->getByCode($componentCode, $styleCode);
         
         // #region agent log
         $debugLog('After getByCode', ['componentCode' => $componentCode, 'found' => $component !== null], 'H');
@@ -491,6 +600,12 @@ class ComponentService
         $template->assign('is_preview', true);
         $template->assign('colors', $colors); // 颜色配置
         $template->assign('template_code', $styleCode); // 模板代码
+        
+        // 为预览模式提供示例数据（确保所有组件都能正常显示预览）
+        $previewData = $this->getPreviewSampleData($componentCode);
+        foreach ($previewData as $key => $value) {
+            $template->assign($key, $value);
+        }
         
         try {
             // 检查组件文件是否存在
@@ -687,9 +802,10 @@ class ComponentService
             }
         }
         
-        // 从 config_schema 中提取 region（如果有的话）
+        // 从 config_schema 中提取 region 和 icon（如果有的话）
         $configSchema = $component->getConfigSchema();
         $region = $configSchema['region'] ?? $this->categoryToRegion($category);
+        $icon = $configSchema['icon'] ?? null;
         
         $result = [
             'id' => $component->getId(),
@@ -702,6 +818,7 @@ class ComponentService
             'type' => $component->getData(Component::fields_TYPE),
             'thumbnail' => $thumbnail,
             'thumbnail_url' => $thumbnailUrl,
+            'icon' => $icon, // 组件图标（用于预览缩略图的后备显示）
             'config_schema' => $configSchema,
             'default_config' => $component->getDefaultConfig(),
             'compatible_styles' => $component->getCompatibleStyles(),
@@ -779,5 +896,383 @@ class ComponentService
     {
         // TODO: 保存到 PageLayout 模型
         return true;
+    }
+    
+    /**
+     * 获取预览模式的示例数据
+     * 
+     * 为依赖外部数据的组件提供示例数据，确保预览能正常显示
+     * 
+     * @param string $componentCode 组件代码
+     * @return array 示例数据
+     */
+    private function getPreviewSampleData(string $componentCode): array
+    {
+        $sampleData = [];
+        
+        // 根据组件代码或类别提供相应的示例数据
+        $codeNormalized = strtolower(str_replace(['_', '-'], '', $componentCode));
+        
+        // 博客相关组件
+        if (str_contains($codeNormalized, 'blog') || str_contains($codeNormalized, 'post')) {
+            $sampleData['blog_posts'] = $this->getSampleBlogPosts();
+            $sampleData['blog_categories'] = $this->getSampleBlogCategories();
+            $sampleData['recent_posts'] = array_slice($this->getSampleBlogPosts(), 0, 5);
+        }
+        
+        // 游戏相关组件
+        if (str_contains($codeNormalized, 'game')) {
+            $sampleData['games'] = $this->getSampleGames();
+        }
+        
+        // 评价/评论相关组件
+        if (str_contains($codeNormalized, 'testimonial') || str_contains($codeNormalized, 'review')) {
+            $sampleData['testimonials'] = $this->getSampleTestimonials();
+        }
+        
+        // FAQ 组件
+        if (str_contains($codeNormalized, 'faq')) {
+            $sampleData['faq_items'] = $this->getSampleFaqItems();
+        }
+        
+        // 团队成员组件
+        if (str_contains($codeNormalized, 'team')) {
+            $sampleData['team_members'] = $this->getSampleTeamMembers();
+        }
+        
+        // 特性/功能组件
+        if (str_contains($codeNormalized, 'feature') || str_contains($codeNormalized, 'advantage')) {
+            $sampleData['features'] = $this->getSampleFeatures();
+        }
+        
+        // 合作伙伴/品牌组件
+        if (str_contains($codeNormalized, 'partner') || str_contains($codeNormalized, 'brand') || str_contains($codeNormalized, 'client')) {
+            $sampleData['partners'] = $this->getSamplePartners();
+        }
+        
+        // 价格表组件
+        if (str_contains($codeNormalized, 'pricing') || str_contains($codeNormalized, 'plan')) {
+            $sampleData['pricing_plans'] = $this->getSamplePricingPlans();
+        }
+        
+        // 统计数字组件
+        if (str_contains($codeNormalized, 'stat') || str_contains($codeNormalized, 'counter')) {
+            $sampleData['statistics'] = $this->getSampleStatistics();
+        }
+        
+        return $sampleData;
+    }
+    
+    /**
+     * 示例博客文章数据
+     */
+    private function getSampleBlogPosts(): array
+    {
+        return [
+            [
+                'id' => 1,
+                'title' => 'Getting Started with Our Platform',
+                'summary' => 'Learn how to quickly set up and start using our platform with this comprehensive guide.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/6c5ce7/ffffff?text=Blog+Post+1',
+                'category_name' => 'Guides',
+                'category_slug' => 'guides',
+                'author' => 'John Doe',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-2 days')),
+                'url' => '#blog-post-1',
+            ],
+            [
+                'id' => 2,
+                'title' => 'Top 10 Tips for Success',
+                'summary' => 'Discover the top strategies that successful users employ to get the most out of their experience.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/00cec9/ffffff?text=Blog+Post+2',
+                'category_name' => 'Tips',
+                'category_slug' => 'tips',
+                'author' => 'Jane Smith',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-5 days')),
+                'url' => '#blog-post-2',
+            ],
+            [
+                'id' => 3,
+                'title' => 'Latest Updates and Features',
+                'summary' => 'Stay informed about the newest features and improvements we have released this month.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/fd79a8/ffffff?text=Blog+Post+3',
+                'category_name' => 'Updates',
+                'category_slug' => 'updates',
+                'author' => 'Mike Johnson',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-7 days')),
+                'url' => '#blog-post-3',
+            ],
+            [
+                'id' => 4,
+                'title' => 'Best Practices for Beginners',
+                'summary' => 'A comprehensive overview of best practices that every new user should know.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/a29bfe/ffffff?text=Blog+Post+4',
+                'category_name' => 'Guides',
+                'category_slug' => 'guides',
+                'author' => 'Sarah Williams',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-10 days')),
+                'url' => '#blog-post-4',
+            ],
+            [
+                'id' => 5,
+                'title' => 'Community Spotlight: User Stories',
+                'summary' => 'Read inspiring stories from our community members about their journey and achievements.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/74b9ff/ffffff?text=Blog+Post+5',
+                'category_name' => 'Community',
+                'category_slug' => 'community',
+                'author' => 'Emily Brown',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-14 days')),
+                'url' => '#blog-post-5',
+            ],
+            [
+                'id' => 6,
+                'title' => 'Advanced Techniques Deep Dive',
+                'summary' => 'Take your skills to the next level with these advanced techniques and strategies.',
+                'content' => 'This is sample content for the blog post...',
+                'cover_image' => 'https://placehold.co/800x450/55a3ff/ffffff?text=Blog+Post+6',
+                'category_name' => 'Advanced',
+                'category_slug' => 'advanced',
+                'author' => 'David Chen',
+                'published_at' => date('Y-m-d H:i:s', strtotime('-21 days')),
+                'url' => '#blog-post-6',
+            ],
+        ];
+    }
+    
+    /**
+     * 示例博客分类数据
+     */
+    private function getSampleBlogCategories(): array
+    {
+        return [
+            ['id' => 1, 'name' => 'Guides', 'slug' => 'guides', 'url' => '#category-guides', 'post_count' => 12],
+            ['id' => 2, 'name' => 'Tips & Tricks', 'slug' => 'tips', 'url' => '#category-tips', 'post_count' => 8],
+            ['id' => 3, 'name' => 'Updates', 'slug' => 'updates', 'url' => '#category-updates', 'post_count' => 15],
+            ['id' => 4, 'name' => 'Community', 'slug' => 'community', 'url' => '#category-community', 'post_count' => 6],
+            ['id' => 5, 'name' => 'Advanced', 'slug' => 'advanced', 'url' => '#category-advanced', 'post_count' => 10],
+        ];
+    }
+    
+    /**
+     * 示例游戏数据
+     */
+    private function getSampleGames(): array
+    {
+        return [
+            [
+                'id' => 1,
+                'name' => 'Teen Patti',
+                'description' => 'Classic Indian card game with exciting gameplay',
+                'image' => 'https://placehold.co/400x300/6c5ce7/ffffff?text=Game+1',
+                'players' => '2-6',
+                'rating' => 4.8,
+            ],
+            [
+                'id' => 2,
+                'name' => 'Rummy',
+                'description' => 'Popular card game requiring skill and strategy',
+                'image' => 'https://placehold.co/400x300/00cec9/ffffff?text=Game+2',
+                'players' => '2-4',
+                'rating' => 4.6,
+            ],
+            [
+                'id' => 3,
+                'name' => 'Poker',
+                'description' => 'World-famous card game with multiple variants',
+                'image' => 'https://placehold.co/400x300/fd79a8/ffffff?text=Game+3',
+                'players' => '2-10',
+                'rating' => 4.9,
+            ],
+            [
+                'id' => 4,
+                'name' => 'Blackjack',
+                'description' => 'Classic casino card game of 21',
+                'image' => 'https://placehold.co/400x300/a29bfe/ffffff?text=Game+4',
+                'players' => '1-7',
+                'rating' => 4.7,
+            ],
+        ];
+    }
+    
+    /**
+     * 示例用户评价数据
+     */
+    private function getSampleTestimonials(): array
+    {
+        return [
+            [
+                'id' => 1,
+                'name' => 'John D.',
+                'role' => 'Business Owner',
+                'avatar' => 'https://placehold.co/100x100/6c5ce7/ffffff?text=JD',
+                'content' => 'Absolutely amazing experience! The platform exceeded all my expectations and the support team is fantastic.',
+                'rating' => 5,
+            ],
+            [
+                'id' => 2,
+                'name' => 'Sarah M.',
+                'role' => 'Designer',
+                'avatar' => 'https://placehold.co/100x100/00cec9/ffffff?text=SM',
+                'content' => 'I have been using this for months now and I can not imagine going back. It has transformed how I work.',
+                'rating' => 5,
+            ],
+            [
+                'id' => 3,
+                'name' => 'Michael T.',
+                'role' => 'Developer',
+                'avatar' => 'https://placehold.co/100x100/fd79a8/ffffff?text=MT',
+                'content' => 'Great product with excellent features. The team is constantly improving and adding new capabilities.',
+                'rating' => 4,
+            ],
+        ];
+    }
+    
+    /**
+     * 示例 FAQ 数据
+     */
+    private function getSampleFaqItems(): array
+    {
+        return [
+            [
+                'question' => 'How do I get started?',
+                'answer' => 'Getting started is easy! Simply sign up for an account, complete the onboarding process, and you will be ready to go in minutes.',
+            ],
+            [
+                'question' => 'What payment methods do you accept?',
+                'answer' => 'We accept all major credit cards, PayPal, and bank transfers. All payments are processed securely.',
+            ],
+            [
+                'question' => 'Is there a free trial available?',
+                'answer' => 'Yes! We offer a 14-day free trial with full access to all features. No credit card required.',
+            ],
+            [
+                'question' => 'How can I contact support?',
+                'answer' => 'Our support team is available 24/7 via email, live chat, and phone. We typically respond within 2 hours.',
+            ],
+        ];
+    }
+    
+    /**
+     * 示例团队成员数据
+     */
+    private function getSampleTeamMembers(): array
+    {
+        return [
+            [
+                'name' => 'Alex Johnson',
+                'role' => 'CEO & Founder',
+                'avatar' => 'https://placehold.co/300x300/6c5ce7/ffffff?text=AJ',
+                'bio' => 'Visionary leader with 15+ years of industry experience.',
+            ],
+            [
+                'name' => 'Emily Chen',
+                'role' => 'CTO',
+                'avatar' => 'https://placehold.co/300x300/00cec9/ffffff?text=EC',
+                'bio' => 'Tech expert driving innovation and engineering excellence.',
+            ],
+            [
+                'name' => 'Michael Brown',
+                'role' => 'Head of Design',
+                'avatar' => 'https://placehold.co/300x300/fd79a8/ffffff?text=MB',
+                'bio' => 'Creative director crafting beautiful user experiences.',
+            ],
+            [
+                'name' => 'Sarah Williams',
+                'role' => 'Marketing Director',
+                'avatar' => 'https://placehold.co/300x300/a29bfe/ffffff?text=SW',
+                'bio' => 'Strategic marketer building brand awareness globally.',
+            ],
+        ];
+    }
+    
+    /**
+     * 示例特性/功能数据
+     */
+    private function getSampleFeatures(): array
+    {
+        return [
+            [
+                'title' => 'Easy to Use',
+                'description' => 'Intuitive interface designed for users of all skill levels.',
+                'icon' => 'star',
+            ],
+            [
+                'title' => 'Fast & Reliable',
+                'description' => 'Lightning-fast performance with 99.9% uptime guarantee.',
+                'icon' => 'zap',
+            ],
+            [
+                'title' => 'Secure',
+                'description' => 'Enterprise-grade security protecting your data 24/7.',
+                'icon' => 'shield',
+            ],
+            [
+                'title' => '24/7 Support',
+                'description' => 'Round-the-clock customer support whenever you need help.',
+                'icon' => 'headphones',
+            ],
+        ];
+    }
+    
+    /**
+     * 示例合作伙伴数据
+     */
+    private function getSamplePartners(): array
+    {
+        return [
+            ['name' => 'Partner A', 'logo' => 'https://placehold.co/200x80/f5f5f5/333333?text=Partner+A'],
+            ['name' => 'Partner B', 'logo' => 'https://placehold.co/200x80/f5f5f5/333333?text=Partner+B'],
+            ['name' => 'Partner C', 'logo' => 'https://placehold.co/200x80/f5f5f5/333333?text=Partner+C'],
+            ['name' => 'Partner D', 'logo' => 'https://placehold.co/200x80/f5f5f5/333333?text=Partner+D'],
+            ['name' => 'Partner E', 'logo' => 'https://placehold.co/200x80/f5f5f5/333333?text=Partner+E'],
+        ];
+    }
+    
+    /**
+     * 示例价格方案数据
+     */
+    private function getSamplePricingPlans(): array
+    {
+        return [
+            [
+                'name' => 'Starter',
+                'price' => 9,
+                'period' => 'month',
+                'features' => ['Basic features', 'Email support', '1 project', '1GB storage'],
+                'is_popular' => false,
+            ],
+            [
+                'name' => 'Professional',
+                'price' => 29,
+                'period' => 'month',
+                'features' => ['All Starter features', 'Priority support', '10 projects', '10GB storage', 'API access'],
+                'is_popular' => true,
+            ],
+            [
+                'name' => 'Enterprise',
+                'price' => 99,
+                'period' => 'month',
+                'features' => ['All Pro features', 'Dedicated support', 'Unlimited projects', '100GB storage', 'Custom integrations'],
+                'is_popular' => false,
+            ],
+        ];
+    }
+    
+    /**
+     * 示例统计数据
+     */
+    private function getSampleStatistics(): array
+    {
+        return [
+            ['label' => 'Happy Customers', 'value' => '10,000+', 'icon' => 'users'],
+            ['label' => 'Projects Completed', 'value' => '50,000+', 'icon' => 'check-circle'],
+            ['label' => 'Years Experience', 'value' => '10+', 'icon' => 'calendar'],
+            ['label' => 'Team Members', 'value' => '100+', 'icon' => 'briefcase'],
+        ];
     }
 }

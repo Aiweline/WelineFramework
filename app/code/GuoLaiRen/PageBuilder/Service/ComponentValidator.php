@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -14,9 +15,24 @@ use Weline\Framework\Manager\ObjectManager;
  * 3. 必需字段完整（name, file, region, category）
  * 4. 文件路径正确且文件存在
  * 5. 布局配置中的组件代码在 component.json 中有定义
+ * 
+ * @author GuoLaiRen
+ * @since 1.0.0
  */
 class ComponentValidator
 {
+    private TemplatePathResolver $pathResolver;
+    
+    /**
+     * 单例实例
+     */
+    private static ?self $instance = null;
+    
+    public function __construct(?TemplatePathResolver $pathResolver = null)
+    {
+        $this->pathResolver = $pathResolver ?? TemplatePathResolver::getInstance();
+    }
+
     /**
      * 组件必需字段
      */
@@ -51,8 +67,8 @@ class ComponentValidator
         $this->errors = [];
         $this->warnings = [];
         
-        $basePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}";
-        $componentJsonPath = "{$basePath}/components/component.json";
+        $basePath = $this->pathResolver->getTemplatePath($styleCode);
+        $componentJsonPath = $this->pathResolver->getComponentJsonPath($styleCode);
         
         // 1. 检查 component.json 是否存在
         if (!file_exists($componentJsonPath)) {
@@ -104,7 +120,7 @@ class ComponentValidator
         $this->warnings = [];
         
         // 加载组件配置
-        $componentJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/component.json";
+        $componentJsonPath = $this->pathResolver->getComponentJsonPath($styleCode);
         
         if (!file_exists($componentJsonPath)) {
             $this->addError("模板 {$styleCode} 的 component.json 不存在");
@@ -145,7 +161,7 @@ class ComponentValidator
      */
     public function getValidatedComponentMetadata(string $styleCode, string $componentCode): ?array
     {
-        $componentJsonPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/component.json";
+        $componentJsonPath = $this->pathResolver->getComponentJsonPath($styleCode);
         
         if (!file_exists($componentJsonPath)) {
             return null;
@@ -159,9 +175,8 @@ class ComponentValidator
         }
         
         // 验证组件文件存在
-        $basePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}";
         $filePath = $componentConfig['file'] ?? '';
-        $fullPath = "{$basePath}/components/{$filePath}";
+        $fullPath = $this->pathResolver->getComponentFilePath($styleCode, $filePath);
         
         if (!file_exists($fullPath)) {
             return null;
@@ -223,7 +238,8 @@ class ComponentValidator
         
         // 5. 验证文件存在
         if (isset($config['file'])) {
-            $filePath = "{$basePath}/components/{$config['file']}";
+            // basePath 已经是模板目录，需要拼接 components 子目录
+            $filePath = $basePath . '/components/' . $config['file'];
             if (!file_exists($filePath)) {
                 $this->addError("组件 '{$code}' 的文件不存在: {$config['file']}（完整路径: {$filePath}）");
             }
@@ -444,5 +460,16 @@ class ComponentValidator
         }
         
         return $report;
+    }
+    
+    /**
+     * 获取实例（单例模式）
+     */
+    public static function getInstance(): self
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
     }
 }
