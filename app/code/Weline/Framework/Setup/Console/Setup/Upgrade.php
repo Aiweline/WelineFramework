@@ -639,7 +639,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('收集标签注册表...'));
                 /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
                 $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-                $taglibCollect->execute([], []);
+                // 在升级流程中跳过模板缓存清理，因为 Upgrade.php 已经在前面清理过了
+                $taglibCollect->execute([], ['skip_template_cache_clear' => true]);
                 $this->printing->success(__('✓ 标签注册表已收集完成。'));
             } catch (\Exception $e) {
                 // 标签收集失败不影响系统更新，只记录警告

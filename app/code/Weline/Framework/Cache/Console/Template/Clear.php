@@ -45,29 +45,57 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         if (empty($modules)) {
             ObjectManager::getInstance(Upgrade::class)->execute();
         }
-        $this->printing->note(__('开始清理拓展全页缓存：'));
+        
+        // 检查是否为静默模式（批量升级时使用）
+        $silent = $data['silent'] ?? false;
+        $clearedCount = 0;
+        
+        if (!$silent) {
+            $this->printing->note(__('开始清理拓展全页缓存：'));
+        }
+        
         foreach ($args as $arg) {
             if (isset($modules[$arg]) && $module_data = $modules[$arg]) {
-                $this->clear($arg, $module_data['base_path']);
-            } else {
+                if ($this->clear($arg, $module_data['base_path'], $silent)) {
+                    $clearedCount++;
+                }
+            } elseif (!$silent) {
                 $this->printing->note(__('模块')) . $this->printing->setup($arg) . $this->printing->note(__('不存在！'));
             }
         }
         if (empty($args)) {
             foreach ($modules as $module_name => $module_data) {
-                $this->clear($module_name, $module_data['base_path']);
+                if ($this->clear($module_name, $module_data['base_path'], $silent)) {
+                    $clearedCount++;
+                }
             }
+        }
+        
+        // 在静默模式下，只输出汇总信息
+        if ($silent && $clearedCount > 0) {
+            $this->printing->note(__('已清理 %{1} 个模块的模板缓存', [$clearedCount]));
+        } elseif ($silent && $clearedCount === 0) {
+            $this->printing->note(__('没有需要清理的模板缓存'));
         }
     }
 
-    public function clear(string $module_name, string $base_path)
+    /**
+     * 清理指定模块的模板缓存
+     * @param string $module_name 模块名
+     * @param string $base_path 基础路径
+     * @param bool $silent 静默模式
+     * @return bool 是否有清理操作
+     */
+    public function clear(string $module_name, string $base_path, bool $silent = false): bool
     {
-        $this->printing->note($module_name);
         if (is_dir($base_path . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE)) {
-//            p($this->system->exec("rm -rf $base_path" . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE. DS,true));
             $this->system->exec("rm -rf $base_path" . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE . DS);
-            $this->printing->note(__('清理完成：%{1}', $module_name));
+            if (!$silent) {
+                $this->printing->note(__('清理完成：%{1}', $module_name));
+            }
+            return true;
         }
+        return false;
     }
 
     /**
