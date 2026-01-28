@@ -8,7 +8,7 @@
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0">
-                <?= $this->getData('page_title') ?: __('页面构建器') ?>
+                <?= $this->getData('page_title') ?: __('网站构建器') ?>
             </h4>
 
             <div class="page-title-right">
@@ -19,7 +19,7 @@
                         </a>
                     </li>
                     <li class="breadcrumb-item active">
-                        <?= $this->getData('breadcrumb_current') ?: __('页面构建器') ?>
+                        <?= $this->getData('breadcrumb_current') ?: __('网站构建器') ?>
                     </li>
                 </ol>
             </div>
@@ -198,13 +198,12 @@
                                             } else {
                                                 $frontendUrl = $baseUrl . '/' . ltrim($pageHandle, '/');
                                             }
-                                            $previewUrl = $frontendUrl . '?preview=1';
                                             $isPublished = $page->getData('status') == 1;
                                             ?>
                                             
-                                            <!-- 预览按钮（始终可用） -->
+                                            <!-- 预览按钮（使用站点链接直接访问） -->
                                             <a class='btn btn-sm btn-outline-info d-inline-flex align-items-center' 
-                                               href="<?= $previewUrl ?>"
+                                               href="<?= $frontendUrl ?>"
                                                target="_blank"
                                                style="min-width: 70px; white-space: nowrap;"
                                                title="<?= __('预览页面效果') ?>">
@@ -401,13 +400,12 @@
                                                                 // 生成子页面前端访问链接（使用页面关联的网站地址，而不是当前访问的网站地址）
                                                                 $childBaseUrl = $childWebsiteUrl ? rtrim($childWebsiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
                                                                 $childFrontendUrl = $childBaseUrl . '/' . ltrim($childPage->getData('handle'), '/');
-                                                                $childPreviewUrl = $childFrontendUrl . '?preview=1';
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
                                                                 
-                                                                <!-- 预览按钮（始终可用） -->
+                                                                <!-- 预览按钮（使用站点链接直接访问） -->
                                                                 <a class='btn btn-sm btn-outline-info d-inline-flex align-items-center' 
-                                                                   href="<?= $childPreviewUrl ?>"
+                                                                   href="<?= $childFrontendUrl ?>"
                                                                    target="_blank"
                                                                    style="min-width: 70px; white-space: nowrap;"
                                                                    title="<?= __('预览页面效果') ?>">
