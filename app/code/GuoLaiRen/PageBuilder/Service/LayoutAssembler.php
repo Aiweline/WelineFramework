@@ -350,12 +350,11 @@ class LayoutAssembler
                 $componentFile = $componentFiles[$code] ?? null;
                 $actualCode = $code;
                 
+                // 🔧 统一处理组件代码格式差异（与 getComponentMetadata 保持一致）
+                
                 // 特殊处理：{styleCode}-header 映射到 header-nav（默认 header 组件）
                 if (!$componentFile && (
-                    $code === $styleCode . '-header' || 
-                    $code === 'tpmst-header' ||
-                    $code === 'sattaking-header' ||
-                    $code === 'header'
+                    $code === $styleCode . '-header' || $code === 'header'
                 )) {
                     $actualCode = 'header-nav';
                     $componentFile = $componentFiles[$actualCode] ?? null;
@@ -363,21 +362,48 @@ class LayoutAssembler
                 
                 // 特殊处理：{styleCode}-footer 映射到 footer-links（默认 footer 组件）
                 if (!$componentFile && (
-                    $code === $styleCode . '-footer' || 
-                    $code === 'tpmst-footer' ||
-                    $code === 'sattaking-footer' ||
-                    $code === 'footer'
+                    $code === $styleCode . '-footer' || $code === 'footer'
                 )) {
                     $actualCode = 'footer-links';
                     $componentFile = $componentFiles[$actualCode] ?? null;
                 }
                 
-                // 如果直接查找失败，尝试去掉模板前缀再查找
+                // 🔧 处理 Component 模型生成的特殊格式：{styleCode}_header_header, {styleCode}_footer_footer
+                if (!$componentFile) {
+                    if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
+                        $actualCode = 'header-nav';
+                        $componentFile = $componentFiles[$actualCode] ?? null;
+                    } elseif (preg_match('/^' . preg_quote($styleCode, '/') . '_footer_(footer|links)$/i', $code)) {
+                        $actualCode = 'footer-links';
+                        $componentFile = $componentFiles[$actualCode] ?? null;
+                    }
+                }
+                
+                // 🔧 处理下划线格式的组件代码（Component 模型生成的格式）
+                if (!$componentFile && strpos($code, $styleCode . '_') === 0) {
+                    $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
+                    $codeWithDash = str_replace('_', '-', $codeWithoutPrefix);
+                    $componentFile = $componentFiles[$codeWithDash] ?? null;
+                    if ($componentFile) {
+                        $actualCode = $codeWithDash;
+                    }
+                }
+                
+                // 如果直接查找失败，尝试去掉模板前缀再查找（破折号格式）
                 if (!$componentFile && strpos($code, $styleCode . '-') === 0) {
                     $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                     $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
                     if ($componentFile) {
                         $actualCode = $codeWithoutPrefix;
+                    }
+                }
+                
+                // 🔧 尝试转换下划线为破折号后查找
+                if (!$componentFile && str_contains($code, '_')) {
+                    $codeWithDash = str_replace('_', '-', $code);
+                    $componentFile = $componentFiles[$codeWithDash] ?? null;
+                    if ($componentFile) {
+                        $actualCode = $codeWithDash;
                     }
                 }
                 
@@ -499,14 +525,17 @@ class LayoutAssembler
         // 实际使用的组件代码（可能去掉前缀后的）
         $actualCode = $componentCode;
         
+        // 🔧 统一处理组件代码格式差异
+        // 支持的格式：
+        // 1. component.json 中的代码：header-nav, header-dark, footer-links
+        // 2. PageLayout 默认格式：{styleCode}-header, {styleCode}-footer
+        // 3. Component 模型格式：{styleCode}_{category}_{name}
+        // 4. 特殊格式：{styleCode}_header_header, {styleCode}_footer_footer（映射到默认组件）
+        
         // 特殊处理：{styleCode}-header 或 header 映射到 header-nav（默认 header 组件）
-        // 注意：必须在 footer 处理之前，因为条件判断顺序很重要
         if (!$componentFile) {
-            // 匹配 {styleCode}-header 或 tpmst-header 格式
-            if ($componentCode === $styleCode . '-header' || 
-                $componentCode === 'tpmst-header' ||
-                $componentCode === 'sattaking-header' ||
-                $componentCode === 'header') {
+            // 匹配 {styleCode}-header 格式（任意 styleCode）
+            if ($componentCode === $styleCode . '-header' || $componentCode === 'header') {
                 $actualCode = 'header-nav';
                 $componentFile = $componentFiles[$actualCode] ?? null;
             }
@@ -514,17 +543,42 @@ class LayoutAssembler
         
         // 特殊处理：{styleCode}-footer 或 footer 映射到 footer-links（默认 footer 组件）
         if (!$componentFile) {
-            // 匹配 {styleCode}-footer 或 tpmst-footer 格式
-            if ($componentCode === $styleCode . '-footer' || 
-                $componentCode === 'tpmst-footer' ||
-                $componentCode === 'sattaking-footer' ||
-                $componentCode === 'footer') {
+            // 匹配 {styleCode}-footer 格式（任意 styleCode）
+            if ($componentCode === $styleCode . '-footer' || $componentCode === 'footer') {
                 $actualCode = 'footer-links';
                 $componentFile = $componentFiles[$actualCode] ?? null;
             }
         }
         
-        // 如果直接查找失败，尝试去掉模板前缀再查找
+        // 🔧 处理 Component 模型生成的特殊格式：{styleCode}_header_header, {styleCode}_footer_footer
+        // 这种格式表示使用分类的默认组件
+        if (!$componentFile) {
+            // 匹配 tpmst_header_header 格式 -> 映射到 header-nav
+            if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $componentCode)) {
+                $actualCode = 'header-nav';
+                $componentFile = $componentFiles[$actualCode] ?? null;
+            }
+            // 匹配 tpmst_footer_footer 或 tpmst_footer_links 格式 -> 映射到 footer-links
+            elseif (preg_match('/^' . preg_quote($styleCode, '/') . '_footer_(footer|links)$/i', $componentCode)) {
+                $actualCode = 'footer-links';
+                $componentFile = $componentFiles[$actualCode] ?? null;
+            }
+        }
+        
+        // 🔧 处理下划线格式的组件代码（Component 模型生成的格式）
+        // 例如：tpmst_header_nav -> header-nav, tpmst_header_dark -> header-dark
+        if (!$componentFile && strpos($componentCode, $styleCode . '_') === 0) {
+            // 移除模板前缀：tpmst_header_nav -> header_nav
+            $codeWithoutPrefix = substr($componentCode, strlen($styleCode) + 1);
+            // 转换下划线为破折号：header_nav -> header-nav
+            $codeWithDash = str_replace('_', '-', $codeWithoutPrefix);
+            $componentFile = $componentFiles[$codeWithDash] ?? null;
+            if ($componentFile) {
+                $actualCode = $codeWithDash;
+            }
+        }
+        
+        // 如果直接查找失败，尝试去掉模板前缀再查找（破折号格式）
         // 例如：tpmst-slider -> slider, tpmst-advantages -> advantages
         if (!$componentFile && strpos($componentCode, $styleCode . '-') === 0) {
             $codeWithoutPrefix = substr($componentCode, strlen($styleCode) + 1);
@@ -534,11 +588,31 @@ class LayoutAssembler
             }
         }
         
+        // 🔧 尝试转换下划线为破折号后查找
+        if (!$componentFile && str_contains($componentCode, '_')) {
+            $codeWithDash = str_replace('_', '-', $componentCode);
+            $componentFile = $componentFiles[$codeWithDash] ?? null;
+            if ($componentFile) {
+                $actualCode = $codeWithDash;
+            }
+        }
+        
         // 如果还是找不到，尝试在所有组件中模糊匹配
         if (!$componentFile) {
-            // 尝试匹配部分名称（如 slider 匹配 hero-slider）
+            // 标准化当前代码（移除前缀，转换格式）
+            $normalizedCode = $componentCode;
+            // 移除可能的模板前缀
+            if (strpos($normalizedCode, $styleCode . '-') === 0) {
+                $normalizedCode = substr($normalizedCode, strlen($styleCode) + 1);
+            } elseif (strpos($normalizedCode, $styleCode . '_') === 0) {
+                $normalizedCode = substr($normalizedCode, strlen($styleCode) + 1);
+            }
+            // 转换下划线为破折号
+            $normalizedCode = str_replace('_', '-', $normalizedCode);
+            
+            // 尝试匹配部分名称（如 nav 匹配 header-nav）
             foreach ($componentFiles as $code => $file) {
-                if (str_contains($code, $componentCode) || str_contains($componentCode, $code)) {
+                if (str_contains($code, $normalizedCode) || str_contains($normalizedCode, $code)) {
                     $actualCode = $code;
                     $componentFile = $file;
                     break;

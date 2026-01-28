@@ -32,7 +32,9 @@ use Weline\I18n\Model\Locals;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\UrlManager\Model\UrlRewrite;
 use Weline\Websites\Model\Website as WebsiteModel;
-use Weline\Acl\Model\Acl as AclModel;
+use Weline\Acl\Model\RoleAccess;
+use Weline\Acl\Cache\AclCache;
+use Weline\Framework\Cache\CacheInterface;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
 class Page extends BackendController
@@ -44,7 +46,11 @@ class Page extends BackendController
     private Style $styleModel;
     private WebsiteUser $websiteUserModel;
     private WebsiteModel $websiteModel;
-    private AclModel $aclModel;
+    
+    /**
+     * 缓存的用户权限列表
+     */
+    private static ?array $userPermissionsCache = null;
 
     public function __construct(
         PageModel $pageModel,
@@ -53,8 +59,7 @@ class Page extends BackendController
         Locals $localsModel,
         Style $styleModel,
         WebsiteUser $websiteUserModel,
-        WebsiteModel $websiteModel,
-        AclModel $aclModel
+        WebsiteModel $websiteModel
     ) {
         $this->pageModel = $pageModel->loadLocalDescription();
         $this->localDescriptionModel = $localDescriptionModel;
@@ -63,7 +68,63 @@ class Page extends BackendController
         $this->styleModel = $styleModel;
         $this->websiteUserModel = $websiteUserModel;
         $this->websiteModel = $websiteModel;
-        $this->aclModel = $aclModel;
+    }
+    
+    /**
+     * 检查用户是否拥有指定权限
+     * 
+     * @param int $userId 用户ID
+     * @param string $sourceId 权限资源ID
+     * @return bool
+     */
+    private function hasPermission(int $userId, string $sourceId): bool
+    {
+        // 超管拥有所有权限
+        if ($userId === 1) {
+            return true;
+        }
+        
+        if ($userId <= 0) {
+            return false;
+        }
+        
+        // 获取用户角色
+        $user = $this->session->getLoginUser();
+        if (!$user) {
+            return false;
+        }
+        
+        $role = $user->getRoleModel();
+        if (!$role || !$role->getId()) {
+            return false;
+        }
+        
+        // 超管角色
+        if ($role->getId() === 1) {
+            return true;
+        }
+        
+        // 使用缓存的权限列表
+        $cacheKey = 'user_permissions_' . $userId;
+        if (self::$userPermissionsCache === null) {
+            /** @var CacheInterface $cache */
+            $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+            $permissions = $cache->get($cacheKey);
+            
+            if (!$permissions) {
+                /** @var RoleAccess $roleAccess */
+                $roleAccess = ObjectManager::getInstance(RoleAccess::class);
+                $accesses = $roleAccess->getRoleAccessListArray($role);
+                $permissions = [];
+                foreach ($accesses as $access) {
+                    $permissions[] = $access['source_id'];
+                }
+                $cache->set($cacheKey, $permissions);
+            }
+            self::$userPermissionsCache = $permissions;
+        }
+        
+        return in_array($sourceId, self::$userPermissionsCache);
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_index', '页面列表', 'mdi mdi-view-list', '查看页面列表')]
@@ -83,7 +144,7 @@ class Page extends BackendController
         $isSuperAdmin = ($userId === 1); // 超管ID为1
         $hasWebsiteAssignmentPermission = false;
         if ($userId > 0 && !$isSuperAdmin) {
-            $hasWebsiteAssignmentPermission = $this->aclModel->isAllowed($userId, 'GuoLaiRen_PageBuilder::website_assignment', 'GET');
+            $hasWebsiteAssignmentPermission = $this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment');
         }
         
         if ($isSuperAdmin || $hasWebsiteAssignmentPermission) {
@@ -186,7 +247,7 @@ class Page extends BackendController
         $isSuperAdmin = ($userId === 1);
         $hasWebsiteAssignmentPermission = false;
         if ($userId > 0 && !$isSuperAdmin) {
-            $hasWebsiteAssignmentPermission = $this->aclModel->isAllowed($userId, 'GuoLaiRen_PageBuilder::website_assignment', 'GET');
+            $hasWebsiteAssignmentPermission = $this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment');
         }
         
         $websites = [];
@@ -406,7 +467,7 @@ class Page extends BackendController
             }
 
             // 如果拥有站点分配权限，则不限制站点（查看所有站点）
-            if ($this->aclModel->isAllowed($userId, 'GuoLaiRen_PageBuilder::website_assignment', 'GET')) {
+            if ($this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment')) {
                 return [];
             }
 

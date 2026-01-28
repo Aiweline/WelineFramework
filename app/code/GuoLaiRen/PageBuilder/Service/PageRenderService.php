@@ -985,10 +985,42 @@ class PageRenderService
             // 查找组件文件
             $componentFile = $componentFiles[$code] ?? null;
             
-            // 尝试去掉模板前缀
+            // 🔧 处理 {styleCode}-header/footer 格式
+            if (!$componentFile) {
+                if ($code === $styleCode . '-header' || $code === 'header') {
+                    $componentFile = $componentFiles['header-nav'] ?? null;
+                } elseif ($code === $styleCode . '-footer' || $code === 'footer') {
+                    $componentFile = $componentFiles['footer-links'] ?? null;
+                }
+            }
+            
+            // 🔧 处理 Component 模型生成的特殊格式：{styleCode}_header_header, {styleCode}_footer_footer
+            if (!$componentFile) {
+                if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
+                    $componentFile = $componentFiles['header-nav'] ?? null;
+                } elseif (preg_match('/^' . preg_quote($styleCode, '/') . '_footer_(footer|links)$/i', $code)) {
+                    $componentFile = $componentFiles['footer-links'] ?? null;
+                }
+            }
+            
+            // 🔧 处理下划线格式的组件代码（Component 模型生成的格式）
+            // 例如：tpmst_header_nav -> header-nav
+            if (!$componentFile && strpos($code, $styleCode . '_') === 0) {
+                $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
+                $codeWithDash = str_replace('_', '-', $codeWithoutPrefix);
+                $componentFile = $componentFiles[$codeWithDash] ?? null;
+            }
+            
+            // 尝试去掉模板前缀（破折号格式）
             if (!$componentFile && strpos($code, $styleCode . '-') === 0) {
                 $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                 $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
+            }
+            
+            // 🔧 尝试转换下划线为破折号后查找
+            if (!$componentFile && str_contains($code, '_')) {
+                $codeWithDash = str_replace('_', '-', $code);
+                $componentFile = $componentFiles[$codeWithDash] ?? null;
             }
             
             // 尝试从指定的其他模板查找
