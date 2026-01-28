@@ -1852,9 +1852,12 @@ class Taglib
                 $pos = $attrStart;
                 $selfClosing = false;
                 $voidTag = in_array(strtolower($tagName), self::HTML_VOID_TAGS, true);
+                // JavaScript 模板字符串 ${...} 跟踪
+                $jsTemplateBraceDepth = 0;
                 while ($pos < $len) {
                     $c = $content[$pos];
                     $n = $pos + 1 < $len ? $content[$pos + 1] : '';
+                    
                     if (!$inQuote && !$inPhp && $c === '/' && $n === '>') {
                         $selfClosing = true;
                         break;
@@ -1872,6 +1875,25 @@ class Taglib
                         $pos += 2;
                         continue;
                     }
+                    
+                    // 检测 JavaScript 模板字符串 ${...}
+                    if ($inQuote && !$inPhp && $c === '$' && $n === '{') {
+                        $jsTemplateBraceDepth++;
+                        $pos += 2;
+                        continue;
+                    }
+                    // 在 ${...} 内部跟踪嵌套大括号
+                    if ($jsTemplateBraceDepth > 0) {
+                        if ($c === '{') {
+                            $jsTemplateBraceDepth++;
+                        } elseif ($c === '}') {
+                            $jsTemplateBraceDepth--;
+                        }
+                        // 在 ${...} 内部，跳过所有其他处理
+                        $pos++;
+                        continue;
+                    }
+                    
                     if (!$inPhp && ($c === '"' || $c === "'")) {
                         if (!$inQuote) {
                             $inQuote = true;
@@ -1884,7 +1906,13 @@ class Taglib
                     $pos++;
                 }
                 if ($pos >= $len) {
-                    throw new TemplateException(__('Tag close not found.'));
+                    // 提取标签周围的内容用于调试
+                    $contextStart = max(0, $i - 20);
+                    $contextEnd = min($len, $i + 100);
+                    $context = substr($content, $contextStart, $contextEnd - $contextStart);
+                    $context = str_replace(["\r\n", "\r", "\n"], ' ', $context); // 替换换行符
+                    $context = htmlentities($context);
+                    throw new TemplateException(__('标签未闭合（缺少 ">"）。标签名: <%{1}>，起始行: %{2}，起始列: %{3}。上下文: ...%{4}...', $tagName, $startLine, $startColumn, $context));
                 }
                 $attrEnd = $pos;
                 $rawAttributes = substr($content, $attrStart, $attrEnd - $attrStart);
@@ -1903,6 +1931,22 @@ class Taglib
                 }
                 $this->advancePosition(substr($content, $i, $end - $i + 1), $line, $column);
                 $i = $end + 1;
+                
+                // 对于 <script> 和 <style> 标签，跳过其内容直到找到闭合标签
+                // 这些标签内的内容不应该被当作 HTML 解析
+                if (!$selfClosing && in_array(strtolower($tagName), ['script', 'style'], true)) {
+                    $closeTag = '</' . strtolower($tagName);
+                    $closeTagPos = stripos($content, $closeTag, $i);
+                    if ($closeTagPos !== false) {
+                        // 将 script/style 内容作为文本节点
+                        $scriptContent = substr($content, $i, $closeTagPos - $i);
+                        if ($scriptContent !== '') {
+                            $tokens[] = new AstToken('TEXT', $scriptContent, $line, $column);
+                            $this->advancePosition($scriptContent, $line, $column);
+                        }
+                        $i = $closeTagPos;
+                    }
+                }
                 continue;
             }
 
@@ -2111,10 +2155,20 @@ class Taglib
         // 使用属性解析器解析属性
         $attrMap = $this->parseAttributesWithTokenizer($attrPart);
         
+        // 获取 data-skip-parse 属性，确定哪些属性不需要解析
+        $skipParseAttrs = [];
+        if (isset($attrMap['data-skip-parse'])) {
+            $skipParseAttrs = array_map('trim', explode(',', $attrMap['data-skip-parse']));
+        }
+        
         // 检查是否有属性值包含框架标签或内联标签
         $hasFrameworkTagInAttr = false;
         $hasInlineTagInAttr = false;
-        foreach ($attrMap as $attrValue) {
+        foreach ($attrMap as $attrName => $attrValue) {
+            // 如果属性在跳过列表中，不检查其内容
+            if (in_array($attrName, $skipParseAttrs)) {
+                continue;
+            }
             // 检查是否包含框架标签（<tag> 格式）
             if (strpos($attrValue, '<') !== false && strpos($attrValue, '>') !== false) {
                 foreach ($frameworkTags as $ftName => $ftConfig) {
@@ -2146,6 +2200,17 @@ class Taglib
         $result[] = new TextNode($line, '<' . $tagName);
         
         foreach ($attrMap as $attrName => $attrValue) {
+            // 跳过 data-skip-parse 属性本身，不输出到结果中
+            if ($attrName === 'data-skip-parse') {
+                continue;
+            }
+            
+            // 如果属性在跳过列表中，直接输出原始值，不进行解析
+            if (in_array($attrName, $skipParseAttrs)) {
+                $result[] = new TextNode($line, ' ' . $attrName . '="' . $attrValue . '"');
+                continue;
+            }
+            
             // 检查属性值是否包含框架标签或内联标签
             $hasTag = false;
             $hasInlineTag = false;
@@ -2610,6 +2675,10 @@ class Taglib
     /**
      * 控制流标签 - 这些标签不应该被作为独立框架标签处理，
      * 而是输出为原始 HTML 标记，由父标签（如 hook, if）在其内容中解析处理
+     * 
+     * 注意：else 和 elseif 需要保持原样，因为：
+     * 1. 在 <w:hook> 标签中，<else/> 用作分隔符，由 hook 回调函数解析
+     * 2. 在 <if> 标签中，内容会被 tmp_replace 重新处理，<else/> 会被正确编译
      */
     private const PASSTHROUGH_TAGS = ['else', 'elseif', 'w:else', 'w:elseif'];
 
@@ -2648,31 +2717,22 @@ class Taglib
         $result = [];
         foreach ($nodes as $node) {
             if ($node instanceof TagNode) {
-                // 控制流标签（else, elseif）需要正确处理，而不是直接输出为原始标记
+                // 控制流标签（else, elseif）直接输出为原始标记，由父标签（如 hook, if）在其内容中解析处理
                 if (in_array($node->name, self::PASSTHROUGH_TAGS, true)) {
-                    // 获取标签配置
+                    // 获取标签配置，检查是否只定义了 tag-self-close
                     $tagConfig = $tags[$node->name] ?? $tags['w:' . $node->name] ?? [];
-                    
-                    // 如果标签只定义了 tag-self-close，应该作为自闭合标签处理
                     $isSelfCloseOnlyTag = !empty($tagConfig['tag-self-close']) 
                         && empty($tagConfig['tag']) 
                         && empty($tagConfig['tag-start']) 
                         && empty($tagConfig['tag-end']);
                     
-                    if ($isSelfCloseOnlyTag || $node->selfClosing) {
-                        // 直接调用回调函数生成 PHP 代码
-                        if (!empty($tagConfig['callback'])) {
-                            $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
-                            $tagData = [$node->raw ?? '', $node->rawAttributes ?? '', $content];
-                            $attributes = $this->buildAttributesFromRaw($node->rawAttributes ?? '');
-                            $rendered = $tagConfig['callback']('tag-self-close', $tagConfig, $tagData, $attributes);
-                            $result = array_merge($result, $this->compileStringToNodes($rendered . $content, $tags, $template, $fileName));
-                            continue;
-                        }
+                    // 对于只定义了 tag-self-close 的标签，强制输出自闭合形式
+                    if ($isSelfCloseOnlyTag) {
+                        $attrs = $node->rawAttributes ?? '';
+                        $result[] = new TextNode($node->line, '<' . $node->name . $attrs . '/>');
+                    } else {
+                        $result[] = new TextNode($node->line, $this->buildOriginalTagMarkup($node));
                     }
-                    
-                    // 其他情况保持原有逻辑
-                    $result[] = new TextNode($node->line, $this->buildOriginalTagMarkup($node));
                     continue;
                 }
                 

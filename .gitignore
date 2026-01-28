@@ -53,3 +53,6 @@ tests/**/node_modules/
 tests/**/package-lock.json
 tests/**/yarn.lock
 tests/**/pnpm-lock.yaml
+
+# Tests 生成的文件
+tests/e2e/modules.json
