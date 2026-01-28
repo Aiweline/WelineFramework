@@ -121,40 +121,28 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
-            // 使用原生 PDO 查询避免框架 ORM 的复杂逻辑
-            $connection = $this->getConnection();
-            $tableName = $this->getTable();
+            // 使用模型 ORM 方法，自动处理 SQL 方言差异
+            $this->clear()->reset()
+                ->where([
+                    [self::fields_KEY, $key],
+                    [self::fields_MODULE, $module],
+                    [self::fields_AREA, $area]
+                ])
+                ->find()
+                ->fetch();
             
-            // 先查询是否存在
-            $sql = "SELECT \"key\" FROM \"{$tableName}\" WHERE \"key\" = :key AND \"module\" = :module AND \"area\" = :area LIMIT 1";
-            $stmt = $connection->getConnector()->query($sql, [
-                'key' => $key,
-                'module' => $module,
-                'area' => $area
+            // 设置数据
+            $this->setData([
+                self::fields_KEY => $key,
+                self::fields_VALUE => $value,
+                self::fields_MODULE => $module,
+                self::fields_AREA => $area
             ]);
-            $existing = $stmt->fetch();
             
-            if ($existing) {
-                // 存在则更新
-                $updateSql = "UPDATE \"{$tableName}\" SET \"v\" = :value WHERE \"key\" = :key AND \"module\" = :module AND \"area\" = :area";
-                $connection->getConnector()->query($updateSql, [
-                    'value' => $value,
-                    'key' => $key,
-                    'module' => $module,
-                    'area' => $area
-                ]);
-            } else {
-                // 不存在则插入
-                $insertSql = "INSERT INTO \"{$tableName}\" (\"key\", \"v\", \"module\", \"area\") VALUES (:key, :value, :module, :area)";
-                $connection->getConnector()->query($insertSql, [
-                    'key' => $key,
-                    'value' => $value,
-                    'module' => $module,
-                    'area' => $area
-                ]);
-            }
+            // 保存（模型会根据是否存在自动处理 insert/update）
+            $this->save(true);
             
-            # 设置配置缓存
+            // 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);
             return true;

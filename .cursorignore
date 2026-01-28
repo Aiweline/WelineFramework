@@ -111,7 +111,6 @@ pub/media/
 # IDE configuration
 .idea/
 .vscode/
-.cursor/
 .trae/
 # Temporary files
 temp_*.json

@@ -49,9 +49,17 @@ class Acl extends \Weline\Framework\Database\Model
 
     public function __init()
     {
+        // #region agent log
+        @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:__init','message'=>'Acl Model __init ENTRY','data'=>[],'hypothesisId'=>'C','sessionId'=>'debug-session'])."\n", FILE_APPEND);
+        // #endregion
+        
         parent::__init();
         // 不再在 __init 中创建 Url 实例，改为延迟加载
         // 避免在模型实例化时触发 Url 及其依赖的创建，防止循环依赖
+        
+        // #region agent log
+        @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:__init','message'=>'Acl Model __init EXIT','data'=>[],'hypothesisId'=>'C','sessionId'=>'debug-session'])."\n", FILE_APPEND);
+        // #endregion
     }
     
     /**

@@ -41,6 +41,17 @@ class Acl implements TaglibInterface
      * 缓存的 Session 实例
      */
     private static $cachedSession = null;
+    
+    /**
+     * 编译时结果缓存，防止同一个标签被递归编译
+     * Key: md5(source + tag_key + tag_data_hash)
+     */
+    private static array $compileCache = [];
+    
+    /**
+     * 当前正在编译的标签哈希集合，用于检测递归
+     */
+    private static array $compilingTags = [];
 
     /**
      * @inheritDoc
@@ -93,15 +104,31 @@ class Acl implements TaglibInterface
                 throw new \Exception(__('acl标签缺少source属性'));
             }
             
-            // 防止权限检查重入导致的循环
-            if (self::$checkingPermission) {
-                // 如果正在检查权限，返回空内容避免循环
-                return '<!-- acl check in progress -->';
+            // 生成唯一标签哈希，用于检测递归编译
+            $tagHash = md5($source . '|' . $tag_key . '|' . serialize($tag_data));
+            
+            // #region agent log
+            static $aclCallCount = 0;
+            $aclCallCount++;
+            if ($aclCallCount <= 10) {
+                @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:callback','message'=>'ACL Taglib ENTRY','data'=>['source'=>$source,'tagHash'=>substr($tagHash,0,8),'callCount'=>$aclCallCount,'inCompiling'=>isset(self::$compilingTags[$tagHash]),'hasCached'=>isset(self::$compileCache[$tagHash])],'hypothesisId'=>'B','sessionId'=>'debug-session'])."\n", FILE_APPEND);
+            }
+            // #endregion
+            
+            // 检测递归编译：如果同一个标签正在编译中，直接返回占位符
+            if (isset(self::$compilingTags[$tagHash])) {
+                return '<!-- acl:' . $source . ' (递归编译保护) -->';
             }
             
+            // 检查编译缓存：如果已经编译过，直接返回缓存结果
+            if (isset(self::$compileCache[$tagHash])) {
+                return self::$compileCache[$tagHash];
+            }
+            
+            // 标记当前标签正在编译
+            self::$compilingTags[$tagHash] = true;
+            
             try {
-                self::$checkingPermission = true;
-                
                 // 使用缓存的 Request 实例，避免重复获取触发循环
                 if (self::$cachedRequest === null) {
                     self::$cachedRequest = ObjectManager::getInstance(Request::class);
@@ -122,7 +149,9 @@ class Acl implements TaglibInterface
                 // 角色
                 $role = $user->getRoleModel();
                 if ($role->getId() === 1) {
-                    return $tag_data[2] ?? '';
+                    $result = $tag_data[2] ?? '';
+                    self::$compileCache[$tagHash] = $result;
+                    return $result;
                 }
                 /**@var CacheInterface $cache */
                 $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
@@ -134,7 +163,9 @@ class Acl implements TaglibInterface
                         $messageManager = ObjectManager::getInstance(MessageManager::class);
                         $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
                         $messageManager->addWarning($msg);
-                        return '<!-- ' . $msg . ' 资源 -->';
+                        $result = '<!-- ' . $msg . ' 资源 -->';
+                        self::$compileCache[$tagHash] = $result;
+                        return $result;
                     }
                     // 检查权限资源
                     /**@var RoleAccess $roleAccess */
@@ -150,15 +181,20 @@ class Acl implements TaglibInterface
                     $messageManager = ObjectManager::getInstance(MessageManager::class);
                     $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
                     $messageManager->addWarning($msg);
-                    return '<!-- ' . $msg . ' 资源 -->';
+                    $result = '<!-- ' . $msg . ' 资源 -->';
+                    self::$compileCache[$tagHash] = $result;
+                    return $result;
                 }
                 if (DEV) {
-                    return '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
+                    $result = '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
+                } else {
+                    $result = $tag_data[2] ?? '';
                 }
-                return $tag_data[2] ?? '';
+                self::$compileCache[$tagHash] = $result;
+                return $result;
             } finally {
-                // 确保标志被重置，避免影响后续正常的 ACL 检查
-                self::$checkingPermission = false;
+                // 移除编译中标记
+                unset(self::$compilingTags[$tagHash]);
             }
         };
     }
