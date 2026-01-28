@@ -46,6 +46,8 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const fields_model_class = 'model_class';
     public const fields_default_value = 'default_value';
     public const fields_dependence = 'dependence'; # 多个依赖以英文逗号隔开,demo1,demo2
+    public const fields_is_filterable = 'is_filterable';
+    public const fields_is_visible_on_front = 'is_visible_on_front';
 
     public const value_key = 'value';
     public const swatch_value_key = 'swatch_value';
@@ -81,7 +83,37 @@ class EavAttribute extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        if (!$setup->tableExist()) {
+            $this->install($setup, $context);
+            return;
+        }
+        
+        // alterTable()->addColumn() 签名：(field_name, after_column, type, length, options, comment)
+        // 添加 is_filterable 字段：是否可用于筛选
+        if (!$setup->hasField(self::fields_is_filterable)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_is_filterable,
+                    self::fields_dependence,  // 在 dependence 字段后添加
+                    'smallint',
+                    1,
+                    'default 0',
+                    '是否可用于筛选'
+                )->alter();
+        }
+        
+        // 添加 is_visible_on_front 字段：是否在前端可见
+        if (!$setup->hasField(self::fields_is_visible_on_front)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_is_visible_on_front,
+                    self::fields_is_filterable,  // 在 is_filterable 字段后添加
+                    'smallint',
+                    1,
+                    'default 0',
+                    '是否在前端可见'
+                )->alter();
+        }
     }
 
     /**
@@ -397,6 +429,34 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this->setData(self::fields_is_enable, $is_enable);
         }
         return (bool)$this->getData(self::fields_is_enable);
+    }
+
+    /**
+     * 是否可用于筛选
+     * 
+     * @param bool|null $is_filterable 如果传入布尔值则设置，否则返回当前值
+     * @return bool|static
+     */
+    public function isFilterable(bool|null $is_filterable = null): bool|static
+    {
+        if (is_bool($is_filterable)) {
+            return $this->setData(self::fields_is_filterable, $is_filterable ? 1 : 0);
+        }
+        return (bool)$this->getData(self::fields_is_filterable);
+    }
+
+    /**
+     * 是否在前端可见
+     * 
+     * @param bool|null $is_visible_on_front 如果传入布尔值则设置，否则返回当前值
+     * @return bool|static
+     */
+    public function isVisibleOnFront(bool|null $is_visible_on_front = null): bool|static
+    {
+        if (is_bool($is_visible_on_front)) {
+            return $this->setData(self::fields_is_visible_on_front, $is_visible_on_front ? 1 : 0);
+        }
+        return (bool)$this->getData(self::fields_is_visible_on_front);
     }
 
     public function getMultipleValued(): bool
