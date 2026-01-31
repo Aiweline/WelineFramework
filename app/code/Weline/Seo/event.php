@@ -97,6 +97,23 @@ return [
         ],
     ],
 
+    /**
+     * 站点绑定SEO账户事件
+     * 当站点绑定或更新SEO账户时触发
+     */
+    'Weline_Seo::domain::website_account_bind' => [
+        'name' => __('站点绑定SEO账户'),
+        'description' => __('当站点绑定SEO账户时触发，自动保存站点与账户的关联关系，用于控制sitemap自动提交。'),
+        'doc' => 'domain/website_account_bind.md',
+        'version' => '1.0.0',
+        'type' => 'domain',
+        'data_contract' => [
+            'website_id' => ['type' => 'integer', 'required' => true, 'description' => '站点ID'],
+            'account_id' => ['type' => 'integer', 'required' => true, 'description' => 'SEO账户ID'],
+            'is_auto_submit' => ['type' => 'boolean', 'required' => false, 'description' => '是否自动提交sitemap，默认true'],
+        ],
+    ],
+
     // ========== Integration Events (集成事件) ==========
     
     /**

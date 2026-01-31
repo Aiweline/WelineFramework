@@ -1,19 +1,18 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Admin\Service\MenuRenderService;
+// 注意：此模板可能被嵌入到其他模板的 if 块中，因此不能使用 use 语句
+// use 语句在 PHP 中必须在文件顶层，不能在控制结构内部
 
 ?>
 <?php
-$themeConfig = ObjectManager::getInstance('\Weline\Backend\Block\ThemeConfig');
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance('\Weline\Backend\Block\ThemeConfig');
 // 检查是否为水平布局，水平布局时不显示左侧菜单
 $currentLayouts = $themeConfig->getOriginThemeConfig('layouts') ?? [];
 $dataLayout = $currentLayouts['data-layout'] ?? '';
 if ($dataLayout !== 'horizontal'):
     // 使用服务类获取菜单数据
-    /**@var MenuRenderService $menuRenderService */
-    $menuRenderService = ObjectManager::getInstance(MenuRenderService::class);
+    /**@var \Weline\Admin\Service\MenuRenderService $menuRenderService */
+    $menuRenderService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Service\MenuRenderService::class);
     
     // 获取常用菜单数据
     $frequentMenusData = $menuRenderService->getFrequentMenus(20, 7);
@@ -3250,155 +3249,138 @@ if ($dataLayout !== 'horizontal'):
                 }, 100);
             }
             
-            // 自动滚动到激活的菜单项，使其居中显示
-            function scrollToActiveMenu() {
-                // 查找激活的菜单项
-                var $activeMenu = null;
-                
-                // 优先查找带有 active 类的链接（最精确的激活项）
-                var $activeLink = $('#sidebar-menu .mm-active .active, #sidebar-menu .mm-active > a.active, #sidebar-menu li.mm-active > a.active');
-                if ($activeLink.length > 0) {
-                    $activeMenu = $activeLink.closest('li');
-                } else {
-                    // 如果没有找到 active 链接，查找 mm-active 的菜单项
-                    $activeMenu = $('#sidebar-menu li.mm-active').first();
-                }
-                
-                if (!$activeMenu || $activeMenu.length === 0) {
-                    return; // 没有找到激活的菜单项
-                }
-                
-                // 获取滚动容器
-                var $simplebarContainer = $('.vertical-menu [data-simplebar]');
+            // 菜单定位：仅负责 #side-menu 内部激活项在侧栏滚动容器中的可见/居中，不处理 window 或其他区域
+            window.scrollToActiveMenu = function scrollToActiveMenu(retryCount) {
+                retryCount = retryCount || 0;
+                var $sideMenu = $('#side-menu');
+                if (!$sideMenu.length) return;
+
+                // 只在 #side-menu 内查找激活项
+                var $activeLink = $('#side-menu .mm-active .active, #side-menu .mm-active > a.active, #side-menu li.mm-active > a.active');
+                var $activeMenu = $activeLink.length > 0 ? $activeLink.closest('li') : $('#side-menu li.mm-active').first();
+                if (!$activeMenu || !$activeMenu.length) return;
+
+                // 滚动容器：仅使用包裹 #side-menu 的 simplebar（不降级到 window 或 #sidebar-menu）
+                var $simplebarContainer = $('#side-menu').closest('.vertical-menu').find('[data-simplebar]');
                 var scrollElement = null;
-                
-                if ($simplebarContainer.length > 0 && $simplebarContainer[0].simpleBar) {
-                    // 使用 simplebar 的滚动元素
-                    scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
-                } else {
-                    // 降级方案：使用侧边栏菜单本身
-                    var $sidebarMenu = $('#sidebar-menu');
-                    if ($sidebarMenu.length && $sidebarMenu[0].scrollHeight > $sidebarMenu[0].clientHeight) {
-                        scrollElement = $sidebarMenu[0];
+                if ($simplebarContainer.length) {
+                    if ($simplebarContainer[0].simpleBar) {
+                        scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
                     } else {
-                        // 再降级：使用 window
-                        scrollElement = window;
+                        var $wrapper = $simplebarContainer.find('.simplebar-content-wrapper');
+                        if ($wrapper.length) scrollElement = $wrapper[0];
                     }
                 }
-                
                 if (!scrollElement) {
+                    if (retryCount < 1) setTimeout(function() { window.scrollToActiveMenu(1); }, 400);
                     return;
                 }
-                
-                // 等待DOM完全渲染和菜单展开完成
+
                 setTimeout(function() {
                     try {
-                        // 确保激活菜单项的父级菜单都已展开
                         $activeMenu.parents('li').each(function() {
                             var $parent = $(this);
-                            var $subMenu = $parent.find('> .sub-menu').first();
-                            if ($subMenu.length > 0 && $subMenu.attr('aria-expanded') === 'false') {
+                            var $sub = $parent.find('> .sub-menu').first();
+                            if ($sub.length && $sub.attr('aria-expanded') === 'false') {
                                 $parent.find('> a.has-arrow').first().trigger('click');
                             }
                         });
-                        
-                        // 再次等待展开动画完成
                         setTimeout(function() {
                             try {
-                                var menuElement = $activeMenu[0];
-                                if (!menuElement) {
-                                    return;
-                                }
-                                
-                                // 如果使用 simplebar，必须使用手动计算（因为 scrollIntoView 可能不会正确滚动 simplebar 容器）
-                                var useScrollIntoView = ($simplebarContainer.length === 0 || !$simplebarContainer[0].simpleBar);
-                                
-                                // 对于非 simplebar 的情况，尝试使用原生 scrollIntoView 方法（更简单可靠）
-                                if (useScrollIntoView && typeof menuElement.scrollIntoView === 'function') {
-                                    try {
-                                        menuElement.scrollIntoView({
-                                            behavior: 'smooth',
-                                            block: 'center',
-                                            inline: 'nearest'
-                                        });
-                                        return; // 如果成功，直接返回
-                                    } catch (e) {
-                                        // 如果 scrollIntoView 失败，继续使用手动计算
-                                        console.warn('scrollIntoView 失败，使用手动计算:', e);
-                                    }
-                                }
-                                
-                                // 手动计算滚动位置（simplebar 或 scrollIntoView 失败时使用）
-                                var menuOffset = $activeMenu.offset();
-                                
-                                if (!menuOffset) {
-                                    return;
-                                }
-                                
-                                var scrollTop = 0;
-                                var menuTop = 0;
-                                var containerHeight = 0;
-                                var containerOffset = null;
-                                
-                                if (scrollElement === window) {
-                                    // 使用 window 滚动
-                                    menuTop = menuOffset.top;
-                                    containerHeight = $(window).height();
-                                    scrollTop = $(window).scrollTop();
-                                } else {
-                                    // 使用元素滚动
-                                    var $scrollContainer = $(scrollElement);
-                                    containerOffset = $scrollContainer.offset();
-                                    
-                                    if (containerOffset) {
-                                        // 计算菜单项相对于滚动容器的位置
-                                        menuTop = menuOffset.top - containerOffset.top + $scrollContainer.scrollTop();
-                                    } else {
-                                        // 降级：使用 position()
-                                        menuTop = $activeMenu.position().top + $scrollContainer.scrollTop();
-                                    }
-                                    
-                                    containerHeight = $scrollContainer.height();
-                                    scrollTop = $scrollContainer.scrollTop();
-                                }
-                                
-                                // 计算目标滚动位置：使菜单项位于容器中间
-                                var menuHeight = $activeMenu.outerHeight() || 40; // 默认高度40px
-                                var targetScrollTop = menuTop - (containerHeight / 2) + (menuHeight / 2);
-                                
-                                // 确保不超出滚动范围
-                                var maxScrollTop = 0;
-                                if (scrollElement === window) {
-                                    maxScrollTop = $(document).height() - $(window).height();
-                                } else {
-                                    maxScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight;
-                                }
-                                
+                                var el = $activeMenu[0];
+                                if (!el) return;
+                                var scrollTop = scrollElement.scrollTop;
+                                var containerHeight = scrollElement.clientHeight;
+                                var menuHeight = $activeMenu.outerHeight() || 40;
+                                var menuRect = el.getBoundingClientRect();
+                                var containerRect = scrollElement.getBoundingClientRect();
+                                var offsetFromVisibleTop = menuRect.top - containerRect.top;
+                                var targetScrollTop = scrollTop + offsetFromVisibleTop - (containerHeight / 2) + (menuHeight / 2);
+                                var maxScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight;
                                 targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
-                                
-                                // 执行滚动动画
-                                if (scrollElement === window) {
-                                    $('html, body').animate({
-                                        scrollTop: targetScrollTop
-                                    }, 500);
-                                } else {
-                                    $(scrollElement).animate({
-                                        scrollTop: targetScrollTop
-                                    }, 500);
-                                }
+                                $(scrollElement).animate({ scrollTop: targetScrollTop }, 400);
                             } catch (e) {
-                                console.warn('计算滚动位置时出错:', e);
+                                console.warn('菜单定位滚动计算出错:', e);
                             }
                         }, 300);
                     } catch (e) {
-                        console.warn('滚动到激活菜单项时出错:', e);
+                        console.warn('菜单定位展开父级出错:', e);
                     }
                 }, 200);
-            }
+            };
             
             // 页面加载完成后执行滚动
             $(document).ready(function() {
-                scrollToActiveMenu();
+                // 确保函数已定义后再调用
+                if (typeof window.scrollToActiveMenu === 'function') {
+                    window.scrollToActiveMenu();
+                } else {
+                    // 如果函数还未定义，延迟执行
+                    setTimeout(function() {
+                        if (typeof window.scrollToActiveMenu === 'function') {
+                            window.scrollToActiveMenu();
+                        }
+                    }, 500);
+                }
+                
+                // 监听菜单激活状态变化，当菜单锁定功能激活菜单后自动滚动
+                if (typeof MutationObserver !== 'undefined') {
+                    var scrollTimer = null;
+                    var lastActiveMenuId = null;
+                    
+                    var menuObserver = new MutationObserver(function(mutations) {
+                        var shouldScroll = false;
+                        var currentActiveMenuId = null;
+                        
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                                var target = mutation.target;
+                                var oldValue = mutation.oldValue || '';
+                                var newValue = target.className || '';
+                                
+                                // 检查是否是菜单项添加了 mm-active 类（之前没有，现在有了）
+                                var hadMmActive = oldValue.indexOf('mm-active') !== -1;
+                                var hasMmActive = newValue.indexOf('mm-active') !== -1;
+                                
+                                if (!hadMmActive && hasMmActive && $(target).is('li')) {
+                                    var $menuItem = $(target);
+                                    if ($menuItem.closest('#side-menu').length > 0) {
+                                        var $link = $menuItem.find('> a.active, .active').first();
+                                        currentActiveMenuId = ($link.length ? $link.attr('href') : $menuItem.find('> a').first().attr('href')) || $menuItem.text();
+                                        if (currentActiveMenuId && currentActiveMenuId !== lastActiveMenuId) shouldScroll = true;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        if (shouldScroll) {
+                            lastActiveMenuId = currentActiveMenuId;
+                            
+                            // 清除之前的定时器，实现防抖
+                            if (scrollTimer) {
+                                clearTimeout(scrollTimer);
+                            }
+                            
+                            // 延迟执行，确保菜单状态已完全更新
+                            scrollTimer = setTimeout(function() {
+                                if (typeof window.scrollToActiveMenu === 'function') {
+                                    window.scrollToActiveMenu();
+                                }
+                            }, 300);
+                        }
+                    });
+                    
+                    // 只观察 #side-menu 内 class 变化
+                    var $sideMenuEl = $('#side-menu')[0];
+                    if ($sideMenuEl) {
+                        menuObserver.observe($sideMenuEl, {
+                            attributes: true,
+                            attributeFilter: ['class'],
+                            subtree: true,
+                            attributeOldValue: true
+                        });
+                    }
+                }
             });
             
             // 如果使用 jQuery 的 ready 事件，也监听 DOMContentLoaded

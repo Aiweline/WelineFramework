@@ -45,9 +45,7 @@ class RatingFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = \Weline\Framework\App\State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'Customer Reviews' : __('用户评分');
+        return __('用户评分');
     }
     
     /**
@@ -59,6 +57,7 @@ class RatingFilterProvider extends AbstractFilterProvider
             return [];
         }
         
+        $andAbove = __('及以上');
         $options = [];
         
         // 从最高评分到最低评分
@@ -72,7 +71,7 @@ class RatingFilterProvider extends AbstractFilterProvider
             
             $value = (string)$rating;
             $stars = str_repeat('★', $rating) . str_repeat('☆', $this->maxRating - $rating);
-            $label = $stars . ' ' . __('及以上');
+            $label = $stars . ' ' . $andAbove;
             
             $options[] = [
                 'value' => $value,
@@ -191,11 +190,7 @@ class RatingFilterProvider extends AbstractFilterProvider
             return $value;
         }
         
-        $lang = \Weline\Framework\App\State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        
         $stars = str_repeat('★', $rating) . str_repeat('☆', $this->maxRating - $rating);
-        $suffix = $isEnglish ? 'and above' : __('及以上');
-        return $stars . ' ' . $suffix;
+        return $stars . ' ' . __('及以上');
     }
 }

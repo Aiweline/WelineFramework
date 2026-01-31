@@ -23,6 +23,10 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * @deprecated 请使用 Manager 控制器 (/eav/backend/manager) 统一管理EAV
+ * @see \Weline\Eav\Controller\Backend\Manager
+ */
 class Attribute extends \Weline\Framework\App\Controller\BackendController
 {
     public const        eav_entity = 'eav_entity';
@@ -146,8 +150,8 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         } else {
             $attribute['options'] = [];
         }
-        if (!isset($attribute['has_option'])) {
-            $attribute['has_option'] = 0;
+        if (!isset($attribute['data_has_option'])) {
+            $attribute['data_has_option'] = 0;
         }
         $this->assign('attribute', $attribute);
         # 实体
@@ -223,8 +227,8 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         } else {
             $attribute['options'] = [];
         }
-        if (!isset($attribute['has_option'])) {
-            $attribute['has_option'] = 0;
+        if (!isset($attribute['data_has_option'])) {
+            $attribute['data_has_option'] = 0;
         }
         $this->assign('attribute', $attribute);
         # 实体

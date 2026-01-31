@@ -202,6 +202,19 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                    close-button-text='关闭' direction='right'
                                                                    class-names='w-75' off-canvas-body-style=''/>
                                                             <if condition="product.parent_id == 0">
+                                                                <?php $childrenCount = $product['children_count'] ?? ($product->getData('children_count') ?? 0); ?>
+                                                                <?php if ($childrenCount > 0): ?>
+                                                                    <button class="btn btn-secondary btn-product-links"
+                                                                            data-bs-toggle="modal"
+                                                                            data-bs-target="#productLinksModal"
+                                                                            data-product-id="<?= $product['product_id'] ?? $product->getData('product_id') ?>"
+                                                                            data-product-name="<?= htmlspecialchars($product['local_name'] ?? $product['name'] ?? $product->getData('name')) ?>"
+                                                                            data-children-count="<?= $childrenCount ?>">
+                                                                        <i class="bx bx-link"></i>
+                                                                        <lang>关联</lang>
+                                                                        <span class="badge bg-info ms-1"><?= $childrenCount ?></span>
+                                                                    </button>
+                                                                <?php endif; ?>
                                                                 <button class="btn btn-danger" w-ajax="@backend-url('*/backend/product/delete',
                                                                 ['product_id'=>$product['product_id']])"
                                                                         w-delete="true"
@@ -245,6 +258,117 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 <!-- Init js -->
 <script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- 产品关联弹窗 -->
+<div id='productLinksModal' class='modal fade' tabindex='-1' aria-labelledby='productLinksModalLabel' aria-hidden='true'>
+    <div class='modal-dialog modal-xl'>
+        <div class='modal-content'>
+            <div class='modal-header'>
+                <h5 class='modal-title' id='productLinksModalLabel'>
+                    <lang>产品关联详情</lang> - <span id="productLinksName"></span>
+                </h5>
+                <button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='关闭'></button>
+            </div>
+            <div class='modal-body'>
+                <!-- Tab 导航 -->
+                <ul class="nav nav-tabs" id="productLinksTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="children-tab" data-bs-toggle="tab" 
+                                data-bs-target="#children-content" type="button" role="tab">
+                            <lang>子产品</lang>
+                            <span class="badge bg-primary ms-1" id="children-count-badge">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="grouped-tab" data-bs-toggle="tab" 
+                                data-bs-target="#grouped-content" type="button" role="tab" disabled>
+                            <lang>组产品</lang>
+                            <span class="badge bg-secondary ms-1">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="bundle-tab" data-bs-toggle="tab" 
+                                data-bs-target="#bundle-content" type="button" role="tab" disabled>
+                            <lang>绑定产品</lang>
+                            <span class="badge bg-secondary ms-1">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="related-tab" data-bs-toggle="tab" 
+                                data-bs-target="#related-content" type="button" role="tab" disabled>
+                            <lang>关联产品</lang>
+                            <span class="badge bg-secondary ms-1">0</span>
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Tab 内容 -->
+                <div class="tab-content mt-3" id="productLinksTabContent">
+                    <!-- 子产品内容 -->
+                    <div class="tab-pane fade show active" id="children-content" role="tabpanel">
+                        <div id="children-loading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2"><lang>正在加载子产品...</lang></p>
+                        </div>
+                        <div id="children-empty" class="text-center py-4 d-none">
+                            <i class="bx bx-package" style="font-size: 48px; color: #ccc;"></i>
+                            <p class="mt-2 text-muted"><lang>暂无子产品</lang></p>
+                        </div>
+                        <div class="table-responsive d-none" id="children-table-wrapper">
+                            <table class="table table-striped table-bordered table-hover" id="children-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 60px;">ID</th>
+                                        <th style="width: 80px;"><lang>图片</lang></th>
+                                        <th><lang>名称</lang></th>
+                                        <th style="width: 120px;">SKU</th>
+                                        <th style="width: 100px;"><lang>价格</lang></th>
+                                        <th style="width: 80px;"><lang>库存</lang></th>
+                                        <th style="width: 80px;"><lang>状态</lang></th>
+                                        <th style="width: 100px;"><lang>操作</lang></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="children-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 组产品内容（预留） -->
+                    <div class="tab-pane fade" id="grouped-content" role="tabpanel">
+                        <div class="text-center py-4">
+                            <i class="bx bx-layer" style="font-size: 48px; color: #ccc;"></i>
+                            <p class="mt-2 text-muted"><lang>组产品功能即将上线</lang></p>
+                        </div>
+                    </div>
+                    
+                    <!-- 绑定产品内容（预留） -->
+                    <div class="tab-pane fade" id="bundle-content" role="tabpanel">
+                        <div class="text-center py-4">
+                            <i class="bx bx-cube" style="font-size: 48px; color: #ccc;"></i>
+                            <p class="mt-2 text-muted"><lang>绑定产品功能即将上线</lang></p>
+                        </div>
+                    </div>
+                    
+                    <!-- 关联产品内容（预留） -->
+                    <div class="tab-pane fade" id="related-content" role="tabpanel">
+                        <div class="text-center py-4">
+                            <i class="bx bx-link-alt" style="font-size: 48px; color: #ccc;"></i>
+                            <p class="mt-2 text-muted"><lang>关联产品功能即将上线</lang></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class='modal-footer'>
+                <button type='button' class='btn btn-secondary' data-bs-dismiss='modal'>
+                    <lang>关闭</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 配置项弹窗 -->
 <div id='optionConfig' class='modal fade' tabindex='-1' aria-labelledby='#optionConfig' aria-hidden='true'>
     <div class='modal-dialog modal-xl'>
@@ -286,6 +410,78 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div><!-- /.modal-dialog -->
 </div>
 <script>
+    // 产品关联弹窗逻辑
+    $('#productLinksModal').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        const productId = button.data('product-id');
+        const productName = button.data('product-name');
+        const childrenCount = button.data('children-count');
+        
+        // 设置产品名称
+        $('#productLinksName').text(productName);
+        $('#children-count-badge').text(childrenCount);
+        
+        // 重置状态
+        $('#children-loading').removeClass('d-none');
+        $('#children-empty').addClass('d-none');
+        $('#children-table-wrapper').addClass('d-none');
+        $('#children-table-body').empty();
+        
+        // 加载子产品
+        loadChildren(productId);
+    });
+    
+    function loadChildren(productId) {
+        $.ajax({
+            url: '@backend-url("*/backend/product/getChildren")',
+            data: { product_id: productId },
+            success: function(res) {
+                $('#children-loading').addClass('d-none');
+                
+                if (res.items && res.items.length > 0) {
+                    $('#children-table-wrapper').removeClass('d-none');
+                    
+                    let tbody = '';
+                    res.items.forEach(function(product) {
+                        const statusHtml = product.status == 1 
+                            ? '<span class="badge bg-success">' + __('启用') + '</span>'
+                            : '<span class="badge bg-danger">' + __('禁用') + '</span>';
+                        
+                        const imageHtml = product.image 
+                            ? '<img src="' + product.image + '" alt="" style="width: 50px; height: 50px; object-fit: cover;" class="rounded">'
+                            : '<div style="width: 50px; height: 50px; background: #f5f5f5;" class="rounded d-flex align-items-center justify-content-center"><i class="bx bx-image text-muted"></i></div>';
+                        
+                        tbody += `
+                            <tr>
+                                <td>${product.product_id}</td>
+                                <td>${imageHtml}</td>
+                                <td>${product.local_name || product.name}</td>
+                                <td><code>${product.sku}</code></td>
+                                <td>¥${parseFloat(product.price || 0).toFixed(2)}</td>
+                                <td>${product.stock || 0}</td>
+                                <td>${statusHtml}</td>
+                                <td>
+                                    <a href="@backend-url('*/backend/product/edit')?product_id=${product.product_id}" 
+                                       class="btn btn-sm btn-outline-primary" target="_blank">
+                                        <i class="bx bx-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    $('#children-table-body').html(tbody);
+                } else {
+                    $('#children-empty').removeClass('d-none');
+                }
+            },
+            error: function() {
+                $('#children-loading').addClass('d-none');
+                $('#children-empty').removeClass('d-none').find('p').text(__('加载失败，请重试'));
+            }
+        });
+    }
+    
     $('#optionConfig').on('show.bs.modal', function (event) {
         showLoading();
         // 触发的按钮

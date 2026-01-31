@@ -104,14 +104,6 @@ class Acl implements TaglibInterface
                 throw new \Exception(__('acl标签缺少source属性'));
             }
             
-            // #region agent log
-            static $aclCallCount = 0;
-            $aclCallCount++;
-            if ($aclCallCount <= 20) {
-                @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Acl.php:callback','message'=>'ACL Taglib ENTRY (runtime)','data'=>['source'=>$source,'callCount'=>$aclCallCount,'tag_key'=>$tag_key],'hypothesisId'=>'B','sessionId'=>'debug-session'])."\n", FILE_APPEND);
-            }
-            // #endregion
-            
             // 获取标签内部内容
             $content = $tag_data[2] ?? '';
             

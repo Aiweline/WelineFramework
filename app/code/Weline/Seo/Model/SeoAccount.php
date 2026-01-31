@@ -20,7 +20,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
  * SEO 提交账户模型
  *
  * 负责存储各搜索引擎/渠道的提交账户配置，
- * 按 scope + module + provider 维度进行管理。
+ * 按 scope + provider 维度进行管理。
  *
  * @package Weline_Seo
  */
@@ -44,6 +44,7 @@ class SeoAccount extends Model
     public const fields_ACCOUNT_ID = 'account_id';
     public const fields_SCOPE = 'scope';
     public const fields_MODULE = 'module';
+    public const fields_PLATFORM = 'platform';
     public const fields_PROVIDER = 'provider';
     public const fields_NAME = 'name';
     public const fields_DESCRIPTION = 'description';
@@ -99,6 +100,13 @@ class SeoAccount extends Model
                     150,
                     '',
                     '来源模块名，例如GuoLaiRen_PageBuilder'
+                )
+                ->addColumn(
+                    self::fields_PLATFORM,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'not null',
+                    'Sitemap平台代码：google/bing/baidu等'
                 )
                 ->addColumn(
                     self::fields_PROVIDER,
@@ -171,6 +179,12 @@ class SeoAccount extends Model
                 )
                 ->addIndex(
                     TableInterface::index_type_KEY,
+                    'idx_platform',
+                    [self::fields_PLATFORM],
+                    '平台索引'
+                )
+                ->addIndex(
+                    TableInterface::index_type_KEY,
                     'idx_provider_active',
                     [self::fields_PROVIDER, self::fields_IS_ACTIVE],
                     '供应商+启用状态索引'
@@ -185,7 +199,24 @@ class SeoAccount extends Model
             return;
         }
 
-        // 预留未来字段升级逻辑
+        // 添加 platform 字段（v1.0.1）
+        if (!$setup->columnExist(self::fields_PLATFORM)) {
+            $setup->addColumn(
+                self::fields_PLATFORM,
+                TableInterface::column_type_VARCHAR,
+                50,
+                'not null default ""',
+                'Sitemap平台代码：google/bing/baidu等',
+                self::fields_MODULE // 在 module 字段之后
+            );
+            
+            $setup->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_platform',
+                [self::fields_PLATFORM],
+                '平台索引'
+            );
+        }
     }
 
     /**
@@ -223,6 +254,23 @@ class SeoAccount extends Model
     public function isCronSitemapEnabled(): bool
     {
         return (int)$this->getData(self::fields_ENABLE_CRON_SITEMAP) === 1;
+    }
+
+    /**
+     * 获取平台代码
+     */
+    public function getPlatform(): string
+    {
+        return (string)$this->getData(self::fields_PLATFORM);
+    }
+
+    /**
+     * 设置平台代码
+     */
+    public function setPlatform(string $platform): self
+    {
+        $this->setData(self::fields_PLATFORM, $platform);
+        return $this;
     }
 
     public function save_before(): void

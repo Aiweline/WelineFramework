@@ -1,0 +1,132 @@
+<?php
+/**
+ * 实体属性展示组件模板
+ * 
+ * @var \Weline\Eav\Block\Widget\EntityAttributes $block
+ */
+
+$entity = $block->getEntity();
+if (!$entity) {
+    echo '<div class="alert alert-warning">未找到指定实体</div>';
+    return;
+}
+
+$attributeData = $block->getFullAttributeData();
+$isEditMode = $block->isEditMode();
+$entityId = $block->getData('entity_id');
+?>
+
+<div class="eav-entity-attributes" data-entity-code="<?= $entity->getData('code') ?>" data-entity-id="<?= $entityId ?>">
+    
+    <?php if (empty($attributeData)): ?>
+        <div class="text-muted text-center py-4">
+            <i class="mdi mdi-database-off-outline d-block mb-2" style="font-size: 32px;"></i>
+            <?= __('暂无属性数据') ?>
+        </div>
+    <?php else: ?>
+        
+        <?php foreach ($attributeData as $setData): ?>
+            <?php $set = $setData['set']; ?>
+            
+            <div class="eav-attribute-set mb-4">
+                <h5 class="border-bottom pb-2 mb-3">
+                    <i class="mdi mdi-folder-outline me-2"></i>
+                    <?= $set['local_name'] ?? $set['name'] ?? $set['code'] ?>
+                </h5>
+                
+                <?php foreach ($setData['groups'] as $groupData): ?>
+                    <?php $group = $groupData['group']; ?>
+                    
+                    <div class="eav-attribute-group mb-3">
+                        <h6 class="text-muted mb-2">
+                            <i class="mdi mdi-folder-multiple-outline me-1"></i>
+                            <?= $group['local_name'] ?? $group['name'] ?? $group['code'] ?>
+                        </h6>
+                        
+                        <?php if ($isEditMode): ?>
+                            <!-- 编辑模式 -->
+                            <div class="row">
+                                <?php foreach ($groupData['attributes'] as $attr): ?>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">
+                                            <?= $attr['local_name'] ?? $attr['name'] ?? $attr['code'] ?>
+                                        </label>
+                                        <?php 
+                                        $element = $attr['element'] ?? 'input';
+                                        $value = $attr['value'] ?? '';
+                                        $attrCode = $attr['code'];
+                                        ?>
+                                        
+                                        <?php if ($element === 'select' && !empty($attr['options'])): ?>
+                                            <select class="form-select" name="eav[<?= $attrCode ?>]">
+                                                <option value=""><?= __('请选择') ?></option>
+                                                <?php foreach ($attr['options'] as $option): ?>
+                                                    <option value="<?= htmlspecialchars($option['code']) ?>" 
+                                                            <?= $value == $option['code'] ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars($option['value']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        <?php elseif ($element === 'textarea'): ?>
+                                            <textarea class="form-control" name="eav[<?= $attrCode ?>]" rows="3"><?= htmlspecialchars($value) ?></textarea>
+                                        <?php elseif ($element === 'checkbox'): ?>
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" name="eav[<?= $attrCode ?>]" 
+                                                       value="1" <?= $value ? 'checked' : '' ?>>
+                                            </div>
+                                        <?php else: ?>
+                                            <input type="text" class="form-control" name="eav[<?= $attrCode ?>]" 
+                                                   value="<?= htmlspecialchars($value) ?>">
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <!-- 查看模式 -->
+                            <table class="table table-sm table-borderless">
+                                <tbody>
+                                    <?php foreach ($groupData['attributes'] as $attr): ?>
+                                        <tr>
+                                            <th style="width: 200px;" class="text-muted">
+                                                <?= $attr['local_name'] ?? $attr['name'] ?? $attr['code'] ?>
+                                            </th>
+                                            <td>
+                                                <?php 
+                                                $value = $attr['value'] ?? '';
+                                                
+                                                // 如果有选项，显示选项值
+                                                if (!empty($attr['options']) && $value) {
+                                                    foreach ($attr['options'] as $option) {
+                                                        if ($option['code'] == $value) {
+                                                            $value = $option['value'];
+                                                            
+                                                            // 如果有样本颜色
+                                                            if (!empty($option['swatch_color'])) {
+                                                                echo '<span class="d-inline-flex align-items-center">';
+                                                                echo '<span class="me-2" style="display:inline-block;width:16px;height:16px;border-radius:3px;background-color:' . htmlspecialchars($option['swatch_color']) . '"></span>';
+                                                                echo htmlspecialchars($value);
+                                                                echo '</span>';
+                                                            } else {
+                                                                echo htmlspecialchars($value);
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                } else {
+                                                    echo htmlspecialchars($value) ?: '<span class="text-muted">-</span>';
+                                                }
+                                                ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endforeach; ?>
+        
+    <?php endif; ?>
+    
+</div>

@@ -201,53 +201,6 @@
                                             $isPublished = $page->getData('status') == 1;
                                             ?>
                                             
-                                            <!-- 预览按钮（使用站点链接直接访问） -->
-                                            <a class='btn btn-sm btn-outline-info d-inline-flex align-items-center' 
-                                               href="<?= $frontendUrl ?>"
-                                               target="_blank"
-                                               style="min-width: 70px; white-space: nowrap;"
-                                               title="<?= __('预览页面效果') ?>">
-                                                <i class="mdi mdi-eye-check-outline me-1"></i><?= __('预览') ?>
-                                            </a>
-                                            
-                                            <?php if ($isPublished): ?>
-                                                <!-- 已发布：查看链接按钮 -->
-                                                <a class='btn btn-sm btn-outline-primary d-inline-flex align-items-center' 
-                                                   href="<?= $frontendUrl ?>"
-                                                   target="_blank"
-                                                   style="min-width: 70px; white-space: nowrap;"
-                                                   title="<?= __('在新标签页查看页面') ?>">
-                                                    <i class="mdi mdi-eye-outline me-1"></i><?= __('查看') ?>
-                                                </a>
-                                                
-                                                <!-- 已发布：拷贝链接按钮 -->
-                                                <button class='btn btn-sm btn-outline-secondary copy-link-btn d-inline-flex align-items-center' 
-                                                        data-url="<?= htmlspecialchars($frontendUrl ?? '') ?>"
-                                                        data-page-name="<?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>"
-                                                        style="min-width: 85px; white-space: nowrap;"
-                                                        title="<?= __('复制链接到剪贴板') ?>">
-                                                    <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>
-                                                </button>
-                                            <?php else: ?>
-                                                <!-- 未发布：禁用的查看按钮 -->
-                                                <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center' 
-                                                        disabled
-                                                        style="min-width: 70px; white-space: nowrap;"
-                                                        title="<?= __('页面发布后才能查看') ?>">
-                                                    <i class="mdi mdi-eye-off-outline me-1"></i><?= __('查看') ?>
-                                                </button>
-                                                
-                                                <!-- 未发布：禁用的拷贝按钮 -->
-                                                <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center' 
-                                                        disabled
-                                                        style="min-width: 85px; white-space: nowrap;"
-                                                        title="<?= __('页面发布后才能复制链接') ?>">
-                                                    <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>
-                                                </button>
-                                            <?php endif; ?>
-                                            
-                                            <div class="border-end mx-1" style="height: 28px;"></div>
-                                            
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                 <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
                                                         onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
@@ -256,14 +209,6 @@
                                                     <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
                                                 </button>
                                             </acl>
-                                            <acl source="GuoLaiRen_PageBuilder::page_builder_create">
-                                                <a class='btn btn-sm btn-success d-inline-flex align-items-center' 
-                                                   href="<?= $this->getBackendUrl('*/backend/page/create') ?>?parent_id=<?= $page->getId() ?>"
-                                                   style="min-width: 70px; white-space: nowrap;"
-                                                   title="<?= __('新增子页面') ?>">
-                                                    <i class="mdi mdi-plus me-1"></i><?= __('子页面') ?>
-                                                </a>
-                                            </acl>
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
                                                 <a class='btn btn-sm btn-info d-inline-flex align-items-center'
                                                    href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>"
@@ -271,23 +216,159 @@
                                                     <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
                                                 </a>
                                             </acl>
-                                            <acl source="GuoLaiRen_PageBuilder::page_builder_export">
-                                                <?php if ($canExport): ?>
-                                                    <button class='btn btn-sm btn-warning d-inline-flex align-items-center export-page-btn'
-                                                            data-page-id="<?= $page->getId() ?>"
-                                                            style="min-width: 70px; white-space: nowrap;"
-                                                            title="<?= __('导出为静态HTML文件（包含所有静态资源）') ?>">
-                                                        <i class="mdi mdi-download me-1"></i><?= __('导出') ?>
-                                                    </button>
-                                                <?php else: ?>
-                                                    <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center'
-                                                            disabled
-                                                            style="min-width: 70px; white-space: nowrap;"
-                                                            title="<?= __('只有首页类型的顶级页面可以导出') ?>">
-                                                        <i class="mdi mdi-download me-1"></i><?= __('导出') ?>
-                                                    </button>
-                                                <?php endif; ?>
-                                            </acl>
+                                            
+                                            <!-- 更多操作下拉菜单 -->
+                                            <div class="btn-group" role="group">
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-secondary dropdown-toggle d-inline-flex align-items-center" 
+                                                        data-bs-toggle="dropdown" 
+                                                        aria-expanded="false"
+                                                        style="min-width: 85px; white-space: nowrap;">
+                                                    <i class="mdi mdi-dots-horizontal me-1"></i><?= __('更多操作') ?>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <!-- 预览、查看、拷贝 -->
+                                                    <li>
+                                                        <a class="dropdown-item" 
+                                                           href="<?= $frontendUrl ?>"
+                                                           target="_blank">
+                                                            <i class="mdi mdi-eye-check-outline text-info me-2"></i>
+                                                            <?= __('预览页面') ?>
+                                                        </a>
+                                                    </li>
+                                                    
+                                                    <?php if ($isPublished): ?>
+                                                        <li>
+                                                            <a class="dropdown-item" 
+                                                               href="<?= $frontendUrl ?>"
+                                                               target="_blank">
+                                                                <i class="mdi mdi-eye-outline text-primary me-2"></i>
+                                                                <?= __('查看页面') ?>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <button class="dropdown-item copy-link-btn" 
+                                                                    data-url="<?= htmlspecialchars($frontendUrl ?? '') ?>"
+                                                                    data-page-name="<?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>">
+                                                                <i class="mdi mdi-content-copy text-secondary me-2"></i>
+                                                                <?= __('拷贝链接') ?>
+                                                            </button>
+                                                        </li>
+                                                    <?php else: ?>
+                                                        <li>
+                                                            <span class="dropdown-item text-muted" style="cursor: not-allowed;">
+                                                                <i class="mdi mdi-eye-off-outline me-2"></i>
+                                                                <?= __('查看页面') ?> <small>(<?= __('未发布') ?>)</small>
+                                                            </span>
+                                                        </li>
+                                                        <li>
+                                                            <span class="dropdown-item text-muted" style="cursor: not-allowed;">
+                                                                <i class="mdi mdi-content-copy me-2"></i>
+                                                                <?= __('拷贝链接') ?> <small>(<?= __('未发布') ?>)</small>
+                                                            </span>
+                                                        </li>
+                                                    <?php endif; ?>
+                                                    
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    
+                                                    <?php if ($isHomePage && $isTopLevel): ?>
+                                                        <!-- Sitemap 查看（仅首页） -->
+                                                        <?php
+                                                        // 生成 Sitemap URL
+                                                        $websiteCode = '';
+                                                        if ($websiteId > 0) {
+                                                            try {
+                                                                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                                                                $website = clone $websiteModel;
+                                                                $website->load($websiteId);
+                                                                if ($website->getId()) {
+                                                                    $websiteCode = $website->getData(\Weline\Websites\Model\Website::fields_CODE) ?: 'website_' . $websiteId;
+                                                                }
+                                                            } catch (\Exception $e) {
+                                                                $websiteCode = 'website_' . $websiteId;
+                                                            }
+                                                        }
+                                                        $sitemapUrl = $websiteCode ? ($baseUrl . '/sitemaps/' . $websiteCode . '/sitemap.xml') : '';
+                                                        ?>
+                                                        <?php if ($sitemapUrl && $isPublished): ?>
+                                                            <li>
+                                                                <a class="dropdown-item" 
+                                                                   href="<?= htmlspecialchars($sitemapUrl) ?>" 
+                                                                   target="_blank">
+                                                                    <i class="mdi mdi-sitemap text-success me-2"></i>
+                                                                    <?= __('查看 Sitemap') ?>
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <button class="dropdown-item copy-sitemap-link-btn" 
+                                                                        data-url="<?= htmlspecialchars($sitemapUrl) ?>">
+                                                                    <i class="mdi mdi-content-copy text-info me-2"></i>
+                                                                    <?= __('复制 Sitemap 链接') ?>
+                                                                </button>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                    
+                                                    <!-- 子页面管理 -->
+                                                    <acl source="GuoLaiRen_PageBuilder::page_builder_create">
+                                                        <li>
+                                                            <a class="dropdown-item" 
+                                                               href="<?= $this->getBackendUrl('*/backend/page/create') ?>?parent_id=<?= $page->getId() ?>">
+                                                                <i class="mdi mdi-plus-circle text-success me-2"></i>
+                                                                <?= __('新增子页面') ?>
+                                                            </a>
+                                                        </li>
+                                                    </acl>
+                                                    
+                                                    <?php if ($isHomePage && $isTopLevel): ?>
+                                                        <!-- SEO 管理（仅首页） -->
+                                                        <li>
+                                                            <a class="dropdown-item" 
+                                                               href="<?= $this->getBackendUrl('*/weline_seo/backend/sitemap/index') ?>" 
+                                                               target="_blank">
+                                                                <i class="mdi mdi-file-search text-primary me-2"></i>
+                                                                <?= __('SEO Sitemap 管理') ?>
+                                                            </a>
+                                                        </li>
+                                                    <?php endif; ?>
+                                                    
+                                                    <!-- 导出功能 -->
+                                                    <acl source="GuoLaiRen_PageBuilder::page_builder_export">
+                                                        <?php if ($canExport): ?>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <button class="dropdown-item export-page-btn" 
+                                                                        data-page-id="<?= $page->getId() ?>">
+                                                                    <i class="mdi mdi-download text-warning me-2"></i>
+                                                                    <?= __('导出为静态网站') ?>
+                                                                </button>
+                                                            </li>
+                                                        <?php endif; ?>
+                                                    </acl>
+                                                    
+                                                    <?php if ($isHomePage && $isTopLevel): ?>
+                                                        <!-- 站点设置（仅首页） -->
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item" 
+                                                               href="<?= $this->getBackendUrl('*/weline_websites/backend/website/edit') ?>?id=<?= $websiteId ?>">
+                                                                <i class="mdi mdi-cog text-secondary me-2"></i>
+                                                                <?= __('站点设置') ?>
+                                                            </a>
+                                                        </li>
+                                                        
+                                                        <!-- 数据统计（仅首页） -->
+                                                        <li>
+                                                            <a class="dropdown-item" 
+                                                               href="<?= $this->getBackendUrl('*/backend/page/index') ?>?website_id=<?= $websiteId ?>">
+                                                                <i class="mdi mdi-chart-bar text-info me-2"></i>
+                                                                <?= __('站点页面统计') ?>
+                                                            </a>
+                                                        </li>
+                                                    <?php endif; ?>
+                                                </ul>
+                                            </div>
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_delete">
                                                 <?php if ($isHomePage && $isTopLevel): ?>
                                                     <!-- 首页类型：一键删除站点 -->
@@ -403,68 +484,6 @@
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
                                                                 
-                                                                <!-- 预览按钮（使用站点链接直接访问） -->
-                                                                <a class='btn btn-sm btn-outline-info d-inline-flex align-items-center' 
-                                                                   href="<?= $childFrontendUrl ?>"
-                                                                   target="_blank"
-                                                                   style="min-width: 70px; white-space: nowrap;"
-                                                                   title="<?= __('预览页面效果') ?>">
-                                                                    <i class="mdi mdi-eye-check-outline me-1"></i><?= __('预览') ?>
-                                                                </a>
-                                                                
-                                                                <?php if ($childIsPublished): ?>
-                                                                    <!-- 已发布：查看链接按钮 -->
-                                                                    <a class='btn btn-sm btn-outline-primary d-inline-flex align-items-center' 
-                                                                       href="<?= $childFrontendUrl ?>"
-                                                                       target="_blank"
-                                                                       style="min-width: 70px; white-space: nowrap;"
-                                                                       title="<?= __('在新标签页查看页面') ?>">
-                                                                        <i class="mdi mdi-eye-outline me-1"></i><?= __('查看') ?>
-                                                                    </a>
-                                                                    
-                                                                    <!-- 已发布：拷贝链接按钮 -->
-                                                                    <button class='btn btn-sm btn-outline-secondary copy-link-btn d-inline-flex align-items-center' 
-                                                                            data-url="<?= htmlspecialchars($childFrontendUrl ?? '') ?>"
-                                                                            data-page-name="<?= htmlspecialchars((($childPage->getData('name') ?? '')) ?? '') ?>"
-                                                                            style="min-width: 85px; white-space: nowrap;"
-                                                                            title="<?= __('复制链接到剪贴板') ?>">
-                                                                        <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>
-                                                                    </button>
-                                                                <?php else: ?>
-                                                                    <!-- 未发布：禁用的查看按钮 -->
-                                                                    <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center' 
-                                                                            disabled
-                                                                            style="min-width: 70px; white-space: nowrap;"
-                                                                            title="<?= __('页面发布后才能查看') ?>">
-                                                                        <i class="mdi mdi-eye-off-outline me-1"></i><?= __('查看') ?>
-                                                                    </button>
-                                                                    
-                                                                    <!-- 未发布：禁用的拷贝按钮 -->
-                                                                    <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center' 
-                                                                            disabled
-                                                                            style="min-width: 85px; white-space: nowrap;"
-                                                                            title="<?= __('页面发布后才能复制链接') ?>">
-                                                                        <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>
-                                                                    </button>
-                                                                <?php endif; ?>
-                                                                
-                                                                <div class="border-end mx-1" style="height: 28px;"></div>
-                                                                
-                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
-                                                                    <a class='btn btn-sm btn-info d-inline-flex align-items-center'
-                                                                       href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $childPage->getId() ?>"
-                                                                       style="min-width: 70px; white-space: nowrap;">
-                                                                        <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
-                                                                    </a>
-                                                                </acl>
-                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_export">
-                                                                    <button class='btn btn-sm btn-outline-secondary d-inline-flex align-items-center'
-                                                                            disabled
-                                                                            style="min-width: 70px; white-space: nowrap;"
-                                                                            title="<?= __('只有首页类型的顶级页面可以导出') ?>">
-                                                                        <i class="mdi mdi-download me-1"></i><?= __('导出') ?>
-                                                                    </button>
-                                                                </acl>
                                                                 <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                                     <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
                                                                             onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('提示') ?>',text:'<?= __('功能建设中，敬请期待！') ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('<?= __('功能建设中，敬请期待！') ?>');} return false;"
@@ -473,17 +492,84 @@
                                                                         <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
                                                                     </button>
                                                                 </acl>
-                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_delete">
-                                                                    <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
-                                                                          method='post' 
-                                                                          style="display:inline;"
-                                                                          onsubmit="return confirm('<?= __('确定要删除此子页面吗？') ?>');">
-                                                                        <input type='hidden' name='id' value='<?= $childPage->getId() ?>'>
-                                                                        <button type='submit' class='btn btn-sm btn-danger d-inline-flex align-items-center' style="min-width: 70px; white-space: nowrap;">
-                                                                            <i class="mdi mdi-delete me-1"></i><?= __('删除') ?>
-                                                                        </button>
-                                                                    </form>
+                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
+                                                                    <a class='btn btn-sm btn-info d-inline-flex align-items-center'
+                                                                       href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $childPage->getId() ?>"
+                                                                       style="min-width: 70px; white-space: nowrap;">
+                                                                        <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
+                                                                    </a>
                                                                 </acl>
+                                                                
+                                                                <!-- 更多操作下拉菜单 -->
+                                                                <div class="btn-group" role="group">
+                                                                    <button type="button" 
+                                                                            class="btn btn-sm btn-secondary dropdown-toggle d-inline-flex align-items-center" 
+                                                                            data-bs-toggle="dropdown" 
+                                                                            aria-expanded="false"
+                                                                            style="min-width: 85px; white-space: nowrap;">
+                                                                        <i class="mdi mdi-dots-horizontal me-1"></i><?= __('更多操作') ?>
+                                                                    </button>
+                                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                                        <!-- 预览、查看、拷贝 -->
+                                                                        <li>
+                                                                            <a class="dropdown-item" 
+                                                                               href="<?= $childFrontendUrl ?>"
+                                                                               target="_blank">
+                                                                                <i class="mdi mdi-eye-check-outline text-info me-2"></i>
+                                                                                <?= __('预览页面') ?>
+                                                                            </a>
+                                                                        </li>
+                                                                        
+                                                                        <?php if ($childIsPublished): ?>
+                                                                            <li>
+                                                                                <a class="dropdown-item" 
+                                                                                   href="<?= $childFrontendUrl ?>"
+                                                                                   target="_blank">
+                                                                                    <i class="mdi mdi-eye-outline text-primary me-2"></i>
+                                                                                    <?= __('查看页面') ?>
+                                                                                </a>
+                                                                            </li>
+                                                                            <li>
+                                                                                <button class="dropdown-item copy-link-btn" 
+                                                                                        data-url="<?= htmlspecialchars($childFrontendUrl ?? '') ?>"
+                                                                                        data-page-name="<?= htmlspecialchars((($childPage->getData('name') ?? '')) ?? '') ?>">
+                                                                                    <i class="mdi mdi-content-copy text-secondary me-2"></i>
+                                                                                    <?= __('拷贝链接') ?>
+                                                                                </button>
+                                                                            </li>
+                                                                        <?php else: ?>
+                                                                            <li>
+                                                                                <span class="dropdown-item text-muted" style="cursor: not-allowed;">
+                                                                                    <i class="mdi mdi-eye-off-outline me-2"></i>
+                                                                                    <?= __('查看页面') ?> <small>(<?= __('未发布') ?>)</small>
+                                                                                </span>
+                                                                            </li>
+                                                                            <li>
+                                                                                <span class="dropdown-item text-muted" style="cursor: not-allowed;">
+                                                                                    <i class="mdi mdi-content-copy me-2"></i>
+                                                                                    <?= __('拷贝链接') ?> <small>(<?= __('未发布') ?>)</small>
+                                                                                </span>
+                                                                            </li>
+                                                                        <?php endif; ?>
+                                                                        
+                                                                        <li><hr class="dropdown-divider"></li>
+                                                                        
+                                                                        <!-- 删除功能 -->
+                                                                        <acl source="GuoLaiRen_PageBuilder::page_builder_delete">
+                                                                            <li>
+                                                                                <form action="<?= $this->getBackendUrl('*/backend/page/delete') ?>"
+                                                                                      method='post' 
+                                                                                      style="display:inline; width: 100%;"
+                                                                                      onsubmit="return confirm('<?= __('确定要删除此子页面吗？') ?>');">
+                                                                                    <input type='hidden' name='id' value='<?= $childPage->getId() ?>'>
+                                                                                    <button type='submit' class='dropdown-item text-danger'>
+                                                                                        <i class="mdi mdi-delete me-2"></i><?= __('删除页面') ?>
+                                                                                    </button>
+                                                                                </form>
+                                                                            </li>
+                                                                        </acl>
+                                                                    </ul>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -736,6 +822,28 @@
                                 <div class="p-2 bg-light rounded">
                                     <div><small class="text-muted"><?= __('站点') ?>:</small> <strong id="selectedWebsiteDisplay">-</strong></div>
                                     <div><small class="text-muted"><?= __('模板') ?>:</small> <strong id="selectedTemplateDisplay">-</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="seoAccountId" class="form-label"><?= __('SEO 账户') ?></label>
+                                <w:seo:account:select 
+                                    id="seo_account_quick"
+                                    name="seo_account_id"
+                                    value="''"
+                                    display="<?= addslashes(__('选择SEO账户（可选）')) ?>"
+                                    class="w-100"
+                                />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="p-2 bg-body-secondary rounded">
+                                    <small class="text-muted">
+                                        <i class="mdi mdi-information-outline"></i>
+                                        <?= __('绑定SEO账户后，站点的sitemap将自动提交到搜索引擎。') ?>
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -1067,6 +1175,75 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    
+    // ============ 复制 Sitemap 链接功能 ============
+    const copySitemapButtons = document.querySelectorAll('.copy-sitemap-link-btn');
+    
+    copySitemapButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.getAttribute('data-url');
+            const originalHtml = this.innerHTML;
+            const originalClass = this.className;
+            
+            // 使用现代 Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url)
+                    .then(() => {
+                        // 成功提示
+                        this.innerHTML = '<i class="mdi mdi-check"></i> <?= __("已复制") ?>';
+                        this.classList.add('text-success');
+                        
+                        // Toast 通知
+                        showToast('success', '<?= __("Sitemap 链接已复制") ?>', 
+                                  '<?= __("链接") ?>: ' + url);
+                        
+                        // 2秒后恢复原状
+                        setTimeout(() => {
+                            this.innerHTML = originalHtml;
+                            this.className = originalClass;
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('<?= __("复制失败") ?>:', err);
+                        showToast('error', '<?= __("复制失败") ?>', '<?= __("请手动复制链接") ?>');
+                    });
+            } else {
+                // 降级方案
+                const textArea = document.createElement('textarea');
+                textArea.value = url;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        this.innerHTML = '<i class="mdi mdi-check"></i> <?= __("已复制") ?>';
+                        this.classList.add('text-success');
+                        
+                        showToast('success', '<?= __("Sitemap 链接已复制") ?>', url);
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalHtml;
+                            this.className = originalClass;
+                        }, 2000);
+                    } else {
+                        throw new Error('execCommand failed');
+                    }
+                } catch (err) {
+                    console.error('<?= __("复制失败") ?>:', err);
+                    prompt('<?= __("请手动复制以下链接") ?>:', url);
+                } finally {
+                    document.body.removeChild(textArea);
+                }
+            }
+        });
+    });
     
     // ============ 一键删除站点功能 ============
     const deleteSiteButtons = document.querySelectorAll('.delete-site-btn');
@@ -1673,6 +1850,11 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('website_id', websiteId);
         formData.append('default_locale', document.getElementById('siteDefaultLocale').value);
         formData.append('page_types', JSON.stringify(pageTypes));
+        // SEO 账户绑定
+        const seoAccountId = document.getElementById('seo_account_quick_value')?.value || '';
+        if (seoAccountId) {
+            formData.append('seo_account_id', seoAccountId);
+        }
         
         const progressBar = document.getElementById('createProgressBar');
         const creationLog = document.getElementById('creationLog');

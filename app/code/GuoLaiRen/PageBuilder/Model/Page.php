@@ -1123,5 +1123,92 @@ class Page extends Model
         // 再执行升级逻辑（为已存在的表补充新字段）
         $this->upgrade($setup, $context);
     }
+    
+    /**
+     * 保存后钩子 - 自动提交已发布页面的 URL 到 SEO 模块
+     */
+    public function save_after(): void
+    {
+        parent::save_after();
+        
+        // 仅当页面为已发布状态时，提交 URL 到 SEO 模块
+        $status = (int)$this->getData(self::fields_STATUS);
+        if ($status !== self::STATUS_PUBLISHED) {
+            return;
+        }
+        
+        try {
+            // 检查 SEO 模块是否可用
+            if (!class_exists(\Weline\Seo\Service\UrlSubmitService::class)) {
+                return;
+            }
+            
+            // 获取页面 URL
+            $pageUrl = $this->getFullUrl();
+            if (empty($pageUrl)) {
+                return;
+            }
+            
+            /** @var \Weline\Seo\Service\UrlSubmitService $urlSubmitService */
+            $urlSubmitService = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Seo\Service\UrlSubmitService::class
+            );
+            
+            $urlSubmitService->requestSubmit(
+                $pageUrl,
+                'page_builder',              // scope
+                [
+                    'subject_type' => 'page',
+                    'subject_id'   => (int)$this->getId(),
+                ]
+            );
+        } catch (\Throwable $e) {
+            // SEO 提交失败不应影响页面保存流程，静默处理
+            if (defined('DEV') && DEV) {
+                error_log('PageBuilder SEO URL Submit Error: ' . $e->getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 获取页面的完整 URL
+     * 
+     * @return string|null 完整 URL
+     */
+    public function getFullUrl(): ?string
+    {
+        $websiteId = (int)$this->getData(self::fields_WEBSITE_ID);
+        $handle = $this->getData(self::fields_HANDLE);
+        $pageType = $this->getData(self::fields_TYPE);
+        
+        try {
+            // 获取站点 URL
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Websites\Model\Website::class
+            );
+            $website = clone $websiteModel;
+            $website->load($websiteId);
+            
+            if (!$website->getId()) {
+                return null;
+            }
+            
+            $baseUrl = rtrim($website->getUrl(), '/');
+            
+            // 首页
+            if ($pageType === self::TYPE_HOME) {
+                return $baseUrl . '/';
+            }
+            
+            // 其他页面使用 handle
+            if (!empty($handle)) {
+                return $baseUrl . '/' . ltrim((string)$handle, '/');
+            }
+            
+            return null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
 }
 

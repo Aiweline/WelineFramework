@@ -53,9 +53,7 @@ class BrandFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = \Weline\Framework\App\State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'Brand' : __('品牌');
+        return __('品牌');
     }
     
     /**
@@ -160,25 +158,7 @@ class BrandFilterProvider extends AbstractFilterProvider
             if (!$attribute || !$attribute->getId()) {
                 return $productIds;
             }
-            
-            // 获取品牌属性值表
-            $valueModel = $attribute->w_getValueModel();
-            $valueTable = $valueModel->getTable();
-            
-            // 查询符合品牌的产品
-            $valueModel->reset()
-                ->fields('entity_id')
-                ->where('attribute_id', $attribute->getId())
-                ->where('value', $filterValues, 'in')
-                ->where('entity_id', $productIds, 'in');
-            
-            $results = $valueModel->select()->fetchArray();
-            
-            if (empty($results)) {
-                return [];
-            }
-            
-            return array_unique(array_column($results, 'entity_id'));
+            return $this->getProductIdsByEavValues($attribute, $productIds, $filterValues);
         } catch (\Throwable $e) {
             return $productIds;
         }
@@ -204,20 +184,7 @@ class BrandFilterProvider extends AbstractFilterProvider
      */
     private function getProductBrandValues(array $productIds, EavAttribute $attribute): array
     {
-        $valueModel = $attribute->w_getValueModel();
-        $valueModel->reset()
-            ->fields(['entity_id', 'value'])
-            ->where('attribute_id', $attribute->getId())
-            ->where('entity_id', $productIds, 'in');
-        
-        $results = $valueModel->select()->fetchArray();
-        
-        $values = [];
-        foreach ($results as $row) {
-            $values[] = $row['value'];
-        }
-        
-        return $values;
+        return $this->getProductEavValues($attribute, $productIds);
     }
     
     /**

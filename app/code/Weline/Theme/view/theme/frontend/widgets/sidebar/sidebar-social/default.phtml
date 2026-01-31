@@ -2,92 +2,156 @@
 /**
  * 社交链接（侧栏）部件
  * 
+ * 侧栏显示的社交媒体链接，支持多种样式和微信二维码
+ * 
+ * @meta::theme {default=Weline_Theme,name="主题命名空间",description="主题命名空间，用于主题模块的命名空间"}
+ * @meta::theme.widget.social {default="社交媒体部件组",name="社交媒体部件组",description="社交媒体部件组，用于给元数据分组"}
+ * @meta::theme.widget.social.sidebar {default="侧栏社交链接",name="侧栏社交链接",description="侧栏社交媒体链接部件"}
+ * @meta::theme.widget.social.sidebar.name {default="侧栏社交链接",name="侧栏社交链接",description="侧栏社交媒体链接部件名称"}
+ * @meta::theme.widget.social.sidebar.description {default="侧栏显示的社交媒体链接",name="侧栏显示的社交媒体链接",description="侧栏显示的社交媒体链接，支持多种样式和微信二维码"}
+ * 
+ * @param title {default="关注我们",name="标题",description="部件标题",type=string}
+ * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}
+ * @param icon_style {default="colored",name="图标样式",description="图标显示样式：colored(彩色)、mono(单色)、outline(线框)",type=string,option={colored:彩色,mono:单色,outline:线框}}
+ * @param gap {default="10px",name="图标间距",description="图标之间的间距，支持CSS单位（如10px、1rem）",type=string}
+ * @param wechat_qr {default="",name="微信二维码",description="微信公众号二维码图片URL",type=string}
+ * @param facebook {default="",name="Facebook链接",description="Facebook主页链接",type=string}
+ * @param twitter {default="",name="Twitter/X链接",description="Twitter/X主页链接",type=string}
+ * @param instagram {default="",name="Instagram链接",description="Instagram主页链接",type=string}
+ * @param youtube {default="",name="YouTube链接",description="YouTube频道链接",type=string}
+ * @param linkedin {default="",name="LinkedIn链接",description="LinkedIn主页链接",type=string}
+ * @param pinterest {default="",name="Pinterest链接",description="Pinterest主页链接",type=string}
+ * @param tiktok {default="",name="TikTok链接",description="TikTok主页链接",type=string}
+ * @param weibo {default="",name="微博链接",description="微博主页链接",type=string}
+ * @param wechat {default="",name="微信链接",description="微信公众号链接",type=string}
+ * @param github {default="",name="GitHub链接",description="GitHub主页链接",type=string}
+ * @param telegram {default="",name="Telegram链接",description="Telegram频道链接",type=string}
+ * @param whatsapp {default="",name="WhatsApp链接",description="WhatsApp联系链接",type=string}
+ * @param discord {default="",name="Discord链接",description="Discord服务器链接",type=string}
+ * @param reddit {default="",name="Reddit链接",description="Reddit社区链接",type=string}
+ * @param snapchat {default="",name="Snapchat链接",description="Snapchat主页链接",type=string}
+ * 
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Theme\Helper\SocialIconHelper;
+
 $title = $this->getData('title') ?? __('关注我们');
-$facebook = $this->getData('facebook') ?? '';
-$twitter = $this->getData('twitter') ?? '';
-$instagram = $this->getData('instagram') ?? '';
-$youtube = $this->getData('youtube') ?? '';
-$tiktok = $this->getData('tiktok') ?? '';
-$wechat = $this->getData('wechat') ?? '';
-$weibo = $this->getData('weibo') ?? '';
-$iconStyle = $this->getData('icon_style') ?? 'colored';
+$iconStyle = $this->getData('icon_style') ?? 'colored'; // colored, mono, outline
+$gap = $this->getData('gap') ?? '10px'; // 图标间距
+$wechatQr = $this->getData('wechat_qr') ?? '';
 
-// 构建社交链接数组
+// 获取自定义社交链接配置（JSON 格式）
+$customLinks = $this->getData('custom_links') ?? '';
 $socials = [];
-if ($facebook) $socials[] = ['name' => 'Facebook', 'url' => $facebook, 'icon' => 'ri-facebook-fill', 'color' => '#1877f2'];
-if ($twitter) $socials[] = ['name' => 'Twitter/X', 'url' => $twitter, 'icon' => 'ri-twitter-x-fill', 'color' => '#000'];
-if ($instagram) $socials[] = ['name' => 'Instagram', 'url' => $instagram, 'icon' => 'ri-instagram-fill', 'color' => '#e4405f'];
-if ($youtube) $socials[] = ['name' => 'YouTube', 'url' => $youtube, 'icon' => 'ri-youtube-fill', 'color' => '#ff0000'];
-if ($tiktok) $socials[] = ['name' => 'TikTok', 'url' => $tiktok, 'icon' => 'ri-tiktok-fill', 'color' => '#000'];
-if ($weibo) $socials[] = ['name' => '微博', 'url' => $weibo, 'icon' => 'ri-weibo-fill', 'color' => '#e6162d'];
 
-// 示例数据
+// 如果有自定义配置，解析 JSON
+if ($customLinks) {
+    $customLinksArray = json_decode($customLinks, true);
+    if (is_array($customLinksArray)) {
+        foreach ($customLinksArray as $link) {
+            if (!empty($link['platform']) && !empty($link['url'])) {
+                $platform = $link['platform'];
+                $socials[] = [
+                    'platform' => $platform,
+                    'name' => SocialIconHelper::getName($platform) ?? $link['name'] ?? $platform,
+                    'url' => $link['url'],
+                    'color' => SocialIconHelper::getColor($platform) ?? '#666'
+                ];
+            }
+        }
+    }
+}
+
+// 如果没有自定义配置，使用传统的单独字段配置
+if (empty($socials)) {
+    $platforms = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
+    
+    foreach ($platforms as $platform) {
+        $url = $this->getData($platform) ?? '';
+        if ($url) {
+            $socials[] = [
+                'platform' => $platform,
+                'name' => SocialIconHelper::getName($platform) ?? ucfirst($platform),
+                'url' => $url,
+                'color' => SocialIconHelper::getColor($platform) ?? '#666'
+            ];
+        }
+    }
+}
+
+// 示例数据（如果没有任何配置）
 if (empty($socials)) {
     $socials = [
-        ['name' => 'Facebook', 'url' => '#', 'icon' => 'ri-facebook-fill', 'color' => '#1877f2'],
-        ['name' => 'Twitter/X', 'url' => '#', 'icon' => 'ri-twitter-x-fill', 'color' => '#000'],
-        ['name' => 'Instagram', 'url' => '#', 'icon' => 'ri-instagram-fill', 'color' => '#e4405f'],
-        ['name' => 'YouTube', 'url' => '#', 'icon' => 'ri-youtube-fill', 'color' => '#ff0000'],
+        ['platform' => 'facebook', 'name' => 'Facebook', 'url' => '#', 'color' => '#1877f2'],
+        ['platform' => 'twitter', 'name' => 'Twitter/X', 'url' => '#', 'color' => '#000000'],
+        ['platform' => 'instagram', 'name' => 'Instagram', 'url' => '#', 'color' => '#e4405f'],
+        ['platform' => 'youtube', 'name' => 'YouTube', 'url' => '#', 'color' => '#ff0000'],
     ];
 }
 
 $widgetId = 'sidebar-social-' . uniqid();
 ?>
 
-<div class="widget-sidebar-social icon-style-<?= htmlspecialchars($iconStyle) ?>" id="<?= $widgetId ?>">
+<div class="widget-sidebar-social" id="<?= $widgetId ?>" data-style="<?= htmlspecialchars($iconStyle) ?>">
     <?php if ($title): ?>
         <h3 class="widget-title"><?= htmlspecialchars($title) ?></h3>
     <?php endif; ?>
     
-    <div class="social-links">
+    <div class="social-links" style="--social-gap: <?= htmlspecialchars($gap) ?>;">
         <?php foreach ($socials as $social): ?>
             <a href="<?= htmlspecialchars($social['url']) ?>" 
-               class="social-link"
+               class="social-link social-link-<?= htmlspecialchars($social['platform']) ?>"
                title="<?= htmlspecialchars($social['name']) ?>"
                target="_blank"
                rel="noopener noreferrer"
-               style="--brand-color: <?= $social['color'] ?>;">
-                <i class="<?= htmlspecialchars($social['icon']) ?>"></i>
+               style="--brand-color: <?= htmlspecialchars($social['color']) ?>;">
+                <?= SocialIconHelper::renderIcon($social['platform'], ['class' => 'social-icon', 'width' => '20', 'height' => '20']) ?>
             </a>
         <?php endforeach; ?>
     </div>
     
-    <?php if ($wechat): ?>
+    <?php if ($wechatQr): ?>
         <div class="wechat-qr">
             <p class="qr-label">
-                <i class="ri-wechat-fill" style="color: #07c160;"></i>
+                <?= SocialIconHelper::renderIcon('wechat', ['class' => 'wechat-icon', 'width' => '18', 'height' => '18']) ?>
                 <?= __('微信扫码关注') ?>
             </p>
-            <img src="<?= htmlspecialchars($wechat) ?>" alt="<?= __('微信二维码') ?>" class="qr-image">
+            <img src="<?= htmlspecialchars($wechatQr) ?>" alt="<?= __('微信二维码') ?>" class="qr-image">
         </div>
     <?php endif; ?>
 </div>
 
 <style>
-.widget-sidebar-social {
+/* 部件作用域样式 - 使用 ID 选择器确保样式隔离 */
+#<?= $widgetId ?> {
     background: #fff;
     border-radius: 10px;
     padding: 20px;
+    box-sizing: border-box;
 }
 
-.widget-sidebar-social .widget-title {
+#<?= $widgetId ?> * {
+    box-sizing: border-box;
+}
+
+#<?= $widgetId ?> .widget-title {
     font-size: 16px;
     font-weight: 600;
     margin: 0 0 15px;
     text-align: center;
+    font-family: inherit;
+    color: inherit;
 }
 
-.widget-sidebar-social .social-links {
+#<?= $widgetId ?> .social-links {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--social-gap, 10px);
 }
 
-.widget-sidebar-social .social-link {
+#<?= $widgetId ?> .social-link {
     width: 44px;
     height: 44px;
     display: flex;
@@ -95,67 +159,79 @@ $widgetId = 'sidebar-social-' . uniqid();
     justify-content: center;
     border-radius: 50%;
     text-decoration: none;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    cursor: pointer;
 }
 
-.widget-sidebar-social .social-link i {
-    font-size: 20px;
+#<?= $widgetId ?> .social-link .social-icon {
+    display: block;
+    width: 20px;
+    height: 20px;
 }
 
 /* 彩色样式 */
-.widget-sidebar-social.icon-style-colored .social-link {
+#<?= $widgetId ?>[data-style="colored"] .social-link {
     background: var(--brand-color);
     color: #fff;
 }
 
-.widget-sidebar-social.icon-style-colored .social-link:hover {
+#<?= $widgetId ?>[data-style="colored"] .social-link:hover {
     transform: translateY(-3px);
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 
 /* 单色样式 */
-.widget-sidebar-social.icon-style-mono .social-link {
+#<?= $widgetId ?>[data-style="mono"] .social-link {
     background: #f5f5f5;
     color: #666;
 }
 
-.widget-sidebar-social.icon-style-mono .social-link:hover {
+#<?= $widgetId ?>[data-style="mono"] .social-link:hover {
     background: var(--brand-color);
     color: #fff;
 }
 
 /* 线框样式 */
-.widget-sidebar-social.icon-style-outline .social-link {
+#<?= $widgetId ?>[data-style="outline"] .social-link {
     background: transparent;
     border: 2px solid #ddd;
     color: #666;
 }
 
-.widget-sidebar-social.icon-style-outline .social-link:hover {
+#<?= $widgetId ?>[data-style="outline"] .social-link:hover {
     border-color: var(--brand-color);
     color: var(--brand-color);
 }
 
 /* 微信二维码 */
-.widget-sidebar-social .wechat-qr {
+#<?= $widgetId ?> .wechat-qr {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid #eee;
     text-align: center;
 }
 
-.widget-sidebar-social .qr-label {
+#<?= $widgetId ?> .qr-label {
     font-size: 13px;
-    color: #666;
+    color: #07c160;
     margin: 0 0 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 5px;
+    font-family: inherit;
 }
 
-.widget-sidebar-social .qr-image {
+#<?= $widgetId ?> .qr-label .wechat-icon {
+    display: block;
+    width: 18px;
+    height: 18px;
+}
+
+#<?= $widgetId ?> .qr-image {
     max-width: 150px;
     border-radius: 8px;
+    display: block;
+    margin: 0 auto;
 }
 </style>

@@ -12,13 +12,12 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Model\EavAttribute;
 
-use Weline\Eav\Model\EavAttribute;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
-
+/**
+ * EAV属性选项模型 (SRP - 单一职责原则)
+ * 
+ * 表结构定义已迁移到 Schema/EavAttributeOptionSchema.php
+ * 本类只负责数据操作和业务逻辑
+ */
 class Option extends \Weline\Framework\Database\Model
 {
     public const fields_ID = 'option_id';
@@ -34,43 +33,11 @@ class Option extends \Weline\Framework\Database\Model
     public array $_unit_primary_keys = ['option_id', 'attribute_id', 'code'];
     public array $_index_sort_keys = ['option_id', 'attribute_id', 'code'];
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('属性配置项')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '配置项ID')
-                ->addColumn(self::fields_code, TableInterface::column_type_VARCHAR, 255, 'not null', '配置项代码')
-                ->addColumn(self::fields_value, TableInterface::column_type_VARCHAR, 255, 'not null', '配置值')
-                ->addColumn(self::fields_attribute_id, TableInterface::column_type_INTEGER, 0, 'not null', '属性ID')
-                ->addColumn(self::fields_eav_entity_id, TableInterface::column_type_VARCHAR, 255, 'not null', '相关实体ID')
-                ->addColumn(self::fields_swatch_image, TableInterface::column_type_TEXT, 0, '', '图片')
-                ->addColumn(self::fields_swatch_color, TableInterface::column_type_VARCHAR, 60, '', '颜色')
-                ->addColumn(self::fields_swatch_text, TableInterface::column_type_VARCHAR, 128, '', '文本')
-                ->addIndex(TableInterface::index_type_KEY, 'IDX_EAV_ATTRIBUTE_ID', 'attribute_id')
-                ->addForeignKey('FK_EAV_ATTRIBUTE_ID', 'attribute_id', ObjectManager::getInstance(EavAttribute::class)->getTable(), 'attribute_id', true)
-                ->create();
-        }
-    }
+    // 表结构已迁移到 Schema/EavAttributeOptionSchema.php
+    // 由 Setup/Install.php 统一管理表创建
+    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
 
     function getOptionId(): int
     {

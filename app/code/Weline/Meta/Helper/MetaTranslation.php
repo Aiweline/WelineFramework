@@ -222,7 +222,7 @@ class MetaTranslation
         $records = $localModel->reset()
             ->where(MetaLocal::fields_META_ID, $metaId)
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
         
         $translations = [];
         foreach ($records as $record) {

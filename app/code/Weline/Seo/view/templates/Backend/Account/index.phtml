@@ -9,94 +9,723 @@
 $accounts = $accounts ?? [];
 $scope = $scope ?? '';
 $module = $module ?? '';
+$isAjax = $is_ajax ?? false;
 ?>
 
-@template(Weline_Admin::common/head.phtml)
+<?php if (!$isAjax): ?>
+<?php
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>SEO账户列表</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
-                <a href="<?= $this->getBackendUrl('seo/backend/account/form', ['scope' => $scope, 'module' => $module]) ?>"
-                   class="btn btn-primary">
-                    <i class="mdi mdi-plus-circle-outline me-1"></i>
-                    <lang>新增账户</lang>
-                </a>
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-account-key me-2"></i>
+                                <lang>SEO账户列表</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>SEO管理</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>账户管理</lang>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<?php endif; ?>
+
+                <div class="row mb-3">
+                    <div class="col-12 d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#seoAccountOffcanvas" onclick="loadSeoAccountForm(0)">
+                            <i class="mdi mdi-plus-circle-outline me-1"></i>
+                            <lang>新增账户</lang>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped mb-0">
+                                <thead>
+                                <tr>
+                                    <th><lang>ID</lang></th>
+                                    <th><lang>名称</lang></th>
+                                    <th><lang>供应商</lang></th>
+                                    <th><lang>Scope</lang></th>
+                                    <th><lang>启用</lang></th>
+                                    <th><lang>URL定时推送</lang></th>
+                                    <th><lang>Sitemap定时提交</lang></th>
+                                    <th><lang>操作</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php if (empty($accounts)): ?>
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">
+                                            <lang>暂无账户</lang>
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($accounts as $account): ?>
+                                        <tr>
+                                            <td><?= (int)($account['account_id'] ?? 0) ?></td>
+                                            <td><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></td>
+                                            <td><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></td>
+                                            <td><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></td>
+                                            <td>
+                                                <?php if ((int)($account['is_active'] ?? 0) === 1): ?>
+                                                    <span class="badge bg-success"><lang>启用</lang></span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ((int)($account['enable_cron_push_urls'] ?? 0) === 1): ?>
+                                                    <span class="badge bg-success"><lang>开启</lang></span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary"><lang>关闭</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ((int)($account['enable_cron_sitemap'] ?? 0) === 1): ?>
+                                                    <span class="badge bg-success"><lang>开启</lang></span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary"><lang>关闭</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-primary me-1"
+                                                        onclick="loadSeoAccountForm(<?= (int)($account['account_id'] ?? 0) ?>)"
+                                                        data-bs-toggle="offcanvas" 
+                                                        data-bs-target="#seoAccountOffcanvas">
+                                                    <i class="mdi mdi-pencil me-1"></i>
+                                                    <lang>编辑</lang>
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-success"
+                                                        onclick="loadWebsiteBindingForm(<?= (int)($account['account_id'] ?? 0) ?>)"
+                                                        data-bs-toggle="offcanvas" 
+                                                        data-bs-target="#websiteBindingOffcanvas">
+                                                    <i class="mdi mdi-web me-1"></i>
+                                                    <lang>绑定站点</lang>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+<?php if (!$isAjax): ?>
             </div>
         </div>
+    </div>
+    <!-- 主要内容结束 -->
 
-        <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped mb-0">
-                        <thead>
-                        <tr>
-                            <th><lang>ID</lang></th>
-                            <th><lang>名称</lang></th>
-                            <th><lang>供应商</lang></th>
-                            <th><lang>Scope</lang></th>
-                            <th><lang>模块</lang></th>
-                            <th><lang>启用</lang></th>
-                            <th><lang>URL定时推送</lang></th>
-                            <th><lang>Sitemap定时提交</lang></th>
-                            <th><lang>操作</lang></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <?php if (empty($accounts)): ?>
-                            <tr>
-                                <td colspan="9" class="text-center text-muted">
-                                    <lang>暂无账户</lang>
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($accounts as $account): ?>
-                                <tr>
-                                    <td><?= (int)($account['account_id'] ?? 0) ?></td>
-                                    <td><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></td>
-                                    <td><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></td>
-                                    <td><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></td>
-                                    <td><?= htmlspecialchars((string)($account['module'] ?? ''), ENT_QUOTES) ?></td>
-                                    <td>
-                                        <?php if ((int)($account['is_active'] ?? 0) === 1): ?>
-                                            <span class="badge bg-success"><lang>启用</lang></span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ((int)($account['enable_cron_push_urls'] ?? 0) === 1): ?>
-                                            <span class="badge bg-success"><lang>开启</lang></span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary"><lang>关闭</lang></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ((int)($account['enable_cron_sitemap'] ?? 0) === 1): ?>
-                                            <span class="badge bg-success"><lang>开启</lang></span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary"><lang>关闭</lang></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <a href="<?= $this->getBackendUrl('seo/backend/account/form', [
-                                            'id' => (int)($account['account_id'] ?? 0),
-                                            'scope' => $scope,
-                                            'module' => $module
-                                        ]) ?>"
-                                           class="btn btn-sm btn-outline-primary">
-                                            <lang>编辑</lang>
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                        </tbody>
-                    </table>
+</div>
+<!-- 页面结束 -->
+
+<!-- SEO账户表单 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="seoAccountOffcanvas" aria-labelledby="seoAccountOffcanvasLabel" style="width: 650px; max-width: 90vw;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="seoAccountOffcanvasLabel">
+            <i class="mdi mdi-account-key me-2"></i>
+            <span id="offcanvasTitle"><lang>新增SEO账户</lang></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="seoAccountFormContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><lang>加载中...</lang></span>
                 </div>
+                <p class="mt-2 text-muted"><lang>正在加载表单...</lang></p>
             </div>
         </div>
     </div>
 </div>
 
+<!-- 站点绑定 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="websiteBindingOffcanvas" aria-labelledby="websiteBindingOffcanvasLabel" style="width: 600px; max-width: 90vw;">
+    <div class="offcanvas-header border-bottom bg-light">
+        <h5 class="offcanvas-title" id="websiteBindingOffcanvasLabel">
+            <i class="mdi mdi-web me-2"></i>
+            <span id="websiteBindingTitle"><lang>绑定站点</lang></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div id="websiteBindingContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><lang>加载中...</lang></span>
+                </div>
+                <p class="mt-2 text-muted"><lang>正在加载站点列表...</lang></p>
+            </div>
+        </div>
+    </div>
+    <div class="border-top p-3 bg-light" style="position: sticky; bottom: 0; z-index: 10;">
+        <button type="button" class="btn btn-primary w-100" id="saveWebsiteBindingsBtn" onclick="saveWebsiteBindings()">
+            <i class="mdi mdi-content-save me-1"></i>
+            <lang>保存绑定</lang>
+        </button>
+    </div>
+</div>
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 友好的消息提示函数
+function showMessage(type, message, title = null) {
+    // 优先使用 SweetAlert2
+    if (typeof Swal !== 'undefined') {
+        const config = {
+            icon: type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning',
+            title: title || (type === 'success' ? '<?= __("操作成功") ?>' : '<?= __("操作失败") ?>'),
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: type === 'success' ? 3000 : 5000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        };
+        Swal.fire(config);
+    } else {
+        // 降级使用 Bootstrap Toast
+        const toastContainer = document.getElementById('toast-container') || createToastContainer();
+        const toastId = 'toast-' + Date.now();
+        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-warning';
+        const icon = type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : 'mdi-alert';
+        
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${bgClass} text-white" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px;">
+                <div class="toast-header ${bgClass} text-white border-0">
+                    <i class="mdi ${icon} me-2"></i>
+                    <strong class="me-auto">${title || (type === 'success' ? '<?= __("操作成功") ?>' : '<?= __("操作失败") ?>')}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: type === 'success' ? 3000 : 5000
+        });
+        toast.show();
+        
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+}
+
+// 创建 Toast 容器
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// 加载SEO账户表单
+function loadSeoAccountForm(accountId) {
+    const container = document.getElementById('seoAccountFormContainer');
+    const titleElement = document.getElementById('offcanvasTitle');
+    
+    // 更新标题
+    if (accountId > 0) {
+        titleElement.textContent = '<?= __("编辑SEO账户") ?> #' + accountId;
+    } else {
+        titleElement.textContent = '<?= __("新增SEO账户") ?>';
+    }
+    
+    // 显示加载状态
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden"><?= __("加载中...") ?></span>
+            </div>
+            <p class="mt-2 text-muted"><?= __("正在加载表单...") ?></p>
+        </div>
+    `;
+    
+    // 构建URL
+    const url = '<?= $this->getBackendUrl('seo/backend/account/form', ['scope' => $scope]) ?>' + 
+                (accountId > 0 ? '&id=' + accountId : '');
+    
+    // 加载表单内容
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.text();
+    })
+    .then(html => {
+        container.innerHTML = html;
+        // 重新绑定表单提交事件
+        const form = document.getElementById('seoAccountForm');
+        if (form) {
+            form.onsubmit = function(e) {
+                saveSeoAccount(e);
+                return false;
+            };
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                <?= __("加载表单失败，请刷新页面重试") ?>
+            </div>
+        `;
+    });
+}
+
+// 保存SEO账户
+function saveSeoAccount(event) {
+    event.preventDefault();
+    const form = document.getElementById('seoAccountForm');
+    if (!form) {
+        showMessage('error', '<?= __("表单不存在") ?>');
+        return;
+    }
+    
+    const formData = new FormData(form);
+    
+    // 处理复选框
+    formData.set('is_active', document.getElementById('is_active')?.checked ? '1' : '0');
+    formData.set('enable_cron_push_urls', document.getElementById('enable_cron_push_urls')?.checked ? '1' : '0');
+    formData.set('enable_cron_sitemap', document.getElementById('enable_cron_sitemap')?.checked ? '1' : '0');
+    
+    const data = {};
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("保存中...") ?>';
+    }
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(response => response.json())
+    .then(resp => {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
+        }
+        
+        if (resp.success) {
+            showMessage('success', resp.message || '<?= __("账户保存成功") ?>');
+            // 关闭 offcanvas
+            const offcanvasElement = document.getElementById('seoAccountOffcanvas');
+            if (offcanvasElement) {
+                const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement);
+                if (offcanvas) {
+                    offcanvas.hide();
+                }
+            }
+            // 刷新列表
+            setTimeout(() => {
+                window.location.reload();
+            }, 800);
+        } else {
+            const errorMsg = resp.message || '<?= __("保存失败") ?>';
+            showMessage('error', errorMsg);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
+        }
+        showMessage('error', '<?= __("请求失败，请检查网络连接后重试") ?>');
+    });
+}
+
+// Offcanvas 关闭时清理
+document.getElementById('seoAccountOffcanvas')?.addEventListener('hidden.bs.offcanvas', function() {
+    const container = document.getElementById('seoAccountFormContainer');
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><?= __("加载中...") ?></span>
+                </div>
+                <p class="mt-2 text-muted"><?= __("正在加载表单...") ?></p>
+            </div>
+        `;
+    }
+});
+
+// ==================== 站点绑定功能 ====================
+
+let currentAccountId = 0;
+let allWebsites = [];
+let selectedWebsiteIds = [];
+
+// 加载站点绑定表单
+function loadWebsiteBindingForm(accountId) {
+    currentAccountId = accountId;
+    const container = document.getElementById('websiteBindingContainer');
+    const titleElement = document.getElementById('websiteBindingTitle');
+    
+    titleElement.innerHTML = '<i class="mdi mdi-web me-2"></i><?= __("绑定站点") ?> <small class="text-muted">(<?= __("账户") ?> #' + accountId + ')</small>';
+    
+    // 显示加载状态
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden"><?= __("加载中...") ?></span>
+            </div>
+            <p class="mt-2 text-muted"><?= __("正在加载站点列表...") ?></p>
+        </div>
+    `;
+    
+    // 加载站点列表和已绑定信息
+    const url = '<?= $this->getBackendUrl('seo/backend/account/websites') ?>' + '?account_id=' + accountId;
+    
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allWebsites = data.websites || [];
+            selectedWebsiteIds = data.bound_website_ids || [];
+            renderWebsiteList(allWebsites);
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="mdi mdi-alert-circle me-2"></i>
+                    ${data.message || '<?= __("加载站点列表失败") ?>'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                <?= __("加载站点列表失败，请刷新页面重试") ?>
+            </div>
+        `;
+    });
+}
+
+// 渲染站点列表
+function renderWebsiteList(websites) {
+    const container = document.getElementById('websiteBindingContainer');
+    
+    if (!websites || websites.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="mdi mdi-web-off" style="font-size: 48px;"></i>
+                <p class="mt-3"><?= __("暂无可绑定的站点") ?></p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="p-3 border-bottom bg-white sticky-top" style="z-index: 10;">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="mdi mdi-magnify"></i>
+                </span>
+                <input type="text" 
+                       class="form-control" 
+                       id="websiteSearchInput"
+                       placeholder="<?= __("搜索站点名称或域名...") ?>"
+                       onkeyup="searchWebsites(this.value)">
+            </div>
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="mdi mdi-check-circle text-success me-1"></i>
+                    <?= __("已选择") ?>: <strong id="selectedCount">${selectedWebsiteIds.length}</strong> <?= __("个站点") ?>
+                </small>
+                ${selectedWebsiteIds.length > 0 ? `
+                <button type="button" class="btn btn-sm btn-link text-danger float-end" onclick="clearAllSelections()">
+                    <i class="mdi mdi-close-circle me-1"></i><?= __("清空选择") ?>
+                </button>
+                ` : ''}
+            </div>
+        </div>
+        <div id="websiteListContainer" class="p-3">
+    `;
+    
+    websites.forEach(website => {
+        const isSelected = selectedWebsiteIds.includes(website.website_id);
+        html += `
+            <div class="website-item card mb-2 ${isSelected ? 'border-success' : ''}" data-website-id="${website.website_id}" data-website-name="${website.name.toLowerCase()}" data-website-domain="${website.domain.toLowerCase()}">
+                <div class="card-body p-3">
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="website_${website.website_id}" 
+                               value="${website.website_id}"
+                               ${isSelected ? 'checked' : ''}
+                               onchange="toggleWebsiteSelection(${website.website_id}, this.checked)">
+                        <label class="form-check-label d-flex justify-content-between align-items-start w-100" for="website_${website.website_id}">
+                            <div class="flex-grow-1">
+                                <div class="fw-bold">${website.name}</div>
+                                <div class="text-muted small">
+                                    <i class="mdi mdi-web me-1"></i>
+                                    ${website.domain}
+                                </div>
+                                ${website.is_default ? '<span class="badge bg-info mt-1"><?= __("默认站点") ?></span>' : ''}
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// 搜索站点
+function searchWebsites(keyword) {
+    keyword = keyword.toLowerCase().trim();
+    const items = document.querySelectorAll('.website-item');
+    let visibleCount = 0;
+    
+    items.forEach(item => {
+        const name = item.dataset.websiteName || '';
+        const domain = item.dataset.websiteDomain || '';
+        
+        if (name.includes(keyword) || domain.includes(keyword)) {
+            item.style.display = '';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // 显示搜索结果提示
+    const container = document.getElementById('websiteListContainer');
+    let noResultDiv = container.querySelector('.no-result-message');
+    
+    if (visibleCount === 0 && keyword !== '') {
+        if (!noResultDiv) {
+            noResultDiv = document.createElement('div');
+            noResultDiv.className = 'no-result-message text-center text-muted py-4';
+            noResultDiv.innerHTML = `
+                <i class="mdi mdi-magnify-close" style="font-size: 48px;"></i>
+                <p class="mt-2"><?= __("未找到匹配的站点") ?></p>
+            `;
+            container.appendChild(noResultDiv);
+        }
+    } else {
+        if (noResultDiv) {
+            noResultDiv.remove();
+        }
+    }
+}
+
+// 切换站点选择
+function toggleWebsiteSelection(websiteId, isChecked) {
+    if (isChecked) {
+        if (!selectedWebsiteIds.includes(websiteId)) {
+            selectedWebsiteIds.push(websiteId);
+        }
+        // 添加边框高亮
+        const item = document.querySelector(`[data-website-id="${websiteId}"]`);
+        if (item) {
+            item.classList.add('border-success');
+        }
+    } else {
+        const index = selectedWebsiteIds.indexOf(websiteId);
+        if (index > -1) {
+            selectedWebsiteIds.splice(index, 1);
+        }
+        // 移除边框高亮
+        const item = document.querySelector(`[data-website-id="${websiteId}"]`);
+        if (item) {
+            item.classList.remove('border-success');
+        }
+    }
+    
+    // 更新计数
+    const countElement = document.getElementById('selectedCount');
+    if (countElement) {
+        countElement.textContent = selectedWebsiteIds.length;
+    }
+}
+
+// 清空所有选择
+function clearAllSelections() {
+    if (!confirm('<?= __("确定要清空所有选择吗？") ?>')) {
+        return;
+    }
+    
+    selectedWebsiteIds = [];
+    
+    // 取消所有复选框
+    document.querySelectorAll('#websiteBindingContainer input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // 移除所有边框高亮
+    document.querySelectorAll('.website-item').forEach(item => {
+        item.classList.remove('border-success');
+    });
+    
+    // 更新计数并重新渲染
+    renderWebsiteList(allWebsites);
+}
+
+// 保存站点绑定
+function saveWebsiteBindings() {
+    if (selectedWebsiteIds.length === 0) {
+        showMessage('warning', '<?= __("请至少选择一个站点") ?>');
+        return;
+    }
+    
+    const data = {
+        account_id: currentAccountId,
+        website_ids: selectedWebsiteIds
+    };
+    
+    // 禁用保存按钮
+    const saveBtn = document.getElementById('saveWebsiteBindingsBtn');
+    if (!saveBtn) {
+        return;
+    }
+    const originalBtnHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("保存中...") ?>';
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/saveWebsiteBindings') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(resp => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalBtnHtml;
+        
+        if (resp.success) {
+            showMessage('success', resp.message || '<?= __("站点绑定成功") ?>');
+            
+            // 关闭 offcanvas
+            const offcanvasElement = document.getElementById('websiteBindingOffcanvas');
+            if (offcanvasElement) {
+                const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement);
+                if (offcanvas) {
+                    offcanvas.hide();
+                }
+            }
+        } else {
+            showMessage('error', resp.message || '<?= __("保存失败") ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalBtnHtml;
+        showMessage('error', '<?= __("请求失败，请检查网络连接后重试") ?>');
+    });
+}
+
+// 站点绑定 Offcanvas 关闭时清理
+document.getElementById('websiteBindingOffcanvas')?.addEventListener('hidden.bs.offcanvas', function() {
+    currentAccountId = 0;
+    allWebsites = [];
+    selectedWebsiteIds = [];
+    
+    const container = document.getElementById('websiteBindingContainer');
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><?= __("加载中...") ?></span>
+                </div>
+                <p class="mt-2 text-muted"><?= __("正在加载站点列表...") ?></p>
+            </div>
+        `;
+    }
+});
+</script>
+
+</body>
+</html>
+<?php endif; ?>

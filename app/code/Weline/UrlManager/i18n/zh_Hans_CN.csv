@@ -2,12 +2,6 @@
 重写成功！,重写成功！
 删除成功！,删除成功！
 删除失败！,删除失败！
-加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
-无效的请求方法,无效的请求方法
-请选择站点,请选择站点
-Sitemap生成成功,Sitemap生成成功
-生成Sitemap失败：%{1},生成Sitemap失败：%{1}
-该站点没有URL,该站点没有URL
 路由表,路由表
 静态路由管理：可定制属于自己的静态url来提升seo。,静态路由管理：可定制属于自己的静态url来提升seo。
 网站ID,网站ID
@@ -40,6 +34,14 @@ Sitemap生成成功,Sitemap生成成功
 URL管理,URL管理
 系统配置,系统配置
 URL管理器,URL管理器
+模组ID,模组ID
+模组,模组
+加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
+无效的请求方法,无效的请求方法
+请选择站点,请选择站点
+Sitemap生成成功,Sitemap生成成功
+生成Sitemap失败：%{1},生成Sitemap失败：%{1}
+该站点没有URL,该站点没有URL
 Sitemap管理,Sitemap管理
 生成Sitemap,生成Sitemap
 选择站点,选择站点
@@ -53,5 +55,3 @@ Sitemap文件列表,Sitemap文件列表
 站点,站点
 确定要生成Sitemap吗？,确定要生成Sitemap吗？
 生成Sitemap失败,生成Sitemap失败
-模组ID,模组ID
-模组,模组

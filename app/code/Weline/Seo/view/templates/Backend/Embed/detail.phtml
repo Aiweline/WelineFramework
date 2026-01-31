@@ -1,0 +1,483 @@
+<?php
+/**
+ * SEO 嵌入式管理界面 - 主体详情
+ * 
+ * 用于嵌入到其他模块中，无 header/sidebar
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $subject 主体数据
+ * @var array $keywords 关键词列表
+ * @var array|null $suggestion AI建议
+ * @var string $module 模块标识
+ * @var string $scope 业务scope
+ * @var bool $is_embed 是否嵌入模式
+ */
+
+$subject = $this->getData('subject') ?: [];
+$keywords = $this->getData('keywords') ?: [];
+$suggestion = $this->getData('suggestion');
+$scope = $this->getData('scope') ?: '';
+$title = $this->getData('title') ?: __('主体SEO详情');
+
+// 构建基础 URL 参数
+$baseParams = [];
+if ($scope) $baseParams['scope'] = $scope;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($title) ?></title>
+    <!-- 使用CDN加载Bootstrap和MDI图标以避免路径问题 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        
+        .embed-container {
+            padding: 20px;
+            max-width: 100%;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .page-header h4 {
+            margin: 0;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .back-btn {
+            color: #6c757d;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .back-btn:hover {
+            color: #0bb197;
+        }
+        
+        .info-card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+        
+        .info-card-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .info-card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .info-card-body {
+            padding: 20px;
+        }
+        
+        .info-item {
+            margin-bottom: 15px;
+        }
+        
+        .info-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-label {
+            font-weight: 500;
+            color: #6c757d;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            color: #333;
+        }
+        
+        .keyword-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 4px;
+        }
+        
+        .keyword-priority {
+            background: #ffc107;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            margin-left: 6px;
+        }
+        
+        .suggestion-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        
+        .suggestion-card .info-card-header {
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .suggestion-card .info-card-header h5 {
+            color: #fff;
+        }
+        
+        .suggestion-content {
+            white-space: pre-line;
+            line-height: 1.6;
+        }
+        
+        .action-btn {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+        }
+        
+        .badge-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+        
+        .empty-keywords {
+            text-align: center;
+            padding: 30px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="embed-container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <div>
+                <a href="<?= $this->getUrl('*/backend/embed', $baseParams) ?>" class="back-btn mb-2">
+                    <i class="mdi mdi-arrow-left me-1"></i>
+                    <lang>返回列表</lang>
+                </a>
+                <h4>
+                    <i class="mdi mdi-file-chart-outline me-2"></i>
+                    <?= htmlspecialchars($subject['title'] ?? __('主体详情')) ?>
+                    <?php if ((int)($subject['status'] ?? 0) === 1): ?>
+                        <span class="badge badge-status bg-success ms-2"><lang>启用</lang></span>
+                    <?php else: ?>
+                        <span class="badge badge-status bg-secondary ms-2"><lang>禁用</lang></span>
+                    <?php endif; ?>
+                </h4>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary action-btn" id="btnEdit">
+                    <i class="mdi mdi-pencil me-1"></i>
+                    <lang>编辑</lang>
+                </button>
+                <button type="button" class="btn btn-primary action-btn" id="btnRefreshSuggestion">
+                    <i class="mdi mdi-robot me-1"></i>
+                    <lang>生成AI建议</lang>
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 左侧：基本信息 + 关键词 -->
+            <div class="col-lg-6">
+                <!-- 基本信息 -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <h5><i class="mdi mdi-information-outline me-2"></i><lang>基本信息</lang></h5>
+                    </div>
+                    <div class="info-card-body">
+                        <div class="info-item">
+                            <div class="info-label"><lang>标题</lang></div>
+                            <div class="info-value"><?= htmlspecialchars($subject['title'] ?? '-') ?></div>
+                        </div>
+                        
+                        <?php if (!empty($subject['url'])): ?>
+                        <div class="info-item">
+                            <div class="info-label"><lang>URL</lang></div>
+                            <div class="info-value">
+                                <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="text-primary">
+                                    <?= htmlspecialchars($subject['url']) ?>
+                                    <i class="mdi mdi-open-in-new ms-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($subject['description'])): ?>
+                        <div class="info-item">
+                            <div class="info-label"><lang>描述</lang></div>
+                            <div class="info-value"><?= htmlspecialchars($subject['description']) ?></div>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <div class="info-label"><lang>类型</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['subject_type'] ?? '-') ?></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <div class="info-label"><lang>语言</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['locale'] ?? 'zh-CN') ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <div class="info-label"><lang>创建时间</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['created_at'] ?? '-') ?></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <div class="info-label"><lang>更新时间</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['updated_at'] ?? '-') ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 关键词 -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <h5><i class="mdi mdi-tag-multiple me-2"></i><lang>关键词</lang></h5>
+                        <span class="badge bg-secondary"><?= count($keywords) ?></span>
+                    </div>
+                    <div class="info-card-body">
+                        <?php if (empty($keywords)): ?>
+                            <div class="empty-keywords">
+                                <i class="mdi mdi-tag-off" style="font-size: 2rem; opacity: 0.3;"></i>
+                                <p class="mb-0 mt-2"><lang>暂无关键词</lang></p>
+                            </div>
+                        <?php else: ?>
+                            <div class="keyword-list">
+                                <?php foreach ($keywords as $keyword): ?>
+                                    <span class="keyword-tag">
+                                        <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
+                                        <?php if (!empty($keyword['priority'])): ?>
+                                            <span class="keyword-priority"><?= (int)$keyword['priority'] ?></span>
+                                        <?php endif; ?>
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：AI建议 -->
+            <div class="col-lg-6">
+                <div class="info-card suggestion-card">
+                    <div class="info-card-header">
+                        <h5><i class="mdi mdi-robot me-2"></i><lang>AI SEO建议</lang></h5>
+                        <?php if ($suggestion): ?>
+                            <small><?= htmlspecialchars($suggestion['created_at'] ?? '') ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="info-card-body">
+                        <?php if ($suggestion): ?>
+                            <div class="suggestion-content" id="suggestionContent">
+                                <?= nl2br(htmlspecialchars($suggestion['content'] ?? '')) ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="text-center py-4" id="noSuggestion">
+                                <i class="mdi mdi-robot-off" style="font-size: 3rem; opacity: 0.5;"></i>
+                                <p class="mb-0 mt-2"><lang>暂无AI建议，点击上方按钮生成</lang></p>
+                            </div>
+                        <?php endif; ?>
+                        <div id="suggestionLoading" style="display: none;" class="text-center py-4">
+                            <div class="spinner-border text-light" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2 mb-0"><lang>正在生成AI建议...</lang></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑 Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editModalLabel">
+                        <i class="mdi mdi-pencil me-2"></i>
+                        <lang>编辑SEO主体</lang>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="editForm">
+                    <div class="modal-body">
+                        <input type="hidden" name="subject_id" value="<?= (int)($subject['subject_id'] ?? 0) ?>">
+                        <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
+                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="editTitle"><lang>标题</lang> <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="editTitle" name="title" 
+                                       value="<?= htmlspecialchars($subject['title'] ?? '') ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="editUrl"><lang>URL</lang></label>
+                                <input type="url" class="form-control" id="editUrl" name="url" 
+                                       value="<?= htmlspecialchars($subject['url'] ?? '') ?>" placeholder="https://">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="editType"><lang>主体类型</lang></label>
+                                <select class="form-select" id="editType" name="subject_type">
+                                    <option value="page" <?= ($subject['subject_type'] ?? '') === 'page' ? 'selected' : '' ?>><?= __('页面') ?></option>
+                                    <option value="product" <?= ($subject['subject_type'] ?? '') === 'product' ? 'selected' : '' ?>><?= __('商品') ?></option>
+                                    <option value="store" <?= ($subject['subject_type'] ?? '') === 'store' ? 'selected' : '' ?>><?= __('店铺') ?></option>
+                                    <option value="website" <?= ($subject['subject_type'] ?? '') === 'website' ? 'selected' : '' ?>><?= __('网站') ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="editStatus"><lang>状态</lang></label>
+                                <select class="form-select" id="editStatus" name="status">
+                                    <option value="1" <?= (int)($subject['status'] ?? 1) === 1 ? 'selected' : '' ?>><?= __('启用') ?></option>
+                                    <option value="0" <?= (int)($subject['status'] ?? 1) === 0 ? 'selected' : '' ?>><?= __('禁用') ?></option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label" for="editDescription"><lang>描述</lang></label>
+                            <textarea class="form-control" id="editDescription" name="description" rows="4"><?= htmlspecialchars($subject['description'] ?? '') ?></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <lang>取消</lang>
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-1"></i>
+                            <lang>保存</lang>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const saveUrl = '<?= $this->getUrl('*/backend/embed/save') ?>';
+        const refreshUrl = '<?= $this->getUrl('*/backend/embed/refreshSuggestion') ?>';
+        const subjectId = <?= (int)($subject['subject_id'] ?? 0) ?>;
+        
+        // 编辑按钮
+        document.getElementById('btnEdit').addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('editModal'));
+            modal.show();
+        });
+        
+        // 编辑表单提交
+        document.getElementById('editForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message || '<?= __('保存成功') ?>');
+                    location.reload();
+                } else {
+                    alert(data.message || '<?= __('保存失败') ?>');
+                }
+            })
+            .catch(error => {
+                alert('<?= __('请求失败') ?>: ' + error.message);
+            });
+        });
+        
+        // 生成AI建议
+        document.getElementById('btnRefreshSuggestion').addEventListener('click', function() {
+            const suggestionContent = document.getElementById('suggestionContent');
+            const noSuggestion = document.getElementById('noSuggestion');
+            const loading = document.getElementById('suggestionLoading');
+            
+            if (suggestionContent) suggestionContent.style.display = 'none';
+            if (noSuggestion) noSuggestion.style.display = 'none';
+            loading.style.display = 'block';
+            
+            const formData = new FormData();
+            formData.append('subject_id', subjectId);
+            
+            fetch(refreshUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                
+                if (data.success && data.data && data.data.suggestion) {
+                    if (!suggestionContent) {
+                        // 创建内容元素
+                        const contentDiv = document.createElement('div');
+                        contentDiv.id = 'suggestionContent';
+                        contentDiv.className = 'suggestion-content';
+                        contentDiv.innerHTML = data.data.suggestion.content.replace(/\n/g, '<br>');
+                        loading.parentNode.insertBefore(contentDiv, loading);
+                    } else {
+                        suggestionContent.innerHTML = data.data.suggestion.content.replace(/\n/g, '<br>');
+                        suggestionContent.style.display = 'block';
+                    }
+                    if (noSuggestion) noSuggestion.remove();
+                } else {
+                    if (noSuggestion) noSuggestion.style.display = 'block';
+                    else if (suggestionContent) suggestionContent.style.display = 'block';
+                    alert(data.message || '<?= __('生成建议失败') ?>');
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                if (noSuggestion) noSuggestion.style.display = 'block';
+                else if (suggestionContent) suggestionContent.style.display = 'block';
+                alert('<?= __('请求失败') ?>: ' + error.message);
+            });
+        });
+    });
+    </script>
+</body>
+</html>

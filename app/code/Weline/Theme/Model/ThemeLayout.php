@@ -15,6 +15,9 @@ use Weline\Framework\Setup\Db\ModelSetup;
  */
 class ThemeLayout extends Model
 {
+    // 设置主键字段
+    public string $_primary_key = 'layout_id';
+    
     public const fields_ID = 'layout_id';
     public const fields_THEME_ID = 'theme_id';
     public const fields_PAGE_TYPE = 'page_type';

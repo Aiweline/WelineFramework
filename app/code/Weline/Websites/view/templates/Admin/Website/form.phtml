@@ -124,6 +124,19 @@ $selected_languages = $selected_languages ?? [];
                     </div>
 
                     <div class="col-4 mb-3">
+                        <label for="scope" class="form-label"><?= __('业务范围 (Scope)') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="scope" 
+                               name="scope"
+                               value="<?= htmlspecialchars($website['scope'] ?? '') ?>"
+                               placeholder="<?= __('如：page_builder、catalog') ?>">
+                        <div class="form-text-hint">
+                            <?= __('用于标识站点的业务来源，留空表示通用站点。由系统自动设置，通常无需手动修改。') ?>
+                        </div>
+                    </div>
+
+                    <div class="col-4 mb-3">
                         <label for="default_currency" class="form-label">默认货币</label>
                         <select class="form-select form-control" name="default_currency" id="default_currency">
                             <option value="">-- 请选择 --</option>
@@ -195,6 +208,53 @@ $selected_languages = $selected_languages ?? [];
                             <?php endforeach; ?>
                         </select>
                         <div class="form-text-hint">不设置则使用i18n支持的所有语言（按住Ctrl或Cmd键可多选）</div>
+                    </div>
+
+                    <div class="col-6 mb-3">
+                        <label for="seo_account" class="form-label"><?= __('SEO 账户') ?></label>
+                        <?php
+                        // 获取当前站点的 SEO 账户绑定
+                        $seoAccountId = '';
+                        $seoAccountName = __('未绑定');
+                        if (!empty($website['website_id'])) {
+                            try {
+                                $seoBinding = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+                                $binding = $seoBinding->getByWebsiteId((int)$website['website_id']);
+                                if ($binding) {
+                                    $seoAccountId = $binding->getAccountId();
+                                    // 获取账户名称
+                                    $seoAccount = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Seo\Model\SeoAccount::class);
+                                    $account = $seoAccount->load($seoAccountId);
+                                    if ($account->getId()) {
+                                        $seoAccountName = $account->getData('name') . ' (' . $account->getData('provider') . ')';
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                // 忽略错误
+                            }
+                        }
+                        ?>
+                        <w:seo:account:select 
+                            id="seo_account"
+                            name="seo_account_id"
+                            value="<?= $seoAccountId ?>"
+                            display="<?= addslashes($seoAccountName) ?>"
+                            class="w-100"
+                        />
+                        <div class="form-text-hint"><?= __('绑定后将自动提交sitemap到该SEO账户的搜索引擎') ?></div>
+                    </div>
+
+                    <div class="col-6 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="p-2 bg-body-secondary rounded">
+                            <small class="text-muted">
+                                <i class="mdi mdi-information-outline"></i>
+                                <?= __('SEO账户管理请前往：') ?>
+                                <a href="<?= $this->getBackendUrl('*/weline_seo/backend/account/index') ?>" target="_blank">
+                                    <?= __('SEO管理 > 账户管理') ?>
+                                </a>
+                            </small>
+                        </div>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">保存</button>

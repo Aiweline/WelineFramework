@@ -15,6 +15,10 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Service\AiService;
+use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
+use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
+use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
+use GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer;
 
 /**
  * AI内容生成控制器
@@ -1013,6 +1017,8 @@ class AiGenerate extends BackendController
             $description = trim($input['description'] ?? '');
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
+            $referenceComponent = $input['reference_component'] ?? '';
+            $referenceCode = $input['reference_code'] ?? '';
             
             if (empty($name)) {
                 return $this->fetchJson([
@@ -1034,15 +1040,105 @@ class AiGenerate extends BackendController
             // 解析配置字段
             $configFields = $this->parseConfigFields($fieldsInput, $componentCode);
             
-            // 构建AI提示词
-            $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields);
+            // 构建AI提示词（传递参考组件代码）
+            $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
             
             // 调用AI生成
             $aiService = ObjectManager::getInstance(AiService::class);
-            $aiResponse = $aiService->generate($prompt, 'zh_Hans_CN');
+            $locale = State::getLang() ?: 'zh_Hans_CN';
+            $aiResponse = $aiService->generate(
+                $prompt,
+                null, // 自动选择模型
+                'pagebuilder_component_generation', // 场景代码：页面构建器组件生成
+                $locale,
+                ['reference_component' => $referenceComponent, 'reference_code' => $referenceCode],
+                null, // userId
+                true  // isBackend
+            );
             
             // 解析AI响应
-            $generatedCode = $this->parseComponentResponse($aiResponse);
+            $aiData = $this->parseComponentResponse($aiResponse);
+            
+            // 使用CodeFixer预处理AI返回的数据
+            $codeFixer = ObjectManager::getInstance(CodeFixer::class);
+            $aiData = $codeFixer->fixAiData($aiData);
+            $fixApplied = $codeFixer->getFixes();
+            if (!empty($fixApplied)) {
+                error_log('[AI Component] Auto-fixes applied: ' . json_encode($fixApplied));
+            }
+            
+            // 使用CodeValidator验证AI返回的数据
+            $codeValidator = ObjectManager::getInstance(CodeValidator::class);
+            $aiDataValidation = $codeValidator->validateAiData($aiData, $region);
+            if (!$aiDataValidation['valid']) {
+                error_log('[AI Component] AI data validation errors: ' . implode(', ', $aiDataValidation['errors']));
+            }
+            
+            // 使用框架构建器组装完整组件
+            $frameworkBuilder = ObjectManager::getInstance(FrameworkBuilder::class);
+            $useFramework = $frameworkBuilder->frameworkExists($region);
+            $safeModeApplied = false;
+            
+            $componentInfo = [
+                'name' => $name,
+                'name_en' => $this->generateEnglishName($name),
+                'description' => $description,
+            ];
+            
+            // 检查框架是否存在
+            if ($useFramework) {
+                // 使用框架模式：将AI返回的JSON回填到框架模板
+                $validation = $frameworkBuilder->validateAiData($aiData, $region);
+                if (!$validation['valid']) {
+                    // 如果验证失败，记录警告但继续
+                    error_log('[AI Component] Framework validation warnings: ' . implode(', ', $validation['errors']));
+                }
+                
+                // 构建完整的PHTML代码
+                $phtmlCode = $frameworkBuilder->buildComponent($region, $componentInfo, $aiData);
+            } else {
+                // 回退到旧模式：AI返回完整的PHTML
+                $phtmlCode = $aiData['phtml'] ?? '';
+            }
+            
+            // 对生成的完整代码进行最终验证和修复
+            $codeValidation = $codeValidator->validate($phtmlCode);
+            if (!$codeValidation['valid']) {
+                // 尝试自动修复
+                $fixResult = $codeFixer->fixAndValidate($phtmlCode, $codeValidator);
+                if ($fixResult['validation']['valid']) {
+                    $phtmlCode = $fixResult['code'];
+                    $codeValidation = $fixResult['validation'];
+                    error_log('[AI Component] Code auto-fixed successfully');
+                } else {
+                    // 修复失败，使用ErrorAnalyzer分析错误
+                    $errorAnalyzer = ObjectManager::getInstance(ErrorAnalyzer::class);
+                    $errorAnalysis = $errorAnalyzer->analyze(
+                        implode('; ', $codeValidation['errors']),
+                        $phtmlCode
+                    );
+                    error_log('[AI Component] Code validation failed: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
+                    
+                    // 最后尝试安全模式构建（移除高风险字段）
+                    if ($useFramework) {
+                        $safeAiData = $aiData;
+                        $safeAiData['php_variables'] = '';
+                        $safeAiData['js_content'] = '';
+                        $safeAiData['html_extra'] = '';
+                        $safeAiData['html_extra_column'] = '';
+                        $safeAiData['footer_extra_text'] = '';
+                        
+                        $safePhtmlCode = $frameworkBuilder->buildComponent($region, $componentInfo, $safeAiData);
+                        $safeValidation = $codeValidator->validate($safePhtmlCode);
+                        if ($safeValidation['valid']) {
+                            $phtmlCode = $safePhtmlCode;
+                            $codeValidation = $safeValidation;
+                            $safeModeApplied = true;
+                            error_log('[AI Component] Safe mode build applied');
+                        }
+                    }
+                }
+            }
             
             // 构建组件信息
             $component = [
@@ -1054,19 +1150,37 @@ class AiGenerate extends BackendController
                 'category' => $region,
                 'style_code' => $styleCode,
                 'file' => "{$region}/{$componentCode}.phtml",
-                'phtml_code' => $generatedCode['phtml'] ?? '',
+                'phtml_code' => $phtmlCode,
                 'config_schema' => $configFields,
+                'ai_data' => $aiData, // 保存原始AI数据，便于微调
             ];
             
             // 验证生成的组件
-            $validator = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\ComponentValidator::class);
-            $validation = $this->validateGeneratedComponent($component, $styleCode);
+            $componentValidation = $this->validateGeneratedComponent($component, $styleCode);
+            
+            // 合并代码验证结果
+            if (!empty($codeValidation['warnings'])) {
+                $componentValidation['warnings'] = array_merge(
+                    $componentValidation['warnings'] ?? [],
+                    $codeValidation['warnings']
+                );
+            }
+            
+            // 添加自动修复信息
+            if (!empty($fixApplied)) {
+                $componentValidation['auto_fixes'] = $fixApplied;
+            }
+            
+            if ($safeModeApplied) {
+                $componentValidation['warnings'][] = __('已启用安全模式，已移除 php_variables / js_content 等高风险字段以确保渲染成功');
+            }
             
             return $this->fetchJson([
                 'success' => true,
-                'component' => $component,
-                'validation' => $validation,
-                'preview' => $this->generateComponentPreview($generatedCode['phtml'] ?? '')
+                'component' => $component + ['safe_mode' => $safeModeApplied],
+                'validation' => $componentValidation,
+                'preview' => $this->generateComponentPreview($phtmlCode),
+                'use_framework' => $frameworkBuilder->frameworkExists($region),
             ]);
             
         } catch (\Exception $e) {
@@ -1102,6 +1216,30 @@ class AiGenerate extends BackendController
                     'success' => false,
                     'message' => __('组件数据不完整')
                 ]);
+            }
+            
+            // 保存前进行最终验证和修复
+            $codeValidator = ObjectManager::getInstance(CodeValidator::class);
+            $codeFixer = ObjectManager::getInstance(CodeFixer::class);
+            
+            $phtmlCode = $component['phtml_code'];
+            $validation = $codeValidator->validate($phtmlCode);
+            
+            if (!$validation['valid']) {
+                // 尝试自动修复
+                $fixResult = $codeFixer->fixAndValidate($phtmlCode, $codeValidator);
+                if ($fixResult['validation']['valid']) {
+                    $component['phtml_code'] = $fixResult['code'];
+                    error_log('[AI Component Save] Code auto-fixed before save');
+                } else {
+                    // 修复失败，但仍然尝试保存（用户可能已经手动确认）
+                    $errorAnalyzer = ObjectManager::getInstance(ErrorAnalyzer::class);
+                    $errorAnalysis = $errorAnalyzer->analyze(
+                        implode('; ', $validation['errors']),
+                        $phtmlCode
+                    );
+                    error_log('[AI Component Save] Saving with validation errors: ' . $errorAnalyzer->formatAnalysis($errorAnalysis));
+                }
             }
             
             // 保存组件文件
@@ -1236,7 +1374,7 @@ class AiGenerate extends BackendController
     /**
      * 构建组件生成提示词
      */
-    private function buildComponentPrompt(string $name, string $description, string $region, string $style, array $configFields): string
+    private function buildComponentPrompt(string $name, string $description, string $region, string $style, array $configFields, string $referenceCode = ''): string
     {
         $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         
@@ -1249,10 +1387,308 @@ class AiGenerate extends BackendController
             default => '现代简约风格'
         };
         
-        return <<<PROMPT
-你是一个专业的前端组件开发专家。请为 PageBuilder 生成一个 PHP/HTML 组件。
+        // 如果有参考组件代码，使用参考模式
+        if (!empty($referenceCode)) {
+            return $this->buildReferenceBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields, $referenceCode);
+        }
+        
+        // 使用框架模式的提示词
+        return $this->buildFrameworkBasedPrompt($name, $description, $region, $style, $styleGuide, $configFields);
+    }
+    
+    /**
+     * 构建基于框架的提示词（新模式）
+     * 
+     * AI只需要返回JSON格式的各区域代码，框架负责组装
+     */
+    private function buildFrameworkBasedPrompt(
+        string $name, 
+        string $description, 
+        string $region, 
+        string $style,
+        string $styleGuide,
+        array $configFields
+    ): string {
+        $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $region = strtolower($region);
+        
+        // 获取框架构建器的提示词指南
+        $frameworkBuilder = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class);
+        $frameworkGuide = $frameworkBuilder->getFrameworkPromptGuide($region);
+        
+        // 根据区域类型调整提示词
+        $regionDescription = match($region) {
+            'header' => '头部导航组件（框架已包含Logo、导航菜单、CTA按钮的固定结构）',
+            'footer' => '底部组件（框架已包含品牌信息、链接列、社交媒体、版权的固定结构）',
+            default => '内容组件（框架已包含标题、副标题、描述的固定结构）',
+        };
+        
+        $prompt = <<<PROMPT
+你是一个专业的前端组件开发专家。请为 PageBuilder 的 **{$region}** 区域组件生成代码。
+
+## 重要提示
+
+我们使用**框架模板系统**，你**不需要**生成完整的PHTML文件。框架已经包含了固定的结构和基础样式，你只需要填充特定区域的代码。
 
 ## 组件要求
+
+- **组件名称**: {$name}
+- **功能描述**: {$description}
+- **组件类型**: {$regionDescription}
+- **视觉风格**: {$styleGuide}
+
+## 用户额外指定的配置字段
+
+```json
+{$fieldsJson}
+```
+
+## 框架说明
+
+{$frameworkGuide}
+
+## 具体要求
+
+PROMPT;
+
+        // 根据区域类型添加具体要求
+        if ($region === 'header') {
+            $prompt .= <<<PROMPT
+
+### Header组件特殊说明
+- 框架已实现：Logo显示、导航菜单（支持从子页面动态获取）、CTA按钮、响应式菜单
+- 你可以添加：额外的装饰元素、动画效果、特殊的交互
+- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
+
+PROMPT;
+        } elseif ($region === 'footer') {
+            $prompt .= <<<PROMPT
+
+### Footer组件特殊说明
+- 框架已实现：品牌Logo和描述、两列链接、社交媒体图标、版权信息
+- 你可以添加：额外的链接列、订阅表单、联系信息等
+- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
+
+PROMPT;
+        } else {
+            $prompt .= <<<PROMPT
+
+### Content组件特殊说明
+- 框架已实现：标题、副标题、描述的展示
+- **html_content 是必填的**，这是你需要实现的核心内容区域
+- 根据功能描述实现具体的内容展示（如特性卡片、图片画廊、定价表、FAQ等）
+- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
+- 所有输出使用 htmlspecialchars() 转义
+
+PROMPT;
+        }
+        
+        $prompt .= <<<PROMPT
+
+## 样式要求
+
+- {$styleGuide}
+- 响应式设计，支持移动端
+- 使用 CSS 变量或媒体查询适配暗色模式
+
+## 返回格式
+
+请**只返回 JSON**，格式如下：
+```json
+{
+    "extra_fields": "可选：额外的字段定义，每行一个",
+    "php_variables": "可选：额外的PHP变量准备代码",
+    "css_extra": "额外的CSS样式",
+    "css_responsive": "可选：响应式CSS（会放在 @media 块内）",
+    "html_content": "{$region}组件的主体HTML内容",
+    "js_content": "可选：JavaScript代码"
+}
+```
+
+只返回 JSON，不要有其他解释性文字。
+PROMPT;
+
+        return $prompt;
+    }
+    
+    /**
+     * 获取Header Nav固定代码块约束
+     * 
+     * @return string
+     */
+    private function getHeaderNavConstraint(): string
+    {
+        return <<<CONSTRAINT
+
+## 【重要-Header Nav 固定结构约束】
+
+生成header/导航组件时，nav导航部分必须遵循以下固定结构：
+
+### 1. 导航数据获取（必须使用此固定代码）：
+```php
+// 获取数据
+\$page = \$this->getData('page');
+\$styleSettings = \$this->getData('style') ?: \$this->getData('style_settings') ?: [];
+\$componentConfig = \$this->getData('component_config') ?: [];
+\$config = array_merge(\$styleSettings, \$componentConfig);
+
+// 辅助函数
+\$getConfig = function(\$key, \$default = '') use (\$config) {
+    return isset(\$config[\$key]) && \$config[\$key] !== '' ? \$config[\$key] : \$default;
+};
+
+// 获取导航项配置
+\$useSubpages = \$getConfig('navigation.use_subpages', 'no') === 'yes';
+\$navItems = [];
+
+// 优先使用真实子页面作为导航
+if (\$useSubpages && \$page) {
+    \$navigationPages = \$page->getNavigationPages([], 10);
+    foreach (\$navigationPages as \$navPage) {
+        \$navItems[] = [
+            'text' => \$navPage['title'] ?? '',
+            'href' => \$navPage['url'] ?? '#',
+        ];
+    }
+}
+
+// 如果没有子页面，使用配置的导航项
+if (empty(\$navItems)) {
+    \$navItemsConfig = \$getConfig('navigation.items', "Home=>\nAbout=>\nBlog=>\nFAQs=>");
+    if (strpos(\$navItemsConfig, '\\n') !== false && strpos(\$navItemsConfig, "\n") === false) {
+        \$navItemsConfig = str_replace('\\n', "\n", \$navItemsConfig);
+    }
+    \$lines = preg_split('/\r?\n/', \$navItemsConfig);
+    foreach (\$lines as \$line) {
+        \$line = trim(\$line);
+        if (empty(\$line)) continue;
+        if (strpos(\$line, '=>') !== false) {
+            \$parts = explode('=>', \$line, 2);
+            \$text = trim(\$parts[0]);
+            \$href = trim(\$parts[1] ?? '');
+            if (!empty(\$text)) {
+                if (empty(\$href)) {
+                    \$href = '/' . strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', trim(\$text)));
+                }
+                \$navItems[] = ['text' => \$text, 'href' => \$href];
+            }
+        }
+    }
+}
+
+// 默认导航项
+if (empty(\$navItems)) {
+    \$navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+```
+
+### 2. 导航HTML结构（必须使用循环渲染）：
+```html
+<nav class="{你的nav类名}" id="<?= \$componentId ?>-nav">
+    <div class="{容器类名}">
+        <!-- Logo区域 -->
+        <?php if (\$logoDisplay && \$logoUrl): ?>
+        <div class="{logo类名}">
+            <img src="<?= htmlspecialchars(\$logoUrl) ?>" alt="<?= htmlspecialchars(\$metaTitle ?? '') ?>" loading="lazy">
+        </div>
+        <?php endif; ?>
+        
+        <!-- 导航链接 - 必须使用循环渲染 -->
+        <ul class="{链接列表类名}">
+            <?php foreach (\$navItems as \$index => \$navItem): ?>
+                <?php 
+                \$navHref = \$navItem['href'] ?? '#';
+                \$navText = \$navItem['text'] ?? '';
+                \$isActive = \$index === 0;
+                ?>
+                <li><a href="<?= htmlspecialchars(\$navHref) ?>" class="<?= \$isActive ? 'active' : '' ?>"><?= htmlspecialchars(\$navText) ?></a></li>
+            <?php endforeach; ?>
+        </ul>
+        
+        <!-- CTA按钮区域（可选） -->
+    </div>
+</nav>
+```
+
+### 3. 必须包含的配置字段：
+```
+group:logo => Logo设置
+logo.display => 显示Logo:select:yes|yes,no
+logo.url => Logo地址:textarea:|默认使用本地logo
+
+group:navigation => 导航设置
+navigation.display => 显示导航:select:yes|yes,no
+navigation.items => 导航项配置:textarea:Home=>\nAbout=>\nBlog=>\nFAQs=>|配置格式：名字=>url，一行一个
+navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
+navigation.bg_color => 导航背景色:color:#0a0a0f
+navigation.link_color => 链接颜色:color:#ffffff
+navigation.link_hover_color => 链接悬停颜色:color:#ffd700
+```
+
+### 4. 可以调整的内容：
+- CSS样式（颜色、字体、间距、布局方式等）
+- 额外的装饰元素
+- 动画效果
+- 响应式布局方式
+- Logo和CTA按钮的位置和样式
+
+### 5. 不可更改的内容：
+- 导航数据获取逻辑（必须支持真实页面数据）
+- 导航项循环渲染结构
+- htmlspecialchars() 转义处理
+- \$page->getNavigationPages() 调用方式
+
+CONSTRAINT;
+    }
+    
+    /**
+     * 构建基于参考组件的提示词
+     * 
+     * @param string $name 组件名称
+     * @param string $description 组件描述
+     * @param string $region 组件区域
+     * @param string $style 样式类型
+     * @param string $styleGuide 样式指南
+     * @param array $configFields 配置字段
+     * @param string $referenceCode 参考组件代码
+     * @return string
+     */
+    private function buildReferenceBasedPrompt(
+        string $name, 
+        string $description, 
+        string $region, 
+        string $style,
+        string $styleGuide,
+        array $configFields, 
+        string $referenceCode
+    ): string {
+        $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        
+        // 截取参考代码（如果太长，只保留关键部分）
+        $refCodeDisplay = $referenceCode;
+        if (strlen($referenceCode) > 15000) {
+            // 保留头部（元数据和字段定义）和部分HTML
+            $refCodeDisplay = substr($referenceCode, 0, 15000) . "\n\n... [代码过长，已截断] ...";
+        }
+        
+        $prompt = <<<PROMPT
+你是一个专业的前端组件开发专家。请**基于参考组件**为 PageBuilder 生成一个新的 PHP/HTML 组件。
+
+## 重要提示
+
+你需要参考下面提供的**参考组件代码**的结构、规范和编码风格来生成新组件。新组件应该：
+1. **保持相同的代码结构**：包括元数据块(@component_start/@component_end)、字段定义块(@fields_start/@fields_end)的格式
+2. **遵循相同的编码规范**：变量命名、函数使用、CSS组织方式
+3. **使用相同的数据获取方式**：如 \$this->getData('page')、\$this->getData('style_settings') 等
+4. **保持相同的安全处理**：htmlspecialchars() 转义等
+5. **根据新的需求调整内容**：但保持结构稳定
+
+## 新组件要求
 
 - **组件名称**: {$name}
 - **功能描述**: {$description}
@@ -1265,26 +1701,35 @@ class AiGenerate extends BackendController
 {$fieldsJson}
 ```
 
+## 参考组件代码
+
+请仔细分析以下参考组件的代码结构和规范：
+
+```php
+{$refCodeDisplay}
+```
+
 ## 输出要求
 
-请生成一个完整的 PHTML 组件文件，要求：
+请生成一个**完整的 PHTML 组件文件**，要求：
 
-1. **文件结构**：
-   - 顶部必须包含 PHP 注释文档
-   - 包含 @fields_start ... @fields_end 块定义可配置字段
-   - 包含完整的 HTML 结构
+1. **必须保持参考组件相同的代码结构**：
+   - 顶部 PHP 注释文档格式
+   - @component_start / @component_end 元数据块格式
+   - @fields_start / @fields_end 字段定义格式
+   - 数据获取和处理逻辑
+   - CSS 作用域隔离方式（使用 \$componentId）
 
-2. **代码规范**：
-   - 使用 `\$styleSettings['settings.field_name']` 获取配置值
-   - 使用 `\$styleSettings['settings.field_name'] ?? '默认值'` 处理默认值
-   - 所有文本使用 `<?= __('文本') ?>` 进行国际化
-   - 使用内联 CSS 或 <style> 标签，不依赖外部CSS
-   - 响应式设计，支持移动端
+2. **必须遵循参考组件的编码规范**：
+   - 使用相同的辅助函数（如 \$getConfig、\$parseResponsive 等）
+   - 使用相同的变量命名约定
+   - 使用相同的 HTML 结构组织方式
 
-3. **样式要求**：
-   - {$styleGuide}
-   - 适配暗色模式（使用 CSS 变量或 @media (prefers-color-scheme: dark)）
-   - 组件宽度 100%，自适应容器
+3. **根据新需求调整**：
+   - 修改组件名称、描述、分类
+   - 修改字段定义以匹配新功能
+   - 修改 HTML 结构以实现新的视觉效果
+   - 修改 CSS 样式以匹配 {$styleGuide}
 
 4. **返回格式**：
 请返回 JSON 格式：
@@ -1296,6 +1741,8 @@ class AiGenerate extends BackendController
 
 只返回 JSON，不要有其他内容。
 PROMPT;
+
+        return $prompt;
     }
 
     /**
@@ -1315,15 +1762,39 @@ PROMPT;
         $data = json_decode($json, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // 如果JSON解析失败，尝试直接提取PHTML代码
+            // 如果JSON解析失败，尝试直接提取PHTML代码（旧模式兼容）
             if (preg_match('/```(?:php|phtml|html)?\s*([\s\S]*?)\s*```/s', $response, $matches)) {
                 return ['phtml' => $matches[1]];
             }
             
-            throw new \Exception('AI返回的内容格式不正确');
+            throw new \Exception('AI返回的内容格式不正确: ' . json_last_error_msg());
         }
         
-        return $data ?: [];
+        // 标准化字段名称（支持多种命名风格）
+        $normalized = [];
+        $fieldMappings = [
+            'extra_fields' => ['extra_fields', 'extraFields', 'fields'],
+            'php_variables' => ['php_variables', 'phpVariables', 'php_vars', 'phpVars'],
+            'css_extra' => ['css_extra', 'cssExtra', 'css', 'css_content', 'cssContent'],
+            'css_responsive' => ['css_responsive', 'cssResponsive', 'responsive_css', 'responsiveCss'],
+            'html_content' => ['html_content', 'htmlContent', 'html', 'content'],
+            'html_extra' => ['html_extra', 'htmlExtra'],
+            'html_extra_column' => ['html_extra_column', 'htmlExtraColumn'],
+            'footer_extra_text' => ['footer_extra_text', 'footerExtraText'],
+            'js_content' => ['js_content', 'jsContent', 'js', 'javascript'],
+            'phtml' => ['phtml', 'code', 'template'], // 旧模式兼容
+        ];
+        
+        foreach ($fieldMappings as $normalizedKey => $possibleKeys) {
+            foreach ($possibleKeys as $key) {
+                if (isset($data[$key]) && !empty($data[$key])) {
+                    $normalized[$normalizedKey] = $data[$key];
+                    break;
+                }
+            }
+        }
+        
+        return $normalized ?: $data ?: [];
     }
 
     /**
@@ -1379,17 +1850,53 @@ PROMPT;
             return '';
         }
         
-        // 简单的预览HTML框架
-        $previewHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}</style></head><body>';
+        // 使用 AIComponentGenerator 进行真实的PHP渲染
+        try {
+            $generator = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::class);
+            $result = $generator->previewTemplateContent($phtmlCode);
+            
+            if ($result['success'] && !empty($result['html'])) {
+                // 添加基础样式框架
+                $previewHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+                $previewHtml .= '<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f5f5f5;}</style>';
+                $previewHtml .= '</head><body>';
+                $previewHtml .= $result['html'];
+                $previewHtml .= '</body></html>';
+                return $previewHtml;
+            }
+            
+            // 如果渲染失败，返回错误提示和代码占位符
+            return $this->generateFallbackPreview($phtmlCode, $result['error'] ?? '渲染失败');
+            
+        } catch (\Throwable $e) {
+            // 出现异常时使用回退方案
+            return $this->generateFallbackPreview($phtmlCode, $e->getMessage());
+        }
+    }
+    
+    /**
+     * 生成回退预览（当PHP渲染失败时）
+     */
+    private function generateFallbackPreview(string $phtmlCode, string $error = ''): string
+    {
+        $previewHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+        $previewHtml .= '<style>
+            *{margin:0;padding:0;box-sizing:border-box;}
+            body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#1a1a2e;color:#fff;padding:20px;}
+            .error-banner{background:#dc3545;color:#fff;padding:12px 20px;border-radius:8px;margin-bottom:20px;}
+            .code-preview{background:#0d1117;border-radius:8px;padding:20px;overflow-x:auto;}
+            .code-preview pre{color:#c9d1d9;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;}
+        </style></head><body>';
         
-        // 尝试提取HTML部分（简单处理，避免执行PHP）
-        $htmlOnly = preg_replace('/<\?php[\s\S]*?\?>/s', '', $phtmlCode);
-        $htmlOnly = preg_replace('/<\?=[\s\S]*?\?>/s', '[配置值]', $htmlOnly);
+        if ($error) {
+            $previewHtml .= '<div class="error-banner"><strong>预览渲染失败:</strong> ' . htmlspecialchars($error) . '</div>';
+        }
         
-        $previewHtml .= $htmlOnly;
+        // 显示代码预览
+        $previewHtml .= '<div class="code-preview"><pre>' . htmlspecialchars(substr($phtmlCode, 0, 3000)) . '</pre></div>';
         $previewHtml .= '</body></html>';
         
-        return htmlspecialchars($previewHtml, ENT_QUOTES, 'UTF-8');
+        return $previewHtml;
     }
 
     /**

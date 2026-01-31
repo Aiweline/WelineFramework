@@ -156,7 +156,7 @@ class Sample extends CommandAbstract
                 $attributes = $attributeModel->reset()
                     ->where(EavAttribute::fields_eav_entity_id, $eavEntityId)
                     ->select()
-                    ->fetchOrigin();
+                    ->fetchArray();
                 
                 // 删除每个属性的值
                 foreach ($attributes ?: [] as $attribute) {

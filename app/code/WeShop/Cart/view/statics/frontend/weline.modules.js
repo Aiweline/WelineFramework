@@ -22,14 +22,20 @@ Object.assign(window.WelineModulesConfig.modules, {
         description: "WeShop 购物车模块 - 处理加入购物车、规格选择等",
         autoInit: true  // 页面加载时自动初始化
     },
-    // 迷你购物车模块 - 头部购物车弹出层
+    // 迷你购物车模块 - Shopify 风格侧边抽屉购物车
     miniCart: {
         paths: [
             "WeShop_Cart::statics/js/mini-cart.js"
         ],
-        globalVar: null,
-        description: "WeShop 迷你购物车模块",
-        autoInit: true
+        globalVar: "MiniCart",
+        description: "WeShop 迷你购物车模块 - Drawer 抽屉式购物车",
+        autoInit: true,
+        events: [
+            "weshop:mini-cart:open",
+            "weshop:mini-cart:close",
+            "weshop:mini-cart:loaded",
+            "weshop:mini-cart:updated"
+        ]
     }
 });
 

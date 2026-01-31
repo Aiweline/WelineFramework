@@ -7,7 +7,8 @@
          icon="mdi mdi-file-document-edit" order="20300"/>
     
     <!--内容管理-->
-    <add source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理器" action=""
+    <add source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理器" 
+         action="editormanager/backend/index"
          parent="Weline_EditorManager::content_management"
          icon="mdi mdi-content-save-edit"
          order="20"/>

@@ -77,7 +77,7 @@ class FilterService
         
         // 获取可用的筛选器集合
         $filterCollection = $this->collectFilters($categoryId, $productIds);
-        
+
         // 触发筛选前事件（dispatch 需要变量传递，不能直接传数组字面量）
         $beforeEventData = [
             'category_id' => $categoryId,
@@ -100,7 +100,7 @@ class FilterService
         
         // 构建筛选组数据（使用筛选后的产品ID更新计数）
         $filtersData = $this->buildFiltersData($categoryId, $filteredProductIds, $filterParams, $filterCollection);
-        
+
         // 构建已应用筛选数据
         $appliedFilters = $this->buildAppliedFilters($filterParams, $filterCollection);
         

@@ -139,11 +139,12 @@ class DocumentScanner
             $frameworkModulePath = $frameworkModule['base_path'] ?? '';
             if (!empty($frameworkModulePath) && ($frameworkModule['status'] ?? false)) {
                 $frameworkDocPath = rtrim($frameworkModulePath, '/\\') . DIRECTORY_SEPARATOR . 'doc';
-                if (is_dir($frameworkDocPath)) {
+                $frameworkViewDocPath = rtrim($frameworkModulePath, '/\\') . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'doc';
+                if (is_dir($frameworkDocPath) || is_dir($frameworkViewDocPath)) {
                     $this->progress("", 'info'); // 空行
                     $this->progress("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", 'info');
                     $this->progress(__('正在扫描模块: Weline_Framework（创建模块分类到"模块文档"下，doc子目录作为顶层分类）'), 'info');
-                    $this->progress(__('路径: %{path}', ['path' => $frameworkDocPath]), 'info');
+                    $this->progress(__('路径: %{path}', ['path' => $frameworkModulePath]), 'info');
                     
                     // 创建 Weline_Framework 模块分类（归属到"模块文档"下）
                     $frameworkModuleCatalog = $this->ensureModuleCatalog('Weline_Framework', $frameworkModulePath);
@@ -152,8 +153,27 @@ class DocumentScanner
                         $scannedCatalogIds[] = $frameworkModuleCatalogId;
                     }
                     
-                    // 特殊处理：doc下的子目录作为顶层分类，但doc根目录下的文档关联到模块分类
-                    $frameworkResult = $this->scanFrameworkDocuments($frameworkDocPath, $frameworkModuleCatalog, $result, $scannedDocumentKeys, $scannedCatalogIds);
+                    $frameworkResult = [
+                        'scanned' => 0,
+                        'new' => 0,
+                        'updated' => 0
+                    ];
+                    
+                    if (is_dir($frameworkDocPath)) {
+                        // 特殊处理：doc下的子目录作为顶层分类，但doc根目录下的文档关联到模块分类
+                        $docResult = $this->scanFrameworkDocuments($frameworkDocPath, $frameworkModuleCatalog, $result, $scannedDocumentKeys, $scannedCatalogIds, 'doc');
+                        $frameworkResult['scanned'] += $docResult['scanned'];
+                        $frameworkResult['new'] += $docResult['new'];
+                        $frameworkResult['updated'] += $docResult['updated'];
+                    }
+                    
+                    if (is_dir($frameworkViewDocPath)) {
+                        // 额外支持 view/doc 目录，归属 Weline_Framework 模块
+                        $viewDocResult = $this->scanFrameworkDocuments($frameworkViewDocPath, $frameworkModuleCatalog, $result, $scannedDocumentKeys, $scannedCatalogIds, 'view/doc');
+                        $frameworkResult['scanned'] += $viewDocResult['scanned'];
+                        $frameworkResult['new'] += $viewDocResult['new'];
+                        $frameworkResult['updated'] += $viewDocResult['updated'];
+                    }
                     
                     // 扫描模块根目录下的外部文档（如 README.md 等）
                     $externalResult = $this->scanModuleExternalDocuments('Weline_Framework', $frameworkModulePath, $frameworkModuleCatalog, $result, $scannedDocumentKeys);
@@ -241,28 +261,45 @@ class DocumentScanner
             // 由于数据库不支持直接对组合键使用 NOT IN，我们需要先查询所有自动导入的文档，然后过滤
             
             $this->progress("   " . __('检查自动导入的文档...'), 'info');
-            $allAutoImportedDocs = $this->documentModel->clear()
-                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
-                ->select()
-                ->fetchArray();
-            
-            $docsToDelete = [];
-            foreach ($allAutoImportedDocs as $doc) {
-                $docKey = $this->buildDocumentKey($doc[Document::fields_MODULE_NAME] ?? '', $doc[Document::fields_FILE_PATH] ?? '');
-                if (!in_array($docKey, $scannedDocumentKeys)) {
-                    $docsToDelete[] = $doc[Document::fields_ID];
+            $pageSize = 500;
+            $page = 1;
+            $totalDeleted = 0;
+            while (true) {
+                $offset = ($page - 1) * $pageSize;
+                $autoDocs = $this->documentModel->clear()
+                    ->fields([Document::fields_ID, Document::fields_MODULE_NAME, Document::fields_FILE_PATH])
+                    ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                    ->limit($offset, $pageSize)
+                    ->select()
+                    ->fetchArray();
+                
+                if (empty($autoDocs)) {
+                    break;
                 }
+                
+                $docsToDelete = [];
+                foreach ($autoDocs as $doc) {
+                    $docKey = $this->buildDocumentKey($doc[Document::fields_MODULE_NAME] ?? '', $doc[Document::fields_FILE_PATH] ?? '');
+                    if (!isset($scannedDocumentKeys[$docKey])) {
+                        $docsToDelete[] = (int)($doc[Document::fields_ID] ?? 0);
+                    }
+                }
+                
+                if (!empty($docsToDelete)) {
+                    $this->documentModel->clear()
+                        ->where(Document::fields_ID, $docsToDelete, 'in')
+                        ->delete()
+                        ->fetch();
+                    $totalDeleted += count($docsToDelete);
+                }
+                
+                unset($autoDocs, $docsToDelete);
+                $page++;
             }
             
-            // 删除不在扫描列表中的文档
-            if (!empty($docsToDelete)) {
-                $deleteCount = count($docsToDelete);
-                $this->progress("   " . __('删除 %{count} 个不存在的文档...', ['count' => $deleteCount]), 'warning');
-                $deletedCount = $this->documentModel->clear()
-                    ->where(Document::fields_ID, $docsToDelete, 'in')
-                    ->delete()
-                    ->fetch();
-                $result['deleted'] = $deleteCount;
+            if ($totalDeleted > 0) {
+                $this->progress("   " . __('删除 %{count} 个不存在的文档...', ['count' => $totalDeleted]), 'warning');
+                $result['deleted'] = $totalDeleted;
                 $this->progress("   ✓ " . __('已删除 %{count} 个文档', ['count' => $result['deleted']]), 'success');
             } else {
                 $this->progress("   ✓ " . __('无需删除文档'), 'success');
@@ -355,7 +392,7 @@ class DocumentScanner
         // 注意：Weline_Framework 模块已经在 scanAllModules 中特殊处理，不会进入这里
         // 其他模块：doc 目录下的子目录会创建分类（最多支持两层）
         $processedPaths = []; // 初始化已处理路径数组
-        $this->scanDirectory($docPath, $moduleName, (int)$moduleCatalog->getId(), $result, '', $scannedDocumentKeys, $scannedCatalogIds, $processedPaths);
+        $this->scanDirectory($docPath, $moduleName, (int)$moduleCatalog->getId(), $result, '', $scannedDocumentKeys, $scannedCatalogIds, $processedPaths, 'doc');
         
         // 扫描模块根目录下的外部文档（如 README.md 等）
         $externalResult = $this->scanModuleExternalDocuments($moduleName, $modulePath, $moduleCatalog, $result, $scannedDocumentKeys);
@@ -426,6 +463,8 @@ class DocumentScanner
             $this->importDocumentFile($docFile['path'], $docFile['name'], $moduleName, $moduleCatalog, $docFile['relative'], $externalResult, $scannedDocumentKeys);
         }
         
+        unset($externalFiles, $files);
+        
         return $externalResult;
     }
     
@@ -441,7 +480,14 @@ class DocumentScanner
      * @param array &$scannedCatalogIds 收集扫描到的分类ID
      * @return array 返回该模块的扫描结果
      */
-    private function scanFrameworkDocuments(string $docPath, Catalog $moduleCatalog, array &$result, array &$scannedDocumentKeys, array &$scannedCatalogIds): array
+    private function scanFrameworkDocuments(
+        string $docPath,
+        Catalog $moduleCatalog,
+        array &$result,
+        array &$scannedDocumentKeys,
+        array &$scannedCatalogIds,
+        string $docRelativePrefix = 'doc'
+    ): array
     {
         $moduleResult = [
             'scanned' => 0,
@@ -453,7 +499,14 @@ class DocumentScanner
             return $moduleResult;
         }
         
-        $this->progress("   📁 " . __('扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）'), 'info');
+        $moduleRelativePrefix = trim($docRelativePrefix, '/\\');
+        if ($moduleRelativePrefix === '') {
+            $moduleRelativePrefix = 'doc';
+        }
+        
+        $this->progress("   📁 " . __('扫描 Weline_Framework/%{path} 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）', [
+            'path' => $moduleRelativePrefix
+        ]), 'info');
         
         // 获取 doc 目录下的所有文件和目录
         $files = scandir($docPath);
@@ -478,7 +531,7 @@ class DocumentScanner
                 $docFiles[] = [
                     'path' => $fullPath,
                     'name' => $file,
-                    'relative' => 'doc/' . $file  // 相对于模块根目录的路径
+                    'relative' => $moduleRelativePrefix . '/' . $file  // 相对于模块根目录的路径
                 ];
             }
         }
@@ -521,7 +574,7 @@ class DocumentScanner
                 ]), 'success');
                 
                 // 使用正常的扫描逻辑处理子目录下的内容
-                $this->scanDirectory($subDir['path'], $moduleName, $topLevelCatalogId, $moduleResult, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths);
+                $this->scanDirectory($subDir['path'], $moduleName, $topLevelCatalogId, $moduleResult, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths, $moduleRelativePrefix);
             } else {
                 // 子目录不包含文档，但可能包含子目录，也需要处理
                 // 创建一个临时分类用于处理子目录
@@ -535,7 +588,7 @@ class DocumentScanner
                 ]), 'success');
                 
                 // 继续扫描子目录
-                $this->scanDirectory($subDir['path'], $moduleName, $topLevelCatalogId, $moduleResult, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths);
+                $this->scanDirectory($subDir['path'], $moduleName, $topLevelCatalogId, $moduleResult, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths, $moduleRelativePrefix);
             }
         }
         
@@ -643,11 +696,27 @@ class DocumentScanner
      * @param array &$scannedDocumentKeys 收集扫描到的文档唯一标识（用于去重）
      * @param array &$scannedCatalogIds 收集扫描到的分类ID（用于去重）
      * @param array &$processedPaths 已处理的路径（用于避免重复处理）
+     * @param string $moduleRelativePrefix 模块内相对路径前缀（默认 doc）
      */
-    private function scanDirectory(string $dirPath, string $moduleName, int $parentCatalogId, array &$result, string $relativePath = '', array &$scannedDocumentKeys = [], array &$scannedCatalogIds = [], array &$processedPaths = []): void
+    private function scanDirectory(
+        string $dirPath,
+        string $moduleName,
+        int $parentCatalogId,
+        array &$result,
+        string $relativePath = '',
+        array &$scannedDocumentKeys = [],
+        array &$scannedCatalogIds = [],
+        array &$processedPaths = [],
+        string $moduleRelativePrefix = 'doc'
+    ): void
     {
         if (!is_dir($dirPath)) {
             return;
+        }
+        
+        $moduleRelativePrefix = trim($moduleRelativePrefix, '/\\');
+        if ($moduleRelativePrefix === '') {
+            $moduleRelativePrefix = 'doc';
         }
         
         // 检查目录层级深度（框架规约：doc 目录下最多支持两层目录）
@@ -723,8 +792,8 @@ class DocumentScanner
             $currentRelativePath = $relativePath ? $relativePath . '/' . $file : $file;
             
             if (is_file($fullPath) && $this->isDocumentFile($file)) {
-                // 构建相对于模块根目录的路径（包含 doc/ 前缀）
-                $moduleRelativePath = 'doc/' . $currentRelativePath;
+                // 构建相对于模块根目录的路径（包含 doc/ 或 view/doc/ 前缀）
+                $moduleRelativePath = $moduleRelativePrefix . '/' . $currentRelativePath;
                 $docFiles[] = [
                     'path' => $fullPath,
                     'name' => $file,
@@ -813,7 +882,7 @@ class DocumentScanner
         foreach ($docFiles as $docFile) {
             // 检查文档是否已经处理过（避免重复导入）
             $documentKey = $this->buildDocumentKey($moduleName, $docFile['relative']);
-            if (in_array($documentKey, $scannedDocumentKeys)) {
+            if (isset($scannedDocumentKeys[$documentKey])) {
                 continue; // 已经处理过，跳过
             }
             
@@ -838,7 +907,7 @@ class DocumentScanner
                 // 递归处理子目录（scanDirectory 方法会自动创建分类）
                 // 对于第一层子目录（depth=1），总是创建分类
                 // 对于第二层子目录（depth=2），如果包含文档或子目录，创建分类
-                $this->scanDirectory($subDir['path'], $moduleName, $currentDirCatalogId, $result, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths);
+                $this->scanDirectory($subDir['path'], $moduleName, $currentDirCatalogId, $result, $subDir['relative'], $scannedDocumentKeys, $scannedCatalogIds, $processedPaths, $moduleRelativePrefix);
             } catch (\Exception $e) {
                 // 如果处理子目录时出错，记录错误但继续处理其他子目录
                 $this->progress("      ❌ " . __('处理子目录失败: %{path}，错误: %{error}，继续处理其他目录', [
@@ -848,6 +917,8 @@ class DocumentScanner
                 // 继续处理下一个子目录，不中断整个扫描过程
             }
         }
+
+        unset($docFiles, $subDirs, $files);
     }
     
     /**
@@ -1011,7 +1082,7 @@ class DocumentScanner
         
         // 构建文档唯一标识（用于后续删除不在列表中的文档）
         $documentKey = $this->buildDocumentKey($moduleName, $relativePath);
-        $scannedDocumentKeys[] = $documentKey;
+        $scannedDocumentKeys[$documentKey] = true;
         
         // 查找所有匹配的文档（可能有多条重复记录）
         $existingDocs = $this->documentModel->clear()
@@ -1074,6 +1145,8 @@ class DocumentScanner
             $result['new']++;
             $this->progress("      ✨ " . __('新增: %{path}', ['path' => $relativePath]), 'success');
         }
+
+        unset($content, $existingDocs);
     }
     
     /**
@@ -1275,7 +1348,21 @@ class DocumentScanner
                 $catalogLevel = (int)($catalog->getData(Catalog::fields_level) ?? 0);
                 $catalogPid = (int)$catalog->getPid();
                 if ($catalogLevel !== 1 || $catalogPid !== $topCatalogId) {
-                    throw new \Exception("无法修复模块分类层级: {$moduleName} (level: {$catalogLevel} != 1, pid: {$catalogPid} != {$topCatalogId})");
+                    $this->progress(__('模块分类层级修复失败: %{name} (level: %{level} != 1, pid: %{pid} != %{top})，将创建新的模块分类', [
+                        'name' => $moduleName,
+                        'level' => $catalogLevel,
+                        'pid' => $catalogPid,
+                        'top' => $topCatalogId
+                    ]), 'warning');
+                    
+                    $catalog = ObjectManager::getInstance(Catalog::class);
+                    $catalog->setName($moduleName)
+                        ->setDescription($moduleDescription)
+                        ->setPid($topCatalogId)
+                        ->setData(Catalog::fields_level, 1)
+                        ->setData(Catalog::fields_is_system, 1)
+                        ->setIsActive(true)
+                        ->save();
                 }
             }
             // 更新描述（从 register.php 提取的）
@@ -1521,7 +1608,7 @@ class DocumentScanner
                         } else {
                             // 如果祖父分类的层级异常，尝试递归计算
                             $grandParentVisited = [];
-                            $calculatedGrandParentLevel = $this->calculateCorrectLevel($parentPid, $grandParentVisited);
+                            $calculatedGrandParentLevel = (int)$this->calculateCorrectLevel($parentPid, $grandParentVisited);
                             if ($calculatedGrandParentLevel >= 0 && $calculatedGrandParentLevel <= 4) {
                                 $parentLevel = $calculatedGrandParentLevel + 1;
                             } else {
@@ -1542,7 +1629,7 @@ class DocumentScanner
                 } else {
                     // 递归计算父分类的层级
                     $grandParentVisited = [];
-                    $calculatedParentLevel = $this->calculateCorrectLevel($parentPid, $grandParentVisited);
+                    $calculatedParentLevel = (int)$this->calculateCorrectLevel($parentPid, $grandParentVisited);
                     if ($calculatedParentLevel >= 0 && $calculatedParentLevel <= 4) {
                         $parentLevel = $calculatedParentLevel + 1;
                     } else {
@@ -1678,6 +1765,19 @@ class DocumentScanner
                     ->setIsActive(true)
                     ->save();
                 
+                // 如果保存后 ID 仍为 0，尝试重新查询一次
+                if (!$catalog->getId()) {
+                    $catalog = $this->catalogModel->clear()
+                        ->where(Catalog::fields_NAME, $displayName)
+                        ->where(Catalog::fields_PID, $parentId)
+                        ->where(Catalog::fields_is_system, 1)
+                        ->find()
+                        ->fetch();
+                    if (!$catalog || !$catalog->getId()) {
+                        throw new \Exception("创建分类后无法获取ID: {$displayName} (pid: {$parentId}, level: {$currentLevel})");
+                    }
+                }
+                
                 // 验证保存后的分类是否正确
                 $savedPid = (int)$catalog->getPid();
                 $savedLevel = (int)($catalog->getData(Catalog::fields_level) ?? 0);
@@ -1710,7 +1810,11 @@ class DocumentScanner
                 }
             }
         }
-        
+
+        if (!$catalog || !$catalog->getId()) {
+            throw new \Exception("创建分类后无法加载: {$displayName} (pid: {$parentId}, level: {$currentLevel})");
+        }
+
         return $catalog;
     }
     
@@ -1835,145 +1939,208 @@ class DocumentScanner
         $this->progress(__('正在检查并清理重复文档...'), 'info');
         
         $totalDeleted = 0;
+        $pageSize = 500;
         
         // ========== 第一步：清理自动导入的重复文档（基于 module_name + file_path）==========
-        $allAutoImportedDocs = $this->documentModel->clear()
-            ->where(Document::fields_IS_AUTO_IMPORTED, 1)
-            ->select()
-            ->fetchArray();
-        
-        if (!empty($allAutoImportedDocs)) {
-            // 按 module_name + file_path 分组
-            $groupedDocs = [];
-            foreach ($allAutoImportedDocs as $doc) {
-                $moduleName = $doc[Document::fields_MODULE_NAME] ?? '';
-                $filePath = $doc[Document::fields_FILE_PATH] ?? '';
-                $key = $moduleName . '|' . $filePath;
-                
-                if (!isset($groupedDocs[$key])) {
-                    $groupedDocs[$key] = [];
-                }
-                $groupedDocs[$key][] = $doc;
+        $page = 1;
+        while (true) {
+            $offset = ($page - 1) * $pageSize;
+            $duplicateGroups = $this->documentModel->clear()
+                ->fields([
+                    Document::fields_MODULE_NAME,
+                    Document::fields_FILE_PATH,
+                    'MIN(' . Document::fields_ID . ') as min_id',
+                    'COUNT(*) as cnt'
+                ])
+                ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                ->group(Document::fields_MODULE_NAME . ', ' . Document::fields_FILE_PATH)
+                ->having('COUNT(*) > 1')
+                ->limit($offset, $pageSize)
+                ->select()
+                ->fetchArray();
+            
+            if (empty($duplicateGroups)) {
+                break;
             }
             
-            // 找出重复的文档并删除（保留 ID 最小的那条）
-            $idsToDelete = [];
-            
-            foreach ($groupedDocs as $key => $docs) {
-                if (count($docs) > 1) {
-                    // 有重复，按 ID 排序，保留最小的
-                    usort($docs, function($a, $b) {
-                        return (int)$a[Document::fields_ID] - (int)$b[Document::fields_ID];
-                    });
+            foreach ($duplicateGroups as $group) {
+                $moduleName = $group[Document::fields_MODULE_NAME] ?? '';
+                $filePath = $group[Document::fields_FILE_PATH] ?? '';
+                $minId = (int)($group['min_id'] ?? 0);
+                $count = (int)($group['cnt'] ?? 0);
+                if (!$moduleName || !$filePath || $minId <= 0 || $count <= 1) {
+                    continue;
+                }
+                
+                $ids = $this->documentModel->clear()
+                    ->fields(Document::fields_ID)
+                    ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+                    ->where(Document::fields_MODULE_NAME, $moduleName)
+                    ->where(Document::fields_FILE_PATH, $filePath)
+                    ->where(Document::fields_ID, $minId, '!=')
+                    ->select()
+                    ->fetchArray();
+                
+                if (empty($ids)) {
+                    continue;
+                }
+                
+                $idsToDelete = array_map('intval', array_column($ids, Document::fields_ID));
+                if (!empty($idsToDelete)) {
+                    $this->documentModel->clear()
+                        ->where(Document::fields_ID, $idsToDelete, 'in')
+                        ->delete()
+                        ->fetch();
                     
-                    // 跳过第一个（ID最小），删除其他
-                    for ($i = 1; $i < count($docs); $i++) {
-                        $idsToDelete[] = (int)$docs[$i][Document::fields_ID];
-                    }
-                    
+                    $totalDeleted += count($idsToDelete);
                     $this->progress(__('发现重复文档(自动导入): %{key}，共 %{count} 条，将删除 %{delete} 条', [
-                        'key' => $key,
-                        'count' => count($docs),
-                        'delete' => count($docs) - 1
+                        'key' => $moduleName . '|' . $filePath,
+                        'count' => $count,
+                        'delete' => count($idsToDelete)
                     ]), 'warning');
                 }
             }
-            
-            // 批量删除重复记录
-            if (!empty($idsToDelete)) {
-                $this->documentModel->clear()
-                    ->where(Document::fields_ID, $idsToDelete, 'in')
-                    ->delete()
-                    ->fetch();
-                
-                $totalDeleted += count($idsToDelete);
-                $this->progress(__('已删除 %{count} 条自动导入的重复文档', ['count' => count($idsToDelete)]), 'success');
-            }
+
+            unset($duplicateGroups);
+            $page++;
         }
         
         // ========== 第二步：清理非自动导入的重复文档（基于 title + category_id）==========
         // 这些可能是历史遗留的手动创建或旧版本导入的重复文档
-        $allNonAutoImportedDocs = $this->documentModel->clear()
-            ->where(Document::fields_IS_AUTO_IMPORTED, 0)
-            ->select()
-            ->fetchArray();
-        
-        if (!empty($allNonAutoImportedDocs)) {
-            // 按 title + category_id 分组（对于非自动导入的文档，使用标题+分类来判断重复）
-            $groupedByTitle = [];
-            foreach ($allNonAutoImportedDocs as $doc) {
-                $title = $doc[Document::fields_TITLE] ?? '';
-                $categoryId = $doc[Document::fields_CATEGORY_ID] ?? '';
-                $key = $title . '|' . $categoryId;
-                
-                if (!isset($groupedByTitle[$key])) {
-                    $groupedByTitle[$key] = [];
-                }
-                $groupedByTitle[$key][] = $doc;
+        $page = 1;
+        while (true) {
+            $offset = ($page - 1) * $pageSize;
+            $duplicateGroups = $this->documentModel->clear()
+                ->fields([
+                    Document::fields_TITLE,
+                    Document::fields_CATEGORY_ID,
+                    'MIN(' . Document::fields_ID . ') as min_id',
+                    'COUNT(*) as cnt'
+                ])
+                ->where(Document::fields_IS_AUTO_IMPORTED, 0)
+                ->group(Document::fields_TITLE . ', ' . Document::fields_CATEGORY_ID)
+                ->having('COUNT(*) > 1')
+                ->limit($offset, $pageSize)
+                ->select()
+                ->fetchArray();
+            
+            if (empty($duplicateGroups)) {
+                break;
             }
             
-            // 找出重复的文档并删除（保留 ID 最小的那条）
-            $idsToDelete = [];
-            
-            foreach ($groupedByTitle as $key => $docs) {
-                if (count($docs) > 1) {
-                    // 有重复，按 ID 排序，保留最小的
-                    usort($docs, function($a, $b) {
-                        return (int)$a[Document::fields_ID] - (int)$b[Document::fields_ID];
-                    });
+            foreach ($duplicateGroups as $group) {
+                $title = $group[Document::fields_TITLE] ?? '';
+                $categoryId = $group[Document::fields_CATEGORY_ID] ?? '';
+                $minId = (int)($group['min_id'] ?? 0);
+                $count = (int)($group['cnt'] ?? 0);
+                if (!$title || $minId <= 0 || $count <= 1) {
+                    continue;
+                }
+                
+                $ids = $this->documentModel->clear()
+                    ->fields(Document::fields_ID)
+                    ->where(Document::fields_IS_AUTO_IMPORTED, 0)
+                    ->where(Document::fields_TITLE, $title)
+                    ->where(Document::fields_CATEGORY_ID, $categoryId)
+                    ->where(Document::fields_ID, $minId, '!=')
+                    ->select()
+                    ->fetchArray();
+                
+                if (empty($ids)) {
+                    continue;
+                }
+                
+                $idsToDelete = array_map('intval', array_column($ids, Document::fields_ID));
+                if (!empty($idsToDelete)) {
+                    $this->documentModel->clear()
+                        ->where(Document::fields_ID, $idsToDelete, 'in')
+                        ->delete()
+                        ->fetch();
                     
-                    // 跳过第一个（ID最小），删除其他
-                    for ($i = 1; $i < count($docs); $i++) {
-                        $idsToDelete[] = (int)$docs[$i][Document::fields_ID];
-                    }
-                    
+                    $totalDeleted += count($idsToDelete);
                     $this->progress(__('发现重复文档(手动创建): %{key}，共 %{count} 条，将删除 %{delete} 条', [
-                        'key' => $key,
-                        'count' => count($docs),
-                        'delete' => count($docs) - 1
+                        'key' => $title . '|' . $categoryId,
+                        'count' => $count,
+                        'delete' => count($idsToDelete)
                     ]), 'warning');
                 }
             }
-            
-            // 批量删除重复记录
-            if (!empty($idsToDelete)) {
-                $this->documentModel->clear()
-                    ->where(Document::fields_ID, $idsToDelete, 'in')
-                    ->delete()
-                    ->fetch();
-                
-                $totalDeleted += count($idsToDelete);
-                $this->progress(__('已删除 %{count} 条手动创建的重复文档', ['count' => count($idsToDelete)]), 'success');
-            }
+
+            unset($duplicateGroups);
+            $page++;
         }
         
         // ========== 第三步：清理关联到不存在分类的文档 ==========
         $this->progress(__('正在检查关联到不存在分类的文档...'), 'info');
         
         // 获取所有有效的分类ID
-        $allCatalogs = $this->catalogModel->clear()->select()->fetchArray();
         $validCatalogIds = [];
-        foreach ($allCatalogs as $cat) {
-            $validCatalogIds[] = (int)($cat[Catalog::fields_ID] ?? 0);
-        }
-        
-        // 查找所有文档，检查其分类是否存在
-        $allDocs = $this->documentModel->clear()->select()->fetchArray();
-        $orphanDocIds = [];
-        
-        foreach ($allDocs as $doc) {
-            $categoryId = (int)($doc[Document::fields_CATEGORY_ID] ?? 0);
-            if ($categoryId > 0 && !in_array($categoryId, $validCatalogIds)) {
-                $orphanDocIds[] = (int)$doc[Document::fields_ID];
-                $this->progress(__('发现孤立文档: %{title} (ID: %{id})，其分类 %{cat_id} 不存在', [
-                    'title' => $doc[Document::fields_TITLE] ?? '',
-                    'id' => $doc[Document::fields_ID] ?? '',
-                    'cat_id' => $categoryId
-                ]), 'warning');
+        $catalogPage = 1;
+        while (true) {
+            $offset = ($catalogPage - 1) * $pageSize;
+            $catalogs = $this->catalogModel->clear()
+                ->fields(Catalog::fields_ID)
+                ->limit($offset, $pageSize)
+                ->select()
+                ->fetchArray();
+            
+            if (empty($catalogs)) {
+                break;
             }
+            
+            foreach ($catalogs as $cat) {
+                $catId = (int)($cat[Catalog::fields_ID] ?? 0);
+                if ($catId > 0) {
+                    $validCatalogIds[$catId] = true;
+                }
+            }
+
+            unset($catalogs);
+            $catalogPage++;
         }
         
-        // 删除孤立文档
+        // 分页查找文档，检查其分类是否存在
+        $orphanDocIds = [];
+        $docPage = 1;
+        while (true) {
+            $offset = ($docPage - 1) * $pageSize;
+            $docs = $this->documentModel->clear()
+                ->fields([Document::fields_ID, Document::fields_CATEGORY_ID, Document::fields_TITLE])
+                ->limit($offset, $pageSize)
+                ->select()
+                ->fetchArray();
+            
+            if (empty($docs)) {
+                break;
+            }
+            
+            foreach ($docs as $doc) {
+                $categoryId = (int)($doc[Document::fields_CATEGORY_ID] ?? 0);
+                if ($categoryId > 0 && !isset($validCatalogIds[$categoryId])) {
+                    $orphanDocIds[] = (int)$doc[Document::fields_ID];
+                    $this->progress(__('发现孤立文档: %{title} (ID: %{id})，其分类 %{cat_id} 不存在', [
+                        'title' => $doc[Document::fields_TITLE] ?? '',
+                        'id' => $doc[Document::fields_ID] ?? '',
+                        'cat_id' => $categoryId
+                    ]), 'warning');
+                }
+            }
+            
+            if (count($orphanDocIds) >= $pageSize) {
+                $this->documentModel->clear()
+                    ->where(Document::fields_ID, $orphanDocIds, 'in')
+                    ->delete()
+                    ->fetch();
+                
+                $totalDeleted += count($orphanDocIds);
+                $this->progress(__('已删除 %{count} 条关联到不存在分类的文档', ['count' => count($orphanDocIds)]), 'success');
+                $orphanDocIds = [];
+            }
+
+            unset($docs);
+            $docPage++;
+        }
+        
         if (!empty($orphanDocIds)) {
             $this->documentModel->clear()
                 ->where(Document::fields_ID, $orphanDocIds, 'in')
@@ -1991,6 +2158,8 @@ class DocumentScanner
         } else {
             $this->progress(__('共清理 %{count} 条文档', ['count' => $totalDeleted]), 'success');
         }
+
+        unset($validCatalogIds);
         
         return $totalDeleted;
     }

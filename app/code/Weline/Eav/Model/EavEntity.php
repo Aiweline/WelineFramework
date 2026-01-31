@@ -12,18 +12,15 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Model;
 
-use Weline\Eav\EavInterface;
-use Weline\Eav\Model\EavAttribute\LocalDescription;
-use Weline\Framework\App\Env;
-use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Module\Config\ModuleFileReader;
-use Weline\Framework\Module\Model\Module;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
+/**
+ * EAV实体模型 (SRP - 单一职责原则)
+ * 
+ * 表结构定义已迁移到 Schema/EavEntitySchema.php
+ * 本类只负责数据操作和业务逻辑
+ */
 class EavEntity extends Model
 {
     public const fields_ID = 'eav_entity_id';
@@ -38,83 +35,27 @@ class EavEntity extends Model
     public array $_unit_primary_keys = ['eav_entity_id', 'code', 'name'];
     public array $_index_sort_keys = ['eav_entity_id', 'code', 'name'];
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    // 表结构已迁移到 Schema/EavEntitySchema.php
+    // 由 SchemaRegistry 统一管理表创建
+    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void
     {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-        }
+        $this->install($setup, $context);
+    }
+    
+    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    
+    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void
+    {
+        // 使用 SchemaRegistry 创建所有 EAV 核心表
+        // EavEntity 是第一个被安装的 Model，所以在这里触发所有表的创建
+        $registry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Eav\Schema\SchemaRegistry::class);
+        $registry->registerClasses(\Weline\Eav\Schema\SchemaRegistry::getDefaultSchemas());
+        $registry->createAllTables($setup);
     }
 
     public function loadByCode($code): static
     {
         return $this->load('code', $code);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable('Eav实体表')
-                ->addColumn(
-                    self::fields_ID,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '实体ID')
-                ->addColumn(
-                    self::fields_code,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'unique not null',
-                    '实体代码')
-                ->addColumn(
-                    self::fields_name,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '实体名')
-                ->addColumn(
-                    self::fields_class,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '实体类')
-                ->addColumn(
-                    self::fields_eav_entity_id_field_type,
-                    TableInterface::column_type_VARCHAR,
-                    60,
-                    'not null',
-                    '实体ID字段类型')
-                ->addColumn(
-                    self::fields_eav_entity_id_field_length,
-                    TableInterface::column_type_SMALLINT,
-                    5,
-                    'not null',
-                    '实体ID字段长度')
-                ->addColumn(
-                    self::fields_is_system,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'default 0',
-                    '是否系统生成')
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_code', self::fields_code, '实体编码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_name', self::fields_name, '实体名索引')
-                ->create();
-        }
     }
 
     public function getAttribute(string $code)
