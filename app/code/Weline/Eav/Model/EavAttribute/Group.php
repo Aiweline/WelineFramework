@@ -15,12 +15,14 @@ namespace Weline\Eav\Model\EavAttribute;
 use Weline\Eav\EavModel;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavEntity;
-use Weline\Framework\Database\Api\Db\TableInterface;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
+/**
+ * EAV属性组模型 (SRP - 单一职责原则)
+ * 
+ * 表结构定义已迁移到 Schema/EavAttributeGroupSchema.php
+ * 本类只负责数据操作和业务逻辑
+ */
 class Group extends \Weline\Framework\Database\Model
 {
     public const fields_ID = 'group_id';
@@ -33,62 +35,11 @@ class Group extends \Weline\Framework\Database\Model
     public array $_unit_primary_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
     public array $_index_sort_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('属性组')
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'PRIMARY KEY auto_increment', '属性组ID')
-                ->addColumn(self::fields_code, TableInterface::column_type_VARCHAR, 255, 'not null', '属性组代码')
-                ->addColumn(self::fields_set_id, TableInterface::column_type_INTEGER, 0, 'not null', '属性集ID')
-                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 255, 'not null', '属性组名')
-                ->addColumn(self::fields_eav_entity_id, TableInterface::column_type_VARCHAR, 255, 'not null', 'Eav实体ID')
-                ->addIndex(
-                    TableInterface::index_type_UNIQUE,
-                    'idx_unique_code_and_eav_entity_id',
-                    [self::fields_code, self::fields_eav_entity_id],
-                    '实体和属性组code唯一索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_eav_entity_id',
-                    self::fields_eav_entity_id,
-                    '实体索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_set_id',
-                    self::fields_set_id,
-                    '属性集索引'
-                )
-                ->addIndex(
-                    TableInterface::index_type_KEY,
-                    'idx_code',
-                    self::fields_code,
-                    '属性组索引'
-                )
-                ->create();
-        }
-    }
+    // 表结构已迁移到 Schema/EavAttributeGroupSchema.php
+    // 由 Setup/Install.php 统一管理表创建
+    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
 
     function getCode()
     {

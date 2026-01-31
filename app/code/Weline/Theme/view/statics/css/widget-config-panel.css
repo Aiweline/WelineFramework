@@ -1,0 +1,1098 @@
+/**
+ * 部件配置面板样式 - 现代化美化版
+ * 精致的配置UI，支持多语言切换
+ */
+
+/* ========================================
+   配置面板主容器
+   ======================================== */
+
+.widget-config-panel {
+    background: var(--te-bg-card);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+                0 2px 4px -1px rgba(0, 0, 0, 0.06),
+                0 0 0 1px rgba(0, 0, 0, 0.05);
+    padding: 0;
+    overflow: hidden;
+    transition: box-shadow 0.3s ease;
+}
+
+.widget-config-panel:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+                0 4px 6px -2px rgba(0, 0, 0, 0.05),
+                0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* ========================================
+   配置头部 - 精致渐变设计
+   ======================================== */
+
+.config-header {
+    padding: 1.75rem 1.5rem;
+    background: linear-gradient(135deg, 
+        #667eea 0%, 
+        #764ba2 50%, 
+        #f093fb 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.config-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.1) 0%, 
+        rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.config-header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.3) 50%, 
+        transparent 100%);
+}
+
+.config-widget-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.widget-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--te-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.widget-meta h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.widget-meta p {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.875rem;
+    opacity: 0.9;
+}
+
+/* 语言切换器 - 毛玻璃效果 */
+.config-lang-switcher {
+    min-width: 160px;
+    position: relative;
+    z-index: 1;
+}
+
+.config-lang-switcher select {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.625rem 2.5rem 0.625rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.config-lang-switcher select:hover {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.config-lang-switcher select:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2),
+                0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.config-lang-switcher select option {
+    background: var(--te-bg-card);
+    color: var(--te-text-primary);
+}
+
+/* ========================================
+   配置表单
+   ======================================== */
+
+.config-form {
+    padding: 1.5rem;
+}
+
+/* ========================================
+   配置分组 - 精致卡片设计
+   ======================================== */
+
+.config-group {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--te-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--te-bg-card);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.config-group:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.config-group:last-child {
+    margin-bottom: 0;
+}
+
+.config-group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, 
+        var(--te-bg-hover) 0%, 
+        var(--te-bg-card) 100%);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--te-text-primary);
+    border-bottom: 1px solid var(--te-border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.config-group-title::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, 
+        #667eea 0%, 
+        #764ba2 50%, 
+        #f093fb 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.config-group-title:hover::before {
+    opacity: 1;
+}
+
+.config-group-title:hover {
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.05) 0%, 
+        var(--te-bg-card) 100%);
+    padding-left: 1.5rem;
+}
+
+.config-group-title i {
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.config-group-title .toggle-icon {
+    margin-left: auto;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 1.125rem;
+    color: var(--te-text-secondary);
+}
+
+.config-group.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.config-fields {
+    padding: 1.25rem;
+    background: var(--te-bg-card);
+}
+
+.config-group.collapsed .config-fields {
+    display: none;
+}
+
+/* ========================================
+   配置字段
+   ======================================== */
+
+.config-field {
+    margin-bottom: 1.25rem;
+}
+
+.config-field:last-child {
+    margin-bottom: 0;
+}
+
+.config-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--te-text-primary);
+    letter-spacing: -0.01em;
+}
+
+.config-label .required-mark {
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.config-label .translatable-icon {
+    font-size: 1.125rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    cursor: help;
+    transition: transform 0.3s ease;
+}
+
+.config-label .translatable-icon:hover {
+    transform: scale(1.2) rotate(10deg);
+}
+
+/* 翻译字段高亮 - 渐变指示器 */
+.translatable-field {
+    position: relative;
+    padding-left: 0.75rem;
+}
+
+.translatable-field::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: calc(100% - 0.5rem);
+    background: linear-gradient(180deg, 
+        #667eea 0%, 
+        #764ba2 50%, 
+        #f093fb 100%);
+    border-radius: 3px;
+    opacity: 0.6;
+    box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
+    transition: all 0.3s ease;
+}
+
+.translatable-field:hover::before {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
+    width: 5px;
+}
+
+/* 表单控件样式 - 精致现代设计 */
+.config-field .form-control,
+.config-field .form-select {
+    border: 2px solid var(--te-border);
+    background: var(--te-bg-card);
+    color: var(--te-text-primary);
+    font-size: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.config-field .form-control:hover,
+.config-field .form-select:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.config-field .form-control:focus,
+.config-field .form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1),
+                0 2px 4px rgba(0, 0, 0, 0.05);
+    background: var(--te-bg-card);
+    outline: none;
+}
+
+.config-field .form-control::placeholder {
+    color: var(--te-text-tertiary);
+    opacity: 0.6;
+}
+
+.config-field .form-control:disabled,
+.config-field .form-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 字段描述 - 柔和提示 */
+.config-field-description {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--te-text-secondary);
+    line-height: 1.5;
+    background: rgba(99, 102, 241, 0.03);
+    border-left: 3px solid rgba(99, 102, 241, 0.2);
+    border-radius: 4px;
+}
+
+/* Color picker - 精致圆形设计 */
+.config-field input[type="color"] {
+    width: 100%;
+    height: 42px;
+    padding: 0.375rem;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 2px solid var(--te-border);
+    transition: all 0.3s ease;
+}
+
+.config-field input[type="color"]:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.config-field input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 4px;
+}
+
+.config-field input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Checkbox/Switch - 渐变开关 */
+.config-field .form-check {
+    padding-top: 0.375rem;
+}
+
+.config-field .form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--te-border);
+    transition: all 0.3s ease;
+}
+
+.config-field .form-check-input:checked {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.config-field .form-check-input:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.config-field .form-switch .form-check-input {
+    width: 2.5rem;
+    height: 1.25rem;
+    border-radius: 1rem;
+}
+
+.config-field .form-switch .form-check-input:checked {
+    background-position: right center;
+}
+
+/* ========================================
+   配置操作按钮 - 精致渐变按钮
+   ======================================== */
+
+.config-actions {
+    display: flex;
+    gap: 0.875rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--te-border);
+    margin-top: 1.75rem;
+}
+
+.config-actions .btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.config-actions .btn i {
+    font-size: 1.125rem;
+    transition: transform 0.3s ease;
+}
+
+.config-actions .btn:hover i {
+    transform: scale(1.1);
+}
+
+.config-actions .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+}
+
+.config-actions .btn-primary::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.config-actions .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}
+
+.config-actions .btn-primary:hover::before {
+    opacity: 1;
+}
+
+.config-actions .btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.config-actions .btn-outline-secondary {
+    background: var(--te-bg-card);
+    border: 2px solid var(--te-border);
+    color: var(--te-text-secondary);
+}
+
+.config-actions .btn-outline-secondary:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(99, 102, 241, 0.05);
+    color: var(--te-text-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.config-actions .btn-outline-danger {
+    background: var(--te-bg-card);
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.config-actions .btn-outline-danger:hover {
+    background: rgba(239, 68, 68, 0.05);
+    border-color: #ef4444;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+/* ========================================
+   空状态 - 友好提示
+   ======================================== */
+
+.config-empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: var(--te-text-secondary);
+}
+
+.config-empty-state i {
+    font-size: 4rem;
+    background: linear-gradient(135deg, 
+        rgba(99, 102, 241, 0.2) 0%, 
+        rgba(118, 75, 162, 0.2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1.5rem;
+    display: block;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.config-empty-state p {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+/* ========================================
+   Loading状态 - 渐变旋转器
+   ======================================== */
+
+.config-loading {
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--te-text-secondary);
+}
+
+.config-loading-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid rgba(99, 102, 241, 0.1);
+    border-top-color: #667eea;
+    border-right-color: #764ba2;
+    border-radius: 50%;
+    animation: config-spin 0.8s linear infinite;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+@keyframes config-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.config-loading p {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+/* ========================================
+   响应式设计
+   ======================================== */
+
+@media (max-width: 768px) {
+    .config-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .config-lang-switcher {
+        width: 100%;
+        min-width: 0;
+    }
+    
+    .config-actions {
+        flex-direction: column;
+    }
+    
+    .config-actions .btn {
+        width: 100%;
+    }
+}
+
+/* ========================================
+   手风琴配置（用于slot内的部件列表）
+   ======================================== */
+
+.widget-accordion-config {
+    border-top: 1px solid var(--te-border);
+    padding: 1.25rem;
+    background: linear-gradient(135deg, 
+        var(--te-bg-hover) 0%, 
+        var(--te-bg-card) 100%);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.widget-accordion-config .config-field {
+    margin-bottom: 0.875rem;
+}
+
+.widget-accordion-config .config-field:last-child {
+    margin-bottom: 0;
+}
+
+.widget-accordion-config .config-label {
+    font-size: 0.8125rem;
+    margin-bottom: 0.375rem;
+}
+
+.widget-accordion-config .form-control,
+.widget-accordion-config .form-select {
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.75rem;
+}
+
+.widget-accordion-config .config-actions {
+    padding-top: 0.875rem;
+    margin-top: 0.875rem;
+    gap: 0.5rem;
+}
+
+.widget-accordion-config .btn-sm {
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.75rem;
+}
+
+/* ========================================
+   工具提示
+   ======================================== */
+
+[data-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    padding: 0.5rem 0.75rem;
+    background: var(--te-bg-dark);
+    color: var(--te-text-primary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    border-radius: var(--te-radius-sm);
+    box-shadow: var(--te-shadow-lg);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 1000;
+}
+
+[data-tooltip]:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+/* ========================================
+   微动效和增强体验
+   ======================================== */
+
+/* 配置面板入场动画 */
+@keyframes panelSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.widget-config-panel {
+    animation: panelSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 字段入场动画 */
+.config-field {
+    animation: fieldFadeIn 0.3s ease;
+}
+
+@keyframes fieldFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 为每个字段添加延迟 */
+.config-field:nth-child(1) { animation-delay: 0.05s; }
+.config-field:nth-child(2) { animation-delay: 0.1s; }
+.config-field:nth-child(3) { animation-delay: 0.15s; }
+.config-field:nth-child(4) { animation-delay: 0.2s; }
+.config-field:nth-child(5) { animation-delay: 0.25s; }
+.config-field:nth-child(n+6) { animation-delay: 0.3s; }
+
+/* 聚焦时的脉冲效果 */
+.config-field .form-control:focus,
+.config-field .form-select:focus {
+    animation: focusPulse 0.6s ease;
+}
+
+@keyframes focusPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(102, 126, 234, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+}
+
+/* 按钮点击涟漪效果 */
+.config-actions .btn {
+    overflow: hidden;
+    position: relative;
+}
+
+.config-actions .btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+}
+
+.config-actions .btn:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* 分组展开/折叠动画优化 */
+.config-fields {
+    animation: expandFields 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: top;
+}
+
+@keyframes expandFields {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 2000px;
+    }
+}
+
+/* 成功状态指示 */
+@keyframes successFlash {
+    0%, 100% {
+        background: var(--te-bg-card);
+    }
+    50% {
+        background: rgba(16, 185, 129, 0.1);
+    }
+}
+
+.config-field.success {
+    animation: successFlash 0.6s ease;
+}
+
+/* 错误状态指示 */
+@keyframes errorShake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-10px);
+    }
+    75% {
+        transform: translateX(10px);
+    }
+}
+
+.config-field.error {
+    animation: errorShake 0.4s ease;
+}
+
+.config-field.error .form-control,
+.config-field.error .form-select {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* 禁用状态优化 */
+.config-field .form-control:disabled,
+.config-field .form-select:disabled {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--te-bg-hover),
+        var(--te-bg-hover) 10px,
+        var(--te-bg-card) 10px,
+        var(--te-bg-card) 20px
+    );
+    cursor: not-allowed;
+}
+
+/* 滚动条美化 */
+.config-form::-webkit-scrollbar {
+    width: 8px;
+}
+
+.config-form::-webkit-scrollbar-track {
+    background: var(--te-bg-hover);
+    border-radius: 4px;
+}
+
+.config-form::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.config-form::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #f093fb 100%);
+}
+
+/* 多选框组优化 */
+.config-field .form-check-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.config-field .form-check-group .form-check {
+    margin: 0;
+    padding: 0.5rem 0.875rem;
+    background: var(--te-bg-hover);
+    border: 2px solid var(--te-border);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.config-field .form-check-group .form-check:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.config-field .form-check-group .form-check-input:checked ~ .form-check-label {
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* ========================================
+   配置字段增强布局
+   ======================================== */
+
+.config-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.config-field-header .config-label {
+    margin: 0;
+}
+
+.config-field-input {
+    position: relative;
+}
+
+/* 多语言编辑按钮 */
+.btn-i18n-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 6px;
+    color: #667eea;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-i18n-edit:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    border-color: rgba(102, 126, 234, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.btn-i18n-edit.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    color: #fff;
+}
+
+.btn-i18n-edit i {
+    font-size: 0.875rem;
+}
+
+/* 多语言编辑面板 */
+.i18n-edit-panel {
+    margin-top: 0.75rem;
+    background: linear-gradient(135deg, 
+        rgba(102, 126, 234, 0.03) 0%, 
+        rgba(118, 75, 162, 0.03) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.15);
+    border-radius: 10px;
+    overflow: hidden;
+    animation: slideDown 0.3s ease;
+}
+
+.i18n-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, 
+        rgba(102, 126, 234, 0.08) 0%, 
+        rgba(118, 75, 162, 0.08) 100%);
+    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.i18n-panel-header span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #667eea;
+}
+
+.i18n-panel-header span i {
+    font-size: 1rem;
+}
+
+.btn-i18n-close {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--te-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-i18n-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--te-text-primary);
+}
+
+.i18n-panel-body {
+    padding: 1rem;
+}
+
+.i18n-lang-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.i18n-lang-row:last-child {
+    margin-bottom: 0;
+}
+
+.i18n-lang-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--te-text-primary);
+}
+
+.lang-flag {
+    font-size: 1.125rem;
+}
+
+.i18n-input {
+    flex: 1;
+    font-size: 0.8125rem !important;
+    padding: 0.5rem 0.75rem !important;
+}
+
+.i18n-panel-footer {
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-top: 1px solid rgba(102, 126, 234, 0.1);
+    text-align: right;
+}
+
+.btn-save-i18n {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.875rem;
+}
+
+/* URL输入框带图标 */
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--te-text-tertiary);
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+.input-with-icon .form-control {
+    padding-left: 2.25rem;
+}
+
+/* 颜色选择器优化 */
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.color-picker-wrapper .form-control-color {
+    width: 42px;
+    height: 38px;
+    padding: 0.25rem;
+    border: 2px solid var(--te-border);
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.color-picker-wrapper .form-control {
+    flex: 1;
+    font-family: monospace;
+}

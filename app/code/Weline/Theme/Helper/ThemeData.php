@@ -1275,5 +1275,251 @@ class ThemeData
         
         return $result;
     }
+    
+    // ========================================
+    // 部件专用函数（Widget-specific functions）
+    // ========================================
+    
+    /**
+     * 获取部件的meta_identify
+     * 
+     * @param string $widgetModule 部件模块名（如 Weline_Theme）
+     * @param string $widgetCode 部件代码（如 footer-social）
+     * @param string $area 区域（frontend 或 backend）
+     * @return string 例如：theme.frontend.widgets.Weline_Theme.footer-social
+     */
+    public static function getWidgetIdentify(string $widgetModule, string $widgetCode, string $area = 'frontend'): string
+    {
+        return "theme.{$area}.widgets.{$widgetModule}.{$widgetCode}";
+    }
+    
+    /**
+     * 获取部件参数定义（不含值，仅结构）
+     * 
+     * 优先从 WidgetRegistry（widget.php）获取，回退到 Meta 扫描（@param 注释）
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param string $area 区域
+     * @param \Weline\Widget\Service\WidgetRegistry|null $widgetRegistry WidgetRegistry 实例（可选）
+     * @return array 参数定义数组，格式：['param_name' => ['type' => 'string', 'label' => '标题', ...]]
+     */
+    public static function getWidgetParamDefinitions(
+        string $widgetModule,
+        string $widgetCode,
+        string $area = 'frontend',
+        $widgetRegistry = null
+    ): array {
+        $params = [];
+        
+        // 方案1：优先从 WidgetRegistry 获取（widget.php 定义）
+        if ($widgetRegistry !== null) {
+            $registry = $widgetRegistry->getRegistry();
+            
+            // WidgetRegistry 是按类型分组的，需要遍历两层
+            foreach ($registry as $type => $widgets) {
+                if (!is_array($widgets)) {
+                    continue;
+                }
+                foreach ($widgets as $code => $widget) {
+                    if (!is_array($widget)) {
+                        continue;
+                    }
+                    if (($widget['module'] ?? '') === $widgetModule && ($widget['code'] ?? '') === $widgetCode) {
+                        $params = $widget['params'] ?? [];
+                        break 2;
+                    }
+                }
+            }
+        }
+        
+        // 如果从 WidgetRegistry 获取到了参数，直接返回
+        if (!empty($params)) {
+            // 确保每个参数都有完整的结构
+            foreach ($params as $key => $param) {
+                if (!isset($param['translatable'])) {
+                    $params[$key]['translatable'] = false;
+                }
+            }
+            return $params;
+        }
+        
+        // 方案2：回退到 Meta 扫描（@param 注释）
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        $metaParams = self::getParamDefinitions($identify);
+        
+        if (!empty($metaParams)) {
+            // 转换 Meta 扫描的格式为统一格式
+            foreach ($metaParams as $key => $def) {
+                $params[$key] = [
+                    'type' => $def['input'] ?? $def['type'] ?? 'text',
+                    'label' => $def['name'] ?? $key,
+                    'default' => $def['default'] ?? '',
+                    'description' => $def['description'] ?? '',
+                    'required' => $def['meta']['required'] ?? false,
+                    'options' => $def['options'] ?? [],
+                    'translatable' => $def['translate'] ?? false,
+                ];
+            }
+        }
+        
+        return $params;
+    }
+    
+    /**
+     * 获取部件参数定义（使用 WidgetRegistry，推荐使用此方法）
+     * 
+     * 此方法接受 WidgetRegistry 实例，确保能获取到 widget.php 中定义的参数
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param \Weline\Widget\Service\WidgetRegistry $widgetRegistry WidgetRegistry 实例
+     * @param string $area 区域
+     * @return array 参数定义数组
+     */
+    public static function getWidgetParamDefinitionsWithRegistry(
+        string $widgetModule,
+        string $widgetCode,
+        $widgetRegistry,
+        string $area = 'frontend'
+    ): array {
+        return self::getWidgetParamDefinitions($widgetModule, $widgetCode, $area, $widgetRegistry);
+    }
+    
+    /**
+     * 获取部件单个参数值（支持多语言）
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param string $paramName 参数名
+     * @param string|null $locale 语言代码，null时使用当前语言
+     * @param mixed $default 默认值
+     * @param string $area 区域
+     * @return mixed
+     */
+    public static function getWidgetParam(
+        string $widgetModule,
+        string $widgetCode,
+        string $paramName,
+        ?string $locale = null,
+        $default = null,
+        string $area = 'frontend'
+    ) {
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        $definitions = self::getParamDefinitions($identify);
+        
+        if (!isset($definitions[$paramName])) {
+            return $default;
+        }
+        
+        $definition = $definitions[$paramName];
+        $isTranslatable = !empty($definition['translate']);
+        
+        if ($isTranslatable) {
+            $value = self::getParamTranslation($identify, $paramName, 'default', $locale, $default);
+            return $value ?? $default;
+        }
+        
+        $configIdentify = "{$identify}.param.{$paramName}.value";
+        $value = self::get($configIdentify);
+        
+        return $value ?? $definition['default'] ?? $default;
+    }
+    
+    /**
+     * 设置部件单个参数值（支持多语言）
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param string $paramName 参数名
+     * @param mixed $value 参数值
+     * @param string|null $locale 语言代码，null时保存为默认值
+     * @param string $area 区域
+     * @return bool
+     */
+    public static function setWidgetParam(
+        string $widgetModule,
+        string $widgetCode,
+        string $paramName,
+        $value,
+        ?string $locale = null,
+        string $area = 'frontend'
+    ): bool {
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        $definitions = self::getParamDefinitions($identify);
+        
+        if (!isset($definitions[$paramName])) {
+            return false;
+        }
+        
+        $definition = $definitions[$paramName];
+        $isTranslatable = !empty($definition['translate']);
+        
+        if ($isTranslatable) {
+            return self::setParamTranslation($identify, $paramName, (string)$value, 'default', $locale);
+        }
+        
+        $configIdentify = "{$identify}.param.{$paramName}.value";
+        return self::set($configIdentify, (string)$value, 'default', $locale);
+    }
+    
+    /**
+     * 批量获取部件所有参数（支持多语言）
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param string|null $locale 语言代码，null时使用当前语言
+     * @param string $area 区域
+     * @return array 参数数组
+     */
+    public static function getWidgetParams(
+        string $widgetModule,
+        string $widgetCode,
+        ?string $locale = null,
+        string $area = 'frontend'
+    ): array {
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        return self::getParamValues($identify, 'default', $locale);
+    }
+    
+    /**
+     * 批量设置部件参数（支持多语言）
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param array $params 参数数组
+     * @param string|null $locale 语言代码，null时保存为默认值
+     * @param string $area 区域
+     */
+    public static function setWidgetParams(
+        string $widgetModule,
+        string $widgetCode,
+        array $params,
+        ?string $locale = null,
+        string $area = 'frontend'
+    ): void {
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        self::setParamValues($identify, $params, 'default', $locale);
+    }
+    
+    /**
+     * 删除部件单个参数值
+     * 
+     * @param string $widgetModule 部件模块名
+     * @param string $widgetCode 部件代码
+     * @param string $paramName 参数名
+     * @param string|null $locale 语言代码
+     * @param string $area 区域
+     */
+    public static function deleteWidgetParam(
+        string $widgetModule,
+        string $widgetCode,
+        string $paramName,
+        ?string $locale = null,
+        string $area = 'frontend'
+    ): void {
+        $identify = self::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        self::deleteParamValue($identify, $paramName, 'default', $locale);
+    }
 }
 

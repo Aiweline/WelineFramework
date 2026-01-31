@@ -12,9 +12,9 @@ declare(strict_types=1);
 namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\App\Controller\BackendRestController;
 
-class Routes extends FrontendRestController
+class Routes extends BackendRestController
 {
     /**
      * 获取所有模块的路由信息

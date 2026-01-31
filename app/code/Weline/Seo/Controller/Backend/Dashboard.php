@@ -76,7 +76,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * 主体SEO详情页
+     * 主体SEO详情页（无id时显示列表，有id时显示详情）
      * 
      * @return string
      */
@@ -85,9 +85,9 @@ class Dashboard extends BaseController
     {
         $subjectId = (int)$this->request->getParam('id', 0);
         
+        // 如果没有 id，显示主体列表
         if ($subjectId <= 0) {
-            $this->getMessageManager()->addWarning(__('请选择有效的主体'));
-            return $this->redirect('*/backend/dashboard');
+            return $this->subjectList();
         }
 
         /** @var SeoSubject $subjectModel */
@@ -96,7 +96,7 @@ class Dashboard extends BaseController
         
         if (!$subjectModel->getId()) {
             $this->getMessageManager()->addError(__('主体不存在'));
-            return $this->redirect('*/backend/dashboard');
+            return $this->redirect('*/backend/dashboard/subject');
         }
 
         // 获取关键词列表
@@ -124,7 +124,56 @@ class Dashboard extends BaseController
         $this->assign('keywords', $keywords);
         $this->assign('suggestion', $suggestion->getId() ? $suggestion->getData() : null);
         
-        return $this->fetch();
+        return $this->fetch('Weline_Seo::templates/Backend/Dashboard/subject_detail.phtml');
+    }
+
+    /**
+     * 主体列表页
+     * 
+     * @return string
+     */
+    private function subjectList(): string
+    {
+        /** @var SeoSubject $subjectModel */
+        $subjectModel = $this->objectManager->getInstance(SeoSubject::class);
+        
+        // 获取搜索参数
+        $search = $this->request->getParam('search', '');
+        $status = $this->request->getParam('status', '');
+        
+        // 构建查询
+        $query = $subjectModel->reset();
+        
+        if (!empty($search)) {
+            $query->where('title', '%' . $search . '%', 'LIKE');
+        }
+        
+        if ($status !== '') {
+            $query->where(SeoSubject::fields_STATUS, (int)$status);
+        }
+        
+        // 获取所有主体
+        $subjects = $query->order(SeoSubject::fields_UPDATED_AT, 'DESC')
+            ->select()
+            ->fetchArray();
+
+        // 为每个主体获取关键词数量
+        /** @var SeoKeyword $keywordModel */
+        $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
+        
+        foreach ($subjects as &$subject) {
+            $keywordCount = $keywordModel->reset()
+                ->where(SeoKeyword::fields_SUBJECT_ID, $subject['subject_id'])
+                ->count();
+            $subject['keyword_count'] = $keywordCount;
+        }
+        
+        $this->assign('title', __('SEO主体列表'));
+        $this->assign('subjects', $subjects);
+        $this->assign('search', $search);
+        $this->assign('status', $status);
+        
+        return $this->fetch('Weline_Seo::templates/Backend/Dashboard/subject.phtml');
     }
 
     /**
@@ -150,7 +199,7 @@ class Dashboard extends BaseController
                 'suggestion' => $suggestion->getData(),
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse(false, __('生成建议失败：%1', $e->getMessage()));
+            return $this->jsonResponse(false, __('生成建议失败：%{1}', $e->getMessage()));
         }
     }
 }

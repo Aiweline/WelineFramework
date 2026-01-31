@@ -1,0 +1,681 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * AI组件框架构建服务
+ * 
+ * 负责加载框架模板并将AI生成的JSON数据回填到框架中
+ */
+
+namespace GuoLaiRen\PageBuilder\Service\AI;
+
+use Weline\Framework\Manager\ObjectManager;
+
+class FrameworkBuilder
+{
+    /**
+     * 框架模板目录
+     */
+    private const FRAMEWORK_DIR = BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/style/_ai_frameworks/';
+    
+    /**
+     * 框架文件映射
+     */
+    private const FRAMEWORK_FILES = [
+        'header' => 'header_framework.phtml',
+        'content' => 'content_framework.phtml',
+        'footer' => 'footer_framework.phtml',
+    ];
+    
+    /**
+     * 所有可用的占位符
+     */
+    private const PLACEHOLDERS = [
+        'COMPONENT_NAME',
+        'COMPONENT_NAME_EN', 
+        'COMPONENT_DESC',
+        'CATEGORY',
+        'EXTRA_FIELDS',
+        'PHP_VARIABLES',
+        'CSS_EXTRA',
+        'CSS_RESPONSIVE',
+        'CSS_CONTENT',
+        'HTML_CONTENT',
+        'HTML_EXTRA',
+        'HTML_EXTRA_COLUMN',
+        'FOOTER_EXTRA_TEXT',
+        'JS_CONTENT',
+        'WRAPPER_TAG',
+    ];
+    
+    /**
+     * 单例实例
+     */
+    private static ?self $instance = null;
+    
+    /**
+     * 获取单例实例
+     */
+    public static function getInstance(): self
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    /**
+     * 加载框架模板
+     * 
+     * @param string $category 组件分类 (header/content/footer)
+     * @return string 框架模板内容
+     * @throws \Exception 如果框架不存在
+     */
+    public function loadFramework(string $category): string
+    {
+        $category = strtolower($category);
+        
+        if (!isset(self::FRAMEWORK_FILES[$category])) {
+            throw new \Exception("未知的组件分类: {$category}");
+        }
+        
+        $frameworkFile = self::FRAMEWORK_DIR . self::FRAMEWORK_FILES[$category];
+        
+        if (!file_exists($frameworkFile)) {
+            throw new \Exception("框架模板文件不存在: {$frameworkFile}");
+        }
+        
+        return file_get_contents($frameworkFile);
+    }
+    
+    /**
+     * 构建完整的组件代码
+     * 
+     * @param string $category 组件分类
+     * @param array $componentInfo 组件基本信息
+     * @param array $aiData AI返回的JSON数据
+     * @return string 完整的组件代码
+     */
+    public function buildComponent(string $category, array $componentInfo, array $aiData): string
+    {
+        // 1. 预处理AI数据 - 移除危险内容
+        $aiData = $this->sanitizeAiData($aiData);
+        
+        // 兜底：content 组件必须有基础 HTML
+        if ($category === 'content' && (empty($aiData['html_content']) || !is_string($aiData['html_content']))) {
+            $aiData['html_content'] = '<div class="ai-empty">AI content placeholder</div>';
+        }
+        
+        // 2. 验证每个字段
+        foreach ($aiData as $key => $value) {
+            if (!is_string($value)) {
+                continue;
+            }
+            $validation = $this->validateField($key, $value);
+            if (!$validation['valid']) {
+                // 记录警告但继续执行
+                error_log("AI组件字段验证警告 [{$key}]: " . implode(', ', $validation['warnings']));
+            }
+        }
+        
+        // 3. 加载框架模板
+        $framework = $this->loadFramework($category);
+        
+        // 4. 准备替换数据
+        $replacements = $this->prepareReplacements($category, $componentInfo, $aiData);
+        
+        // 5. 安全替换（使用标记确保替换正确）
+        $result = $this->safeReplace($framework, $replacements);
+        
+        // 6. 清理未使用的占位符
+        $result = $this->cleanupPlaceholders($result);
+        
+        return $result;
+    }
+    
+    /**
+     * 安全替换占位符
+     * 
+     * @param string $template 模板内容
+     * @param array $replacements 替换映射
+     * @return string 替换后的内容
+     */
+    private function safeReplace(string $template, array $replacements): string
+    {
+        $result = $template;
+        
+        foreach ($replacements as $placeholder => $value) {
+            // 确保值是字符串
+            if (!is_string($value)) {
+                $value = '';
+            }
+            
+            // 执行替换
+            $result = str_replace('{{' . $placeholder . '}}', $value, $result);
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * 清理AI数据中的危险内容
+     * 
+     * @param array $data AI返回的数据
+     * @return array 清理后的数据
+     */
+    private function sanitizeAiData(array $data): array
+    {
+        // 清理 HTML 相关字段中的 PHP 标签（防止短标签触发语法错误）
+        $htmlKeys = [
+            'html_content',
+            'html_extra',
+            'html_extra_column',
+            'footer_extra_text',
+        ];
+        foreach ($htmlKeys as $key) {
+            if (isset($data[$key]) && is_string($data[$key])) {
+                $data[$key] = str_replace(['<?', '?>'], ['&lt;?', '?&gt;'], $data[$key]);
+            }
+        }
+        
+        // 移除所有字段中的反引号
+        foreach ($data as $key => $value) {
+            if (is_string($value)) {
+                $data[$key] = str_replace('`', "'", $value);
+            }
+        }
+        
+        // 清理 php_variables 中的 PHP 标签
+        if (isset($data['php_variables']) && is_string($data['php_variables'])) {
+            // 移除所有 PHP 开始标签（不仅仅是开头的）
+            $data['php_variables'] = preg_replace('/<\?(?:php)?\s*/i', '', $data['php_variables']);
+            // 移除所有 PHP 结束标签（不仅仅是结尾的）- 这非常重要，否则会破坏模板结构
+            $data['php_variables'] = preg_replace('/\s*\?>\s*/', '', $data['php_variables']);
+            
+            // 检查并修复不平衡的控制结构
+            $data['php_variables'] = $this->balanceControlStructures($data['php_variables']);
+        }
+        
+        // 清理 CSS 相关字段中的 PHP 标签
+        $cssKeys = [
+            'css_extra',
+            'css_responsive',
+            'css_content',
+        ];
+        foreach ($cssKeys as $key) {
+            if (isset($data[$key]) && is_string($data[$key])) {
+                $data[$key] = str_replace(['<?', '?>'], ['', ''], $data[$key]);
+            }
+        }
+        
+        // 清理 js_content 
+        if (isset($data['js_content']) && is_string($data['js_content'])) {
+            // 移除 </script> 标签
+            $data['js_content'] = str_replace('</script>', '<\/script>', $data['js_content']);
+            
+            // 构造 PHP 标签字符串
+            $phpOpen = chr(60) . chr(63);
+            $phpClose = chr(63) . chr(62);
+            
+            // 移除残留的 PHP 标签和代码块
+            $data['js_content'] = str_replace($phpOpen . 'php', '', $data['js_content']);
+            $data['js_content'] = str_replace($phpOpen . '=', '', $data['js_content']);
+            $data['js_content'] = str_replace($phpOpen, '', $data['js_content']);
+            $data['js_content'] = str_replace($phpClose, '', $data['js_content']);
+        }
+        
+        return $data;
+    }
+    
+    /**
+     * 验证单个字段
+     * 
+     * @param string $fieldName 字段名
+     * @param string $value 字段值
+     * @return array ['valid' => bool, 'warnings' => array]
+     */
+    private function validateField(string $fieldName, string $value): array
+    {
+        $warnings = [];
+        
+        // 检查反引号
+        if (strpos($value, '`') !== false) {
+            $warnings[] = '包含反引号字符';
+        }
+        
+        // 检查 html_content 中的 PHP 标签
+        if ($fieldName === 'html_content') {
+            if (preg_match('/<\?(php|=)/i', $value)) {
+                $warnings[] = 'HTML内容中包含PHP标签';
+            }
+        }
+        
+        // 检查 php_variables 中的危险函数
+        if ($fieldName === 'php_variables') {
+            $dangerousFunctions = ['eval', 'exec', 'shell_exec', 'system', 'passthru'];
+            foreach ($dangerousFunctions as $func) {
+                if (preg_match('/\b' . $func . '\s*\(/i', $value)) {
+                    $warnings[] = "包含危险函数: {$func}";
+                }
+            }
+        }
+        
+        return [
+            'valid' => empty($warnings),
+            'warnings' => $warnings,
+        ];
+    }
+    
+    /**
+     * 平衡PHP控制结构
+     * 
+     * 检测并移除不平衡的控制结构，防止破坏模板
+     * 
+     * @param string $code PHP代码
+     * @return string 平衡后的代码
+     */
+    private function balanceControlStructures(string $code): string
+    {
+        // 定义控制结构对
+        $structures = [
+            'if' => 'endif',
+            'foreach' => 'endforeach',
+            'for' => 'endfor',
+            'while' => 'endwhile',
+            'switch' => 'endswitch',
+        ];
+        
+        foreach ($structures as $start => $end) {
+            // 统计开始和结束标记
+            // 匹配 if(...)：或 if (...): 形式
+            $startPattern = '/\b' . $start . '\s*\([^)]*\)\s*:/';
+            $endPattern = '/\b' . $end . '\s*;/';
+            
+            preg_match_all($startPattern, $code, $startMatches);
+            preg_match_all($endPattern, $code, $endMatches);
+            
+            $startCount = count($startMatches[0]);
+            $endCount = count($endMatches[0]);
+            
+            // 如果结束标记多于开始标记，移除多余的结束标记
+            if ($endCount > $startCount) {
+                $excess = $endCount - $startCount;
+                for ($i = 0; $i < $excess; $i++) {
+                    // 从后往前移除多余的结束标记
+                    $code = preg_replace('/\b' . $end . '\s*;\s*$/', '', $code, 1);
+                    if ($code === null) break;
+                    $code = preg_replace('/\b' . $end . '\s*;/', '', $code, 1);
+                }
+            }
+            // 如果开始标记多于结束标记，添加缺失的结束标记
+            elseif ($startCount > $endCount) {
+                $missing = $startCount - $endCount;
+                for ($i = 0; $i < $missing; $i++) {
+                    $code .= "\n" . $end . ";";
+                }
+            }
+        }
+        
+        // 同样处理大括号形式的控制结构
+        $openBraces = substr_count($code, '{');
+        $closeBraces = substr_count($code, '}');
+        
+        if ($openBraces > $closeBraces) {
+            // 添加缺失的闭合大括号
+            $code .= str_repeat("\n}", $openBraces - $closeBraces);
+        } elseif ($closeBraces > $openBraces) {
+            // 移除多余的闭合大括号（从末尾开始）
+            $excess = $closeBraces - $openBraces;
+            for ($i = 0; $i < $excess; $i++) {
+                $code = preg_replace('/\}\s*$/', '', $code, 1);
+            }
+        }
+        
+        return trim($code);
+    }
+    
+    /**
+     * 准备替换数据
+     * 
+     * @param string $category 组件分类
+     * @param array $componentInfo 组件基本信息
+     * @param array $aiData AI返回的数据
+     * @return array 占位符 => 值 的映射
+     */
+    private function prepareReplacements(string $category, array $componentInfo, array $aiData): array
+    {
+        $replacements = [];
+        
+        // 基本组件信息
+        $replacements['COMPONENT_NAME'] = $componentInfo['name'] ?? 'AI Generated Component';
+        $replacements['COMPONENT_NAME_EN'] = $componentInfo['name_en'] ?? $this->generateEnglishName($componentInfo['name'] ?? '');
+        $replacements['COMPONENT_DESC'] = $componentInfo['description'] ?? '';
+        $replacements['CATEGORY'] = $category;
+        $replacements['WRAPPER_TAG'] = $category === 'header' ? 'header' : ($category === 'footer' ? 'footer' : 'section');
+        
+        // AI生成的代码
+        $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($aiData['extra_fields'] ?? '');
+        $replacements['PHP_VARIABLES'] = $aiData['php_variables'] ?? '';
+        $replacements['CSS_EXTRA'] = $aiData['css_extra'] ?? '';
+        $replacements['CSS_RESPONSIVE'] = $aiData['css_responsive'] ?? '';
+        $replacements['CSS_CONTENT'] = $aiData['css_content'] ?? '';
+        $replacements['HTML_CONTENT'] = $aiData['html_content'] ?? '';
+        $replacements['HTML_EXTRA'] = $aiData['html_extra'] ?? '';
+        $replacements['HTML_EXTRA_COLUMN'] = $aiData['html_extra_column'] ?? '';
+        $replacements['FOOTER_EXTRA_TEXT'] = $aiData['footer_extra_text'] ?? '';
+        $replacements['JS_CONTENT'] = $aiData['js_content'] ?? '';
+        
+        return $replacements;
+    }
+    
+    /**
+     * 格式化额外的字段定义
+     * 
+     * @param string $fields 字段定义字符串
+     * @return string 格式化后的字段定义
+     */
+    private function formatExtraFields(string $fields): string
+    {
+        if (empty($fields)) {
+            return '';
+        }
+        
+        // 确保每行以正确的格式开始
+        $lines = explode("\n", $fields);
+        $formatted = [];
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            
+            // 如果不是以 group: 或字段名开头，添加 * 前缀
+            if (!preg_match('/^(group:|[a-z_]+\.)/', $line)) {
+                $line = '* ' . $line;
+            } else if (!str_starts_with($line, '*')) {
+                $line = '* ' . $line;
+            }
+            
+            $formatted[] = $line;
+        }
+        
+        return implode("\n", $formatted);
+    }
+    
+    /**
+     * 生成英文名称
+     * 
+     * @param string $name 中文名称
+     * @return string 英文名称
+     */
+    private function generateEnglishName(string $name): string
+    {
+        // 简单转换，实际应用中可以使用翻译服务
+        return preg_replace('/[^a-zA-Z0-9\s]/', '', $name) ?: 'AI Component';
+    }
+    
+    /**
+     * 清理未使用的占位符
+     * 
+     * @param string $content 内容
+     * @return string 清理后的内容
+     */
+    private function cleanupPlaceholders(string $content): string
+    {
+        // 移除所有未替换的占位符
+        foreach (self::PLACEHOLDERS as $placeholder) {
+            $content = str_replace('{{' . $placeholder . '}}', '', $content);
+        }
+        
+        // 清理空的样式块
+        $content = preg_replace('/\/\* AI生成的额外CSS \*\/\s*\n\s*\n/', "/* AI生成的额外CSS */\n", $content);
+        
+        return $content;
+    }
+    
+    /**
+     * 验证AI返回的JSON数据
+     * 
+     * @param array $data AI返回的数据
+     * @param string $category 组件分类
+     * @return array ['valid' => bool, 'errors' => array]
+     */
+    public function validateAiData(array $data, string $category): array
+    {
+        $errors = [];
+        
+        // 基本验证：至少要有HTML内容
+        if (empty($data['html_content']) && $category === 'content') {
+            $errors[] = '缺少必需的 html_content 字段';
+        }
+        
+        // 验证PHP代码语法（如果有）
+        if (!empty($data['php_variables'])) {
+            $syntaxCheck = $this->checkPhpSyntax($data['php_variables']);
+            if (!$syntaxCheck['valid']) {
+                $errors[] = 'PHP代码语法错误: ' . $syntaxCheck['error'];
+            }
+        }
+        
+        // 验证CSS（基本检查）
+        if (!empty($data['css_extra'])) {
+            if (!$this->validateCss($data['css_extra'])) {
+                $errors[] = 'CSS代码可能存在语法问题';
+            }
+        }
+        
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
+        ];
+    }
+    
+    /**
+     * 检查PHP语法
+     * 
+     * @param string $code PHP代码
+     * @return array ['valid' => bool, 'error' => string]
+     */
+    private function checkPhpSyntax(string $code): array
+    {
+        // 创建临时文件进行语法检查
+        $tempFile = sys_get_temp_dir() . '/ai_php_check_' . uniqid() . '.php';
+        $phpOpen = chr(60) . chr(63) . 'php';
+        $fullCode = $phpOpen . "\n" . $code;
+        file_put_contents($tempFile, $fullCode);
+        
+        $output = [];
+        $returnVar = 0;
+        exec("php -l " . escapeshellarg($tempFile) . " 2>&1", $output, $returnVar);
+        
+        unlink($tempFile);
+        
+        return [
+            'valid' => $returnVar === 0,
+            'error' => $returnVar !== 0 ? implode("\n", $output) : '',
+        ];
+    }
+    
+    /**
+     * 基本CSS验证
+     * 
+     * @param string $css CSS代码
+     * @return bool 是否有效
+     */
+    private function validateCss(string $css): bool
+    {
+        // 检查括号是否匹配
+        $openBraces = substr_count($css, '{');
+        $closeBraces = substr_count($css, '}');
+        
+        return $openBraces === $closeBraces;
+    }
+    
+    /**
+     * 获取框架的提示词说明
+     * 
+     * @param string $category 组件分类
+     * @return string 提示词说明
+     */
+    public function getFrameworkPromptGuide(string $category): string
+    {
+        $category = strtolower($category);
+        
+        $commonRules = <<<'RULES'
+
+【重要 - 框架已提供的变量，不要重复定义】
+- $page, $config, $componentConfig, $styleSettings - 数据变量
+- $getConfig - 配置读取函数
+- $componentId - 组件唯一ID
+- $showLogo, $showNav, $showCta, $navItems 等 - Header框架变量
+- $title, $subtitle, $description 等 - Content框架变量
+
+【重要 - php_variables 格式要求】
+- 只用于定义简单变量，如：$myVar = $getConfig('key', 'default');
+- 每行必须是完整的语句，以分号结尾
+- 禁止包含 PHP 开始或结束标签
+- 禁止使用 if/foreach/for/while 等控制结构
+- 禁止定义函数或类
+- 如果不需要额外变量，php_variables 应该为空字符串
+
+【重要 - js_content 格式要求】
+- 只提供组件内部的JavaScript逻辑代码
+- 框架已提供 component 变量指向组件DOM元素
+- 不要包含 document.addEventListener('DOMContentLoaded', ...)
+- 不要包含 (function(){...})() 自执行函数包装
+- 直接写操作 component 元素的代码即可
+- 禁止使用任何 PHP 标签
+- js_content 必须是纯 JavaScript，不能混合 PHP 代码
+- 字符串引号必须成对且正确转义：推荐统一使用双引号，避免单引号冲突；如必须用单引号，内部单引号必须转义
+- 禁止在 js_content 中使用 $componentId 或 "# $componentId" 这样的 PHP 变量，请使用 component / component.id
+
+【正确的 js_content 示例】
+```
+const buttons = component.querySelectorAll('.btn');
+buttons.forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+});
+
+// 如需使用配置值，通过 data-* 属性获取
+const config = JSON.parse(component.dataset.config || '{}');
+```
+
+【错误的 js_content 示例 - 绝对不要这样写】
+```
+// 错误1：不要使用 DOMContentLoaded 包装
+document.addEventListener('DOMContentLoaded', function() { });
+
+// 错误2：不要在 JS 中嵌入服务端代码
+if (serverVar) { }  // 禁止在JS中使用服务端变量
+
+// 错误3：单引号不转义
+const text = 'I'm broken';
+```
+RULES;
+
+        $guides = [
+            'header' => <<<'GUIDE'
+你只需要返回以下JSON格式的代码，框架已经包含了导航、Logo、CTA按钮等固定结构：
+
+```json
+{
+    "extra_fields": "可选：额外的字段定义，每行一个",
+    "php_variables": "可选：额外的PHP变量准备代码",
+    "css_extra": "可选：额外的CSS样式",
+    "html_extra": "可选：额外的HTML内容（放在header容器内）",
+    "js_content": "可选：JavaScript代码"
+}
+```
+
+注意：
+- 导航菜单、Logo、CTA按钮等已经在框架中实现
+- 你只需要添加额外的样式或装饰元素
+- CSS中使用 #$componentId 作为选择器前缀
+- Header 导航必须使用真实子页面（PHP渲染），AI 不能生成或修改导航项数据
+GUIDE,
+            
+            'content' => <<<'GUIDE'
+你只需要返回以下JSON格式的代码，框架已经包含了标题、副标题、描述等固定结构：
+
+```json
+{
+    "extra_fields": "可选：额外的字段定义，每行一个，格式：group:分组名 => 分组标题 或 分组名.字段名 => 标签:类型:默认值",
+    "php_variables": "可选：额外的PHP变量准备代码，使用 $getConfig('字段名', '默认值') 获取配置",
+    "css_extra": "额外的CSS样式",
+    "css_responsive": "可选：响应式CSS（放在 @media 块内）",
+    "html_content": "必填：主体HTML内容",
+    "js_content": "可选：JavaScript代码"
+}
+```
+
+注意：
+- 标题、副标题、描述已经在框架中处理
+- html_content 是你需要实现的核心内容区域
+- CSS中使用 #$componentId 作为选择器前缀
+- 所有输出使用 htmlspecialchars() 转义
+GUIDE,
+            
+            'footer' => <<<'GUIDE'
+你只需要返回以下JSON格式的代码，框架已经包含了品牌信息、链接列、社交媒体、版权等固定结构：
+
+```json
+{
+    "extra_fields": "可选：额外的字段定义，每行一个",
+    "php_variables": "可选：额外的PHP变量准备代码",
+    "css_extra": "可选：额外的CSS样式",
+    "html_extra_column": "可选：额外的链接列HTML",
+    "html_extra": "可选：额外的主体内容",
+    "footer_extra_text": "可选：底部额外文字",
+    "js_content": "可选：JavaScript代码"
+}
+```
+
+注意：
+- 品牌区域、链接列、社交媒体图标、版权信息已经在框架中实现
+- 你只需要添加额外的内容或样式
+- CSS中使用 #$componentId 作为选择器前缀
+GUIDE,
+        ];
+        
+        $guide = $guides[$category] ?? $guides['content'];
+        return $guide . "\n" . $commonRules;
+    }
+    
+    /**
+     * 检查框架是否存在
+     * 
+     * @param string $category 组件分类
+     * @return bool
+     */
+    public function frameworkExists(string $category): bool
+    {
+        $category = strtolower($category);
+        
+        if (!isset(self::FRAMEWORK_FILES[$category])) {
+            return false;
+        }
+        
+        return file_exists(self::FRAMEWORK_DIR . self::FRAMEWORK_FILES[$category]);
+    }
+    
+    /**
+     * 获取所有可用的框架
+     * 
+     * @return array
+     */
+    public function getAvailableFrameworks(): array
+    {
+        $available = [];
+        
+        foreach (self::FRAMEWORK_FILES as $category => $file) {
+            if (file_exists(self::FRAMEWORK_DIR . $file)) {
+                $available[$category] = [
+                    'file' => $file,
+                    'path' => self::FRAMEWORK_DIR . $file,
+                ];
+            }
+        }
+        
+        return $available;
+    }
+}

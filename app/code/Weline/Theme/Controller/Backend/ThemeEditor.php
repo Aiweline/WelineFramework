@@ -11,6 +11,8 @@ use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
+use Weline\Theme\Helper\ThemeData;
+use Weline\Meta\Model\Meta;
 
 /**
  * 主题编辑器控制器
@@ -22,19 +24,25 @@ class ThemeEditor extends BackendController
     private ThemeCacheGenerator $cacheGenerator;
     private WidgetPositionResolver $positionResolver;
     private WidgetRegistry $widgetRegistry;
+    private ThemeLayout $themeLayout;
+    private Meta $meta;
 
     public function __construct(
         WelineTheme $welineTheme,
         ThemeLayoutService $layoutService,
         ThemeCacheGenerator $cacheGenerator,
         WidgetPositionResolver $positionResolver,
-        WidgetRegistry $widgetRegistry
+        WidgetRegistry $widgetRegistry,
+        ThemeLayout $themeLayout,
+        Meta $meta
     ) {
         $this->welineTheme = $welineTheme;
         $this->layoutService = $layoutService;
         $this->cacheGenerator = $cacheGenerator;
         $this->positionResolver = $positionResolver;
         $this->widgetRegistry = $widgetRegistry;
+        $this->themeLayout = $themeLayout;
+        $this->meta = $meta;
     }
 
     /**
@@ -158,23 +166,31 @@ class ThemeEditor extends BackendController
      */
     public function postSaveWidget()
     {
-        // 优先从请求体获取 JSON 数据
+        // 优先从请求体获取 JSON 数据（JSON 请求体可能已被 Request __init 合并到 getData，getBodyParams 二次读取 php://input 可能为空）
         $bodyParams = $this->request->getBodyParams();
         
-        // 如果 bodyParams 是字符串，尝试解析为 JSON
         if (is_string($bodyParams)) {
             $decoded = json_decode($bodyParams, true);
-            if ($decoded !== null && is_array($decoded)) {
-                $data = $decoded;
-            } else {
-                $data = $this->request->getParams();
-            }
+            $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
         } elseif (is_array($bodyParams) && !empty($bodyParams)) {
-            // 如果 bodyParams 是数组且不为空，使用它
             $data = $bodyParams;
         } else {
-            // 回退到 getParams
             $data = $this->request->getParams();
+        }
+
+        // 缺失时从 getParam 补全（Request __init 可能已将 JSON 合并到 setData，getBodyParams 二次读 php://input 可能为空）
+        $keys = ['theme_id', 'area', 'widget_code', 'widget_module', 'widget_type', 'page_type', 'slot_id', 'config'];
+        foreach ($keys as $key) {
+            $empty = !isset($data[$key]) || $data[$key] === '' || $data[$key] === null;
+            if ($key === 'theme_id') {
+                $empty = $empty || (int)($data[$key] ?? 0) === 0;
+            }
+            if ($empty) {
+                $v = $this->request->getParam($key);
+                if ($v !== '' && $v !== null && ($key !== 'theme_id' || (int)$v > 0)) {
+                    $data[$key] = $key === 'theme_id' ? (int)$v : $v;
+                }
+            }
         }
 
         if (empty($data['theme_id']) || empty($data['area']) || empty($data['widget_code'])) {
@@ -184,15 +200,19 @@ class ThemeEditor extends BackendController
             ]);
         }
 
-        // 如果 area 不是标准区域，则视为自定义插槽，默认归到 content 区域
+        // 如果 area 不是标准区域，则视为自定义插槽，根据插槽名推断实际所属区域
         $area = $data['area'];
         if (!array_key_exists($area, ThemeLayout::getAreas())) {
             $data['slot_id'] = $data['slot_id'] ?? $area;
-            $data['area'] = ThemeLayout::AREA_CONTENT;
+            // 根据插槽名或部件类型推断实际区域
+            $data['area'] = $this->inferAreaFromSlot($area, $data['widget_type'] ?? '', $data['widget_code']);
         }
 
-        // 检查位置是否允许
-        if (!$this->positionResolver->canPlaceInArea($data['widget_module'] ?? '', $data['widget_code'], $data['area'])) {
+        // 检查位置是否允许（对于已通过前端插槽验证的部件，跳过后端区域限制检查）
+        // 前端已根据 slot accept/reject 规则验证过，后端只做基本校验
+        $slotId = $data['slot_id'] ?? null;
+        $skipAreaCheck = !empty($slotId); // 有明确插槽时跳过区域检查
+        if (!$skipAreaCheck && !$this->positionResolver->canPlaceInArea($data['widget_module'] ?? '', $data['widget_code'], $data['area'])) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('该部件不能放置在此区域'),
@@ -203,7 +223,21 @@ class ThemeEditor extends BackendController
         // slot_id: 插槽ID（如 logo, search, user-area 等）
         // exclusive: 是否独占（true 表示替换现有部件）
         $data['slot_id'] = $data['slot_id'] ?? null;
-        $data['exclusive'] = (bool)($data['exclusive'] ?? false);
+        
+        // 后端兜底：如果 exclusive 未传或为 null，根据 slot_id 自动判断是否独占
+        $exclusiveSlots = [
+            'logo', 'search', 'main-nav', 'user-area', 'cart', 'language', 'currency',
+            'header-container', 'footer-container', 'copyright', 'top-bar',
+            'footer-links', 'footer-social', 'footer-newsletter',
+        ];
+        $slotId = $data['slot_id'];
+        $passedExclusive = $data['exclusive'] ?? null;
+        if ($passedExclusive === null || $passedExclusive === '') {
+            // 未传递 exclusive，根据 slot_id 自动判断
+            $data['exclusive'] = $slotId && in_array($slotId, $exclusiveSlots, true);
+        } else {
+            $data['exclusive'] = (bool)$passedExclusive;
+        }
 
         try {
             $layoutId = $this->layoutService->saveWidget($data);
@@ -290,10 +324,21 @@ class ThemeEditor extends BackendController
 
     /**
      * 删除部件 (AJAX)
+     * 路由: /backend/theme-editor/remove-widget (POST)
      */
-    public function postDeleteWidget()
+    public function postRemoveWidget()
     {
-        $layoutId = (int)$this->request->getParam('layout_id');
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = [];
+        }
+        
+        $layoutId = (int)($data['layout_id'] ?? $this->request->getParam('layout_id', 0));
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
 
         if (!$layoutId) {
             return $this->fetchJson([
@@ -303,11 +348,84 @@ class ThemeEditor extends BackendController
         }
 
         try {
+            // 获取要删除的部件信息（在删除前）
+            $widget = $this->themeLayout->reset()->load($layoutId);
+            $slotId = $widget->getData('slot_id');
+            $pageType = $widget->getData('page_type');
+            $area = $widget->getData('area');
+            
+            // 删除部件
             $result = $this->layoutService->deleteWidget($layoutId);
-
-            return $this->fetchJson([
+            
+            $response = [
                 'success' => $result,
                 'message' => $result ? __('删除成功') : __('删除失败'),
+                'slot_id' => $slotId,
+            ];
+            
+            // 如果删除成功，获取插槽的原始内容
+            if ($result && $themeId && $slotId) {
+                $originalHtml = $this->getOriginalSlotContent($themeId, $pageType, $slotId, $area);
+                $response['original_html'] = $originalHtml;
+                $response['has_original'] = !empty($originalHtml);
+            }
+            
+            return $this->fetchJson($response);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 批量删除孤儿部件（找不到插槽的部件）
+     * 路由: /backend/theme-editor/remove-orphan-widgets (POST)
+     */
+    public function postRemoveOrphanWidgets()
+    {
+        // 获取 JSON 请求体
+        $bodyParams = $this->request->getBodyParams();
+        
+        if (is_string($bodyParams)) {
+            $decoded = json_decode($bodyParams, true);
+            $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+        } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+        
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $slotIds = $data['slot_ids'] ?? $this->request->getParam('slot_ids', []);
+        
+        if (!$themeId || empty($slotIds)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+        
+        try {
+            $deletedCount = 0;
+            
+            // 批量删除指定插槽的所有部件（包括 draft 和 published）
+            foreach ($slotIds as $slotId) {
+                // ✅ 正确方式：delete()->fetch() 才能真正执行删除
+                $this->themeLayout->reset()
+                    ->where('theme_id', $themeId)
+                    ->where('slot_id', $slotId)
+                    ->delete()
+                    ->fetch();  // ✅ 必须调用 fetch() 执行删除
+                    
+                $deletedCount++;
+            }
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('已删除 %1 个孤儿部件', [$deletedCount]),
+                'deleted_count' => $deletedCount,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -353,7 +471,9 @@ class ThemeEditor extends BackendController
      */
     public function postUpdateSort()
     {
-        $sortData = $this->request->getParam('sort_data', []);
+        // 尝试从 JSON body 获取参数
+        $body = json_decode(file_get_contents('php://input'), true);
+        $sortData = $body['sort_data'] ?? $this->request->getParam('sort_data', []);
 
         if (empty($sortData)) {
             return $this->fetchJson([
@@ -368,6 +488,39 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('排序已更新') : __('更新失败'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 交换两个部件的排序 (AJAX)
+     */
+    public function postSwapWidgetOrder()
+    {
+        // 尝试从 JSON body 获取参数
+        $body = json_decode(file_get_contents('php://input'), true);
+        $themeId = (int)($body['theme_id'] ?? $this->request->getParam('theme_id'));
+        $layoutId1 = (int)($body['layout_id_1'] ?? $this->request->getParam('layout_id_1'));
+        $layoutId2 = (int)($body['layout_id_2'] ?? $this->request->getParam('layout_id_2'));
+
+        if (!$layoutId1 || !$layoutId2) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+
+        try {
+            $result = $this->layoutService->swapWidgetOrder($layoutId1, $layoutId2);
+
+            return $this->fetchJson([
+                'success' => $result,
+                'message' => $result ? __('位置已交换') : __('交换失败'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -434,6 +587,52 @@ class ThemeEditor extends BackendController
     /**
      * 发布主题 (将草稿发布为正式版并生成缓存)
      */
+    /**
+     * 恢复原始布局（从已发布版本重新初始化草稿）
+     */
+    public function postRestoreLayout()
+    {
+        try {
+            $themeId = (int)$this->request->getParam('theme_id', 0);
+            $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+            if (!$themeId) {
+                return $this->json([
+                    'success' => false,
+                    'message' => __('主题 ID 不能为空'),
+                ]);
+            }
+
+            // 删除当前草稿布局数据
+            $this->themeLayout->reset()
+                ->where('theme_id', $themeId)
+                ->where('page_type', $pageType)
+                ->where('status', 'draft')
+                ->delete()
+                ->fetch();
+
+            // 从已发布版本重新初始化草稿
+            $result = $this->layoutService->initDraftFromPublished($themeId, $pageType);
+
+            if ($result) {
+                return $this->json([
+                    'success' => true,
+                    'message' => __('已成功恢复到原始布局'),
+                ]);
+            }
+
+            return $this->json([
+                'success' => false,
+                'message' => __('恢复原始布局失败'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'message' => __('恢复失败: %1', $e->getMessage()),
+            ]);
+        }
+    }
+
     public function postPublish()
     {
         $themeId = (int)$this->request->getParam('theme_id');
@@ -690,6 +889,134 @@ class ThemeEditor extends BackendController
     }
 
     /**
+     * 获取部件配置信息 (GET)
+     * 
+     * 支持多语言：传递 locale 参数获取特定语言的配置值
+     * 
+     * @return array JSON响应
+     */
+    public function getWidgetConfig()
+    {
+        $layoutId = (int)$this->request->getParam('layout_id', 0);
+        $locale = $this->request->getParam('locale', null); // null表示默认语言
+        
+        if (!$layoutId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少布局ID'),
+            ]);
+        }
+        
+        // 查询部件信息
+        $widgetLayout = $this->themeLayout->reset()->load($layoutId);
+        
+        if (!$widgetLayout->getLayoutId()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('部件不存在'),
+            ]);
+        }
+        
+        $widgetModule = $widgetLayout->getData('widget_module');
+        $widgetCode = $widgetLayout->getData('widget_code');
+        $area = $widgetLayout->getData('area') ?: 'frontend';
+        
+        // 使用 ThemeData 获取参数定义（自动从 WidgetRegistry 和 Meta 两个来源获取）
+        $params = ThemeData::getWidgetParamDefinitionsWithRegistry(
+            $widgetModule,
+            $widgetCode,
+            $this->widgetRegistry,
+            $area
+        );
+        
+        if (empty($params)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('该部件没有配置项'),
+            ]);
+        }
+        
+        // 使用 ThemeData 获取参数值（支持多语言）
+        $config = ThemeData::getWidgetParams($widgetModule, $widgetCode, $locale, $area);
+        
+        // 返回参数定义和当前配置
+        return $this->fetchJson([
+            'success' => true,
+            'data' => [
+                'layout_id' => $layoutId,
+                'widget_module' => $widgetModule,
+                'widget_code' => $widgetCode,
+                'params' => $params,  // 参数定义（含多语言标记）
+                'config' => $config,  // 当前配置值（已支持多语言）
+                'locale' => $locale,  // 当前语言
+            ],
+        ]);
+    }
+    
+    /**
+     * 保存部件配置 (POST)
+     * 
+     * 支持多语言：传递 locale 参数保存特定语言的配置值
+     * 
+     * @return array JSON响应
+     */
+    public function postSaveWidgetConfig()
+    {
+        $layoutId = (int)$this->request->getParam('layout_id', 0);
+        $configData = $this->request->getParam('config', []);
+        $locale = $this->request->getParam('locale', null); // null表示保存为默认值
+        
+        if (!$layoutId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少布局ID'),
+            ]);
+        }
+        
+        if (!is_array($configData)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('配置数据格式错误'),
+            ]);
+        }
+        
+        // 获取部件信息
+        $widgetLayout = $this->themeLayout->reset()->load($layoutId);
+        
+        if (!$widgetLayout->getLayoutId()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('部件不存在'),
+            ]);
+        }
+        
+        $widgetModule = $widgetLayout->getData('widget_module');
+        $widgetCode = $widgetLayout->getData('widget_code');
+        $area = $widgetLayout->getData('area') ?: 'frontend';
+        
+        try {
+            // 使用 ThemeData 保存参数（含多语言）
+            ThemeData::setWidgetParams($widgetModule, $widgetCode, $configData, $locale, $area);
+            
+            // 仅在默认语言（locale=null）时，更新 m_theme_layout.config 字段（用于向后兼容）
+            if ($locale === null) {
+                $widgetLayout->setData('config', json_encode($configData));
+                $widgetLayout->save();
+            }
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => $locale ? __('已保存 %1 语言的配置', $locale) : __('配置已保存'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('保存失败：%1', $e->getMessage()),
+            ]);
+        }
+    }
+
+    /**
      * 编译布局模板 (GET) - 返回编译后的带插槽标记的 HTML
      * 
      * 用于可视化编辑器加载编译后的页面
@@ -846,6 +1173,73 @@ class ThemeEditor extends BackendController
         } catch (\Exception $e) {
             return '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>';
         }
+    }
+
+    /**
+     * 根据插槽名或部件类型推断实际所属区域
+     * 
+     * @param string $slotOrArea 插槽名或区域名
+     * @param string $widgetType 部件类型
+     * @param string $widgetCode 部件代码
+     * @return string 推断的区域代码
+     */
+    private function inferAreaFromSlot(string $slotOrArea, string $widgetType = '', string $widgetCode = ''): string
+    {
+        // Header 相关的插槽名
+        $headerSlots = [
+            'logo', 'search', 'main-nav', 'user-area', 'cart', 'language', 'currency',
+            'header-left', 'header-center', 'header-right', 'header-container',
+            'top-bar', 'top-bar-left', 'top-bar-right', 'navigation',
+        ];
+        
+        // Footer 相关的插槽名
+        $footerSlots = [
+            'footer-left', 'footer-center', 'footer-right', 'footer-container',
+            'footer-links', 'footer-social', 'copyright', 'footer-newsletter',
+        ];
+        
+        // 检查插槽名是否匹配 header 区域
+        $slotLower = strtolower($slotOrArea);
+        foreach ($headerSlots as $hs) {
+            if ($slotLower === $hs || str_contains($slotLower, 'header') || str_starts_with($slotLower, 'top-')) {
+                return ThemeLayout::AREA_HEADER;
+            }
+        }
+        if (in_array($slotLower, $headerSlots, true)) {
+            return ThemeLayout::AREA_HEADER;
+        }
+        
+        // 检查插槽名是否匹配 footer 区域
+        foreach ($footerSlots as $fs) {
+            if ($slotLower === $fs || str_contains($slotLower, 'footer') || $slotLower === 'copyright') {
+                return ThemeLayout::AREA_FOOTER;
+            }
+        }
+        if (in_array($slotLower, $footerSlots, true)) {
+            return ThemeLayout::AREA_FOOTER;
+        }
+        
+        // 根据部件类型推断
+        $headerTypes = ['header', 'navigation', 'search', 'logo', 'cart', 'language', 'currency'];
+        $footerTypes = ['footer', 'social', 'newsletter', 'copyright'];
+        
+        $typeLower = strtolower($widgetType);
+        $codeLower = strtolower($widgetCode);
+        
+        foreach ($headerTypes as $ht) {
+            if (str_contains($typeLower, $ht) || str_contains($codeLower, $ht)) {
+                return ThemeLayout::AREA_HEADER;
+            }
+        }
+        
+        foreach ($footerTypes as $ft) {
+            if (str_contains($typeLower, $ft) || str_contains($codeLower, $ft)) {
+                return ThemeLayout::AREA_FOOTER;
+            }
+        }
+        
+        // 默认归到 content 区域
+        return ThemeLayout::AREA_CONTENT;
     }
 
     /**
@@ -1106,4 +1500,109 @@ class ThemeEditor extends BackendController
         
         return $this->fetch($templatePath);
     }
+
+    /**
+     * 获取插槽的原始内容（从published版本）
+     * 
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @param string $slotId 插槽ID
+     * @param string $area 区域
+     * @return string 原始HTML内容
+     */
+    private function getOriginalSlotContent(int $themeId, string $pageType, string $slotId, string $area): string
+    {
+        try {
+            // 删除draft后，重新渲染布局预览（此时draft已被删除，会显示原始内容）
+            $layoutType = $this->request->getParam('layout_type', 'homepage');
+            $layoutOption = $this->request->getParam('layout_option', 'default');
+            
+            // 渲染完整的布局预览（使用draft状态，但刚才的draft已被删除）
+            $fullHtml = $this->renderLayoutPreviewHtml($themeId, $pageType, $layoutType, $layoutOption);
+            
+            if (empty($fullHtml)) {
+                return '';
+            }
+            
+            // 从渲染的HTML中提取指定插槽的内容
+            $slotContent = $this->extractSlotContentFromHtml($fullHtml, $slotId);
+            
+            return $slotContent;
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+    
+    /**
+     * 渲染布局预览HTML（用于提取插槽内容）
+     */
+    private function renderLayoutPreviewHtml(int $themeId, string $pageType, string $layoutType, string $layoutOption): string
+    {
+        try {
+            $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
+            
+            // 设置渲染参数（与getLayoutPreview()相同）
+            $this->assign('editor_mode', true);
+            $this->assign('preview_mode', true); // 读取草稿数据
+            $this->assign('theme_id', $themeId);
+            $this->assign('page_type', $pageType);
+            $this->assign('layout_type', $layoutType);
+            $this->assign('meta', [
+                'showHeader' => true,
+                'showFooter' => true,
+                'showStatistics' => true,
+                'showFeatures' => true,
+                'showProducts' => true,
+                'showTestimonials' => true,
+                'showNews' => true,
+                'showPartners' => true,
+            ]);
+            
+            // 渲染模板（会触发插槽渲染事件，应用draft配置）
+            $html = $this->fetch($templatePath);
+            
+            return $html ?: '';
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+    
+    /**
+     * 从HTML中提取指定插槽的内容
+     */
+    private function extractSlotContentFromHtml(string $html, string $slotId): string
+    {
+        try {
+            // 使用DOMDocument解析HTML
+            libxml_use_internal_errors(true);
+            $dom = new \DOMDocument();
+            
+            // 添加UTF-8声明并加载HTML
+            $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            libxml_clear_errors();
+            
+            // 查找插槽元素
+            $xpath = new \DOMXPath($dom);
+            $slotNodes = $xpath->query("//*[@data-wslot='{$slotId}' or @data-slot='{$slotId}']");
+            
+            if ($slotNodes->length === 0) {
+                return '';
+            }
+            
+            // 获取插槽的innerHTML
+            $slotNode = $slotNodes->item(0);
+            $innerHTML = '';
+            foreach ($slotNode->childNodes as $child) {
+                $innerHTML .= $dom->saveHTML($child);
+            }
+            
+            // 去除UTF-8声明
+            $innerHTML = str_replace('<?xml encoding="UTF-8">', '', $innerHTML);
+            
+            return $innerHTML;
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+
 }

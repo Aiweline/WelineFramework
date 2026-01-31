@@ -1,0 +1,1253 @@
+<?php
+/**
+ * Sitemap管理页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $websites
+ * @var array|null $index_file
+ * @var array $providers
+ * @var array $module_sitemaps
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$websites = $websites ?? [];
+$indexFile = $index_file ?? null;
+$providers = $providers ?? [];
+$moduleSitemaps = $module_sitemaps ?? [];
+$websiteStats = $website_stats ?? [];
+
+// 获取前台根 URL（后台上下文中需要使用 getBaseHost 获取纯域名）
+$request = $this->getRequest();
+$frontendBaseUrl = $request->getBaseHost();
+if (!preg_match('/^https?:\/\//i', $frontendBaseUrl)) {
+    $scheme = $request->isSecure() ? 'https' : 'http';
+    $host = $request->getHttpHost();
+    $frontendBaseUrl = $scheme . '://' . $host;
+}
+$frontendBaseUrl = rtrim($frontendBaseUrl, '/');
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>Sitemap管理</lang></title>
+    <style>
+        .sitemap-tree {
+            background: #fff;
+            border-radius: 8px;
+        }
+        .website-node {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .website-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+        .website-header:hover {
+            opacity: 0.95;
+        }
+        .website-header .website-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .website-header .website-icon {
+            font-size: 24px;
+            opacity: 0.9;
+        }
+        .website-header .website-name {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .website-header .website-domain {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .website-header .file-count {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .website-header .toggle-icon {
+            font-size: 20px;
+            transition: transform 0.3s ease;
+        }
+        .website-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+        .website-files {
+            padding: 0;
+            background: #f8f9fa;
+        }
+        .website-files.show {
+            display: block;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e9ecef;
+            background: #fff;
+            transition: background 0.2s ease;
+        }
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .file-icon {
+            font-size: 28px;
+            color: #28a745;
+        }
+        .file-details {
+            display: flex;
+            flex-direction: column;
+        }
+        .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+        .file-meta {
+            font-size: 12px;
+            color: #6c757d;
+            display: flex;
+            gap: 15px;
+            margin-top: 4px;
+        }
+        .file-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .empty-website {
+            padding: 30px 20px;
+            text-align: center;
+            color: #6c757d;
+            background: #fff;
+        }
+        .empty-website i {
+            font-size: 32px;
+            opacity: 0.5;
+            margin-bottom: 8px;
+        }
+        .index-file-card {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .index-file-card .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .index-file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .index-file-details {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+        .index-file-details span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.9;
+        }
+        .index-file-hint {
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .index-file-hint i {
+            font-size: 16px;
+        }
+        .index-file-hint a {
+            color: #0d6efd;
+            text-decoration: none;
+            margin-left: 5px;
+        }
+        .index-file-hint a:hover {
+            text-decoration: underline;
+        }
+        .no-sitemap {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .no-sitemap i {
+            font-size: 80px;
+            opacity: 0.3;
+            margin-bottom: 20px;
+        }
+        .provider-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+            background: #fff;
+            transition: all 0.2s ease;
+        }
+        .provider-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .provider-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .provider-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .provider-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+        }
+        .provider-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .provider-scope {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .provider-desc {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+            padding-left: 52px;
+        }
+        .provider-actions {
+            padding-left: 52px;
+        }
+        .source-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #e9ecef;
+            color: #495057;
+        }
+        .source-badge.module {
+            background: #d4edda;
+            color: #155724;
+        }
+        .source-badge.manual {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .website-header.module-header {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%) !important;
+            color: #fff !important;
+        }
+        
+        /* 分组样式 */
+        .scope-group {
+            margin-bottom: 1px;
+        }
+        
+        .scope-group .toggle-icon,
+        .platform-group .toggle-icon {
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+        
+        .scope-group .toggle-icon.rotated,
+        .platform-group .toggle-icon.rotated {
+            transform: rotate(-90deg);
+        }
+        
+        .scope-group .file-item,
+        .platform-group .file-item {
+            border-left: none;
+        }
+        
+        /* 平台样式 */
+        .platform-group {
+            margin-bottom: 5px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .platform-group > .file-item {
+            border-radius: 0;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <i class="mdi mdi-sitemap me-2"></i>
+                                <lang>Sitemap管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>SEO管理</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>Sitemap管理</lang>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <w:template name="Weline_Component::message.phtml"/>
+                    </div>
+                </div>
+
+                <!-- SEO 模块工作原理手风琴 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="accordion mb-3" id="seoWorkflowAccordion">
+                            <div class="accordion-item" style="border: 2px solid #667eea; border-radius: 8px; overflow: hidden;">
+                                <h2 class="accordion-header" id="headingWorkflow">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWorkflow" aria-expanded="false" aria-controls="collapseWorkflow" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-weight: 600;">
+                                        <i class="mdi mdi-information-outline me-2" style="font-size: 20px;"></i>
+                                        <lang>SEO 模块工作原理</lang>
+                                        <span class="badge bg-light text-dark ms-2" style="font-size: 11px;"><lang>点击查看</lang></span>
+                                    </button>
+                                </h2>
+                                <div id="collapseWorkflow" class="accordion-collapse collapse" aria-labelledby="headingWorkflow" data-bs-parent="#seoWorkflowAccordion">
+                                    <div class="accordion-body" style="background: #f8f9fa; padding: 20px;">
+                                        
+                                        <!-- 工作流程概览 -->
+                                        <div class="workflow-overview mb-4">
+                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
+                                                <i class="mdi mdi-chart-timeline-variant me-2"></i>
+                                                <lang>工作流程概览</lang>
+                                            </h5>
+                                            <div class="workflow-steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                                                <!-- 步骤 1 -->
+                                                <div class="step-card" style="background: #fff; border-left: 4px solid #667eea; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                    <div class="step-number" style="width: 32px; height: 32px; background: #667eea; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">1</div>
+                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>URL 数据采集</lang></h6>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等</lang></p>
+                                                </div>
+                                                
+                                                <!-- 步骤 2 -->
+                                                <div class="step-card" style="background: #fff; border-left: 4px solid #764ba2; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                    <div class="step-number" style="width: 32px; height: 32px; background: #764ba2; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">2</div>
+                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>平台适配器生成</lang></h6>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml</lang></p>
+                                                </div>
+                                                
+                                                <!-- 步骤 3 -->
+                                                <div class="step-card" style="background: #fff; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                    <div class="step-number" style="width: 32px; height: 32px; background: #28a745; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">3</div>
+                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>自动提交</lang></h6>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议</lang></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 架构说明 -->
+                                        <div class="architecture-section mb-4">
+                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
+                                                <i class="mdi mdi-sitemap me-2"></i>
+                                                <lang>架构设计</lang>
+                                            </h5>
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="architecture-card" style="background: #fff; padding: 15px; border-radius: 8px; height: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                        <h6 style="font-weight: 600; margin-bottom: 12px; color: #667eea;">
+                                                            <i class="mdi mdi-puzzle-outline me-2"></i>
+                                                            <lang>Provider 扩展机制</lang>
+                                                        </h6>
+                                                        <ul class="mb-0" style="font-size: 13px; line-height: 1.8; padding-left: 20px;">
+                                                            <li><lang>各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器</lang></li>
+                                                            <li><lang>实现 <code>SitemapUrlProviderInterface</code> 接口</lang></li>
+                                                            <li><lang>支持增量更新（<code>syncUrls</code> 方法）</lang></li>
+                                                            <li><lang>URL 数据统一存储在 <code>sitemap_url</code> 表</lang></li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="architecture-card" style="background: #fff; padding: 15px; border-radius: 8px; height: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                        <h6 style="font-weight: 600; margin-bottom: 12px; color: #764ba2;">
+                                                            <i class="mdi mdi-cog-outline me-2"></i>
+                                                            <lang>平台适配器模式</lang>
+                                                        </h6>
+                                                        <ul class="mb-0" style="font-size: 13px; line-height: 1.8; padding-left: 20px;">
+                                                            <li><lang>每个搜索引擎平台有独立的适配器</lang></li>
+                                                            <li><lang>适配器负责生成符合平台规范的 XML 文件</lang></li>
+                                                            <li><lang>处理平台特定限制（文件大小、URL 数量）</lang></li>
+                                                            <li><lang>实现平台特定的提交协议</lang></li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 目录结构 -->
+                                        <div class="directory-section mb-4">
+                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
+                                                <i class="mdi mdi-folder-outline me-2"></i>
+                                                <lang>目录结构</lang>
+                                            </h5>
+                                            <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                <pre style="margin: 0; font-size: 12px; line-height: 1.6; color: #333; background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto;"><code>pub/sitemaps/
+├── sitemap.xml                          # 跨站总索引（可选）
+├── default/                             # 站点目录
+│   ├── google/                          # Google 平台目录
+│   │   ├── sitemap.xml                  # Google 平台索引
+│   │   ├── sitemap_pagebuilder_1.xml    # PageBuilder 模块 URL
+│   │   └── sitemap_product_1.xml        # 产品模块 URL
+│   ├── bing/                            # Bing 平台目录
+│   │   ├── sitemap.xml                  # Bing 平台索引
+│   │   └── ...
+│   └── baidu/                           # Baidu 平台目录
+│       ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
+│       └── ...
+└── shop_us/                             # 其他站点
+    └── ...</code></pre>
+                                            </div>
+                                        </div>
+
+                                        <!-- 平台限制对比 -->
+                                        <div class="platform-limits mb-4">
+                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
+                                                <i class="mdi mdi-speedometer me-2"></i>
+                                                <lang>平台规范对比</lang>
+                                            </h5>
+                                            <div style="background: #fff; padding: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                <table class="table table-bordered mb-0" style="font-size: 13px;">
+                                                    <thead style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff;">
+                                                        <tr>
+                                                            <th style="border: none; padding: 12px;"><lang>平台</lang></th>
+                                                            <th style="border: none; padding: 12px;"><lang>最大 URL 数量</lang></th>
+                                                            <th style="border: none; padding: 12px;"><lang>最大文件大小</lang></th>
+                                                            <th style="border: none; padding: 12px;"><lang>提交方式</lang></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #4285f4;">Google</span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;">Ping URL + IndexNow</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #008373;">Bing</span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;">IndexNow API</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #2932e1;">Baidu</span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">10 MB ⚠️</td>
+                                                            <td style="padding: 10px;">Ping URL + API</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <!-- 核心接口 -->
+                                        <div class="interfaces-section">
+                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
+                                                <i class="mdi mdi-code-braces me-2"></i>
+                                                <lang>核心接口</lang>
+                                            </h5>
+                                            <div class="row">
+                                                <div class="col-lg-6 mb-3">
+                                                    <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                        <h6 style="font-weight: 600; margin-bottom: 10px;">SitemapUrlProviderInterface</h6>
+                                                        <p class="text-muted mb-2" style="font-size: 12px;"><lang>模块实现此接口以提供 URL 数据</lang></p>
+                                                        <pre style="margin: 0; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>interface SitemapUrlProviderInterface {
+    public function getUrls(): array;
+    public function syncUrls(int $websiteId): array;
+    public function getModule(): string;
+    public function getScope(): string;
+}</code></pre>
+                                                    </div>
+                                                </div>
+                                                <div class="col-lg-6 mb-3">
+                                                    <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                                                        <h6 style="font-weight: 600; margin-bottom: 10px;">SitemapPlatformAdapterInterface</h6>
+                                                        <p class="text-muted mb-2" style="font-size: 12px;"><lang>平台适配器接口，处理平台特定逻辑</lang></p>
+                                                        <pre style="margin: 0; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>interface SitemapPlatformAdapterInterface {
+    public function generateSitemapFiles(...): array;
+    public function submitSitemap(...): array;
+    public function getMaxUrlsPerFile(): int;
+    public function getMaxFileSizeBytes(): int;
+}</code></pre>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 快速链接 -->
+                                        <div class="quick-links mt-4 pt-3" style="border-top: 2px dashed #dee2e6;">
+                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <div>
+                                                    <i class="mdi mdi-bookmark-outline me-2" style="color: #667eea;"></i>
+                                                    <strong style="color: #667eea;"><lang>相关文档</lang>:</strong>
+                                                    <span class="text-muted ms-2" style="font-size: 12px;"><lang>（在开发文档中搜索查看）</lang></span>
+                                                </div>
+                                                <div class="d-flex gap-2 flex-wrap">
+                                                    <a href="<?= $this->getUrl('dev/tool/docs') ?>?search=Sitemap+架构" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="<?= __('在开发文档中搜索：Sitemap 架构设计') ?>">
+                                                        <i class="mdi mdi-file-document-outline me-1"></i><lang>架构设计文档</lang>
+                                                    </a>
+                                                    <a href="<?= $this->getUrl('dev/tool/docs') ?>?search=Sitemap+扩展" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success" title="<?= __('在开发文档中搜索：Sitemap扩展开发指南') ?>">
+                                                        <i class="mdi mdi-puzzle-outline me-1"></i><lang>扩展开发指南</lang>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <div class="alert alert-info mt-3 mb-0" style="font-size: 12px; padding: 10px 15px;">
+                                                <i class="mdi mdi-information-outline me-1"></i>
+                                                <lang>提示：如果搜索不到文档，请先在开发空间运行命令</lang>：<code>php bin/w doc:import</code> <lang>导入模块文档到数据库</lang>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- 左侧：生成控制 + Provider 列表 -->
+                    <div class="col-xl-4">
+                        <!-- 手动生成 Sitemap -->
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4">
+                                    <i class="mdi mdi-cog-outline me-2"></i>
+                                    <lang>手动生成</lang>
+                                </h4>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label"><lang>选择站点</lang></label>
+                                    <select class="form-select" id="website_id">
+                                        <option value="0"><lang>全站生成</lang></option>
+                                        <?php foreach ($websites as $website): ?>
+                                        <?php 
+                                        $websiteId = $website['website_id'] ?? $website['id'] ?? 0;
+                                        $websiteName = $website['name'] ?? $website['domain'] ?? __('站点') . ' ' . $websiteId;
+                                        ?>
+                                        <option value="<?= $websiteId ?>"><?= htmlspecialchars($websiteName) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-primary w-100" id="generateBtn" onclick="generateSitemap()">
+                                    <i class="mdi mdi-refresh me-2"></i><lang>生成Sitemap</lang>
+                                </button>
+                                <p class="text-muted mt-2 mb-0" style="font-size: 12px;">
+                                    <i class="mdi mdi-alert-circle-outline me-1" style="color: #f39c12;"></i>
+                                    <lang>注意：请先点击下方"调用所有生成器"按钮生成URL数据，然后再点击此按钮生成sitemap文件</lang>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- Sitemap 生成器（Provider）列表 -->
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4">
+                                    <i class="mdi mdi-puzzle-outline me-2"></i>
+                                    <lang>Sitemap 生成器</lang>
+                                    <span class="badge bg-primary ms-2"><?= count($providers) ?></span>
+                                </h4>
+                                
+                                <?php if (!empty($providers)): ?>
+                                    <?php foreach ($providers as $provider): ?>
+                                    <div class="provider-card">
+                                        <div class="provider-header">
+                                            <div class="provider-info">
+                                                <div class="provider-icon">
+                                                    <i class="mdi mdi-puzzle"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="provider-name"><?= htmlspecialchars($provider['module']) ?></div>
+                                                    <div class="provider-scope">scope: <?= htmlspecialchars($provider['scope']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="provider-desc">
+                                            <?= htmlspecialchars($provider['description']) ?>
+                                        </div>
+                                        <div class="provider-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    onclick="generateByProvider('<?= htmlspecialchars($provider['module']) ?>')">
+                                                <i class="mdi mdi-refresh me-1"></i><lang>生成</lang>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                    
+                                    <button type="button" class="btn btn-success w-100 mt-3" onclick="generateByAllProviders()">
+                                        <i class="mdi mdi-refresh-auto me-2"></i><lang>调用所有生成器</lang>
+                                    </button>
+                                <?php else: ?>
+                                    <div class="text-center text-muted py-4">
+                                        <i class="mdi mdi-puzzle-outline" style="font-size: 40px; opacity: 0.3;"></i>
+                                        <p class="mt-2 mb-0"><lang>暂无注册的 Sitemap 生成器</lang></p>
+                                        <p class="small"><lang>其他模块可通过 extends 扩展点注册</lang></p>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧：Sitemap 文件列表 -->
+                    <div class="col-xl-8">
+                        <!-- 跨站总索引提示 -->
+                        <?php if ($indexFile): ?>
+                        <div class="index-file-hint">
+                            <i class="mdi mdi-information-outline"></i>
+                            <span><lang>跨站总索引</lang>: <strong><?= htmlspecialchars($indexFile['name']) ?></strong> (<?= $indexFile['size_formatted'] ?>)</span>
+                            <code class="ms-2" style="font-size: 0.85em; background: #f5f5f5; padding: 2px 8px; border-radius: 3px;"><?= htmlspecialchars($indexFile['url']) ?></code>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('<?= htmlspecialchars($indexFile['full_url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
+                                <i class="mdi mdi-content-copy"></i>
+                            </button>
+                            <a href="<?= htmlspecialchars($indexFile['full_url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary ms-1"><i class="mdi mdi-open-in-new"></i> <lang>查看</lang></a>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- 多平台 Sitemap（pub/sitemaps/{site}/{platform}/ 目录） -->
+                        <?php if (!empty($moduleSitemaps)): ?>
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4">
+                                    <i class="mdi mdi-sitemap me-2"></i>
+                                    <lang>多平台 Sitemap</lang>
+                                    <span class="source-badge module ms-2"><lang>自动生成</lang></span>
+                                </h4>
+                                
+                                <div class="sitemap-tree" id="sitemapTree">
+                                    <?php foreach ($moduleSitemaps as $websiteCode => $websiteData): ?>
+                                    <?php $siteUrl = rtrim($websiteData['website_url'] ?? $frontendBaseUrl, '/'); ?>
+                                    <div class="website-node" 
+                                         data-website-name="<?= htmlspecialchars(strtolower($websiteData['website_name'])) ?>" 
+                                         data-website-code="<?= htmlspecialchars(strtolower($websiteCode)) ?>" 
+                                         data-website-domain="<?= htmlspecialchars(strtolower($websiteData['website_domain'] ?? '')) ?>">
+                                        <!-- 站点头部 -->
+                                        <div class="website-header module-header" onclick="toggleWebsite(this)" data-bs-toggle="collapse" data-bs-target="#module-files-<?= htmlspecialchars($websiteCode) ?>">
+                                            <div class="website-info">
+                                                <i class="mdi mdi-web website-icon"></i>
+                                                <div>
+                                                    <div class="website-name"><?= htmlspecialchars($websiteData['website_name']) ?></div>
+                                                    <?php if (!empty($websiteData['website_domain'])): ?>
+                                                    <div class="website-domain"><?= htmlspecialchars($websiteData['website_domain']) ?></div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <span class="badge bg-primary"><?= $websiteData['platform_count'] ?? 0 ?> <lang>个平台</lang></span>
+                                                <span class="file-count"><?= $websiteData['total_files'] ?? 0 ?> <lang>个文件</lang></span>
+                                                <i class="mdi mdi-chevron-down toggle-icon"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="collapse website-files" id="module-files-<?= htmlspecialchars($websiteCode) ?>">
+                                            <!-- 平台列表 -->
+                                            <?php if (!empty($websiteData['platforms'])): ?>
+                                            <?php foreach ($websiteData['platforms'] as $platformCode => $platformData): ?>
+                                            <?php $color = $platformData['platform_color'] ?? '#6c757d'; ?>
+                                            <div class="platform-group" style="border-left: 4px solid <?= $color ?>; margin-left: 15px; margin-top: 10px; border-radius: 4px; overflow: hidden;">
+                                                <!-- 平台头部 -->
+                                                <div class="file-item" style="background: <?= $color ?>15; cursor: pointer;" onclick="toggleScope(this)" data-bs-toggle="collapse" data-bs-target="#platform-<?= htmlspecialchars($websiteCode) ?>-<?= htmlspecialchars($platformCode) ?>">
+                                                    <div class="file-info">
+                                                        <i class="mdi mdi-cloud-outline file-icon" style="color: <?= $color ?>; font-size: 24px;"></i>
+                                                        <div class="file-details">
+                                                            <span class="file-name">
+                                                                <strong style="color: <?= $color ?>;"><?= htmlspecialchars($platformData['platform_name']) ?></strong>
+                                                                <span class="badge ms-2" style="background: <?= $color ?>; color: #fff;"><?= $platformData['module_count'] ?? 0 ?> <lang>个模块</lang></span>
+                                                                <span class="badge bg-secondary ms-1"><?= $platformData['file_count'] ?? 0 ?> <lang>个文件</lang></span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <?php if (!empty($platformData['index'])): ?>
+                                                        <button type="button" class="btn btn-sm" style="background: <?= $color ?>; color: #fff;" onclick="event.stopPropagation(); copyToClipboard('<?= $siteUrl . $platformData['index']['url'] ?>')">
+                                                            <i class="mdi mdi-content-copy me-1"></i><lang>复制提交URL</lang>
+                                                        </button>
+                                                        <?php endif; ?>
+                                                        <i class="mdi mdi-chevron-down toggle-icon"></i>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- 平台内容 -->
+                                                <div class="collapse" id="platform-<?= htmlspecialchars($websiteCode) ?>-<?= htmlspecialchars($platformCode) ?>">
+                                                    <!-- 平台总索引 sitemap.xml -->
+                                                    <?php if (!empty($platformData['index'])): ?>
+                                                    <?php $platformIndex = $platformData['index']; ?>
+                                                    <div class="file-item" style="margin-left: 20px; background: <?= $color ?>20;">
+                                                        <div class="file-info">
+                                                            <i class="mdi mdi-file-tree file-icon" style="color: <?= $color ?>;"></i>
+                                                            <div class="file-details">
+                                                                <span class="file-name">
+                                                                    <strong><?= htmlspecialchars($platformIndex['name']) ?></strong>
+                                                                    <span class="badge ms-2" style="background: <?= $color ?>; color: #fff;"><lang>平台总索引</lang></span>
+                                                                </span>
+                                                                <div class="file-meta">
+                                                                    <span><i class="mdi mdi-harddisk"></i> <?= $platformIndex['size_formatted'] ?></span>
+                                                                    <span><i class="mdi mdi-clock-outline"></i> <?= $platformIndex['modified'] ?></span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="file-actions">
+                                                            <button type="button" class="btn btn-sm me-1" style="background: rgba(<?= hexdec(substr($color, 1, 2)) ?>, <?= hexdec(substr($color, 3, 2)) ?>, <?= hexdec(substr($color, 5, 2)) ?>, 0.3); color: <?= $color ?>; border: 1px solid <?= $color ?>;" onclick="copyToClipboard('<?= htmlspecialchars($siteUrl . $platformIndex['url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
+                                                                <i class="mdi mdi-content-copy"></i>
+                                                            </button>
+                                                            <a href="<?= htmlspecialchars($siteUrl . $platformIndex['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background: <?= $color ?>; color: #fff;" title="<?= __('打开查看') ?>">
+                                                                <i class="mdi mdi-open-in-new me-1"></i><lang>查看</lang>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                    <?php endif; ?>
+                                                    
+                                                    <!-- 模块文件列表 -->
+                                                    <?php if (!empty($platformData['modules'])): ?>
+                                                    <?php foreach ($platformData['modules'] as $moduleName => $moduleData): ?>
+                                                    <div class="module-group" style="margin-left: 20px; margin-top: 8px;">
+                                                        <div class="d-flex align-items-center mb-2" style="padding: 6px 12px; background: #f8f9fa; border-radius: 4px;">
+                                                            <i class="mdi mdi-puzzle-outline me-2" style="color: #6c757d;"></i>
+                                                            <span class="fw-medium"><?= ucfirst(htmlspecialchars($moduleName)) ?></span>
+                                                            <span class="badge bg-secondary ms-2"><?= $moduleData['file_count'] ?? count($moduleData['files']) ?> <lang>个分片</lang></span>
+                                                        </div>
+                                                        <?php foreach ($moduleData['files'] as $file): ?>
+                                                        <div class="file-item" style="margin-left: 15px; padding: 6px 12px;">
+                                                            <div class="file-info">
+                                                                <i class="mdi mdi-file-xml-box file-icon" style="color: #667eea;"></i>
+                                                                <div class="file-details">
+                                                                    <span class="file-name" style="font-size: 0.9rem;"><?= htmlspecialchars($file['name']) ?></span>
+                                                                    <div class="file-meta" style="font-size: 0.8rem;">
+                                                                        <span><i class="mdi mdi-harddisk"></i> <?= $file['size_formatted'] ?></span>
+                                                                        <span><i class="mdi mdi-clock-outline"></i> <?= htmlspecialchars($file['modified']) ?></span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="file-actions">
+                                                                <button type="button" class="btn btn-outline-secondary btn-sm me-1" style="padding: 3px 10px;" onclick="copyToClipboard('<?= htmlspecialchars($siteUrl . $file['url'], ENT_QUOTES) ?>')" title="<?= __('复制地址') ?>">
+                                                                    <i class="mdi mdi-content-copy"></i>
+                                                                </button>
+                                                                <a href="<?= htmlspecialchars($siteUrl . $file['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm" style="padding: 3px 10px;" title="<?= __('打开查看') ?>">
+                                                                    <i class="mdi mdi-open-in-new"></i>
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                    <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                            <?php endforeach; ?>
+                                            <?php else: ?>
+                                            <div class="empty-website">
+                                                <?php if (!empty($websiteData['error'])): ?>
+                                                    <?php if ($websiteData['error'] === 'no_urls'): ?>
+                                                        <i class="mdi mdi-alert-outline" style="color: #ff9800;"></i>
+                                                        <p class="mb-0" style="color: #ff9800;">
+                                                            <strong><lang>该站点没有 URL 数据</lang></strong><br>
+                                                            <small><lang>请先点击上方的"调用所有生成器"按钮生成 URL 数据</lang></small>
+                                                        </p>
+                                                    <?php elseif ($websiteData['error'] === 'no_seo_account'): ?>
+                                                        <i class="mdi mdi-alert-circle-outline" style="color: #f44336;"></i>
+                                                        <p class="mb-2" style="color: #f44336;">
+                                                            <strong><lang>该站点未绑定 SEO 账户</lang></strong><br>
+                                                            <small><lang>已有</lang> <?= $websiteData['total_urls'] ?? 0 ?> <lang>条 URL 数据，但无法生成 sitemap 文件</lang></small>
+                                                        </p>
+                                                        <p class="mb-0" style="font-size: 12px;">
+                                                            <a href="<?= $this->getBackendUrl('websites/backend/website/index') ?>" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                                <i class="mdi mdi-cog me-1"></i><lang>站点管理</lang>
+                                                            </a>
+                                                            <lang>或</lang>
+                                                            <a href="<?= $this->getBackendUrl('seo/backend/account/index') ?>" target="_blank" class="btn btn-sm btn-outline-success">
+                                                                <i class="mdi mdi-account-key me-1"></i><lang>SEO 账户管理</lang>
+                                                            </a>
+                                                        </p>
+                                                    <?php else: ?>
+                                                        <i class="mdi mdi-cloud-off-outline"></i>
+                                                        <p class="mb-0"><lang>该站点暂无平台 Sitemap 文件</lang></p>
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <i class="mdi mdi-cloud-off-outline"></i>
+                                                    <p class="mb-0"><lang>该站点暂无平台 Sitemap 文件</lang></p>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                
+                                <!-- 分页控件 -->
+                                <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top: 1px solid #dee2e6;" id="paginationContainer">
+                                    <div class="text-muted">
+                                        <span id="pageInfo"></span>
+                                    </div>
+                                    <nav>
+                                        <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+<script>
+// 分页配置
+const ITEMS_PER_PAGE = 5; // 每页显示的站点数量
+let currentPage = 1;
+let filteredNodes = [];
+let allNodes = [];
+
+// 初始化分页
+function initPagination() {
+    allNodes = Array.from(document.querySelectorAll('.website-node'));
+    filteredNodes = allNodes;
+    renderPagination();
+}
+
+// 搜索站点
+function searchSites() {
+    const searchTerm = document.getElementById('siteSearchInput').value.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        filteredNodes = allNodes;
+    } else {
+        filteredNodes = allNodes.filter(node => {
+            const name = node.getAttribute('data-website-name') || '';
+            const code = node.getAttribute('data-website-code') || '';
+            const domain = node.getAttribute('data-website-domain') || '';
+            
+            return name.includes(searchTerm) || 
+                   code.includes(searchTerm) || 
+                   domain.includes(searchTerm);
+        });
+    }
+    
+    currentPage = 1;
+    renderPagination();
+}
+
+// 渲染分页
+function renderPagination() {
+    const totalPages = Math.ceil(filteredNodes.length / ITEMS_PER_PAGE);
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    
+    // 隐藏所有站点节点
+    allNodes.forEach(node => {
+        node.style.display = 'none';
+    });
+    
+    // 显示当前页的站点
+    filteredNodes.slice(start, end).forEach(node => {
+        node.style.display = 'block';
+    });
+    
+    // 更新分页信息
+    const pageInfo = document.getElementById('pageInfo');
+    if (pageInfo) {
+        if (filteredNodes.length === 0) {
+            pageInfo.textContent = '<?= __("没有找到站点") ?>';
+        } else {
+            pageInfo.textContent = `<?= __("显示") ?> ${start + 1}-${Math.min(end, filteredNodes.length)} / ${filteredNodes.length} <?= __("个站点") ?>`;
+        }
+    }
+    
+    // 渲染分页按钮
+    const pagination = document.getElementById('pagination');
+    if (pagination) {
+        pagination.innerHTML = '';
+        
+        if (totalPages <= 1) {
+            document.getElementById('paginationContainer').style.display = 'none';
+            return;
+        }
+        
+        document.getElementById('paginationContainer').style.display = 'flex';
+        
+        // 上一页
+        const prevLi = document.createElement('li');
+        prevLi.className = 'page-item' + (currentPage === 1 ? ' disabled' : '');
+        prevLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${currentPage - 1})">«</a>`;
+        pagination.appendChild(prevLi);
+        
+        // 页码
+        const maxButtons = 7;
+        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+        
+        if (endPage - startPage + 1 < maxButtons) {
+            startPage = Math.max(1, endPage - maxButtons + 1);
+        }
+        
+        if (startPage > 1) {
+            const firstLi = document.createElement('li');
+            firstLi.className = 'page-item';
+            firstLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(1)">1</a>`;
+            pagination.appendChild(firstLi);
+            
+            if (startPage > 2) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                pagination.appendChild(ellipsisLi);
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = 'page-item' + (i === currentPage ? ' active' : '');
+            li.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${i})">${i}</a>`;
+            pagination.appendChild(li);
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                pagination.appendChild(ellipsisLi);
+            }
+            
+            const lastLi = document.createElement('li');
+            lastLi.className = 'page-item';
+            lastLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${totalPages})">${totalPages}</a>`;
+            pagination.appendChild(lastLi);
+        }
+        
+        // 下一页
+        const nextLi = document.createElement('li');
+        nextLi.className = 'page-item' + (currentPage === totalPages ? ' disabled' : '');
+        nextLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${currentPage + 1})">»</a>`;
+        pagination.appendChild(nextLi);
+    }
+}
+
+// 跳转到指定页
+function goToPage(page) {
+    const totalPages = Math.ceil(filteredNodes.length / ITEMS_PER_PAGE);
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    renderPagination();
+    
+    // 滚动到顶部
+    document.getElementById('sitemapTree').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 展开所有站点
+function expandAllSites() {
+    document.querySelectorAll('.website-node .collapse').forEach(collapse => {
+        if (!collapse.classList.contains('show')) {
+            const bsCollapse = new bootstrap.Collapse(collapse, { toggle: true });
+        }
+    });
+}
+
+// 折叠所有站点
+function collapseAllSites() {
+    document.querySelectorAll('.website-node .collapse').forEach(collapse => {
+        if (collapse.classList.contains('show')) {
+            const bsCollapse = bootstrap.Collapse.getInstance(collapse);
+            if (bsCollapse) {
+                bsCollapse.hide();
+            } else {
+                new bootstrap.Collapse(collapse, { toggle: true });
+            }
+        }
+    });
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化分页
+    initPagination();
+    
+    // 绑定搜索事件
+    const searchInput = document.getElementById('siteSearchInput');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchSites, 300); // 防抖
+        });
+    }
+});
+
+// 友好的消息提示函数（使用 Bootstrap Toast，禁止使用 alert）
+function showMessage(type, message, title = null) {
+    // 优先使用 SweetAlert2（如果已加载）
+    if (typeof Swal !== 'undefined') {
+        const iconMap = { 'success': 'success', 'error': 'error', 'warning': 'warning', 'info': 'info' };
+        Swal.fire({
+            icon: iconMap[type] || 'info',
+            title: title || (type === 'success' ? '<?= __("操作成功") ?>' : type === 'error' ? '<?= __("操作失败") ?>' : '<?= __("提示") ?>'),
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: type === 'error' ? 5000 : 3000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+    } else {
+        // 降级使用 Bootstrap Toast（禁止使用 alert）
+        const toastContainer = document.getElementById('toast-container') || createToastContainer();
+        const toastId = 'toast-' + Date.now();
+        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+        const icon = type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : type === 'warning' ? 'mdi-alert' : 'mdi-information';
+        const defaultTitle = type === 'success' ? '<?= __("操作成功") ?>' : type === 'error' ? '<?= __("操作失败") ?>' : type === 'warning' ? '<?= __("警告") ?>' : '<?= __("提示") ?>';
+        
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${bgClass} text-white" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px;">
+                <div class="toast-header ${bgClass} text-white border-0">
+                    <i class="mdi ${icon} me-2"></i>
+                    <strong class="me-auto">${title || defaultTitle}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: type === 'error' ? 5000 : 3000
+        });
+        toast.show();
+        
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+}
+
+// 创建 Toast 容器
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// 切换站点展开/折叠
+function toggleWebsite(header) {
+    header.classList.toggle('collapsed');
+}
+
+// 切换分组展开/折叠
+function toggleScope(element) {
+    const icon = element.querySelector('.toggle-icon');
+    if (icon) {
+        icon.classList.toggle('rotated');
+    }
+}
+
+// 复制到剪贴板
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            showMessage('success', '<?= __("已复制到剪贴板") ?>');
+        }).catch(function(err) {
+            fallbackCopyToClipboard(text);
+        });
+    } else {
+        fallbackCopyToClipboard(text);
+    }
+}
+
+function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showMessage('success', '<?= __("已复制到剪贴板") ?>');
+    } catch (err) {
+        showMessage('error', '<?= __("复制失败") ?>');
+    }
+    document.body.removeChild(textArea);
+}
+
+// 手动生成 Sitemap
+function generateSitemap() {
+    const websiteId = document.getElementById('website_id').value;
+    const generateAll = websiteId === '0';
+    const btn = document.getElementById('generateBtn');
+    const originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-2"></i><?= __("生成中...") ?>';
+    
+    const formData = new FormData();
+    formData.append('website_id', websiteId);
+    formData.append('generate_all', generateAll ? '1' : '0');
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        
+        if (data.success) {
+            showMessage('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', data.message);
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error:', error);
+        showMessage('error', '<?= __('生成Sitemap失败，请检查网络连接后重试') ?>');
+    });
+}
+
+// 通过指定 Provider 生成
+function generateByProvider(module) {
+    const formData = new FormData();
+    formData.append('use_providers', '1');
+    formData.append('provider_module', module);
+    
+    showMessage('info', '<?= __("正在调用生成器...") ?>');
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('error', '<?= __('生成Sitemap失败，请检查网络连接后重试') ?>');
+    });
+}
+
+// 调用所有 Provider 生成
+function generateByAllProviders() {
+    const formData = new FormData();
+    formData.append('use_providers', '1');
+    formData.append('provider_module', '');
+    
+    showMessage('info', '<?= __("正在调用所有生成器...") ?>');
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('error', '<?= __('生成Sitemap失败，请检查网络连接后重试') ?>');
+    });
+}
+</script>
+
+</body>
+</html>

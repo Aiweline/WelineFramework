@@ -234,9 +234,13 @@ class Scanner
      */
     protected function getModulePath(string $moduleName): ?string
     {
-        $moduleManager = ObjectManager::getInstance(\Weline\Framework\Module\Model\Module::class);
-        $module = $moduleManager->load('name', $moduleName);
-        return $module->getId() ? $module->getPath() : null;
+        $env = \Weline\Framework\App\Env::getInstance();
+        $moduleInfo = $env->getModuleInfo($moduleName);
+        if (empty($moduleInfo)) {
+            return null;
+        }
+        // base_path 已经是完整的绝对路径，直接返回
+        return $moduleInfo['base_path'] ?? null;
     }
 
     /**

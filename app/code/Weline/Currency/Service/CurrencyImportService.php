@@ -247,7 +247,7 @@ class CurrencyImportService
         // 获取所有货币
         $currencies = $this->currencyModel->clear()
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
 
         // 如果查询失败或没有数据，返回空数组
         if ($currencies === false || !is_array($currencies)) {
