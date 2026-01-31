@@ -7,6 +7,7 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\SlotRendererService;
@@ -39,18 +40,21 @@ class LayoutSlotRenderer implements ObserverInterface
     private WelineTheme $welineTheme;
     private Request $request;
     private ThemeCacheGenerator $cacheGenerator;
+    private Url $url;
     private bool $isEnabled = true;
 
     public function __construct(
         SlotRendererService $slotRenderer,
         WelineTheme $welineTheme,
         Request $request,
-        ThemeCacheGenerator $cacheGenerator
+        ThemeCacheGenerator $cacheGenerator,
+        Url $url
     ) {
         $this->slotRenderer = $slotRenderer;
         $this->welineTheme = $welineTheme;
         $this->request = $request;
         $this->cacheGenerator = $cacheGenerator;
+        $this->url = $url;
     }
 
     public function execute(Event &$event): void
@@ -157,11 +161,21 @@ class LayoutSlotRenderer implements ObserverInterface
         }
         
         $warningItems = [];
+        $orphanSlotIds = []; // 收集所有孤儿部件的 slot_id
         foreach ($orphans as $orphan) {
             $widgetName = htmlspecialchars((string)($orphan['widget_name'] ?? '未知部件'));
             $slotId = htmlspecialchars((string)($orphan['slot_id'] ?? '未知插槽'));
             $warningItems[] = "<li><strong>{$widgetName}</strong> - 找不到插槽 <code>{$slotId}</code></li>";
+            if (!empty($orphan['slot_id'])) {
+                $orphanSlotIds[] = $orphan['slot_id'];
+            }
         }
+        
+        // 去重并编码为 JSON
+        $orphanSlotIdsJson = htmlspecialchars(json_encode(array_values(array_unique($orphanSlotIds))));
+        
+        // 生成正确的后台URL（遵循 weline-routing 技能规范）
+        $removeOrphanWidgetsUrl = htmlspecialchars($this->url->getBackendUrl('theme/backend/theme-editor/remove-orphan-widgets'));
         
         $warningHtml = <<<HTML
 <div id="orphan-widgets-warning" style="
@@ -194,10 +208,145 @@ HTML;
         $warningHtml .= implode("\n", $warningItems);
         $warningHtml .= <<<HTML
     </ul>
-    <p style="margin: 10px 0 0 0; font-size: 12px; color: #856404;">
+    <p style="margin: 10px 0 5px 0; font-size: 12px; color: #856404;">
         提示：这些部件可能需要重新配置到新的插槽位置。
     </p>
+    <div id="orphan-actions" style="display: flex; gap: 8px; margin-top: 10px;">
+        <button id="btnConfirmDelete" data-orphan-slots='{$orphanSlotIdsJson}' style="
+            flex: 1;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+        " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
+            删除这些部件
+        </button>
+        <button onclick="document.getElementById('orphan-widgets-warning').remove()" style="
+            flex: 1;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+        " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+            稍后处理
+        </button>
+    </div>
+    <div id="confirm-message" style="display: none; margin-top: 10px; padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24; font-size: 13px;">
+        <strong>⚠️ 确认删除？</strong>
+        <p style="margin: 5px 0;">此操作将永久删除这些无效部件配置，不可恢复。</p>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button id="btnConfirmYes" style="
+                flex: 1;
+                background: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                cursor: pointer;
+                font-size: 12px;
+            " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
+                确认删除
+            </button>
+            <button id="btnConfirmNo" style="
+                flex: 1;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                cursor: pointer;
+                font-size: 12px;
+            " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+                取消
+            </button>
+        </div>
+    </div>
+    <div id="delete-status" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 13px;"></div>
 </div>
+<script>
+(function() {
+    const btnConfirmDelete = document.getElementById('btnConfirmDelete');
+    const confirmMessage = document.getElementById('confirm-message');
+    const orphanActions = document.getElementById('orphan-actions');
+    const btnConfirmYes = document.getElementById('btnConfirmYes');
+    const btnConfirmNo = document.getElementById('btnConfirmNo');
+    const deleteStatus = document.getElementById('delete-status');
+    
+    // 点击删除按钮 - 显示确认消息
+    if (btnConfirmDelete) {
+        btnConfirmDelete.addEventListener('click', function() {
+            orphanActions.style.display = 'none';
+            confirmMessage.style.display = 'block';
+        });
+    }
+    
+    // 取消删除
+    if (btnConfirmNo) {
+        btnConfirmNo.addEventListener('click', function() {
+            confirmMessage.style.display = 'none';
+            orphanActions.style.display = 'flex';
+        });
+    }
+    
+    // 确认删除
+    if (btnConfirmYes) {
+        btnConfirmYes.addEventListener('click', function() {
+            const btn = document.querySelector('[data-orphan-slots]');
+            if (!btn) return;
+            
+            const orphanSlots = JSON.parse(btn.getAttribute('data-orphan-slots') || '[]');
+            const urlParams = new URLSearchParams(window.location.search);
+            const themeId = urlParams.get('theme_id') || '';
+            
+            // 显示处理中
+            confirmMessage.style.display = 'none';
+            deleteStatus.style.display = 'block';
+            deleteStatus.style.background = '#d1ecf1';
+            deleteStatus.style.color = '#0c5460';
+            deleteStatus.textContent = '正在删除...';
+            
+            // 发起删除请求（使用正确的后台URL）
+            fetch('{$removeOrphanWidgetsUrl}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    theme_id: themeId,
+                    slot_ids: orphanSlots
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    deleteStatus.style.background = '#d4edda';
+                    deleteStatus.style.color = '#155724';
+                    deleteStatus.textContent = '✓ 删除成功，页面即将刷新...';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    deleteStatus.style.background = '#f8d7da';
+                    deleteStatus.style.color = '#721c24';
+                    deleteStatus.textContent = '✗ 删除失败: ' + (data.message || '未知错误');
+                }
+            })
+            .catch(error => {
+                console.error('删除失败:', error);
+                deleteStatus.style.background = '#f8d7da';
+                deleteStatus.style.color = '#721c24';
+                deleteStatus.textContent = '✗ 删除失败，请查看控制台';
+            });
+        });
+    }
+})();
+</script>
 HTML;
         
         // 在 </body> 前插入警告

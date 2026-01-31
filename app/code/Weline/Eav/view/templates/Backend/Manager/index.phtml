@@ -1,0 +1,399 @@
+<?php
+/**
+ * EAV统一管理界面
+ * 左侧：树形导航（Entity → Set → Group → Attribute）
+ * 右侧：详情编辑面板
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('EAV管理') ?></title>
+    <style>
+        /* EAV管理器样式 */
+        .eav-manager-container {
+            display: flex;
+            height: calc(100vh - 180px);
+            gap: 16px;
+        }
+        
+        .eav-tree-panel {
+            width: 320px;
+            min-width: 280px;
+            max-width: 400px;
+            background: var(--bs-card-bg, #fff);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* 允许下拉菜单溢出 */
+        .eav-tree-panel .eav-tree-actions {
+            overflow: visible;
+        }
+        
+        .eav-tree-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+            flex-shrink: 0;
+        }
+        
+        .eav-tree-search {
+            position: relative;
+        }
+        
+        .eav-tree-search input {
+            padding-left: 36px;
+        }
+        
+        .eav-tree-search .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        
+        .eav-tree-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        
+        .eav-tree-actions {
+            padding: 12px 16px;
+            border-top: 1px solid var(--bs-border-color, #e9ecef);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1050;
+            background: var(--bs-card-bg, #fff);
+        }
+        
+        .eav-tree-actions .dropup {
+            position: static;
+        }
+        
+        .eav-tree-actions .dropup .dropdown-menu {
+            bottom: 100%;
+            top: auto !important;
+            transform: none !important;
+            margin-bottom: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1051;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .eav-detail-panel {
+            flex: 1;
+            background: var(--bs-card-bg, #fff);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .eav-detail-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .eav-detail-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .eav-detail-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6c757d;
+        }
+        
+        .eav-detail-placeholder i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* 树形节点样式 */
+        .tree-node {
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.15s;
+        }
+        
+        .tree-node:hover {
+            background-color: var(--bs-tertiary-bg, #f8f9fa);
+        }
+        
+        .tree-node.active {
+            background-color: var(--bs-primary-bg-subtle, #cfe2ff);
+            color: var(--bs-primary, #0d6efd);
+        }
+        
+        .tree-node-toggle {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .tree-node-toggle.empty {
+            visibility: hidden;
+        }
+        
+        .tree-node-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        
+        .tree-node-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .tree-node-code {
+            font-size: 12px;
+            color: #6c757d;
+            margin-left: 4px;
+        }
+        
+        .tree-node-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        
+        .tree-children {
+            margin-left: 20px;
+            display: none;
+        }
+        
+        .tree-children.expanded {
+            display: block;
+        }
+        
+        .tree-loading {
+            padding: 8px 12px;
+            color: #6c757d;
+            font-size: 13px;
+        }
+        
+        /* 节点类型图标颜色 */
+        .node-entity .tree-node-icon { color: #6f42c1; }
+        .node-set .tree-node-icon { color: #fd7e14; }
+        .node-group .tree-node-icon { color: #20c997; }
+        .node-attribute .tree-node-icon { color: #0dcaf0; }
+        
+        /* 表单样式 */
+        .form-section {
+            margin-bottom: 24px;
+        }
+        
+        .form-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+        }
+        
+        /* 设置分组样式 */
+        .settings-group {
+            background: var(--bs-light, #f8f9fa);
+            border-radius: 8px;
+            padding: 12px 16px;
+            border: 1px solid var(--bs-border-color, #e9ecef);
+        }
+        
+        .settings-group-title {
+            font-weight: 500;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+        }
+        
+        .settings-group-title i {
+            font-size: 16px;
+        }
+        
+        .settings-group .form-check-label {
+            font-size: 14px;
+        }
+        
+        /* 暗色模式适配 */
+        [data-bs-theme="dark"] .settings-group {
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- 页面标题 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>EAV管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统配置</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>EAV管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- EAV管理器主体 -->
+                <div class="eav-manager-container" id="eav-manager">
+                    
+                    <!-- 左侧树形导航面板 -->
+                    <div class="eav-tree-panel">
+                        <div class="eav-tree-header">
+                            <div class="eav-tree-search">
+                                <i class="mdi mdi-magnify search-icon"></i>
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="tree-search" placeholder="<?= __('搜索实体、属性集、属性...') ?>">
+                            </div>
+                        </div>
+                        <div class="eav-tree-content" id="eav-tree">
+                            <div class="tree-loading">
+                                <i class="mdi mdi-loading mdi-spin me-2"></i>
+                                <lang>加载中...</lang>
+                            </div>
+                        </div>
+                        <div class="eav-tree-actions">
+                            <div class="dropup">
+                                <button class="btn btn-primary btn-sm dropdown-toggle w-100" type="button" 
+                                        id="addNewDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="mdi mdi-plus me-1"></i>
+                                    <lang>新建</lang>
+                                </button>
+                                <ul class="dropdown-menu w-100" aria-labelledby="addNewDropdown">
+                                    <li><a class="dropdown-item" href="#" onclick="EavManager.addNode('entity'); return false;">
+                                        <i class="mdi mdi-cube-outline me-2"></i><lang>新建实体</lang>
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="EavManager.addNode('set'); return false;">
+                                        <i class="mdi mdi-folder-outline me-2"></i><lang>新建属性集</lang>
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="EavManager.addNode('group'); return false;">
+                                        <i class="mdi mdi-folder-multiple-outline me-2"></i><lang>新建属性组</lang>
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="EavManager.addNode('attribute'); return false;">
+                                        <i class="mdi mdi-tag-outline me-2"></i><lang>新建属性</lang>
+                                    </a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧详情编辑面板 -->
+                    <div class="eav-detail-panel">
+                        <div class="eav-detail-header" id="detail-header" style="display: none;">
+                            <div>
+                                <h5 class="mb-0" id="detail-title"></h5>
+                                <small class="text-muted" id="detail-subtitle"></small>
+                            </div>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete" style="display: none;">
+                                    <i class="mdi mdi-delete"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="eav-detail-content" id="detail-content">
+                            <!-- 占位提示 -->
+                            <div class="eav-detail-placeholder" id="detail-placeholder">
+                                <i class="mdi mdi-cursor-default-click-outline"></i>
+                                <h5><lang>选择左侧节点查看详情</lang></h5>
+                                <p class="text-muted"><lang>点击左侧树形导航中的节点，在此处查看和编辑详情</lang></p>
+                            </div>
+                            <!-- 表单容器 -->
+                            <div id="detail-form" style="display: none;"></div>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<div class="rightbar-overlay"></div>
+
+<!-- EAV管理器脚本 -->
+<script src="@static(Weline_Eav::js/eav-manager/eav-manager.js)"></script>
+<script>
+    // 初始化EAV管理器
+    $(document).ready(function() {
+        EavManager.init({
+            apiBase: '@backend-url("eav/backend/manager")',
+            treeContainer: '#eav-tree',
+            detailContainer: '#detail-form',
+            searchInput: '#tree-search'
+        });
+        
+        // 处理下拉菜单点击后关闭
+        $('#addNewDropdown').on('click', function(e) {
+            e.stopPropagation();
+        });
+        
+        // 点击下拉菜单项后关闭下拉菜单
+        $('.eav-tree-actions .dropdown-item').on('click', function() {
+            const dropdown = bootstrap.Dropdown.getInstance($('#addNewDropdown')[0]);
+            if (dropdown) {
+                dropdown.hide();
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

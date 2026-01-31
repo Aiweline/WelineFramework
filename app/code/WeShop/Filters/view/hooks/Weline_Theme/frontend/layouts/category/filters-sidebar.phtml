@@ -13,6 +13,8 @@
 
 // 将 Filters 模块添加到请求模块链，以便加载翻译
 $this->request->addModule('WeShop_Filters');
+// 强制重新加载翻译词典（因为模块可能在翻译加载后才添加）
+\Weline\Framework\Phrase\Parser::$loaded = false;
 
 use WeShop\Filters\Service\FilterService;
 use WeShop\Filters\Service\FilterUrlService;
@@ -89,9 +91,9 @@ if (empty($filters) && empty($appliedFilters)) {
 ?>
 <div class="category-filter-mock" data-category-id="<?= $categoryId ?>">
     <div class="category-filter-header">
-        <div class="category-filter-title"><lang>筛选条件</lang></div>
+        <div class="category-filter-title"><?= __('筛选条件') ?></div>
         <?php if (!empty($appliedFilters)): ?>
-        <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="category-filter-clear"><lang>清除全部</lang></a>
+        <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="category-filter-clear"><?= __('清除全部') ?></a>
         <?php endif; ?>
     </div>
 
@@ -105,12 +107,17 @@ if (empty($filters) && empty($appliedFilters)) {
         ?>
         <span class="filter-chip is-active" data-filter-code="<?= htmlspecialchars($chipFilterCode) ?>" data-value="<?= htmlspecialchars($chipValue) ?>">
             <?= htmlspecialchars($filter['label'] ?? '') ?>
-            <a href="<?= htmlspecialchars($removeUrl) ?>" class="chip-remove" aria-label="<lang>移除</lang>">×</a>
+            <a href="<?= htmlspecialchars($removeUrl) ?>" class="chip-remove" aria-label="<?= __('移除') ?>">×</a>
         </span>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
 
+    <?php 
+    // 定义默认展开的筛选器数量
+    $defaultExpandedCount = 5;
+    $filterIndex = 0;
+    ?>
     <?php foreach ($filters as $filter): ?>
     <?php
         $filterCode = $filter['code'] ?? '';
@@ -122,10 +129,22 @@ if (empty($filters) && empty($appliedFilters)) {
         if (empty($options)) {
             continue;
         }
-    ?>
-    <div class="category-filter-group <?= $collapsed ? 'is-collapsed' : '' ?>" data-filter-code="<?= htmlspecialchars($filterCode) ?>">
-        <div class="category-filter-group-title"><?= htmlspecialchars($filterName) ?></div>
         
+        // 超过默认数量的筛选器默认折叠
+        $isCollapsed = $collapsed || ($filterIndex >= $defaultExpandedCount);
+        $filterIndex++;
+    ?>
+    <div class="category-filter-group <?= $isCollapsed ? 'is-collapsed' : '' ?>" data-filter-code="<?= htmlspecialchars($filterCode) ?>">
+        <div class="category-filter-group-header" onclick="toggleFilterGroup(this)">
+            <span class="category-filter-group-title"><?= htmlspecialchars($filterName) ?></span>
+            <span class="category-filter-group-toggle">
+                <svg class="toggle-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </span>
+        </div>
+        
+        <div class="category-filter-group-content">
         <?php if ($displayType === 'slider' && isset($options[0]['slider'])): ?>
             <?php $slider = $options[0]['slider']; ?>
             <div class="price-slider-container">
@@ -194,7 +213,7 @@ if (empty($filters) && empty($appliedFilters)) {
                         <span class="label">
                             <?php if (isset($option['stars_filled'])): ?>
                             <span class="stars"><?= str_repeat('★', $option['stars_filled']) . str_repeat('☆', $option['stars_empty'] ?? 0) ?></span>
-                            <lang>及以上</lang>
+                            <?= __('及以上') ?>
                             <?php else: ?>
                             <?= htmlspecialchars($option['label'] ?? '') ?>
                             <?php endif; ?>
@@ -205,8 +224,167 @@ if (empty($filters) && empty($appliedFilters)) {
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
+        </div>
     </div>
     <?php endforeach; ?>
+    
+    <?php if (count($filters) > $defaultExpandedCount): ?>
+    <div class="category-filter-show-more">
+        <button type="button" class="show-more-filters-btn" onclick="toggleAllFilters(this)">
+            <span class="show-more-text"><?= __('展开更多筛选') ?></span>
+            <span class="show-less-text" style="display:none;"><?= __('收起筛选') ?></span>
+            <svg class="toggle-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+    <?php endif; ?>
 </div>
+
+<style>
+/* 筛选组折叠样式 */
+.category-filter-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.category-filter-group-header:hover {
+    color: var(--color-link, #007185);
+}
+
+.category-filter-group-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #111827);
+}
+
+.category-filter-group-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+}
+
+.category-filter-group-toggle .toggle-icon {
+    color: var(--color-text-secondary, #6b7280);
+    transition: transform 0.3s ease;
+}
+
+.category-filter-group.is-collapsed .category-filter-group-toggle .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+/* 折叠内容样式 */
+.category-filter-group-content {
+    max-height: 500px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out;
+    opacity: 1;
+    padding-top: 0.5rem;
+}
+
+.category-filter-group.is-collapsed .category-filter-group-content {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* 展开更多筛选按钮 */
+.category-filter-show-more {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.show-more-filters-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-secondary, #f3f4f6);
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 6px;
+    color: var(--color-text-primary, #111827);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.show-more-filters-btn:hover {
+    background: var(--color-bg-tertiary, #e5e7eb);
+    border-color: var(--color-border, #d1d5db);
+}
+
+.show-more-filters-btn .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.show-more-filters-btn.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.show-more-filters-btn.expanded .show-more-text {
+    display: none;
+}
+
+.show-more-filters-btn.expanded .show-less-text {
+    display: inline !important;
+}
+
+/* 筛选组间距 */
+.category-filter-group {
+    margin-bottom: 0.5rem;
+}
+
+.category-filter-group:last-of-type {
+    margin-bottom: 0;
+}
+</style>
+
+<script>
+// 切换单个筛选组的展开/折叠
+function toggleFilterGroup(header) {
+    const group = header.closest('.category-filter-group');
+    if (group) {
+        group.classList.toggle('is-collapsed');
+    }
+}
+
+// 展开/收起所有筛选器
+function toggleAllFilters(btn) {
+    const container = btn.closest('.category-filter-mock');
+    const groups = container.querySelectorAll('.category-filter-group');
+    const isExpanded = btn.classList.contains('expanded');
+    
+    if (isExpanded) {
+        // 收起超出默认数量的筛选器
+        let index = 0;
+        groups.forEach(function(group) {
+            if (index >= <?= $defaultExpandedCount ?>) {
+                group.classList.add('is-collapsed');
+            }
+            index++;
+        });
+        btn.classList.remove('expanded');
+    } else {
+        // 展开所有筛选器
+        groups.forEach(function(group) {
+            group.classList.remove('is-collapsed');
+        });
+        btn.classList.add('expanded');
+    }
+}
+</script>
 
 <div class="filter-mobile-overlay"></div>

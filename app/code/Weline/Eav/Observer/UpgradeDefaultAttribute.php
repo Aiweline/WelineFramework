@@ -45,10 +45,11 @@ class UpgradeDefaultAttribute implements ObserverInterface
                 /**@var \Weline\Eav\EavInterface $eavEntity */
                 $eavEntity = ObjectManager::getInstance($eav);
                 if ($eavEntity instanceof EavInterface) {
+                    // 注意：不设置 EavEntity::fields_ID，让数据库自动生成
+                    // 使用 code 作为唯一键进行更新或插入
                     $eavEntityModel->reset()
                         ->setData(
                             [
-                                EavEntity::fields_ID => $eavEntity->getEavEntityId(),
                                 EavEntity::fields_code => $eavEntity->getEntityCode(),
                                 EavEntity::fields_class => $eav,
                                 EavEntity::fields_name => $eavEntity->getEntityName(),
@@ -59,33 +60,56 @@ class UpgradeDefaultAttribute implements ObserverInterface
                         )
                         ->forceCheck(true, EavEntity::fields_code)
                         ->save();
+                    
+                    // 获取刚保存的实体 ID（从 eavEntityModel 获取，而不是从 eavEntity 获取）
+                    // 因为 eavEntity->getEavEntityId() 可能使用了缓存中的旧数据
+                    $savedEntityId = $eavEntityModel->getId();
+                    
                     # 检查属性集和属性组，没有则为实体创建默认属性集和默认属性组
                     #--属性集
-                    $attributeSet = $eavEntity->getAttributeSets();
-                    if (empty($attributeSet)) {
+                    /**@var Set $setModel */
+                    $setModel = ObjectManager::getInstance(Set::class);
+                    $existingSet = $setModel->reset()->clearData()
+                        ->where('eav_entity_id', $savedEntityId)
+                        ->where('code', 'default')
+                        ->find()->fetch();
+                    if (!$existingSet->getId()) {
                         /**@var Set $eavAttributeSet */
                         $eavAttributeSet = ObjectManager::make(Set::class);
                         $eavAttributeSet->reset()->clearData()
                             ->insert([
-                                'eav_entity_id' => $eavEntity->getEavEntityId(),
+                                'eav_entity_id' => $savedEntityId,
                                 'name' => '默认属性集',
                                 'code' => 'default',
                             ])->fetch();
                     }
+                    
                     # --属性组
-                    $attributeGroup = $eavEntity->getAttributeGroups();
-                    if (empty($attributeGroup)) {
+                    /**@var Group $groupModel */
+                    $groupModel = ObjectManager::getInstance(Group::class);
+                    $existingGroup = $groupModel->reset()->clearData()
+                        ->where('eav_entity_id', $savedEntityId)
+                        ->where('code', 'default')
+                        ->find()->fetch();
+                    if (!$existingGroup->getId()) {
                         # 获取默认属性集
-                        $attributeSet = $eavEntity->getAttributeSet('default');
-                        /**@var Group $eavAttributeGroup */
-                        $eavAttributeGroup = ObjectManager::make(Group::class);
-                        $eavAttributeGroup->reset()->clearData()
-                            ->insert([
-                                'set_id' => $attributeSet->getId(),
-                                'eav_entity_id' => $eavEntity->getEavEntityId(),
-                                'name' => '默认属性组',
-                                'code' => 'default',
-                            ])->fetch();
+                        $defaultSet = ObjectManager::getInstance(Set::class);
+                        $defaultSet->reset()->clearData()
+                            ->where('eav_entity_id', $savedEntityId)
+                            ->where('code', 'default')
+                            ->find()->fetch();
+                        
+                        if ($defaultSet->getId()) {
+                            /**@var Group $eavAttributeGroup */
+                            $eavAttributeGroup = ObjectManager::make(Group::class);
+                            $eavAttributeGroup->reset()->clearData()
+                                ->insert([
+                                    'set_id' => $defaultSet->getId(),
+                                    'eav_entity_id' => $savedEntityId,
+                                    'name' => '默认属性组',
+                                    'code' => 'default',
+                                ])->fetch();
+                        }
                     }
                 }
             } catch (\Throwable $e) {

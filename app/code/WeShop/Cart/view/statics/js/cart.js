@@ -514,14 +514,22 @@
             const result = await response.json();
 
             if (result.success) {
-                // 触发成功事件
+                // 触发成功事件（使用 snake_case 以兼容 MiniCart）
                 dispatchEvent('weshop:cart:added', {
-                    productId,
-                    qty,
-                    selectedOptions,
-                    cartItemId: result.cart_item_id,
-                    cartCount: result.cart_count,
-                    cartTotal: result.cart_total,
+                    product_id: productId,
+                    productId: productId, // 兼容旧版
+                    qty: qty,
+                    quantity: qty,
+                    selected_options: selectedOptions,
+                    selectedOptions: selectedOptions, // 兼容旧版
+                    cart_item_id: result.cart_item_id,
+                    cartItemId: result.cart_item_id, // 兼容旧版
+                    cart_count: result.cart_count,
+                    cartCount: result.cart_count, // 兼容旧版
+                    cart_total: result.cart_total,
+                    cartTotal: result.cart_total, // 兼容旧版
+                    subtotal: result.cart_total,
+                    subtotal_formatted: result.cart_total_formatted,
                     product: result.product,
                 });
 
@@ -628,7 +636,10 @@
         });
 
         // 触发购物车更新事件
-        dispatchEvent('weshop:cart:updated', { count });
+        dispatchEvent('weshop:cart:updated', { 
+            count: count,
+            cart_count: count,
+        });
     }
 
     /**

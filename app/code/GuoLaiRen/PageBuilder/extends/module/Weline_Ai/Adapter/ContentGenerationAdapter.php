@@ -12,7 +12,7 @@ declare(strict_types=1);
  * - 处理响应，提取JSON内容
  */
 
-namespace GuoLaiRen\PageBuilder\Extends\Weline_Ai\Adapter;
+namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 

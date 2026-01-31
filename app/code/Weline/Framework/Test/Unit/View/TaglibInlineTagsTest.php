@@ -22,7 +22,7 @@ class TaglibInlineTagsTest extends TestCore
      */
     private Template $template;
 
-    protected function setUp(): void
+    public function setUp(): void
     {
         parent::setUp();
         $this->taglib = ObjectManager::getInstance(Taglib::class);
@@ -35,7 +35,7 @@ class TaglibInlineTagsTest extends TestCore
     public function testInlineStaticTagInAttribute()
     {
         $content = '<img src="@static(Weline_Frontend::img/logo.png)" alt="Logo">';
-        $result = $this->taglib->parse($this->template, 'inline-static-attr.phtml', $content);
+        $result = $this->taglib->compile($this->template, $content, 'inline-static-attr.phtml');
 
         $this->assertStringNotContainsString('@static(', $result, 'Inline @static should be resolved');
         $this->assertStringContainsString('logo.png', $result, 'Resolved URL should include logo filename');
@@ -47,7 +47,7 @@ class TaglibInlineTagsTest extends TestCore
     public function testInlineStaticTagInText()
     {
         $content = "<script>var logoUrl='@static(Weline_Frontend::img/logo.png)';</script>";
-        $result = $this->taglib->parse($this->template, 'inline-static-text.phtml', $content);
+        $result = $this->taglib->compile($this->template, $content, 'inline-static-text.phtml');
 
         $this->assertStringNotContainsString('@static(', $result, 'Inline @static should be resolved in text');
         $this->assertStringContainsString('logo.png', $result, 'Resolved URL should include logo filename');

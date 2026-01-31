@@ -85,20 +85,20 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     <div class='col-lg-4 col-md-6 col-sm-12'>
                         <!--状态-->
                         <div class='form-group'>
-                            <label class='visually-hidden' for='is_enable'>
+                            <label class='visually-hidden' for='basic_is_enable'>
                                 <lang>状态</lang>
                             </label>
                             <div class='input-group'>
                                 <div class='input-group-text'>状态</div>
-                                <select class='form-control' name='is_enable' id='is_enable'>
-                                    <option value='1' @if{attribute.is_enable==='1'=>'selected'}>启用</option>
-                                    <option value='0' @if{attribute.is_enable==='0'=>'selected'}>禁用</option>
+                                <select class='form-control' name='basic_is_enable' id='basic_is_enable'>
+                                    <option value='1' @if{attribute.basic_is_enable==='1'=>'selected'}>启用</option>
+                                    <option value='0' @if{attribute.basic_is_enable==='0'=>'selected'}>禁用</option>
                                 </select>
                             </div>
                         </div>
                     </div>
                     <!--如果有配置项-->
-                    <has name="attribute.has_option">
+                    <has name="attribute.data_has_option">
                         <!--选项列表/选项卡片/选项卡片列表-->
                         <div class='form-group col-12'>
                             <div class='row'>
@@ -197,7 +197,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 <!-- Sweet alert init js-->
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 
-<has name="attribute.has_option==1">
+<has name="attribute.data_has_option==1">
     <!-- Table Editable plugin -->
     <script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
     <script src='@static(Weline_Eav::/js/pages/attribute-edit/table-editable.init.js)'></script>

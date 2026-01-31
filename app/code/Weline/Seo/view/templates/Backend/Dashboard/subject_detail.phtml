@@ -1,0 +1,479 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+/**
+ * 变量：
+ * @var array $subject 主体信息
+ * @var array $keywords 关键词列表
+ * @var array|null $suggestion AI建议
+ * @var string $title 页面标题
+ */
+
+$subject = $this->getData('subject') ?: [];
+$keywords = $this->getData('keywords') ?: [];
+$suggestion = $this->getData('suggestion');
+$title = $this->getData('title') ?: __('主体SEO详情');
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= htmlspecialchars($title) ?></title>
+    <style>
+        .detail-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            width: 120px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            flex: 1;
+            color: #212529;
+        }
+        
+        .keyword-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .keyword-card:hover {
+            border-color: #0bb197;
+            box-shadow: 0 2px 8px rgba(11, 177, 151, 0.1);
+        }
+        
+        .keyword-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 8px;
+        }
+        
+        .keyword-meta {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .keyword-meta-item {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #0bb197 0%, #0a9d85 100%);
+            color: #fff;
+            border-radius: 50%;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        
+        .suggestion-content {
+            background: #fff9e6;
+            border: 1px solid #ffe58f;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .suggestion-content h6 {
+            color: #d48806;
+            margin-bottom: 10px;
+        }
+        
+        .suggestion-text {
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+        
+        .empty-keywords {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        
+        .btn-refresh-suggestion {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-refresh-suggestion:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-file-chart me-2"></i>
+                                <?= htmlspecialchars($subject['title'] ?? __('主体详情')) ?>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'>
+                                        <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
+                                            <lang>SEO管理</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href='<?= $this->getUrl('*/backend/dashboard/subject') ?>'>
+                                            <lang>主体列表</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>详情</lang>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- 主体基本信息 -->
+                    <div class="col-lg-5">
+                        <div class="card detail-card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="mdi mdi-information-outline me-2"></i>
+                                    <lang>基本信息</lang>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="info-item">
+                                    <div class="info-label">ID</div>
+                                    <div class="info-value"><?= (int)($subject['subject_id'] ?? 0) ?></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label"><lang>标题</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['title'] ?? '-') ?></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">URL</div>
+                                    <div class="info-value">
+                                        <?php if (!empty($subject['url'])): ?>
+                                            <a href="<?= htmlspecialchars($subject['url']) ?>" target="_blank" class="text-decoration-none">
+                                                <?= htmlspecialchars($subject['url']) ?>
+                                                <i class="mdi mdi-open-in-new ms-1"></i>
+                                            </a>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label"><lang>状态</lang></div>
+                                    <div class="info-value">
+                                        <?php if ((int)($subject['status'] ?? 0) === 1): ?>
+                                            <span class="badge bg-success"><lang>启用</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label"><lang>关键词数</lang></div>
+                                    <div class="info-value">
+                                        <span class="badge bg-info"><?= count($keywords) ?></span>
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label"><lang>创建时间</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['created_at'] ?? '-') ?></div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label"><lang>更新时间</lang></div>
+                                    <div class="info-value"><?= htmlspecialchars($subject['updated_at'] ?? '-') ?></div>
+                                </div>
+                                <?php if (!empty($subject['description'])): ?>
+                                    <div class="info-item">
+                                        <div class="info-label"><lang>描述</lang></div>
+                                        <div class="info-value"><?= nl2br(htmlspecialchars($subject['description'])) ?></div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- AI建议 -->
+                        <div class="card detail-card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="mdi mdi-robot me-2"></i>
+                                    <lang>AI优化建议</lang>
+                                </h5>
+                                <button type="button" class="btn btn-sm btn-refresh-suggestion" id="refreshSuggestion"
+                                        data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>">
+                                    <i class="mdi mdi-refresh me-1"></i>
+                                    <lang>刷新建议</lang>
+                                </button>
+                            </div>
+                            <div class="card-body" id="suggestionContent">
+                                <?php if ($suggestion): ?>
+                                    <div class="suggestion-content">
+                                        <h6><i class="mdi mdi-lightbulb-on me-1"></i><lang>优化建议</lang></h6>
+                                        <div class="suggestion-text"><?= nl2br(htmlspecialchars($suggestion['content'] ?? '')) ?></div>
+                                        <div class="mt-3 text-muted small">
+                                            <lang>生成时间：</lang><?= htmlspecialchars($suggestion['created_at'] ?? '-') ?>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-center text-muted py-4">
+                                        <i class="mdi mdi-robot-confused" style="font-size: 3rem; opacity: 0.3;"></i>
+                                        <p class="mt-2"><lang>暂无AI建议，点击上方按钮生成</lang></p>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 关键词列表 -->
+                    <div class="col-lg-7">
+                        <div class="card detail-card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="mdi mdi-tag-multiple me-2"></i>
+                                    <lang>关键词列表</lang>
+                                    <span class="badge bg-secondary ms-2"><?= count($keywords) ?></span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($keywords)): ?>
+                                    <div class="empty-keywords">
+                                        <i class="mdi mdi-tag-off" style="font-size: 3rem; opacity: 0.3;"></i>
+                                        <p class="mt-2"><lang>该主体暂无关键词</lang></p>
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($keywords as $index => $keyword): ?>
+                                        <div class="keyword-card">
+                                            <div class="d-flex align-items-center">
+                                                <span class="priority-badge"><?= $index + 1 ?></span>
+                                                <div class="flex-grow-1">
+                                                    <div class="keyword-name">
+                                                        <?= htmlspecialchars($keyword['keyword'] ?? '') ?>
+                                                    </div>
+                                                    <div class="keyword-meta">
+                                                        <span class="keyword-meta-item">
+                                                            <i class="mdi mdi-star me-1"></i>
+                                                            <lang>优先级：</lang><?= (int)($keyword['priority'] ?? 0) ?>
+                                                        </span>
+                                                        <?php if (!empty($keyword['search_volume'])): ?>
+                                                            <span class="keyword-meta-item">
+                                                                <i class="mdi mdi-trending-up me-1"></i>
+                                                                <lang>搜索量：</lang><?= number_format((int)$keyword['search_volume']) ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                        <?php if (!empty($keyword['difficulty'])): ?>
+                                                            <span class="keyword-meta-item">
+                                                                <i class="mdi mdi-gauge me-1"></i>
+                                                                <lang>难度：</lang><?= (int)$keyword['difficulty'] ?>%
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 返回按钮 -->
+                <div class="row">
+                    <div class="col-12">
+                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left me-1"></i>
+                            <lang>返回列表</lang>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 友好的消息提示函数
+function showMessage(type, message, title = null) {
+    // 优先使用 SweetAlert2
+    if (typeof Swal !== 'undefined') {
+        const config = {
+            icon: type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning',
+            title: title || (type === 'success' ? '<?= __("操作成功") ?>' : '<?= __("操作失败") ?>'),
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: type === 'success' ? 3000 : 5000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        };
+        Swal.fire(config);
+    } else {
+        // 降级使用 Bootstrap Toast
+        const toastContainer = document.getElementById('toast-container') || createToastContainer();
+        const toastId = 'toast-' + Date.now();
+        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-warning';
+        const icon = type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : 'mdi-alert';
+        
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${bgClass} text-white" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 300px;">
+                <div class="toast-header ${bgClass} text-white border-0">
+                    <i class="mdi ${icon} me-2"></i>
+                    <strong class="me-auto">${title || (type === 'success' ? '<?= __("操作成功") ?>' : '<?= __("操作失败") ?>')}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: type === 'success' ? 3000 : 5000
+        });
+        toast.show();
+        
+        // 自动移除 DOM 元素
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+}
+
+// 创建 Toast 容器
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+document.getElementById('refreshSuggestion')?.addEventListener('click', function() {
+    const btn = this;
+    const subjectId = btn.dataset.subjectId;
+    const originalHtml = btn.innerHTML;
+    
+    if (!subjectId || subjectId <= 0) {
+        showMessage('error', '<?= __("无效的主体ID") ?>');
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("生成中...") ?>';
+    
+    fetch('<?= $this->getUrl("*/backend/dashboard/refreshSuggestion") ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'subject_id=' + subjectId
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.json();
+    })
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        
+        if (data.success && data.data && data.data.suggestion) {
+            const suggestion = data.data.suggestion;
+            document.getElementById('suggestionContent').innerHTML = `
+                <div class="suggestion-content">
+                    <h6><i class="mdi mdi-lightbulb-on me-1"></i><?= __("优化建议") ?></h6>
+                    <div class="suggestion-text">${suggestion.content ? suggestion.content.replace(/\n/g, '<br>') : ''}</div>
+                    <div class="mt-3 text-muted small">
+                        <?= __("生成时间：") ?>${suggestion.created_at || '-'}
+                    </div>
+                </div>
+            `;
+            showMessage('success', '<?= __("AI建议生成成功") ?>');
+        } else {
+            const errorMsg = data.message || '<?= __("生成建议失败，请稍后重试") ?>';
+            showMessage('error', errorMsg);
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error:', error);
+        const errorMsg = error.message || '<?= __("请求失败，请检查网络连接后重试") ?>';
+        showMessage('error', errorMsg);
+    });
+});
+</script>
+
+</body>
+</html>

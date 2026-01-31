@@ -63,18 +63,11 @@ class Component extends BackendController
         }
         ob_start();
         
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'Component.php:list', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        // #endregion
         try {
             $styleCode = $this->request->getParam('style_code', '');
             $layoutCode = $this->request->getParam('layout_code', '');
             $pageType = $this->request->getParam('page_type', ''); // 页面类型
             $includeCompatible = $this->request->getParam('include_compatible', '1') === '1';
-            
-            // #region agent log
-            $debugLog('API params', ['styleCode' => $styleCode, 'layoutCode' => $layoutCode, 'pageType' => $pageType, 'includeCompatible' => $includeCompatible], 'A');
-            // #endregion
             
             // 先扫描共享组件
             $this->componentService->scanAndRegister('_shared');
@@ -86,50 +79,25 @@ class Component extends BackendController
             
             // 如果包含兼容组件，扫描所有其他模板
             if ($includeCompatible) {
-                // #region agent log
-                $debugLog('Before scanAndRegisterAll', [], 'E');
-                // #endregion
                 $this->componentService->scanAndRegisterAll();
-                // #region agent log
-                $debugLog('After scanAndRegisterAll', [], 'E');
-                // #endregion
             }
             
             // 是否包含预览HTML（默认不包含，减小响应大小）
             $includePreview = $this->request->getParam('include_preview', '0') === '1';
             
-            // #region agent log
-            $debugLog('Before getComponentsForBuilder', ['includePreview' => $includePreview], 'B');
-            // #endregion
-            
             // 获取为构建器格式化的组件数据
             $data = $this->componentService->getComponentsForBuilder($styleCode, $layoutCode ?: null, $includePreview, $pageType ?: null);
             
-            // #region agent log
-            $debugLog('After getComponentsForBuilder success', ['dataKeys' => array_keys($data ?? [])], 'B');
-            // #endregion
-            
             // 清除缓冲区中可能存在的PHP警告/错误输出
-            $unexpectedOutput = ob_get_clean();
-            if (!empty($unexpectedOutput)) {
-                // 记录意外输出到日志
-                $debugLog('Unexpected output before JSON', ['output' => substr($unexpectedOutput, 0, 1000)], 'WARNING');
-            }
+            ob_get_clean();
             
             return $this->fetchJson([
                 'success' => true,
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            // #region agent log
-            $debugLog('Exception caught', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()], 'ALL');
-            // #endregion
-            
             // 清除缓冲区
             $unexpectedOutput = ob_get_clean();
-            if (!empty($unexpectedOutput)) {
-                $debugLog('Unexpected output before JSON (exception)', ['output' => substr($unexpectedOutput, 0, 1000)], 'WARNING');
-            }
             
             return $this->fetchJson([
                 'success' => false,
@@ -1396,6 +1364,89 @@ class Component extends BackendController
                 'success' => true,
                 'metadata' => $metadata,
             ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * API: 获取组件源代码
+     * GET /backend/visual/api/component/code
+     * 
+     * 用于AI生成组件时作为参考模板
+     * 
+     * 请求参数：
+     * - component_code: 组件代码（必填）
+     * - style_code: 样式代码（可选）
+     */
+    public function code()
+    {
+        try {
+            $componentCode = $this->request->getParam('component_code', '');
+            $styleCode = $this->request->getParam('style_code', 'tpmst');
+            
+            if (empty($componentCode)) {
+                throw new \Exception('请提供组件代码');
+            }
+            
+            // 获取组件信息
+            $component = $this->componentService->getByCode($componentCode, $styleCode);
+            
+            if (!$component) {
+                throw new \Exception('组件不存在: ' . $componentCode);
+            }
+            
+            // 获取组件模板代码
+            $templateCode = '';
+            
+            // 如果是AI组件，从数据库获取
+            if ($component->isAIGenerated()) {
+                $templateCode = $component->getTemplateContent();
+            } else {
+                // 如果是模板组件，读取文件内容
+                $templatePath = $component->getData('template_path');
+                if ($templatePath && file_exists($templatePath)) {
+                    $templateCode = file_get_contents($templatePath);
+                } else {
+                    // 尝试构建模板路径
+                    $category = $component->getData('category') ?: 'content';
+                    $componentStyleCode = $component->getData('style_code') ?: $styleCode;
+                    
+                    // 可能的路径模式
+                    $possiblePaths = [
+                        BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $componentStyleCode . '/components/' . $category . '/' . $componentCode . '.phtml',
+                        BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $componentStyleCode . '/' . $category . '/' . $componentCode . '.phtml',
+                        BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $componentStyleCode . '/components/' . $componentCode . '.phtml',
+                    ];
+                    
+                    foreach ($possiblePaths as $path) {
+                        if (file_exists($path)) {
+                            $templateCode = file_get_contents($path);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (empty($templateCode)) {
+                throw new \Exception('无法获取组件代码');
+            }
+            
+            return $this->fetchJson([
+                'success' => true,
+                'code' => $templateCode,
+                'component' => [
+                    'code' => $component->getData('code'),
+                    'name' => $component->getData('name'),
+                    'category' => $component->getData('category'),
+                    'region' => $component->getData('region') ?: $component->getData('category'),
+                    'is_ai_generated' => $component->isAIGenerated(),
+                ],
+            ]);
+            
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'success' => false,

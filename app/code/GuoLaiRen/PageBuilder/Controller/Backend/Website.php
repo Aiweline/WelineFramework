@@ -121,10 +121,15 @@ class Website extends BackendController
     /**
      * 快速创建站点（代理到 Websites 模块）
      * 用于一键建站等场景的快速创建
+     * 自动设置 scope 为 page_builder，标识站点来源
      */
     #[Acl('Weline_Websites::website_quick_save', '快速创建站点', '', '快速创建站点')]
     public function quickSave()
     {
+        // 自动设置 scope 参数为 page_builder，标识该站点由 PageBuilder 创建
+        // 这样在 SEO 账户关联时可以按 scope 过滤
+        $this->request->setPost('scope', 'page_builder');
+        
         // 代理到 Websites 模块的 quickSave 方法
         $websitesController = ObjectManager::getInstance(\Weline\Websites\Controller\Admin\Website::class);
         return $websitesController->quickSave();

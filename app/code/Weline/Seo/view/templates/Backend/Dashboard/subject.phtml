@@ -1,0 +1,276 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+/**
+ * 变量：
+ * @var array $subjects SEO主体列表
+ * @var string $title 页面标题
+ * @var string $search 搜索关键词
+ * @var string $status 状态筛选
+ */
+
+$subjects = $this->getData('subjects') ?: [];
+$title = $this->getData('title') ?: __('SEO主体列表');
+$search = $this->getData('search') ?: '';
+$status = $this->getData('status');
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= htmlspecialchars($title) ?></title>
+    <style>
+        .subject-table {
+            margin-bottom: 0;
+        }
+        
+        .subject-table th {
+            font-weight: 600;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .subject-table td {
+            vertical-align: middle;
+        }
+        
+        .subject-title-cell {
+            max-width: 300px;
+        }
+        
+        .subject-title-link {
+            color: #212529;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .subject-title-link:hover {
+            color: #0bb197;
+        }
+        
+        .subject-url {
+            font-size: 0.85rem;
+            color: #6c757d;
+            word-break: break-all;
+        }
+        
+        .badge-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .keyword-count {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .action-buttons .btn {
+            padding: 6px 12px;
+            font-size: 0.875rem;
+        }
+        
+        .search-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-file-document-multiple me-2"></i>
+                                <?= htmlspecialchars($title) ?>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'>
+                                        <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
+                                            <lang>SEO管理</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>主体列表</lang>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 搜索框 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="search-box">
+                            <form method="get" action="<?= $this->getUrl('*/backend/dashboard/subject') ?>">
+                                <div class="row align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label"><lang>搜索主体</lang></label>
+                                        <input type="text" class="form-control" name="search" 
+                                               value="<?= htmlspecialchars($search) ?>" 
+                                               placeholder="<?= __('输入主体标题...') ?>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label"><lang>状态</lang></label>
+                                        <select class="form-select" name="status">
+                                            <option value=""><?= __('全部状态') ?></option>
+                                            <option value="1" <?= $status === '1' ? 'selected' : '' ?>><?= __('启用') ?></option>
+                                            <option value="0" <?= $status === '0' ? 'selected' : '' ?>><?= __('禁用') ?></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="mdi mdi-magnify me-1"></i>
+                                            <lang>搜索</lang>
+                                        </button>
+                                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="btn btn-outline-secondary ms-2">
+                                            <i class="mdi mdi-refresh me-1"></i>
+                                            <lang>重置</lang>
+                                        </a>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主体列表 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <lang>主体列表</lang>
+                                    <span class="badge bg-secondary ms-2"><?= count($subjects) ?></span>
+                                </h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <?php if (empty($subjects)): ?>
+                                    <div class="empty-state">
+                                        <i class="mdi mdi-file-document-outline"></i>
+                                        <h5><lang>暂无SEO主体</lang></h5>
+                                        <p class="text-muted"><lang>当前没有SEO主体记录。</lang></p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table subject-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 60px;">ID</th>
+                                                    <th><lang>主体信息</lang></th>
+                                                    <th style="width: 100px;" class="text-center"><lang>关键词数</lang></th>
+                                                    <th style="width: 100px;" class="text-center"><lang>状态</lang></th>
+                                                    <th style="width: 160px;"><lang>更新时间</lang></th>
+                                                    <th style="width: 120px;" class="text-center"><lang>操作</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($subjects as $subject): ?>
+                                                    <tr>
+                                                        <td><?= (int)($subject['subject_id'] ?? 0) ?></td>
+                                                        <td class="subject-title-cell">
+                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" 
+                                                               class="subject-title-link">
+                                                                <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
+                                                            </a>
+                                                            <?php if (!empty($subject['url'])): ?>
+                                                                <div class="subject-url">
+                                                                    <i class="mdi mdi-link-variant me-1"></i>
+                                                                    <?= htmlspecialchars(mb_substr($subject['url'], 0, 50)) ?>
+                                                                    <?= mb_strlen($subject['url']) > 50 ? '...' : '' ?>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <span class="keyword-count">
+                                                                <i class="mdi mdi-tag me-1"></i>
+                                                                <?= (int)($subject['keyword_count'] ?? 0) ?>
+                                                            </span>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <?php if ((int)($subject['status'] ?? 0) === 1): ?>
+                                                                <span class="badge badge-status bg-success"><lang>启用</lang></span>
+                                                            <?php else: ?>
+                                                                <span class="badge badge-status bg-secondary"><lang>禁用</lang></span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <small class="text-muted">
+                                                                <?= htmlspecialchars($subject['updated_at'] ?? '-') ?>
+                                                            </small>
+                                                        </td>
+                                                        <td class="text-center action-buttons">
+                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" 
+                                                               class="btn btn-sm btn-outline-primary" title="<?= __('查看详情') ?>">
+                                                                <i class="mdi mdi-eye"></i>
+                                                                <lang>详情</lang>
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+</body>
+</html>

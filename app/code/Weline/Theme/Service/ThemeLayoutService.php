@@ -49,6 +49,7 @@ class ThemeLayoutService
         }
 
         try {
+            // 使用 fetchArray() 获取原始数组数据，避免返回对象导致的问题
             $layouts = $this->themeLayout->reset()
                 ->where(ThemeLayout::fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
@@ -57,7 +58,7 @@ class ThemeLayoutService
                 ->order(ThemeLayout::fields_AREA)
                 ->order(ThemeLayout::fields_SORT_ORDER)
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
             // 确保 layouts 是数组
             if (!is_array($layouts)) {
@@ -224,7 +225,7 @@ class ThemeLayoutService
             // 新建部件
             $this->themeLayout->reset();
         }
-
+        
         $this->themeLayout
             ->setThemeId((int)$data['theme_id'])
             ->setPageType($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT)
@@ -258,18 +259,29 @@ class ThemeLayoutService
             $query = $this->themeLayout->reset()
                 ->where(ThemeLayout::fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::fields_AREA, $area)
                 ->where(ThemeLayout::fields_STATUS, $status);
 
-            // 如果有插槽ID，按插槽删除；否则按区域+部件代码删除
+            // 如果有插槽ID，按插槽删除（不限制 area，因为旧数据的 area 可能不一致）
+            // 否则按区域+部件代码删除
             if ($slotId) {
                 $query->where(ThemeLayout::fields_SLOT_ID, $slotId);
             } else {
                 // 删除同类型的部件（独占整个区域）
+                $query->where(ThemeLayout::fields_AREA, $area);
                 $query->where(ThemeLayout::fields_WIDGET_CODE, $widgetCode);
             }
 
             $existingWidgets = $query->select()->fetch();
+            
+            // 如果按 slotId 没找到，尝试按 area = slotId 查找（兼容旧数据）
+            if ($slotId && (!is_array($existingWidgets) || count($existingWidgets) === 0)) {
+                $existingWidgets = $this->themeLayout->reset()
+                    ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                    ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
+                    ->where(ThemeLayout::fields_STATUS, $status)
+                    ->where(ThemeLayout::fields_AREA, $slotId)  // 旧数据可能把 slotId 存在 area 字段
+                    ->select()->fetch();
+            }
 
             if (is_array($existingWidgets)) {
                 foreach ($existingWidgets as $widget) {
@@ -527,7 +539,8 @@ class ThemeLayoutService
             return false;
         }
 
-        $this->themeLayout->delete();
+        $this->themeLayout->delete()->fetch();
+        
         return true;
     }
 
@@ -589,6 +602,75 @@ class ThemeLayoutService
             ->setSortOrder($newSortOrder)
             ->save();
 
+        return true;
+    }
+
+    /**
+     * 交换两个部件的排序顺序
+     */
+    public function swapWidgetOrder(int $layoutId1, int $layoutId2): bool
+    {
+        // 加载第一个部件
+        $layout1 = clone $this->themeLayout;
+        $layout1->reset()->load($layoutId1);
+        if (!$layout1->getLayoutId()) {
+            return false;
+        }
+
+        // 加载第二个部件
+        $layout2 = clone $this->themeLayout;
+        $layout2->reset()->load($layoutId2);
+        if (!$layout2->getLayoutId()) {
+            return false;
+        }
+
+        // 交换排序值
+        $sortOrder1 = $layout1->getSortOrder();
+        $sortOrder2 = $layout2->getSortOrder();
+
+        $layout1->setSortOrder($sortOrder2)->save();
+        $layout2->setSortOrder($sortOrder1)->save();
+
+        return true;
+    }
+
+    /**
+     * 获取插槽内的部件列表（按排序）
+     * 
+     * @param int $themeId 主题ID
+     * @param string $pageType 页面类型
+     * @param string $slotId 插槽ID
+     * @param string $status 状态
+     * @return array
+     */
+    public function getSlotWidgets(int $themeId, string $pageType, string $slotId, string $status = 'draft'): array
+    {
+        $layouts = $this->themeLayout->reset()
+            ->where(ThemeLayout::fields_THEME_ID, $themeId)
+            ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayout::fields_STATUS, $status)
+            ->where(ThemeLayout::fields_SLOT_ID, $slotId)
+            ->order(ThemeLayout::fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        return $layouts ?: [];
+    }
+
+    /**
+     * 批量更新插槽内部件排序
+     * 
+     * @param array $layoutIds 按顺序排列的布局ID数组
+     * @return bool
+     */
+    public function updateSlotWidgetsOrder(array $layoutIds): bool
+    {
+        foreach ($layoutIds as $sortOrder => $layoutId) {
+            $this->themeLayout->reset()->load($layoutId);
+            if ($this->themeLayout->getLayoutId()) {
+                $this->themeLayout->setSortOrder((int)$sortOrder)->save();
+            }
+        }
         return true;
     }
 

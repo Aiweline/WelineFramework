@@ -1,0 +1,2238 @@
+<?php
+/**
+ * PageBuilder SEO 管理页面
+ * 
+ * 集成SEO模块，提供SEO账户管理和站点绑定
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$title = $this->getData('title') ?: __('PageBuilder SEO管理');
+$module = $this->getData('module') ?: '';
+$scope = $this->getData('scope') ?: '';
+$accounts = $this->getData('accounts') ?: [];
+$websites = $this->getData('websites') ?: [];
+$websiteBindingsMap = $this->getData('websiteBindingsMap') ?: [];
+$boundAccounts = $this->getData('boundAccounts') ?: []; // 已绑定账户列表
+$sitemap_index_file = $this->getData('sitemap_index_file');
+$sitemap_providers = $this->getData('sitemap_providers') ?: [];
+$sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= htmlspecialchars($title) ?></title>
+    
+    <!-- SweetAlert2 CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+    
+    <style>
+        /* 手风琴样式 */
+        .seo-accordion {
+            margin-bottom: 20px;
+        }
+        
+        .seo-accordion-item {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        
+        .seo-accordion-header {
+            padding: 18px 24px;
+            background: #495057;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+        
+        .seo-accordion-header:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+        }
+        
+        .seo-accordion-header h5 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .seo-accordion-header i.toggle-icon {
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .seo-accordion-header.collapsed i.toggle-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .seo-accordion-body {
+            padding: 24px;
+            display: none;
+        }
+        
+        .seo-accordion-body.show {
+            display: block;
+        }
+        
+        /* 使用指南样式 */
+        .usage-guide {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .usage-guide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .usage-guide-header h6 {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .usage-guide-body {
+            margin-top: 12px;
+            display: none;
+        }
+        
+        .usage-guide-body.show {
+            display: block;
+        }
+        
+        .usage-guide-body ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+            color: #666;
+        }
+        
+        .usage-guide-body li {
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+        
+        /* 表格样式 */
+        .seo-table {
+            width: 100%;
+            margin-bottom: 0;
+        }
+        
+        .seo-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            padding: 12px;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .seo-table td {
+            padding: 12px;
+            vertical-align: middle;
+        }
+        
+        /* 展开按钮 */
+        .expand-toggle {
+            padding: 4px 8px !important;
+            border: none !important;
+            background: transparent !important;
+            color: #6c757d;
+            transition: all 0.2s ease;
+        }
+        
+        .expand-toggle:hover {
+            color: #6366f1;
+            background: #f0f0ff !important;
+            border-radius: 6px;
+        }
+        
+        .expand-toggle i {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .expand-toggle.expanded i {
+            transform: rotate(90deg);
+        }
+        
+        /* 账户行样式 */
+        .account-row {
+            transition: background-color 0.2s ease;
+        }
+        
+        .account-row.expanded {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        }
+        
+        /* 站点详情行 */
+        .website-details-row {
+            border-top: none !important;
+        }
+        
+        .website-details-container {
+            padding: 20px;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 域名配置卡片 */
+        .domain-config-card {
+            background: #fff;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .domain-config-card:hover {
+            border-color: #6366f1;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+        }
+        
+        .domain-config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+        
+        .domain-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .domain-name i {
+            color: #6366f1;
+        }
+        
+        .domain-url {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+        }
+        
+        .config-field {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .config-field label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .config-field label i {
+            color: #6366f1;
+            font-size: 1rem;
+        }
+        
+        .config-field select,
+        .config-field input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+        
+        .config-field select:focus,
+        .config-field input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .config-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 2px solid #f1f5f9;
+        }
+        
+        /* 无绑定站点提示 */
+        .no-websites-hint {
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);
+            border-radius: 12px;
+            border: 2px dashed #fbbf24;
+        }
+        
+        .no-websites-hint i {
+            font-size: 3rem;
+            color: #f59e0b;
+            opacity: 0.6;
+            margin-bottom: 12px;
+        }
+        
+        .no-websites-hint p {
+            color: #92400e;
+            font-size: 1rem;
+            margin: 8px 0;
+        }
+        
+        .no-websites-hint button {
+            margin-top: 12px;
+        }
+        
+        /* 空状态样式 */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 15px;
+        }
+        
+        /* Badge */
+        .badge-custom {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        /* 绑定表格样式 */
+        .binding-table {
+            margin-top: 20px;
+        }
+        
+        .binding-table-wrapper {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        /* 站点绑定 Offcanvas 样式 */
+        #accountWebsiteBindingOffcanvas .offcanvas-header {
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #6366f1 100%);
+            color: #fff;
+            padding: 24px 28px;
+            border-bottom: none;
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #accountWebsiteBindingOffcanvas .offcanvas-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid2" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid2)"/></svg>');
+            opacity: 0.5;
+        }
+        
+        #accountWebsiteBindingOffcanvas .offcanvas-title {
+            font-weight: 700;
+            font-size: 1.2rem;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        #accountWebsiteBindingOffcanvas .offcanvas-title i {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        #accountWebsiteBindingOffcanvas .btn-close {
+            position: relative;
+            z-index: 1;
+            filter: brightness(0) invert(1);
+            opacity: 0.9;
+            transition: all 0.2s ease;
+        }
+        
+        #accountWebsiteBindingOffcanvas .btn-close:hover {
+            opacity: 1;
+            transform: rotate(90deg);
+        }
+        
+        #accountWebsiteBindingOffcanvas .border-top {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+            border-top: 2px solid #e2e8f0 !important;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+        }
+        
+        #saveAccountWebsiteBindingsBtn {
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            border: none;
+            padding: 14px;
+            font-weight: 600;
+            font-size: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        #saveAccountWebsiteBindingsBtn:hover {
+            background: linear-gradient(135deg, #0891b2 0%, #2563eb 100%);
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        #saveAccountWebsiteBindingsBtn:active {
+            transform: translateY(0);
+        }
+        
+        #accountWebsiteBindingContainer .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        }
+        
+        #accountWebsiteBindingContainer .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #dbeafe;
+            border-top-color: #06b6d4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        #accountWebsiteBindingContainer .loading-text {
+            margin-top: 24px;
+            color: #0369a1;
+            font-size: 1rem;
+            font-weight: 500;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        #accountWebsiteBindingContainer .loading-tips {
+            margin-top: 12px;
+            color: #0c4a6e;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        #accountWebsiteBindingContainer .loading-tips i {
+            color: #06b6d4;
+        }
+        
+        /* Sitemap 管理样式 */
+        .provider-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .provider-item {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .sitemap-website-card {
+            background: #fff;
+            border: 1px solid #e3e6f0;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .sitemap-website-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .sitemap-platforms {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .sitemap-platform-item {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .platform-badge {
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        
+        .platform-files {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .file-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .file-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <i class="mdi mdi-chart-line me-2"></i>
+                                <?= htmlspecialchars($title) ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="<?= $this->getUrl('pagebuilder/backend/page') ?>"><lang>页面管理</lang></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><lang>SEO管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 使用指南区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="usage-guide">
+                            <div class="usage-guide-header" onclick="toggleUsageGuide()">
+                                <h6>
+                                    <i class="mdi mdi-help-circle-outline me-2"></i>
+                                    <lang>使用指南</lang>
+                                </h6>
+                                <i class="mdi mdi-chevron-down" id="usage-guide-icon"></i>
+                            </div>
+                            <div class="usage-guide-body" id="usage-guide-body">
+                                <p class="mb-2"><strong><lang>关于SEO管理</lang></strong></p>
+                                <ul>
+                                    <li><strong><lang>SEO账户</lang>：</strong><lang>配置Google、Bing、Baidu等搜索引擎的API凭证，用于提交sitemap和URL</lang></li>
+                                    <li><strong><lang>站点绑定</lang>：</strong><lang>将账户绑定到站点，配置每个站点的SEO策略</lang></li>
+                                    <li><strong><lang>Sitemap管理</lang>：</strong><lang>生成和管理站点的Sitemap文件，提交到搜索引擎</lang></li>
+                                </ul>
+                                <p class="mb-0 mt-2"><lang>添加SEO账户后，点击绑定站点来配置SEO策略，然后系统会自动提交sitemap到搜索引擎。</lang></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEO账户管理手风琴区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="seo-accordion">
+                            <div class="seo-accordion-item">
+                                <div class="seo-accordion-header" onclick="toggleAccordion('accounts')">
+                                    <h5>
+                                        <i class="mdi mdi-account-key me-2"></i>
+                                        <lang>SEO账户管理</lang>
+                                        <span class="badge bg-light text-dark ms-2"><?= count($accounts) ?></span>
+                                    </h5>
+                                    <i class="mdi mdi-chevron-down toggle-icon" id="accounts-toggle-icon"></i>
+                                </div>
+                                <div class="seo-accordion-body show" id="accounts-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0"><lang>账户列表</lang></h6>
+                                        <button type="button" class="btn btn-primary btn-sm" 
+                                                data-bs-toggle="offcanvas" 
+                                                data-bs-target="#accountOffcanvas"
+                                                onclick="loadAccountForm(0)">
+                                            <i class="mdi mdi-plus-circle-outline me-1"></i>
+                                            <lang>添加SEO账户</lang>
+                                        </button>
+                                    </div>
+
+                                    <?php if (empty($accounts)): ?>
+                                        <div class="empty-state">
+                                            <i class="mdi mdi-account-off-outline"></i>
+                                            <p><lang>暂无SEO账户</lang></p>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="table-responsive">
+                                            <table class="table table-hover seo-table" id="accountTable">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width: 50px;"></th>
+                                                        <th>ID</th>
+                                                        <th><lang>名称</lang></th>
+                                                        <th><lang>平台</lang></th>
+                                                        <th><lang>Provider</lang></th>
+                                                        <th><lang>绑定站点</lang></th>
+                                                        <th><lang>状态</lang></th>
+                                                        <th><lang>URL推送</lang></th>
+                                                        <th><lang>Sitemap</lang></th>
+                                                        <th><lang>操作</lang></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($accounts as $account): 
+                                                        $accountId = (int)$account['account_id'];
+                                                        // 计算账户绑定的站点数量
+                                                        $boundWebsiteCount = 0;
+                                                        foreach ($websiteAccountBindings as $binding) {
+                                                            if ((int)$binding['account_id'] === $accountId) {
+                                                                $boundWebsiteCount++;
+                                                            }
+                                                        }
+                                                    ?>
+                                                        <tr class="account-row" data-account-id="<?= $accountId ?>">
+                                                            <td>
+                                                                <button class="btn btn-sm btn-ghost expand-toggle" 
+                                                                        onclick="toggleAccountWebsites(<?= $accountId ?>)"
+                                                                        title="<?= __('展开/收起绑定站点') ?>">
+                                                                    <i class="mdi mdi-chevron-right"></i>
+                                                                </button>
+                                                            </td>
+                                                            <td><?= $accountId ?></td>
+                                                            <td><?= htmlspecialchars($account['name']) ?></td>
+                                                            <td>
+                                                                <?php
+                                                                $platform = $account['platform'] ?? '';
+                                                                $platformIcon = match($platform) {
+                                                                    'google' => 'mdi-google text-danger',
+                                                                    'bing' => 'mdi-microsoft text-primary',
+                                                                    'baidu' => 'mdi-web text-info',
+                                                                    default => 'mdi-web-box'
+                                                                };
+                                                                ?>
+                                                                <i class="mdi <?= $platformIcon ?> me-1"></i>
+                                                                <?= htmlspecialchars(ucfirst($platform)) ?>
+                                                            </td>
+                                                            <td><code class="small"><?= htmlspecialchars($account['provider']) ?></code></td>
+                                                            <td>
+                                                                <?php if ($boundWebsiteCount > 0): ?>
+                                                                    <span class="badge bg-primary" style="cursor: pointer;" onclick="toggleAccountWebsites(<?= $accountId ?>)">
+                                                                        <i class="mdi mdi-web me-1"></i>
+                                                                        <?= $boundWebsiteCount ?> <lang>个站点</lang>
+                                                                    </span>
+                                                                <?php else: ?>
+                                                                    <span class="badge bg-secondary">
+                                                                        <lang>个站点</lang>
+                                                                    </span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ((int)$account['is_active'] === 1): ?>
+                                                                    <span class="badge badge-custom bg-success"><lang>启用</lang></span>
+                                                                <?php else: ?>
+                                                                    <span class="badge badge-custom bg-secondary"><lang>禁用</lang></span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ((int)$account['enable_cron_push_urls'] === 1): ?>
+                                                                    <i class="mdi mdi-check-circle text-success"></i>
+                                                                <?php else: ?>
+                                                                    <i class="mdi mdi-close-circle text-muted"></i>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ((int)$account['enable_cron_sitemap'] === 1): ?>
+                                                                    <i class="mdi mdi-check-circle text-success"></i>
+                                                                <?php else: ?>
+                                                                    <i class="mdi mdi-close-circle text-muted"></i>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <button class="btn btn-sm btn-outline-primary me-1" 
+                                                                        data-bs-toggle="offcanvas" 
+                                                                        data-bs-target="#accountOffcanvas"
+                                                                        onclick="loadAccountForm(<?= $accountId ?>)"
+                                                                        title="<?= __('编辑账户') ?>">
+                                                                    <i class="mdi mdi-pencil"></i>
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-success me-1" 
+                                                                        data-bs-toggle="offcanvas" 
+                                                                        data-bs-target="#accountWebsiteBindingOffcanvas"
+                                                                        onclick="loadAccountWebsiteBinding(<?= $accountId ?>)"
+                                                                        title="<?= __('绑定站点') ?>">
+                                                                    <i class="mdi mdi-web"></i>
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-danger" 
+                                                                        onclick="deleteAccount(<?= $accountId ?>)"
+                                                                        title="<?= __('删除账户') ?>">
+                                                                    <i class="mdi mdi-delete"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                        <!-- 站点详情展开行区域 -->
+                                                        <tr class="website-details-row" id="websites-row-<?= $accountId ?>" style="display: none;">
+                                                            <td colspan="10" style="padding: 0; background: #f8f9fa;">
+                                                                <div class="website-details-container" id="websites-container-<?= $accountId ?>">
+                                                                    <!-- 站点配置容器 -->
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <?php endif; ?>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sitemap管理区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="seo-accordion">
+                            <div class="seo-accordion-item">
+                                <div class="seo-accordion-header collapsed" onclick="toggleAccordion('sitemap')">
+                                    <h5>
+                                        <i class="mdi mdi-sitemap me-2"></i>
+                                        <lang>Sitemap管理</lang>
+                                    </h5>
+                                    <i class="mdi mdi-chevron-down toggle-icon" id="sitemap-toggle-icon"></i>
+                                </div>
+                                <div class="seo-accordion-body" id="sitemap-body">
+                                    
+                                    <!-- Sitemap 生成控制 -->
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0"><lang>Sitemap 文件管理</lang></h6>
+                                        <div>
+                                            <acl source="Weline_Seo::sitemap_management">
+                                                <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="window.open('<?= $this->getBackendUrl('seo/backend/sitemap/index') ?>', '_blank')">
+                                                    <i class="mdi mdi-open-in-new me-1"></i>
+                                                    <lang>完整管理</lang>
+                                                </button>
+                                                <button type="button" class="btn btn-primary btn-sm" onclick="generateSitemap()">
+                                                    <i class="mdi mdi-refresh me-1"></i>
+                                                    <lang>生成Sitemap</lang>
+                                                </button>
+                                            </acl>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 主索引文件 -->
+                                    <?php if ($sitemap_index_file): ?>
+                                    <div class="alert alert-info mb-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <i class="mdi mdi-file-document me-2"></i>
+                                                <strong><lang>主索引文件</lang>:</strong>
+                                                <code><?= htmlspecialchars($sitemap_index_file['name']) ?></code>
+                                                <span class="badge bg-light text-dark ms-2"><?= htmlspecialchars($sitemap_index_file['size_formatted']) ?></span>
+                                            </div>
+                                            <a href="<?= htmlspecialchars($sitemap_index_file['full_url']) ?>" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                <i class="mdi mdi-open-in-new"></i>
+                                            </a>
+                                        </div>
+                                        <small class="text-muted"><lang>最后更新</lang>: <?= htmlspecialchars($sitemap_index_file['modified']) ?></small>
+                                    </div>
+                                    <?php endif; ?>
+                                    
+                                    <!-- 已注册的 Provider -->
+                                    <?php if (!empty($sitemap_providers)): ?>
+                                    <div class="mb-4">
+                                        <h6 class="mb-2"><lang>已注册的 URL 提供器</lang> (<?= count($sitemap_providers) ?>)</h6>
+                                        <div class="provider-list">
+                                            <?php foreach ($sitemap_providers as $provider): ?>
+                                            <div class="provider-item">
+                                                <span class="badge bg-primary me-2"><?= htmlspecialchars($provider['module']) ?></span>
+                                                <small class="text-muted"><?= htmlspecialchars($provider['description']) ?></small>
+                                            </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+                                    
+                                    <!-- 站点 Sitemap 文件 -->
+                                    <?php if (!empty($sitemap_module_sitemaps)): ?>
+                                    <div>
+                                        <h6 class="mb-3"><lang>站点 Sitemap 文件</lang></h6>
+                                        <?php foreach ($sitemap_module_sitemaps as $siteData): ?>
+                                        <div class="sitemap-website-card mb-3">
+                                            <div class="sitemap-website-header">
+                                                <div>
+                                                    <i class="mdi mdi-web me-2"></i>
+                                                    <strong><?= htmlspecialchars($siteData['website_name']) ?></strong>
+                                                    <?php if (!empty($siteData['website_domain'])): ?>
+                                                    <small class="text-muted ms-2"><?= htmlspecialchars($siteData['website_domain']) ?></small>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if (isset($siteData['error'])): ?>
+                                                <span class="badge bg-warning"><lang>需要配置</lang></span>
+                                                <?php else: ?>
+                                                <span class="badge bg-success"><?= $siteData['platform_count'] ?? 0 ?> <lang>个平台</lang></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            
+                                            <?php if (isset($siteData['error'])): ?>
+                                            <div class="alert alert-warning mb-0 mt-2">
+                                                <i class="mdi mdi-alert-circle me-2"></i>
+                                                <?= htmlspecialchars($siteData['message']) ?>
+                                            </div>
+                                            <?php elseif (!empty($siteData['platforms'])): ?>
+                                            <div class="sitemap-platforms mt-2">
+                                                <?php foreach ($siteData['platforms'] as $platform): ?>
+                                                <div class="sitemap-platform-item">
+                                                    <div class="platform-badge" style="background-color: <?= htmlspecialchars($platform['platform_color']) ?>;">
+                                                        <?= htmlspecialchars($platform['platform_name']) ?>
+                                                    </div>
+                                                    <div class="platform-files">
+                                                        <?php if ($platform['index']): ?>
+                                                        <a href="<?= htmlspecialchars($platform['index']['url']) ?>" target="_blank" class="file-link">
+                                                            <i class="mdi mdi-file-xml-box me-1"></i>
+                                                            <?= htmlspecialchars($platform['index']['name']) ?>
+                                                            <small class="text-muted">(<?= htmlspecialchars($platform['index']['size_formatted']) ?>)</small>
+                                                        </a>
+                                                        <?php endif; ?>
+                                                        <small class="text-muted"><?= $platform['module_count'] ?> <lang>个模块</lang>, <?= $platform['file_count'] ?> <lang>个文件</lang></small>
+                                                    </div>
+                                                </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php else: ?>
+                                    <div class="empty-state">
+                                        <i class="mdi mdi-sitemap"></i>
+                                        <p><lang>暂无 Sitemap 文件</lang></p>
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="generateSitemap()">
+                                            <i class="mdi mdi-refresh me-1"></i>
+                                            <lang>立即生成</lang>
+                                        </button>
+                                    </div>
+                                    <?php endif; ?>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- SEO账户 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="accountOffcanvas" style="width: 700px; max-width: 90vw;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="accountOffcanvasLabel">
+            <i class="mdi mdi-account-key me-2"></i>
+            <span id="accountOffcanvasTitle"><lang>SEO账户</lang></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="accountFormContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><lang>加载中...</lang></span>
+                </div>
+                <p class="mt-2 text-muted"><lang>正在加载表单...</lang></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 站点绑定 Offcanvas 侧边面板 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="accountWebsiteBindingOffcanvas" aria-labelledby="accountWebsiteBindingOffcanvasLabel" style="width: 600px; max-width: 90vw;">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="accountWebsiteBindingOffcanvasLabel">
+            <i class="mdi mdi-web"></i>
+            <span id="accountWebsiteBindingTitle"><lang>站点绑定</lang></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div id="accountWebsiteBindingContainer">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">
+                    <lang>正在加载绑定信息...</lang>
+                </div>
+                <div class="loading-tips">
+                    <i class="mdi mdi-information-outline"></i>
+                    <span><lang>绑定信息</lang></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="border-top p-3" style="position: sticky; bottom: 0; z-index: 10;">
+        <button type="button" class="btn btn-primary w-100" id="saveAccountWebsiteBindingsBtn" onclick="saveAccountWebsiteBindings()">
+            <i class="mdi mdi-content-save me-2"></i>
+            <lang>保存绑定</lang>
+        </button>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 国际化翻译
+const i18n = {
+    // 通用
+    loading: '<?= __("加载中...") ?>',
+    saving: '<?= __("保存中...") ?>',
+    loadFailed: '<?= __("加载失败") ?>',
+    saveFailed: '<?= __("保存失败") ?>',
+    saveSuccess: '<?= __("保存成功") ?>',
+    confirm: '<?= __("确认") ?>',
+    cancel: '<?= __("取消") ?>',
+    reset: '<?= __("重置") ?>',
+    unbind: '<?= __("解绑") ?>',
+    noData: '<?= __("暂无数据") ?>',
+    enabled: '<?= __("已启用") ?>',
+    disabled: '<?= __("已禁用") ?>',
+    
+    // 网站绑定
+    noWebsitesBound: '<?= __("该账户暂未绑定站点") ?>',
+    clickBindButton: '<?= __("点击右上角的【绑定站点】按钮添加站点绑定") ?>',
+    bindWebsites: '<?= __("绑定站点") ?>',
+    saveConfig: '<?= __("保存配置") ?>',
+    
+    // Sitemap配置
+    sitemapFrequency: '<?= __("Sitemap生成频率") ?>',
+    crawlFrequency: '<?= __("搜索引擎抓取频率") ?>',
+    priority: '<?= __("URL优先级") ?>',
+    autoSubmit: '<?= __("自动提交") ?>',
+    
+    // 频率选项
+    realtime: '<?= __("实时") ?>',
+    hourly: '<?= __("每小时") ?>',
+    daily: '<?= __("每天") ?>',
+    weekly: '<?= __("每周") ?>',
+    monthly: '<?= __("每月") ?>',
+    yearly: '<?= __("每年") ?>',
+    always: '<?= __("总是") ?>',
+    never: '<?= __("从不") ?>',
+    
+    // 解绑操作
+    confirmUnbind: '<?= __("确认解绑") ?>',
+    unbindConfirmText: '<?= __("确定要解绑该站点吗？解绑后将停止为该站点生成Sitemap。") ?>',
+    unbindSuccess: '<?= __("解绑成功") ?>',
+    unbindFailed: '<?= __("解绑失败") ?>',
+    
+    // 站点选择器
+    noWebsites: '<?= __("没有可用站点") ?>',
+    searchPlaceholder: '<?= __("搜索站点名称...") ?>',
+    selected: '<?= __("已选择") ?>',
+    websites: '<?= __("站点") ?>',
+    clearSelection: '<?= __("确认") ?>',
+    defaultWebsite: '<?= __("确认") ?>',
+    noMatch: '<?= __("无匹配结果") ?>'
+};
+
+// Safe Swal wrapper
+const SafeSwal = {
+    fire: function(config) {
+        if (typeof Swal !== 'undefined') {
+            return Swal.fire(config);
+        } else {
+            console.warn('SweetAlert2 not loaded, using native dialogs');
+            
+            if (config.icon === 'success' || config.icon === 'error' || config.icon === 'warning') {
+                const message = config.html || config.text || config.title || '';
+                const plainMessage = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                alert(plainMessage);
+                
+                if (config.timer && config.showConfirmButton === false) {
+                    return Promise.resolve({ isConfirmed: true });
+                }
+            }
+            
+            if (config.showCancelButton) {
+                const message = config.html || config.text || config.title || '';
+                const plainMessage = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                const result = confirm(plainMessage);
+                return Promise.resolve({ isConfirmed: result });
+            }
+            
+            return Promise.resolve({ isConfirmed: true });
+        }
+    },
+    showLoading: function() {
+        if (typeof Swal !== 'undefined') {
+            Swal.showLoading();
+        }
+    }
+};
+
+// Friendly message function
+function showMessage(type, message, title = null) {
+    if (typeof Swal !== 'undefined') {
+        const config = {
+            icon: type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning',
+            title: title || (type === 'success' ? '<?= __("确认") ?>' : '<?= __("确认") ?>'),
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: type === 'success' ? 3000 : 5000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        };
+        SafeSwal.fire(config);
+    } else {
+        const prefix = type === 'success' ? '\u2713 ' : type === 'error' ? '\u2717 ' : '\u26A0 ';
+        alert(prefix + (title || '') + '\n' + message);
+    }
+}
+
+// SEO 账户平台处理 - AJAX 表单处理函数
+(function initSeoAccountPlatformHandlers() {
+    if (typeof window.handlePlatformChange === 'function') {
+        return;
+    }
+
+    function getPlatformData() {
+        if (window.PLATFORM_DATA) {
+            return window.PLATFORM_DATA;
+        }
+        const dataEl = document.getElementById('seoAccountPlatformData');
+        if (!dataEl) {
+            return null;
+        }
+        try {
+            const data = JSON.parse(dataEl.textContent || '{}');
+            window.PLATFORM_DATA = data;
+            return data;
+        } catch (e) {
+            console.error('解析平台数据失败:', e);
+            return null;
+        }
+    }
+
+    function hideAllPlatformInfo() {
+        const info = document.getElementById('platformFeaturesInfo');
+        const guide = document.getElementById('platformGuideInfo');
+        const fillBtn = document.getElementById('fillTemplateBtn');
+        if (info) info.style.display = 'none';
+        if (guide) guide.style.display = 'none';
+        if (fillBtn) fillBtn.style.display = 'none';
+    }
+
+    function showPlatformInfo(platformCode) {
+        const data = getPlatformData();
+        if (!data || !data[platformCode]) {
+            hideAllPlatformInfo();
+            return;
+        }
+
+        const platform = data[platformCode];
+        const featuresInfo = document.getElementById('platformFeaturesInfo');
+        const guideInfo = document.getElementById('platformGuideInfo');
+        const fillBtn = document.getElementById('fillTemplateBtn');
+
+        if (featuresInfo) featuresInfo.style.display = 'block';
+        if (guideInfo) guideInfo.style.display = 'block';
+        if (fillBtn) fillBtn.style.display = 'inline-block';
+
+        const title = document.getElementById('platformFeaturesTitle');
+        if (title) title.textContent = platform.name || '';
+
+        const featuresList = document.getElementById('platformFeaturesList');
+        if (featuresList && Array.isArray(platform.features)) {
+            featuresList.innerHTML = platform.features.map(f => `<li>${f}</li>`).join('');
+        }
+
+        const hint = document.getElementById('platformConfigHint');
+        if (hint) hint.textContent = platform.config_hint || '';
+
+        const guideTitle = document.getElementById('platformGuideTitle');
+        if (guideTitle) guideTitle.textContent = platform.guide_title || '';
+
+        const guideSteps = document.getElementById('platformGuideSteps');
+        if (guideSteps && Array.isArray(platform.guide_steps)) {
+            guideSteps.innerHTML = platform.guide_steps.map(s => `<li>${s}</li>`).join('');
+        }
+
+        const configTemplate = document.getElementById('platformConfigTemplate');
+        if (configTemplate && platform.config_template) {
+            configTemplate.textContent = JSON.stringify(platform.config_template, null, 2);
+        }
+
+        const guideContent = document.getElementById('platformGuideContent');
+        const guideIcon = document.getElementById('guideToggleIcon');
+        if (guideContent) guideContent.style.display = 'block';
+        if (guideIcon) guideIcon.style.transform = 'rotate(180deg)';
+
+        const configTextarea = document.getElementById('configJsonTextarea');
+        if (configTextarea && !configTextarea.value.trim() && platform.config_template) {
+            configTextarea.placeholder = JSON.stringify(platform.config_template, null, 2);
+        }
+    }
+
+    window.handlePlatformChange = function handlePlatformChange(platformCode) {
+        const platformSelect = document.getElementById('platformSelect');
+        const code = platformCode || (platformSelect ? platformSelect.value : '');
+        window.currentSelectedPlatform = code || '';
+        if (!code) {
+            hideAllPlatformInfo();
+            return;
+        }
+        showPlatformInfo(code);
+    };
+
+    window.toggleGuideContent = function toggleGuideContent() {
+        const content = document.getElementById('platformGuideContent');
+        const icon = document.getElementById('guideToggleIcon');
+        if (!content || !icon) {
+            return;
+        }
+        const isVisible = content.style.display !== 'none';
+        content.style.display = isVisible ? 'none' : 'block';
+        icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
+    };
+
+    window.fillConfigTemplate = function fillConfigTemplate() {
+        const data = getPlatformData();
+        const platformSelect = document.getElementById('platformSelect');
+        const code = window.currentSelectedPlatform || (platformSelect ? platformSelect.value : '');
+        if (!data || !code || !data[code]) {
+            showMessage('warning', '<?= __("请先选择平台") ?>');
+            return;
+        }
+        const configTextarea = document.getElementById('configJsonTextarea');
+        const template = data[code].config_template;
+        if (!configTextarea || !template) {
+            return;
+        }
+        if (configTextarea.value.trim() !== '') {
+            if (typeof Swal !== 'undefined') {
+                SafeSwal.fire({
+                    icon: 'question',
+                    title: '<?= __("确认") ?>',
+                    text: '<?= __("当前配置将被替换，确定吗？") ?>',
+                    showCancelButton: true,
+                    confirmButtonText: '<?= __("确定") ?>',
+                    cancelButtonText: '<?= __("确定") ?>'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        configTextarea.value = JSON.stringify(template, null, 2);
+                        configTextarea.focus();
+                    }
+                });
+            } else {
+                if (confirm('<?= __("当前配置将被替换，确定吗？") ?>')) {
+                    configTextarea.value = JSON.stringify(template, null, 2);
+                    configTextarea.focus();
+                }
+            }
+            return;
+        }
+        configTextarea.value = JSON.stringify(template, null, 2);
+        configTextarea.focus();
+    };
+
+    window.handleJsonFileUpload = function handleJsonFileUpload(input) {
+        const file = input.files[0];
+        if (!file) {
+            return;
+        }
+        
+        if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+            showMessage('error', '<?= __("请选择JSON文件") ?>');
+            input.value = '';
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            showMessage('error', '<?= __("文件大小不能超过5MB") ?>');
+            input.value = '';
+            return;
+        }
+        
+        const configTextarea = document.getElementById('configJsonTextarea');
+        
+        function readJsonFile() {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const jsonObj = JSON.parse(content);
+                    if (configTextarea) {
+                        configTextarea.value = JSON.stringify(jsonObj, null, 2);
+                        configTextarea.focus();
+                    }
+                    showMessage('success', '<?= __("JSON文件导入成功") ?>');
+                } catch (err) {
+                    showMessage('error', '<?= __("JSON解析失败") ?>: ' + err.message);
+                }
+                input.value = '';
+            };
+            reader.onerror = function() {
+                showMessage('error', '<?= __("文件读取失败") ?>');
+                input.value = '';
+            };
+            reader.readAsText(file);
+        }
+        
+        if (configTextarea && configTextarea.value.trim() !== '') {
+            if (typeof Swal !== 'undefined') {
+                SafeSwal.fire({
+                    icon: 'question',
+                    title: '<?= __("确认") ?>',
+                    text: '<?= __("请检查网络连接后重试") ?>',
+                    showCancelButton: true,
+                    confirmButtonText: '<?= __("确定") ?>',
+                    cancelButtonText: '<?= __("确定") ?>'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        readJsonFile();
+                    } else {
+                        input.value = '';
+                    }
+                });
+            } else {
+                if (confirm('<?= __("请检查网络连接后重试") ?>')) {
+                    readJsonFile();
+                } else {
+                    input.value = '';
+                }
+            }
+            return;
+        }
+        
+        readJsonFile();
+    };
+})();
+
+// 切换使用指南
+function toggleUsageGuide() {
+    const body = document.getElementById('usage-guide-body');
+    const icon = document.getElementById('usage-guide-icon');
+    body.classList.toggle('show');
+    icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// 切换手风琴
+function toggleAccordion(section) {
+    const body = document.getElementById(section + '-body');
+    const header = document.querySelector(`[onclick="toggleAccordion('${section}')"]`);
+    body.classList.toggle('show');
+    header.classList.toggle('collapsed');
+}
+
+// 生成 Sitemap
+function generateSitemap() {
+    if (!confirm('<?= __('确定要生成所有站点的 Sitemap 吗？') ?>')) {
+        return;
+    }
+    
+    SafeSwal.fire({
+        title: '<?= __("生成中") ?>',
+        html: '<div class="text-center"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted"><?= __("正在生成 Sitemap，请稍候...") ?></p></div>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            SafeSwal.showLoading();
+        }
+    });
+    
+    const formData = new FormData();
+    formData.append('generate_all', '1');
+    formData.append('use_providers', '1');
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/sitemap/generate') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            SafeSwal.fire({
+                icon: 'success',
+                title: '<?= __("生成成功") ?>',
+                html: data.message || '<?= __("Sitemap 生成成功") ?>',
+                timer: 2500,
+                timerProgressBar: true,
+                showConfirmButton: false
+            }).then(() => {
+                location.reload();
+            });
+        } else {
+            SafeSwal.fire({
+                icon: 'error',
+                title: '<?= __("生成失败") ?>',
+                text: data.message || '<?= __("Sitemap 生成失败") ?>',
+                confirmButtonText: '<?= __("确定") ?>'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('生成 Sitemap 失败:', error);
+        SafeSwal.fire({
+            icon: 'error',
+            title: '<?= __("生成失败") ?>',
+            text: '<?= __("请求失败，请重试") ?>',
+            confirmButtonText: '<?= __("确定") ?>'
+        });
+    });
+}
+
+// 加载账户表单到 Offcanvas
+function loadAccountForm(accountId) {
+    const container = document.getElementById('accountFormContainer');
+    const titleElement = document.getElementById('accountOffcanvasTitle');
+    
+    // 设置标题
+    if (accountId > 0) {
+        titleElement.textContent = '<?= __("编辑SEO账户") ?> #' + accountId;
+    } else {
+        titleElement.textContent = '<?= __("添加SEO账户") ?>';
+    }
+    
+    // 显示加载状态
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden"><?= __("加载中...") ?></span>
+            </div>
+            <p class="mt-2 text-muted"><?= __("正在加载表单...") ?></p>
+        </div>
+    `;
+    
+    // 构建URL
+    const url = '<?= $this->getBackendUrl('seo/backend/account/form', ['module' => $module, 'scope' => $scope]) ?>' + 
+                (accountId > 0 ? '&id=' + accountId : '');
+    
+    // 发起请求
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.text();
+    })
+    .then(html => {
+        container.innerHTML = html;
+        
+        // 绑定表单提交事件
+        const form = container.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', handleAccountFormSubmit);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading form:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                <?= __("加载失败") ?>: ${error.message}
+            </div>
+        `;
+    });
+}
+
+// 处理账户表单提交
+function handleAccountFormSubmit(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __("保存中...") ?>';
+    }
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('success', data.message || '<?= __("确认") ?>');
+            
+            // 关闭 offcanvas
+            const offcanvasElement = document.getElementById('accountOffcanvas');
+            const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement);
+            if (offcanvas) {
+                offcanvas.hide();
+            }
+            
+            // 刷新页面
+            setTimeout(() => {
+                location.reload();
+            }, 800);
+        } else {
+            showMessage('error', data.message || '<?= __("确认") ?>');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('error', '<?= __("保存失败，请重试") ?>');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
+        }
+    });
+    
+    return false;
+}
+
+// 站点配置
+// 展开/收起账户绑定的站点列表
+function toggleAccountWebsites(accountId) {
+    const row = document.querySelector(`tr[data-account-id="${accountId}"]`);
+    const detailsRow = document.getElementById(`websites-row-${accountId}`);
+    const container = document.getElementById(`websites-container-${accountId}`);
+    const toggleBtn = row.querySelector('.expand-toggle');
+    
+    if (detailsRow.style.display === 'none') {
+        // 展开
+        detailsRow.style.display = '';
+        row.classList.add('expanded');
+        toggleBtn.classList.add('expanded');
+        
+        // 加载站点配置
+        loadAccountWebsitesConfig(accountId, container);
+    } else {
+        // 收起
+        detailsRow.style.display = 'none';
+        row.classList.remove('expanded');
+        toggleBtn.classList.remove('expanded');
+    }
+}
+
+// 加载账户绑定站点的配置信息
+async function loadAccountWebsitesConfig(accountId, container) {
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">' + i18n.loading + '</p></div>';
+    
+    try {
+        const response = await fetch(`<?= $this->getBackendUrl('seo/backend/account/websites') ?>?account_id=${accountId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.message || i18n.loadFailed);
+        }
+        
+        const boundWebsites = data.bound_website_ids || [];
+        const allWebsites = data.websites || [];
+        const configs = data.configs || {};
+        
+        if (boundWebsites.length === 0) {
+            // 没有绑定站点
+            container.innerHTML = `
+                <div class="no-websites-hint">
+                    <i class="mdi mdi-web-off"></i>
+                    <p><strong>${i18n.noWebsitesBound}</strong></p>
+                    <p class="small">${i18n.clickBindButton}</p>
+                    <button class="btn btn-primary btn-sm" 
+                            data-bs-toggle="offcanvas" 
+                            data-bs-target="#accountWebsiteBindingOffcanvas"
+                            onclick="loadAccountWebsiteBinding(${accountId})">
+                        <i class="mdi mdi-web me-1"></i>
+                        ${i18n.bindWebsites}
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // 渲染绑定站点的配置表单
+        const websitesHtml = boundWebsites.map(websiteId => {
+            const website = allWebsites.find(w => parseInt(w.website_id) === parseInt(websiteId));
+            if (!website) return '';
+            
+            const config = configs[websiteId] || {};
+            const sitemapFreq = config.sitemap_frequency || 'daily';
+            const crawlFreq = config.crawl_frequency || 'weekly';
+            const priority = config.priority || '0.50';
+            const isAutoSubmit = config.is_auto_submit !== undefined ? parseInt(config.is_auto_submit) : 1;
+            
+            return `
+                <div class="domain-config-card" data-website-id="${websiteId}">
+                    <div class="domain-config-header">
+                        <div>
+                            <div class="domain-name">
+                                <i class="mdi mdi-web"></i>
+                                <span>${website.name || 'Website #' + websiteId}</span>
+                                <span class="badge bg-light text-dark small">${website.code || ''}</span>
+                            </div>
+                            <div class="domain-url">
+                                <i class="mdi mdi-link-variant"></i>
+                                <code>${website.base_url || ''}</code>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" 
+                                onclick="unbindWebsiteFromAccount(${accountId}, ${websiteId})"
+                                title="${i18n.unbind}">
+                            <i class="mdi mdi-link-off"></i>
+                        </button>
+                    </div>
+                    
+                    <form class="website-config-form" data-account-id="${accountId}" data-website-id="${websiteId}">
+                        <div class="config-grid">
+                            <div class="config-field">
+                                <label>
+                                    <i class="mdi mdi-calendar-clock"></i>
+                                    <span>${i18n.sitemapFrequency}</span>
+                                </label>
+                                <select name="sitemap_frequency" class="form-select">
+                                    <option value="realtime" ${sitemapFreq === 'realtime' ? 'selected' : ''}>${i18n.realtime}</option>
+                                    <option value="hourly" ${sitemapFreq === 'hourly' ? 'selected' : ''}>${i18n.hourly}</option>
+                                    <option value="daily" ${sitemapFreq === 'daily' ? 'selected' : ''}>${i18n.daily}</option>
+                                    <option value="weekly" ${sitemapFreq === 'weekly' ? 'selected' : ''}>${i18n.weekly}</option>
+                                    <option value="monthly" ${sitemapFreq === 'monthly' ? 'selected' : ''}>${i18n.monthly}</option>
+                                </select>
+                            </div>
+                            
+                            <div class="config-field">
+                                <label>
+                                    <i class="mdi mdi-spider-web"></i>
+                                    <span>${i18n.crawlFrequency}</span>
+                                </label>
+                                <select name="crawl_frequency" class="form-select">
+                                    <option value="always" ${crawlFreq === 'always' ? 'selected' : ''}>${i18n.always}</option>
+                                    <option value="hourly" ${crawlFreq === 'hourly' ? 'selected' : ''}>${i18n.hourly}</option>
+                                    <option value="daily" ${crawlFreq === 'daily' ? 'selected' : ''}>${i18n.daily}</option>
+                                    <option value="weekly" ${crawlFreq === 'weekly' ? 'selected' : ''}>${i18n.weekly}</option>
+                                    <option value="monthly" ${crawlFreq === 'monthly' ? 'selected' : ''}>${i18n.monthly}</option>
+                                    <option value="yearly" ${crawlFreq === 'yearly' ? 'selected' : ''}>${i18n.yearly}</option>
+                                    <option value="never" ${crawlFreq === 'never' ? 'selected' : ''}>${i18n.never}</option>
+                                </select>
+                            </div>
+                            
+                            <div class="config-field">
+                                <label>
+                                    <i class="mdi mdi-star-outline"></i>
+                                    <span>${i18n.priority}</span>
+                                </label>
+                                <input type="number" name="priority" class="form-control" 
+                                       value="${priority}" min="0" max="1" step="0.1">
+                            </div>
+                            
+                            <div class="config-field">
+                                <label>
+                                    <i class="mdi mdi-upload-network"></i>
+                                    <span>${i18n.autoSubmit}</span>
+                                </label>
+                                <div class="form-check form-switch" style="padding-top: 8px;">
+                                    <input class="form-check-input" type="checkbox" name="is_auto_submit" 
+                                           value="1" ${isAutoSubmit === 1 ? 'checked' : ''} 
+                                           style="width: 48px; height: 24px; cursor: pointer;">
+                                    <label class="form-check-label ms-2" style="color: #64748b; font-size: 0.85rem;">
+                                        ${isAutoSubmit === 1 ? i18n.enabled : i18n.disabled}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetWebsiteConfig(this)">
+                                <i class="mdi mdi-restore me-1"></i>
+                                ${i18n.reset}
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="saveWebsiteConfig(this)">
+                                <i class="mdi mdi-content-save me-1"></i>
+                                ${i18n.saveConfig}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = websitesHtml || '<div class="alert alert-warning">' + i18n.noData + '</div>';
+        
+    } catch (error) {
+        console.error('加载站点配置失败:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                ${error.message || i18n.loadFailed}
+            </div>
+        `;
+    }
+}
+
+// 保存站点配置
+function saveWebsiteConfig(button) {
+    const form = button.closest('.website-config-form');
+    const accountId = form.dataset.accountId;
+    const websiteId = form.dataset.websiteId;
+    const formData = new FormData(form);
+    
+    const config = {
+        sitemap_frequency: formData.get('sitemap_frequency'),
+        crawl_frequency: formData.get('crawl_frequency'),
+        priority: formData.get('priority'),
+        is_auto_submit: formData.get('is_auto_submit') ? 1 : 0
+    };
+    
+    console.log('保存配置参数:', { accountId, websiteId, config });
+    
+    // 禁用按钮并显示loading状态
+    button.disabled = true;
+    const originalHtml = button.innerHTML;
+    button.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>' + i18n.saving;
+    button.classList.add('btn-secondary');
+    button.classList.remove('btn-primary');
+    
+    // 显示loading弹窗
+    SafeSwal.fire({
+        title: i18n.saving,
+        html: '<div class="text-center"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted">' + '<?= __("正在保存配置，请稍候...") ?>' + '</p></div>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            SafeSwal.showLoading();
+        }
+    });
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/saveWebsiteConfig') ?>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            account_id: accountId,
+            website_id: websiteId,
+            config: config
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('保存响应:', data);
+        
+        if (data.success) {
+            // 显示成功
+            SafeSwal.fire({
+                icon: 'success',
+                title: i18n.saveSuccess,
+                html: '<p class="mb-2">' + (data.message || '<?= __("配置保存成功") ?>') + '</p><small class="text-muted"><?= __("页面将自动刷新") ?></small>',
+                timer: 2500,
+                timerProgressBar: true,
+                showConfirmButton: false
+            }).then(() => {
+                // 更新按钮状态
+                button.innerHTML = '<i class="mdi mdi-check-circle me-1"></i><?= __("已保存") ?>';
+                button.classList.remove('btn-secondary');
+                button.classList.add('btn-success');
+                
+                // 1秒后恢复按钮
+                setTimeout(() => {
+                    button.innerHTML = originalHtml;
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-primary');
+                    button.disabled = false;
+                }, 1000);
+            });
+        } else {
+            throw new Error(data.message || i18n.saveFailed);
+        }
+    })
+    .catch(error => {
+        console.error('保存配置失败:', error);
+        
+        // 显示错误
+        SafeSwal.fire({
+            icon: 'error',
+            title: i18n.saveFailed,
+            html: '<p class="mb-2">' + error.message + '</p><small class="text-muted"><?= __("请检查网络连接后重试") ?></small>',
+            confirmButtonText: '<?= __("确定") ?>',
+            confirmButtonColor: '#dc3545'
+        }).then(() => {
+            // 恢复按钮
+            button.innerHTML = originalHtml;
+            button.classList.remove('btn-secondary');
+            button.classList.add('btn-primary');
+            button.disabled = false;
+        });
+    });
+}
+
+// 重置站点配置
+function resetWebsiteConfig(button) {
+    const form = button.closest('.website-config-form');
+    const accountId = form.dataset.accountId;
+    const websiteId = form.dataset.websiteId;
+    
+    // 重新加载站点配置
+    const container = document.getElementById(`websites-container-${accountId}`);
+    loadAccountWebsitesConfig(accountId, container);
+}
+
+// 解绑站点
+function unbindWebsiteFromAccount(accountId, websiteId) {
+    console.log('解绑站点参数', { accountId, websiteId });
+    
+    SafeSwal.fire({
+        icon: 'warning',
+        title: i18n.confirmUnbind,
+        html: '<p class="mb-2">' + i18n.unbindConfirmText + '</p><small class="text-danger"><i class="mdi mdi-alert me-1"></i><?= __("此操作不会删除该站点的Sitemap") ?></small>',
+        showCancelButton: true,
+        confirmButtonText: '<i class="mdi mdi-link-off me-1"></i>' + i18n.confirm,
+        cancelButtonText: '<i class="mdi mdi-close me-1"></i>' + i18n.cancel,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        
+        // 显示loading
+        SafeSwal.fire({
+            title: '<?= __("正在解绑") ?>',
+            html: '<div class="text-center"><div class="spinner-border text-danger mb-3" role="status"></div><p class="text-muted"><?= __("正在解绑站点，请稍候...") ?></p></div>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                SafeSwal.showLoading();
+            }
+        });
+        
+        fetch('<?= $this->getBackendUrl('seo/backend/account/unbindWebsite') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: accountId,
+                website_id: websiteId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('解绑响应:', data);
+            
+            if (data.success) {
+                // 显示成功
+                SafeSwal.fire({
+                    icon: 'success',
+                    title: i18n.unbindSuccess,
+                    html: '<p class="mb-0">' + (data.message || '<?= __("站点已成功解绑") ?>') + '</p>',
+                    timer: 1500,
+                    timerProgressBar: true,
+                    showConfirmButton: false
+                }).then(() => {
+                    // 刷新绑定列表
+                    const container = document.getElementById(`websites-container-${accountId}`);
+                    loadAccountWebsitesConfig(accountId, container);
+                    
+                    // 刷新页面更新统计
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                });
+            } else {
+                throw new Error(data.message || i18n.unbindFailed);
+            }
+        })
+        .catch(error => {
+            console.error('解绑失败:', error);
+            SafeSwal.fire({
+                icon: 'error',
+                title: i18n.unbindFailed,
+                html: '<p class="mb-2">' + error.message + '</p><small class="text-muted"><?= __("请检查网络连接后重试") ?></small>',
+                confirmButtonText: '<?= __("确定") ?>',
+                confirmButtonColor: '#dc3545'
+            });
+        });
+    });
+}
+
+function deleteAccount(accountId) {
+    if (!confirm('<?= __('确定要删除该SEO账户吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/delete') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'id=' + accountId
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            showMessage('error', data.message || '<?= __('删除失败') ?>');
+        }
+    });
+}
+
+// ==================== 站点绑定功能 ====================
+
+let currentBindingAccountId = 0;
+let allAvailableWebsites = [];
+let selectedWebsiteIdsForAccount = [];
+
+// 加载账户站点绑定面板
+function loadAccountWebsiteBinding(accountId) {
+    currentBindingAccountId = accountId;
+    const container = document.getElementById('accountWebsiteBindingContainer');
+    const titleElement = document.getElementById('accountWebsiteBindingTitle');
+    
+    titleElement.innerHTML = '<i class="mdi mdi-web me-2"></i><?= __("绑定站点") ?> <small class="text-muted">(<?= __("账户") ?> #' + accountId + ')</small>';
+    
+    // 显示加载状态
+    container.innerHTML = `
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">
+                <?= __("正在加载数据...") ?>
+            </div>
+            <div class="loading-tips">
+                <i class="mdi mdi-information-outline"></i>
+                <span><?= __("搜索可用站点") ?></span>
+            </div>
+        </div>
+    `;
+    
+    // 获取账户站点绑定信息
+    const url = '<?= $this->getBackendUrl('seo/backend/account/websites') ?>' + '?account_id=' + accountId;
+    
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allAvailableWebsites = data.websites || [];
+            selectedWebsiteIdsForAccount = data.bound_website_ids || [];
+            renderAccountWebsiteList(allAvailableWebsites);
+        } else {
+            container.innerHTML = `
+                <div class="loading-state">
+                    <div style="text-align: center;">
+                        <i class="mdi mdi-alert-circle-outline" style="font-size: 5rem; color: #ef4444; opacity: 0.8; margin-bottom: 24px;"></i>
+                        <div class="loading-text" style="color: #ef4444;">
+                            <?= __("加载失败") ?>
+                        </div>
+                        <div class="loading-tips" style="margin-top: 12px; color: #64748b;">
+                            <i class="mdi mdi-information-outline"></i>
+                            <span>${data.message || '<?= __("请稍后重试") ?>'}</span>
+                        </div>
+                        <button class="btn btn-outline-primary mt-4" onclick="loadAccountWebsiteBinding(${accountId})">
+                            <i class="mdi mdi-refresh me-2"></i>
+                            <?= __("重试") ?>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        container.innerHTML = `
+            <div class="loading-state">
+                <div style="text-align: center;">
+                    <i class="mdi mdi-alert-circle-outline" style="font-size: 5rem; color: #ef4444; opacity: 0.8; margin-bottom: 24px;"></i>
+                        <div class="loading-text" style="color: #ef4444;">
+                            <?= __("请求失败") ?>
+                        </div>
+                        <div class="loading-tips" style="margin-top: 12px; color: #64748b;">
+                            <i class="mdi mdi-information-outline"></i>
+                            <span><?= __("请检查网络连接后重试") ?></span>
+                        </div>
+                        <button class="btn btn-outline-primary mt-4" onclick="loadAccountWebsiteBinding(${accountId})">
+                            <i class="mdi mdi-refresh me-2"></i>
+                            <?= __("重试") ?>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// 渲染站点列表
+function renderAccountWebsiteList(websites) {
+    const container = document.getElementById('accountWebsiteBindingContainer');
+    
+    if (!websites || websites.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-muted">' +
+            '<i class="mdi mdi-web-off" style="font-size: 48px;"></i>' +
+            '<p class="mt-3">' + i18n.noWebsites + '</p>' +
+            '</div>';
+        return;
+    }
+    
+    // 使用纯JavaScript构建列表，避免PHP混合
+    let html = '<div class="p-3 border-bottom bg-white sticky-top" style="z-index: 10;">' +
+        '<div class="input-group">' +
+        '<span class="input-group-text"><i class="mdi mdi-magnify"></i></span>' +
+        '<input type="text" class="form-control" id="accountWebsiteSearchInput" ' +
+        'placeholder="' + i18n.searchPlaceholder + '" onkeyup="searchAccountWebsites(this.value)">' +
+        '</div>' +
+        '<div class="mt-2">' +
+        '<small class="text-muted">' +
+        '<i class="mdi mdi-check-circle text-success me-1"></i>' +
+        i18n.selected + ': <strong id="accountSelectedCount">' + selectedWebsiteIdsForAccount.length + '</strong> ' + i18n.websites +
+        '</small>';
+    
+    if (selectedWebsiteIdsForAccount.length > 0) {
+        html += '<button type="button" class="btn btn-sm btn-link text-danger float-end" onclick="clearAccountWebsiteSelections()">' +
+            '<i class="mdi mdi-close-circle me-1"></i>' + i18n.clearSelection +
+            '</button>';
+    }
+    
+    html += '</div></div><div id="accountWebsiteListContainer" class="p-3">';
+    
+    websites.forEach(website => {
+        const isSelected = selectedWebsiteIdsForAccount.includes(website.website_id);
+        html += '<div class="account-website-item card mb-2' + (isSelected ? ' border-success' : '') + '" ' +
+            'data-website-id="' + website.website_id + '" ' +
+            'data-website-name="' + website.name.toLowerCase() + '" ' +
+            'data-website-domain="' + website.domain.toLowerCase() + '">' +
+            '<div class="card-body p-3"><div class="form-check">' +
+            '<input class="form-check-input" type="checkbox" ' +
+            'id="account_website_' + website.website_id + '" ' +
+            'value="' + website.website_id + '"' +
+            (isSelected ? ' checked' : '') +
+            ' onchange="toggleAccountWebsiteSelection(' + website.website_id + ', this.checked)">' +
+            '<label class="form-check-label d-flex justify-content-between align-items-start w-100" for="account_website_' + website.website_id + '">' +
+            '<div class="flex-grow-1">' +
+            '<div class="fw-bold">' + website.name + '</div>' +
+            '<div class="text-muted small"><i class="mdi mdi-web me-1"></i>' + website.domain + '</div>';
+        
+        if (website.is_default) {
+            html += '<span class="badge bg-info mt-1">' + i18n.defaultWebsite + '</span>';
+        }
+        
+        html += '</div></label></div></div></div>';
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 搜索站点
+function searchAccountWebsites(keyword) {
+    keyword = keyword.toLowerCase().trim();
+    const items = document.querySelectorAll('.account-website-item');
+    let visibleCount = 0;
+    
+    items.forEach(item => {
+        const name = item.dataset.websiteName || '';
+        const domain = item.dataset.websiteDomain || '';
+        
+        if (name.includes(keyword) || domain.includes(keyword)) {
+            item.style.display = '';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // 无结果提示
+    const container = document.getElementById('accountWebsiteListContainer');
+    let noResultDiv = container.querySelector('.no-result-message');
+    
+    if (visibleCount === 0 && keyword !== '') {
+        if (!noResultDiv) {
+            noResultDiv = document.createElement('div');
+            noResultDiv.className = 'no-result-message text-center text-muted py-4';
+            noResultDiv.innerHTML = `
+                <i class="mdi mdi-magnify-close" style="font-size: 48px;"></i>
+                <p class="mt-2">${i18n.noMatch}</p>
+            `;
+            container.appendChild(noResultDiv);
+        }
+    } else {
+        if (noResultDiv) {
+            noResultDiv.remove();
+        }
+    }
+}
+
+// 切换站点选择状态
+function toggleAccountWebsiteSelection(websiteId, isChecked) {
+    if (isChecked) {
+        if (!selectedWebsiteIdsForAccount.includes(websiteId)) {
+            selectedWebsiteIdsForAccount.push(websiteId);
+        }
+        // 添加高亮
+        const item = document.querySelector(`.account-website-item[data-website-id="${websiteId}"]`);
+        if (item) {
+            item.classList.add('border-success');
+        }
+    } else {
+        const index = selectedWebsiteIdsForAccount.indexOf(websiteId);
+        if (index > -1) {
+            selectedWebsiteIdsForAccount.splice(index, 1);
+        }
+        // 移除高亮
+        const item = document.querySelector(`.account-website-item[data-website-id="${websiteId}"]`);
+        if (item) {
+            item.classList.remove('border-success');
+        }
+    }
+    
+    // 更新计数
+    const countElement = document.getElementById('accountSelectedCount');
+    if (countElement) {
+        countElement.textContent = selectedWebsiteIdsForAccount.length;
+    }
+}
+
+// 清除站点选择
+function clearAccountWebsiteSelections() {
+    if (!confirm('<?= __("确定要清除所有选择吗？") ?>')) {
+        return;
+    }
+    
+    selectedWebsiteIdsForAccount = [];
+    
+    // 清除复选框
+    document.querySelectorAll('#accountWebsiteBindingContainer input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // 清除高亮样式
+    document.querySelectorAll('.account-website-item').forEach(item => {
+        item.classList.remove('border-success');
+    });
+    
+    // 重新渲染
+    renderAccountWebsiteList(allAvailableWebsites);
+}
+
+// 保存站点绑定
+function saveAccountWebsiteBindings() {
+    // 构建保存数据
+    const data = {
+        account_id: currentBindingAccountId,
+        website_ids: selectedWebsiteIdsForAccount
+    };
+    
+    const saveBtn = document.getElementById('saveAccountWebsiteBindingsBtn');
+    if (!saveBtn) {
+        console.error('找不到保存按钮');
+        return;
+    }
+    
+    console.log('保存站点绑定数据:', data);
+    
+    const originalBtnHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("保存中..") ?>';
+    saveBtn.classList.add('btn-secondary');
+    saveBtn.classList.remove('btn-primary');
+    
+    // 显示loading弹窗
+    SafeSwal.fire({
+        title: '<?= __("保存中") ?>',
+        html: '<div class="text-center"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted"><?= __("正在保存站点绑定...") ?></p><small class="text-muted"><?= __("已选择") ?>: <strong>' + selectedWebsiteIdsForAccount.length + '</strong> <?= __("个站点") ?></small></div>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            SafeSwal.showLoading();
+        }
+    });
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/saveWebsiteBindings') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        console.log('保存响应:', response);
+        return response.json();
+    })
+    .then(resp => {
+        console.log('解析响应:', resp);
+        
+        if (resp.success) {
+            // 显示成功
+            SafeSwal.fire({
+                icon: 'success',
+                title: '<?= __("保存成功") ?>',
+                html: '<p class="mb-2">' + (resp.message || '<?= __("配置保存成功") ?>') + '</p><small class="text-success"><i class="mdi mdi-check-circle me-1"></i><?= __("页面将自动刷新") ?></small>',
+                timer: 2000,
+                timerProgressBar: true,
+                showConfirmButton: false
+            }).then(() => {
+                // 关闭 offcanvas
+                const offcanvasElement = document.getElementById('accountWebsiteBindingOffcanvas');
+                if (offcanvasElement) {
+                    const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement);
+                    if (offcanvas) {
+                        offcanvas.hide();
+                    }
+                }
+                
+                // 刷新页面
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+            });
+        } else {
+            throw new Error(resp.message || '<?= __("保存失败") ?>');
+        }
+    })
+    .catch(error => {
+        console.error('保存失败:', error);
+        
+        // 显示错误
+        SafeSwal.fire({
+            icon: 'error',
+            title: '<?= __("保存失败") ?>',
+            html: '<p class="mb-2">' + error.message + '</p><small class="text-muted"><?= __("请检查网络连接后重试") ?></small>',
+            confirmButtonText: '<?= __("确定") ?>',
+            confirmButtonColor: '#dc3545'
+        }).then(() => {
+            // 恢复按钮状态
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalBtnHtml;
+            saveBtn.classList.remove('btn-secondary');
+            saveBtn.classList.add('btn-primary');
+        });
+    });
+}
+
+// 站点绑定 Offcanvas 关闭时重置
+document.getElementById('accountWebsiteBindingOffcanvas')?.addEventListener('hidden.bs.offcanvas', function() {
+    currentBindingAccountId = 0;
+    allAvailableWebsites = [];
+    selectedWebsiteIdsForAccount = [];
+    
+    const container = document.getElementById('accountWebsiteBindingContainer');
+    if (container) {
+        container.innerHTML = `
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">
+                    <?= __("正在加载数据...") ?>
+                </div>
+                <div class="loading-tips">
+                    <i class="mdi mdi-information-outline"></i>
+                    <span><?= __("搜索可用站点") ?></span>
+                </div>
+            </div>
+        `;
+    }
+});
+
+// ==================== Offcanvas 关闭事件 ====================
+
+document.getElementById('accountOffcanvas')?.addEventListener('hidden.bs.offcanvas', function() {
+    const container = document.getElementById('accountFormContainer');
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><?= __("加载中...") ?></span>
+                </div>
+                <p class="mt-2 text-muted"><?= __("正在加载表单...") ?></p>
+            </div>
+        `;
+    }
+});
+
+</script>
+
+</body>
+</html>

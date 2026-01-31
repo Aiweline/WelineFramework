@@ -78,8 +78,10 @@ class Cli extends CliAbstract
             return true;
         }
         
-        // 检查 -f 参数
-        if (isset($args['f']) || isset($args['-f'])) {
+        // 检查 -f 参数：只有当没有其他命令时，-f 才作为查找命令的触发器
+        // 如果已经有具体命令（如 cron:task:run），-f 应该作为该命令的参数
+        $command = $args['command'] ?? '';
+        if (empty($command) && (isset($args['f']) || isset($args['-f']))) {
             return true;
         }
         

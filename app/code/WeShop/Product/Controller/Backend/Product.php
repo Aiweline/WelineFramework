@@ -43,7 +43,41 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             ->pagination()
             ->select()
             ->fetch();
-        $this->assign('products', $products->getItems());
+        
+        // 获取子产品数量统计
+        $items = $products->getItems();
+        $productIds = [];
+        foreach ($items as $item) {
+            $productIds[] = $item['product_id'] ?? ($item->getData('product_id') ?? 0);
+        }
+        $childrenCounts = [];
+        
+        if (!empty($productIds)) {
+            // 查询每个产品的子产品数量
+            $childrenData = $this->product->reset()
+                ->fields('parent_id, COUNT(*) as children_count')
+                ->where(\WeShop\Product\Model\Product::fields_parent_id, $productIds, 'in')
+                ->group('parent_id')
+                ->select()
+                ->fetchArray();
+            
+            foreach ($childrenData as $row) {
+                $childrenCounts[$row['parent_id']] = (int)$row['children_count'];
+            }
+        }
+        
+        // 将子产品数量附加到产品数据中（通过 setData 设置到模型对象）
+        foreach ($items as $item) {
+            $productId = $item['product_id'] ?? ($item->getData('product_id') ?? 0);
+            $count = $childrenCounts[$productId] ?? 0;
+            if (is_object($item) && method_exists($item, 'setData')) {
+                $item->setData('children_count', $count);
+            } elseif (is_array($item)) {
+                $item['children_count'] = $count;
+            }
+        }
+        
+        $this->assign('products', $items);
         $this->assign('pagination', $products->getPagination());
         return $this->fetch();
     }
@@ -162,6 +196,54 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             $group['attributes'] = $attributes;
         }
         return $this->fetchJson($groups);
+    }
+
+    /**
+     * 获取产品关联信息（子产品数量统计）
+     */
+    public function getLinksCount(): string
+    {
+        $productId = (int)$this->request->getGet('product_id');
+        if (!$productId) {
+            return $this->fetchJson(['error' => '缺少产品ID']);
+        }
+
+        // 获取子产品数量
+        $childrenCount = $this->product->reset()
+            ->where(\WeShop\Product\Model\Product::fields_parent_id, $productId)
+            ->count();
+
+        return $this->fetchJson([
+            'product_id' => $productId,
+            'children' => $childrenCount,
+            'grouped' => 0,  // 预留：组产品
+            'bundle' => 0,   // 预留：绑定产品
+            'related' => 0,  // 预留：关联产品
+        ]);
+    }
+
+    /**
+     * 获取子产品列表
+     */
+    public function getChildren(): string
+    {
+        $productId = (int)$this->request->getGet('product_id');
+        if (!$productId) {
+            return $this->fetchJson(['error' => '缺少产品ID', 'items' => []]);
+        }
+
+        $children = $this->product->reset()
+            ->loadLocalDescription()
+            ->where(\WeShop\Product\Model\Product::fields_parent_id, $productId)
+            ->order('main_table.' . \WeShop\Product\Model\Product::fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        return $this->fetchJson([
+            'product_id' => $productId,
+            'total' => count($children),
+            'items' => $children
+        ]);
     }
 
 }

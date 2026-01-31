@@ -35,6 +35,15 @@
          parent="Weline_Seo::seo_management"
          icon="mdi mdi-account-key"
          order="30"/>
+
+    <!-- Sitemap 管理 -->
+    <add source="Weline_Seo::sitemap_management"
+         name="sitemap_management"
+         title="Sitemap管理"
+         action="seo/backend/sitemap"
+         parent="Weline_Seo::seo_management"
+         icon="mdi mdi-sitemap"
+         order="40"/>
 </menus>
 
 

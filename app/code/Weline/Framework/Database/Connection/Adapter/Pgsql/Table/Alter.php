@@ -157,6 +157,43 @@ class Alter extends AbstractTable implements AlterInterface
     }
 
     /**
+     * 生成 PostgreSQL 类型转换的 USING 子句
+     * 
+     * @param string $fieldName 字段名
+     * @param string $targetType 目标类型
+     * @return string USING 子句
+     */
+    private function generateUsingClause(string $fieldName, string $targetType): string
+    {
+        // 移除长度信息，只保留基础类型
+        $baseType = preg_replace('/\([^)]+\)/', '', $targetType);
+        $baseType = strtoupper(trim($baseType));
+        
+        // 根据目标类型生成 USING 表达式
+        $numericTypes = ['INTEGER', 'SMALLINT', 'BIGINT', 'NUMERIC', 'DECIMAL', 'REAL', 'DOUBLE PRECISION'];
+        $textTypes = ['VARCHAR', 'CHAR', 'TEXT'];
+        $boolTypes = ['BOOLEAN', 'BOOL'];
+        $dateTypes = ['DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMPTZ'];
+        
+        if (in_array($baseType, $numericTypes)) {
+            // 转换为数值类型：尝试将字符串转为数值
+            return " USING \"{$fieldName}\"::{$baseType}";
+        } elseif (in_array($baseType, $textTypes)) {
+            // 转换为文本类型：直接转换
+            return " USING \"{$fieldName}\"::TEXT";
+        } elseif (in_array($baseType, $boolTypes)) {
+            // 转换为布尔类型
+            return " USING \"{$fieldName}\"::BOOLEAN";
+        } elseif (in_array($baseType, $dateTypes)) {
+            // 转换为日期时间类型
+            return " USING \"{$fieldName}\"::{$baseType}";
+        }
+        
+        // 默认情况：使用目标类型进行转换
+        return " USING \"{$fieldName}\"::{$baseType}";
+    }
+
+    /**
      * 映射 MySQL 类型到 PostgreSQL 类型
      */
     private function mapTypeToPostgres(string $type, int|string|null $length): string
@@ -473,7 +510,11 @@ class Alter extends AbstractTable implements AlterInterface
                     // 修改字段类型
                     $currentType = $table_field['Type'] ?? $table_field['data_type'] ?? '';
                     if ($alter_field['type_length'] && !str_contains(strtolower($currentType), strtolower($alter_field['type_length']))) {
-                        $sql = "ALTER TABLE {$this->table} ALTER COLUMN \"{$fieldName}\" TYPE {$alter_field['type_length']}";
+                        // PostgreSQL 需要 USING 子句来进行类型转换
+                        // 根据目标类型生成合适的 USING 表达式
+                        $targetType = strtoupper($alter_field['type_length']);
+                        $usingClause = $this->generateUsingClause($fieldName, $targetType);
+                        $sql = "ALTER TABLE {$this->table} ALTER COLUMN \"{$fieldName}\" TYPE {$alter_field['type_length']}{$usingClause}";
                         if ($dump_sql) {
                             $dump_sqls[] = $sql;
                         } else {

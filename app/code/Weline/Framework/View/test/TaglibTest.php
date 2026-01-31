@@ -134,4 +134,41 @@ class TaglibTest extends TestCore
         self::assertTrue(str_contains($parse_str, 'renderRuntimeTag'), 'dynamic args should be runtime');
         self::assertTrue(str_contains($parse_str, '\'args\' => (\$args)'), 'php attribute should be parsed');
     }
+
+    /**
+     * 测试自定义标签的动态属性也能正确延迟到运行期
+     * 确保不在 compileCandidates 列表的标签，如果有动态属性也能正确处理
+     */
+    public function testCustomTagDynamicAttributeRuntime()
+    {
+        $template = new Template();
+        // 使用 block 标签测试，它不在 compileCandidates 列表中
+        $content = '<block class="<?= $blockClass ?>" template="test.phtml"/>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        // 如果有动态属性，应该延迟到运行期
+        self::assertTrue(
+            str_contains($parse_str, 'renderRuntimeTag'),
+            '自定义标签的动态属性应延迟到运行期执行'
+        );
+        self::assertTrue(
+            str_contains($parse_str, '\'class\' => ($blockClass)'),
+            'PHP 属性表达式应被正确解析'
+        );
+    }
+
+    /**
+     * 测试混合内容属性值（文本 + PHP 表达式）
+     */
+    public function testMixedAttributeValueRuntime()
+    {
+        $template = new Template();
+        $content = '<lang args="前缀<?= $var ?>后缀">hello</lang>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+        self::assertTrue(str_contains($parse_str, 'renderRuntimeTag'), '混合属性值应延迟到运行期');
+        // 应该生成拼接表达式
+        self::assertTrue(
+            str_contains($parse_str, "'前缀' . (\$var) . '后缀'"),
+            '混合属性值应生成字符串拼接表达式'
+        );
+    }
 }

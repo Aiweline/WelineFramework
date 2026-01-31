@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Model;
 
-use Weline\Eav\Model\EavAttribute\LocalDescription;
 use Weline\Eav\EavInterface;
 use Weline\Eav\EavModel;
 use Weline\Eav\Model\EavAttribute\Option;
@@ -21,14 +20,16 @@ use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavAttribute\Type\Value;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\Exception\Core;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\ModelSetup;
 
+/**
+ * EAV属性模型 (SRP - 单一职责原则)
+ * 
+ * 表结构定义已迁移到 Schema/EavAttributeSchema.php
+ * 本类只负责数据操作和业务逻辑
+ */
 class EavAttribute extends \Weline\Framework\Database\Model
 {
     public const fields_ID = 'attribute_id';
@@ -39,15 +40,33 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const fields_set_id = 'set_id';
     public const fields_group_id = 'group_id';
     public const fields_eav_entity_id = 'eav_entity_id';
-    public const fields_multiple_valued = 'multiple_valued';
-    public const fields_has_option = 'has_option';
     public const fields_is_system = 'is_system';
-    public const fields_is_enable = 'is_enable';
     public const fields_model_class = 'model_class';
     public const fields_default_value = 'default_value';
     public const fields_dependence = 'dependence'; # 多个依赖以英文逗号隔开,demo1,demo2
-    public const fields_is_filterable = 'is_filterable';
-    public const fields_is_visible_on_front = 'is_visible_on_front';
+    
+    // 基本设置组 (basic_)
+    public const fields_basic_is_enable = 'basic_is_enable';
+    
+    // 前端显示组 (frontend_)
+    public const fields_frontend_is_visible = 'frontend_is_visible';
+    public const fields_frontend_is_filterable = 'frontend_is_filterable';
+    
+    // 数据配置组 (data_)
+    public const fields_data_is_multiple = 'data_is_multiple';
+    public const fields_data_has_option = 'data_has_option';
+    
+    // 兼容旧字段常量（已废弃）
+    /** @deprecated use fields_data_is_multiple */
+    public const fields_multiple_valued = 'data_is_multiple';
+    /** @deprecated use fields_data_has_option */
+    public const fields_has_option = 'data_has_option';
+    /** @deprecated use fields_basic_is_enable */
+    public const fields_is_enable = 'basic_is_enable';
+    /** @deprecated use fields_frontend_is_filterable */
+    public const fields_is_filterable = 'frontend_is_filterable';
+    /** @deprecated use fields_frontend_is_visible */
+    public const fields_is_visible_on_front = 'frontend_is_visible';
 
     public const value_key = 'value';
     public const swatch_value_key = 'swatch_value';
@@ -64,171 +83,16 @@ class EavAttribute extends \Weline\Framework\Database\Model
     private ?Value $value = null;
     private ?EavModel $currentEntity = null;
     private array $exist_types = [];
+
+    // 表结构已迁移到 Schema/EavAttributeSchema.php
+    // 由 Setup/Install.php 统一管理表创建
+    public function setup(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function upgrade(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
+    public function install(\Weline\Framework\Setup\Db\ModelSetup $setup, \Weline\Framework\Setup\Data\Context $context): void {}
     
     public function loadByAttributeId(int $attribute_id): AbstractModel
     {
         return parent::load('main_table.attribute_id', $attribute_id);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
-    {
-        $this->install($setup, $context);
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $this->install($setup, $context);
-            return;
-        }
-        
-        // alterTable()->addColumn() 签名：(field_name, after_column, type, length, options, comment)
-        // 添加 is_filterable 字段：是否可用于筛选
-        if (!$setup->hasField(self::fields_is_filterable)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_is_filterable,
-                    self::fields_dependence,  // 在 dependence 字段后添加
-                    'smallint',
-                    1,
-                    'default 0',
-                    '是否可用于筛选'
-                )->alter();
-        }
-        
-        // 添加 is_visible_on_front 字段：是否在前端可见
-        if (!$setup->hasField(self::fields_is_visible_on_front)) {
-            $setup->alterTable()
-                ->addColumn(
-                    self::fields_is_visible_on_front,
-                    self::fields_is_filterable,  // 在 is_filterable 字段后添加
-                    'smallint',
-                    1,
-                    'default 0',
-                    '是否在前端可见'
-                )->alter();
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-//        $setup->dropTable();
-        if (!$setup->tableExist()) {
-            $setup->createTable('属性表')
-                ->addColumn(
-                    self::fields_attribute_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'primary key auto_increment',
-                    '属性ID'
-                )
-                ->addColumn(
-                    self::fields_code,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '代码'
-                )
-                ->addColumn(
-                    self::fields_eav_entity_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '所属Eav实体ID'
-                )
-                ->addColumn(
-                    self::fields_set_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '所属属性集ID'
-                )
-                ->addColumn(
-                    self::fields_group_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '所属属性组ID'
-                )
-                ->addColumn(
-                    self::fields_name,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'not null',
-                    '名称'
-                )
-                ->addColumn(
-                    self::fields_type_id,
-                    TableInterface::column_type_INTEGER,
-                    0,
-                    'not null',
-                    '类型'
-                )
-                ->addColumn(
-                    self::fields_multiple_valued,
-                    TableInterface::column_type_SMALLINT,
-                    0,
-                    'default 0',
-                    '是否多值'
-                )
-                ->addColumn(
-                    self::fields_has_option,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'default 0',
-                    '是否多值'
-                )
-                ->addColumn(
-                    self::fields_is_system,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'default 0',
-                    '是否系统生成'
-                )
-                ->addColumn(
-                    self::fields_is_enable,
-                    TableInterface::column_type_SMALLINT,
-                    1,
-                    'default 1',
-                    '是否启用'
-                )
-                ->addColumn(
-                    self::fields_model_class,
-                    TableInterface::column_type_VARCHAR,
-                    255,
-                    'default ""',
-                    '模型'
-                )
-                ->addColumn(
-                    self::fields_default_value,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    '',
-                    '默认值'
-                )
-                ->addColumn(
-                    self::fields_dependence,
-                    TableInterface::column_type_VARCHAR,
-                    128,
-                    'default null',
-                    '依赖属性:多个属性以英文逗号隔开,demo1,demo2'
-                )
-                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_entity_and_code', [self::fields_code, self::fields_eav_entity_id])
-                ->addIndex(TableInterface::index_type_KEY, 'idx_eav_entity_id', self::fields_eav_entity_id)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_set_id', self::fields_set_id)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_group_id', self::fields_group_id)
-                ->addIndex(TableInterface::index_type_KEY, 'idx_name', self::fields_name)
-                ->create();
-        }
     }
 
     public function getEavEntityId(): int
@@ -320,9 +184,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function hasOption(bool|null $has_option = null): bool|static
     {
         if (is_bool($has_option)) {
-            return $this->setData(self::fields_has_option, $has_option);
+            return $this->setData(self::fields_data_has_option, $has_option);
         }
-        return (bool)$this->getData(self::fields_has_option);
+        return (bool)$this->getData(self::fields_data_has_option);
     }
 
     public function getOptions(): array
@@ -426,9 +290,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isEnable(bool|null $is_enable = null): bool|static
     {
         if (is_bool($is_enable)) {
-            return $this->setData(self::fields_is_enable, $is_enable);
+            return $this->setData(self::fields_basic_is_enable, $is_enable);
         }
-        return (bool)$this->getData(self::fields_is_enable);
+        return (bool)$this->getData(self::fields_basic_is_enable);
     }
 
     /**
@@ -440,9 +304,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isFilterable(bool|null $is_filterable = null): bool|static
     {
         if (is_bool($is_filterable)) {
-            return $this->setData(self::fields_is_filterable, $is_filterable ? 1 : 0);
+            return $this->setData(self::fields_frontend_is_filterable, $is_filterable ? 1 : 0);
         }
-        return (bool)$this->getData(self::fields_is_filterable);
+        return (bool)$this->getData(self::fields_frontend_is_filterable);
     }
 
     /**
@@ -454,19 +318,19 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function isVisibleOnFront(bool|null $is_visible_on_front = null): bool|static
     {
         if (is_bool($is_visible_on_front)) {
-            return $this->setData(self::fields_is_visible_on_front, $is_visible_on_front ? 1 : 0);
+            return $this->setData(self::fields_frontend_is_visible, $is_visible_on_front ? 1 : 0);
         }
-        return (bool)$this->getData(self::fields_is_visible_on_front);
+        return (bool)$this->getData(self::fields_frontend_is_visible);
     }
 
     public function getMultipleValued(): bool
     {
-        return (bool)$this->getData(self::fields_multiple_valued);
+        return (bool)$this->getData(self::fields_data_is_multiple);
     }
 
     public function setMultipleValued(bool $is_multiple_valued = false): static
     {
-        return $this->setData(self::fields_multiple_valued, $is_multiple_valued ? '1' : '0');
+        return $this->setData(self::fields_data_is_multiple, $is_multiple_valued ? '1' : '0');
     }
 
     public function getValue(string|int|null $entity_id = null, bool $return_attribute = false)

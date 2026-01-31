@@ -20,6 +20,8 @@ namespace GuoLaiRen\PageBuilder\Service\Component;
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
+use GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry;
+use GuoLaiRen\PageBuilder\Service\AI\EntityFileManager;
 use Weline\Framework\Manager\ObjectManager;
 
 class ComponentResolver
@@ -27,6 +29,8 @@ class ComponentResolver
     private ?TemplatePathResolver $pathResolver = null;
     private ?LayoutConfigNormalizer $configNormalizer = null;
     private ?Component $componentModel = null;
+    private ?AIComponentRegistry $aiRegistry = null;
+    private ?EntityFileManager $entityFileManager = null;
     
     /**
      * 组件缓存
@@ -51,6 +55,28 @@ class ComponentResolver
         $this->pathResolver = $pathResolver;
         $this->configNormalizer = $configNormalizer;
         $this->componentModel = $componentModel;
+    }
+    
+    /**
+     * 获取 AI 组件注册表（延迟加载）
+     */
+    private function getAIRegistry(): AIComponentRegistry
+    {
+        if ($this->aiRegistry === null) {
+            $this->aiRegistry = ObjectManager::getInstance(AIComponentRegistry::class);
+        }
+        return $this->aiRegistry;
+    }
+    
+    /**
+     * 获取实体文件管理器（延迟加载）
+     */
+    private function getEntityFileManager(): EntityFileManager
+    {
+        if ($this->entityFileManager === null) {
+            $this->entityFileManager = ObjectManager::getInstance(EntityFileManager::class);
+        }
+        return $this->entityFileManager;
     }
     
     /**
@@ -92,8 +118,9 @@ class ComponentResolver
      * 查找优先级：
      * 1. 如果指定了优先模板，先在该模板中查找
      * 2. 在当前模板中查找
-     * 3. 在共享组件中查找
-     * 4. 在兼容组件中查找
+     * 3. 在 AI 生成组件中查找
+     * 4. 在共享组件中查找
+     * 5. 在兼容组件中查找
      * 
      * @param string $code 组件代码（如 header-nav）
      * @param string $styleCode 当前模板代码
@@ -129,14 +156,21 @@ class ComponentResolver
             return $component;
         }
         
-        // 3. 在共享组件中查找
+        // 3. 在 AI 生成组件中查找
+        $component = $this->findAIComponent($normalizedCode);
+        if ($component) {
+            self::$componentCache[$cacheKey] = $component;
+            return $component;
+        }
+        
+        // 4. 在共享组件中查找
         $component = $this->findInStyle($normalizedCode, TemplatePathResolver::SHARED_STYLE_CODE);
         if ($component) {
             self::$componentCache[$cacheKey] = $component;
             return $component;
         }
         
-        // 4. 在兼容组件中查找
+        // 5. 在兼容组件中查找
         $component = $this->findCompatible($normalizedCode, $styleCode);
         if ($component) {
             self::$componentCache[$cacheKey] = $component;
@@ -146,6 +180,41 @@ class ComponentResolver
         // 缓存空结果
         self::$componentCache[$cacheKey] = null;
         return null;
+    }
+    
+    /**
+     * 在 AI 生成组件中查找
+     * 
+     * @param string $code 组件代码
+     * @return Component|null
+     */
+    public function findAIComponent(string $code): ?Component
+    {
+        try {
+            $component = $this->getAIRegistry()->getComponent($code);
+            
+            if ($component) {
+                // 确保 AI 组件的实体文件存在
+                $this->getEntityFileManager()->ensureEntityFile($component);
+                return $component;
+            }
+        } catch (\Exception $e) {
+            // AI 组件查找失败，记录日志但不中断
+            error_log("[ComponentResolver] AI component lookup failed for {$code}: " . $e->getMessage());
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 检查是否是 AI 组件
+     * 
+     * @param string $code 组件代码
+     * @return bool
+     */
+    public function isAIComponent(string $code): bool
+    {
+        return $this->getAIRegistry()->isAIComponent($code);
     }
     
     /**
@@ -212,6 +281,16 @@ class ComponentResolver
     {
         $styleCode = $component->getData(Component::fields_STYLE_CODE);
         $path = $component->getData(Component::fields_PATH);
+        
+        // 对于 AI 组件，确保实体文件存在并返回正确的路径
+        if ($component->isAIGenerated()) {
+            try {
+                $this->getEntityFileManager()->ensureEntityFile($component);
+                $path = $component->getData(Component::fields_PATH);
+            } catch (\Exception $e) {
+                error_log("[ComponentResolver] Failed to ensure AI component entity file: " . $e->getMessage());
+            }
+        }
         
         if (empty($path)) {
             return null;

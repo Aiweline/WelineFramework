@@ -180,8 +180,17 @@ abstract class EavModel extends Model implements EavInterface
      * @inheritDoc
      * @throws null
      */
-    public function addAttribute(string $code, string $name, string $type, bool $multi_value = false, bool $has_option = false, bool $is_system = false,
-                                 bool   $is_enable = true, string $group_code = 'default', string $set_code = 'default'): bool
+    public function addAttribute(
+        string $code, 
+        string $name, 
+        string $type, 
+        bool $data_is_multiple = false, 
+        bool $data_has_option = false, 
+        bool $is_system = false,
+        bool $basic_is_enable = true, 
+        string $group_code = 'default', 
+        string $set_code = 'default'
+    ): bool
     {
         if ($this->attribute->clear()->where([
             $this->attribute::fields_eav_entity_id => $this->getEntityCode(),
@@ -206,10 +215,13 @@ abstract class EavModel extends Model implements EavInterface
                     $this->attribute::fields_type_id => $type->getId(),
                     $this->attribute::fields_group_id => $group->getId(),
                     $this->attribute::fields_eav_entity_id => $eavEntity->getId(),
-                    $this->attribute::fields_multiple_valued => intval($multi_value),
-                    $this->attribute::fields_has_option => intval($has_option),
+                    // 数据配置组
+                    $this->attribute::fields_data_is_multiple => intval($data_is_multiple),
+                    $this->attribute::fields_data_has_option => intval($data_has_option),
+                    // 系统字段
                     $this->attribute::fields_is_system => intval($is_system),
-                    $this->attribute::fields_is_enable => intval($is_enable),
+                    // 基本设置组
+                    $this->attribute::fields_basic_is_enable => intval($basic_is_enable),
                 ]
             )->forceCheck(true, $this->attribute->_unit_primary_keys)->save();
             return true;

@@ -104,9 +104,9 @@ class SlotRendererService
         libxml_use_internal_errors(true);
 
         $doc = new \DOMDocument();
-        // 保持原有编码
-        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
-        $doc->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        // 添加 UTF-8 声明避免编码问题
+        $html = '<?xml encoding="UTF-8">' . $html;
+        $doc->loadHTML($html);
 
         $xpath = new \DOMXPath($doc);
 
@@ -146,8 +146,8 @@ class SlotRendererService
 
         libxml_clear_errors();
 
-        // 修复编码
-        $result = mb_convert_encoding($result, 'UTF-8', 'HTML-ENTITIES');
+        // 移除 XML 声明
+        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', $result);
 
         return $result;
     }
@@ -334,8 +334,8 @@ class SlotRendererService
         $finalConfig = array_merge($defaultConfig, $config);
 
         try {
-            // 渲染部件模板
-            $html = $this->template->fetchTagHtml($templatePath, $finalConfig);
+            // 渲染部件模板 - 使用 fetch() 方法，它接受2个参数：fileName 和 data
+            $html = $this->template->fetch($templatePath, $finalConfig);
             $html = is_string($html) ? $html : '';
 
             // 为编辑器模式包装部件，添加识别属性

@@ -1,0 +1,145 @@
+<?php
+/**
+ * Header 购物车图标 Widget
+ * 
+ * @param showCount {default=true,name="显示数量",description="是否显示购物车商品数量徽章"}
+ * @param showLabel {default=true,name="显示文字",description="是否显示购物车文字标签"}
+ * @param triggerAction {default="drawer",options=["drawer","link"],name="点击行为",description="点击购物车图标的行为"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use WeShop\Cart\Service\CartService;
+use WeShop\Customer\Session\CustomerSession;
+
+// 获取参数
+$showCount = $this->getData('showCount') ?? true;
+$showLabel = $this->getData('showLabel') ?? true;
+$triggerAction = $this->getData('triggerAction') ?? 'drawer';
+
+// 获取购物车数量
+$cartCount = 0;
+
+try {
+    $session = ObjectManager::getInstance(CustomerSession::class);
+    $customer = $session->getCustomer();
+    
+    if ($customer) {
+        $cartService = ObjectManager::getInstance(CartService::class);
+        $cartCount = $cartService->getCartItemCount($customer->getId());
+    }
+} catch (\Exception $e) {
+    // 忽略错误
+}
+
+$isDrawer = $triggerAction === 'drawer';
+?>
+
+<?php if ($isDrawer): ?>
+<button type="button" 
+        class="header-cart-icon" 
+        data-action="open-mini-cart"
+        aria-label="<?= __('Open Cart') ?>"
+        aria-haspopup="dialog">
+<?php else: ?>
+<a href="<?= $this->getUrl('cart') ?>" 
+   class="header-cart-icon"
+   aria-label="<?= __('View Cart') ?>">
+<?php endif; ?>
+
+    <span class="cart-icon-wrapper">
+        <span class="material-symbols-outlined cart-icon">shopping_cart</span>
+        <?php if ($showCount): ?>
+            <span class="cart-count-badge <?= $cartCount > 0 ? 'has-items' : '' ?>" 
+                  data-cart-count
+                  <?= $cartCount === 0 ? 'style="display:none;"' : '' ?>>
+                <?= $cartCount > 99 ? '99+' : $cartCount ?>
+            </span>
+        <?php endif; ?>
+    </span>
+    
+    <?php if ($showLabel): ?>
+        <span class="cart-label"><lang>Cart</lang></span>
+    <?php endif; ?>
+
+<?php if ($isDrawer): ?>
+</button>
+<?php else: ?>
+</a>
+<?php endif; ?>
+
+<style>
+/* Header Cart Icon */
+.header-cart-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-primary, #1a1a1a);
+    text-decoration: none;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.header-cart-icon:hover {
+    background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+}
+
+.cart-icon-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cart-icon {
+    font-size: 24px;
+}
+
+.cart-count-badge {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    background: var(--danger, #dc2626);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 9px;
+    line-height: 1;
+}
+
+.cart-count-badge.has-items {
+    animation: cartBadgePop 0.3s ease;
+}
+
+@keyframes cartBadgePop {
+    0% { transform: scale(0.5); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.cart-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* 响应式 - 移动端隐藏文字 */
+@media (max-width: 768px) {
+    .cart-label {
+        display: none;
+    }
+    
+    .header-cart-icon {
+        padding: 0.5rem;
+    }
+}
+</style>

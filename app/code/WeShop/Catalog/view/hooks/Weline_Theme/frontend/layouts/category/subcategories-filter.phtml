@@ -315,6 +315,35 @@ if (empty($childCategories) && empty($parentCategory)) {
     font-size: 0.875rem;
 }
 
+/* 子分类内容区域最大高度限制和滚动 */
+.category-filter-subcategories .category-filter-section-content {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* 自定义滚动条样式 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb, #a2adb7) transparent;
+}
+
+/* Webkit 浏览器滚动条样式 */
+.category-filter-subcategories .category-filter-section-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.category-filter-subcategories .category-filter-section-content::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.category-filter-subcategories .category-filter-section-content::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb, #a2adb7);
+    border-radius: 3px;
+}
+
+.category-filter-subcategories .category-filter-section-content::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover, #8590a5);
+}
+
 /* 父分类链接样式 */
 .category-filter-parent-link {
     display: flex;
@@ -518,6 +547,11 @@ if (empty($childCategories) && empty($parentCategory)) {
     
     .category-filter-section-content {
         font-size: 0.85rem;
+    }
+    
+    /* 移动端子分类最大高度调整 */
+    .category-filter-subcategories .category-filter-section-content {
+        max-height: 240px;
     }
     
     .category-filter-parent-link,

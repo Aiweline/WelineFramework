@@ -38,9 +38,7 @@ class NewFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = \Weline\Framework\App\State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'New Arrivals' : __('新品');
+        return __('新品');
     }
     
     /**
@@ -148,9 +146,7 @@ class NewFilterProvider extends AbstractFilterProvider
     public function getValueLabel(string $value): string
     {
         if ($value === self::NEW_PRODUCTS) {
-            $lang = \Weline\Framework\App\State::getLangLocal();
-            $isEnglish = str_starts_with($lang, 'en');
-            return $isEnglish ? 'New Arrivals' : __('新品上市');
+            return __('新品上市');
         }
         return $value;
     }

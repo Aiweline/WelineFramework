@@ -413,7 +413,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         $ds = DS;
         // PHPUnit 10.x 不支持 --verbose 参数，使用 --testdox 代替以获得更好的输出
-        $phpunitCommand = PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox --no-interaction";
+        $phpunitCommand = PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox";
         // 如果指定了 debug 参数，添加 --debug
         if (isset($args['debug']) || isset($data['debug'])) {
             $phpunitCommand .= ' --debug';

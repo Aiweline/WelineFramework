@@ -25,6 +25,8 @@ class Website extends Model
     public const fields_DEFAULT_LANGUAGE = 'default_language';
     # 时区
     public const fields_DEFAULT_TIMEZONE = 'default_timezone';
+    # 业务范围标识
+    public const fields_SCOPE = 'scope';
 
 
     /**
@@ -59,6 +61,20 @@ class Website extends Model
                 } catch (\Exception $e) {
                     // 字段可能已经修改过或不存在，忽略错误
                 }
+                
+                // 检查并添加scope字段
+                try {
+                    $connection->query("ALTER TABLE `{$tableName}` ADD COLUMN `scope` VARCHAR(100) DEFAULT '' COMMENT '业务scope标识，如page_builder、catalog等'");
+                } catch (\Exception $e) {
+                    // 字段可能已存在，忽略错误
+                }
+                
+                // 添加scope索引（提升查询性能）
+                try {
+                    $connection->query("ALTER TABLE `{$tableName}` ADD INDEX `idx_scope` (`scope`)");
+                } catch (\Exception $e) {
+                    // 索引可能已存在，忽略错误
+                }
             } catch (\Exception $e) {
                 // 忽略错误，可能表不存在或其他问题
             }
@@ -81,6 +97,7 @@ class Website extends Model
             ->addColumn(self::fields_DEFAULT_CURRENCY, TableInterface::column_type_VARCHAR, 20, "", '默认货币')
             ->addColumn(self::fields_DEFAULT_LANGUAGE, TableInterface::column_type_VARCHAR, 20, "", '默认语言')
             ->addColumn(self::fields_DEFAULT_TIMEZONE, TableInterface::column_type_VARCHAR, 60, "not null", '默认时区')
+            ->addColumn(self::fields_SCOPE, TableInterface::column_type_VARCHAR, 100, "", '业务scope标识，如page_builder、catalog等')
             ->create();
         # 新建一个默认网站
         try {
@@ -240,5 +257,27 @@ class Website extends Model
     public function getDefaultTimezone(): string
     {
         return (string)$this->getData(self::fields_DEFAULT_TIMEZONE);
+    }
+
+    /**
+     * 设置业务范围标识
+     * 
+     * @param string $scope 业务范围标识，如 page_builder、catalog 等
+     * @return self
+     */
+    public function setScope(string $scope): self
+    {
+        $this->setData(self::fields_SCOPE, $scope);
+        return $this;
+    }
+
+    /**
+     * 获取业务范围标识
+     * 
+     * @return string
+     */
+    public function getScope(): string
+    {
+        return (string)$this->getData(self::fields_SCOPE);
     }
 }

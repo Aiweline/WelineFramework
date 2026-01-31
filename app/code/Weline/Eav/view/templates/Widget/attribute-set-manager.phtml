@@ -1,0 +1,256 @@
+<?php
+/**
+ * 属性集管理组件模板
+ * 
+ * @var \Weline\Eav\Block\Widget\AttributeSetManager $block
+ */
+
+$entity = $block->getEntity();
+if (!$entity) {
+    echo '<div class="alert alert-warning">未找到指定实体</div>';
+    return;
+}
+
+$entityCode = $entity->getData('code');
+$sets = $block->getAttributeSets();
+$isManageMode = $block->isManageMode();
+$isSelectMode = $block->isSelectMode();
+$selectedSetId = $block->getSelectedSetId();
+$apiBaseUrl = $block->getApiBaseUrl();
+$widgetId = 'eav-set-manager-' . uniqid();
+?>
+
+<div class="eav-attribute-set-manager" id="<?= $widgetId ?>" 
+     data-entity-code="<?= $entityCode ?>" 
+     data-entity-id="<?= $entity->getId() ?>"
+     data-api-base="<?= $apiBaseUrl ?>">
+    
+    <?php if ($isSelectMode): ?>
+        <!-- 选择模式：下拉选择属性集 -->
+        <div class="eav-set-selector">
+            <select class="form-select" name="set_id" id="<?= $widgetId ?>-select">
+                <option value=""><?= __('请选择属性集') ?></option>
+                <?php foreach ($sets as $set): ?>
+                    <option value="<?= $set['set_id'] ?>" <?= $selectedSetId == $set['set_id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($set['local_name'] ?? $set['name'] ?? $set['code']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+    <?php elseif ($isManageMode): ?>
+        <!-- 管理模式：完整的属性集管理界面 -->
+        <div class="eav-set-manager-container">
+            
+            <!-- 属性集列表 -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="mdi mdi-folder-outline me-2"></i>
+                        <?= __('属性集') ?>
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="EavSetManager.addSet('<?= $widgetId ?>')">
+                        <i class="mdi mdi-plus"></i> <?= __('新建') ?>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <?php if (empty($sets)): ?>
+                        <div class="text-muted text-center py-4">
+                            <i class="mdi mdi-folder-off-outline d-block mb-2" style="font-size: 32px;"></i>
+                            <?= __('暂无属性集') ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="list-group list-group-flush">
+                            <?php foreach ($sets as $set): ?>
+                                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                     data-set-id="<?= $set['set_id'] ?>"
+                                     onclick="EavSetManager.selectSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                    <div>
+                                        <strong><?= htmlspecialchars($set['local_name'] ?? $set['name'] ?? $set['code']) ?></strong>
+                                        <br>
+                                        <small class="text-muted"><?= htmlspecialchars($set['code']) ?></small>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary" 
+                                                onclick="event.stopPropagation(); EavSetManager.editSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                            <i class="mdi mdi-pencil"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger"
+                                                onclick="event.stopPropagation(); EavSetManager.deleteSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                            <i class="mdi mdi-delete"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- 属性集详情区域 -->
+            <div class="eav-set-detail" id="<?= $widgetId ?>-detail" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0" id="<?= $widgetId ?>-detail-title"><?= __('属性集详情') ?></h6>
+                    </div>
+                    <div class="card-body" id="<?= $widgetId ?>-detail-content">
+                        <!-- 动态加载内容 -->
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+    <?php endif; ?>
+    
+</div>
+
+<?php if ($isManageMode): ?>
+<script>
+// 属性集管理器
+window.EavSetManager = window.EavSetManager || {
+    
+    selectSet: function(widgetId, setId) {
+        const container = document.getElementById(widgetId);
+        const apiBase = container.dataset.apiBase;
+        const detailEl = document.getElementById(widgetId + '-detail');
+        const contentEl = document.getElementById(widgetId + '-detail-content');
+        
+        // 高亮选中项
+        container.querySelectorAll('.list-group-item').forEach(el => {
+            el.classList.remove('active');
+            if (el.dataset.setId == setId) {
+                el.classList.add('active');
+            }
+        });
+        
+        // 显示详情区域
+        detailEl.style.display = 'block';
+        contentEl.innerHTML = '<div class="text-center py-3"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
+        
+        // 加载属性集详情
+        fetch(apiBase + '/set/detail?id=' + setId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.renderSetDetail(widgetId, data.data);
+                } else {
+                    contentEl.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('加载失败') ?>') + '</div>';
+                }
+            })
+            .catch(error => {
+                contentEl.innerHTML = '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + error.message + '</div>';
+            });
+    },
+    
+    renderSetDetail: function(widgetId, setData) {
+        const contentEl = document.getElementById(widgetId + '-detail-content');
+        const titleEl = document.getElementById(widgetId + '-detail-title');
+        
+        titleEl.textContent = setData.local_name || setData.name || setData.code;
+        
+        let html = `
+            <div class="mb-3">
+                <label class="form-label"><?= __('属性集代码') ?></label>
+                <input type="text" class="form-control" value="${setData.code}" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?= __('属性集名称') ?></label>
+                <input type="text" class="form-control" value="${setData.name || ''}" id="${widgetId}-set-name">
+            </div>
+            <button type="button" class="btn btn-primary" onclick="EavSetManager.saveSet('${widgetId}', ${setData.set_id})">
+                <i class="mdi mdi-content-save me-1"></i> <?= __('保存') ?>
+            </button>
+        `;
+        
+        contentEl.innerHTML = html;
+    },
+    
+    addSet: function(widgetId) {
+        const container = document.getElementById(widgetId);
+        const entityId = container.dataset.entityId;
+        const name = prompt('<?= __('请输入属性集名称') ?>');
+        
+        if (!name) return;
+        
+        const code = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        
+        this.doSaveSet(widgetId, {
+            eav_entity_id: entityId,
+            code: code,
+            name: name
+        });
+    },
+    
+    editSet: function(widgetId, setId) {
+        this.selectSet(widgetId, setId);
+    },
+    
+    saveSet: function(widgetId, setId) {
+        const container = document.getElementById(widgetId);
+        const name = document.getElementById(widgetId + '-set-name').value;
+        const entityId = container.dataset.entityId;
+        
+        this.doSaveSet(widgetId, {
+            set_id: setId,
+            eav_entity_id: entityId,
+            name: name
+        });
+    },
+    
+    doSaveSet: function(widgetId, data) {
+        const container = document.getElementById(widgetId);
+        const apiBase = container.dataset.apiBase;
+        
+        const formData = new FormData();
+        for (const key in data) {
+            formData.append(key, data[key]);
+        }
+        
+        fetch(apiBase + '/set/save', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert(result.message || '<?= __('保存成功') ?>');
+                location.reload();
+            } else {
+                alert(result.message || '<?= __('保存失败') ?>');
+            }
+        })
+        .catch(error => {
+            alert('<?= __('网络错误') ?>: ' + error.message);
+        });
+    },
+    
+    deleteSet: function(widgetId, setId) {
+        if (!confirm('<?= __('确定要删除此属性集吗？') ?>')) return;
+        
+        const container = document.getElementById(widgetId);
+        const apiBase = container.dataset.apiBase;
+        
+        const formData = new FormData();
+        formData.append('id', setId);
+        
+        fetch(apiBase + '/set/delete', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert(result.message || '<?= __('删除成功') ?>');
+                location.reload();
+            } else {
+                alert(result.message || '<?= __('删除失败') ?>');
+            }
+        })
+        .catch(error => {
+            alert('<?= __('网络错误') ?>: ' + error.message);
+        });
+    }
+};
+</script>
+<?php endif; ?>

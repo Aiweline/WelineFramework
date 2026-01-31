@@ -16,6 +16,10 @@ use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * @deprecated 请使用 Manager 控制器 (/eav/backend/manager) 统一管理EAV
+ * @see \Weline\Eav\Controller\Backend\Manager
+ */
 class Set extends \Weline\Framework\App\Controller\BackendController
 {
     private \Weline\Eav\Model\EavAttribute\Set $set;
