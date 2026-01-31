@@ -92,7 +92,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         <th><lang>适配器代码</lang></th>
                                         <th><lang>适配器名称</lang></th>
                                         <th><lang>版本</lang></th>
-                                        <th><lang>描述</lang></th>
+                                        <th width="600"><lang>描述</lang></th>
                                         <th><lang>状态</lang></th>
                                         <th><lang>创建时间</lang></th>
                                         <th><lang>操作</lang></th>
@@ -127,7 +127,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                            target-button-class='btn btn-outline-primary'
                                                            icon='mdi mdi-eye'
                                                            title='适配器详情'
-                                                           target-button-text=''
+                                                           target-button-text='编辑'
                                                            close-button-show='1'
                                                            close-button-text='关闭'
                                                            direction='right'
@@ -258,7 +258,6 @@ function performToggleStatus(adapterId) {
                 console.error('<?= __('请求失败：') ?>' + error.message);
             }
         });
-    }
 }
 </script>
 

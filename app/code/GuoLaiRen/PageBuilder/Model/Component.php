@@ -24,6 +24,11 @@ class Component extends Model
 {
     public const table = 'guolairen_page_builder_component';
     
+    /**
+     * 标志：是否正在同步实体文件（防止递归）
+     */
+    private bool $syncingEntityFile = false;
+    
     // 字段定义
     public const fields_ID = 'component_id';
     public const fields_CODE = 'code';                    // 组件代码（唯一标识）
@@ -44,6 +49,14 @@ class Component extends Model
     public const fields_CREATE_TIME = 'create_time';
     public const fields_UPDATE_TIME = 'update_time';
     
+    // AI 组件相关字段
+    public const fields_IS_AI_GENERATED = 'is_ai_generated';    // 是否 AI 生成
+    public const fields_AI_PROMPT = 'ai_prompt';                // AI 生成时的用户提示
+    public const fields_AI_VERSION = 'ai_version';              // AI 生成版本号
+    public const fields_TEMPLATE_CONTENT = 'template_content';  // 组件模板内容（AI 组件存储）
+    public const fields_ENTITY_FILE_HASH = 'entity_file_hash';  // 实体文件内容哈希
+    public const fields_ENTITY_GENERATED_AT = 'entity_generated_at'; // 实体文件生成时间
+    
     // 组件分类常量
     public const CATEGORY_HEADER = 'header';
     public const CATEGORY_FOOTER = 'footer';
@@ -55,6 +68,106 @@ class Component extends Model
     public const TYPE_WIDGET = 'widget';        // 小部件（如 Button、Form）
     public const TYPE_LAYOUT = 'layout';        // 布局组件（如 Grid、Flex）
     public const TYPE_SYSTEM = 'system';        // 系统组件（header、footer）
+    
+    // AI 组件样式代码
+    public const STYLE_CODE_AI_GENERATED = '_ai_generated';
+    
+    /**
+     * 检查是否是 AI 生成的组件
+     */
+    public function isAIGenerated(): bool
+    {
+        return (bool)$this->getData(self::fields_IS_AI_GENERATED);
+    }
+    
+    /**
+     * 设置为 AI 生成组件
+     */
+    public function setAIGenerated(bool $isAI = true): self
+    {
+        return $this->setData(self::fields_IS_AI_GENERATED, $isAI ? 1 : 0);
+    }
+    
+    /**
+     * 获取 AI 提示词
+     */
+    public function getAIPrompt(): string
+    {
+        return $this->getData(self::fields_AI_PROMPT) ?: '';
+    }
+    
+    /**
+     * 设置 AI 提示词
+     */
+    public function setAIPrompt(string $prompt): self
+    {
+        return $this->setData(self::fields_AI_PROMPT, $prompt);
+    }
+    
+    /**
+     * 获取模板内容（用于 AI 组件）
+     */
+    public function getTemplateContent(): string
+    {
+        return $this->getData(self::fields_TEMPLATE_CONTENT) ?: '';
+    }
+    
+    /**
+     * 设置模板内容
+     */
+    public function setTemplateContent(string $content): self
+    {
+        return $this->setData(self::fields_TEMPLATE_CONTENT, $content);
+    }
+    
+    /**
+     * 获取实体文件哈希
+     */
+    public function getEntityFileHash(): string
+    {
+        return $this->getData(self::fields_ENTITY_FILE_HASH) ?: '';
+    }
+    
+    /**
+     * 设置实体文件哈希
+     */
+    public function setEntityFileHash(string $hash): self
+    {
+        return $this->setData(self::fields_ENTITY_FILE_HASH, $hash);
+    }
+    
+    /**
+     * 检查实体文件是否需要更新
+     * 
+     * @param string $currentContentHash 当前内容的哈希
+     * @return bool
+     */
+    public function needsEntityFileUpdate(string $currentContentHash): bool
+    {
+        $storedHash = $this->getEntityFileHash();
+        return empty($storedHash) || $storedHash !== $currentContentHash;
+    }
+    
+    /**
+     * 生成 AI 组件代码
+     * 
+     * @param string $category 组件分类
+     * @param string|null $name 可选的描述性名称
+     * @return string 组件代码
+     */
+    public static function generateAIComponentCode(string $category, ?string $name = null): string
+    {
+        if ($name) {
+            // 清理名称：只保留字母数字和破折号
+            $cleanName = preg_replace('/[^a-zA-Z0-9\-]/', '', str_replace(' ', '-', strtolower($name)));
+            if (!empty($cleanName)) {
+                return strtolower($category) . '-' . $cleanName;
+            }
+        }
+        
+        // 使用时间戳格式：{category}-ai-{yymmddHHMM}
+        return strtolower($category) . '-ai-' . date('ymdHi');
+    }
     
     /**
      * 获取所有组件分类
@@ -437,11 +550,6 @@ class Component extends Model
      */
     public static function getByStyleCode(string $styleCode, bool $includeCompatible = true, bool $activeOnly = true): array
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'Component.php:getByStyleCode', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['styleCode' => $styleCode, 'includeCompatible' => $includeCompatible, 'activeOnly' => $activeOnly], 'B');
-        // #endregion
-        
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         
         // 获取属于该模板的组件
@@ -453,10 +561,6 @@ class Component extends Model
             $query->where(self::fields_IS_ACTIVE, 1);
         }
         
-        // #region agent log
-        $debugLog('Before own query', ['styleCode' => $styleCode], 'B');
-        // #endregion
-        
         $result = [
             'own' => $query->order(self::fields_SORT_ORDER, 'ASC')
                 ->select()
@@ -464,10 +568,6 @@ class Component extends Model
                 ->getItems(),
             'compatible' => [],
         ];
-        
-        // #region agent log
-        $debugLog('Own query done', ['ownCount' => count($result['own'])], 'B');
-        // #endregion
         
         // 如果需要包含兼容的组件
         if ($includeCompatible) {
@@ -479,19 +579,11 @@ class Component extends Model
                 $allQuery->where(self::fields_IS_ACTIVE, 1);
             }
             
-            // #region agent log
-            $debugLog('Before compatible query', ['excludeStyleCode' => $styleCode], 'E');
-            // #endregion
-            
             $allItems = $allQuery->order(self::fields_STYLE_CODE, 'ASC')
                 ->order(self::fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
-            
-            // #region agent log
-            $debugLog('Compatible query done', ['allItemsCount' => count($allItems)], 'E');
-            // #endregion
             
             // 过滤出兼容的组件
             foreach ($allItems as $component) {
@@ -800,11 +892,6 @@ class Component extends Model
         string $filePath,
         array $regions = []
     ): array {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'Component.php:registerComponentFromJson', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['styleCode' => $styleCode, 'componentCode' => $componentCode], 'C');
-        // #endregion
-        
         $componentModel = \Weline\Framework\Manager\ObjectManager::getInstance(self::class);
         
         // 计算相对路径
@@ -847,10 +934,6 @@ class Component extends Model
             self::fields_SORT_ORDER => (int)$sortOrder,
         ];
         
-        // #region agent log
-        $debugLog('Data prepared', ['data_keys' => array_keys($data), 'sort_order' => $data[self::fields_SORT_ORDER], 'is_system' => $data[self::fields_IS_SYSTEM], 'is_active' => $data[self::fields_IS_ACTIVE]], 'C');
-        // #endregion
-        
         // 额外存储 region 和 icon 信息到 config_schema
         $configSchema = [
             'config_groups' => $config['config_groups'] ?? [],
@@ -864,9 +947,6 @@ class Component extends Model
         $data[self::fields_CONFIG_SCHEMA] = json_encode($configSchema, JSON_UNESCAPED_UNICODE);
         
         if ($existing->getId()) {
-            // #region agent log
-            $debugLog('Updating existing', ['existingId' => $existing->getId()], 'D');
-            // #endregion
             // 更新现有组件
             foreach ($data as $key => $value) {
                 $existing->setData($key, $value);
@@ -874,9 +954,6 @@ class Component extends Model
             $existing->save();
             return ['created' => false, 'component' => $existing];
         } else {
-            // #region agent log
-            $debugLog('Creating new', ['componentCode' => $componentCode], 'D');
-            // #endregion
             // 创建新组件
             $newComponent = clone $componentModel;
             $newComponent->clearData();
@@ -1265,10 +1342,54 @@ class Component extends Model
                 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
                 '更新时间'
             )
+            // AI 组件相关字段
+            ->addColumn(
+                self::fields_IS_AI_GENERATED,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'not null default 0',
+                '是否AI生成'
+            )
+            ->addColumn(
+                self::fields_AI_PROMPT,
+                TableInterface::column_type_TEXT,
+                0,
+                '',
+                'AI生成时的用户提示'
+            )
+            ->addColumn(
+                self::fields_AI_VERSION,
+                TableInterface::column_type_VARCHAR,
+                50,
+                '',
+                'AI生成版本号'
+            )
+            ->addColumn(
+                self::fields_TEMPLATE_CONTENT,
+                TableInterface::column_type_TEXT,
+                0,
+                '',
+                '组件模板内容(AI组件存储)'
+            )
+            ->addColumn(
+                self::fields_ENTITY_FILE_HASH,
+                TableInterface::column_type_VARCHAR,
+                32,
+                '',
+                '实体文件内容哈希'
+            )
+            ->addColumn(
+                self::fields_ENTITY_GENERATED_AT,
+                TableInterface::column_type_DATETIME,
+                0,
+                '',
+                '实体文件生成时间'
+            )
             ->addIndex(TableInterface::index_type_KEY, 'idx_code', [self::fields_CODE], '组件代码索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_style_code', [self::fields_STYLE_CODE], '模板代码索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_category', [self::fields_CATEGORY], '分类索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', [self::fields_IS_ACTIVE], '状态索引')
+            ->addIndex(TableInterface::index_type_KEY, 'idx_is_ai_generated', [self::fields_IS_AI_GENERATED], 'AI组件索引')
             ->create();
     }
 
@@ -1277,7 +1398,98 @@ class Component extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 预留升级逻辑
+        // 添加 AI 组件相关字段（用于已有安装的升级）
+        $this->addAIColumns($setup);
+    }
+    
+    /**
+     * 添加 AI 组件相关字段
+     */
+    private function addAIColumns(ModelSetup $setup): void
+    {
+        // 检查并添加 is_ai_generated 字段
+        if (!$setup->hasField(self::fields_IS_AI_GENERATED)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_IS_AI_GENERATED,
+                    self::fields_IS_SYSTEM, // 在 is_system 字段之后添加
+                    TableInterface::column_type_SMALLINT,
+                    1,
+                    'not null default 0',
+                    '是否AI生成'
+                )
+                ->alter();
+        }
+        
+        // 检查并添加 ai_prompt 字段
+        if (!$setup->hasField(self::fields_AI_PROMPT)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_AI_PROMPT,
+                    self::fields_IS_AI_GENERATED,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    'AI生成时的用户提示'
+                )
+                ->alter();
+        }
+        
+        // 检查并添加 ai_version 字段
+        if (!$setup->hasField(self::fields_AI_VERSION)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_AI_VERSION,
+                    self::fields_AI_PROMPT,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    '',
+                    'AI生成版本号'
+                )
+                ->alter();
+        }
+        
+        // 检查并添加 template_content 字段
+        if (!$setup->hasField(self::fields_TEMPLATE_CONTENT)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_TEMPLATE_CONTENT,
+                    self::fields_AI_VERSION,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    '组件模板内容(AI组件存储)'
+                )
+                ->alter();
+        }
+        
+        // 检查并添加 entity_file_hash 字段
+        if (!$setup->hasField(self::fields_ENTITY_FILE_HASH)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_ENTITY_FILE_HASH,
+                    self::fields_TEMPLATE_CONTENT,
+                    TableInterface::column_type_VARCHAR,
+                    32,
+                    '',
+                    '实体文件内容哈希'
+                )
+                ->alter();
+        }
+        
+        // 检查并添加 entity_generated_at 字段
+        if (!$setup->hasField(self::fields_ENTITY_GENERATED_AT)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_ENTITY_GENERATED_AT,
+                    self::fields_ENTITY_FILE_HASH,
+                    TableInterface::column_type_DATETIME,
+                    0,
+                    '',
+                    '实体文件生成时间'
+                )
+                ->alter();
+        }
     }
 
     /**
@@ -1286,5 +1498,42 @@ class Component extends Model
     public function setup(ModelSetup $setup, Context $context): void
     {
         $this->install($setup, $context);
+    }
+    
+    /**
+     * 保存后钩子 - 自动同步 AI 组件的实体文件
+     */
+    public function save_after(): void
+    {
+        parent::save_after();
+        
+        // 如果是 AI 生成的组件，且模板内容不为空，自动同步实体文件
+        // 使用实例标志防止递归保存
+        if (!$this->syncingEntityFile && $this->isAIGenerated() && !empty($this->getTemplateContent())) {
+            try {
+                $entityFileManager = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::class
+                );
+                
+                // 检查是否需要更新
+                if ($entityFileManager->needsUpdate($this)) {
+                    $this->syncingEntityFile = true;
+                    try {
+                        // 同步实体文件（updateModel=true 会更新哈希和时间戳并保存）
+                        // 但由于 syncingEntityFile 标志，不会再次进入此逻辑
+                        $entityFileManager->syncEntityFile($this, true);
+                        
+                        // 更新 component.json
+                        $entityFileManager->updateComponentJson();
+                    } finally {
+                        $this->syncingEntityFile = false;
+                    }
+                }
+            } catch (\Exception $e) {
+                // 记录错误但不中断保存流程
+                error_log("[Component] Failed to sync AI component entity file: " . $e->getMessage());
+                $this->syncingEntityFile = false;
+            }
+        }
     }
 }

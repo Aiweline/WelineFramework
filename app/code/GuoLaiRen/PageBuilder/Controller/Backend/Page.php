@@ -79,11 +79,6 @@ class Page extends BackendController
      */
     private function hasPermission(int $userId, string $sourceId): bool
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['timestamp'=>microtime(true),'location'=>'Page.php:hasPermission','message'=>$msg,'data'=>$data,'hypothesisId'=>$hyp,'sessionId'=>'debug-session'])."\n", FILE_APPEND); };
-        $debugLog('hasPermission ENTRY', ['userId'=>$userId,'sourceId'=>$sourceId,'cacheExists'=>self::$userPermissionsCache!==null], 'A');
-        // #endregion
-        
         // 超管拥有所有权限
         if ($userId === 1) {
             return true;
@@ -93,28 +88,16 @@ class Page extends BackendController
             return false;
         }
         
-        // #region agent log
-        $debugLog('Before getLoginUser', ['userId'=>$userId], 'D');
-        // #endregion
-        
         // 获取用户角色
         $user = $this->session->getLoginUser(\Weline\Backend\Model\BackendUser::class);
         if (!$user) {
             return false;
         }
         
-        // #region agent log
-        $debugLog('Before getRoleModel', ['userId'=>$userId,'userExists'=>(bool)$user], 'D');
-        // #endregion
-        
         $role = $user->getRoleModel();
         if (!$role || !$role->getId()) {
             return false;
         }
-        
-        // #region agent log
-        $debugLog('Role obtained', ['roleId'=>$role->getId()], 'D');
-        // #endregion
         
         // 超管角色
         if ($role->getId() === 1) {
@@ -124,19 +107,11 @@ class Page extends BackendController
         // 使用缓存的权限列表
         $cacheKey = 'user_permissions_' . $userId;
         if (self::$userPermissionsCache === null) {
-            // #region agent log
-            $debugLog('Cache miss, fetching permissions', ['cacheKey'=>$cacheKey], 'A');
-            // #endregion
-            
             /** @var CacheInterface $cache */
             $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
             $permissions = $cache->get($cacheKey);
             
             if (!$permissions) {
-                // #region agent log
-                $debugLog('Before getRoleAccessListArray', ['roleId'=>$role->getId()], 'A');
-                // #endregion
-                
                 /** @var RoleAccess $roleAccess */
                 $roleAccess = ObjectManager::getInstance(RoleAccess::class);
                 $accesses = $roleAccess->getRoleAccessListArray($role);
@@ -145,17 +120,9 @@ class Page extends BackendController
                     $permissions[] = $access['source_id'];
                 }
                 $cache->set($cacheKey, $permissions);
-                
-                // #region agent log
-                $debugLog('Permissions loaded', ['count'=>count($permissions)], 'A');
-                // #endregion
             }
             self::$userPermissionsCache = $permissions;
         }
-        
-        // #region agent log
-        $debugLog('hasPermission EXIT', ['result'=>in_array($sourceId, self::$userPermissionsCache)], 'A');
-        // #endregion
         
         return in_array($sourceId, self::$userPermissionsCache);
     }
@@ -1977,6 +1944,22 @@ class Page extends BackendController
             
             // 同时清除 PageBuilder Router 的静态缓存
             \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
+            
+            // 绑定 SEO 账户（如果提供了 seo_account_id）
+            $seoAccountId = (int)$this->request->getPost('seo_account_id', 0);
+            if ($seoAccountId > 0 && $websiteId > 0) {
+                try {
+                    $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                    $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
+                        'website_id' => $websiteId,
+                        'account_id' => $seoAccountId,
+                        'is_auto_submit' => true,
+                    ]);
+                } catch (\Exception $e) {
+                    // SEO 账户绑定失败不影响建站结果
+                    error_log('[GuoLaiRen_PageBuilder] SEO account bind error: ' . $e->getMessage());
+                }
+            }
             
             return $this->fetchJson([
                 'success' => true,

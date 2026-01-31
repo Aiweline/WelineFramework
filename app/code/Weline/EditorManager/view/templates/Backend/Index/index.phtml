@@ -1,0 +1,80 @@
+<?php
+/**
+ * @var \Weline\EditorManager\Controller\Backend\Index $this
+ * @var array $editors
+ * @var string $title
+ */
+?>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="mdi mdi-content-save-edit me-2"></i>
+                        <?= $title ?>
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        <?= __('管理系统中可用的富文本编辑器。编辑器管理器允许您在不同的编辑器之间切换。') ?>
+                    </p>
+                    
+                    <?php if (empty($editors)): ?>
+                        <div class="alert alert-info">
+                            <i class="mdi mdi-information-outline me-2"></i>
+                            <?= __('暂无已注册的编辑器管理器。') ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th style="width: 150px;"><?= __('编辑器名称') ?></th>
+                                        <th style="width: 300px;"><?= __('类名') ?></th>
+                                        <th><?= __('描述/状态') ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($editors as $index => $editor): ?>
+                                        <tr>
+                                            <td><?= $index + 1 ?></td>
+                                            <td>
+                                                <span class="badge bg-primary">
+                                                    <?= htmlspecialchars($editor['name']) ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <code class="text-muted small">
+                                                    <?= htmlspecialchars($editor['class']) ?>
+                                                </code>
+                                            </td>
+                                            <td>
+                                                <?= $editor['description'] ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="mt-4">
+                        <div class="alert alert-secondary">
+                            <h6 class="alert-heading">
+                                <i class="mdi mdi-lightbulb-outline me-2"></i>
+                                <?= __('安装更多编辑器') ?>
+                            </h6>
+                            <p class="mb-2"><?= __('您可以通过 Composer 安装额外的编辑器管理器模块：') ?></p>
+                            <code class="d-block bg-dark text-light p-2 rounded">
+                                composer require weline/module-ckeditor-editor-manager
+                            </code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

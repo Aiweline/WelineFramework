@@ -648,7 +648,7 @@ class Dashboard extends BackendController
                 ->order('total_cost DESC')
                 ->limit(5)
                 ->select()
-                ->fetchOrigin();
+                ->fetchArray();
             
             $providers = $accountService->getSupportedProviders();
             $topProviders = [];

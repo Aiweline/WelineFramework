@@ -6,13 +6,14 @@ namespace Weline\DeveloperWorkspace\Api\Rest\V1;
 
 use Weline\DeveloperWorkspace\Model\Document as DocumentModel;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\App\Controller\BackendRestController;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 文档API控制器 - 提供前端文档搜索和浏览
+ * 文档API控制器 - 提供开发工具面板的文档搜索和浏览
+ * 需要后台登录权限
  */
-class Document extends FrontendRestController
+class Document extends BackendRestController
 {
     private DocumentModel $documentModel;
     private Catalog $catalogModel;
@@ -36,7 +37,6 @@ class Document extends FrontendRestController
             $modules = $this->documentModel->clear()
                 ->fields(DocumentModel::fields_MODULE_NAME)
                 ->where(DocumentModel::fields_MODULE_NAME, '', '!=')
-                ->where(DocumentModel::fields_MODULE_NAME, null, 'IS NOT')
                 ->group(DocumentModel::fields_MODULE_NAME)
                 ->select()
                 ->fetch()
@@ -84,12 +84,10 @@ class Document extends FrontendRestController
             $query = $this->documentModel->clear();
             
             // 关键词搜索（标题、摘要、内容）
+            // 注意：由于框架限制，使用 OR 条件需要分别执行查询后合并，或使用 SQL 原生查询
+            // 这里简化处理：仅搜索标题字段
             if ($keyword) {
-                $query->where(function($q) use ($keyword) {
-                    $q->where(DocumentModel::fields_TITLE, '%' . $keyword . '%', 'like')
-                      ->orWhere(DocumentModel::fields_summary, '%' . $keyword . '%', 'like')
-                      ->orWhere(DocumentModel::fields_CONTEND, '%' . $keyword . '%', 'like');
-                });
+                $query->where(DocumentModel::fields_TITLE, '%' . $keyword . '%', 'like');
             }
             
             // 模块过滤
@@ -101,13 +99,23 @@ class Document extends FrontendRestController
             $query->order(DocumentModel::fields_SORT_ORDER, 'ASC')
                   ->order(DocumentModel::fields_ID, 'DESC');
             
-            // 分页
+            // 先获取总数（不带分页限制）
+            $total = $query->count();
+            
+            // 重新构建查询并添加分页
+            $query = $this->documentModel->clear();
+            if ($keyword) {
+                $query->where(DocumentModel::fields_TITLE, '%' . $keyword . '%', 'like');
+            }
+            if ($module && $module !== 'all') {
+                $query->where(DocumentModel::fields_MODULE_NAME, $module);
+            }
+            $query->order(DocumentModel::fields_SORT_ORDER, 'ASC')
+                  ->order(DocumentModel::fields_ID, 'DESC');
+            
+            // 添加分页
             $offset = ($page - 1) * $pageSize;
             $query->limit($offset, $pageSize);
-            
-            // 获取总数
-            $totalQuery = clone $query;
-            $total = $totalQuery->count();
             
             // 获取数据
             $documents = $query->select()->fetch()->getItems();

@@ -16,42 +16,6 @@ File: Main Js File
         var isCollapsedMode = $('body').hasClass('vertical-collpsed');
 
         if (!isCollapsedMode) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    sessionId: 'debug-session',
-                    runId: 'pre-fix',
-                    hypothesisId: 'H1',
-                    location: 'Admin/app.js:initMetisMenu',
-                    message: 'Before init metisMenu on #sidebar-menu',
-                    data: {
-                        sidebarCount: $("#sidebar-menu").length,
-                        firstTag: $("#sidebar-menu").get(0) ? $("#sidebar-menu").get(0).tagName : null
-                    },
-                    timestamp: Date.now()
-                })
-            }).catch(function () {});
-            // #endregion agent log
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    sessionId: 'debug-session',
-                    runId: 'post-fix',
-                    hypothesisId: 'H3',
-                    location: 'Admin/app.js:initMetisMenu',
-                    message: 'Before init metisMenu on #side-menu',
-                    data: {
-                        sideMenuCount: $("#side-menu").length,
-                        firstTag: $("#side-menu").get(0) ? $("#side-menu").get(0).tagName : null
-                    },
-                    timestamp: Date.now()
-                })
-            }).catch(function () {});
-            // #endregion agent log
             // 只在非图标模式下启用MetisMenu
             $("#side-menu").metisMenu();
         } else {
@@ -200,6 +164,18 @@ File: Main Js File
             bestMatch.parent().parent().parent().addClass("mm-active");
             bestMatch.parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
             bestMatch.parent().parent().parent().parent().parent().addClass("mm-active");
+            // 菜单激活后触发 #side-menu 内定位（由 left-sidebar 的 scrollToActiveMenu 负责）
+            var scrollAttempts = 0;
+            var maxAttempts = 10;
+            var tryScroll = function() {
+                scrollAttempts++;
+                if (typeof window.scrollToActiveMenu === 'function') {
+                    window.scrollToActiveMenu();
+                } else if (scrollAttempts < maxAttempts) {
+                    setTimeout(tryScroll, 100);
+                }
+            };
+            setTimeout(tryScroll, 100);
         }
     }
 

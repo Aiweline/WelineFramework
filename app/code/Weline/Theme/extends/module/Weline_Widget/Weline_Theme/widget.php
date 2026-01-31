@@ -1683,6 +1683,34 @@ return [
                 'type'        => 'string',
                 'label'       => '标题',
                 'default'     => '关注我们',
+                'translatable' => true,  // 支持多语言
+            ],
+            'icon_style' => [
+                'type'        => 'select',
+                'label'       => '图标样式',
+                'default'     => 'colored',
+                'options'     => [
+                    'colored' => '彩色',
+                    'mono'    => '单色',
+                    'outline' => '线框',
+                ],
+            ],
+            'gap' => [
+                'type'        => 'string',
+                'label'       => '图标间距',
+                'default'     => '10px',
+                'description' => '支持CSS单位（如10px、1rem）',
+            ],
+            'wechat_qr' => [
+                'type'        => 'image',
+                'label'       => '微信二维码',
+                'default'     => '',
+            ],
+            'custom_links' => [
+                'type'        => 'string',
+                'label'       => '自定义社交链接',
+                'default'     => '',
+                'description' => 'JSON格式，例：[{"platform":"facebook","url":"https://..."}]',
             ],
             'facebook' => [
                 'type'        => 'url',
@@ -1704,14 +1732,19 @@ return [
                 'label'       => 'YouTube链接',
                 'default'     => '',
             ],
+            'linkedin' => [
+                'type'        => 'url',
+                'label'       => 'LinkedIn链接',
+                'default'     => '',
+            ],
+            'pinterest' => [
+                'type'        => 'url',
+                'label'       => 'Pinterest链接',
+                'default'     => '',
+            ],
             'tiktok' => [
                 'type'        => 'url',
                 'label'       => 'TikTok链接',
-                'default'     => '',
-            ],
-            'wechat' => [
-                'type'        => 'image',
-                'label'       => '微信二维码',
                 'default'     => '',
             ],
             'weibo' => [
@@ -1719,15 +1752,40 @@ return [
                 'label'       => '微博链接',
                 'default'     => '',
             ],
-            'icon_style' => [
-                'type'        => 'select',
-                'label'       => '图标样式',
-                'default'     => 'colored',
-                'options'     => [
-                    'colored' => '彩色',
-                    'mono'    => '单色',
-                    'outline' => '线框',
-                ],
+            'wechat' => [
+                'type'        => 'url',
+                'label'       => '微信链接',
+                'default'     => '',
+            ],
+            'github' => [
+                'type'        => 'url',
+                'label'       => 'GitHub链接',
+                'default'     => '',
+            ],
+            'telegram' => [
+                'type'        => 'url',
+                'label'       => 'Telegram链接',
+                'default'     => '',
+            ],
+            'whatsapp' => [
+                'type'        => 'url',
+                'label'       => 'WhatsApp链接',
+                'default'     => '',
+            ],
+            'discord' => [
+                'type'        => 'url',
+                'label'       => 'Discord链接',
+                'default'     => '',
+            ],
+            'reddit' => [
+                'type'        => 'url',
+                'label'       => 'Reddit链接',
+                'default'     => '',
+            ],
+            'snapchat' => [
+                'type'        => 'url',
+                'label'       => 'Snapchat链接',
+                'default'     => '',
             ],
         ],
     ],
@@ -2140,61 +2198,124 @@ return [
                 'type'        => 'string',
                 'label'       => '标题',
                 'default'     => '',
+                'translatable' => true,  // 支持多语言
+            ],
+            'alignment' => [
+                'type'        => 'select',
+                'label'       => '对齐方式',
+                'default'     => 'left',
+                'options'     => [
+                    'left'   => '左对齐',
+                    'center' => '居中',
+                    'right'  => '右对齐',
+                ],
+            ],
+            'icon_size' => [
+                'type'        => 'select',
+                'label'       => '图标尺寸',
+                'default'     => 'medium',
+                'options'     => [
+                    'small'  => '小号',
+                    'medium' => '中号',
+                    'large'  => '大号',
+                ],
+            ],
+            'icon_style' => [
+                'type'        => 'select',
+                'label'       => '图标样式',
+                'default'     => 'colored',
+                'options'     => [
+                    'colored' => '彩色',
+                    'mono'    => '单色',
+                    'outline' => '线框',
+                ],
+            ],
+            'gap' => [
+                'type'        => 'string',
+                'label'       => '图标间距',
+                'default'     => '10px',
+                'description' => '支持CSS单位（如10px、1rem）',
+            ],
+            'custom_links' => [
+                'type'        => 'string',
+                'label'       => '自定义社交链接',
+                'default'     => '',
+                'description' => 'JSON格式，例：[{"platform":"facebook","url":"https://..."}]',
             ],
             'facebook' => [
                 'type'        => 'url',
-                'label'       => 'Facebook',
+                'label'       => 'Facebook链接',
                 'default'     => '',
             ],
             'twitter' => [
                 'type'        => 'url',
-                'label'       => 'Twitter/X',
+                'label'       => 'Twitter/X链接',
                 'default'     => '',
             ],
             'instagram' => [
                 'type'        => 'url',
-                'label'       => 'Instagram',
+                'label'       => 'Instagram链接',
                 'default'     => '',
             ],
             'youtube' => [
                 'type'        => 'url',
-                'label'       => 'YouTube',
+                'label'       => 'YouTube链接',
                 'default'     => '',
             ],
             'linkedin' => [
                 'type'        => 'url',
-                'label'       => 'LinkedIn',
+                'label'       => 'LinkedIn链接',
                 'default'     => '',
             ],
             'pinterest' => [
                 'type'        => 'url',
-                'label'       => 'Pinterest',
+                'label'       => 'Pinterest链接',
                 'default'     => '',
             ],
             'tiktok' => [
                 'type'        => 'url',
-                'label'       => 'TikTok',
-                'default'     => '',
-            ],
-            'wechat_qr' => [
-                'type'        => 'image',
-                'label'       => '微信二维码',
+                'label'       => 'TikTok链接',
                 'default'     => '',
             ],
             'weibo' => [
                 'type'        => 'url',
-                'label'       => '微博',
+                'label'       => '微博链接',
                 'default'     => '',
             ],
-            'icon_size' => [
-                'type'        => 'select',
-                'label'       => '图标大小',
-                'default'     => 'medium',
-                'options'     => [
-                    'small'  => '小',
-                    'medium' => '中',
-                    'large'  => '大',
-                ],
+            'wechat' => [
+                'type'        => 'url',
+                'label'       => '微信链接',
+                'default'     => '',
+            ],
+            'github' => [
+                'type'        => 'url',
+                'label'       => 'GitHub链接',
+                'default'     => '',
+            ],
+            'telegram' => [
+                'type'        => 'url',
+                'label'       => 'Telegram链接',
+                'default'     => '',
+            ],
+            'whatsapp' => [
+                'type'        => 'url',
+                'label'       => 'WhatsApp链接',
+                'default'     => '',
+            ],
+            'discord' => [
+                'type'        => 'url',
+                'label'       => 'Discord链接',
+                'default'     => '',
+            ],
+            'reddit' => [
+                'type'        => 'url',
+                'label'       => 'Reddit链接',
+                'default'     => '',
+            ],
+            'snapchat' => [
+                'type'        => 'url',
+                'label'       => 'Snapchat链接',
+                'default'     => '',
             ],
         ],
     ],

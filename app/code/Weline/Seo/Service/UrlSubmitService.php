@@ -30,21 +30,23 @@ class UrlSubmitService
 
     /**
      * 提交单个 URL
+     * 
+     * @param string $url 要提交的 URL
+     * @param string $scope 业务范围标识（如 page_builder、catalog）
+     * @param array $extra 额外参数
      */
-    public function requestSubmit(string $url, string $scope, string $module, array $extra = []): void
+    public function requestSubmit(string $url, string $scope, array $extra = []): void
     {
         $url = trim($url);
         $scope = trim($scope);
-        $module = trim($module);
 
-        if ($url === '' || $scope === '' || $module === '') {
+        if ($url === '' || $scope === '') {
             return;
         }
 
         $data = array_merge($extra, [
             'url' => $url,
             'scope' => $scope,
-            'module' => $module,
         ]);
 
         $this->eventsManager->dispatch('Weline_Seo::integration::url_submit_request', $data);
@@ -54,11 +56,13 @@ class UrlSubmitService
      * 批量提交 URL
      *
      * @param array $urls URL 列表
+     * @param string $scope 业务范围标识
+     * @param array $extra 额外参数
      */
-    public function requestBatch(array $urls, string $scope, string $module, array $extra = []): void
+    public function requestBatch(array $urls, string $scope, array $extra = []): void
     {
         foreach ($urls as $url) {
-            $this->requestSubmit((string)$url, $scope, $module, $extra);
+            $this->requestSubmit((string)$url, $scope, $extra);
         }
     }
 }

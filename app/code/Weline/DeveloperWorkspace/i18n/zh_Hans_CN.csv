@@ -89,7 +89,7 @@ API文档管理,API文档管理
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
 "API文档导入失败: %{error}","API文档导入失败: %{error}"
 "扫描模块根目录下的外部文档: %{count} 个","扫描模块根目录下的外部文档: %{count} 个"
-"扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）","扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）"
+"扫描 Weline_Framework/%{path} 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）","扫描 Weline_Framework/%{path} 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）"
 "处理 doc 根目录下的 %{count} 个文档文件（关联到 Weline_Framework 模块分类）","处理 doc 根目录下的 %{count} 个文档文件（关联到 Weline_Framework 模块分类）"
 "发现 %{count} 个子目录，将直接作为顶层分类（PID=0, Level=1）","发现 %{count} 个子目录，将直接作为顶层分类（PID=0, Level=1）"
 "处理顶层分类: %{name}","处理顶层分类: %{name}"
@@ -105,15 +105,14 @@ API文档管理,API文档管理
 "更新: %{path}","更新: %{path}"
 "新增: %{path}","新增: %{path}"
 "创建顶层分类: %{name}","创建顶层分类: %{name}"
+"模块分类层级修复失败: %{name} (level: %{level} != 1, pid: %{pid} != %{top})，将创建新的模块分类","模块分类层级修复失败: %{name} (level: %{level} != 1, pid: %{pid} != %{top})，将创建新的模块分类"
 "分类层级不一致: %{name} (当前层级: %{current} != 计算层级: %{calculated})，将更新层级","分类层级不一致: %{name} (当前层级: %{current} != 计算层级: %{calculated})，将更新层级"
 "发现同名但父ID不同的分类: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level})，将创建新分类（不同父分类下允许同名）","发现同名但父ID不同的分类: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level})，将创建新分类（不同父分类下允许同名）"
 "发现已存在的同名分类: %{name} (id: %{id}, pid: %{pid}, level: %{level})，将使用已存在的分类","发现已存在的同名分类: %{name} (id: %{id}, pid: %{pid}, level: %{level})，将使用已存在的分类"
 "目录 %{name}","目录 %{name}"
 正在检查并清理重复文档...,正在检查并清理重复文档...
 "发现重复文档(自动导入): %{key}，共 %{count} 条，将删除 %{delete} 条","发现重复文档(自动导入): %{key}，共 %{count} 条，将删除 %{delete} 条"
-"已删除 %{count} 条自动导入的重复文档","已删除 %{count} 条自动导入的重复文档"
 "发现重复文档(手动创建): %{key}，共 %{count} 条，将删除 %{delete} 条","发现重复文档(手动创建): %{key}，共 %{count} 条，将删除 %{delete} 条"
-"已删除 %{count} 条手动创建的重复文档","已删除 %{count} 条手动创建的重复文档"
 正在检查关联到不存在分类的文档...,正在检查关联到不存在分类的文档...
 "发现孤立文档: %{title} (ID: %{id})，其分类 %{cat_id} 不存在","发现孤立文档: %{title} (ID: %{id})，其分类 %{cat_id} 不存在"
 "已删除 %{count} 条关联到不存在分类的文档","已删除 %{count} 条关联到不存在分类的文档"
@@ -401,6 +400,9 @@ Header值,Header值
 返回文档列表,返回文档列表
 返回网站,返回网站
 请从左侧选择分类查看文档,请从左侧选择分类查看文档
+"扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）","扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，doc根目录文档关联到模块分类）"
+"已删除 %{count} 条自动导入的重复文档","已删除 %{count} 条自动导入的重复文档"
+"已删除 %{count} 条手动创建的重复文档","已删除 %{count} 条手动创建的重复文档"
 没有发现重复文档,没有发现重复文档
 "共清理 %{count} 条重复文档","共清理 %{count} 条重复文档"
 没有找到自动导入的文档,没有找到自动导入的文档

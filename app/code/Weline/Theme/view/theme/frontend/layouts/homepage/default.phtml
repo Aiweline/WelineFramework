@@ -75,7 +75,7 @@ $colors = $this->getData('colors') ?? [];
                      data-wslot-name="内容区域"
                      data-wslot-multiple="true"
                      data-wslot-reject="header,footer">
-                    <w:hook>Weline_Theme::frontend::layouts::homepage::content<else/>
+                    <w:hook name="Weline_Theme::frontend::layouts::homepage::content">
                         <if condition="meta.content">
                             {{meta.content}}
                         <else/>

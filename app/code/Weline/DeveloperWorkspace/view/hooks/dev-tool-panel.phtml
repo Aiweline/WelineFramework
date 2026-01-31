@@ -243,6 +243,35 @@ $panelType = $panelType ?? 'frontend';
         margin-left: auto;
         font-style: normal;
     }
+    
+    .dev-tool-close-btn {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        z-index: 10;
+    }
+    
+    .dev-tool-close-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: scale(1.05);
+    }
+    
+    .dev-tool-close-btn:active {
+        transform: scale(0.95);
+    }
 
     .dev-tool-quick-actions {
         display: flex;
@@ -798,6 +827,12 @@ $panelType = $panelType ?? 'frontend';
             font-size: 14px;
         }
         
+        .dev-tool-close-btn {
+            width: 34px;
+            height: 34px;
+            font-size: 18px;
+        }
+        
         .dev-tool-quick-btn {
             padding: 3px 8px;
             font-size: 11px;
@@ -896,6 +931,15 @@ $panelType = $panelType ?? 'frontend';
         
         .dev-tool-header-hint {
             font-size: 10px;
+        }
+        
+        /* 手机端关闭按钮优化 - 更大的触摸目标 */
+        .dev-tool-close-btn {
+            width: 40px;
+            height: 40px;
+            font-size: 22px;
+            top: 8px;
+            right: 12px;
         }
         
         .dev-tool-quick-actions {
@@ -1030,6 +1074,15 @@ $panelType = $panelType ?? 'frontend';
         .doc-item h4 {
             font-size: 13px;
         }
+        
+        /* 移动端关闭按钮优化 */
+        .dev-tool-close-btn {
+            width: 36px;
+            height: 36px;
+            font-size: 20px;
+            top: 6px;
+            right: 10px;
+        }
     }
     
     /* 触摸设备优化 */
@@ -1109,6 +1162,9 @@ $panelType = $panelType ?? 'frontend';
     <div class="dev-tool-container">
         <!-- 头部区域 -->
         <div class="dev-tool-header" title="双击此处收起面板">
+            <button class="dev-tool-close-btn" onclick="DevToolPanel.closePanel()" title="关闭开发工具面板">
+                <i class="fa fa-times"></i>
+            </button>
             <h3>
                 <i class="fa fa-code"></i>
                 开发工具
@@ -1124,11 +1180,6 @@ $panelType = $panelType ?? 'frontend';
                 <a href="/dev/tool/docs?catalog=api" target="_blank" class="dev-tool-quick-btn">
                     <i class="fa fa-code"></i> API文档
                 </a>
-                <?php if (isset($showCloseButton) && $showCloseButton): ?>
-                <button class="dev-tool-quick-btn" onclick="DevToolPanel.closePanel()" title="关闭开发工具面板（删除Cookie）">
-                    <i class="fa fa-times"></i> 关闭面板
-                </button>
-                <?php endif; ?>
             </div>
         </div>
         
@@ -1526,6 +1577,11 @@ const DevToolPanel = (function() {
             const isMobileDevice = window.innerWidth <= 480 || ('ontouchstart' in window);
             
             header.addEventListener('mousedown', function(e) {
+                // 排除关闭按钮的点击
+                if (e.target.closest('.dev-tool-close-btn')) {
+                    return;
+                }
+                
                 // 移动设备禁用header拖动（移动端全屏无需拖动）
                 if (isMobileDevice) return;
                 
@@ -1537,6 +1593,11 @@ const DevToolPanel = (function() {
             
             // Header双击收起
             header.addEventListener('click', function(e) {
+                // 排除关闭按钮和快捷操作区域的点击
+                if (e.target.closest('.dev-tool-close-btn') || e.target.closest('.dev-tool-quick-actions')) {
+                    return;
+                }
+                
                 headerClickCount++;
                 
                 if (headerClickCount === 1) {
@@ -1957,11 +2018,30 @@ const DevToolPanel = (function() {
         // 获取Cookie名称（从PHP传递）
         const cookieName = '<?php echo isset($devToolCookieNameJs) ? $devToolCookieNameJs : "w_dev_tool"; ?>';
         
-        // 删除Cookie（设置过期时间为过去的时间）
+        // 删除Cookie（多种路径尝试，确保删除成功）
+        // 1. 删除根路径Cookie
         document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         
-        // 刷新页面以应用更改
-        window.location.reload();
+        // 2. 删除当前路径Cookie
+        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=' + window.location.pathname + ';';
+        
+        // 3. 删除可能的域名Cookie
+        const domain = window.location.hostname;
+        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=' + domain + ';';
+        document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + domain + ';';
+        
+        // 4. 隐藏面板（立即生效，不等刷新）
+        const panel = document.getElementById('dev-tool-panel');
+        if (panel) {
+            panel.style.display = 'none';
+        }
+        
+        console.log('开发工具面板已关闭，Cookie已删除');
+        
+        // 延迟刷新页面，给用户反馈时间
+        setTimeout(() => {
+            window.location.reload();
+        }, 300);
     }
 
     function switchMainTab(button, tab, shouldSave = true) {
@@ -2019,7 +2099,8 @@ const DevToolPanel = (function() {
         
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载路由...</div></div>';
         
-        return fetch('/dev/tool/rest/v1/routes?type=' + type)
+        const url = (window.api ? window.api('dev/tool/rest/v1/routes', { type }) : ('/api/rest/dev/tool/rest/v1/routes?type=' + type));
+        return fetch(url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -2027,11 +2108,11 @@ const DevToolPanel = (function() {
                 return response.json();
             })
             .then(data => {
-                if (data && data.success) {
+                if (data && Number(data.code) === 200) {
                     state.allRouteModules = data.data || [];
                     renderRouteModules(state.allRouteModules);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data?.message || '加载失败') + '</div>';
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data?.msg || '加载失败') + '</div>';
                 }
             })
             .catch(error => {
@@ -2123,7 +2204,8 @@ const DevToolPanel = (function() {
 
     // ========== 文档功能 ==========
     function loadModules() {
-        return fetch('/dev/tool/rest/v1/document/modules')
+        const url = (window.api ? window.api('dev/tool/rest/v1/document/modules') : '/api/rest/dev/tool/rest/v1/document/modules');
+        return fetch(url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -2131,7 +2213,7 @@ const DevToolPanel = (function() {
                 return response.json();
             })
             .then(data => {
-                if (data && data.code === 0) {
+                if (data && Number(data.code) === 200) {
                     state.allModules = data.data || [];
                     updateModuleSelect();
                 } else {
@@ -2202,7 +2284,7 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>搜索文档...</div></div>';
         
-        let url = '/dev/tool/rest/v1/document/search?';
+        let url = (window.api ? window.api('dev/tool/rest/v1/document/search') : '/api/rest/dev/tool/rest/v1/document/search');
         const params = [];
         
         if (state.docSearchKeyword) {
@@ -2213,12 +2295,14 @@ const DevToolPanel = (function() {
             params.push('module=' + encodeURIComponent(state.selectedModule));
         }
         
-        url += params.join('&');
+        if (params.length > 0) {
+            url += (url.includes('?') ? '&' : '?') + params.join('&');
+        }
         
         fetch(url)
             .then(response => response.json())
             .then(data => {
-                if (data.code === 0) {
+                if (data && Number(data.code) === 200) {
                     state.docList = data.data.items || [];
                     renderDocList(state.docList);
                 } else {
@@ -2267,10 +2351,11 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
         
-        fetch('/dev/tool/rest/v1/document/detail?id=' + docId)
+        const url = (window.api ? window.api('dev/tool/rest/v1/document/detail', { id: docId }) : ('/api/rest/dev/tool/rest/v1/document/detail?id=' + docId));
+        fetch(url)
             .then(response => response.json())
             .then(data => {
-                if (data.code === 0) {
+                if (data && Number(data.code) === 200) {
                     renderDocContent(data.data);
                 } else {
                     content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data.msg || '加载失败') + '</div>';

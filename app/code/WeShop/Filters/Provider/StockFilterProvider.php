@@ -41,9 +41,7 @@ class StockFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'Availability' : __('库存状态');
+        return __('库存状态');
     }
     
     /**
@@ -168,13 +166,10 @@ class StockFilterProvider extends AbstractFilterProvider
      */
     public function getValueLabel(string $value): string
     {
-        $lang = State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        
         $labels = [
-            self::STOCK_IN => $isEnglish ? 'In Stock' : __('有货'),
-            self::STOCK_OUT => $isEnglish ? 'Out of Stock' : __('缺货'),
-            self::STOCK_LOW => $isEnglish ? 'Low Stock' : __('库存紧张'),
+            self::STOCK_IN => __('有货'),
+            self::STOCK_OUT => __('缺货'),
+            self::STOCK_LOW => __('库存紧张'),
         ];
         
         return $labels[$value] ?? $value;

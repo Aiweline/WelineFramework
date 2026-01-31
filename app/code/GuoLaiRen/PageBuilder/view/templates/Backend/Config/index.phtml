@@ -43,20 +43,12 @@ $i18nEnabled = $i18n_enabled ?? '0';
             font-size: 0.875rem;
             margin-top: 0.5rem;
         }
-        /* SEO账户 Offcanvas 宽度设置 */
-        #seoAccountOffcanvas {
-            width: 80% !important;
-            max-width: 1200px;
+        /* SEO 账户 Widget 样式调整 */
+        .seo-account-widget {
+            margin-top: 1rem;
         }
-        @media (max-width: 992px) {
-            #seoAccountOffcanvas {
-                width: 90% !important;
-            }
-        }
-        @media (max-width: 768px) {
-            #seoAccountOffcanvas {
-                width: 100% !important;
-            }
+        .seo-account-widget .card-header {
+            background-color: #f8f9fa;
         }
     </style>
 </head>
@@ -136,33 +128,6 @@ $i18nEnabled = $i18n_enabled ?? '0';
                                         </div>
                                     </div>
 
-                                    <hr>
-
-                                    <!-- SEO 账户配置（PageBuilder Scope） -->
-                                    <div class="mb-3">
-                                        <h5 class="mb-3">
-                                            <i class="mdi mdi-google me-2"></i>
-                                            <lang>SEO提交账户（PageBuilder Scope）</lang>
-                                        </h5>
-                                        <p class="config-description">
-                                            <lang>这里展示 scope=page_builder 的 SEO 账户。点击按钮可在弹出窗口中管理账户。</lang>
-                                        </p>
-                                        <div class="mb-2">
-                                            <button type="button"
-                                                    class="btn btn-outline-primary btn-sm me-2"
-                                                    onclick="showSeoAccountList()">
-                                                <i class="mdi mdi-view-list-outline me-1"></i>
-                                                <lang>查看SEO账户</lang>
-                                            </button>
-                                            <button type="button"
-                                                    class="btn btn-primary btn-sm"
-                                                    onclick="showSeoAccountForm()">
-                                                <i class="mdi mdi-plus-circle-outline me-1"></i>
-                                                <lang>新增SEO账户</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-
                                     <div class="mt-4">
                                         <button type="submit" class="btn btn-primary">
                                             <i class="mdi mdi-content-save me-2"></i><lang>保存配置</lang>
@@ -176,29 +141,43 @@ $i18nEnabled = $i18n_enabled ?? '0';
                         </div>
                     </div>
                 </div>
+
+                <!-- SEO 账户配置 Widget -->
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card border-primary">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">
+                                    <i class="mdi mdi-chart-line me-2 text-primary"></i>
+                                    <lang>SEO 管理</lang>
+                                </h5>
+                                <p class="text-muted mb-3">
+                                    <lang>SEO账户配置、站点关联、主体管理等功能已整合到专门的SEO管理页面。</lang>
+                                </p>
+                                <div class="alert alert-info mb-3">
+                                    <i class="mdi mdi-information-outline me-2"></i>
+                                    <strong><lang>功能说明：</lang></strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li><lang>配置Google、Bing、Baidu等搜索引擎账户</lang></li>
+                                        <li><lang>为不同站点绑定SEO账户并配置提交频率</lang></li>
+                                        <li><lang>管理PageBuilder页面的SEO主体信息</lang></li>
+                                        <li><lang>自动生成Sitemap并提交到搜索引擎</lang></li>
+                                    </ul>
+                                </div>
+                                <a href="<?= $this->getBackendUrl('pagebuilder/backend/seo/index') ?>" 
+                                   class="btn btn-primary btn-lg">
+                                    <i class="mdi mdi-arrow-right-circle me-2"></i>
+                                    <lang>前往 SEO 管理</lang>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     @template(Weline_Admin::common/footer.phtml)
-</div>
-
-<!-- SEO账户 Offcanvas -->
-<div class="offcanvas offcanvas-end offcanvas-xl" tabindex="-1" id="seoAccountOffcanvas" aria-labelledby="seoAccountOffcanvasLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="seoAccountOffcanvasLabel">
-            <lang>SEO账户管理</lang>
-        </h5>
-        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body" id="seoAccountOffcanvasBody">
-        <div class="text-center p-5">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">加载中...</span>
-            </div>
-            <p class="mt-3">正在加载...</p>
-        </div>
-    </div>
 </div>
 
 <script>
@@ -219,20 +198,20 @@ function showPageMessage(type, message) {
         return;
     }
     const alertType = MESSAGE_TYPE_MAP[type] || 'info';
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${alertType} alert-dismissible fade show`;
-    alert.setAttribute('role', 'alert');
-    alert.innerHTML = `
+    const alertEl = document.createElement('div');
+    alertEl.className = `alert alert-${alertType} alert-dismissible fade show`;
+    alertEl.setAttribute('role', 'alert');
+    alertEl.innerHTML = `
         <span>${message}</span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
-    container.appendChild(alert);
+    container.appendChild(alertEl);
     setTimeout(() => {
         try {
-            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
             bsAlert.close();
         } catch (e) {
-            alert.remove();
+            alertEl.remove();
         }
     }, 4000);
 }
@@ -283,348 +262,6 @@ function resetForm() {
         document.getElementById('configForm').reset();
     }
 }
-
-// SEO账户 Offcanvas 管理
-(function() {
-    let offcanvasElement = null;
-    let offcanvasTitle = null;
-    let offcanvasBody = null;
-    let offcanvasInstance = null;
-    
-    // 获取 offcanvas 元素
-    function getOffcanvasElements() {
-        if (!offcanvasElement) {
-            offcanvasElement = document.getElementById('seoAccountOffcanvas');
-        }
-        if (!offcanvasTitle) {
-            offcanvasTitle = document.getElementById('seoAccountOffcanvasLabel');
-        }
-        if (!offcanvasBody) {
-            offcanvasBody = document.getElementById('seoAccountOffcanvasBody');
-        }
-        return offcanvasElement && offcanvasTitle && offcanvasBody;
-    }
-    
-    // 初始化 Bootstrap Offcanvas
-    function initOffcanvasInstance() {
-        if (!getOffcanvasElements()) {
-            return false;
-        }
-        
-        if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            if (!offcanvasInstance) {
-                offcanvasInstance = new bootstrap.Offcanvas(offcanvasElement);
-            }
-            return true;
-        }
-        return false;
-    }
-    
-    // 打开 offcanvas
-    function showOffcanvas() {
-        if (!getOffcanvasElements()) {
-            console.error('Offcanvas 元素未找到');
-            return;
-        }
-        
-        if (initOffcanvasInstance() && offcanvasInstance) {
-            offcanvasInstance.show();
-        } else if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            offcanvasInstance = new bootstrap.Offcanvas(offcanvasElement);
-            offcanvasInstance.show();
-        } else {
-            // 降级方案：直接操作 DOM
-            offcanvasElement.classList.add('show');
-            offcanvasElement.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('offcanvas-backdrop', 'modal-open');
-            // 添加背景遮罩
-            const backdrop = document.createElement('div');
-            backdrop.className = 'offcanvas-backdrop fade show';
-            backdrop.setAttribute('data-bs-dismiss', 'offcanvas');
-            backdrop.addEventListener('click', function() {
-                hideOffcanvas();
-            });
-            document.body.appendChild(backdrop);
-        }
-    }
-    
-    // 关闭 offcanvas
-    function hideOffcanvas() {
-        if (offcanvasElement) {
-            offcanvasElement.classList.remove('show');
-            offcanvasElement.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('offcanvas-backdrop', 'modal-open');
-            const backdrop = document.querySelector('.offcanvas-backdrop');
-            if (backdrop) {
-                backdrop.remove();
-            }
-        }
-    }
-    
-    // 加载SEO账户列表
-    window.showSeoAccountList = function() {
-        if (!getOffcanvasElements()) {
-            console.error('Offcanvas 元素未找到，请刷新页面重试');
-            return;
-        }
-        
-        // 显示加载状态
-        offcanvasBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在加载SEO账户列表...</p></div>';
-        
-        // 设置标题
-        offcanvasTitle.textContent = '<?= __('SEO账户列表') ?>';
-        
-        // 打开 offcanvas
-        showOffcanvas();
-        
-        // AJAX 加载列表
-        const listUrl = '<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => 'page_builder', 'module' => 'GuoLaiRen_PageBuilder']) ?>';
-        fetch(listUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
-            }
-            return response.text();
-        })
-        .then(function(html) {
-            // 提取页面内容部分
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const pageContent = doc.querySelector('.page-content');
-            if (pageContent) {
-                // 移除script标签，避免冲突
-                const content = pageContent.cloneNode(true);
-                const scripts = content.querySelectorAll('script');
-                scripts.forEach(function(script) {
-                    script.remove();
-                });
-                offcanvasBody.innerHTML = content.innerHTML;
-                // 重新绑定表单提交事件
-                bindSeoAccountFormSubmit();
-            } else {
-                offcanvasBody.innerHTML = '<div class="alert alert-danger">加载失败：无法解析内容</div>';
-            }
-        })
-        .catch(function(error) {
-            console.error('加载列表失败:', error);
-            offcanvasBody.innerHTML = '<div class="alert alert-danger">加载列表失败，请稍后重试。错误：' + error.message + '</div>';
-        });
-    };
-    
-    // 加载SEO账户表单
-    window.showSeoAccountForm = function(accountId = null) {
-        if (!getOffcanvasElements()) {
-            console.error('Offcanvas 元素未找到，请刷新页面重试');
-            return;
-        }
-        
-        // 显示加载状态
-        offcanvasBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在加载表单...</p></div>';
-        
-        // 设置标题
-        offcanvasTitle.textContent = accountId ? '<?= __('编辑SEO账户') ?>' : '<?= __('新增SEO账户') ?>';
-        
-        // 打开 offcanvas
-        showOffcanvas();
-        
-        // AJAX 加载表单
-        let formUrl = '<?= $this->getBackendUrl('seo/backend/account/form', ['scope' => 'page_builder', 'module' => 'GuoLaiRen_PageBuilder']) ?>';
-        if (accountId) {
-            formUrl += '&id=' + encodeURIComponent(accountId);
-        }
-        
-        fetch(formUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
-            }
-            return response.text();
-        })
-        .then(function(html) {
-            // 提取页面内容部分
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const pageContent = doc.querySelector('.page-content');
-            if (pageContent) {
-                // 移除script标签，避免冲突
-                const content = pageContent.cloneNode(true);
-                const scripts = content.querySelectorAll('script');
-                scripts.forEach(function(script) {
-                    script.remove();
-                });
-                offcanvasBody.innerHTML = content.innerHTML;
-                // 重新绑定表单提交事件
-                bindSeoAccountFormSubmit();
-            } else {
-                offcanvasBody.innerHTML = '<div class="alert alert-danger">加载失败：无法解析内容</div>';
-            }
-        })
-        .catch(function(error) {
-            console.error('加载表单失败:', error);
-            offcanvasBody.innerHTML = '<div class="alert alert-danger">加载表单失败，请稍后重试。错误：' + error.message + '</div>';
-        });
-    };
-    
-    // 绑定SEO账户表单提交事件
-    function bindSeoAccountFormSubmit() {
-        // 处理表单提交
-        const form = offcanvasBody.querySelector('#seoAccountForm');
-        if (form) {
-            // 移除onsubmit属性，避免冲突
-            form.removeAttribute('onsubmit');
-            
-            // 移除旧的事件监听器并重新绑定
-            const newForm = form.cloneNode(true);
-            newForm.removeAttribute('onsubmit');
-            form.parentNode.replaceChild(newForm, form);
-            
-            // 绑定新的事件
-            newForm.addEventListener('submit', function(event) {
-                event.preventDefault();
-                saveSeoAccount(newForm);
-            });
-            
-            // 处理返回列表按钮
-            const backLink = newForm.querySelector('a[href*="seo/backend/account/index"]');
-            if (backLink) {
-                const backBtn = document.createElement('button');
-                backBtn.type = 'button';
-                backBtn.className = 'btn btn-secondary ms-2 btn-back-to-list';
-                backBtn.innerHTML = backLink.innerHTML;
-                backLink.parentNode.replaceChild(backBtn, backLink);
-                backBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    showSeoAccountList();
-                });
-            }
-        }
-        
-        // 处理列表页面的按钮和链接
-        // 处理新增账户按钮
-        const addAccountLink = offcanvasBody.querySelector('a[href*="seo/backend/account/form"]:not([href*="id="])');
-        if (addAccountLink && addAccountLink.textContent.includes('新增')) {
-            const addBtn = document.createElement('button');
-            addBtn.type = 'button';
-            addBtn.className = addAccountLink.className.replace('btn-primary', 'btn-primary');
-            addBtn.innerHTML = addAccountLink.innerHTML;
-            addAccountLink.parentNode.replaceChild(addBtn, addAccountLink);
-            addBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                showSeoAccountForm();
-            });
-        }
-        
-        // 处理编辑按钮
-        const editLinks = offcanvasBody.querySelectorAll('a[href*="seo/backend/account/form"][href*="id="]');
-        editLinks.forEach(function(link) {
-            const accountIdMatch = link.getAttribute('href').match(/[?&]id=(\d+)/);
-            if (accountIdMatch) {
-                const accountId = accountIdMatch[1];
-                const editBtn = document.createElement('button');
-                editBtn.type = 'button';
-                editBtn.className = link.className;
-                editBtn.innerHTML = link.innerHTML;
-                link.parentNode.replaceChild(editBtn, link);
-                editBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    showSeoAccountForm(accountId);
-                });
-            }
-        });
-    }
-    
-    // 保存SEO账户
-    function saveSeoAccount(form) {
-        const formData = new FormData(form);
-        
-        // 处理复选框值
-        const isActive = form.querySelector('#is_active');
-        const enableCronPush = form.querySelector('#enable_cron_push_urls');
-        const enableCronSitemap = form.querySelector('#enable_cron_sitemap');
-        
-        if (isActive) {
-            formData.set('is_active', isActive.checked ? '1' : '0');
-        }
-        if (enableCronPush) {
-            formData.set('enable_cron_push_urls', enableCronPush.checked ? '1' : '0');
-        }
-        if (enableCronSitemap) {
-            formData.set('enable_cron_sitemap', enableCronSitemap.checked ? '1' : '0');
-        }
-        
-        const data = {};
-        for (let [key, value] of formData.entries()) {
-            data[key] = value;
-        }
-        
-        // 显示保存中状态
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn ? submitBtn.innerHTML : '';
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>保存中...';
-        }
-        
-        fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams(data)
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(resp) {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-            }
-            
-            if (resp.success) {
-                showPageMessage('success', resp.message);
-                // 刷新列表
-                setTimeout(function() {
-                    showSeoAccountList();
-                }, 800);
-            } else {
-                showPageMessage('error', resp.message || '保存失败');
-            }
-        })
-        .catch(function(error) {
-            console.error('Error:', error);
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-            }
-            showPageMessage('error', '请求失败');
-        });
-    }
-    
-    // 初始化
-    function init() {
-        // 初始化 offcanvas 实例
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(initOffcanvasInstance, 100);
-            });
-        } else {
-            setTimeout(initOffcanvasInstance, 100);
-        }
-    }
-    
-    init();
-})();
 </script>
 
 </body>

@@ -148,7 +148,7 @@ app/design/WeShop/default/
 - `WeShop_Frontend::header::search-before` - 搜索框前
 - `WeShop_Frontend::header::search-after` - 搜索框后
 - `WeShop_Frontend::header::account` - 账户区域
-- `WeShop_Frontend::header::mini_cart` - 迷你购物车
+- `WeShop_Frontend::frontend::partials::header::mini-cart` - 迷你购物车
 - `WeShop_Frontend::header::language_switcher` - 语言切换器
 - `WeShop_Frontend::header::currency_switcher` - 货币切换器
 

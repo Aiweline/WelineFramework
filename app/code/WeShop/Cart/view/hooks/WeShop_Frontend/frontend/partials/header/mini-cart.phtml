@@ -1,0 +1,15 @@
+<?php
+/**
+ * WeShop Header 迷你购物车 Hook 实现
+ *
+ * 此 Hook 实现 WeShop 主题 Header 中的迷你购物车区域
+ *
+ * @hook WeShop_Frontend::frontend::partials::header::mini-cart
+ * @hook-priority 100
+ */
+
+// 直接使用 Widget，避免代码重复
+?>
+
+<!-- 使用 MiniCart Widget -->
+<w:widget type="mini-cart" name="mini-cart-drawer" params='{"position":"right","autoOpen":true}'/>

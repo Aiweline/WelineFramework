@@ -11,5 +11,10 @@
     <event name="Weline_Seo::integration::url_submit_request">
         <observer name="Weline_Seo::url_submit_request" instance="Weline\Seo\Observer\UrlSubmitRequest" />
     </event>
+
+    <!-- 站点绑定SEO账户事件 -->
+    <event name="Weline_Seo::domain::website_account_bind">
+        <observer name="Weline_Seo::website_account_bind" instance="Weline\Seo\Observer\WebsiteAccountBind" />
+    </event>
 </config>
 

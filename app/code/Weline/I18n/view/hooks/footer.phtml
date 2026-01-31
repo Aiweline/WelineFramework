@@ -11,7 +11,7 @@
  */
 ?>
 <!--实时翻译收集 START-->
-<if condition="env.translate_mode === 'online'">
+<if condition="(env.translate_mode ?? '') === 'online'">
     <script>
         let success_word = __('成功推送收集词汇！推送消息：%{msg}')
         let error_word = __('推送收集词汇失败！推送消息：%{1}')

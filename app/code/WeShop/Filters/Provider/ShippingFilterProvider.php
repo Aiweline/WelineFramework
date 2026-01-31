@@ -37,9 +37,7 @@ class ShippingFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'Shipping' : __('配送方式');
+        return __('配送方式');
     }
     
     /**
@@ -256,14 +254,11 @@ class ShippingFilterProvider extends AbstractFilterProvider
      */
     public function getValueLabel(string $value): string
     {
-        $lang = State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        
         $labels = [
-            self::SHIPPING_FREE => $isEnglish ? 'Free Shipping' : __('免运费'),
-            self::SHIPPING_SAME_DAY => $isEnglish ? 'Same Day Delivery' : __('当日达'),
-            self::SHIPPING_NEXT_DAY => $isEnglish ? 'Next Day Delivery' : __('次日达'),
-            self::SHIPPING_EXPRESS => $isEnglish ? 'Express Delivery' : __('快递'),
+            self::SHIPPING_FREE => __('免运费'),
+            self::SHIPPING_SAME_DAY => __('当日达'),
+            self::SHIPPING_NEXT_DAY => __('次日达'),
+            self::SHIPPING_EXPRESS => __('快递'),
         ];
         
         return $labels[$value] ?? $value;

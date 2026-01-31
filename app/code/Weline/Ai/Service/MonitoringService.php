@@ -287,7 +287,7 @@ class MonitoringService
                 $query->where('tenant_id', $tenantId);
             }
 
-            $records = $query->select()->fetchOrigin();
+            $records = $query->select()->fetchArray();
 
             $totalRequests = 0;
             $totalSuccess = 0;
@@ -388,7 +388,7 @@ class MonitoringService
                 $query->where('tenant_id', $tenantId);
             }
 
-            $records = $query->select()->fetchOrigin();
+            $records = $query->select()->fetchArray();
             $modelSummary = [];
 
             foreach ($records as $record) {

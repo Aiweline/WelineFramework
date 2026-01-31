@@ -167,6 +167,36 @@ class View extends BaseController
         // 获取产品关联数据
         $productCategoryList = $productCategory->select()->fetchArray();
         
+        // 收集分类下所有产品 ID，用于筛选
+        $productIds = [];
+        if (!empty($productCategoryList) && is_array($productCategoryList)) {
+            foreach ($productCategoryList as $row) {
+                $productData = $row['product'] ?? $row;
+                $productStatus = (int)($productData['status'] ?? $productData[Product::fields_status] ?? 0);
+                if ($productStatus !== 1) {
+                    continue;
+                }
+                $pid = (int)($productData['product_id'] ?? $productData[Product::fields_ID] ?? $row[ProductCategory::fields_product_id] ?? 0);
+                if ($pid > 0) {
+                    $productIds[] = $pid;
+                }
+            }
+            $productIds = array_values(array_unique($productIds));
+        }
+        
+        // 若有 URL 筛选参数，使用 FilterService 得到过滤后的产品 ID
+        $allowedProductIds = null;
+        if (!empty($productIds)) {
+            $filterUrlService = ObjectManager::getInstance(\WeShop\Filters\Service\FilterUrlService::class);
+            $filterParams = $filterUrlService->getFilterParams();
+            if (!empty($filterParams)) {
+                $filterService = ObjectManager::getInstance(\WeShop\Filters\Service\FilterService::class);
+                $filterResult = $filterService->getFilterResult($category->getId(), $productIds, $filterParams);
+                $allowedProductIds = $filterResult->getProductIds();
+                $allowedProductIds = is_array($allowedProductIds) ? $allowedProductIds : array_values($allowedProductIds);
+            }
+        }
+        
         // 用于去重的产品ID集合（防止同一产品重复显示）
         $productIdsSeen = [];
         
@@ -184,6 +214,11 @@ class View extends BaseController
                 // 获取产品ID（优先从product表，否则从主表）
                 $productId = (int)($productData['product_id'] ?? $productData[Product::fields_ID] ?? $row[ProductCategory::fields_product_id] ?? 0);
                 if ($productId <= 0) {
+                    continue;
+                }
+                
+                // 若已应用筛选，只保留在允许列表中的产品
+                if ($allowedProductIds !== null && !in_array($productId, $allowedProductIds, true)) {
                     continue;
                 }
                 

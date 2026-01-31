@@ -2,117 +2,237 @@
 /**
  * 页脚社交图标部件
  * 
+ * 显示社交媒体链接图标，支持多种样式和布局
+ * 
+ * @meta::theme {default=Weline_Theme,name="主题命名空间",description="主题命名空间，用于主题模块的命名空间"}
+ * @meta::theme.widget.social {default="社交媒体部件组",name="社交媒体部件组",description="社交媒体部件组，用于给元数据分组"}
+ * @meta::theme.widget.social.footer {default="页脚社交图标",name="页脚社交图标",description="页脚社交媒体图标部件"}
+ * @meta::theme.widget.social.footer.name {default="页脚社交图标",name="页脚社交图标",description="页脚社交媒体图标部件名称"}
+ * @meta::theme.widget.social.footer.description {default="显示社交媒体链接图标",name="显示社交媒体链接图标",description="显示社交媒体链接图标，支持多种样式和布局"}
+ * 
+ * @param title {default="",name="标题",description="部件标题，可选",type=string}
+ * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}
+ * @param alignment {default="left",name="对齐方式",description="图标对齐方式：left(左对齐)、center(居中)、right(右对齐)",type=string,option={left:左对齐,center:居中,right:右对齐}}
+ * @param icon_size {default="medium",name="图标尺寸",description="图标大小：small(32px)、medium(40px)、large(48px)",type=string,option={small:小号,medium:中号,large:大号}}
+ * @param icon_style {default="colored",name="图标样式",description="图标显示样式：colored(彩色)、mono(单色)、outline(线框)",type=string,option={colored:彩色,mono:单色,outline:线框}}
+ * @param gap {default="10px",name="图标间距",description="图标之间的间距，支持CSS单位（如10px、1rem）",type=string}
+ * @param facebook {default="",name="Facebook链接",description="Facebook主页链接",type=string}
+ * @param twitter {default="",name="Twitter/X链接",description="Twitter/X主页链接",type=string}
+ * @param instagram {default="",name="Instagram链接",description="Instagram主页链接",type=string}
+ * @param youtube {default="",name="YouTube链接",description="YouTube频道链接",type=string}
+ * @param linkedin {default="",name="LinkedIn链接",description="LinkedIn主页链接",type=string}
+ * @param pinterest {default="",name="Pinterest链接",description="Pinterest主页链接",type=string}
+ * @param tiktok {default="",name="TikTok链接",description="TikTok主页链接",type=string}
+ * @param weibo {default="",name="微博链接",description="微博主页链接",type=string}
+ * @param wechat {default="",name="微信链接",description="微信公众号链接",type=string}
+ * @param github {default="",name="GitHub链接",description="GitHub主页链接",type=string}
+ * @param telegram {default="",name="Telegram链接",description="Telegram频道链接",type=string}
+ * @param whatsapp {default="",name="WhatsApp链接",description="WhatsApp联系链接",type=string}
+ * @param discord {default="",name="Discord链接",description="Discord服务器链接",type=string}
+ * @param reddit {default="",name="Reddit链接",description="Reddit社区链接",type=string}
+ * @param snapchat {default="",name="Snapchat链接",description="Snapchat主页链接",type=string}
+ * 
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Theme\Helper\SocialIconHelper;
+
 $title = $this->getData('title') ?? '';
-$facebook = $this->getData('facebook') ?? '';
-$twitter = $this->getData('twitter') ?? '';
-$instagram = $this->getData('instagram') ?? '';
-$youtube = $this->getData('youtube') ?? '';
-$linkedin = $this->getData('linkedin') ?? '';
-$pinterest = $this->getData('pinterest') ?? '';
-$tiktok = $this->getData('tiktok') ?? '';
-$wechatQr = $this->getData('wechat_qr') ?? '';
-$weibo = $this->getData('weibo') ?? '';
-$iconSize = $this->getData('icon_size') ?? 'medium';
+$alignment = $this->getData('alignment') ?? 'left'; // left, center, right
+$iconSize = $this->getData('icon_size') ?? 'medium'; // small, medium, large
+$iconStyle = $this->getData('icon_style') ?? 'colored'; // colored, mono, outline
+$gap = $this->getData('gap') ?? '10px'; // 图标间距
 
-// 构建社交链接
+// 获取自定义社交链接配置（JSON 格式）
+$customLinks = $this->getData('custom_links') ?? '';
 $socials = [];
-if ($facebook) $socials[] = ['name' => 'Facebook', 'url' => $facebook, 'icon' => 'ri-facebook-fill'];
-if ($twitter) $socials[] = ['name' => 'Twitter/X', 'url' => $twitter, 'icon' => 'ri-twitter-x-fill'];
-if ($instagram) $socials[] = ['name' => 'Instagram', 'url' => $instagram, 'icon' => 'ri-instagram-fill'];
-if ($youtube) $socials[] = ['name' => 'YouTube', 'url' => $youtube, 'icon' => 'ri-youtube-fill'];
-if ($linkedin) $socials[] = ['name' => 'LinkedIn', 'url' => $linkedin, 'icon' => 'ri-linkedin-fill'];
-if ($pinterest) $socials[] = ['name' => 'Pinterest', 'url' => $pinterest, 'icon' => 'ri-pinterest-fill'];
-if ($tiktok) $socials[] = ['name' => 'TikTok', 'url' => $tiktok, 'icon' => 'ri-tiktok-fill'];
-if ($weibo) $socials[] = ['name' => '微博', 'url' => $weibo, 'icon' => 'ri-weibo-fill'];
 
-// 示例数据
+// 如果有自定义配置，解析 JSON
+if ($customLinks) {
+    $customLinksArray = json_decode($customLinks, true);
+    if (is_array($customLinksArray)) {
+        foreach ($customLinksArray as $link) {
+            if (!empty($link['platform']) && !empty($link['url'])) {
+                $platform = $link['platform'];
+                $socials[] = [
+                    'platform' => $platform,
+                    'name' => SocialIconHelper::getName($platform) ?? $link['name'] ?? $platform,
+                    'url' => $link['url'],
+                    'color' => SocialIconHelper::getColor($platform) ?? '#666'
+                ];
+            }
+        }
+    }
+}
+
+// 如果没有自定义配置，使用传统的单独字段配置
+if (empty($socials)) {
+    $platforms = ['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'];
+    
+    foreach ($platforms as $platform) {
+        $url = $this->getData($platform) ?? '';
+        if ($url) {
+            $socials[] = [
+                'platform' => $platform,
+                'name' => SocialIconHelper::getName($platform) ?? ucfirst($platform),
+                'url' => $url,
+                'color' => SocialIconHelper::getColor($platform) ?? '#666'
+            ];
+        }
+    }
+}
+
+// 示例数据（如果没有任何配置）
 if (empty($socials)) {
     $socials = [
-        ['name' => 'Facebook', 'url' => '#', 'icon' => 'ri-facebook-fill'],
-        ['name' => 'Twitter/X', 'url' => '#', 'icon' => 'ri-twitter-x-fill'],
-        ['name' => 'Instagram', 'url' => '#', 'icon' => 'ri-instagram-fill'],
-        ['name' => 'YouTube', 'url' => '#', 'icon' => 'ri-youtube-fill'],
+        ['platform' => 'facebook', 'name' => 'Facebook', 'url' => '#', 'color' => '#1877f2'],
+        ['platform' => 'twitter', 'name' => 'Twitter/X', 'url' => '#', 'color' => '#000000'],
+        ['platform' => 'instagram', 'name' => 'Instagram', 'url' => '#', 'color' => '#e4405f'],
+        ['platform' => 'youtube', 'name' => 'YouTube', 'url' => '#', 'color' => '#ff0000'],
     ];
 }
 
 $widgetId = 'footer-social-' . uniqid();
 ?>
 
-<div class="widget-footer-social size-<?= htmlspecialchars($iconSize) ?>" id="<?= $widgetId ?>">
+<div class="widget-footer-social" id="<?= $widgetId ?>" data-size="<?= htmlspecialchars($iconSize) ?>" data-style="<?= htmlspecialchars($iconStyle) ?>" data-align="<?= htmlspecialchars($alignment) ?>">
     <?php if ($title): ?>
         <h4 class="social-title"><?= htmlspecialchars($title) ?></h4>
     <?php endif; ?>
     
-    <div class="social-links">
+    <div class="social-links" style="--social-gap: <?= htmlspecialchars($gap) ?>;">
         <?php foreach ($socials as $social): ?>
             <a href="<?= htmlspecialchars($social['url']) ?>" 
-               class="social-link"
+               class="social-link social-link-<?= htmlspecialchars($social['platform']) ?>"
                title="<?= htmlspecialchars($social['name']) ?>"
                target="_blank"
-               rel="noopener noreferrer">
-                <i class="<?= htmlspecialchars($social['icon']) ?>"></i>
+               rel="noopener noreferrer"
+               style="--brand-color: <?= htmlspecialchars($social['color']) ?>;">
+                <?= SocialIconHelper::renderIcon($social['platform'], ['class' => 'social-icon', 'width' => '20', 'height' => '20']) ?>
             </a>
         <?php endforeach; ?>
     </div>
 </div>
 
 <style>
-.widget-footer-social .social-title {
+/* 部件作用域样式 - 使用 ID 选择器确保样式隔离 */
+#<?= $widgetId ?> {
+    /* 重置外部样式影响 */
+    all: initial;
+    display: block;
+    box-sizing: border-box;
+}
+
+#<?= $widgetId ?> * {
+    box-sizing: border-box;
+}
+
+#<?= $widgetId ?> .social-title {
     font-size: 16px;
     font-weight: 600;
     margin: 0 0 15px;
     color: #fff;
+    font-family: inherit;
 }
 
-.widget-footer-social .social-links {
+#<?= $widgetId ?> .social-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--social-gap, 10px);
 }
 
-.widget-footer-social .social-link {
+/* 对齐方式 */
+#<?= $widgetId ?>[data-align="left"] .social-links {
+    justify-content: flex-start;
+}
+
+#<?= $widgetId ?>[data-align="center"] .social-links {
+    justify-content: center;
+}
+
+#<?= $widgetId ?>[data-align="right"] .social-links {
+    justify-content: flex-end;
+}
+
+#<?= $widgetId ?> .social-link {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255,255,255,0.1);
-    color: #fff;
     border-radius: 50%;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    cursor: pointer;
 }
 
-.widget-footer-social .social-link:hover {
-    background: var(--primary-color, #007bff);
+#<?= $widgetId ?> .social-link .social-icon {
+    display: block;
+}
+
+/* 彩色样式 */
+#<?= $widgetId ?>[data-style="colored"] .social-link {
+    background: var(--brand-color);
+    color: #fff;
+}
+
+#<?= $widgetId ?>[data-style="colored"] .social-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* 单色样式 */
+#<?= $widgetId ?>[data-style="mono"] .social-link {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+#<?= $widgetId ?>[data-style="mono"] .social-link:hover {
+    background: var(--brand-color);
     transform: translateY(-3px);
 }
 
-/* 尺寸 */
-.widget-footer-social.size-small .social-link {
+/* 线框样式 */
+#<?= $widgetId ?>[data-style="outline"] .social-link {
+    background: transparent;
+    border: 2px solid rgba(255,255,255,0.3);
+    color: #fff;
+}
+
+#<?= $widgetId ?>[data-style="outline"] .social-link:hover {
+    border-color: var(--brand-color);
+    background: var(--brand-color);
+    transform: translateY(-3px);
+}
+
+/* 尺寸 - small */
+#<?= $widgetId ?>[data-size="small"] .social-link {
     width: 32px;
     height: 32px;
 }
 
-.widget-footer-social.size-small .social-link i {
-    font-size: 16px;
+#<?= $widgetId ?>[data-size="small"] .social-icon {
+    width: 16px;
+    height: 16px;
 }
 
-.widget-footer-social.size-medium .social-link {
+/* 尺寸 - medium */
+#<?= $widgetId ?>[data-size="medium"] .social-link {
     width: 40px;
     height: 40px;
 }
 
-.widget-footer-social.size-medium .social-link i {
-    font-size: 20px;
+#<?= $widgetId ?>[data-size="medium"] .social-icon {
+    width: 20px;
+    height: 20px;
 }
 
-.widget-footer-social.size-large .social-link {
+/* 尺寸 - large */
+#<?= $widgetId ?>[data-size="large"] .social-link {
     width: 48px;
     height: 48px;
 }
 
-.widget-footer-social.size-large .social-link i {
-    font-size: 24px;
+#<?= $widgetId ?>[data-size="large"] .social-icon {
+    width: 24px;
+    height: 24px;
 }
 </style>

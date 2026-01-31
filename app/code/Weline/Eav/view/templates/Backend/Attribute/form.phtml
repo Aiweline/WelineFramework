@@ -108,7 +108,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     </li>
                     <!--如果有配置属性配置项-->
 
-                    <li v-if='params.has_option==1' class='nav-item nav-link'
+                    <li v-if='params.data_has_option==1' class='nav-item nav-link'
                         :class="{active:activeName=='progress-attribute-option'}"
                         @click="changeNav('progress-attribute-option')">
                         <span class='step-number'>05</span>
@@ -308,11 +308,11 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     </label>
                                     <select class='form-control' id='validationEnable' required=''
                                             scope="attribute"
-                                            v-model="params.is_enable" name='is_enable'>
-                                        <option value='0' @if{attribute.is_enable==0=>'selected'}>
+                                            v-model="params.basic_is_enable" name='basic_is_enable'>
+                                        <option value='0' @if{attribute.basic_is_enable==0=>'selected'}>
                                             <lang>禁用</lang>
                                         </option>
-                                        <option value='1' @if{attribute.is_enable==1=>'selected'}>
+                                        <option value='1' @if{attribute.basic_is_enable==1=>'selected'}>
                                             <lang>启用</lang>
                                         </option>
                                     </select>
@@ -340,12 +340,12 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                             </label>
                                                             <select class='form-control' id='validationMulti'
                                                                     scope="attribute"
-                                                                    v-model="params.multiple_valued" required=''
-                                                                    name='multiple_valued' @if{attribute.attribute_id=>'disabled'}>
-                                                                <option value='0' @if{attribute.multiple_valued==0=>
+                                                                    v-model="params.data_is_multiple" required=''
+                                                                    name='data_is_multiple' @if{attribute.attribute_id=>'disabled'}>
+                                                                <option value='0' @if{attribute.data_is_multiple==0=>
                                                                     'selected'}>单值
                                                                 </option>
-                                                                <option value='1' @if{attribute.multiple_valued==1=>
+                                                                <option value='1' @if{attribute.data_is_multiple==1=>
                                                                     'selected'}>多值
                                                                 </option>
                                                             </select>
@@ -360,16 +360,16 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                                 <lang>是否有配置项</lang>
                                                             </label>
                                                             <select class='form-control' id='validationOption'
-                                                                    required='' name='has_option'
+                                                                    required='' name='data_has_option'
                                                                     scope="attribute"
                                                                     event="click"
-                                                                    v-model="params.has_option"
+                                                                    v-model="params.data_has_option"
                                                                     :disabled="(params.attribute_id||stopable)?true:false">
-                                                                <option value='0' @if{attribute.has_option==0=>
+                                                                <option value='0' @if{attribute.data_has_option==0=>
                                                                     'selected'}>
                                                                     <lang>没有特定配置项</lang>
                                                                 </option>
-                                                                <option value='1' @if{attribute.has_option==1=>
+                                                                <option value='1' @if{attribute.data_has_option==1=>
                                                                     'selected'}>
                                                                     <lang>有特定配置项</lang>
                                                                 </option>
@@ -632,7 +632,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 
                     </div>
 
-                    <div v-if="(activeName=='progress-attribute-details'&&params.has_option!=1)||activeName=='progress-attribute-option'">
+                    <div v-if="(activeName=='progress-attribute-details'&&params.data_has_option!=1)||activeName=='progress-attribute-option'">
                         <button class="btn btn-primary pull-right" @click="submitAttr">
                             <lang>提交</lang>
                         </button>
@@ -677,10 +677,10 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 code: '{{attribute.code}}', //代码
                 name: '{{attribute.name}}', //属性名
                 type_id: '{{attribute.type_id|0}}', //属性类型
-                is_enable: '{{attribute.is_enable|1}}', //是否启用
-                has_option: '{{attribute.has_option|0}}', //是否有配置项
+                basic_is_enable: '{{attribute.basic_is_enable|1}}', //是否启用（基本设置组）
+                data_has_option: '{{attribute.data_has_option|0}}', //是否有配置项（数据配置组）
                 is_system: '{{attribute.is_system|0}}', //是否系统生成
-                multiple_valued: '{{attribute.multiple_valued|0}}', //是否多值
+                data_is_multiple: '{{attribute.data_is_multiple|0}}', //是否多值（数据配置组）
             },
             addParams: { //添加配置项
                 option_id: 0,
@@ -939,10 +939,10 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 })
             }, 500),
             debounceSaveType: debounce(function (type) {
-                let has_option = 0;
+                let data_has_option = 0;
                 if (type.is_swatch == 1) {
-                    has_option = 1;
-                    this.params.has_option = has_option;
+                    data_has_option = 1;
+                    this.params.data_has_option = data_has_option;
                 }
                 $.ajax({
                     type: "post",
@@ -950,8 +950,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     dataType: "json",
                     data: {
                         scope: 'attribute',
-                        name: 'has_option',
-                        value: has_option
+                        name: 'data_has_option',
+                        value: data_has_option
                     },
                     success: (res) => {
                     },
@@ -1231,7 +1231,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 let find_item = {}
                 arr.forEach((item) => {
                     if (item.type_id == Number(id)) {
-                        this.params.has_option = item.is_swatch;
+                        this.params.data_has_option = item.is_swatch;
                         this.stopable = item.is_swatch;
                         find_item = item;
                     }

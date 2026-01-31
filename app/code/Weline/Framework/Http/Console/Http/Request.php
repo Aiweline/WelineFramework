@@ -451,6 +451,20 @@ class Request extends CommandAbstract
         // 处理路径
         $path = ltrim($path, '/');
         
+        // 智能检测：如果路径包含 REST API 特征，自动识别为 API 后端路径
+        // 支持模式：rest/v1, api/rest, /rest/
+        $isRestApiPath = (
+            str_contains($path, 'rest/v1') || 
+            str_contains($path, 'api/rest') ||
+            preg_match('#(^|/)rest/v\d+/#', $path)
+        );
+        
+        // 如果是后端请求且路径是 REST API，自动切换到 API 后端模式
+        if ($isBackend && $isRestApiPath && !$isApiBackend) {
+            $isApiBackend = true;
+            $isBackend = false;
+        }
+        
         if ($isApiBackend) {
             // API后端路径 - 需要加上api_admin_key
             $apiAdminKey = $env->get('api_admin') ?? '';

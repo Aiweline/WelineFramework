@@ -12,7 +12,7 @@ $base_host = $this->request->getPrePath();
 //$http_host                          = explode('.', $this->request->getServer('HTTP_HOST'));
 //$domain                             = array_pop($http_host);
 //$domain                             = array_pop($http_host) . '.' . $domain;
-//dd($domain);
+// dd($domain);
 $base_router = $this->request->getRouterData('router');
 $current_module = $this->request->getModuleName();
 $area = \Weline\Framework\App\Env::getInstance()->getConfig('admin');

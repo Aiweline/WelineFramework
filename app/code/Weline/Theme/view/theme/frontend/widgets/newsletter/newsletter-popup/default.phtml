@@ -16,16 +16,21 @@ $showOnce = (bool)($this->getData('show_once') ?? true);
 $cookieDays = (int)($this->getData('cookie_days') ?? 7);
 
 $widgetId = 'newsletter-popup-' . uniqid();
+
+// 判断是否在编辑器预览模式（widget-preview请求）
+$isEditorPreview = $this->getData('_editor_preview') || 
+                   (isset($_GET['widget_preview']) && $_GET['widget_preview'] === '1') ||
+                   strpos($_SERVER['REQUEST_URI'] ?? '', 'widget-preview') !== false;
 ?>
 
-<div class="widget-newsletter-popup" 
+<div class="widget-newsletter-popup <?= $isEditorPreview ? 'editor-preview-mode' : '' ?>" 
      id="<?= $widgetId ?>"
      data-trigger="<?= htmlspecialchars($trigger) ?>"
      data-delay="<?= $delaySeconds * 1000 ?>"
      data-scroll="<?= $scrollPercent ?>"
      data-show-once="<?= $showOnce ? 'true' : 'false' ?>"
      data-cookie-days="<?= $cookieDays ?>"
-     style="display: none;">
+     style="<?= $isEditorPreview ? '' : 'display: none;' ?>">
     
     <div class="popup-overlay"></div>
     
@@ -261,12 +266,101 @@ $widgetId = 'newsletter-popup-' . uniqid();
         font-size: 20px;
     }
 }
+
+/* 编辑器预览模式 - 内联卡片显示 */
+.widget-newsletter-popup.editor-preview-mode,
+.widget-preview-canvas .widget-newsletter-popup {
+    position: relative !important;
+    display: block !important;
+    background: transparent !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-overlay,
+.widget-preview-canvas .widget-newsletter-popup .popup-overlay {
+    display: none !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-container,
+.widget-preview-canvas .widget-newsletter-popup .popup-container {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    animation: none !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-close,
+.widget-preview-canvas .widget-newsletter-popup .popup-close {
+    display: none !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-content,
+.widget-preview-canvas .widget-newsletter-popup .popup-content {
+    flex-direction: column !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-image,
+.widget-preview-canvas .widget-newsletter-popup .popup-image {
+    display: none !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-body,
+.widget-preview-canvas .widget-newsletter-popup .popup-body {
+    padding: 24px 20px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-icon,
+.widget-preview-canvas .widget-newsletter-popup .popup-icon {
+    width: 48px !important;
+    height: 48px !important;
+    margin-bottom: 16px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-icon i,
+.widget-preview-canvas .widget-newsletter-popup .popup-icon i {
+    font-size: 22px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-title,
+.widget-preview-canvas .widget-newsletter-popup .popup-title {
+    font-size: 18px !important;
+    margin-bottom: 8px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-description,
+.widget-preview-canvas .widget-newsletter-popup .popup-description {
+    font-size: 14px !important;
+    margin-bottom: 16px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-input,
+.widget-preview-canvas .widget-newsletter-popup .popup-input {
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+}
+
+.widget-newsletter-popup.editor-preview-mode .popup-submit,
+.widget-preview-canvas .widget-newsletter-popup .popup-submit {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+}
 </style>
 
 <script>
 (function() {
     const popup = document.getElementById('<?= $widgetId ?>');
     if (!popup) return;
+    
+    // 编辑器预览模式或部件库预览模式下不执行弹窗逻辑
+    if (popup.classList.contains('editor-preview-mode') || popup.closest('.widget-preview-canvas')) {
+        popup.style.display = 'block';
+        return;
+    }
     
     const trigger = popup.dataset.trigger;
     const delay = parseInt(popup.dataset.delay);
