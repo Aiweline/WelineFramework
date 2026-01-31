@@ -58,7 +58,7 @@ class Config extends BackendController
                 ->where(\Weline\Currency\Model\Currency::fields_STATUS, 1)
                 ->order('code', 'ASC')
                 ->select()
-                ->fetchOrigin();
+                ->fetchArray();
             $this->assign('available_currencies', $currencies);
             
             // 格式化最后导入时间

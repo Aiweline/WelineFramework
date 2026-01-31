@@ -163,6 +163,21 @@ class Website extends BackendController
                 $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
                 $websiteLanguage->setWebsiteLanguages((int)$websiteId, $languageCodes);
                 
+                // 绑定 SEO 账户
+                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
+                if ($seoAccountId > 0) {
+                    try {
+                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
+                            'website_id' => (int)$websiteId,
+                            'account_id' => $seoAccountId,
+                            'is_auto_submit' => true,
+                        ]);
+                    } catch (\Exception $e) {
+                        // SEO 账户绑定失败不影响网站保存结果
+                    }
+                }
+                
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
                     'url' => '*/admin/website',
@@ -289,6 +304,21 @@ class Website extends BackendController
                     MessageManager::warning(__('保存关联语言失败: %{1}', $e->getMessage()));
                 }
                 
+                // 绑定 SEO 账户
+                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
+                if ($seoAccountId > 0) {
+                    try {
+                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
+                            'website_id' => $postWebsiteId,
+                            'account_id' => $seoAccountId,
+                            'is_auto_submit' => true,
+                        ]);
+                    } catch (\Exception $e) {
+                        // SEO 账户绑定失败不影响网站保存结果
+                    }
+                }
+                
                 $this->redirect('/component/offcanvas/success',
                     [
                         'msg' => __('网站更新成功'),
@@ -354,6 +384,7 @@ class Website extends BackendController
             $code = trim($this->request->getPost('code', ''));
             $url = trim($this->request->getPost('url', ''));
             $defaultTimezone = $this->request->getPost('default_timezone', 'Asia/Shanghai');
+            $scope = trim($this->request->getPost('scope', ''));
             
             // 验证必填字段
             if (empty($name)) {
@@ -400,6 +431,11 @@ class Website extends BackendController
                 ->setData(\Weline\Websites\Model\Website::fields_URL, rtrim($url, '/'))
                 ->setData(\Weline\Websites\Model\Website::fields_DEFAULT_TIMEZONE, $defaultTimezone);
             
+            // 设置业务范围标识
+            if (!empty($scope)) {
+                $newWebsite->setData(\Weline\Websites\Model\Website::fields_SCOPE, $scope);
+            }
+            
             // 确保主键字段被清除（防止主键冲突）
             if ($newWebsite->hasData(\Weline\Websites\Model\Website::fields_ID)) {
                 $newWebsite->unsetData(\Weline\Websites\Model\Website::fields_ID);
@@ -415,6 +451,7 @@ class Website extends BackendController
                     'name' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_NAME),
                     'code' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_CODE),
                     'url' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_URL),
+                    'scope' => $newWebsite->getData(\Weline\Websites\Model\Website::fields_SCOPE) ?? '',
                 ],
             ]);
         } catch (\Exception $e) {

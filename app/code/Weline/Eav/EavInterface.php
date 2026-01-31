@@ -79,8 +79,29 @@ interface EavInterface
      *
      * @return mixed
      */
-    public function addAttribute(string $code, string $name, string $type, bool $multi_value = false, bool $has_option = false, bool $is_system = false,
-                                 bool   $is_enable = true, string $group_code = 'default', string $set_code = 'default'): bool;
+    /**
+     * @param string $code 属性代码
+     * @param string $name 属性名
+     * @param string $type 属性类型
+     * @param bool $data_is_multiple 数据配置：是否多值
+     * @param bool $data_has_option 数据配置：是否有选项
+     * @param bool $is_system 是否系统属性
+     * @param bool $basic_is_enable 基本设置：是否启用
+     * @param string $group_code 属性组代码
+     * @param string $set_code 属性集代码
+     * @return bool
+     */
+    public function addAttribute(
+        string $code, 
+        string $name, 
+        string $type, 
+        bool $data_is_multiple = false, 
+        bool $data_has_option = false, 
+        bool $is_system = false,
+        bool $basic_is_enable = true, 
+        string $group_code = 'default', 
+        string $set_code = 'default'
+    ): bool;
 
     /**
      * @DESC          # 设置属性

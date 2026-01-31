@@ -13,6 +13,4 @@
          parent="Weline_UrlManager::url-manager" icon="mdi mdi-router" order="10" is_backend="1"/>
     <add source="Weline_UrlManager::url-manager-rewrite" name="url-manager-rewrite" title="URL路由重写" action="url-manager/backend/rewriter"
          parent="Weline_UrlManager::url-manager" icon="mdi mdi-lock-reset" order="20" is_backend="1"/>
-    <add source="Weline_UrlManager::sitemap_management" name="sitemap_management" title="Sitemap管理" action="url-manager/backend/sitemap"
-         parent="Weline_UrlManager::seo_optimization" icon="mdi mdi-sitemap" order="30" is_backend="1"/>
 </menus>

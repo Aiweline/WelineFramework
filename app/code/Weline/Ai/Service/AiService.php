@@ -132,7 +132,7 @@ class AiService
         array $params = []
     ): string {
         /** @var AiService $instance */
-        $instance = ObjectManager::getInstance()->get(self::class);
+        $instance = ObjectManager::getInstance(self::class);
         return $instance->generate($prompt, $modelCode, $scenarioCode, $locale, $params);
     }
 
@@ -157,7 +157,7 @@ class AiService
         array $params = []
     ): void {
         /** @var AiService $instance */
-        $instance = ObjectManager::getInstance()->get(self::class);
+        $instance = ObjectManager::getInstance(self::class);
         $instance->generateStream($prompt, $callback, $modelCode, $scenarioCode, $locale, $params);
     }
 

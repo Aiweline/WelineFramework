@@ -16,6 +16,10 @@ namespace Weline\Eav\Controller\Backend;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Http\Cookie;
 
+/**
+ * @deprecated 请使用 Manager 控制器 (/eav/backend/manager) 统一管理EAV
+ * @see \Weline\Eav\Controller\Backend\Manager
+ */
 class Entity extends \Weline\Framework\App\Controller\BackendController
 {
     /**

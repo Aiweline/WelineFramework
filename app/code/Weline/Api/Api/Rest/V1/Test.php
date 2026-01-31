@@ -358,7 +358,7 @@ class Test extends FrontendRestController
                 ->order('id', 'DESC')
                 ->limit($pageSize, $offset)
                 ->select()
-                ->fetchOrigin();
+                ->fetchArray();
             
             $dataList = [];
             foreach ($list as $item) {

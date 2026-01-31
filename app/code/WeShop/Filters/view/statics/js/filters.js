@@ -464,14 +464,20 @@
          * 处理筛选结果
          */
         handleFilterResult(data) {
+            this.lastPaginationTotal = data.pagination?.total;
+            
             // 更新筛选选项和计数
             if (data.filters) {
                 this.updateFilterOptions(data.filters);
             }
             
-            // 更新产品列表
-            if (this.options.renderProducts && data.products) {
-                this.options.renderProducts(data.products);
+            // 更新产品列表（使用自定义回调或默认渲染）
+            if (data.products) {
+                if (this.options.renderProducts) {
+                    this.options.renderProducts(data.products);
+                } else {
+                    this.defaultRenderProducts(data.products);
+                }
             }
             
             // 更新分页
@@ -481,6 +487,76 @@
             
             // 更新结果数量
             this.updateResultCount(data.pagination?.total || 0);
+        }
+        
+        /**
+         * 默认产品列表渲染（AJAX 无刷新时用 JSON 数据填充 .category-products）
+         */
+        defaultRenderProducts(products) {
+            const container = document.querySelector(this.options.productContainer);
+            if (!container) return;
+            
+            const grid = container.querySelector('.products-grid');
+            const countEl = container.querySelector('.products-count');
+            const total = (this.lastPaginationTotal !== undefined && this.lastPaginationTotal !== null) ? this.lastPaginationTotal : products.length;
+            
+            if (countEl) {
+                countEl.textContent = typeof window.__ === 'function'
+                    ? window.__('共 %{count} 件商品', { count: total })
+                    : (total + '');
+            }
+            
+            if (!grid) return;
+            
+            const basePath = this.getProductBasePath();
+            
+            if (products.length === 0) {
+                const noProducts = typeof window.__ === 'function'
+                    ? window.__('该分类下暂无商品')
+                    : 'No products in this category';
+                grid.innerHTML = '<div class="no-products-inline" style="grid-column:1/-1;text-align:center;padding:2rem;color:#6b7280;">' + noProducts + '</div>';
+                return;
+            }
+            
+            const html = products.map(p => {
+                const name = (p.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const price = parseFloat(p.price) || 0;
+                const productUrl = p.handle
+                    ? basePath + '/product/' + encodeURIComponent(p.handle)
+                    : basePath + '/weshop/product/view?id=' + (p.product_id || '');
+                const imgSrc = (p.image || '').replace(/"/g, '&quot;');
+                const inStock = p.in_stock !== false && (p.stock || 0) > 0;
+                const outOfStockLabel = typeof window.__ === 'function' ? window.__('缺货') : 'Out of stock';
+                return (
+                    '<div class="product-card" data-product-id="' + (p.product_id || '') + '">' +
+                    '<div class="product-card-image">' +
+                    '<a href="' + productUrl + '" class="product-image-link">' +
+                    (imgSrc ? '<img src="' + imgSrc + '" alt="' + name + '" class="product-image" loading="lazy"/>' : '<div class="product-image-placeholder"><span>📷</span></div>') +
+                    '</a>' +
+                    (!inStock ? '<div class="product-badge out-of-stock">' + outOfStockLabel + '</div>' : '') +
+                    '</div>' +
+                    '<div class="product-card-info">' +
+                    '<h3 class="product-name"><a href="' + productUrl + '">' + name + '</a></h3>' +
+                    '<div class="product-price-row"><span class="product-price">¥' + price.toFixed(2) + '</span></div>' +
+                    '</div></div>'
+                );
+            }).join('');
+            
+            grid.innerHTML = html;
+        }
+        
+        /**
+         * 获取产品链接基础路径（与当前页同源，用于 /product/{handle}）
+         */
+        getProductBasePath() {
+            const firstLink = document.querySelector('.category-products .product-card a[href*="/product/"], .product-list-container .product-card a[href*="/product/"]');
+            if (firstLink && firstLink.href) {
+                try {
+                    const u = new URL(firstLink.href);
+                    return u.origin + u.pathname.replace(/\/product\/[^/]+$/, '');
+                } catch (e) {}
+            }
+            return window.location.origin + (document.body.dataset.basePath || '');
         }
         
         /**
@@ -522,10 +598,12 @@
          */
         updateResultCount(total) {
             const countEl = document.querySelector('.filter-result-count');
-            if (countEl) {
-                countEl.textContent = total > 0 
-                    ? `${total} 个产品`
-                    : '没有找到产品';
+            if (countEl && typeof window.__ === 'function') {
+                countEl.textContent = total > 0
+                    ? window.__('共 %{count} 件商品', { count: total })
+                    : window.__('该分类下暂无商品');
+            } else if (countEl) {
+                countEl.textContent = total > 0 ? total + '' : '';
             }
         }
         

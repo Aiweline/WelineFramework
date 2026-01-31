@@ -23,7 +23,7 @@ use Weline\Seo\Service\EventDispatcher;
  * URL 提交请求观察者
  *
  * 监听 Weline_Seo::integration::url_submit_request 事件，
- * 将 URL 按 scope/module 分发到对应的 SEO 账户并入队任务。
+ * 将 URL 按 scope 分发到对应的 SEO 账户并入队任务。
  */
 class UrlSubmitRequest implements ObserverInterface
 {
@@ -40,11 +40,10 @@ class UrlSubmitRequest implements ObserverInterface
 
         $url = trim((string)($data['url'] ?? ''));
         $scope = trim((string)($data['scope'] ?? ''));
-        $module = trim((string)($data['module'] ?? ''));
         $subjectType = (string)($data['subject_type'] ?? SeoSubject::SUBJECT_TYPE_PAGE);
         $subjectEntityId = (int)($data['subject_id'] ?? 0);
 
-        if ($url === '' || $scope === '' || $module === '') {
+        if ($url === '' || $scope === '') {
             return;
         }
 
@@ -54,7 +53,6 @@ class UrlSubmitRequest implements ObserverInterface
             $subject = $subjectModel->findOrCreate($subjectType, $subjectEntityId);
             $subject->setUrl($url)
                 ->setData(SeoSubject::fields_SCOPE, $scope)
-                ->setData(SeoSubject::fields_MODULE, $module)
                 ->setStatus(SeoSubject::STATUS_ENABLED)
                 ->save();
 
@@ -66,10 +64,9 @@ class UrlSubmitRequest implements ObserverInterface
             /** @var SeoAccount $accountModel */
             $accountModel = $this->objectManager->getInstance(SeoAccount::class);
 
-            // 查找匹配 scope/module 的启用账户
+            // 查找匹配 scope 的启用账户
             $accounts = $accountModel->reset()
                 ->where(SeoAccount::fields_SCOPE, $scope)
-                ->where(SeoAccount::fields_MODULE, $module)
                 ->where(SeoAccount::fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
@@ -97,7 +94,6 @@ class UrlSubmitRequest implements ObserverInterface
                     'provider' => $provider,
                     'account_id' => $accountId,
                     'scope' => $scope,
-                    'module' => $module,
                 ];
 
                 $task = $taskModel->reset()
@@ -110,7 +106,6 @@ class UrlSubmitRequest implements ObserverInterface
                     ->setMaxAttempts(3);
 
                 $task->setData(SeoTask::fields_SCOPE, $scope)
-                    ->setData(SeoTask::fields_MODULE, $module)
                     ->save();
 
                 $taskId = (int)$task->getId();
@@ -122,7 +117,6 @@ class UrlSubmitRequest implements ObserverInterface
                         $subjectId,
                         [
                             'scope' => $scope,
-                            'module' => $module,
                         ]
                     );
                 }

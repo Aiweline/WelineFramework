@@ -639,7 +639,7 @@ class Provider extends BaseController
             $records = $usageModel->order(UsageRecord::fields_CREATED_AT, 'DESC')
                 ->pagination($page, $limit)
                 ->select()
-                ->fetchOrigin();
+                ->fetchArray();
 
             if (!is_array($records)) {
                 $records = [];

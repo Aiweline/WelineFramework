@@ -180,21 +180,12 @@ class ComponentService
      */
     public function getComponentsForBuilder(string $styleCode, ?string $layoutCode = null, bool $includePreview = true, ?string $pageType = null): array
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:getComponentsForBuilder', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['styleCode' => $styleCode, 'includePreview' => $includePreview], 'F');
-        // #endregion
-        
         // 启用输出缓冲，防止模板渲染时的直接输出破坏JSON响应
         $obLevel = ob_get_level();
         ob_start();
         
         try {
             $allComponents = $this->getComponentsByStyle($styleCode, true);
-            
-            // #region agent log
-            $debugLog('Before toArrayBatch recommended', ['ownCount' => count($allComponents['own'] ?? [])], 'F');
-            // #endregion
             
             $result = [
                 // 当前模板的组件（推荐）- 包含预览
@@ -213,20 +204,12 @@ class ComponentService
                 'other_templates' => [],
             ];
             
-            // #region agent log
-            $debugLog('After recommended and shared', ['recommendedCount' => count($result['recommended']['components']), 'sharedCount' => count($result['shared']['components'])], 'F');
-            // #endregion
-            
             // 整理其他模板的组件（不生成预览，避免跨模板渲染问题）
             if (!empty($allComponents['compatible'])) {
                 foreach ($allComponents['compatible'] as $templateCode => $components) {
                     if ($templateCode === self::SHARED_STYLE_CODE) {
                         continue; // 跳过共享组件（已单独处理）
                     }
-                    
-                    // #region agent log
-                    $debugLog('Processing compatible template', ['templateCode' => $templateCode, 'componentsCount' => count($components)], 'F');
-                    // #endregion
                     
                     // 兼容组件不生成预览（避免跨模板渲染导致的输出问题）
                     $result['other_templates'][$templateCode] = [
@@ -251,12 +234,8 @@ class ComponentService
             }
             
             // 清理可能的直接输出
-            $unexpectedOutput = '';
             while (ob_get_level() > $obLevel) {
-                $unexpectedOutput .= ob_get_clean();
-            }
-            if (!empty($unexpectedOutput)) {
-                $debugLog('Unexpected output in getComponentsForBuilder', ['output' => substr($unexpectedOutput, 0, 500)], 'WARNING');
+                ob_get_clean();
             }
             
             return $result;
@@ -266,7 +245,6 @@ class ComponentService
             while (ob_get_level() > $obLevel) {
                 ob_end_clean();
             }
-            $debugLog('Exception in getComponentsForBuilder', ['error' => $e->getMessage()], 'ERROR');
             throw $e;
         }
     }
@@ -548,16 +526,7 @@ class ComponentService
      */
     public function renderPreview(string $componentCode, array $config = [], ?string $styleCode = null): string
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:renderPreview', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['componentCode' => $componentCode, 'styleCode' => $styleCode], 'H');
-        // #endregion
-        
         $component = $this->getByCode($componentCode, $styleCode);
-        
-        // #region agent log
-        $debugLog('After getByCode', ['componentCode' => $componentCode, 'found' => $component !== null], 'H');
-        // #endregion
         
         if (!$component) {
             throw new \Exception('组件不存在: ' . $componentCode);
@@ -565,10 +534,6 @@ class ComponentService
         
         $styleCode = $component->getData(Component::fields_STYLE_CODE);
         $path = $component->getData(Component::fields_PATH);
-        
-        // #region agent log
-        $debugLog('Got styleCode and path', ['componentCode' => $componentCode, 'styleCode' => $styleCode, 'path' => $path], 'I');
-        // #endregion
         
         if (empty($path)) {
             throw new \Exception('组件路径未定义: ' . $componentCode);
@@ -578,19 +543,11 @@ class ComponentService
         $defaultConfig = $component->getDefaultConfig();
         $mergedConfig = array_merge($defaultConfig, $config);
         
-        // #region agent log
-        $debugLog('Got config', ['componentCode' => $componentCode], 'I');
-        // #endregion
-        
         // 使用框架的模板引擎渲染组件
         $template = \Weline\Framework\View\Template::getInstance();
         
         // 加载组件所属模板的颜色配置
         $colors = $this->loadTemplateColors($styleCode);
-        
-        // #region agent log
-        $debugLog('Loaded colors', ['componentCode' => $componentCode, 'colorsCount' => count($colors)], 'I');
-        // #endregion
         
         // 准备模板变量
         $template->assign('page', null);
@@ -611,10 +568,6 @@ class ComponentService
             // 检查组件文件是否存在
             $fullPath = $component->getFullPath();
             
-            // #region agent log
-            $debugLog('Checking file', ['componentCode' => $componentCode, 'fullPath' => $fullPath, 'exists' => file_exists($fullPath)], 'I');
-            // #endregion
-            
             if (!file_exists($fullPath)) {
                 throw new \Exception("组件文件不存在: {$path}");
             }
@@ -622,10 +575,6 @@ class ComponentService
             // 使用模块路径格式渲染组件
             // path 格式类似: style/tpmst/components/header/nav.phtml
             $templatePath = "GuoLaiRen_PageBuilder::templates/{$path}";
-            
-            // #region agent log
-            $debugLog('Before fetch', ['componentCode' => $componentCode, 'templatePath' => $templatePath], 'I');
-            // #endregion
             
             // 启用输出缓冲捕获模板可能的直接输出
             ob_start();
@@ -636,10 +585,6 @@ class ComponentService
             if (!empty($directOutput)) {
                 $html = $directOutput . ($html ?? '');
             }
-            
-            // #region agent log
-            $debugLog('After fetch', ['componentCode' => $componentCode, 'htmlLen' => strlen($html ?? ''), 'directOutputLen' => strlen($directOutput)], 'I');
-            // #endregion
             
             // 确保 $html 是字符串
             if (!is_string($html)) {
@@ -716,11 +661,6 @@ class ComponentService
      */
     public function extractPreviewHtml(string $componentCode): string
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:extractPreviewHtml', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        $debugLog('Entry', ['componentCode' => $componentCode], 'G');
-        // #endregion
-        
         // 启用输出缓冲，捕获所有可能的直接输出
         ob_start();
         
@@ -729,16 +669,7 @@ class ComponentService
             $html = $this->renderPreview($componentCode, []);
             
             // 获取可能的直接输出
-            $directOutput = ob_get_clean();
-            
-            // #region agent log
-            $debugLog('After renderPreview', ['componentCode' => $componentCode, 'htmlLen' => strlen($html ?? ''), 'directOutputLen' => strlen($directOutput)], 'G');
-            // #endregion
-            
-            // 如果有直接输出，记录但忽略（不混入结果）
-            if (!empty($directOutput)) {
-                $debugLog('Warning: Direct output detected', ['componentCode' => $componentCode, 'output' => substr($directOutput, 0, 200)], 'WARNING');
-            }
+            ob_get_clean();
             
             if (empty($html)) {
                 return '';
@@ -752,9 +683,6 @@ class ComponentService
             // 清理输出缓冲
             ob_end_clean();
             
-            // #region agent log
-            $debugLog('Exception', ['componentCode' => $componentCode, 'error' => $e->getMessage()], 'G');
-            // #endregion
             // 渲染失败时返回错误提示
             $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $componentCode);
             return '<div class="cp-' . $safeCode . ' component-preview-error" style="padding:10px;color:#999;font-size:12px;text-align:center;">预览加载失败</div>';
@@ -769,19 +697,10 @@ class ComponentService
      */
     public function toArray(Component $component, bool $includePreview = false): array
     {
-        // #region agent log
-        $debugLog = function($msg, $data, $hyp) { @file_put_contents(BP . '.cursor/debug.log', json_encode(['location' => 'ComponentService.php:toArray', 'message' => $msg, 'data' => $data, 'hypothesisId' => $hyp, 'timestamp' => microtime(true)]) . "\n", FILE_APPEND); };
-        // #endregion
-        
         $styleCode = $component->getData(Component::fields_STYLE_CODE);
         $thumbnail = $component->getData(Component::fields_THUMBNAIL);
         $category = $component->getData(Component::fields_CATEGORY);
         $componentCode = $component->getData(Component::fields_CODE);
-        
-        // #region agent log
-        $componentId = $component->getId();
-        $debugLog('Entry', ['componentCode' => $componentCode, 'componentId' => $componentId, 'idType' => gettype($componentId), 'styleCode' => $styleCode], 'F');
-        // #endregion
         
         // 构建缩略图完整路径
         $thumbnailUrl = '';

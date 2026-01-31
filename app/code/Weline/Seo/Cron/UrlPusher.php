@@ -94,7 +94,6 @@ class UrlPusher implements CronTaskInterface
                 $provider = (string)($account[\Weline\Seo\Model\SeoAccount::fields_PROVIDER] ?? '');
                 $accountId = (int)($account[\Weline\Seo\Model\SeoAccount::fields_ACCOUNT_ID] ?? 0);
                 $scope = (string)($account[\Weline\Seo\Model\SeoAccount::fields_SCOPE] ?? '');
-                $module = (string)($account[\Weline\Seo\Model\SeoAccount::fields_MODULE] ?? '');
 
                 if ($provider === '' || $accountId <= 0) {
                     continue;
@@ -105,7 +104,6 @@ class UrlPusher implements CronTaskInterface
                     ->where(SeoTask::fields_TASK_TYPE, SeoTask::TASK_TYPE_PUSH_URLS)
                     ->where(SeoTask::fields_STATUS, [SeoTask::STATUS_PENDING, SeoTask::STATUS_PROCESSING], 'IN')
                     ->where(SeoTask::fields_SCOPE, $scope)
-                    ->where(SeoTask::fields_MODULE, $module)
                     ->where(SeoTask::fields_PAYLOAD, '%"account_id":' . $accountId . '%', 'LIKE')
                     ->find()
                     ->fetch();
@@ -114,7 +112,7 @@ class UrlPusher implements CronTaskInterface
                     continue;
                 }
 
-                // 获取需要推送的SEO主体（按账户的 scope/module 过滤）
+                // 获取需要推送的SEO主体（按账户的 scope 过滤）
                 $subjectQuery = $subjectModel->reset()
                     ->where(SeoSubject::fields_STATUS, SeoSubject::STATUS_ENABLED)
                     ->where(SeoSubject::fields_URL, '', '!=')
@@ -122,9 +120,6 @@ class UrlPusher implements CronTaskInterface
 
                 if ($scope !== '') {
                     $subjectQuery->where(SeoSubject::fields_SCOPE, $scope);
-                }
-                if ($module !== '') {
-                    $subjectQuery->where(SeoSubject::fields_MODULE, $module);
                 }
 
                 $subjects = $subjectQuery->select()->fetchArray();
@@ -150,7 +145,6 @@ class UrlPusher implements CronTaskInterface
                         'provider' => $provider,
                         'account_id' => $accountId,
                         'scope' => $scope,
-                        'module' => $module,
                     ];
 
                     $taskModel->reset()
@@ -162,7 +156,6 @@ class UrlPusher implements CronTaskInterface
                         ->setStatus(SeoTask::STATUS_PENDING)
                         ->setMaxAttempts(3)
                         ->setData(SeoTask::fields_SCOPE, $scope)
-                        ->setData(SeoTask::fields_MODULE, $module)
                         ->save();
 
                     $taskCount++;

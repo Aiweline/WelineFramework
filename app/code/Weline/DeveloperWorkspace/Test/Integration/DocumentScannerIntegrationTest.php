@@ -87,7 +87,8 @@ class DocumentScannerIntegrationTest extends TestCase
         $this->assertDirectoryExists($docPath, 'doc目录不存在');
         
         // 扫描文档
-        $result = $this->scanner->scanModuleDocuments('Weline_DeveloperWorkspace', $docPath);
+        $scannedKeys = [];
+        $result = $this->scanner->scanModuleDocuments('Weline_DeveloperWorkspace', $docPath, $modulePath, $scannedKeys);
         
         // 验证结果
         $this->assertIsArray($result);
@@ -125,7 +126,9 @@ class DocumentScannerIntegrationTest extends TestCase
         
         try {
             // 扫描文档
-            $result = $this->scanner->scanModuleDocuments('Test_Module', $testDir);
+            $scannedKeys = [];
+            $modulePath = dirname($testDir);
+            $result = $this->scanner->scanModuleDocuments('Test_Module', $testDir, $modulePath, $scannedKeys);
             
             // 验证文档被创建
             $this->assertGreaterThan(0, $result['scanned']);
@@ -172,7 +175,9 @@ class DocumentScannerIntegrationTest extends TestCase
         
         try {
             // 扫描文档
-            $result = $this->scanner->scanModuleDocuments('Test_Module', $testDir);
+            $scannedKeys = [];
+            $modulePath = dirname($testDir);
+            $result = $this->scanner->scanModuleDocuments('Test_Module', $testDir, $modulePath, $scannedKeys);
             
             $this->assertGreaterThan(0, $result['scanned']);
             
@@ -191,6 +196,69 @@ class DocumentScannerIntegrationTest extends TestCase
             }
             
             // 清理
+            unlink($testFile);
+            rmdir($testDir);
+        } catch (\Exception $e) {
+            if (file_exists($testFile)) {
+                unlink($testFile);
+            }
+            if (is_dir($testDir)) {
+                rmdir($testDir);
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * 测试：支持 Weline_Framework/view/doc 二级目录扫描
+     */
+    public function testScanFrameworkViewDocDirectory(): void
+    {
+        $testDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'test_fw_view_doc_' . uniqid();
+        mkdir($testDir, 0777, true);
+
+        $fileName = 'view-doc-test-' . uniqid() . '.md';
+        $testFile = $testDir . DIRECTORY_SEPARATOR . $fileName;
+        file_put_contents($testFile, "# View Doc Test\n\nFramework view doc scan.");
+
+        try {
+            $frameworkModulePath = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'Framework';
+
+            $refClass = new \ReflectionClass($this->scanner);
+            $ensureModuleCatalog = $refClass->getMethod('ensureModuleCatalog');
+            $ensureModuleCatalog->setAccessible(true);
+            $moduleCatalog = $ensureModuleCatalog->invoke($this->scanner, 'Weline_Framework', $frameworkModulePath);
+
+            $scanFrameworkDocuments = $refClass->getMethod('scanFrameworkDocuments');
+            $scanFrameworkDocuments->setAccessible(true);
+
+            $result = ['scanned' => 0, 'new' => 0, 'updated' => 0];
+            $scannedKeys = [];
+            $scannedCatalogIds = [];
+
+            $scanResult = $scanFrameworkDocuments->invoke(
+                $this->scanner,
+                $testDir,
+                $moduleCatalog,
+                $result,
+                $scannedKeys,
+                $scannedCatalogIds,
+                'view/doc'
+            );
+
+            $this->assertGreaterThanOrEqual(1, $scanResult['scanned']);
+
+            $doc = $this->documentModel->clear()
+                ->where(Document::fields_MODULE_NAME, 'Weline_Framework')
+                ->where(Document::fields_FILE_NAME, $fileName)
+                ->where(Document::fields_FILE_PATH, 'view/doc/' . $fileName)
+                ->find()
+                ->fetch();
+
+            $this->assertNotNull($doc);
+            $this->assertGreaterThan(0, $doc->getId());
+            $this->createdDocumentIds[] = $doc->getId();
+
             unlink($testFile);
             rmdir($testDir);
         } catch (\Exception $e) {

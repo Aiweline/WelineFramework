@@ -57,5 +57,14 @@
          icon="mdi mdi-cog" 
          order="50"/>
     
+    <!-- SEO 管理子菜单（嵌入式） -->
+    <add source="GuoLaiRen_PageBuilder::seo_management" 
+         name="seo_management" 
+         title="SEO管理" 
+         action="pagebuilder/backend/seo/index"
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-chart-line" 
+         order="45"/>
+    
 </menus>
 
