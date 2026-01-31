@@ -8,9 +8,8 @@
 !media/
 !media/.gitkeep
 
-# 如果需要保留其他目录，请在下面添加
-# !other_dir/
-
 # 保留 sitemaps 目录
-pub/sitemaps/
 !pub/sitemaps/.gitkeep
+
+# 保留cli-server-router.php
+!pub/cli-server-router.php
