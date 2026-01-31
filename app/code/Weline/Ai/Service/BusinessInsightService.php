@@ -90,7 +90,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
 
             $totalRequests = 0;
             $totalTokens = 0;
@@ -146,7 +146,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             $modelStats = [];
 
             foreach ($logs as $log) {
@@ -210,7 +210,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             $dailyData = [];
 
             foreach ($logs as $log) {
@@ -268,7 +268,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             $scenarioStats = [];
 
             foreach ($logs as $log) {
@@ -317,7 +317,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             $userActivity = [];
 
             foreach ($logs as $log) {
@@ -378,7 +378,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             
             $totalRevenue = 0.0;
             $revenueByModel = [];
@@ -438,7 +438,7 @@ class BusinessInsightService
                 $usageLogs->where('tenant_id', $tenantId);
             }
 
-            $logs = $usageLogs->select()->fetchOrigin();
+            $logs = $usageLogs->select()->fetchArray();
             
             $responseTimes = [];
             $successCount = 0;

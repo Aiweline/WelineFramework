@@ -8,11 +8,12 @@
 /** @var \Weline\Seo\Model\SeoAccount $account */
 $account = $account ?? null;
 $scope = $scope ?? '';
-$module = $module ?? '';
+$isAjax = $is_ajax ?? false;
+$platforms = $platforms ?? [];
 
 $id = $account ? (int)$account->getId() : 0;
 $name = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_NAME) : '';
-$provider = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_PROVIDER) : 'google_indexing_api';
+$platform = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_PLATFORM) : '';
 $description = $account ? (string)$account->getData(\Weline\Seo\Model\SeoAccount::fields_DESCRIPTION) : '';
 $isActive = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::fields_IS_ACTIVE) : 1;
 $enableCronPush = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::fields_ENABLE_CRON_PUSH_URLS) : 1;
@@ -20,147 +21,609 @@ $enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAcco
 
 $configArray = $account ? $account->getConfigArray() : [];
 $configJson = $configArray ? json_encode($configArray, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '';
+
+// 平台功能说明和配置指引
+$platformFeatures = [
+    'google' => [
+        'name' => 'Google',
+        'features' => [
+            'Web Search Indexing API (实时推送URL)',
+            'Search Console (Sitemap提交)',
+            'URL检查工具',
+            '性能监控'
+        ],
+        'config_hint' => '需要配置 Google Service Account JSON',
+        'guide_title' => 'Google Service Account 获取步骤',
+        'guide_steps' => [
+            '1. 访问 Google Cloud Console: <a href="https://console.cloud.google.com" target="_blank">https://console.cloud.google.com</a>',
+            '2. 创建新项目或选择现有项目',
+            '3. 启用 Web Search Indexing API: 导航到 API 和服务 → 库，搜索 "Web Search Indexing API" 并启用',
+            '4. 创建服务账号: 导航到 API 和服务 → 凭证',
+            '5. 点击右上角 "创建凭证" 按钮 → 选择 "服务账号"',
+            '6. 填写服务账号名称（如：seo-indexing），点击创建',
+            '7. 授予角色: 选择 "Owner" 或 "Editor" 权限（可选，可跳过）',
+            '8. 创建密钥: 在服务账号列表中点击刚创建的账号 → 密钥 → 添加密钥 → 创建新密钥',
+            '9. 选择 JSON 格式，下载密钥文件',
+            '10. 复制整个 JSON 文件内容到下方配置框的 service_account 字段',
+            '11. 在 Google Search Console 中添加此服务账号邮箱（client_email）为网站所有者'
+        ],
+        'config_template' => [
+            'service_account' => [
+                'type' => 'service_account',
+                'project_id' => 'your-project-id',
+                'private_key_id' => 'your-private-key-id',
+                'private_key' => '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n',
+                'client_email' => 'xxx@xxx.iam.gserviceaccount.com',
+                'client_id' => 'your-client-id',
+                'auth_uri' => 'https://accounts.google.com/o/oauth2/auth',
+                'token_uri' => 'https://oauth2.googleapis.com/token'
+            ],
+            'site_url' => 'https://example.com'
+        ]
+    ],
+    'bing' => [
+        'name' => 'Bing',
+        'features' => [
+            'Webmaster Tools',
+            'URL Submission API',
+            'Sitemap提交'
+        ],
+        'config_hint' => '需要配置 Bing Webmaster API Key',
+        'guide_title' => 'Bing Webmaster API Key 获取步骤',
+        'guide_steps' => [
+            '1. 访问 Bing Webmaster Tools: <a href="https://www.bing.com/webmasters" target="_blank">https://www.bing.com/webmasters</a>',
+            '2. 使用 Microsoft 账号登录',
+            '3. 添加并验证您的网站',
+            '4. 导航到 Settings → API Access',
+            '5. 点击 "Generate API Key"',
+            '6. 复制生成的 API Key',
+            '7. 将 API Key 填写到下方配置的 api_key 字段'
+        ],
+        'config_template' => [
+            'api_key' => 'your-bing-webmaster-api-key',
+            'site_url' => 'https://example.com'
+        ]
+    ],
+    'baidu' => [
+        'name' => '百度',
+        'features' => [
+            'LinkSubmit (链接提交)',
+            'Sitemap提交',
+            'MIP/AMP推送'
+        ],
+        'config_hint' => '需要配置百度站点Token',
+        'guide_title' => '百度站长平台 Token 获取步骤',
+        'guide_steps' => [
+            '1. 访问百度搜索资源平台: <a href="https://ziyuan.baidu.com" target="_blank">https://ziyuan.baidu.com</a>',
+            '2. 注册并登录百度账号',
+            '3. 添加网站并完成验证（HTML标签验证/文件验证/CNAME验证）',
+            '4. 进入 用户中心 → 站点管理，选择您的网站',
+            '5. 点击 数据引入 → 链接提交',
+            '6. 选择 "主动推送（实时）" 方式',
+            '7. 在接口调用地址中找到 token 参数',
+            '   示例: http://data.zz.baidu.com/urls?site=example.com&amp;token=<span style="color:red">xxxxx</span>',
+            '8. 复制 token 值，填写到下方配置的 site_token 字段'
+        ],
+        'config_template' => [
+            'site_token' => 'your-baidu-site-token',
+            'site_url' => 'https://example.com'
+        ]
+    ],
+];
+
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 ?>
 
-@template(Weline_Admin::common/head.phtml)
+<?php if (!$isAjax): ?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $id ? __('编辑SEO账户') : __('新增SEO账户') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<div class="page-content">
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-12 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">
-                    <?php if ($id): ?>
-                        <lang>编辑SEO账户</lang> #<?= $id ?>
-                    <?php else: ?>
-                        <lang>新增SEO账户</lang>
-                    <?php endif; ?>
-                </h4>
-            </div>
-        </div>
+@template(Weline_Admin::common/page/loading.phtml)
 
-        <div class="card">
-            <div class="card-body">
-                <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
-                    <input type="hidden" name="id" value="<?= $id ?>">
-                    <input type="hidden" name="scope" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>">
-                    <input type="hidden" name="module" value="<?= htmlspecialchars($module, ENT_QUOTES) ?>">
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
 
-                    <div class="mb-3">
-                        <label class="form-label"><lang>Scope</lang></label>
-                        <input type="text"
-                               class="form-control"
-                               value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>"
-                               disabled>
-                        <div class="form-text">
-                            <lang>由URL参数指定的scope不可修改，用于区分不同业务范围，例如 page_builder。</lang>
-                        </div>
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <template>Weline_Component::message.phtml</template>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><lang>模块</lang></label>
-                        <input type="text"
-                               class="form-control"
-                               value="<?= htmlspecialchars($module, ENT_QUOTES) ?>"
-                               disabled>
-                        <div class="form-text">
-                            <lang>由URL参数指定的来源模块不可修改，例如 GuoLaiRen_PageBuilder。</lang>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><lang>账户名称</lang></label>
-                        <input type="text"
-                               name="name"
-                               class="form-control"
-                               value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
-                               required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><lang>供应商(provider)</lang></label>
-                        <select name="provider" class="form-select" required>
-                            <option value="google_indexing_api" <?= $provider === 'google_indexing_api' ? 'selected' : '' ?>>
-                                <lang>Google Indexing API</lang>
-                            </option>
-                        </select>
-                        <div class="form-text">
-                            <lang>每个供应商对应一个适配器，目前仅内置 Google Indexing API。</lang>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><lang>描述</lang></label>
-                        <textarea name="description" class="form-control" rows="2"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label"><lang>账户配置(JSON)</lang></label>
-                        <textarea name="config_json" class="form-control" rows="10"
-                                  placeholder='{"service_account": {...}, "sitemaps": ["https://example.com/sitemap.xml"]}'><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
-                        <div class="form-text">
-                            <lang>请粘贴 Google Service Account JSON 到 service_account 字段，并可配置 sitemaps 列表。</lang>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       name="is_active"
-                                       value="1"
-                                       id="is_active"
-                                       <?= $isActive === 1 ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="is_active">
-                                    <lang>启用账户</lang>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       name="enable_cron_push_urls"
-                                       value="1"
-                                       id="enable_cron_push_urls"
-                                       <?= $enableCronPush === 1 ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="enable_cron_push_urls">
-                                    <lang>启用URL定时推送</lang>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       name="enable_cron_sitemap"
-                                       value="1"
-                                       id="enable_cron_sitemap"
-                                       <?= $enableCronSitemap === 1 ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="enable_cron_sitemap">
-                                    <lang>启用Sitemap定时提交</lang>
-                                </label>
+                </div>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-account-key me-2"></i>
+                                <?php if ($id): ?>
+                                    <lang>编辑SEO账户</lang> #<?= $id ?>
+                                <?php else: ?>
+                                    <lang>新增SEO账户</lang>
+                                <?php endif; ?>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>SEO管理</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item'><a href='<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope]) ?>'>
+                                            <lang>账户管理</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item active'>
+                                        <?php if ($id): ?>
+                                            <lang>编辑</lang>
+                                        <?php else: ?>
+                                            <lang>新增</lang>
+                                        <?php endif; ?>
+                                    </li>
+                                </ol>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-1"></i>
-                            <lang>保存</lang>
-                        </button>
-                        <a href="<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope, 'module' => $module]) ?>"
-                           class="btn btn-secondary ms-2">
-                            <lang>返回列表</lang>
-                        </a>
+                <div class="row mb-3">
+                    <div class="col-12 d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <?php if ($id): ?>
+                                <lang>编辑SEO账户</lang> #<?= $id ?>
+                            <?php else: ?>
+                                <lang>新增SEO账户</lang>
+                            <?php endif; ?>
+                        </h4>
                     </div>
-                </form>
+                </div>
+
+                <!-- 平台配置 JavaScript（必须在表单之前定义） -->
+                <script>
+                // ==================== 平台配置数据 ====================
+                const PLATFORM_DATA = <?= json_encode($platformFeatures) ?>;
+                let currentSelectedPlatform = '<?= htmlspecialchars($platform, ENT_QUOTES) ?>';
+
+                // ==================== 通用工具函数 ====================
+                
+                /**
+                 * 显示消息提示
+                 */
+                function showMessage(type, message, title = null) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning',
+                            title: title || (type === 'success' ? '<?= __("成功") ?>' : type === 'error' ? '<?= __("错误") ?>' : '<?= __("提示") ?>'),
+                            text: message,
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: type === 'success' ? 3000 : 5000,
+                            timerProgressBar: true
+                        });
+                    } else if (typeof showPageMessage === 'function') {
+                        showPageMessage(type, message);
+                    } else {
+                        console.log('[' + type + '] ' + message);
+                    }
+                }
+                
+                /**
+                 * 显示确认对话框
+                 */
+                function showConfirm(message, onConfirm, onCancel) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'question',
+                            title: '<?= __("确认操作") ?>',
+                            text: message,
+                            showCancelButton: true,
+                            confirmButtonText: '<?= __("确定") ?>',
+                            cancelButtonText: '<?= __("取消") ?>',
+                            confirmButtonColor: '#3085d6',
+                            cancelButtonColor: '#d33'
+                        }).then((result) => {
+                            if (result.isConfirmed && onConfirm) {
+                                onConfirm();
+                            } else if (result.isDismissed && onCancel) {
+                                onCancel();
+                            }
+                        });
+                    } else {
+                        if (confirm(message)) {
+                            if (onConfirm) onConfirm();
+                        } else {
+                            if (onCancel) onCancel();
+                        }
+                    }
+                }
+
+                // ==================== 核心功能函数 ====================
+
+                /**
+                 * 处理平台选择变化
+                 */
+                function handlePlatformChange(platformCode) {
+                    console.log('平台选择:', platformCode);
+                    currentSelectedPlatform = platformCode;
+                    
+                    if (!platformCode || !PLATFORM_DATA[platformCode]) {
+                        hideAllPlatformInfo();
+                        return;
+                    }
+                    
+                    showPlatformInfo(platformCode);
+                }
+
+                /**
+                 * 隐藏所有平台信息
+                 */
+                function hideAllPlatformInfo() {
+                    document.getElementById('platformFeaturesInfo').style.display = 'none';
+                    document.getElementById('platformGuideInfo').style.display = 'none';
+                    document.getElementById('fillTemplateBtn').style.display = 'none';
+                }
+
+                /**
+                 * 显示平台信息
+                 */
+                function showPlatformInfo(platformCode) {
+                    const platform = PLATFORM_DATA[platformCode];
+                    
+                    // 显示功能说明
+                    document.getElementById('platformFeaturesInfo').style.display = 'block';
+                    document.getElementById('platformFeaturesTitle').textContent = platform.name;
+                    
+                    const featuresList = document.getElementById('platformFeaturesList');
+                    featuresList.innerHTML = platform.features.map(f => `<li>${f}</li>`).join('');
+                    
+                    document.getElementById('platformConfigHint').textContent = platform.config_hint;
+                    
+                    // 显示配置指南（默认展开）
+                    document.getElementById('platformGuideInfo').style.display = 'block';
+                    document.getElementById('platformGuideTitle').textContent = platform.guide_title;
+                    
+                    const guideSteps = document.getElementById('platformGuideSteps');
+                    guideSteps.innerHTML = platform.guide_steps.map(s => `<li>${s}</li>`).join('');
+                    
+                    document.getElementById('platformConfigTemplate').textContent = 
+                        JSON.stringify(platform.config_template, null, 2);
+                    
+                    // 默认展开指南内容
+                    document.getElementById('platformGuideContent').style.display = 'block';
+                    document.getElementById('guideToggleIcon').style.transform = 'rotate(180deg)';
+                    
+                    // 显示填充模板按钮
+                    document.getElementById('fillTemplateBtn').style.display = 'inline-block';
+                    
+                    // 更新配置框 placeholder
+                    const configTextarea = document.getElementById('configJsonTextarea');
+                    if (!configTextarea.value.trim()) {
+                        configTextarea.placeholder = JSON.stringify(platform.config_template, null, 2);
+                    }
+                }
+
+                /**
+                 * 切换指南内容展开/收起
+                 */
+                function toggleGuideContent() {
+                    const content = document.getElementById('platformGuideContent');
+                    const icon = document.getElementById('guideToggleIcon');
+                    const isVisible = content.style.display !== 'none';
+                    
+                    content.style.display = isVisible ? 'none' : 'block';
+                    icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+
+                /**
+                 * 填充配置模板
+                 */
+                function fillConfigTemplate() {
+                    if (!currentSelectedPlatform || !PLATFORM_DATA[currentSelectedPlatform]) {
+                        showMessage('warning', '请先选择平台');
+                        return;
+                    }
+                    
+                    const configTextarea = document.getElementById('configJsonTextarea');
+                    const template = PLATFORM_DATA[currentSelectedPlatform].config_template;
+                    
+                    if (configTextarea.value.trim() !== '') {
+                        showConfirm('当前已有配置内容，是否覆盖？', function() {
+                            configTextarea.value = JSON.stringify(template, null, 2);
+                            configTextarea.focus();
+                        });
+                        return;
+                    }
+                    
+                    configTextarea.value = JSON.stringify(template, null, 2);
+                    configTextarea.focus();
+                }
+
+                /**
+                 * 处理 JSON 文件上传
+                 */
+                function handleJsonFileUpload(input) {
+                    const file = input.files[0];
+                    if (!file) {
+                        return;
+                    }
+                    
+                    // 检查文件类型
+                    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+                        showMessage('error', '请上传 JSON 文件');
+                        input.value = '';
+                        return;
+                    }
+                    
+                    // 检查文件大小（限制 5MB）
+                    if (file.size > 5 * 1024 * 1024) {
+                        showMessage('error', '文件大小不能超过 5MB');
+                        input.value = '';
+                        return;
+                    }
+                    
+                    const configTextarea = document.getElementById('configJsonTextarea');
+                    
+                    // 如果已有内容，确认是否覆盖
+                    if (configTextarea.value.trim() !== '') {
+                        showConfirm('当前已有配置内容，是否覆盖？', function() {
+                            readAndFillJsonFile(file, configTextarea, input);
+                        }, function() {
+                            input.value = '';
+                        });
+                        return;
+                    }
+                    
+                    readAndFillJsonFile(file, configTextarea, input);
+                }
+                
+                /**
+                 * 读取并填充 JSON 文件
+                 */
+                function readAndFillJsonFile(file, configTextarea, input) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const content = e.target.result;
+                            // 验证是否是有效的 JSON
+                            const jsonObj = JSON.parse(content);
+                            // 格式化后填充到 textarea
+                            configTextarea.value = JSON.stringify(jsonObj, null, 2);
+                            configTextarea.focus();
+                            showMessage('success', 'JSON 文件上传成功');
+                        } catch (err) {
+                            showMessage('error', 'JSON 文件格式错误: ' + err.message);
+                        }
+                        // 清空 input，允许再次上传同一文件
+                        input.value = '';
+                    };
+                    reader.onerror = function() {
+                        showMessage('error', '文件读取失败，请重试');
+                        input.value = '';
+                    };
+                    reader.readAsText(file);
+                }
+
+                // ==================== 页面初始化 ====================
+                window.addEventListener('DOMContentLoaded', function() {
+                    // 页面加载完成后，如果已选择平台，显示信息
+                    if (currentSelectedPlatform) {
+                        handlePlatformChange(currentSelectedPlatform);
+                    }
+                });
+                </script>
+
+                <div class="card">
+                    <div class="card-body">
+                        <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
+<?php else: ?>
+                        <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
+<?php endif; ?>
+                            <input type="hidden" name="id" value="<?= $id ?>">
+                            <input type="hidden" name="scope" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>">
+
+                            <div class="mb-3">
+                                <label class="form-label"><lang>Scope</lang></label>
+                                <input type="text"
+                                       class="form-control"
+                                       value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>"
+                                       disabled>
+                                <div class="form-text">
+                                    <lang>由URL参数指定的scope不可修改，用于区分不同业务范围，例如 page_builder。</lang>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label"><lang>账户名称</lang></label>
+                                <input type="text"
+                                       name="name"
+                                       class="form-control"
+                                       value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
+                                       required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label"><lang>平台(Platform)</lang> <span class="text-danger">*</span></label>
+                                <select name="platform" id="platformSelect" class="form-select form-select-lg" required onchange="handlePlatformChange(this.value)">
+                                    <option value=""><lang>👉 请选择平台（选择后将显示配置获取指南）</lang></option>
+                                    <?php foreach ($platforms as $code => $info): ?>
+                                        <option value="<?= htmlspecialchars($code) ?>" 
+                                                <?= $platform === $code ? 'selected' : '' ?>
+                                                data-name="<?= htmlspecialchars($info['name']) ?>"
+                                                data-color="<?= htmlspecialchars($info['color']) ?>">
+                                            <?= htmlspecialchars($info['name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <script type="application/json" id="seoAccountPlatformData">
+                                    <?= json_encode($platformFeatures, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+                                </script>
+                                <div class="form-text">
+                                    <i class="mdi mdi-information-outline me-1"></i>
+                                    <strong><lang>选择目标搜索引擎平台后，下方将自动显示：</lang></strong>
+                                    <ul class="mb-0 mt-1">
+                                        <li><lang>平台支持的功能列表</lang></li>
+                                        <li><lang>详细的配置获取步骤指南</lang></li>
+                                        <li><lang>配置模板和示例</lang></li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- 平台功能说明 -->
+                            <div id="platformFeaturesInfo" class="mb-3" style="display: none;">
+                                <div class="alert alert-info mb-0">
+                                    <div class="d-flex align-items-start">
+                                        <i class="mdi mdi-information-outline me-2 mt-1" style="font-size: 20px;"></i>
+                                        <div class="flex-grow-1">
+                                            <strong><span id="platformFeaturesTitle"></span> <lang>支持的功能</lang>：</strong>
+                                            <ul id="platformFeaturesList" class="mb-2 mt-2"></ul>
+                                            <small class="text-muted">
+                                                <i class="mdi mdi-lightbulb-outline me-1"></i>
+                                                <span id="platformConfigHint"></span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 配置获取指南 -->
+                            <div id="platformGuideInfo" class="mb-3" style="display: none;">
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" 
+                                         style="cursor: pointer;" 
+                                         onclick="toggleGuideContent()">
+                                        <div>
+                                            <i class="mdi mdi-book-open-variant me-2"></i>
+                                            <strong id="platformGuideTitle"></strong>
+                                        </div>
+                                        <i class="mdi mdi-chevron-down" id="guideToggleIcon"></i>
+                                    </div>
+                                    <div class="card-body" id="platformGuideContent">
+                                        <ol id="platformGuideSteps" class="mb-3" style="line-height: 1.8;"></ol>
+                                        <div class="alert alert-success mb-0">
+                                            <strong><i class="mdi mdi-code-json me-2"></i><lang>配置模板：</lang></strong>
+                                            <pre id="platformConfigTemplate" class="mb-0 mt-2" style="background: #f8f9fa; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto;"></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label"><lang>描述</lang></label>
+                                <textarea name="description" class="form-control" rows="2"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <lang>账户配置(JSON)</lang>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2" 
+                                            onclick="fillConfigTemplate()" 
+                                            id="fillTemplateBtn" 
+                                            style="display: none;">
+                                        <i class="mdi mdi-content-copy me-1"></i>
+                                        <lang>填充模板</lang>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                                            onclick="document.getElementById('jsonFileInput').click()">
+                                        <i class="mdi mdi-upload me-1"></i>
+                                        <lang>上传 JSON 文件</lang>
+                                    </button>
+                                    <input type="file" id="jsonFileInput" accept=".json,application/json" style="display: none;" onchange="handleJsonFileUpload(this)">
+                                </label>
+                                <textarea name="config_json" id="configJsonTextarea" class="form-control font-monospace" rows="12"
+                                          placeholder='{"service_account": {...}}'
+                                          style="font-size: 12px;"><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
+                                <div class="form-text" id="configJsonHelp">
+                                    <i class="mdi mdi-alert-circle-outline me-1"></i>
+                                    <lang>请根据所选平台填写相应的配置信息，点击上方"配置获取指南"查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件</lang>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="is_active"
+                                               value="1"
+                                               id="is_active"
+                                               <?= $isActive === 1 ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="is_active">
+                                            <lang>启用账户</lang>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="enable_cron_push_urls"
+                                               value="1"
+                                               id="enable_cron_push_urls"
+                                               <?= $enableCronPush === 1 ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="enable_cron_push_urls">
+                                            <lang>启用URL定时推送</lang>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="enable_cron_sitemap"
+                                               value="1"
+                                               id="enable_cron_sitemap"
+                                               <?= $enableCronSitemap === 1 ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="enable_cron_sitemap">
+                                            <lang>启用Sitemap定时提交</lang>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="mdi mdi-content-save me-1"></i>
+                                    <lang>保存</lang>
+                                </button>
+                                <?php if (!$isAjax): ?>
+                                <a href="<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope]) ?>"
+                                   class="btn btn-secondary ms-2">
+                                    <lang>返回列表</lang>
+                                </a>
+                                <?php else: ?>
+                                <button type="button" class="btn btn-secondary ms-2" data-bs-dismiss="offcanvas">
+                                    <lang>取消</lang>
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                        </form>
+
+<?php if (!$isAjax): ?>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
+    <!-- 主要内容结束 -->
+
 </div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
 
 <script>
+// 表单提交处理（仅非AJAX模式）
 function saveSeoAccount(event) {
     event.preventDefault();
     const form = document.getElementById('seoAccountForm');
@@ -175,6 +638,13 @@ function saveSeoAccount(event) {
         data[key] = value;
     }
 
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("保存中...") ?>';
+    }
+
     fetch('<?= $this->getBackendUrl('seo/backend/account/save') ?>', {
         method: 'POST',
         headers: {
@@ -184,19 +654,64 @@ function saveSeoAccount(event) {
     })
         .then(response => response.json())
         .then(resp => {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+            
             if (resp.success) {
-                showPageMessage('success', resp.message);
+                // 显示消息并跳转
+                if (typeof showMessage === 'function') {
+                    showMessage('success', resp.message || '<?= __('账户保存成功') ?>');
+                } else if (typeof showPageMessage === 'function') {
+                    showPageMessage('success', resp.message);
+                }
                 setTimeout(() => {
-                    window.location.href = '<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope, 'module' => $module]) ?>';
+                    window.location.href = '<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope]) ?>';
                 }, 800);
             } else {
-                showPageMessage('error', resp.message || '保存失败');
+                const errorMsg = resp.message || '<?= __('保存失败') ?>';
+                if (typeof showMessage === 'function') {
+                    showMessage('error', errorMsg);
+                } else if (typeof showPageMessage === 'function') {
+                    showPageMessage('error', errorMsg);
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '<?= __("错误") ?>',
+                        text: errorMsg
+                    });
+                } else {
+                    console.error(errorMsg);
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            showPageMessage('error', '请求失败');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+            const errorMsg = '<?= __('请求失败，请检查网络连接后重试') ?>';
+            if (typeof showMessage === 'function') {
+                showMessage('error', errorMsg);
+            } else if (typeof showPageMessage === 'function') {
+                showPageMessage('error', errorMsg);
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: '<?= __("请求失败") ?>',
+                    text: errorMsg
+                });
+            } else {
+                console.error(errorMsg);
+            }
         });
 }
 </script>
 
+</body>
+</html>
+<?php else: ?>
+<!-- AJAX模式：不需要额外的脚本，表单提交由主页面的 handleAccountFormSubmit 处理 -->
+<?php endif; ?>

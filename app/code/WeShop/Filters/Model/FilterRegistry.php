@@ -34,6 +34,9 @@ class FilterRegistry
         'stock' => \WeShop\Filters\Provider\StockFilterProvider::class,
         'shipping' => \WeShop\Filters\Provider\ShippingFilterProvider::class,
         'brand' => \WeShop\Filters\Provider\BrandFilterProvider::class,
+        'color' => \WeShop\Filters\Provider\ColorFilterProvider::class,
+        'size' => \WeShop\Filters\Provider\SizeFilterProvider::class,
+        'material' => \WeShop\Filters\Provider\MaterialFilterProvider::class,
         'new' => \WeShop\Filters\Provider\NewFilterProvider::class,
         'sale' => \WeShop\Filters\Provider\SaleFilterProvider::class,
     ];

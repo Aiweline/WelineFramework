@@ -28,7 +28,14 @@ return [
         'SitemapProvider' => [
             'path' => 'extends/module/Weline_Seo/SitemapProvider',
             'interface' => 'Weline\Seo\Interface\SitemapProviderInterface',
-            'description' => 'Sitemap 提供扩展点，允许其他模块生成 Sitemap 并向 SEO 模块上报 URL',
+            'description' => 'Sitemap 提供扩展点（旧版），允许其他模块生成 Sitemap 并向 SEO 模块上报 URL',
+            'required' => false,
+            'multiple' => true
+        ],
+        'SitemapUrlProvider' => [
+            'path' => 'extends/module/Weline_Seo/SitemapUrlProvider',
+            'interface' => 'Weline\Seo\Interface\SitemapUrlProviderInterface',
+            'description' => 'Sitemap URL 提供扩展点（新架构），允许其他模块提供 URL 数据，由 SEO 模块统一生成平台分组的 Sitemap',
             'required' => false,
             'multiple' => true
         ]

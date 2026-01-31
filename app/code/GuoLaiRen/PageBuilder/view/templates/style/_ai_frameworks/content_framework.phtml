@@ -1,0 +1,214 @@
+<?php
+/**
+ * AI Component Framework - Content
+ * 
+ * 内容组件框架模板，通用的内容区块结构
+ * AI只需填充特定区域的代码
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ * @var array $component_config 组件配置
+ * 
+ * @component_start
+ * name => {{COMPONENT_NAME}}
+ * name_en => {{COMPONENT_NAME_EN}}
+ * description => {{COMPONENT_DESC}}
+ * category => content
+ * type => section
+ * sort_order => 50
+ * compatible_styles => *
+ * ai_generated => true
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.title => 标题:text:Section Title
+ * content.subtitle => 副标题:text:
+ * content.description => 描述:textarea:
+ * 
+ * group:layout => 布局设置
+ * layout.container_width => 容器宽度:select:1200|960,1200,1400,full
+ * layout.padding_top => 顶部间距:number:80|px
+ * layout.padding_bottom => 底部间距:number:80|px
+ * layout.text_align => 文字对齐:select:center|left,center,right
+ * 
+ * group:style => 样式设置
+ * style.bg_type => 背景类型:select:color|color,gradient,image
+ * style.bg_color => 背景颜色:color:#ffffff
+ * style.bg_gradient => 渐变背景:text:linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+ * style.bg_image => 背景图片:textarea:
+ * style.text_color => 文字颜色:color:#333333
+ * style.title_color => 标题颜色:color:#1a1a1a
+ * style.accent_color => 强调色:color:#7c3aed
+ * 
+ * {{EXTRA_FIELDS}}
+ * 
+ * @fields_end
+ */
+
+// ===== 固定的PHP数据获取部分 =====
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$componentId = 'ai-content-' . uniqid();
+
+// 内容配置
+$title = $getConfig('content.title', 'Section Title');
+$subtitle = $getConfig('content.subtitle', '');
+$description = $getConfig('content.description', '');
+
+// 布局配置
+$containerWidth = $getConfig('layout.container_width', '1200');
+$paddingTop = (int)$getConfig('layout.padding_top', 80);
+$paddingBottom = (int)$getConfig('layout.padding_bottom', 80);
+$textAlign = $getConfig('layout.text_align', 'center');
+
+// 样式配置
+$bgType = $getConfig('style.bg_type', 'color');
+$bgColor = $getConfig('style.bg_color', '#ffffff');
+$bgGradient = $getConfig('style.bg_gradient', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
+$bgImage = $getConfig('style.bg_image', '');
+$textColor = $getConfig('style.text_color', '#333333');
+$titleColor = $getConfig('style.title_color', '#1a1a1a');
+$accentColor = $getConfig('style.accent_color', '#7c3aed');
+
+// 计算背景样式
+$bgStyle = match($bgType) {
+    'gradient' => $bgGradient,
+    'image' => $bgImage ? "url('" . htmlspecialchars($bgImage) . "') center/cover no-repeat" : $bgColor,
+    default => $bgColor,
+};
+
+// 容器宽度
+$maxWidth = $containerWidth === 'full' ? '100%' : $containerWidth . 'px';
+
+// ===== AI生成的额外PHP变量 =====
+// 使用try-catch包装AI生成的代码，防止错误中断渲染
+try {
+    {{PHP_VARIABLES}}
+} catch (\Throwable $e) {
+    // 静默处理AI生成代码的错误，记录日志
+    error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+}
+?>
+
+<!-- AI生成的CSS样式 -->
+<style>
+/* 基础样式 */
+#<?= $componentId ?> {
+    background: <?= $bgStyle ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+    padding: <?= $paddingTop ?>px 20px <?= $paddingBottom ?>px;
+}
+
+#<?= $componentId ?> .ai-content-container {
+    max-width: <?= $maxWidth ?>;
+    margin: 0 auto;
+    text-align: <?= htmlspecialchars($textAlign) ?>;
+}
+
+#<?= $componentId ?> .ai-content-header {
+    margin-bottom: 40px;
+}
+
+#<?= $componentId ?> .ai-content-subtitle {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: <?= htmlspecialchars($accentColor) ?>;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+}
+
+#<?= $componentId ?> .ai-content-title {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 700;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    margin: 0 0 16px 0;
+    line-height: 1.2;
+}
+
+#<?= $componentId ?> .ai-content-description {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    max-width: 700px;
+    margin: 0 auto;
+    opacity: 0.9;
+}
+
+#<?= $componentId ?> .ai-content-body {
+    /* AI可以覆盖这个样式 */
+}
+
+/* AI生成的额外CSS */
+{{CSS_EXTRA}}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= max(40, $paddingTop / 2) ?>px 16px <?= max(40, $paddingBottom / 2) ?>px;
+    }
+    
+    #<?= $componentId ?> .ai-content-header {
+        margin-bottom: 30px;
+    }
+    
+    #<?= $componentId ?> .ai-content-description {
+        font-size: 1rem;
+    }
+    
+    {{CSS_RESPONSIVE}}
+}
+</style>
+
+<!-- Content HTML结构 -->
+<section id="<?= $componentId ?>" class="ai-component ai-content">
+    <div class="ai-content-container">
+        <!-- 内容头部 -->
+        <?php if ($title || $subtitle || $description): ?>
+        <div class="ai-content-header">
+            <?php if ($subtitle): ?>
+            <div class="ai-content-subtitle"><?= htmlspecialchars($subtitle) ?></div>
+            <?php endif; ?>
+            
+            <?php if ($title): ?>
+            <h2 class="ai-content-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            
+            <?php if ($description): ?>
+            <p class="ai-content-description"><?= nl2br(htmlspecialchars($description)) ?></p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        
+        <!-- AI生成的主体内容 -->
+        <div class="ai-content-body">
+            {{HTML_CONTENT}}
+        </div>
+    </div>
+</section>
+
+<!-- AI生成的JavaScript -->
+<?php 
+$_jsPlaceholder = <<<'JSEOF'
+{{JS_CONTENT}}
+JSEOF;
+$jsContent = trim($_jsPlaceholder);
+// 检查是否有有效的JS内容（非空且不是未替换的占位符）
+$_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
+if ($_hasValidJs): 
+?>
+<script>
+(function() {
+    const component = document.getElementById('<?= $componentId ?>');
+    <?= $jsContent ?>
+})();
+</script>
+<?php endif; ?>

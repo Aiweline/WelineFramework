@@ -114,6 +114,24 @@ class Taglib
     public const special_lang_symbols = [
         'null', 'and', 'or', 'xor', '||', 'neq', 'eq', 'gt', 'lt', 'gte', 'lte'
     ];
+    
+    /**
+     * 性能优化：操作符查找表（使用 isset 比 in_array 快 3-5 倍）
+     */
+    private const OPERATOR_LOOKUP = [
+        '||' => true, '&&' => true, '==' => true, '!=' => true, 
+        '!==' => true, '===' => true, '>' => true, '<' => true, 
+        '>=' => true, '<=' => true, 'or' => true, 'and' => true, 'xor' => true
+    ];
+    
+    /**
+     * 性能优化：特殊语言符号查找表
+     */
+    private const SPECIAL_SYMBOLS_LOOKUP = [
+        'null' => true, 'and' => true, 'or' => true, 'xor' => true, 
+        '||' => true, 'neq' => true, 'eq' => true, 'gt' => true, 
+        'lt' => true, 'gte' => true, 'lte' => true
+    ];
 
     public function checkFilter(string $name, string $filter = '|', $default = '\'\''): array
     {
@@ -146,13 +164,22 @@ class Taglib
             //            return '('.$name.'??"")';
             return $name;
         }
+        
+        // 处理可能的前导括号，如 (env 应该变成 ($env
+        $prefix = '';
+        $originalName = $name;
+        while ($name !== '' && str_starts_with($name, '(')) {
+            $prefix .= '(';
+            $name = substr($name, 1);
+        }
+        
         # 有字母的，且不是字符串，不存在特殊字符内的，可以加$
-        if (preg_match('/^[a-zA-Z|\|\|]/', $name)) {
+        if (preg_match('/^[a-zA-Z_]/', $name)) {
             if (!in_array($name, self::special_lang_symbols) and !str_starts_with($name, '"') and !str_starts_with($name, "'")) {
                 $name = $name ? '$' . $name : $name;
             }
         }
-        return $name;
+        return $prefix . $name;
     }
 
     public function varParser(string $name): string
@@ -179,7 +206,9 @@ class Taglib
         }
 
         // 性能优化：缓存编译后的正则表达式
-        static $operatorPattern = '/(?<![\-\>()\s])\s*([><=!]={1,3}+|&&|\|\|)\s*(?![()\s])/';
+        // 注意：负向后瞻移除了 )，因为 ') === ' 是合法的 PHP 语法
+        // static $operatorPattern = '/(?<![\-\>()\s])\s*(===|!==|==|!=|>=|<=|>|<|&&|\|\|)\s*(?![()\s])/';  旧正则
+        static $operatorPattern = '/(?<![\-\>\s])\s*(===|!==|==|!=|>=|<=|>|<|&&|\|\|)\s*(?![()\s])/';
         $originalName = preg_replace($operatorPattern, ' $1 ', $originalName);
 
         foreach ($exclude_names as $key => $exclude_name) {
@@ -232,12 +261,9 @@ class Taglib
             }
         }
 
-        // 替换操作符
-        foreach (self::operators_symbols_to_lang as $item) {
-            if (str_contains($name_str, $item)) {
-                $name_str = str_replace($item, ' ' . $item . ' ', $name_str);
-            }
-        }
+        // 修复：移除重复的操作符处理
+        // operators_symbols_to_lang 是用于特定模板语法转换的（如 eq → ==），不应该在这里使用
+        // 操作符的空格已经在上面的正则处理和循环中处理过了
 
         // 缓存结果
         self::$varParserCache[$name] = $name_str;
@@ -1248,19 +1274,31 @@ class Taglib
             ],
             'template' => [
                 'tag' => 1,
-                'attr' => ['enable' => 0],
+                'attr' => ['enable' => 0, 'name' => 0],
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
                         $enable = $attributes['enable'] ?? 1;
                         if (!$enable or ($enable === 'false')) {
                             $template_string = $tag_data[0] ?? '';
-                            $target_template = $tag_data[2] ?? '';
+                            $target_template = $tag_data[2] ?? $attributes['name'] ?? '';
                             return "<!-- 模块被禁用：{$target_template} 原始模板：{$template_string}-->";
                         }
-                        return match ($tag_key) {
-                            'tag' => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, trim($tag_data[2]))),
-                            default => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, trim($tag_data[1])))
-                        };
+                        // 优先从 name 属性获取模板路径，然后从 tag_data 获取
+                        $templatePath = '';
+                        if ($tag_key === 'tag') {
+                            // <w:template name="..."/> 或 <template>...</template>
+                            $templatePath = $attributes['name'] ?? ($tag_data[2] ?? '');
+                        } else {
+                            // @template(...) 格式
+                            $templatePath = $tag_data[1] ?? '';
+                        }
+                        
+                        $templatePath = trim($templatePath);
+                        if (empty($templatePath)) {
+                            return "<!-- 警告：template 标签缺少模板路径 -->";
+                        }
+                        
+                        return file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, $templatePath));
                     }
             ],
             'js' => [

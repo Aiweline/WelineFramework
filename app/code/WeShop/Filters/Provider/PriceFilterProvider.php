@@ -59,9 +59,7 @@ class PriceFilterProvider extends AbstractFilterProvider
      */
     public function getName(): string
     {
-        $lang = \Weline\Framework\App\State::getLangLocal();
-        $isEnglish = str_starts_with($lang, 'en');
-        return $isEnglish ? 'Price Range' : __('价格区间');
+        return __('价格区间');
     }
     
     /**
