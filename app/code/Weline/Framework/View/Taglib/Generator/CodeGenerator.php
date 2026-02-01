@@ -220,6 +220,21 @@ final class CodeGenerator
     {
         $varPath = trim($varPath);
         
+        // 如果是字符串字面量（以引号开头），直接返回
+        if (str_starts_with($varPath, "'") || str_starts_with($varPath, '"')) {
+            return $varPath;
+        }
+        
+        // 如果是数字字面量，直接返回
+        if (is_numeric($varPath)) {
+            return $varPath;
+        }
+        
+        // 如果是布尔字面量或 null，直接返回
+        if (in_array(strtolower($varPath), ['true', 'false', 'null'], true)) {
+            return $varPath;
+        }
+        
         // 如果已经是 PHP 变量格式（以 $ 开头）
         if (str_starts_with($varPath, '$')) {
             // 处理点号分隔的属性访问
@@ -433,11 +448,12 @@ final class CodeGenerator
             return $expr;
         }
 
-        // 处理表达式中的每个标识符
-        // 匹配：非 $ 开头的标识符后跟 .标识符 的模式
-        $pattern = '/\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_.]*)\b/';
+        // 保留的 PHP 关键字和常量，不应该添加 $ 前缀
+        $reserved = ['true', 'false', 'null', 'and', 'or', 'xor', 'not', 'empty', 'isset', 'array', 'new', 'instanceof'];
 
-        return preg_replace_callback($pattern, function ($matches) {
+        // 首先处理带点号的表达式（如 meta.showHeader => $meta['showHeader']）
+        $pattern = '/\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_.]*)\b/';
+        $expr = preg_replace_callback($pattern, function ($matches) {
             $var = $matches[1];
             $path = $matches[2];
 
@@ -451,6 +467,35 @@ final class CodeGenerator
 
             return $result;
         }, $expr);
+
+        // 然后处理简单变量名（不带 $ 的标识符）
+        // 匹配：非 $ 开头的独立标识符（不在运算符或函数调用中）
+        $expr = preg_replace_callback(
+            '/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/',
+            function ($matches) use ($reserved) {
+                $var = $matches[1];
+                
+                // 跳过保留关键字
+                if (in_array(strtolower($var), $reserved, true)) {
+                    return $var;
+                }
+                
+                // 跳过已经是 PHP 变量的（虽然这个正则不会匹配 $ 开头的）
+                // 跳过纯数字
+                if (is_numeric($var)) {
+                    return $var;
+                }
+                
+                // 添加 $ 前缀
+                return '$' . $var;
+            },
+            $expr
+        );
+
+        // 修复可能产生的 $$ 问题
+        $expr = preg_replace('/\$\$+/', '$', $expr);
+
+        return $expr;
     }
 
     /**

@@ -28,7 +28,11 @@ final class Tokenizer
      *
      * 匹配：<tagname attrs> 或 </tagname> 或 <tagname attrs/>
      */
-    private const TAG_PATTERN = '/<(\/)?([a-zA-Z][\w:.-]*)((?:\s+[^>\/]*(?:"[^"]*"|\'[^\']*\')?)*)\s*(\/)?>/s';
+    /**
+     * 修复：属性值中可能包含 < 和 > 字符（如 placeholder="<lang>..."）
+     * 使用 [^>\'"=\s]*(?:=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]*))? 匹配每个属性
+     */
+    private const TAG_PATTERN = '/<(\/)?([a-zA-Z][\w:.-]*)((?:\s+[^>\'"=\s]*(?:=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]*))?)*)\s*(\/)?>/s';
 
     /**
      * 内联资源标签名（用于 @ 符号的内联语法）
@@ -73,6 +77,11 @@ final class Tokenizer
      * @var array<string, bool>
      */
     private array $frameworkTags = [];
+    
+    /**
+     * 框架标签匹配正则（延迟生成，用于快速检测属性值中的框架标签）
+     */
+    private ?string $frameworkTagPattern = null;
 
     /**
      * 内联资源标签映射（用于快速查找）
@@ -88,10 +97,7 @@ final class Tokenizer
     public function setFrameworkTags(array $tags): void
     {
         $this->frameworkTags = array_fill_keys($tags, true);
-        // Debug: 检查 template 是否在白名单中
-        if (!isset($this->frameworkTags['template'])) {
-            // error_log("Tokenizer: 'template' tag is missing from framework tags whitelist!");
-        }
+        $this->frameworkTagPattern = null; // 重置缓存的正则表达式
     }
 
     /**
@@ -248,9 +254,20 @@ final class Tokenizer
                                 'fullMatch' => $fullMatch,
                             ]);
                         } else {
-                            // 非框架标签：检查属性中是否包含双花括号变量或内联标签
+                            // 非框架标签：检查属性中是否包含双花括号变量、内联标签或框架标签
                             // 如果包含，需要分割生成多个 Token
-                            if (str_contains($fullMatch, '{{') || str_contains($fullMatch, '@')) {
+                            $hasSpecialContent = str_contains($fullMatch, '{{') || str_contains($fullMatch, '@');
+                            
+                            // 快速检查：只有包含 < 且有框架标签时才进一步检查
+                            if (!$hasSpecialContent && str_contains($fullMatch, '<') && !empty($this->frameworkTags)) {
+                                // 使用预编译的正则表达式进行快速匹配
+                                if ($this->frameworkTagPattern === null) {
+                                    $this->frameworkTagPattern = '/<(' . implode('|', array_map('preg_quote', array_keys($this->frameworkTags))) . ')[\s>]/';
+                                }
+                                $hasSpecialContent = (bool)preg_match($this->frameworkTagPattern, $fullMatch);
+                            }
+                            
+                            if ($hasSpecialContent) {
                                 yield from $this->tokenizeTextWithVariables($fullMatch, $line);
                             } else {
                                 yield new Token(TokenType::Text, $fullMatch, $line);
@@ -300,9 +317,10 @@ final class Tokenizer
         $length = strlen($text);
         
         while ($offset < $length) {
-            // 查找下一个双花括号和内联标签
+            // 查找下一个双花括号、内联标签和框架标签
             $nextVarPos = strpos($text, '{{', $offset);
             $nextInlinePos = strpos($text, '@', $offset);
+            $nextTagPos = strpos($text, '<', $offset);
             
             // 计算最近的特殊位置
             $nextPos = $length;
@@ -315,6 +333,24 @@ final class Tokenizer
             if ($nextInlinePos !== false && $nextInlinePos < $nextPos) {
                 $nextPos = $nextInlinePos;
                 $nextType = 'inline';
+            }
+            // 检查是否为框架标签（可能需要搜索多个 < 位置）
+            $searchTagPos = $nextTagPos;
+            while ($searchTagPos !== false && $searchTagPos < $nextPos) {
+                // 验证是否为框架标签
+                if (preg_match(self::TAG_PATTERN, $text, $m, PREG_OFFSET_CAPTURE, $searchTagPos)) {
+                    $matchStart = $m[0][1];
+                    if ($matchStart === $searchTagPos) {
+                        $tagName = $m[2][0];
+                        if ($this->isFrameworkTag($tagName)) {
+                            $nextPos = $searchTagPos;
+                            $nextType = 'tag';
+                            break;
+                        }
+                    }
+                }
+                // 不是框架标签，继续搜索下一个 <
+                $searchTagPos = strpos($text, '<', $searchTagPos + 1);
             }
             
             // 没有更多特殊内容
@@ -365,6 +401,43 @@ final class Tokenizer
                 
                 // 不是有效内联标签，输出 @ 作为文本
                 yield new Token(TokenType::Text, '@', $line);
+                $offset++;
+                continue;
+            }
+            
+            // 处理框架标签（如 <lang>...</lang>）
+            if ($nextType === 'tag') {
+                if (preg_match(self::TAG_PATTERN, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                    $matchStart = $m[0][1];
+                    
+                    if ($matchStart === $offset) {
+                        $fullMatch = $m[0][0];
+                        $isClose = ($m[1][0] ?? '') !== '';
+                        $tagName = $m[2][0];
+                        $rawAttrs = trim($m[3][0] ?? '');
+                        $selfClose = ($m[4][0] ?? '') === '/';
+                        
+                        if ($this->isFrameworkTag($tagName)) {
+                            $type = match (true) {
+                                $isClose => TokenType::CloseTag,
+                                $selfClose => TokenType::SelfCloseTag,
+                                default => TokenType::OpenTag,
+                            };
+                            
+                            yield new Token($type, $tagName, $line, [
+                                'rawAttrs' => $rawAttrs,
+                                'fullMatch' => $fullMatch,
+                            ]);
+                            
+                            $line += substr_count($fullMatch, "\n");
+                            $offset += strlen($fullMatch);
+                            continue;
+                        }
+                    }
+                }
+                
+                // 不是有效框架标签，输出 < 作为文本
+                yield new Token(TokenType::Text, '<', $line);
                 $offset++;
                 continue;
             }
