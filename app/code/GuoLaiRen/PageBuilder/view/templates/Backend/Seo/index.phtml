@@ -621,7 +621,7 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
                                     <h5>
                                         <i class="mdi mdi-account-key me-2"></i>
                                         <lang>SEO账户管理</lang>
-                                        <span class="badge bg-light text-dark ms-2"><?= count($accounts) ?></span>
+                                        <span class="badge bg-white text-primary ms-2" style="font-weight: 600;"><?= count($accounts) ?></span>
                                     </h5>
                                     <i class="mdi mdi-chevron-down toggle-icon" id="accounts-toggle-icon"></i>
                                 </div>
@@ -1194,26 +1194,19 @@ function showMessage(type, message, title = null) {
             return;
         }
         if (configTextarea.value.trim() !== '') {
-            if (typeof Swal !== 'undefined') {
-                SafeSwal.fire({
-                    icon: 'question',
-                    title: '<?= __("确认") ?>',
-                    text: '<?= __("当前配置将被替换，确定吗？") ?>',
-                    showCancelButton: true,
-                    confirmButtonText: '<?= __("确定") ?>',
-                    cancelButtonText: '<?= __("确定") ?>'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        configTextarea.value = JSON.stringify(template, null, 2);
-                        configTextarea.focus();
-                    }
-                });
-            } else {
-                if (confirm('<?= __("当前配置将被替换，确定吗？") ?>')) {
+            SafeSwal.fire({
+                icon: 'question',
+                title: '<?= __("确认") ?>',
+                text: '<?= __("当前配置将被替换，确定吗？") ?>',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then((result) => {
+                if (result.isConfirmed) {
                     configTextarea.value = JSON.stringify(template, null, 2);
                     configTextarea.focus();
                 }
-            }
+            });
             return;
         }
         configTextarea.value = JSON.stringify(template, null, 2);
@@ -1264,28 +1257,20 @@ function showMessage(type, message, title = null) {
         }
         
         if (configTextarea && configTextarea.value.trim() !== '') {
-            if (typeof Swal !== 'undefined') {
-                SafeSwal.fire({
-                    icon: 'question',
-                    title: '<?= __("确认") ?>',
-                    text: '<?= __("请检查网络连接后重试") ?>',
-                    showCancelButton: true,
-                    confirmButtonText: '<?= __("确定") ?>',
-                    cancelButtonText: '<?= __("确定") ?>'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        readJsonFile();
-                    } else {
-                        input.value = '';
-                    }
-                });
-            } else {
-                if (confirm('<?= __("请检查网络连接后重试") ?>')) {
+            SafeSwal.fire({
+                icon: 'question',
+                title: '<?= __("确认") ?>',
+                text: '<?= __("当前配置将被替换，确定导入吗？") ?>',
+                showCancelButton: true,
+                confirmButtonText: '<?= __("确定") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then((result) => {
+                if (result.isConfirmed) {
                     readJsonFile();
                 } else {
                     input.value = '';
                 }
-            }
+            });
             return;
         }
         
@@ -1309,12 +1294,8 @@ function toggleAccordion(section) {
     header.classList.toggle('collapsed');
 }
 
-// 生成 Sitemap
+// 生成 Sitemap（直接生成，不询问确认）
 function generateSitemap() {
-    if (!confirm('<?= __('确定要生成所有站点的 Sitemap 吗？') ?>')) {
-        return;
-    }
-    
     SafeSwal.fire({
         title: '<?= __("生成中") ?>',
         html: '<div class="text-center"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted"><?= __("正在生成 Sitemap，请稍候...") ?></p></div>',
@@ -1839,21 +1820,37 @@ function unbindWebsiteFromAccount(accountId, websiteId) {
 }
 
 function deleteAccount(accountId) {
-    if (!confirm('<?= __('确定要删除该SEO账户吗？') ?>')) {
-        return;
-    }
-    
-    fetch('<?= $this->getBackendUrl('seo/backend/account/delete') ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'id=' + accountId
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            showMessage('error', data.message || '<?= __('删除失败') ?>');
+    SafeSwal.fire({
+        title: '<?= __("确认删除") ?>',
+        text: '<?= __("确定要删除该SEO账户吗？此操作不可撤销。") ?>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<?= __("删除") ?>',
+        cancelButtonText: '<?= __("取消") ?>'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('<?= $this->getBackendUrl('seo/backend/account/delete') ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'id=' + accountId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    SafeSwal.fire({
+                        icon: 'success',
+                        title: '<?= __("删除成功") ?>',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    showMessage('error', data.message || '<?= __('删除失败') ?>');
+                }
+            });
         }
     });
 }
@@ -2077,24 +2074,40 @@ function toggleAccountWebsiteSelection(websiteId, isChecked) {
 
 // 清除站点选择
 function clearAccountWebsiteSelections() {
-    if (!confirm('<?= __("确定要清除所有选择吗？") ?>')) {
-        return;
-    }
-    
-    selectedWebsiteIdsForAccount = [];
-    
-    // 清除复选框
-    document.querySelectorAll('#accountWebsiteBindingContainer input[type="checkbox"]').forEach(checkbox => {
-        checkbox.checked = false;
+    SafeSwal.fire({
+        title: '<?= __("确认清除") ?>',
+        text: '<?= __("确定要清除所有选择吗？") ?>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<?= __("确定") ?>',
+        cancelButtonText: '<?= __("取消") ?>'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            selectedWebsiteIdsForAccount = [];
+            
+            // 清除复选框
+            document.querySelectorAll('#accountWebsiteBindingContainer input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // 清除高亮样式
+            document.querySelectorAll('.account-website-item').forEach(item => {
+                item.classList.remove('border-success');
+            });
+            
+            // 重新渲染
+            renderAccountWebsiteList(allAvailableWebsites);
+            
+            SafeSwal.fire({
+                icon: 'success',
+                title: '<?= __("已清除") ?>',
+                timer: 1000,
+                showConfirmButton: false
+            });
+        }
     });
-    
-    // 清除高亮样式
-    document.querySelectorAll('.account-website-item').forEach(item => {
-        item.classList.remove('border-success');
-    });
-    
-    // 重新渲染
-    renderAccountWebsiteList(allAvailableWebsites);
 }
 
 // 保存站点绑定

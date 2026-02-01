@@ -172,4 +172,21 @@ class TokenizerTest extends TestCase
         self::assertContains(TokenType::Text, $types);
         self::assertContains(TokenType::InlineTag, $types);
     }
+
+    /**
+     * 测试 block 成对标签
+     */
+    public function testBlockPairedTag(): void
+    {
+        $content = '<block>Weline\Backend\Block\Header\Base</block>';
+        $tokens = $this->tokenizer->tokenizeToArray($content);
+
+        self::assertCount(3, $tokens, '应该有 3 个 token: OpenTag, Text, CloseTag');
+        self::assertEquals(TokenType::OpenTag, $tokens[0]->type, '第一个应该是 OpenTag');
+        self::assertEquals('block', $tokens[0]->value);
+        self::assertEquals(TokenType::Text, $tokens[1]->type, '第二个应该是 Text');
+        self::assertEquals('Weline\Backend\Block\Header\Base', $tokens[1]->value);
+        self::assertEquals(TokenType::CloseTag, $tokens[2]->type, '第三个应该是 CloseTag');
+        self::assertEquals('block', $tokens[2]->value);
+    }
 }
