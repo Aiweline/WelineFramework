@@ -44,19 +44,30 @@ final class WeakMapCache
     }
 
     /**
-     * 以 Template 对象为 key 获取缓存
+     * 以 Template 对象和内容哈希为 key 获取缓存
      */
-    public function getByTemplate(Template $template): ?string
+    public function getByTemplate(Template $template, string $hash = ''): ?string
     {
-        return $this->cache[$template] ?? null;
+        $entry = $this->cache[$template] ?? null;
+        if ($entry === null) {
+            return null;
+        }
+        // 验证内容哈希
+        if ($hash !== '' && isset($entry['hash']) && $entry['hash'] !== $hash) {
+            return null;
+        }
+        return $entry['compiled'] ?? null;
     }
 
     /**
-     * 以 Template 对象为 key 设置缓存
+     * 以 Template 对象和内容哈希为 key 设置缓存
      */
-    public function setByTemplate(Template $template, string $compiled): void
+    public function setByTemplate(Template $template, string $compiled, string $hash = ''): void
     {
-        $this->cache[$template] = $compiled;
+        $this->cache[$template] = [
+            'hash' => $hash,
+            'compiled' => $compiled,
+        ];
     }
 
     /**
