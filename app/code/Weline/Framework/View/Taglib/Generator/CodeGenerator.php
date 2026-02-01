@@ -38,6 +38,11 @@ final class CodeGenerator
      * PHP 提取器（用于恢复占位符）
      */
     private ?PhpExtractor $phpExtractor = null;
+    
+    /**
+     * 源码映射（调试模式下使用）
+     */
+    private ?\Weline\Framework\View\Taglib\Debug\SourceMap $sourceMap = null;
 
     /**
      * 设置 PHP 提取器
@@ -45,6 +50,22 @@ final class CodeGenerator
     public function setPhpExtractor(PhpExtractor $extractor): void
     {
         $this->phpExtractor = $extractor;
+    }
+    
+    /**
+     * 设置源码映射
+     */
+    public function setSourceMap(\Weline\Framework\View\Taglib\Debug\SourceMap $sourceMap): void
+    {
+        $this->sourceMap = $sourceMap;
+    }
+    
+    /**
+     * 获取源码映射
+     */
+    public function getSourceMap(): ?\Weline\Framework\View\Taglib\Debug\SourceMap
+    {
+        return $this->sourceMap;
     }
 
     /**
@@ -66,10 +87,16 @@ final class CodeGenerator
     }
 
     /**
+     * 当前生成的行号（用于 SourceMap）
+     */
+    private int $currentLine = 1;
+
+    /**
      * 生成 PHP 代码
      */
     public function generate(ProgramNode $ast): string
     {
+        $this->currentLine = 1;
         return $this->generateNodes($ast->children);
     }
 
@@ -94,21 +121,32 @@ final class CodeGenerator
      */
     public function generateNode(Node $node): string
     {
+        // 记录源码映射（如果启用）
+        if ($this->sourceMap !== null) {
+            $this->sourceMap->addMapping($this->currentLine, $node->line);
+        }
+        
         // 分支预测优化：按频率排序
         
         // 1. 文本节点（最常见）
         if ($node instanceof TextNode) {
-            return $node->value;
+            $code = $node->value;
+            $this->currentLine += substr_count($code, "\n");
+            return $code;
         }
 
         // 2. PHP 占位符
         if ($node instanceof PhpPlaceholder) {
-            return $this->generatePlaceholder($node);
+            $code = $this->generatePlaceholder($node);
+            $this->currentLine += substr_count($code, "\n");
+            return $code;
         }
 
         // 3. 标签节点
         if ($node instanceof TagNode) {
-            return $this->generateTagNode($node);
+            $code = $this->generateTagNode($node);
+            $this->currentLine += substr_count($code, "\n");
+            return $code;
         }
 
         return '';
@@ -274,8 +312,67 @@ final class CodeGenerator
             'else' => $this->generateElseTag($node),
             'foreach' => $this->generateForeachTag($node),
             'for' => $this->generateForTag($node),
+            'while' => $this->generateWhileTag($node),
+            'switch' => $this->generateSwitchTag($node),
+            'case' => $this->generateCaseTag($node),
+            'default' => $this->generateDefaultCaseTag($node),
+            // 模板内联标签
+            'template', 'w:template' => $this->generateTemplateTag($node),
+            'include', 'w:include' => $this->generateTemplateTag($node),
             default => null,
         };
+    }
+    
+    /**
+     * 生成 template/include 标签代码 - 编译时内联模板内容
+     */
+    private function generateTemplateTag(TagNode $node): string
+    {
+        // 获取模板路径
+        $templatePath = '';
+        
+        // 优先从 name 属性获取
+        foreach ($node->attributes as $attr) {
+            if ($attr->name === 'name') {
+                $templatePath = $attr->staticValue ?? $attr->rawValue;
+                break;
+            }
+        }
+        
+        // 从子内容获取
+        if ($templatePath === '' && !empty($node->children)) {
+            $templatePath = $this->buildStringFromChildren($node->children);
+        }
+        
+        // 从 rawContent 获取
+        if ($templatePath === '' && $node->rawContent !== '') {
+            $templatePath = trim($node->rawContent);
+        }
+        
+        $templatePath = trim($templatePath);
+        
+        if ($templatePath === '') {
+            return "<!-- 警告：template 标签缺少模板路径 -->";
+        }
+        
+        // 生成内联代码：使用 fetchTagSource 获取编译后的模板文件路径，然后 include 执行
+        // 这与原始回调逻辑一致，但改用 include 来执行 PHP 代码
+        $escapedPath = var_export($templatePath, true);
+        return "<?php include \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_TEMPLATE, {$escapedPath}); ?>";
+    }
+    
+    /**
+     * 从子节点构建字符串（用于获取模板路径）
+     */
+    private function buildStringFromChildren(array $children): string
+    {
+        $result = '';
+        foreach ($children as $child) {
+            if ($child instanceof \Weline\Framework\View\TextNode) {
+                $result .= $child->value;
+            }
+        }
+        return trim($result);
     }
 
     /**
@@ -390,32 +487,65 @@ final class CodeGenerator
 
     /**
      * 生成 foreach 标签代码
+     * 
+     * 支持多种语法：
+     * 1. <foreach items="$items" as="$item">...</foreach>
+     * 2. <foreach name="items" item="item" key="key">...</foreach>
+     * 3. @foreach($items as $item) 内联格式
      */
     private function generateForeachTag(TagNode $node): string
     {
         $expr = '';
         
-        // 从 name 属性获取
+        // 语法 1: items/as 属性（文档推荐语法）
+        $items = null;
+        $as = null;
+        $key = null;
+        
         foreach ($node->attributes as $attr) {
-            if ($attr->name === 'name') {
-                $name = $attr->staticValue ?? $attr->rawValue;
-                $key = null;
-                $item = null;
-                
-                // 获取 key 和 item
-                foreach ($node->attributes as $a) {
-                    if ($a->name === 'key') $key = $a->staticValue ?? $a->rawValue;
-                    if ($a->name === 'item') $item = $a->staticValue ?? $a->rawValue;
-                }
-                
-                $item = $item ?: 'item';
-                $expr = $key ? "\${$name} as \${$key} => \${$item}" : "\${$name} as \${$item}";
-                break;
+            match ($attr->name) {
+                'items' => $items = $attr->staticValue ?? $attr->rawValue,
+                'as' => $as = $attr->staticValue ?? $attr->rawValue,
+                'key' => $key = $attr->staticValue ?? $attr->rawValue,
+                default => null,
+            };
+        }
+        
+        if ($items !== null && $as !== null) {
+            // 确保变量以 $ 开头
+            $itemsVar = str_starts_with($items, '$') ? $items : "\${$items}";
+            $asVar = str_starts_with($as, '$') ? $as : "\${$as}";
+            
+            if ($key !== null) {
+                $keyVar = str_starts_with($key, '$') ? $key : "\${$key}";
+                $expr = "{$itemsVar} as {$keyVar} => {$asVar}";
+            } else {
+                $expr = "{$itemsVar} as {$asVar}";
             }
-            // 从 value 属性获取（@foreach($items as $item) 格式）
-            if ($attr->name === 'value') {
-                $expr = $attr->staticValue ?? $attr->rawValue;
-                break;
+        }
+        
+        // 语法 2: name/item/key 属性（旧语法）
+        if ($expr === '') {
+            foreach ($node->attributes as $attr) {
+                if ($attr->name === 'name') {
+                    $name = $attr->staticValue ?? $attr->rawValue;
+                    $item = null;
+                    $key = null;
+                    
+                    foreach ($node->attributes as $a) {
+                        if ($a->name === 'key') $key = $a->staticValue ?? $a->rawValue;
+                        if ($a->name === 'item') $item = $a->staticValue ?? $a->rawValue;
+                    }
+                    
+                    $item = $item ?: 'item';
+                    $expr = $key ? "\${$name} as \${$key} => \${$item}" : "\${$name} as \${$item}";
+                    break;
+                }
+                // 从 value 属性获取（@foreach($items as $item) 格式）
+                if ($attr->name === 'value') {
+                    $expr = $attr->staticValue ?? $attr->rawValue;
+                    break;
+                }
             }
         }
 
@@ -479,23 +609,154 @@ final class CodeGenerator
     }
 
     /**
+     * 生成 while 标签代码
+     */
+    private function generateWhileTag(TagNode $node): string
+    {
+        $condition = '';
+
+        foreach ($node->attributes as $attr) {
+            if ($attr->name === 'condition' || $attr->name === 'value') {
+                $condition = $attr->staticValue ?? $attr->rawValue;
+                break;
+            }
+        }
+
+        if ($condition === '' && $node->rawContent !== '') {
+            $condition = trim($node->rawContent);
+        }
+
+        if ($condition === '') {
+            $condition = 'false';
+        }
+
+        $condition = $this->parseVarExpression($condition);
+        $children = $this->generateNodes($node->children);
+
+        if ($node->selfClosing) {
+            return "<?php while({$condition}): ?>";
+        }
+
+        return "<?php while({$condition}): ?>{$children}<?php endwhile; ?>";
+    }
+
+    /**
+     * 生成 switch 标签代码
+     */
+    private function generateSwitchTag(TagNode $node): string
+    {
+        $expr = '';
+
+        foreach ($node->attributes as $attr) {
+            if ($attr->name === 'value' || $attr->name === 'expression') {
+                $expr = $attr->staticValue ?? $attr->rawValue;
+                break;
+            }
+        }
+
+        if ($expr === '' && $node->rawContent !== '') {
+            $expr = trim($node->rawContent);
+        }
+
+        if ($expr === '') {
+            return '<?php switch(null): ?>';
+        }
+
+        $expr = $this->parseVarExpression($expr);
+        $children = $this->generateNodes($node->children);
+
+        if ($node->selfClosing) {
+            return "<?php switch({$expr}): ?>";
+        }
+
+        return "<?php switch({$expr}): ?>{$children}<?php endswitch; ?>";
+    }
+
+    /**
+     * 生成 case 标签代码
+     */
+    private function generateCaseTag(TagNode $node): string
+    {
+        $value = '';
+
+        foreach ($node->attributes as $attr) {
+            if ($attr->name === 'value') {
+                $value = $attr->staticValue ?? $attr->rawValue;
+                break;
+            }
+        }
+
+        if ($value === '' && $node->rawContent !== '') {
+            $value = trim($node->rawContent);
+        }
+
+        $children = $this->generateNodes($node->children);
+
+        if ($node->selfClosing) {
+            return "<?php case {$value}: ?>";
+        }
+
+        return "<?php case {$value}: ?>{$children}<?php break; ?>";
+    }
+
+    /**
+     * 生成 default case 标签代码
+     */
+    private function generateDefaultCaseTag(TagNode $node): string
+    {
+        $children = $this->generateNodes($node->children);
+
+        if ($node->selfClosing) {
+            return "<?php default: ?>";
+        }
+
+        return "<?php default: ?>{$children}<?php break; ?>";
+    }
+
+    /**
      * 生成运行期标签代码
+     * 
+     * 支持内联优化：
+     * - 自闭合标签（无子内容）：直接调用渲染器，不需要 ob_start
+     * - 标记为 __INLINE_OPTIMIZED__ 的标签：跳过缓冲区
+     * - 标记为 __STATIC_CHILDREN__ 的标签：使用预合并的静态子内容
      */
     private function generateRuntimeTag(TagNode $node): string
     {
-        // 生成运行时调用代码
         $tagName = var_export($node->name, true);
         $attrs = ExprBuilder::buildAttrArray($node->attributes);
-        $children = $this->generateNodes($node->children);
         
-        // 将子内容包装为 heredoc
+        // 确定 tagKey：自闭合标签使用 'tag-self-close'，否则使用 'tag-start'
+        $tagKey = $node->selfClosing ? "'tag-self-close'" : "'tag-start'";
+        
+        // 构建原始属性字符串
+        $rawAttributes = var_export($node->rawAttributes ?? '', true);
+        
+        // 检查是否为内联优化的自闭合标签
+        if ($node->selfClosing || str_starts_with($node->rawContent, '__INLINE_OPTIMIZED__')) {
+            // 无子内容，直接调用渲染器
+            return ExprBuilder::wrapEcho(
+                "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, '', '', {$rawAttributes}, '')"
+            );
+        }
+        
+        // 检查是否有预合并的静态子内容
+        if (str_starts_with($node->rawContent, '__STATIC_CHILDREN__')) {
+            $staticContent = var_export(substr($node->rawContent, 19), true);
+            return ExprBuilder::wrapEcho(
+                "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$staticContent}, '', {$rawAttributes}, '')"
+            );
+        }
+        
+        // 常规情况：使用 ob_start 捕获子内容
+        $children = $this->generateNodes($node->children);
         $childrenVar = '$__children_' . crc32($tagName . $node->line);
         
         $code = ExprBuilder::wrapPhp("ob_start();");
         $code .= $children;
         $code .= ExprBuilder::wrapPhp("{$childrenVar} = ob_get_clean();");
         $code .= ExprBuilder::wrapEcho(
-            "\$this->taglib->renderRuntimeTag({$tagName}, {$attrs}, {$childrenVar})"
+            "\$this->taglib->renderRuntimeTag(\$this, {$tagName}, {$tagKey}, {$attrs}, {$childrenVar}, '', {$rawAttributes}, '')"
         );
 
         return $code;

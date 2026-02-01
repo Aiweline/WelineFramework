@@ -15,6 +15,7 @@ use Weline\Framework\View\Taglib\Ast\{
     Node,
     ProgramNode,
     TextNode,
+    PhpPlaceholder,
     TagNode,
     AttrNode,
     NodePool
@@ -25,17 +26,36 @@ use Weline\Framework\View\Taglib\Ast\{
  * 
  * 将编译期可确定的常量表达式求值，减少运行时计算
  * 
- * 优化示例：
- * - <lang>STATIC_KEY</lang> => 直接替换为翻译结果
- * - 连续的 TextNode 合并
+ * 优化规则：
+ * 1. 合并连续的 TextNode，减少内存分配
+ * 2. 静态 <lang>KEY</lang> 标签折叠为翻译结果（需要提供翻译回调）
+ * 3. 静态属性值合并
+ * 
+ * 优先级：10（常量折叠/常量传播阶段）
  */
 final class ConstantFoldingPass implements CompilePassInterface
 {
+    /**
+     * 静态翻译回调
+     * @var callable|null
+     */
+    private $translationCallback = null;
+
     /**
      * 静态翻译缓存
      * @var array<string, string>
      */
     private array $translationCache = [];
+
+    /**
+     * 设置翻译回调
+     * 
+     * @param callable $callback function(string $key): ?string
+     */
+    public function setTranslationCallback(callable $callback): void
+    {
+        $this->translationCallback = $callback;
+    }
 
     /**
      * @inheritDoc
@@ -56,6 +76,8 @@ final class ConstantFoldingPass implements CompilePassInterface
 
     /**
      * @inheritDoc
+     * 
+     * 优先级 10：常量折叠阶段
      */
     public function getPriority(): int
     {
@@ -92,7 +114,18 @@ final class ConstantFoldingPass implements CompilePassInterface
 
             // 处理标签节点
             if ($node instanceof TagNode) {
-                $result[] = $this->optimizeTagNode($node);
+                $optimized = $this->optimizeTagNode($node);
+                
+                // 如果优化结果是 TextNode，可以继续合并
+                if ($optimized instanceof TextNode) {
+                    if ($textBuffer === '') {
+                        $textLine = $optimized->line;
+                    }
+                    $textBuffer .= $optimized->value;
+                    continue;
+                }
+                
+                $result[] = $optimized;
                 continue;
             }
 
@@ -110,43 +143,79 @@ final class ConstantFoldingPass implements CompilePassInterface
 
     /**
      * 优化标签节点
+     * 
+     * @return Node 优化后的节点（可能是 TagNode 或 TextNode）
      */
-    private function optimizeTagNode(TagNode $node): TagNode
+    private function optimizeTagNode(TagNode $node): Node
     {
         // 递归优化子节点
         $optimizedChildren = $this->optimizeNodes($node->children);
 
-        // 尝试常量折叠
+        // 尝试常量折叠（可能返回 TextNode）
         $foldedNode = $this->tryFoldConstants($node, $optimizedChildren);
         
-        return $foldedNode ?? $node->withChildren($optimizedChildren);
+        if ($foldedNode !== null) {
+            return $foldedNode;
+        }
+        
+        // 返回优化后的 TagNode
+        if ($optimizedChildren !== $node->children) {
+            return $node->withChildren($optimizedChildren);
+        }
+        
+        return $node;
     }
 
     /**
      * 尝试常量折叠
      * 
-     * @return TagNode|null 折叠后的节点，无法折叠返回 null
+     * @return Node|null 折叠后的节点，无法折叠返回 null
      */
-    private function tryFoldConstants(TagNode $node, array $children): ?TagNode
+    private function tryFoldConstants(TagNode $node, array $children): ?Node
     {
-        // 目前只处理 lang 标签的静态翻译
-        if ($node->name !== 'lang') {
-            return null;
+        // 处理 lang/trans 标签的静态翻译
+        if ($node->name === 'lang' || $node->name === 'trans') {
+            return $this->tryFoldLangTag($node, $children);
         }
 
+        return null;
+    }
+
+    /**
+     * 尝试折叠 lang 标签
+     * 
+     * @return Node|null 折叠后的节点
+     */
+    private function tryFoldLangTag(TagNode $node, array $children): ?Node
+    {
         // 检查是否所有子节点都是静态的
         if ($node->isDynamic) {
             return null;
         }
 
-        // 提取静态内容
-        $staticContent = $this->extractStaticContent($children);
-        if ($staticContent === null) {
+        // 提取静态内容作为翻译键
+        $translationKey = $this->extractStaticContent($children);
+        if ($translationKey === null || trim($translationKey) === '') {
             return null;
         }
 
-        // 可以在这里实现静态翻译查找
-        // 目前返回 null 表示不优化
+        $translationKey = trim($translationKey);
+
+        // 检查缓存
+        if (isset($this->translationCache[$translationKey])) {
+            return NodePool::textNode($node->line, $this->translationCache[$translationKey]);
+        }
+
+        // 使用翻译回调获取翻译结果
+        if ($this->translationCallback !== null) {
+            $translated = ($this->translationCallback)($translationKey);
+            if ($translated !== null) {
+                $this->translationCache[$translationKey] = $translated;
+                return NodePool::textNode($node->line, $translated);
+            }
+        }
+
+        // 无法折叠
         return null;
     }
 
@@ -164,5 +233,13 @@ final class ConstantFoldingPass implements CompilePassInterface
             }
         }
         return $content;
+    }
+
+    /**
+     * 清除翻译缓存
+     */
+    public function clearCache(): void
+    {
+        $this->translationCache = [];
     }
 }

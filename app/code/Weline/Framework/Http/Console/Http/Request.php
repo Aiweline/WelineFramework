@@ -111,6 +111,9 @@ class Request extends CommandAbstract
                 
                 // 使用新cookie重新请求
                 $this->printer->note(__('登录成功，正在重新请求...'));
+                // #region agent log
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:execute:re-request','message'=>'Re-requesting with new cookie','data'=>['url'=>$url,'newCookieFile'=>$newCookieFile],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H5-path-mismatch'])."\n", FILE_APPEND);
+                // #endregion
                 $response = $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $newCookieFile, true);
                 
                 if ($response === false) {
@@ -120,6 +123,9 @@ class Request extends CommandAbstract
                 
                 // 再次检查是否还是登录页面
                 if ($this->isLoginPage($response['body'])) {
+                    // #region agent log
+                    file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:execute:still-login','message'=>'Still on login page after re-request','data'=>['statusCode'=>$response['status_code'],'bodyLength'=>strlen($response['body']),'bodyPreview'=>substr($response['body'], 0, 500)],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H4-session-mismatch'])."\n", FILE_APPEND);
+                    // #endregion
                     $this->printer->error(__('登录后仍然返回登录页面，请检查用户权限或路由配置！'));
                     return;
                 }
@@ -244,16 +250,28 @@ class Request extends CommandAbstract
         }
         $cookieFile = $varPath . '/http_request_cookies.txt';
         
+        // #region agent log
+        file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:start','message'=>'Login started','data'=>['cookieFile'=>$cookieFile,'loginPageUrl'=>$loginPageUrl],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+        // #endregion
+        
         // 第一步：访问登录页面获取form_key
         $this->printer->note(__('正在获取登录页面: %{1}', [$loginPageUrl]));
         
         // 使用Guzzle HTTP客户端，禁用代理
+        // 关键修复：使用 FileCookieJar 从一开始就共享 cookie
         try {
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:before-get','message'=>'Creating FileCookieJar for GET','data'=>['cookieFile'=>$cookieFile],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
+            
+            // 创建共享的 FileCookieJar - GET 和 POST 都使用同一个
+            $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+            
             $client = new \GuzzleHttp\Client([
                 'timeout' => 30,
                 'connect_timeout' => 10,
                 'verify' => false,
-                'cookies' => true,
+                'cookies' => $cookieJar, // 使用 FileCookieJar 而非 true
                 'allow_redirects' => true,
                 'proxy' => false, // 禁用代理
                 'http_errors' => false // 不抛出HTTP错误异常
@@ -273,8 +291,13 @@ class Request extends CommandAbstract
             $receivedBytes = strlen($loginPage);
             $error = '';
             
-            // 保存cookie（Guzzle自动处理）
-            // 注意：Guzzle的CookieJar会自动保存cookie到文件
+            // #region agent log
+            $cookiesAfterGet = [];
+            foreach ($cookieJar as $cookie) {
+                $cookiesAfterGet[] = $cookie->getName() . '=' . substr($cookie->getValue(), 0, 20) . '...';
+            }
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:after-get','message'=>'Cookies after GET','data'=>['cookies'=>$cookiesAfterGet,'cookieCount'=>count($cookiesAfterGet)],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
             
         } catch (\Exception $e) {
             $loginPage = '';
@@ -282,6 +305,9 @@ class Request extends CommandAbstract
             $totalTime = 0;
             $receivedBytes = 0;
             $error = $e->getMessage();
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:get-error','message'=>'GET request failed','data'=>['error'=>$e->getMessage()],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
         }
         
         $this->printer->note(__('HTTP状态码: %{1}, 耗时: %{2}秒', [$httpCode, round($totalTime, 2)]));
@@ -346,8 +372,14 @@ class Request extends CommandAbstract
         $this->printer->note(__('正在提交登录信息到: %{1}', [$loginPostUrl]));
         
         try {
-            // 创建cookie jar - 第二个参数true表示自动保存
-            $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:before-post','message'=>'Reusing cookieJar for POST','data'=>['cookieFile'=>$cookieFile,'formKey'=>substr($formKey,0,16).'...'],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
+            
+            // 重用之前的 cookieJar（如果存在），否则从文件加载
+            if (!isset($cookieJar)) {
+                $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+            }
             
             $client = new \GuzzleHttp\Client([
                 'timeout' => 30,
@@ -358,6 +390,15 @@ class Request extends CommandAbstract
                 'proxy' => false, // 禁用代理
                 'http_errors' => false // 不抛出HTTP错误异常
             ]);
+            
+            // #region agent log
+            // 记录实际发送的 cookie
+            $cookiesToSend = [];
+            foreach ($cookieJar as $cookie) {
+                $cookiesToSend[] = $cookie->getName() . '=' . $cookie->getValue();
+            }
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:post-cookies-sent','message'=>'Cookies being sent with POST','data'=>['cookies'=>$cookiesToSend],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H7-cookie-sent'])."\n", FILE_APPEND);
+            // #endregion
             
             $response = $client->post($loginPostUrl, [
                 'headers' => [
@@ -371,20 +412,56 @@ class Request extends CommandAbstract
                     'password' => $password,
                     'form_key' => $formKey,
                     'remember' => '1'
-                ]
+                ],
+                'allow_redirects' => false  // 禁用自动重定向，手动处理
             ]);
             
             $statusCode = $response->getStatusCode();
-            $redirectCount = 0; // Guzzle自动处理重定向
+            $redirectCount = 0;
             $error = '';
             
-            // 保存cookie（Guzzle自动处理）
-            // 注意：FileCookieJar会自动保存cookie到文件
+            // #region agent log
+            $responseHeaders = [];
+            foreach ($response->getHeaders() as $name => $values) {
+                $responseHeaders[$name] = implode(', ', $values);
+            }
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:post-headers','message'=>'POST response headers','data'=>['statusCode'=>$statusCode,'headers'=>$responseHeaders],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H8-redirect'])."\n", FILE_APPEND);
+            // #endregion
+            
+            // 处理重定向
+            if ($statusCode >= 300 && $statusCode < 400) {
+                $location = $response->getHeaderLine('Location');
+                // #region agent log
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:redirect','message'=>'Following redirect','data'=>['location'=>$location],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H8-redirect'])."\n", FILE_APPEND);
+                // #endregion
+                
+                // 跟随重定向
+                if ($location) {
+                    $response = $client->get($location, [
+                        'headers' => [
+                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        ]
+                    ]);
+                    $statusCode = $response->getStatusCode();
+                }
+            }
+            
+            // #region agent log
+            $cookiesAfterPost = [];
+            foreach ($cookieJar as $cookie) {
+                $cookiesAfterPost[] = $cookie->getName() . '=' . substr($cookie->getValue(), 0, 20) . '...';
+            }
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:after-post','message'=>'Cookies after POST','data'=>['statusCode'=>$statusCode,'cookies'=>$cookiesAfterPost,'cookieCount'=>count($cookiesAfterPost)],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
             
         } catch (\Exception $e) {
             $statusCode = 0;
             $redirectCount = 0;
             $error = $e->getMessage();
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:post-error','message'=>'POST request failed','data'=>['error'=>$e->getMessage()],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H1-cookie-share'])."\n", FILE_APPEND);
+            // #endregion
         }
         
         $this->printer->note(__('登录响应状态码: %{1}, 重定向次数: %{2}', [$statusCode, $redirectCount]));
@@ -393,6 +470,11 @@ class Request extends CommandAbstract
         if ($statusCode === 200) {
             // 检查响应内容是否包含登录成功标识
             $responseBody = $response->getBody()->getContents();
+            
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:post-response','message'=>'POST response body','data'=>['statusCode'=>$statusCode,'bodyLength'=>strlen($responseBody),'bodyPreview'=>substr($responseBody, 0, 1000),'containsLoginSuccess'=>str_contains($responseBody,'登录成功'),'containsLoginPage'=>str_contains($responseBody,'admin/login/post')],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H6-post-response'])."\n", FILE_APPEND);
+            // #endregion
+            
             if (strpos($responseBody, '登录成功') !== false || 
                 strpos($responseBody, 'dashboard') !== false ||
                 strpos($responseBody, 'admin') !== false ||
@@ -405,6 +487,11 @@ class Request extends CommandAbstract
         // 即使请求失败或超时，也检查cookie是否已生成
         if (file_exists($cookieFile) && filesize($cookieFile) > 0) {
             $cookieContent = file_get_contents($cookieFile);
+            
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:performLogin:check-file','message'=>'Checking cookie file','data'=>['cookieFile'=>$cookieFile,'fileSize'=>filesize($cookieFile),'content'=>substr($cookieContent, 0, 500)],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H2-persist'])."\n", FILE_APPEND);
+            // #endregion
+            
             // 检查是否包含session cookie
             if (strpos($cookieContent, 'WELINE_SESSID') !== false || 
                 strpos($cookieContent, 'session') !== false) {
@@ -893,7 +980,12 @@ class Request extends CommandAbstract
                 $options['headers'] = $headers;
             }
             
+            // #region agent log
+            file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:sendGuzzleRequest:start','message'=>'sendGuzzleRequest called','data'=>['url'=>$url,'method'=>$method,'cookieFile'=>$cookieFile,'saveCookie'=>$saveCookie],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H3-new-jar'])."\n", FILE_APPEND);
+            // #endregion
+            
             // 处理cookie - FileCookieJar会自动读写文件
+            $cookieJar = null;
             if ($cookieFile) {
                 // 确保目录存在
                 $cookieDir = dirname($cookieFile);
@@ -901,14 +993,24 @@ class Request extends CommandAbstract
                     mkdir($cookieDir, 0755, true);
                 }
                 // FileCookieJar 会自动保存cookie到文件
-                $options['cookies'] = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+                $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+                $options['cookies'] = $cookieJar;
+                
+                // #region agent log
+                $cookiesLoaded = [];
+                foreach ($cookieJar as $cookie) {
+                    $cookiesLoaded[] = $cookie->getName() . '=' . substr($cookie->getValue(), 0, 20) . '...';
+                }
+                file_put_contents('e:\WelineFramework\DEV-workspace\.cursor\debug.log', json_encode(['location'=>'Request.php:sendGuzzleRequest:cookies-loaded','message'=>'Cookies loaded from file','data'=>['cookieFile'=>$cookieFile,'cookies'=>$cookiesLoaded,'cookieCount'=>count($cookiesLoaded)],'timestamp'=>microtime(true)*1000,'sessionId'=>'debug-session','hypothesisId'=>'H3-new-jar'])."\n", FILE_APPEND);
+                // #endregion
             } elseif ($saveCookie) {
                 $varPath = BP . 'var';
                 if (!is_dir($varPath)) {
                     mkdir($varPath, 0755, true);
                 }
                 $cookieFile = $varPath . '/http_request_cookies.txt';
-                $options['cookies'] = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+                $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
+                $options['cookies'] = $cookieJar;
             }
             
             // 处理请求体
