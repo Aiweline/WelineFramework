@@ -119,6 +119,12 @@ final class CodeGenerator
      */
     private function generatePlaceholder(PhpPlaceholder $node): string
     {
+        // 检查是否为双花括号变量（占位符以 __VAR_ 开头）
+        if (str_starts_with($node->placeholder, '__VAR_')) {
+            // 生成变量输出代码
+            return $this->generateVariableCode($node->expression, $node->line);
+        }
+        
         // 使用提取器恢复原始代码
         if ($this->phpExtractor !== null) {
             $info = $this->phpExtractor->getPlaceholderInfo($node->placeholder);
@@ -129,6 +135,90 @@ final class CodeGenerator
 
         // 回退：直接返回占位符
         return $node->placeholder;
+    }
+    
+    /**
+     * 生成双花括号变量的 PHP 代码
+     */
+    private function generateVariableCode(string $varPath, int $line): string
+    {
+        // 解析变量路径
+        $parsedPath = $this->parseVariablePath($varPath);
+        
+        // 生成 echo 语句
+        return '<?php echo ' . $parsedPath . '; ?>';
+    }
+    
+    /**
+     * 解析变量路径为 PHP 表达式
+     * 
+     * 支持格式：
+     * - variable -> ($variable ?? $this->getData('variable'))  // 优先局部变量
+     * - $variable -> $variable
+     * - object.property -> $this->getData('object')['property']
+     * - $_SERVER.KEY -> $_SERVER['KEY']
+     * - expr1 | expr2 -> ($expr1 ?? $expr2)  // 管道符用于回退值
+     */
+    private function parseVariablePath(string $varPath): string
+    {
+        $varPath = trim($varPath);
+        
+        // 处理管道符回退语法（如 page.local_title | page.title）
+        // 管道符 | 表示：如果第一个表达式为空则使用第二个表达式
+        if (str_contains($varPath, '|')) {
+            $parts = array_map('trim', explode('|', $varPath, 2));
+            $primary = $this->parseSingleVariablePath($parts[0]);
+            $fallback = $this->parseSingleVariablePath($parts[1]);
+            return '(' . $primary . ' ?? ' . $fallback . ')';
+        }
+        
+        return $this->parseSingleVariablePath($varPath);
+    }
+    
+    /**
+     * 解析单个变量路径（不含管道符）
+     */
+    private function parseSingleVariablePath(string $varPath): string
+    {
+        $varPath = trim($varPath);
+        
+        // 如果已经是 PHP 变量格式（以 $ 开头）
+        if (str_starts_with($varPath, '$')) {
+            // 处理点号分隔的属性访问
+            if (str_contains($varPath, '.')) {
+                $parts = explode('.', $varPath);
+                $result = array_shift($parts);
+                // 对每个属性访问添加 null 安全检查
+                foreach ($parts as $part) {
+                    $result = '(' . $result . ' ?? [])[\'' . $part . '\']';
+                }
+                return $result;
+            }
+            return $varPath;
+        }
+        
+        // 特殊处理 $_SERVER, $_GET, $_POST 等超全局变量
+        if (preg_match('/^_([A-Z]+)\.(.+)$/', $varPath, $m)) {
+            return '$_' . $m[1] . '[\'' . $m[2] . '\']';
+        }
+        
+        // 处理点号分隔的路径（如 user.name）
+        if (str_contains($varPath, '.')) {
+            $parts = explode('.', $varPath);
+            $first = array_shift($parts);
+            // 优先检查局部变量，然后使用 getData
+            // 添加空数组作为最终回退，避免对 null 进行数组访问
+            $result = '($' . $first . ' ?? $this->getData(\'' . $first . '\') ?? [])';
+            foreach ($parts as $part) {
+                // 每一级属性访问都添加 null 安全检查
+                $result = '(' . $result . '[\'' . $part . '\'] ?? null)';
+            }
+            return $result;
+        }
+        
+        // 简单变量名：优先检查局部变量，然后使用 getData
+        // 这样在 foreach 循环中的变量可以正确解析
+        return '($' . $varPath . ' ?? $this->getData(\'' . $varPath . '\'))';
     }
 
     /**
