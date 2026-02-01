@@ -415,10 +415,31 @@ final class Tokenizer
     }
 
     /**
+     * HTML 保留标签名（不能作为框架标签使用）
+     * 这些标签与 HTML 标签冲突，必须使用命名空间前缀（如 w:meta）
+     */
+    private const HTML_RESERVED_TAGS = [
+        'meta', 'link', 'script', 'style', 'head', 'body', 'html',
+        'div', 'span', 'p', 'a', 'img', 'form', 'input', 'button',
+        'table', 'tr', 'td', 'th', 'thead', 'tbody', 'ul', 'ol', 'li',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'footer', 'nav',
+        'section', 'article', 'aside', 'main', 'video', 'audio', 'canvas',
+        'iframe', 'embed', 'object', 'param', 'source', 'track',
+        'area', 'base', 'br', 'col', 'hr', 'wbr', 'option', 'select', 'textarea',
+        'label', 'fieldset', 'legend', 'datalist', 'output', 'progress', 'meter',
+    ];
+    
+    /**
      * 判断是否为框架标签
      */
     private function isFrameworkTag(string $tagName): bool
     {
+        // 排除 HTML 保留标签（没有命名空间前缀的）
+        // 如 <meta> 被当作 HTML，但 <w:meta> 是框架标签
+        if (!str_contains($tagName, ':') && in_array(strtolower($tagName), self::HTML_RESERVED_TAGS, true)) {
+            return false;
+        }
+        
         // 首先检查是否为内联资源标签
         if ($this->isInlineAssetTag($tagName)) {
             return true;

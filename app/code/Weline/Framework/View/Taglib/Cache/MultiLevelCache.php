@@ -58,22 +58,22 @@ final class MultiLevelCache
      */
     public function get(Template $template, string $path, string $content): ?string
     {
+        // 计算内容哈希（使用 xxh3，比 md5 快 10 倍）
+        $hash = hash('xxh3', $content);
+        
         // L0: 进程内 WeakMap（最快）
-        $result = $this->l0->getByTemplate($template);
+        $result = $this->l0->getByTemplate($template, $hash);
         if ($result !== null) {
             $this->l0Hits++;
             return $result;
         }
-
-        // 计算内容哈希（使用 xxh3，比 md5 快 10 倍）
-        $hash = hash('xxh3', $content);
 
         // L1: APCu 共享内存
         $result = $this->l1->get($path, $hash);
         if ($result !== null) {
             $this->l1Hits++;
             // 回填 L0
-            $this->l0->setByTemplate($template, $result);
+            $this->l0->setByTemplate($template, $result, $hash);
             return $result;
         }
 
@@ -82,7 +82,7 @@ final class MultiLevelCache
         if ($result !== null) {
             $this->l3Hits++;
             // 回填 L0 和 L1
-            $this->l0->setByTemplate($template, $result);
+            $this->l0->setByTemplate($template, $result, $hash);
             $this->l1->set($path, $hash, $result);
             return $result;
         }
@@ -134,7 +134,7 @@ final class MultiLevelCache
         $hash = hash('xxh3', $content);
 
         // 写入所有层
-        $this->l0->setByTemplate($template, $compiled);
+        $this->l0->setByTemplate($template, $compiled, $hash);
         $this->l1->set($path, $hash, $compiled);
         $this->l3->set($path, $hash, $compiled);
     }

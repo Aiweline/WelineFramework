@@ -108,18 +108,24 @@ final class StageResolver
             return $definitions[$tagName]->stage;
         }
 
-        // 3. 检查命名空间前缀匹配（如 w:xxx 匹配 w 定义）
+        // 3. 检查命名空间前缀匹配（如 w:template 匹配 template 定义）
         if (str_contains($tagName, ':')) {
-            $parts = explode(':', $tagName);
+            $parts = explode(':', $tagName, 2);
             $namespace = $parts[0];
+            $baseName = $parts[1] ?? '';
+            
+            // 先检查基础名称是否有定义（w:template -> template）
+            if ($baseName !== '' && isset($definitions[$baseName])) {
+                return $definitions[$baseName]->stage;
+            }
 
             // 检查命名空间是否有定义
             if (isset($definitions[$namespace])) {
                 return $definitions[$namespace]->stage;
             }
 
-            // 命名空间标签默认运行期
-            return TagNode::STAGE_RUNTIME;
+            // 命名空间标签默认编译期（与无命名空间标签一致）
+            return TagNode::STAGE_COMPILE;
         }
 
         // 4. 根据动态属性判断

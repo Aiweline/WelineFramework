@@ -56,3 +56,6 @@ tests/**/pnpm-lock.yaml
 
 # Tests 生成的文件
 tests/e2e/modules.json
+
+# Tests 生成的文件
+test-results.xml

@@ -170,7 +170,7 @@ final class TagRegistry
             // ==================== 组件标签 (优先级 300) ====================
             new TagDefinition(
                 name: 'block',
-                stage: TagDefinition::STAGE_RUNTIME,
+                stage: TagDefinition::STAGE_COMPILE,  // 使用 Taglib::getTags() 中定义的回调
                 priority: TagDefinition::PRIORITY_COMPONENT,
                 aliases: ['w:block'],
             ),
@@ -181,7 +181,7 @@ final class TagRegistry
             ),
             new TagDefinition(
                 name: 'hook',
-                stage: TagDefinition::STAGE_RUNTIME,
+                stage: TagDefinition::STAGE_COMPILE,  // 使用 Taglib::getTags() 中定义的回调
                 priority: TagDefinition::PRIORITY_COMPONENT,
                 aliases: ['w:hook'],
             ),
