@@ -195,6 +195,11 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     width: 50px;
 }
 
+.component-panel.collapsed .component-panel-header {
+    justify-content: center;
+    padding: 15px 5px;
+}
+
 .component-panel-header {
     padding: 15px;
     background: var(--visual-config-panel-header-bg, #fff);
@@ -212,7 +217,8 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-panel.collapsed .component-panel-header h6,
-.component-panel.collapsed .component-search {
+.component-panel.collapsed .component-search,
+.component-panel.collapsed .component-panel-header .btn {
     display: none;
 }
 
@@ -223,10 +229,27 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     cursor: pointer;
     padding: 5px;
     color: var(--visual-config-text-muted, #6c757d);
+    transition: transform 0.3s ease;
 }
 
 .component-panel-toggle:hover {
     color: var(--visual-config-text, #333);
+}
+
+/* 收起状态时，切换按钮旋转180度并增强样式 */
+.component-panel.collapsed .component-panel-toggle {
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.component-panel.collapsed .component-panel-toggle i {
+    transform: rotate(180deg);
+    color: #3498db;
+}
+
+.component-panel.collapsed .component-panel-toggle:hover {
+    background: rgba(52, 152, 219, 0.2);
 }
 
 .component-search {
@@ -424,7 +447,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 
 .component-card-thumb {
     width: 100%;
-    height: 80px;
+    min-height: 80px;
     background: var(--visual-config-input-bg, #f8f9fa);
     border-radius: 4px;
     margin-bottom: 8px;
@@ -436,9 +459,9 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 }
 
 .component-card-thumb img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: cover;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
 }
 
 .component-card-thumb i {
@@ -449,14 +472,10 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 /* 组件预览容器样式 */
 .component-card-thumb .component-preview-container {
     width: 100%;
-    height: 100%;
+    min-height: 80px;
     overflow: hidden;
     pointer-events: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
 }
 
 /* 预览iframe填满容器 */
@@ -474,7 +493,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 /* 预览容器内的所有元素样式隔离 */
 .component-card-thumb .component-preview-container .component-preview-wrapper {
     background: #fff;
-    min-height: 400px;
+    width: 100%;
 }
 
 /* 预览加载占位 */
@@ -483,7 +502,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
+    min-height: 80px;
     color: var(--visual-config-text-muted, #6c757d);
 }
 
@@ -1244,7 +1263,13 @@ function showComponentError(message) {
 // 切换组件面板
 function toggleComponentPanel() {
     const panel = document.getElementById('componentPanel');
-    panel.classList.toggle('collapsed');
+    const isCollapsed = panel.classList.toggle('collapsed');
+    
+    // 更新按钮提示文本
+    const toggleBtn = panel.querySelector('.component-panel-toggle');
+    if (toggleBtn) {
+        toggleBtn.title = isCollapsed ? '<?= __('展开组件库') ?>' : '<?= __('收起组件库') ?>';
+    }
 }
 
 // 切换区域

@@ -63,6 +63,12 @@ final class Tokenizer
     private const PLACEHOLDER_PATTERN = '/__PHP_(\d+)__/';
 
     /**
+     * 双花括号变量匹配正则
+     * 匹配：{{variable}} 或 {{ variable }} 或 {{$variable}}
+     */
+    private const VARIABLE_PATTERN = '/\{\{\s*([^}]+?)\s*\}\}/';
+
+    /**
      * 框架标签名列表（用于过滤非框架标签）
      * @var array<string, bool>
      */
@@ -105,10 +111,11 @@ final class Tokenizer
         while ($offset < $length) {
             // 分支预测优化：Text 最常见（80%+），优先匹配
             
-            // 查找下一个标签、内联标签或占位符
+            // 查找下一个标签、内联标签、占位符或双花括号变量
             $nextTagPos = strpos($content, '<', $offset);
             $nextInlinePos = strpos($content, '@', $offset);
             $nextPhpPos = strpos($content, '__PHP_', $offset);
+            $nextVarPos = strpos($content, '{{', $offset);
 
             // 计算最近的特殊位置
             $nextPos = $length;
@@ -125,6 +132,10 @@ final class Tokenizer
             if ($nextPhpPos !== false && $nextPhpPos < $nextPos) {
                 $nextPos = $nextPhpPos;
                 $nextType = 'php';
+            }
+            if ($nextVarPos !== false && $nextVarPos < $nextPos) {
+                $nextPos = $nextVarPos;
+                $nextType = 'variable';
             }
 
             // 处理标签/占位符前的文本（最常见情况）
@@ -146,6 +157,32 @@ final class Tokenizer
                     $offset += strlen($m[0]);
                     continue;
                 }
+            }
+
+            // 处理双花括号变量 {{variable}}
+            if ($nextType === 'variable') {
+                if (preg_match(self::VARIABLE_PATTERN, $content, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                    $matchStart = $m[0][1];
+                    
+                    if ($matchStart === $offset) {
+                        $fullMatch = $m[0][0];
+                        $varPath = trim($m[1][0]);
+                        
+                        yield new Token(TokenType::Variable, $varPath, $line, [
+                            'fullMatch' => $fullMatch,
+                        ]);
+                        
+                        $line += substr_count($fullMatch, "\n");
+                        $offset += strlen($fullMatch);
+                        continue;
+                    }
+                }
+                
+                // 不是有效变量（只有单个 { 或未闭合），作为文本处理
+                $text = substr($content, $offset, 2); // 输出 {{
+                yield new Token(TokenType::Text, $text, $line);
+                $offset += 2;
+                continue;
             }
 
             // 处理内联标签 @template(...) 或 @template{...} 格式
@@ -211,8 +248,13 @@ final class Tokenizer
                                 'fullMatch' => $fullMatch,
                             ]);
                         } else {
-                            // 非框架标签作为文本处理
-                            yield new Token(TokenType::Text, $fullMatch, $line);
+                            // 非框架标签：检查属性中是否包含双花括号变量或内联标签
+                            // 如果包含，需要分割生成多个 Token
+                            if (str_contains($fullMatch, '{{') || str_contains($fullMatch, '@')) {
+                                yield from $this->tokenizeTextWithVariables($fullMatch, $line);
+                            } else {
+                                yield new Token(TokenType::Text, $fullMatch, $line);
+                            }
                         }
 
                         $line += substr_count($fullMatch, "\n");
@@ -243,6 +285,114 @@ final class Tokenizer
     public function tokenizeToArray(string $content): array
     {
         return iterator_to_array($this->tokenize($content), false);
+    }
+    
+    /**
+     * 在文本中扫描内联标签和双花括号变量并生成混合 Token
+     * 
+     * @param string $text 待扫描的文本
+     * @param int $line 起始行号
+     * @return \Generator<Token>
+     */
+    private function tokenizeTextWithVariables(string $text, int $line): \Generator
+    {
+        $offset = 0;
+        $length = strlen($text);
+        
+        while ($offset < $length) {
+            // 查找下一个双花括号和内联标签
+            $nextVarPos = strpos($text, '{{', $offset);
+            $nextInlinePos = strpos($text, '@', $offset);
+            
+            // 计算最近的特殊位置
+            $nextPos = $length;
+            $nextType = null;
+            
+            if ($nextVarPos !== false && $nextVarPos < $nextPos) {
+                $nextPos = $nextVarPos;
+                $nextType = 'variable';
+            }
+            if ($nextInlinePos !== false && $nextInlinePos < $nextPos) {
+                $nextPos = $nextInlinePos;
+                $nextType = 'inline';
+            }
+            
+            // 没有更多特殊内容
+            if ($nextType === null) {
+                if ($offset < $length) {
+                    $remaining = substr($text, $offset);
+                    yield new Token(TokenType::Text, $remaining, $line);
+                    $line += substr_count($remaining, "\n");
+                }
+                break;
+            }
+            
+            // 输出特殊内容前的文本
+            if ($nextPos > $offset) {
+                $beforeText = substr($text, $offset, $nextPos - $offset);
+                yield new Token(TokenType::Text, $beforeText, $line);
+                $line += substr_count($beforeText, "\n");
+                $offset = $nextPos;
+            }
+            
+            // 处理内联标签 @static(...)
+            if ($nextType === 'inline') {
+                if (preg_match(self::INLINE_TAG_PATTERN, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                    $matchStart = $m[0][1];
+                    
+                    if ($matchStart === $offset) {
+                        $fullMatch = $m[0][0];
+                        $tagName = $m[1][0];
+                        // 提取内容：m[2] 是小括号内容，m[3] 是大括号内容
+                        $tagContent = ($m[2][0] ?? '') !== '' ? $m[2][0] : ($m[3][0] ?? '');
+                        
+                        // 判断是否为框架标签
+                        if ($this->isFrameworkTag($tagName)) {
+                            yield new Token(TokenType::InlineTag, $tagName, $line, [
+                                'content' => $tagContent,
+                                'fullMatch' => $fullMatch,
+                            ]);
+                        } else {
+                            // 非框架标签作为文本处理
+                            yield new Token(TokenType::Text, $fullMatch, $line);
+                        }
+                        
+                        $line += substr_count($fullMatch, "\n");
+                        $offset += strlen($fullMatch);
+                        continue;
+                    }
+                }
+                
+                // 不是有效内联标签，输出 @ 作为文本
+                yield new Token(TokenType::Text, '@', $line);
+                $offset++;
+                continue;
+            }
+            
+            // 处理双花括号变量
+            if ($nextType === 'variable') {
+                if (preg_match(self::VARIABLE_PATTERN, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                    $matchStart = $m[0][1];
+                    
+                    if ($matchStart === $offset) {
+                        $fullMatch = $m[0][0];
+                        $varPath = trim($m[1][0]);
+                        
+                        yield new Token(TokenType::Variable, $varPath, $line, [
+                            'fullMatch' => $fullMatch,
+                        ]);
+                        
+                        $line += substr_count($fullMatch, "\n");
+                        $offset += strlen($fullMatch);
+                        continue;
+                    }
+                }
+                
+                // 不是有效变量，输出 {{ 作为文本
+                yield new Token(TokenType::Text, '{{', $line);
+                $offset += 2;
+            }
+        }
     }
 
     /**

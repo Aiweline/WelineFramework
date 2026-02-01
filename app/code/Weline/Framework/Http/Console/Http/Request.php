@@ -913,23 +913,34 @@ class Request extends CommandAbstract
             
             // 处理请求体
             if (!empty($body) && in_array($method, ['POST', 'PUT', 'PATCH'])) {
-                $options['body'] = $body;
+                $trimmedBody = trim($body);
                 
-                // 如果是JSON数据，自动设置Content-Type头
-                if (is_string($body) && (str_starts_with(trim($body), '{') || str_starts_with(trim($body), '['))) {
+                // 如果是JSON数据
+                if (str_starts_with($trimmedBody, '{') || str_starts_with($trimmedBody, '[')) {
                     $options['headers']['Content-Type'] = 'application/json';
                     
                     // 确保JSON格式正确（添加双引号）
-                    $trimmedBody = trim($body);
                     if (str_starts_with($trimmedBody, '{') && str_ends_with($trimmedBody, '}')) {
                         // 简单的JSON格式修复：将单引号或无引号的键名改为双引号
                         $trimmedBody = preg_replace('/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/', '$1"$2":', $trimmedBody);
                         
                         // 修复值：将无引号的字符串值改为双引号（跳过数字和布尔值）
                         $trimmedBody = preg_replace('/:\s*([a-zA-Z_][a-zA-Z0-9_-]*)\s*([,}])/', ':"$1"$2', $trimmedBody);
-                        
-                        $options['body'] = $trimmedBody;
                     }
+                    $options['body'] = $trimmedBody;
+                }
+                // 如果是 URL 编码的表单数据（如 key=value&key2=value2）
+                elseif (str_contains($body, '=')) {
+                    parse_str($body, $formParams);
+                    if (!empty($formParams)) {
+                        $options['form_params'] = $formParams;
+                    } else {
+                        $options['body'] = $body;
+                    }
+                }
+                // 其他情况直接发送原始数据
+                else {
+                    $options['body'] = $body;
                 }
             }
             

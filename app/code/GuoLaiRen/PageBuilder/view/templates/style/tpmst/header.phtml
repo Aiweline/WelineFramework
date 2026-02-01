@@ -734,8 +734,9 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
         // 设置 website_id Cookie，供像素代码读取
         \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
         
-        // 获取网站 URL（用于像素统计）
+        // 获取网站信息（用于像素统计）
         $websiteUrl = '';
+        $websiteCode = '';
         try {
             if (class_exists('\Weline\Websites\Model\Website')) {
                 $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
@@ -743,6 +744,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
                 $website->clear()->load($websiteId);
                 if ($website->getId()) {
                     $websiteUrl = $website->getData('url') ?? '';
+                    $websiteCode = $website->getData('code') ?? '';
                 }
             }
         } catch (\Exception $e) {
@@ -752,6 +754,11 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
         // 设置 website_url Cookie
         if (!empty($websiteUrl)) {
             \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+        }
+        
+        // 设置 website_code Cookie，用于区分不同站点
+        if (!empty($websiteCode)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
         }
         
         // 使用变量传递方式，避免在标签属性中使用 PHP 标签
