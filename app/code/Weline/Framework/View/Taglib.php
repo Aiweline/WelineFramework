@@ -25,10 +25,17 @@ use Weline\Framework\View\Taglib\Parser\Tokenizer;
 use Weline\Framework\View\Taglib\Parser\AstBuilder;
 use Weline\Framework\View\Taglib\Compiler\CompilePipeline;
 use Weline\Framework\View\Taglib\Compiler\NodeCompiler;
+use Weline\Framework\View\Taglib\Compiler\StageResolver;
+use Weline\Framework\View\Taglib\Compiler\Pass\StageResolutionPass;
 use Weline\Framework\View\Taglib\Compiler\Pass\ConstantFoldingPass;
 use Weline\Framework\View\Taglib\Compiler\Pass\DeadCodeEliminationPass;
+use Weline\Framework\View\Taglib\Compiler\Pass\InlineOptimizationPass;
 use Weline\Framework\View\Taglib\Generator\CodeGenerator;
 use Weline\Framework\View\Taglib\Cache\MultiLevelCache;
+use Weline\Framework\View\Taglib\Registry\TagRegistry;
+use Weline\Framework\View\Taglib\Registry\TagDefinition;
+use Weline\Framework\View\Taglib\Runtime\RuntimeTag;
+use Weline\Framework\View\Taglib\Debug\SourceMap;
 use Weline\Framework\View\Taglib\Ast\TagNode as AstTagNode;
 use Weline\Framework\View\Taglib\Ast\AttrNode as AstAttrNode;
 
@@ -77,6 +84,26 @@ class Taglib
      * 多级缓存
      */
     private ?MultiLevelCache $cache = null;
+    
+    /**
+     * 标签注册表
+     */
+    private ?TagRegistry $tagRegistry = null;
+    
+    /**
+     * 阶段解析器
+     */
+    private ?StageResolver $stageResolver = null;
+    
+    /**
+     * 运行期标签渲染器
+     */
+    private ?RuntimeTag $runtimeTag = null;
+    
+    /**
+     * 源码映射（调试模式下使用）
+     */
+    private ?SourceMap $sourceMap = null;
     
     /**
      * 编译统计
@@ -143,14 +170,22 @@ class Taglib
     
     /**
      * 获取编译管道
+     * 
+     * 默认包含四个优化通道（按文档约定优先级）：
+     * - StageResolutionPass (优先级 0-10) - 预处理：解析标签阶段
+     * - ConstantFoldingPass (优先级 10-30) - 常量折叠
+     * - DeadCodeEliminationPass (优先级 30-50) - 死代码消除
+     * - InlineOptimizationPass (优先级 50-70) - 内联优化
      */
     private function getCompilePipeline(): CompilePipeline
     {
         if ($this->pipeline === null) {
             $this->pipeline = new CompilePipeline();
-            // 添加优化通道
+            // 添加优化通道（按文档约定优先级）
+            $this->pipeline->addPass(new StageResolutionPass($this->getStageResolver()));
             $this->pipeline->addPass(new ConstantFoldingPass());
             $this->pipeline->addPass(new DeadCodeEliminationPass());
+            $this->pipeline->addPass(new InlineOptimizationPass());
         }
         return $this->pipeline;
     }
@@ -177,6 +212,47 @@ class Taglib
         return $this->cache;
     }
     
+    /**
+     * 获取标签注册表
+     */
+    private function getTagRegistry(): TagRegistry
+    {
+        if ($this->tagRegistry === null) {
+            $this->tagRegistry = new TagRegistry();
+        }
+        return $this->tagRegistry;
+    }
+    
+    /**
+     * 获取阶段解析器
+     */
+    private function getStageResolver(): StageResolver
+    {
+        if ($this->stageResolver === null) {
+            $this->stageResolver = new StageResolver($this->getTagRegistry());
+        }
+        return $this->stageResolver;
+    }
+    
+    /**
+     * 获取运行期标签渲染器
+     */
+    private function getRuntimeTag(): RuntimeTag
+    {
+        if ($this->runtimeTag === null) {
+            $this->runtimeTag = new RuntimeTag();
+        }
+        return $this->runtimeTag;
+    }
+    
+    /**
+     * 获取源码映射
+     */
+    public function getSourceMap(): ?SourceMap
+    {
+        return $this->sourceMap;
+    }
+    
     // ====== 核心编译方法（v2 API）======
     
     /**
@@ -186,8 +262,8 @@ class Taglib
      * 1. PhpExtractor - 提取 PHP 代码为占位符
      * 2. Tokenizer - 词法分析
      * 3. AstBuilder - 构建 AST
-     * 4. CompilePipeline - 编译优化
-     * 5. CodeGenerator - 生成代码
+     * 4. CompilePipeline - 编译优化（含 ConstantFolding、DeadCodeElimination、InlineOptimization）
+     * 5. CodeGenerator - 生成代码（含 SourceMap）
      *
      * @param Template $template 模板对象
      * @param string $content 模板内容
@@ -201,14 +277,21 @@ class Taglib
             $content = $this->removeHtmlComments($content);
         }
         
-        // 使用缓存（使用路径和内容的组合作为缓存键）
-        $cached = $this->getCache()->getByPath($fileName, $content);
+        // 使用多级缓存：优先 L0（Template WeakMap），再 L1（APCu），最后 L3（File）
+        $cache = $this->getCache();
+        $cached = $cache->get($template, $fileName, $content);
         if ($cached !== null) {
             $this->cacheHits++;
             return $cached;
         }
         
         $this->compilations++;
+        
+        // 调试模式：创建 SourceMap
+        if ($this->debug) {
+            $this->sourceMap = new SourceMap();
+            $this->sourceMap->setSourceFile($fileName);
+        }
         
         // 阶段 1: 提取 PHP 代码（每次编译创建新实例，避免嵌套编译时状态污染）
         $extractor = new PhpExtractor();
@@ -232,14 +315,20 @@ class Taglib
         // 阶段 5: 生成代码（每次编译创建新实例，避免回调累积）
         $generator = new CodeGenerator();
         $generator->setPhpExtractor($extractor);
+        
+        // 调试模式：传递 SourceMap 给生成器
+        if ($this->debug && $this->sourceMap !== null) {
+            $generator->setSourceMap($this->sourceMap);
+        }
+        
         $this->registerTagCallbacks($generator, $tags, $template, $fileName);
         $result = $generator->generate($ast);
         
         // 恢复 PHP 占位符
         $result = $extractor->restore($result);
         
-        // 缓存结果
-        $this->getCache()->setByPath($fileName, $content, $result);
+        // 缓存结果（写入所有缓存层）
+        $cache->set($template, $fileName, $content, $result);
         
         return $result;
     }
@@ -256,8 +345,10 @@ class Taglib
             
             $callback = $tagConfig['callback'];
             
-            // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
-            $generator->registerTag($tagName, function(array $params) use ($callback, $tagConfig, $tagName) {
+            // 构建注册闭包
+            $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName) {
+                // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
+                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName) {
                 // 从 params 中提取属性
                 $attrs = [];
                 foreach ($params as $key => $value) {
@@ -288,8 +379,14 @@ class Taglib
                 // 确定 tag_key
                 $selfClosing = $params['selfClosing'] ?? false;
                 $rawContent = $params['rawContent'] ?? '';
+                $children = $params['children'] ?? [];
                 
-                if ($selfClosing && !empty($attrs)) {
+                // 内联标签格式：@tag() 或 @tag{}
+                // 特征：selfClosing=true, rawContent不为空, children为空
+                if ($selfClosing && $rawContent !== '' && empty($children)) {
+                    // 内联标签格式 @tag()
+                    $tag_key = '@tag()';
+                } elseif ($selfClosing && !empty($attrs)) {
                     $tag_key = 'tag-self-close-with-attrs';
                 } elseif ($selfClosing) {
                     $tag_key = 'tag-self-close';
@@ -306,7 +403,16 @@ class Taglib
                 
                 // 调用原始回调：function ($tag_key, $config, $tag_data, $attributes)
                 return $callback($tag_key, $tagConfig, $tag_data, $attrs);
-            });
+                });
+            };
+            
+            // 注册原始标签名
+            $registerCallback($tagName);
+            
+            // 同时注册 w: 前缀版本（如果原始名没有 w: 前缀）
+            if (!str_starts_with($tagName, 'w:')) {
+                $registerCallback('w:' . $tagName);
+            }
         }
     }
     
@@ -327,6 +433,13 @@ class Taglib
             'compilations' => $this->compilations,
             'cacheHits' => $this->cacheHits,
             'cache' => $this->cache?->stats() ?? [],
+            'pipeline' => [
+                'passes' => $this->pipeline?->getPassNames() ?? [],
+                'passCount' => $this->pipeline?->count() ?? 0,
+            ],
+            'tagRegistry' => $this->tagRegistry?->stats() ?? [],
+            'runtimeTag' => $this->runtimeTag?->stats() ?? [],
+            'debug' => $this->debug,
         ];
     }
     
@@ -336,9 +449,11 @@ class Taglib
     public function clearCache(): void
     {
         $this->cache?->flush();
+        $this->tagRegistry?->clearCache();
         self::$varParserCache = [];
         self::$hookCheckCache = [];
         self::$compiledRegexCache = [];
+        self::$cachedTags = null;
     }
     
     /**
@@ -347,6 +462,37 @@ class Taglib
     public function addCompilePass(object $pass): void
     {
         $this->getCompilePipeline()->addPass($pass);
+    }
+    
+    /**
+     * 注册编译期标签
+     * 
+     * @param string $name 标签名
+     * @param callable $callback 回调函数 function(array $params): string
+     * @param array $options 可选配置：aliases, priority, dependencies
+     */
+    public function registerTag(string $name, callable $callback, array $options = []): void
+    {
+        $definition = new TagDefinition(
+            name: $name,
+            stage: TagDefinition::STAGE_COMPILE,
+            priority: $options['priority'] ?? TagDefinition::PRIORITY_DEFAULT,
+            aliases: $options['aliases'] ?? [],
+            dependencies: $options['dependencies'] ?? [],
+            callback: $callback,
+        );
+        $this->getTagRegistry()->registerDefinition($definition);
+    }
+    
+    /**
+     * 注册运行期标签
+     * 
+     * @param string $name 标签名
+     * @param callable $callback 回调函数 function(array $params): string
+     */
+    public function registerRuntimeTag(string $name, callable $callback): void
+    {
+        $this->getRuntimeTag()->registerCallback($name, $callback);
     }
     
     // ====== 常量定义 ======
@@ -1574,6 +1720,23 @@ class Taglib
                     }
                 }
             ],
+            // 内置控制流标签，由 CodeGenerator 处理
+            'while' => [
+                'tag-start' => 1,
+                'tag-end' => 1,
+                'attr' => ['condition' => 1],
+            ],
+            'switch' => [
+                'tag-start' => 1,
+                'tag-end' => 1,
+                'attr' => ['value' => 1],
+            ],
+            'case' => [
+                'tag-start' => 1,
+                'tag-end' => 1,
+                'tag-self-close' => 1,
+                'attr' => ['value' => 1],
+            ],
             'static' => [
                 'tag' => 1,
                 'callback' =>
@@ -1595,11 +1758,13 @@ class Taglib
                             $target_template = $tag_data[2] ?? $attributes['name'] ?? '';
                             return "<!-- 模块被禁用：{$target_template} 原始模板：{$template_string}-->";
                         }
-                        // 优先从 name 属性获取模板路径，然后从 tag_data 获取
+                        // 优先从 name 属性获取模板路径，然后从 tag_data 或 content 获取
+                        // tag_data 结构：[0] = 原始标签HTML, [1] = rawAttributes, [2] = content（子内容）
                         $templatePath = '';
-                        if ($tag_key === 'tag') {
-                            // <w:template name="..."/> 或 <template>...</template>
-                            $templatePath = $attributes['name'] ?? ($tag_data[2] ?? '');
+                        if ($tag_key === 'tag' || $tag_key === 'tag-self-close' || $tag_key === 'tag-start') {
+                            // <w:template name="..."/> 或 <template>path</template> 或 <w:template>path</w:template>
+                            // 优先使用 name 属性，然后使用标签内容（tag_data[2]）
+                            $templatePath = $attributes['name'] ?? trim($tag_data[2] ?? '');
                         } else {
                             // @template(...) 格式
                             $templatePath = $tag_data[1] ?? '';
@@ -3042,25 +3207,32 @@ class Taglib
 
     private function determineTagStage(TagNode $node): string
     {
+        // 编译时标签候选列表（包含 w: 前缀版本）
         $compileCandidates = [
             'css', 'js', 'url', 'frontend-url', 'backend-url', 'backend-api', 'api',
-            'template', 'include', 'static', 'theme:css', 'theme:js', 'theme:template'
+            'template', 'include', 'static', 'theme:css', 'theme:js', 'theme:template',
+            // w: 前缀版本
+            'w:css', 'w:js', 'w:url', 'w:frontend-url', 'w:backend-url', 'w:backend-api', 'w:api',
+            'w:template', 'w:include', 'w:static', 'w:theme:css', 'w:theme:js', 'w:theme:template'
         ];
         
         // 强制运行时执行的标签（避免编译时递归）
-        $runtimeOnlyTags = ['acl'];
+        $runtimeOnlyTags = ['acl', 'w:acl'];
         if (in_array($node->name, $runtimeOnlyTags, true)) {
             return self::STAGE_RUNTIME;
         }
         
         $hasDynamicAttrs = $this->isAttributesDynamic($node->attributes);
-        $hasDynamicChildren = $this->isNodesDynamic($node->children);
+        // 对于 template/include 标签，子内容（模板路径）应该被视为静态
+        // 只检查属性是否动态，不检查子内容
+        $isTemplateTag = in_array($node->name, ['template', 'w:template', 'include', 'w:include'], true);
+        $hasDynamicChildren = $isTemplateTag ? false : $this->isNodesDynamic($node->children);
         $hasDynamicInline = ($node->tagKey === '@tag()' || $node->tagKey === '@tag{}')
             ? $this->isInlineContentDynamic($node->inlineContent)
             : false;
         $isDynamic = $hasDynamicAttrs || $hasDynamicChildren || $hasDynamicInline;
 
-        if ($node->name === 'lang') {
+        if ($node->name === 'lang' || $node->name === 'w:lang') {
             return $isDynamic ? self::STAGE_RUNTIME : self::STAGE_COMPILE_TIME;
         }
 
@@ -3113,10 +3285,21 @@ class Taglib
                 if (!$isHookTag) {
                     $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
                 }
-                if (isset($tags[$node->name])) {
+                // 规范化标签名（w:template -> template）
+                $normalizedName = str_starts_with($node->name, 'w:') 
+                    ? substr($node->name, 2) 
+                    : $node->name;
+                $tagKey = $tags[$node->name] ?? $tags[$normalizedName] ?? null;
+                
+                if ($tagKey !== null) {
                     $node->executionStage = $this->determineTagStage($node);
                     if ($node->executionStage === self::STAGE_COMPILE_TIME) {
-                        $rendered = $this->renderTagNode($node, $tags, $template, $fileName);
+                        // 使用规范化名称查找回调
+                        $tagsForRender = $tags;
+                        if (!isset($tags[$node->name]) && isset($tags[$normalizedName])) {
+                            $tagsForRender[$node->name] = $tags[$normalizedName];
+                        }
+                        $rendered = $this->renderTagNode($node, $tagsForRender, $template, $fileName);
                         $result = array_merge($result, $this->compileStringToNodes($rendered, $tags, $template, $fileName));
                         continue;
                     }

@@ -15,6 +15,7 @@ use Weline\Framework\View\Taglib\Ast\{
     Node,
     ProgramNode,
     TextNode,
+    PhpPlaceholder,
     TagNode,
     NodePool
 };
@@ -24,13 +25,25 @@ use Weline\Framework\View\Taglib\Ast\{
  * 
  * 移除不会产生输出的代码
  * 
- * 优化示例：
- * - 移除空的文本节点
- * - 移除空的标签
- * - 移除 if(false) 分支
+ * 优化规则：
+ * 1. 移除完全为空的文本节点
+ * 2. 移除 if(false) 分支
+ * 3. 简化 if(true) 分支（只保留子内容）
+ * 4. 移除空的自闭合标签（无属性且无副作用）
+ * 5. 移除空内容的成对标签（无子内容且无副作用）
+ * 
+ * 优先级：20（死代码消除阶段）
  */
 final class DeadCodeEliminationPass implements CompilePassInterface
 {
+    /**
+     * 有副作用的标签列表（不应移除）
+     */
+    private const SIDE_EFFECT_TAGS = [
+        'php', 'include', 'template', 'block', 'hook', 'csrf', 'method',
+        'push', 'stack', 'section', 'yield', 'extends', 'slot', 'component',
+    ];
+
     /**
      * @inheritDoc
      */
@@ -50,6 +63,8 @@ final class DeadCodeEliminationPass implements CompilePassInterface
 
     /**
      * @inheritDoc
+     * 
+     * 优先级 20：死代码消除阶段
      */
     public function getPriority(): int
     {
@@ -75,9 +90,18 @@ final class DeadCodeEliminationPass implements CompilePassInterface
             // 处理标签节点
             if ($node instanceof TagNode) {
                 $optimized = $this->optimizeTagNode($node);
-                if ($optimized !== null) {
-                    $result[] = $optimized;
+                if ($optimized === null) {
+                    // 标签被移除
+                    continue;
                 }
+                if (is_array($optimized)) {
+                    // 标签被展开为多个节点（如 if(true) 简化）
+                    foreach ($optimized as $child) {
+                        $result[] = $child;
+                    }
+                    continue;
+                }
+                $result[] = $optimized;
                 continue;
             }
 
@@ -100,22 +124,38 @@ final class DeadCodeEliminationPass implements CompilePassInterface
     /**
      * 优化标签节点
      * 
-     * @return TagNode|null 优化后的节点，如果应该移除返回 null
+     * @return TagNode|array<Node>|null 优化后的节点、节点数组、或 null（移除）
      */
-    private function optimizeTagNode(TagNode $node): ?TagNode
+    private function optimizeTagNode(TagNode $node): TagNode|array|null
     {
         // 递归处理子节点
         $optimizedChildren = $this->eliminateDeadCode($node->children);
 
         // 检查 if 标签的静态条件
         if ($node->name === 'if') {
-            $condition = $node->getAttr('condition') ?? $node->getAttr('test');
+            $condition = $node->getAttr('condition') ?? $node->getAttr('test') ?? $node->getAttr('value');
             if ($condition !== null) {
-                // 静态 false 条件
+                // 静态 false 条件：移除整个 if 块
                 if ($this->isStaticFalse($condition)) {
                     return null;
                 }
-                // 静态 true 条件可以简化（未来实现）
+                // 静态 true 条件：简化为只保留子内容
+                if ($this->isStaticTrue($condition)) {
+                    return $optimizedChildren;
+                }
+            }
+        }
+
+        // 检查空的自闭合标签（无副作用）
+        if ($node->selfClosing && empty($node->attributes) && !$this->hasSideEffect($node)) {
+            return null;
+        }
+
+        // 检查空内容的成对标签（无子内容且无副作用）
+        if (!$node->selfClosing && empty($optimizedChildren) && !$this->hasSideEffect($node)) {
+            // 仅当没有任何有意义内容时移除
+            if ($node->rawContent === '' && empty($node->attributes)) {
+                return null;
             }
         }
 
@@ -133,6 +173,23 @@ final class DeadCodeEliminationPass implements CompilePassInterface
     private function isStaticFalse(string $condition): bool
     {
         $condition = trim(strtolower($condition));
-        return $condition === 'false' || $condition === '0' || $condition === '""' || $condition === "''";
+        return in_array($condition, ['false', '0', '""', "''", 'null', '!true'], true);
+    }
+
+    /**
+     * 检查是否为静态 true
+     */
+    private function isStaticTrue(string $condition): bool
+    {
+        $condition = trim(strtolower($condition));
+        return in_array($condition, ['true', '1', '!false', '!null', '!0'], true);
+    }
+
+    /**
+     * 检查标签是否有副作用
+     */
+    private function hasSideEffect(TagNode $node): bool
+    {
+        return in_array($node->name, self::SIDE_EFFECT_TAGS, true);
     }
 }
