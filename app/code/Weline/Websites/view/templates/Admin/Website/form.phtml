@@ -237,8 +237,8 @@ $selected_languages = $selected_languages ?? [];
                         <w:seo:account:select 
                             id="seo_account"
                             name="seo_account_id"
-                            value="<?= $seoAccountId ?>"
-                            display="<?= addslashes($seoAccountName) ?>"
+                            value="seoAccountId|''"
+                            display="seoAccountName|'请选择SEO账户'"
                             class="w-100"
                         />
                         <div class="form-text-hint"><?= __('绑定后将自动提交sitemap到该SEO账户的搜索引擎') ?></div>
