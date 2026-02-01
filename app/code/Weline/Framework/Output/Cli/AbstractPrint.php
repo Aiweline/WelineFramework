@@ -134,6 +134,28 @@ abstract class AbstractPrint implements PrintInterface
     }
 
     /**
+     * @DESC         |信息（note的别名）
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @param string $data
+     * @param string $message
+     * @param string $color
+     * @param int    $pad_length
+     *
+     * @return mixed|void
+     */
+    public function info(string $data = 'CLI Info!', string $message = '', string $color = self::NOTE, int $pad_length = 25)
+    {
+        $this->doPrint($data, $message, self::NOTE);
+    }
+
+    /**
      * ----------------辅助方法-------------------
      *
      * @param mixed $data
