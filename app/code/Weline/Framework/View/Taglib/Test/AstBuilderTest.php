@@ -157,4 +157,25 @@ class AstBuilderTest extends TestCase
 
         self::assertEquals('test.phtml', $ast->fileName);
     }
+
+    /**
+     * 测试 block 成对标签（无属性，内容为类名）
+     */
+    public function testBlockPairedTagWithClassName(): void
+    {
+        $content = '<block>Weline\Backend\Block\Header\Base</block>';
+        $tokens = $this->tokenizer->tokenize($content);
+        $ast = $this->builder->build($tokens);
+
+        self::assertCount(1, $ast->children);
+        self::assertInstanceOf(TagNode::class, $ast->children[0]);
+        
+        $tagNode = $ast->children[0];
+        self::assertEquals('block', $tagNode->name);
+        self::assertFalse($tagNode->selfClosing, 'block 成对标签的 selfClosing 应该是 false');
+        self::assertCount(1, $tagNode->children, '应该有一个子节点');
+        self::assertInstanceOf(TextNode::class, $tagNode->children[0]);
+        self::assertEquals('Weline\Backend\Block\Header\Base', $tagNode->children[0]->value);
+        self::assertEquals('Weline\Backend\Block\Header\Base', $tagNode->rawContent);
+    }
 }

@@ -234,6 +234,7 @@ class WebSitemapData
         
         $platformResults = [];
         $totalUrls = 0;
+        $totalFiles = 0;
         
         // 计算总 URL 数
         foreach ($groupedUrls as $urls) {
@@ -249,11 +250,15 @@ class WebSitemapData
                 $groupedUrls
             );
             $platformResults[$platformCode] = $result;
+            
+            // 累计生成的文件数
+            $totalFiles += ($result['total_files'] ?? 0);
         }
         
         return [
             'platforms' => $platformResults,
             'total_urls' => $totalUrls,
+            'total_files' => $totalFiles,
             'website_code' => $websiteCode,
             'platform_count' => count($adapters),
         ];

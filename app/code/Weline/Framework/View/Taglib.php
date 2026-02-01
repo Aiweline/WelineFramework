@@ -19,6 +19,19 @@ use Weline\Framework\View\Block\Csrf;
 use Weline\Framework\View\Exception\TemplateException;
 use Weline\Hook\HookData;
 
+// 优化组件
+use Weline\Framework\View\Taglib\Parser\PhpExtractor;
+use Weline\Framework\View\Taglib\Parser\Tokenizer;
+use Weline\Framework\View\Taglib\Parser\AstBuilder;
+use Weline\Framework\View\Taglib\Compiler\CompilePipeline;
+use Weline\Framework\View\Taglib\Compiler\NodeCompiler;
+use Weline\Framework\View\Taglib\Compiler\Pass\ConstantFoldingPass;
+use Weline\Framework\View\Taglib\Compiler\Pass\DeadCodeEliminationPass;
+use Weline\Framework\View\Taglib\Generator\CodeGenerator;
+use Weline\Framework\View\Taglib\Cache\MultiLevelCache;
+use Weline\Framework\View\Taglib\Ast\TagNode as AstTagNode;
+use Weline\Framework\View\Taglib\Ast\AttrNode as AstAttrNode;
+
 class Taglib
 {
     // PHP 标签常量，避免在回调函数中重复定义
@@ -32,6 +45,51 @@ class Taglib
         'area', 'base', 'br', 'col', 'embed', 'hr', 'img',
         'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
     ];
+    
+    // ====== 优化组件 ======
+    
+    /**
+     * PHP 提取器
+     */
+    private ?PhpExtractor $phpExtractor = null;
+    
+    /**
+     * 词法分析器
+     */
+    private ?Tokenizer $tokenizer = null;
+    
+    /**
+     * AST 构建器
+     */
+    private ?AstBuilder $astBuilder = null;
+    
+    /**
+     * 编译管道
+     */
+    private ?CompilePipeline $pipeline = null;
+    
+    /**
+     * 代码生成器
+     */
+    private ?CodeGenerator $codeGenerator = null;
+    
+    /**
+     * 多级缓存
+     */
+    private ?MultiLevelCache $cache = null;
+    
+    /**
+     * 编译统计
+     */
+    private int $compilations = 0;
+    private int $cacheHits = 0;
+    
+    /**
+     * 调试模式
+     */
+    private bool $debug = false;
+    
+    // ====== 原有缓存 ======
     
     /**
      * 性能优化：缓存变量解析结果
@@ -47,6 +105,251 @@ class Taglib
      * 性能优化：缓存编译后的正则表达式
      */
     private static array $compiledRegexCache = [];
+    
+    // ====== 懒加载获取器 ======
+    
+    /**
+     * 获取 PHP 提取器
+     */
+    private function getPhpExtractor(): PhpExtractor
+    {
+        if ($this->phpExtractor === null) {
+            $this->phpExtractor = new PhpExtractor();
+        }
+        return $this->phpExtractor;
+    }
+    
+    /**
+     * 获取词法分析器
+     */
+    private function getTokenizer(): Tokenizer
+    {
+        if ($this->tokenizer === null) {
+            $this->tokenizer = new Tokenizer();
+        }
+        return $this->tokenizer;
+    }
+    
+    /**
+     * 获取 AST 构建器
+     */
+    private function getAstBuilder(): AstBuilder
+    {
+        if ($this->astBuilder === null) {
+            $this->astBuilder = new AstBuilder();
+        }
+        return $this->astBuilder;
+    }
+    
+    /**
+     * 获取编译管道
+     */
+    private function getCompilePipeline(): CompilePipeline
+    {
+        if ($this->pipeline === null) {
+            $this->pipeline = new CompilePipeline();
+            // 添加优化通道
+            $this->pipeline->addPass(new ConstantFoldingPass());
+            $this->pipeline->addPass(new DeadCodeEliminationPass());
+        }
+        return $this->pipeline;
+    }
+    
+    /**
+     * 获取代码生成器
+     */
+    private function getCodeGenerator(): CodeGenerator
+    {
+        if ($this->codeGenerator === null) {
+            $this->codeGenerator = new CodeGenerator();
+        }
+        return $this->codeGenerator;
+    }
+    
+    /**
+     * 获取多级缓存
+     */
+    private function getCache(): MultiLevelCache
+    {
+        if ($this->cache === null) {
+            $this->cache = new MultiLevelCache();
+        }
+        return $this->cache;
+    }
+    
+    // ====== 核心编译方法（v2 API）======
+    
+    /**
+     * 编译模板（v2 主入口）
+     * 
+     * 使用新的编译管道：
+     * 1. PhpExtractor - 提取 PHP 代码为占位符
+     * 2. Tokenizer - 词法分析
+     * 3. AstBuilder - 构建 AST
+     * 4. CompilePipeline - 编译优化
+     * 5. CodeGenerator - 生成代码
+     *
+     * @param Template $template 模板对象
+     * @param string $content 模板内容
+     * @param string $fileName 文件名
+     * @return string 编译后的内容
+     */
+    public function compile(Template &$template, string &$content, string $fileName = ''): string
+    {
+        // 生产环境移除 HTML 注释
+        if (PROD) {
+            $content = $this->removeHtmlComments($content);
+        }
+        
+        // 使用缓存（使用路径和内容的组合作为缓存键）
+        $cached = $this->getCache()->getByPath($fileName, $content);
+        if ($cached !== null) {
+            $this->cacheHits++;
+            return $cached;
+        }
+        
+        $this->compilations++;
+        
+        // 阶段 1: 提取 PHP 代码（每次编译创建新实例，避免嵌套编译时状态污染）
+        $extractor = new PhpExtractor();
+        $cleanContent = $extractor->extract($content);
+        
+        // 阶段 2: 词法分析（每次编译创建新实例）
+        $tokenizer = new Tokenizer();
+        $tags = $this->getTags($template, $fileName, $content);
+        $tokenizer->setFrameworkTags(array_keys($tags));
+        $tokens = $tokenizer->tokenize($cleanContent);
+        
+        // 阶段 3: 构建 AST（每次编译创建新实例）
+        $astBuilder = new AstBuilder();
+        $astBuilder->setPhpExtractor($extractor);
+        $ast = $astBuilder->build($tokens, $fileName);
+        
+        // 阶段 4: 编译管道优化
+        $pipeline = $this->getCompilePipeline();
+        $ast = $pipeline->process($ast);
+        
+        // 阶段 5: 生成代码（每次编译创建新实例，避免回调累积）
+        $generator = new CodeGenerator();
+        $generator->setPhpExtractor($extractor);
+        $this->registerTagCallbacks($generator, $tags, $template, $fileName);
+        $result = $generator->generate($ast);
+        
+        // 恢复 PHP 占位符
+        $result = $extractor->restore($result);
+        
+        // 缓存结果
+        $this->getCache()->setByPath($fileName, $content, $result);
+        
+        return $result;
+    }
+    
+    /**
+     * 注册标签回调到代码生成器
+     */
+    private function registerTagCallbacks(CodeGenerator $generator, array $tags, Template &$template, string $fileName): void
+    {
+        foreach ($tags as $tagName => $tagConfig) {
+            if (!isset($tagConfig['callback'])) {
+                continue;
+            }
+            
+            $callback = $tagConfig['callback'];
+            
+            // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
+            $generator->registerTag($tagName, function(array $params) use ($callback, $tagConfig, $tagName) {
+                // 从 params 中提取属性
+                $attrs = [];
+                foreach ($params as $key => $value) {
+                    if (!in_array($key, ['tagName', 'line', 'selfClosing', 'rawContent', 'children', 'childrenCode'])) {
+                        // 处理 AttrNode 对象（使用 Property Hooks，不是 __get）
+                        if ($value instanceof \Weline\Framework\View\Taglib\Ast\AttrNode) {
+                            $attrs[$key] = $value->staticValue ?? $value->rawValue ?? '';
+                        } elseif (is_object($value) && method_exists($value, '__get')) {
+                            $attrs[$key] = $value->staticValue ?? $value->rawValue ?? '';
+                        } else {
+                            $attrs[$key] = $value;
+                        }
+                    }
+                }
+                
+                // 获取子内容代码
+                // 对于 hook/w:hook 标签，使用原始子节点内容而不是生成的代码
+                // 因为 hook 回调需要原始的 <else/> 来分割内容
+                $isHookTag = ($tagName === 'hook' || $tagName === 'w:hook');
+                $innerContent = '';
+                if ($isHookTag && isset($params['children']) && is_array($params['children'])) {
+                    // 使用原始子节点构建内容
+                    $innerContent = $this->buildOriginalChildrenContent($params['children']);
+                } elseif (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
+                    $innerContent = $params['childrenCode']();
+                }
+                
+                // 确定 tag_key
+                $selfClosing = $params['selfClosing'] ?? false;
+                $rawContent = $params['rawContent'] ?? '';
+                
+                if ($selfClosing && !empty($attrs)) {
+                    $tag_key = 'tag-self-close-with-attrs';
+                } elseif ($selfClosing) {
+                    $tag_key = 'tag-self-close';
+                } else {
+                    $tag_key = 'tag';
+                }
+                
+                // 构建 tag_data 数组：[原始标签, 内联内容, 子内容]
+                $tag_data = [
+                    '<' . $tagName . '>', // [0] 原始标签
+                    $rawContent,           // [1] 内联内容（@tag() 格式的值）
+                    $innerContent,         // [2] 子内容
+                ];
+                
+                // 调用原始回调：function ($tag_key, $config, $tag_data, $attributes)
+                return $callback($tag_key, $tagConfig, $tag_data, $attrs);
+            });
+        }
+    }
+    
+    /**
+     * 设置调试模式
+     */
+    public function setDebug(bool $debug): void
+    {
+        $this->debug = $debug;
+    }
+    
+    /**
+     * 获取统计信息
+     */
+    public function stats(): array
+    {
+        return [
+            'compilations' => $this->compilations,
+            'cacheHits' => $this->cacheHits,
+            'cache' => $this->cache?->stats() ?? [],
+        ];
+    }
+    
+    /**
+     * 清除缓存
+     */
+    public function clearCache(): void
+    {
+        $this->cache?->flush();
+        self::$varParserCache = [];
+        self::$hookCheckCache = [];
+        self::$compiledRegexCache = [];
+    }
+    
+    /**
+     * 添加编译优化通道
+     */
+    public function addCompilePass(object $pass): void
+    {
+        $this->getCompilePipeline()->addPass($pass);
+    }
+    
+    // ====== 常量定义 ======
     
     public const operators_symbols = [
         # 比较
@@ -676,6 +979,7 @@ class Taglib
                             // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
                             $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
                             $hook_name = trim($hook_name);
+                            
                             // 检查 hook 是否存在
                             $hook_exists = false;
                             $hook_has_files = false;
@@ -1197,7 +1501,15 @@ class Taglib
                                 $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // <block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml'/>
+                            // 或者内联格式 @block(Weline\Demo\Block\Demo) 会解析为 value 属性
                             case 'tag-self-close-with-attrs':
+                                // 支持内联格式：@block(ClassName) 会设置 value 属性
+                                // 将 value 属性作为 class 的备选
+                                if ((!isset($attributes['class']) || !$attributes['class']) && isset($attributes['value']) && $attributes['value']) {
+                                    $attributes['class'] = $attributes['value'];
+                                    unset($attributes['value']);
+                                }
+                                
                                 if (!isset($attributes['class']) || !$attributes['class']) {
                                     $template_html = htmlentities($tag_data[0]);
                                     throw new TemplateException(__("block标签语法使用错误:[{$template_html}]：未指定block类。示例：%{1}", htmlentities("<block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml' vars='item|pageSize|page'/>")));
@@ -1663,6 +1975,14 @@ class Taglib
             $reordered_tags[$tag] = $tag_data;      // 原始标签紧随其后
         }
         $tags = $reordered_tags;
+        
+        // 为内置标签添加 w: 前缀别名（支持 <w:hook> 等写法）
+        $builtinTagsWithAlias = ['hook', 'if', 'else', 'elseif', 'foreach', 'for', 'switch', 'case', 'var', 'lang', 'block', 'template'];
+        foreach ($builtinTagsWithAlias as $tagName) {
+            if (isset($tags[$tagName]) && !isset($tags['w:' . $tagName])) {
+                $tags['w:' . $tagName] = $tags[$tagName];
+            }
+        }
         
         // 缓存结果，避免同一请求内重复收集
         self::$cachedTags = $tags;
@@ -2788,7 +3108,11 @@ class Taglib
                     }
                 }
                 
-                $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
+                // 对于 hook/w:hook 标签，不递归编译子节点，因为回调函数需要原始的 <else/> 来分割内容
+                $isHookTag = ($node->name === 'hook' || $node->name === 'w:hook');
+                if (!$isHookTag) {
+                    $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
+                }
                 if (isset($tags[$node->name])) {
                     $node->executionStage = $this->determineTagStage($node);
                     if ($node->executionStage === self::STAGE_COMPILE_TIME) {
@@ -2905,7 +3229,16 @@ class Taglib
         }
         $tagKey = $this->resolveTagKey($node, $config);
         $rawAttributes = $node->rawAttributes ?? '';
-        $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
+        
+        // 对于 hook/w:hook 标签，使用原始内容而不是 generatePhpFromNodes
+        // 因为 hook 回调需要原始的 <else/> 来分割内容
+        $isHookTag = ($node->name === 'hook' || $node->name === 'w:hook');
+        if ($isHookTag) {
+            // 使用原始内容，保留 <else/> 标签
+            $content = $this->buildOriginalChildrenContent($node->children);
+        } else {
+            $content = $this->generatePhpFromNodes($node->children, $tags, $template, $fileName);
+        }
         $tagData = $this->buildTagData($node, $content);
         $attributes = $this->buildAttributesFromRaw($rawAttributes);
 
@@ -2950,6 +3283,25 @@ class Taglib
         }
         $content = $this->buildStringFromNodes($node->children);
         return '<' . $node->name . $attrs . '>' . $content . '</' . $node->name . '>';
+    }
+
+    /**
+     * 构建原始子节点内容，保留标签形式（不执行回调）
+     * 用于 hook 标签，需要保留 <else/> 等标签让回调函数处理
+     */
+    private function buildOriginalChildrenContent(array $children): string
+    {
+        $content = '';
+        foreach ($children as $child) {
+            if ($child instanceof TextNode) {
+                $content .= $child->value;
+            } elseif ($child instanceof PhpNode) {
+                $content .= $child->code;
+            } elseif ($child instanceof TagNode) {
+                $content .= $this->buildOriginalTagMarkup($child);
+            }
+        }
+        return $content;
     }
 
     private function generatePhpFromAst(ProgramNode $root, array $tags, Template $template, string $fileName): string
@@ -3067,19 +3419,15 @@ class Taglib
         return '<' . $tagName . $rawAttributes . '>' . $content . '</' . $tagName . '>';
     }
 
+    /**
+     * 标签替换（v1 API，已废弃）
+     * 
+     * @deprecated 请使用 compile() 方法
+     */
     public function tagReplace(Template &$template, string &$content, string &$fileName = ''): array|string
     {
-        if (PROD) {
-            $content = $this->removeHtmlComments($content);
-        }
-
-        $tags = $this->getTags($template, $fileName, $content);
-        $tokens = $this->tokenizeTemplate($content);
-        $ast = $this->parseTokensToAst($tokens, $tags);
-        $ast = $this->compileAst($ast, $tags, $template, $fileName);
-        $ast = $this->optimizeAst($ast);
-        $content = $this->generatePhpFromAst($ast, $tags, $template, $fileName);
-
+        // 调用新的 compile 方法
+        $content = $this->compile($template, $content, $fileName);
         return $content;
     }
 }

@@ -255,7 +255,7 @@ class ComponentResolver
         $component = clone $this->getComponentModel();
         $components = $component->clear()
             ->where(Component::fields_CODE, $code)
-            ->where(Component::fields_STYLE_CODE, '!=', $styleCode)
+            ->where(Component::fields_STYLE_CODE, $styleCode, '!=')
             ->where(Component::fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()

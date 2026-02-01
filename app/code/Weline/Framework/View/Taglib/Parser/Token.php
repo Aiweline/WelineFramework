@@ -22,6 +22,7 @@ enum TokenType: string
     case SelfCloseTag = 'self';   // 自闭合标签 <tag/>
     case InlineTag = 'inline';    // 内联标签 @tag(...)
     case Placeholder = 'php';     // PHP 占位符
+    case Variable = 'variable';   // 双花括号变量 {{variable}}
 }
 
 /**

@@ -44,9 +44,11 @@ class ExtendsScanner
             // 扫描模块的 extends.php 规约文件
             $extendsConfig = $this->scanModuleExtendsConfig($moduleName, $basePath);
             if ($extendsConfig) {
+                // 保留之前已收集的 extended_by 数据，避免覆盖
+                $existingExtendedBy = $result[$moduleName]['extended_by'] ?? [];
                 $result[$moduleName] = [
                     'extends' => $extendsConfig,
-                    'extended_by' => []
+                    'extended_by' => $existingExtendedBy
                 ];
             }
 
