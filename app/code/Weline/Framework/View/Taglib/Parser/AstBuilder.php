@@ -94,6 +94,13 @@ final class AstBuilder
                 continue;
             }
 
+            // 2.5. 双花括号变量节点 {{variable}}
+            if ($token->type === TokenType::Variable) {
+                $nodes[] = $this->buildVariableNode($token);
+                $i++;
+                continue;
+            }
+
             // 3. 内联标签 @template(...)
             if ($token->type === TokenType::InlineTag) {
                 $nodes[] = $this->buildInlineTagNode($token);
@@ -184,6 +191,28 @@ final class AstBuilder
         }
 
         return NodePool::phpPlaceholder($token->line, $placeholder, $expression, $originalCode, $isEcho);
+    }
+
+    /**
+     * 构建双花括号变量节点 {{variable}}
+     */
+    private function buildVariableNode(Token $token): PhpPlaceholder
+    {
+        $varPath = $token->value;
+        $fullMatch = $token->getMeta('fullMatch', '{{' . $varPath . '}}');
+        
+        $placeholder = '__VAR_' . md5($varPath) . '__';
+        
+        // 生成 PHP 代码用于变量输出
+        // 使用 Taglib 的 varParser 方法解析变量路径
+        // 这里直接生成占位符，后续由 CodeGenerator 处理
+        return NodePool::phpPlaceholder(
+            $token->line,
+            $placeholder,   // 唯一占位符
+            $varPath,       // 表达式
+            $fullMatch,     // 原始代码
+            true            // 是 echo 类型
+        );
     }
 
     /**

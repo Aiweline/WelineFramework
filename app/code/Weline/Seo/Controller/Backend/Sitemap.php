@@ -77,10 +77,13 @@ class Sitemap extends BackendController
         }
         
         try {
-            $websiteId = (int)$this->request->getPost('website_id', 0);
-            $generateAll = (bool)$this->request->getPost('generate_all', false);
-            $useProviders = (bool)$this->request->getPost('use_providers', false);
-            $providerModule = (string)$this->request->getPost('provider_module', '');
+            // 获取 POST 数据，支持多种格式
+            $postData = $this->getPostData();
+            
+            $websiteId = (int)($postData['website_id'] ?? 0);
+            $generateAll = $this->toBool($postData['generate_all'] ?? false);
+            $useProviders = $this->toBool($postData['use_providers'] ?? false);
+            $providerModule = (string)($postData['provider_module'] ?? '');
             
             // 使用注册的 Provider 生成
             if ($useProviders) {
@@ -742,5 +745,64 @@ class Sitemap extends BackendController
             'message' => $message,
             'data' => $data,
         ], JSON_UNESCAPED_UNICODE);
+    }
+    
+    /**
+     * 获取 POST 数据，支持多种格式
+     * 
+     * 支持：
+     * - 标准 $_POST（application/x-www-form-urlencoded 和 multipart/form-data）
+     * - JSON 请求体（application/json）
+     * - 原始 URL 编码数据（用于某些 CLI 工具）
+     * 
+     * @return array
+     */
+    private function getPostData(): array
+    {
+        // 优先使用 $_POST
+        if (!empty($_POST)) {
+            return $_POST;
+        }
+        
+        // 尝试从原始输入解析
+        $rawInput = file_get_contents('php://input');
+        if (empty($rawInput)) {
+            return [];
+        }
+        
+        // 尝试解析为 JSON
+        $jsonData = json_decode($rawInput, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+            return $jsonData;
+        }
+        
+        // 尝试解析为 URL 编码数据
+        $parsed = [];
+        parse_str($rawInput, $parsed);
+        if (!empty($parsed)) {
+            return $parsed;
+        }
+        
+        return [];
+    }
+    
+    /**
+     * 将值转换为布尔值
+     * 
+     * @param mixed $value
+     * @return bool
+     */
+    private function toBool(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['1', 'true', 'yes', 'on'], true);
+        }
+        if (is_numeric($value)) {
+            return (int)$value !== 0;
+        }
+        return (bool)$value;
     }
 }

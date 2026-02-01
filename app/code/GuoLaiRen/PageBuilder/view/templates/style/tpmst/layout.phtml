@@ -236,6 +236,34 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
     <?php if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode): ?>
         <?php
         \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+        
+        // 获取网站信息（用于像素统计）
+        $websiteUrl = '';
+        $websiteCode = '';
+        try {
+            if (class_exists('\Weline\Websites\Model\Website')) {
+                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $website = clone $websiteModel;
+                $website->clear()->load($websiteId);
+                if ($website->getId()) {
+                    $websiteUrl = $website->getData('url') ?? '';
+                    $websiteCode = $website->getData('code') ?? '';
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果获取网站信息失败，不影响像素功能
+        }
+        
+        // 设置 website_url Cookie
+        if (!empty($websiteUrl)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+        }
+        
+        // 设置 website_code Cookie，用于区分不同站点
+        if (!empty($websiteCode)) {
+            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+        }
+        
         $this->assign('pixel_name', htmlspecialchars($pixelName));
         $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
         ?>

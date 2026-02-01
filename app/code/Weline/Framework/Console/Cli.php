@@ -251,8 +251,11 @@ class Cli extends CliAbstract
             }
             
             if (str_contains($arg, '=')) {
-                $arg = explode('=', $arg);
-                $args[trim($arg[0], '-')] = $arg[1] ?? true;
+                // 只分割第一个等号，保留后面的值完整
+                $eqPos = strpos($arg, '=');
+                $key = trim(substr($arg, 0, $eqPos), '-');
+                $value = substr($arg, $eqPos + 1);
+                $args[$key] = $value !== false ? $value : true;
                 continue;
             }
             
