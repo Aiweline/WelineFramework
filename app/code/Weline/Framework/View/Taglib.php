@@ -38,6 +38,10 @@ use Weline\Framework\View\Taglib\Runtime\RuntimeTag;
 use Weline\Framework\View\Taglib\Debug\SourceMap;
 use Weline\Framework\View\Taglib\Ast\TagNode as AstTagNode;
 use Weline\Framework\View\Taglib\Ast\AttrNode as AstAttrNode;
+use Weline\Framework\View\Taglib\Ast\TextNode as AstTextNode;
+use Weline\Framework\View\Taglib\Ast\PhpNode as AstPhpNode;
+use Weline\Framework\View\Taglib\Ast\ProgramNode as AstProgramNode;
+use Weline\Framework\View\Taglib\Ast\PhpPlaceholder as AstPhpPlaceholder;
 
 class Taglib
 {
@@ -365,13 +369,43 @@ class Taglib
                 }
                 
                 // 获取子内容代码
-                // 对于 hook/w:hook 标签，使用原始子节点内容而不是生成的代码
-                // 因为 hook 回调需要原始的 <else/> 来分割内容
                 $isHookTag = ($tagName === 'hook' || $tagName === 'w:hook');
                 $innerContent = '';
-                if ($isHookTag && isset($params['children']) && is_array($params['children'])) {
-                    // 使用原始子节点构建内容
-                    $innerContent = $this->buildOriginalChildrenContent($params['children']);
+                $rawContent = $params['rawContent'] ?? '';
+                
+                if ($isHookTag && $rawContent !== '') {
+                    // 对于 hook 标签，需要特殊处理：
+                    // - rawContent 包含 <else/> 但内容未编译
+                    // - childrenCode() 已编译但不包含 <else/>（格式：hookname + fallback_without_else）
+                    // 策略：从 rawContent 提取 hook 名称，从 childrenCode() 中移除 hook 名称保留 fallback
+                    
+                    // 检查 rawContent 中是否有 <else/>
+                    $else_pattern = '/<(?:w:)?else\s*\/?>/i';
+                    if (preg_match($else_pattern, $rawContent, $else_matches, PREG_OFFSET_CAPTURE)) {
+                        $else_pos = (int)$else_matches[0][1];
+                        $else_match_str = $else_matches[0][0];
+                        $hook_name_from_raw = trim(substr($rawContent, 0, $else_pos));
+                        $hook_name_from_raw = preg_replace('/\s+/', '', $hook_name_from_raw);
+                        
+                        // 获取已编译的全部子内容（hookname + fallback_without_else）
+                        $compiled_all = '';
+                        if (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
+                            $compiled_all = $params['childrenCode']();
+                        }
+                        
+                        // 从已编译内容中移除开头的 hook 名称，只保留 fallback 部分
+                        // compiled_all 格式：hookname + fallback_content（AstBuilder 移除了 <else/>）
+                        $compiled_fallback = $compiled_all;
+                        if (str_starts_with($compiled_all, $hook_name_from_raw)) {
+                            $compiled_fallback = substr($compiled_all, strlen($hook_name_from_raw));
+                        }
+                        
+                        // 重新组装：hook_name + <else/> + compiled_fallback
+                        $innerContent = $hook_name_from_raw . $else_match_str . $compiled_fallback;
+                    } else {
+                        // 没有 <else/>，直接使用 rawContent（只是 hook 名称）
+                        $innerContent = $rawContent;
+                    }
                 } elseif (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
                     $innerContent = $params['childrenCode']();
                 }
@@ -3136,11 +3170,13 @@ class Taglib
     {
         $result = '';
         foreach ($nodes as $node) {
-            if ($node instanceof TextNode) {
+            if ($node instanceof AstTextNode || $node instanceof TextNode) {
                 $result .= $node->value;
-            } elseif ($node instanceof PhpNode) {
+            } elseif ($node instanceof AstPhpNode || $node instanceof PhpNode) {
                 $result .= $node->code;
-            } elseif ($node instanceof TagNode) {
+            } elseif ($node instanceof AstPhpPlaceholder) {
+                $result .= $node->placeholder;
+            } elseif ($node instanceof AstTagNode || $node instanceof TagNode) {
                 $result .= $this->buildOriginalTagMarkup($node);
             }
         }
@@ -3150,10 +3186,10 @@ class Taglib
     private function isNodesDynamic(array $nodes): bool
     {
         foreach ($nodes as $node) {
-            if ($node instanceof PhpNode) {
+            if ($node instanceof AstPhpNode || $node instanceof PhpNode || $node instanceof AstPhpPlaceholder) {
                 return true;
             }
-            if ($node instanceof TagNode) {
+            if ($node instanceof AstTagNode || $node instanceof TagNode) {
                 return true;
             }
         }
@@ -3163,7 +3199,7 @@ class Taglib
     private function isAttributesDynamic(array $attributes): bool
     {
         foreach ($attributes as $attr) {
-            if (!$attr instanceof AttrNode) {
+            if (!$attr instanceof AttrNode && !$attr instanceof AstAttrNode) {
                 continue;
             }
             if ($this->isNodesDynamic($attr->value)) {
@@ -3458,9 +3494,10 @@ class Taglib
         return [$node->raw ?? $this->buildOriginalTagMarkup($node), $node->rawAttributes ?? '', $content];
     }
 
-    private function buildOriginalTagMarkup(TagNode $node): string
+    private function buildOriginalTagMarkup(AstTagNode|TagNode $node): string
     {
         $attrs = $node->rawAttributes ?? '';
+        
         if ($node->selfClosing) {
             return '<' . $node->name . $attrs . '/>';
         }
@@ -3475,15 +3512,21 @@ class Taglib
     private function buildOriginalChildrenContent(array $children): string
     {
         $content = '';
-        foreach ($children as $child) {
-            if ($child instanceof TextNode) {
-                $content .= $child->value;
-            } elseif ($child instanceof PhpNode) {
-                $content .= $child->code;
-            } elseif ($child instanceof TagNode) {
-                $content .= $this->buildOriginalTagMarkup($child);
+        foreach ($children as $idx => $child) {
+            $added = '';
+            if ($child instanceof AstTextNode) {
+                $added = $child->value;
+            } elseif ($child instanceof AstPhpNode) {
+                $added = $child->code;
+            } elseif ($child instanceof AstPhpPlaceholder) {
+                $added = $child->placeholder;
+            } elseif ($child instanceof AstTagNode) {
+                $added = $this->buildOriginalTagMarkup($child);
             }
+            
+            $content .= $added;
         }
+        
         return $content;
     }
 
