@@ -36,6 +36,15 @@
          icon="mdi mdi-account-key"
          order="30"/>
 
+    <!-- 站点SEO账户关联 -->
+    <add source="Weline_Seo::website_account"
+         name="website_account"
+         title="站点账户绑定"
+         action="seo/backend/websiteAccount"
+         parent="Weline_Seo::seo_management"
+         icon="mdi mdi-link-variant"
+         order="35"/>
+
     <!-- Sitemap 管理 -->
     <add source="Weline_Seo::sitemap_management"
          name="sitemap_management"
