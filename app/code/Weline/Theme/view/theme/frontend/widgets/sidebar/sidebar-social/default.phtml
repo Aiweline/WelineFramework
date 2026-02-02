@@ -4,11 +4,14 @@
  * 
  * 侧栏显示的社交媒体链接，支持多种样式和微信二维码
  * 
- * @meta::theme {default=Weline_Theme,name="主题命名空间",description="主题命名空间，用于主题模块的命名空间"}
- * @meta::theme.widget.social {default="社交媒体部件组",name="社交媒体部件组",description="社交媒体部件组，用于给元数据分组"}
- * @meta::theme.widget.social.sidebar {default="侧栏社交链接",name="侧栏社交链接",description="侧栏社交媒体链接部件"}
- * @meta::theme.widget.social.sidebar.name {default="侧栏社交链接",name="侧栏社交链接",description="侧栏社交媒体链接部件名称"}
- * @meta::theme.widget.social.sidebar.description {default="侧栏显示的社交媒体链接",name="侧栏显示的社交媒体链接",description="侧栏显示的社交媒体链接，支持多种样式和微信二维码"}
+ * @widget.code {sidebar-social}
+ * @widget.name {侧栏社交}
+ * @widget.description {侧边栏社交媒体链接，支持微信二维码}
+ * @widget.type {social}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
  * 
  * @param title {default="关注我们",name="标题",description="部件标题",type=string}
  * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}

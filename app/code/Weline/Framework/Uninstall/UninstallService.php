@@ -445,15 +445,16 @@ class UninstallService
                         'time' => date('Y-m-d H:i:s'),
                         'success' => true,
                     ];
-                ];
+                }
             }
 
             // 触发卸载前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_module', [
+            $beforeEventData = [
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_uninstall_module', $beforeEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -466,10 +467,11 @@ class UninstallService
             // 因为卸载涉及数据库操作等，应该由具体的模块管理器处理
 
             // 触发卸载后事件
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_module', [
+            $afterEventData = [
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_uninstall_module', $afterEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -548,10 +550,11 @@ class UninstallService
 
             // 触发卸载前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_theme', [
+            $beforeThemeEventData = [
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_uninstall_theme', $beforeThemeEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -561,10 +564,11 @@ class UninstallService
             ];
 
             // 触发卸载后事件
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_theme', [
+            $afterThemeEventData = [
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_uninstall_theme', $afterThemeEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -643,10 +647,11 @@ class UninstallService
 
             // 触发卸载前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_uninstall_i18n', [
+            $beforeI18nEventData = [
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_uninstall_i18n', $beforeI18nEventData);
 
             $steps[] = [
                 'step' => 'before_uninstall',
@@ -656,10 +661,11 @@ class UninstallService
             ];
 
             // 触发卸载后事件
-            $eventManager->dispatch('Framework_UninstallService::after_uninstall_i18n', [
+            $afterI18nEventData = [
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_uninstall_i18n', $afterI18nEventData);
 
             $steps[] = [
                 'step' => 'after_uninstall',
@@ -745,21 +751,23 @@ class UninstallService
 
             // 触发回滚前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_module', [
+            $beforeRollbackModuleData = [
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_rollback_module', $beforeRollbackModuleData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
 
             // 触发回滚后事件
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_module', [
+            $afterRollbackModuleData = [
                 'module_name' => $moduleName,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_rollback_module', $afterRollbackModuleData);
 
             return [
                 'success' => true,
@@ -825,21 +833,23 @@ class UninstallService
 
             // 触发回滚前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_theme', [
+            $beforeRollbackThemeData = [
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_rollback_theme', $beforeRollbackThemeData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
 
             // 触发回滚后事件
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_theme', [
+            $afterRollbackThemeData = [
                 'theme_name' => $themeName,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_rollback_theme', $afterRollbackThemeData);
 
             return [
                 'success' => true,
@@ -905,21 +915,23 @@ class UninstallService
 
             // 触发回滚前事件
             $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-            $eventManager->dispatch('Framework_UninstallService::before_rollback_i18n', [
+            $beforeRollbackI18nData = [
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::before_rollback_i18n', $beforeRollbackI18nData);
 
             // 恢复文件
             $this->copyDirectory($backupPath, $targetPath, ['backup_info.json']);
 
             // 触发回滚后事件
-            $eventManager->dispatch('Framework_UninstallService::after_rollback_i18n', [
+            $afterRollbackI18nData = [
                 'locale_code' => $localeCode,
                 'backup_path' => $backupPath,
                 'target_path' => $targetPath,
-            ]);
+            ];
+            $eventManager->dispatch('Framework_UninstallService::after_rollback_i18n', $afterRollbackI18nData);
 
             return [
                 'success' => true,
@@ -956,8 +968,19 @@ class UninstallService
             \RecursiveIteratorIterator::SELF_FIRST
         );
 
+        // 规范化源路径，确保使用统一的分隔符
+        $normalizedSource = str_replace(['/', '\\'], DS, realpath($source) ?: $source);
+        $sourceLen = strlen($normalizedSource) + 1; // +1 for trailing separator
+
         foreach ($iterator as $item) {
-            $relativePath = str_replace($source . DS, '', $item->getPathname());
+            // 使用 substr 获取相对路径，避免路径分隔符不一致问题
+            $itemPath = str_replace(['/', '\\'], DS, $item->getPathname());
+            $relativePath = substr($itemPath, $sourceLen);
+            
+            // 跳过无效的相对路径
+            if ($relativePath === false || $relativePath === '') {
+                continue;
+            }
             
             // 检查是否在排除列表中
             $shouldExclude = false;

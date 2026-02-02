@@ -730,14 +730,14 @@ class ThemeLayoutService
                 // WidgetScanner 将原始配置存储在 'config' 子数组中
                 $originalConfig = $widget['config'] ?? [];
                 
-                // 提取 page_types 字段
-                $pageTypes = $widget['page_types'] ?? $originalConfig['page_types'] ?? ['*'];
-                $widget['page_types'] = $pageTypes;
+                // 提取 page_layouts 字段（布局目录名）
+                $pageLayouts = $widget['page_layouts'] ?? $originalConfig['page_layouts'] ?? ['*'];
+                $widget['page_layouts'] = $pageLayouts;
                 
-                // 如果指定了页面类型，检查部件是否适用
+                // 如果指定了布局类型，检查部件是否适用
                 if ($pageType !== null) {
-                    if (!$this->isWidgetAllowedForPageType($pageTypes, $pageType)) {
-                        continue; // 跳过不适用于当前页面类型的部件
+                    if (!$this->isWidgetAllowedForLayout($pageLayouts, $pageType)) {
+                        continue; // 跳过不适用于当前布局的部件
                     }
                 }
                 
@@ -829,26 +829,26 @@ class ThemeLayoutService
     }
 
     /**
-     * 检查部件是否适用于指定的页面类型
+     * 检查部件是否适用于指定的布局
      * 
-     * @param array $widgetPageTypes 部件支持的页面类型列表
-     * @param string $pageType 当前页面类型
+     * @param array $widgetLayouts 部件支持的布局目录名列表
+     * @param string $layoutName 当前布局目录名
      * @return bool
      */
-    private function isWidgetAllowedForPageType(array $widgetPageTypes, string $pageType): bool
+    private function isWidgetAllowedForLayout(array $widgetLayouts, string $layoutName): bool
     {
-        // * 表示所有页面类型都可用
-        if (in_array('*', $widgetPageTypes)) {
+        // * 表示所有布局都可用
+        if (in_array('*', $widgetLayouts)) {
             return true;
         }
         
-        // 检查是否包含当前页面类型
-        if (in_array($pageType, $widgetPageTypes)) {
+        // 检查是否包含当前布局
+        if (in_array($layoutName, $widgetLayouts)) {
             return true;
         }
         
-        // default 类型的部件在所有页面都可用
-        if (in_array('default', $widgetPageTypes)) {
+        // default 布局的部件在所有页面都可用
+        if (in_array('default', $widgetLayouts)) {
             return true;
         }
         

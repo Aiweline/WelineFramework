@@ -6,6 +6,19 @@
  * 
  * @var array $config 部件配置
  * @var array $children 子部件（按插槽分组）
+ * 
+ * @widget.code {footer-container}
+ * @widget.name {Footer 容器}
+ * @widget.description {页面底部容器，包含链接、社交、订阅、版权等插槽。独占底部区域。}
+ * @widget.type {container}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.is_container {true}
+ * @widget.exclusive {true}
+ * 
+ * @param bg_color {default="#1a1a2e",type="color",label="背景颜色"}
+ * @param text_color {default="#ffffff",type="color",label="文字颜色"}
  */
 
 $bgColor = $config['bg_color'] ?? '#1a1a2e';

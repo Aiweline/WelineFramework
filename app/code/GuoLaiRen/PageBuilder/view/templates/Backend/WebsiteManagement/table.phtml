@@ -1,0 +1,109 @@
+<?php
+/**
+ * PageBuilder 网站管理 - 表格模板
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$websites = $this->getData('websites') ?: [];
+$pagination = $this->getData('pagination') ?: '';
+?>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th><lang>名称</lang></th>
+            <th><lang>代码</lang></th>
+            <th>URL</th>
+            <th><lang>默认货币</lang></th>
+            <th><lang>关联货币</lang></th>
+            <th><lang>关联语言</lang></th>
+            <th><lang>时区</lang></th>
+            <th><lang>操作</lang></th>
+        </tr>
+        </thead>
+        <tbody>
+        <?php if (empty($websites)): ?>
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4">
+                    <i class="mdi mdi-web-off" style="font-size: 2rem;"></i>
+                    <p class="mt-2"><lang>暂无网站数据</lang></p>
+                </td>
+            </tr>
+        <?php else: ?>
+            <?php foreach ($websites as $website): ?>
+                <tr>
+                    <td><?= $website['website_id'] ?></td>
+                    <td><?= htmlspecialchars($website['name']) ?></td>
+                    <td><code><?= htmlspecialchars($website['code']) ?></code></td>
+                    <td>
+                        <a href="<?= htmlspecialchars($website['url']) ?>" target="_blank" class="text-decoration-none">
+                            <?= htmlspecialchars($website['url']) ?>
+                            <i class="mdi mdi-open-in-new ms-1 small"></i>
+                        </a>
+                    </td>
+                    <td>
+                        <?php if (!empty($website['default_currency'])): ?>
+                            <span class="badge bg-primary"><?= htmlspecialchars($website['default_currency']) ?></span>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php 
+                        $currencyCodes = $website['currency_codes'] ?? [];
+                        if (!empty($currencyCodes)): 
+                            foreach ($currencyCodes as $code): ?>
+                                <span class="badge bg-info me-1"><?= htmlspecialchars($code) ?></span>
+                            <?php endforeach;
+                        else: ?>
+                            <span class="text-muted"><lang>全部</lang></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php 
+                        $languageCodes = $website['language_codes'] ?? [];
+                        if (!empty($languageCodes)): 
+                            foreach ($languageCodes as $code): ?>
+                                <span class="badge bg-success me-1"><?= htmlspecialchars($code) ?></span>
+                            <?php endforeach;
+                        else: ?>
+                            <span class="text-muted"><lang>全部</lang></span>
+                        <?php endif; ?>
+                    </td>
+                    <td><small><?= htmlspecialchars($website['default_timezone'] ?? '') ?></small></td>
+                    <td>
+                        <block class='Weline\Component\Block\OffCanvas'
+                               cache='0'
+                               id='edit_website_{{website.website_id}}'
+                               action='*/backend/websiteManagement/edit'
+                               vars='website'
+                               action-params='{id:website.website_id}'
+                               title='编辑网站'
+                               close-button-show='1'
+                               close-button-text='关闭'
+                               direction='right'
+                               class-names='w-75 h-100'
+                               off-canvas-body-style=''
+                               target-button-text='编辑'
+                               icon='mdi mdi-pencil'
+                               target-button-class='btn btn-sm btn-outline-info'
+                               target-tag='a'
+                               save='1'
+                        />
+                        <a href="<?= $this->getBackendUrl('*/backend/websiteManagement/delete') ?>?id=<?= $website['website_id'] ?>"
+                           w-delete="true"
+                           w-msg="<?= __('您确定要删除此网站吗？') ?>"
+                           class="btn btn-sm btn-outline-danger"
+                           title="<?= __('删除') ?>">
+                            <i class="mdi mdi-delete"></i>
+                        </a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        </tbody>
+    </table>
+
+    <?= $pagination ?>
+</div>

@@ -1,0 +1,486 @@
+<?php
+/**
+ * 布局：CMS页面 - 默认布局
+ *
+ * CMS内容页面默认布局，简化为 header、content、footer 三大区域
+ * content 区域是一个大的 slot 容器，可以放入任意部件或容器（行列布局等）
+ * 
+ * 字段
+ * @meta.name {default="CMS页面默认布局",name="CMS页面默认布局",description="CMS页面默认布局，用于描述布局的名称"}
+ * @meta.description {default="CMS页面默认布局，包含 header、content、footer 三大区域",name="CMS页面默认布局描述",description="简化的CMS页面布局，content区域支持自由拖放部件和容器"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
+ * @param title {default="CMS页面",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+$meta = $this->getData('meta') ?? [];
+$colors = $this->getData('colors') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::body-start</w:hook>
+    
+    <div class="weline-page-wrapper">
+        <!-- ========== HEADER 区域 ========== -->
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::header-before</w:hook>
+            
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <!-- ========== CONTENT 主内容区域 ========== -->
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::content-before</w:hook>
+            
+            <main class="cms-page-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cms-page-main" data-layout="cms_page">
+                <!-- 面包屑导航 -->
+                <if condition="meta.showBreadcrumb">
+                    <div class="container">
+                        <w:hook>Weline_Theme::frontend::layouts::cms_page::breadcrumb</w:hook>
+                    </div>
+                </if>
+                
+                <w:hook>Weline_Theme::frontend::layouts::cms_page::main-before</w:hook>
+                
+                <!-- ========== CONTENT SLOT 主内容插槽 ========== -->
+                <w:slot id="content" 
+                        name="内容区域"
+                        multiple="true"
+                        reject="header,footer"
+                        position="content"
+                        class="cms-page-content-slot">
+                    <w:hook name="Weline_Theme::frontend::layouts::cms_page::content">
+                        <if condition="meta.content">
+                            <div class="container">
+                                <div class="cms-content">
+                                    {{meta.content}}
+                                </div>
+                            </div>
+                        <else/>
+                            <div class="cms-page-default-content">
+                                <div class="container">
+                                    <div class="slot-placeholder" data-placeholder="content">
+                                        <span class="placeholder-icon">📄</span>
+                                        <span class="placeholder-text">CMS内容区域 - 拖拽部件或容器到此处</span>
+                                        <span class="placeholder-hint">支持：富文本内容、Banner、图片、视频等任意部件</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </if>
+                    </w:hook>
+                </w:slot>
+                
+                <w:hook>Weline_Theme::frontend::layouts::cms_page::main-after</w:hook>
+            </main>
+            
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+        
+        <!-- ========== FOOTER 区域 ========== -->
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::footer-before</w:hook>
+            
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            
+            <w:hook>Weline_Theme::frontend::layouts::cms_page::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::cms_page::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    
+    <style>
+    /* ========================================
+       CMS页面布局样式
+       ======================================== */
+    
+    .weline-page-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+    
+    .weline-main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .cms-page-main {
+        width: 100%;
+        flex: 1;
+    }
+    
+    .cms-page-content-slot {
+        min-height: 400px;
+        position: relative;
+    }
+    
+    .cms-page-default-content {
+        width: 100%;
+        padding: 3rem 0;
+    }
+    
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+    
+    /* CMS内容样式 */
+    .cms-content {
+        padding: 2rem 0;
+        line-height: 1.8;
+        color: #333;
+    }
+    
+    .cms-content h1,
+    .cms-content h2,
+    .cms-content h3,
+    .cms-content h4,
+    .cms-content h5,
+    .cms-content h6 {
+        margin: 1.5em 0 0.5em;
+        line-height: 1.4;
+        color: #1a1a1a;
+    }
+    
+    .cms-content h1 { font-size: 2.5rem; }
+    .cms-content h2 { font-size: 2rem; }
+    .cms-content h3 { font-size: 1.75rem; }
+    .cms-content h4 { font-size: 1.5rem; }
+    .cms-content h5 { font-size: 1.25rem; }
+    .cms-content h6 { font-size: 1rem; }
+    
+    .cms-content p {
+        margin: 1em 0;
+    }
+    
+    .cms-content img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+    }
+    
+    .cms-content a {
+        color: var(--primary-color, #007bff);
+        text-decoration: underline;
+    }
+    
+    .cms-content a:hover {
+        text-decoration: none;
+    }
+    
+    .cms-content ul,
+    .cms-content ol {
+        margin: 1em 0;
+        padding-left: 2em;
+    }
+    
+    .cms-content li {
+        margin: 0.5em 0;
+    }
+    
+    .cms-content blockquote {
+        margin: 1.5em 0;
+        padding: 1em 1.5em;
+        border-left: 4px solid var(--primary-color, #007bff);
+        background: #f8f9fa;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    .cms-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.5em 0;
+    }
+    
+    .cms-content th,
+    .cms-content td {
+        border: 1px solid #dee2e6;
+        padding: 0.75em 1em;
+        text-align: left;
+    }
+    
+    .cms-content th {
+        background: #f8f9fa;
+        font-weight: 600;
+    }
+    
+    /* 插槽占位符样式 */
+    .slot-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        margin: 20px;
+        text-align: center;
+        color: #6c757d;
+        min-height: 300px;
+    }
+    
+    .slot-placeholder .placeholder-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    
+    .slot-placeholder .placeholder-text {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    
+    .slot-placeholder .placeholder-hint {
+        font-size: 13px;
+        color: #9ca3af;
+        max-width: 400px;
+    }
+    
+    /* 编辑模式下的插槽样式 */
+    body.editor-mode [data-wslot] {
+        outline: 2px dashed transparent;
+        outline-offset: -2px;
+        transition: outline 0.3s ease, background-color 0.3s ease;
+        position: relative;
+    }
+    
+    body.editor-mode [data-wslot]:hover {
+        outline-color: #6366f1;
+        background-color: rgba(99, 102, 241, 0.05);
+    }
+    
+    body.editor-mode [data-wslot].drag-over {
+        outline-color: #10b981;
+        outline-style: solid;
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    body.editor-mode [data-wslot].drag-invalid {
+        outline-color: #ef4444;
+        outline-style: solid;
+        background-color: rgba(239, 68, 68, 0.08);
+    }
+    
+    body.editor-mode [data-wslot]::before {
+        content: attr(data-wslot-name);
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 100;
+        pointer-events: none;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+    }
+    
+    body.editor-mode [data-wslot]:hover::before,
+    body.editor-mode [data-wslot].drag-over::before {
+        opacity: 1;
+    }
+
+    body.editor-mode [data-wslot].slot-active {
+        outline-color: #6366f1;
+        outline-style: solid;
+        background-color: rgba(99, 102, 241, 0.08);
+    }
+    
+    body.editor-mode .slot-placeholder {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    body.editor-mode .slot-placeholder:hover {
+        border-color: #6366f1;
+        background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+        color: #4f46e5;
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+        .cms-page-default-content {
+            padding: 2rem 0;
+        }
+        
+        .slot-placeholder {
+            padding: 40px 15px;
+            min-height: 200px;
+        }
+        
+        .slot-placeholder .placeholder-icon {
+            font-size: 36px;
+        }
+        
+        .cms-content h1 { font-size: 2rem; }
+        .cms-content h2 { font-size: 1.75rem; }
+        .cms-content h3 { font-size: 1.5rem; }
+    }
+    </style>
+    
+    <!-- 编辑模式脚本 -->
+    <?php if ($this->getData('editor_mode')): ?>
+    <script>
+    (function() {
+        document.body.classList.add('editor-mode');
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            .slot-highlight {
+                animation: slot-pulse 0.5s ease-in-out 3;
+            }
+            @keyframes slot-pulse {
+                0%, 100% { outline-color: #6366f1; }
+                50% { outline-color: #10b981; outline-width: 4px; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.querySelectorAll('[data-wslot]').forEach(slot => {
+            slot.addEventListener('click', function(e) {
+                e.stopPropagation();
+                
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                    multiple: this.dataset.wslotMultiple === 'true',
+                    exclusive: this.dataset.wslotExclusive === 'true',
+                    append: this.dataset.wslotAppend === 'true',
+                    prepend: this.dataset.wslotPrepend === 'true'
+                };
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'slot-selected',
+                        slot: slotData
+                    }, '*');
+                }
+                
+                document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
+                this.classList.add('slot-active');
+            });
+            
+            slot.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.add('drag-over');
+                this.classList.remove('drag-invalid');
+            });
+            
+            slot.addEventListener('dragleave', function(e) {
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('drag-over', 'drag-invalid');
+                }
+            });
+            
+            slot.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('drag-over', 'drag-invalid');
+                
+                let widgetData;
+                try {
+                    const jsonData = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                    if (jsonData) {
+                        widgetData = JSON.parse(jsonData);
+                    }
+                } catch (err) {
+                    console.error('Failed to parse widget data:', err);
+                    return;
+                }
+                
+                if (!widgetData) {
+                    console.error('No widget data found in drop event');
+                    return;
+                }
+                
+                const slotData = {
+                    id: this.dataset.wslot,
+                    name: this.dataset.wslotName || this.dataset.wslot,
+                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                    exclusive: this.dataset.wslotExclusive === 'true'
+                };
+                
+                const acceptedCodes = slotData.accept;
+                const widgetCode = widgetData.code;
+                const widgetSlot = widgetData.slot;
+                
+                const allowed = (widgetSlot && widgetSlot === slotData.id) || 
+                               acceptedCodes.includes(widgetCode) || 
+                               acceptedCodes.length === 0;
+                
+                if (!allowed) {
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'widget-rejected',
+                            widget: widgetData,
+                            slot: slotData,
+                            reason: `插槽 "${slotData.name}" 不接受部件 "${widgetData.name || widgetCode}"`
+                        }, '*');
+                    }
+                    this.classList.add('drag-invalid');
+                    setTimeout(() => this.classList.remove('drag-invalid'), 500);
+                    return;
+                }
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'widget-dropped',
+                        widget: widgetData,
+                        slot: slotData
+                    }, '*');
+                }
+                
+                this.classList.add('slot-highlight');
+                setTimeout(() => this.classList.remove('slot-highlight'), 1500);
+            });
+        });
+        
+        document.querySelectorAll('.slot-placeholder').forEach(placeholder => {
+            placeholder.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const slotArea = this.closest('[data-wslot]');
+                if (slotArea) {
+                    slotArea.click();
+                }
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
+</body>
+</html>

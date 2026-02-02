@@ -3,6 +3,20 @@
  * 页脚支付图标部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {footer-payment}
+ * @widget.name {支付方式}
+ * @widget.description {展示支持的支付方式图标}
+ * @widget.type {footer}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {payment}
+ * @widget.exclusive {true}
+ * 
+ * @param title {default="支付方式",type="string",label="标题"}
+ * @param payment_methods {default=["visa","mastercard","paypal","alipay","wechat"],type="array",label="支付方式"}
+ * @param show_label {default=true,type="bool",label="显示标签"}
  */
 
 $title = $this->getData('title') ?? __('支付方式');

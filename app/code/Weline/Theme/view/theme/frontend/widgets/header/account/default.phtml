@@ -4,10 +4,18 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - show_avatar: 显示头像
- * - show_name: 显示用户名
- * - dropdown_items: 下拉菜单项
+ * @widget.code {account}
+ * @widget.name {用户账户入口}
+ * @widget.description {Header 用户账户入口，支持登录状态显示和下拉菜单}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {user-area}
+ * 
+ * @param show_avatar {default=true,type="bool",label="显示头像"}
+ * @param show_name {default=false,type="bool",label="显示用户名"}
+ * @param dropdown_items {default=[],type="array",label="下拉菜单项"}
  */
 
 $showAvatar = (bool)($this->getData('show_avatar') ?? true);

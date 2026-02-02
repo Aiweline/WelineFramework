@@ -487,19 +487,19 @@ HTML;
         if (preg_match('/layouts\/(\w+)\//', $template, $matches)) {
             $layoutDir = $matches[1];
             
-            // 映射目录名到页面类型常量
+            // 目录名直接作为页面类型（与 ThemeLayout 常量一致）
+            // layouts 目录名即为 page_type 值
             $mapping = [
-                'homepage' => ThemeLayout::PAGE_TYPE_HOME,  // homepage 目录 -> home 类型
-                'home' => ThemeLayout::PAGE_TYPE_HOME,
-                'category' => ThemeLayout::PAGE_TYPE_CATEGORY,
-                'product' => ThemeLayout::PAGE_TYPE_PRODUCT,
-                'product_list' => ThemeLayout::PAGE_TYPE_PRODUCT_LIST,  // 产品列表页
-                'cms' => ThemeLayout::PAGE_TYPE_CMS,
-                'cart' => ThemeLayout::PAGE_TYPE_CART,
-                'checkout' => ThemeLayout::PAGE_TYPE_CHECKOUT,
-                'account' => ThemeLayout::PAGE_TYPE_ACCOUNT,
-                'search' => ThemeLayout::PAGE_TYPE_SEARCH,
-                'default' => ThemeLayout::PAGE_TYPE_DEFAULT,
+                'homepage' => ThemeLayout::PAGE_TYPE_HOME,      // homepage
+                'category' => ThemeLayout::PAGE_TYPE_CATEGORY,  // category
+                'product' => ThemeLayout::PAGE_TYPE_PRODUCT,    // product
+                'product_list' => ThemeLayout::PAGE_TYPE_PRODUCT_LIST,  // product_list
+                'cms_page' => ThemeLayout::PAGE_TYPE_CMS,       // cms_page
+                'cart' => ThemeLayout::PAGE_TYPE_CART,          // cart
+                'checkout' => ThemeLayout::PAGE_TYPE_CHECKOUT,  // checkout
+                'account' => ThemeLayout::PAGE_TYPE_ACCOUNT,    // account
+                'search' => ThemeLayout::PAGE_TYPE_SEARCH,      // search
+                'default' => ThemeLayout::PAGE_TYPE_DEFAULT,    // default
             ];
             
             return $mapping[$layoutDir] ?? $layoutDir;

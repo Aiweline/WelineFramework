@@ -3,6 +3,20 @@
  * 客户评价部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {testimonials}
+ * @widget.name {客户评价}
+ * @widget.description {展示客户评价和推荐语}
+ * @widget.type {testimonial}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * 
+ * @param title {default="客户评价",type="string",label="标题"}
+ * @param subtitle {default="看看客户怎么说",type="string",label="副标题"}
+ * @param testimonials {default=[],type="array",label="评价列表",description="每项包含name、avatar、content、rating、company"}
+ * @param columns {default="3",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列"}}
+ * @param layout {default="grid",type="select",label="布局",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('客户评价');
