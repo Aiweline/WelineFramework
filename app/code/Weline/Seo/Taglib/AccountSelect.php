@@ -74,7 +74,7 @@ class AccountSelect implements TaglibInterface
             $class = $attributes['class'] ?? '';
             $style = $attributes['style'] ?? '';
             $limit = (int)($attributes['limit'] ?? 50);
-            $urlPath = $attributes['url'] ?? '*/backend/api/seo/accounts';
+            $urlPath = $attributes['url'] ?? 'seo/backend/api/seo/accounts';
             
             /** @var Url $url */
             $url = w_obj(Url::class);
@@ -114,7 +114,7 @@ class AccountSelect implements TaglibInterface
             $html[] = '    <i class="mdi mdi-account-search me-1"></i>';
             $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('请选择SEO账户')) . '<?php endif; ?></span>';
             $html[] = '  </button>';
-            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060;"' . $dataAttrsStr . '>';
+            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" class="bg-white border rounded shadow-sm" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060; padding: 0.75rem;"' . $dataAttrsStr . '>';
             $html[] = '    <input type="text" class="form-control mb-2" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
             $html[] = '    <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_value" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>"' . $dataAttrsStr . '>';
             $html[] = '    <div class="border rounded shadow bg-white" style="max-height:300px; overflow-y:auto; position:relative;">';
