@@ -250,6 +250,12 @@ class ExtendsScanner
                     $result[$targetModule] = [];
                 }
 
+                // 从 PHP 文件中提取实际的完整类名（解决大小写敏感问题）
+                $className = null;
+                if (str_ends_with($filePath, '.php')) {
+                    $className = $this->extractClassName($filePath);
+                }
+                
                 // 为 Sticker 扩展添加特殊标记
                 $extendInfo = [
                     'type' => $type,
@@ -257,7 +263,8 @@ class ExtendsScanner
                     'source_file' => $filePath,
                     'target_module' => $targetModule,
                     'file_path' => $fileRelativePath,
-                    'relative_path' => $relativePath
+                    'relative_path' => $relativePath,
+                    'class_name' => $className, // 直接存储完整类名
                 ];
 
                 // 如果是 Sticker 扩展，添加特殊信息
@@ -281,6 +288,47 @@ class ExtendsScanner
         } catch (\Exception $e) {
             error_log("扫描模块扩展失败: {$sourceModule}, 错误: " . $e->getMessage());
         }
+    }
+    
+    /**
+     * 从 PHP 文件中提取完整类名
+     * 
+     * 通过读取文件的 namespace 和 class 声明来获取真实的类名
+     * 避免路径大小写推断问题（Windows/Linux 兼容）
+     * 
+     * @param string $filePath 文件完整路径
+     * @return string|null 完整类名，如 GuoLaiRen\PageBuilder\extends\module\Weline_Seo\SitemapProvider\PageBuilderSitemapProvider
+     */
+    private function extractClassName(string $filePath): ?string
+    {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            return null;
+        }
+        
+        // 只读取文件前 4KB（足够提取 namespace 和 class）
+        $content = file_get_contents($filePath, false, null, 0, 4096);
+        if ($content === false) {
+            return null;
+        }
+        
+        $namespace = null;
+        $className = null;
+        
+        // 提取 namespace
+        if (preg_match('/^\s*namespace\s+([^;]+)\s*;/m', $content, $matches)) {
+            $namespace = trim($matches[1]);
+        }
+        
+        // 提取 class/interface/trait 名
+        if (preg_match('/^\s*(?:abstract\s+)?(?:final\s+)?(?:class|interface|trait)\s+(\w+)/m', $content, $matches)) {
+            $className = trim($matches[1]);
+        }
+        
+        if ($namespace && $className) {
+            return $namespace . '\\' . $className;
+        }
+        
+        return null;
     }
 }
 
