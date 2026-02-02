@@ -436,14 +436,12 @@ class ThemeLayoutService
                 $query->where(ThemeLayout::fields_PAGE_TYPE, $pageType);
             }
 
-            $result = $query->select()->fetchOriginal();
+            // 使用 fetchArray() 替代 fetchOriginal()，与其他方法保持一致
+            $result = $query->select()->fetchArray();
             
-            // 检查 fetchOriginal() 是否返回有效对象
-            if ($result === false || $result === null) {
-                return false;
-            }
+            // 检查结果是否为有效数组
+            $count = is_array($result) ? count($result) : 0;
             
-            $count = $result->count();
             return $count > 0;
         } catch (\Exception $e) {
             return false;

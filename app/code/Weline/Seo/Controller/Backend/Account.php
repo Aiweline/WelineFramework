@@ -50,6 +50,76 @@ class Account extends BackendController
         $query->order(SeoAccount::fields_CREATED_AT, 'DESC');
 
         $accounts = $query->fetchArray();
+        
+        // 获取每个账户绑定的站点数量
+        /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
+        $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+        $bindingCounts = [];
+        foreach ($accounts as $account) {
+            $accountId = (int)($account['account_id'] ?? 0);
+            if ($accountId > 0) {
+                $bindings = $websiteAccountModel->reset()
+                    ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                    ->select()
+                    ->fetchArray();
+                $bindingCounts[$accountId] = count($bindings);
+            }
+        }
+        
+        // 获取每个账户的统计数据汇总
+        /** @var \Weline\Seo\Model\SeoWebsiteStats $statsModel */
+        $statsModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteStats::class);
+        $accountStats = [];
+        foreach ($accounts as $account) {
+            $accountId = (int)($account['account_id'] ?? 0);
+            if ($accountId > 0) {
+                // 获取该账户关联的所有统计数据（取每个站点最新一条汇总）
+                $stats = $statsModel->reset()
+                    ->where(\Weline\Seo\Model\SeoWebsiteStats::fields_ACCOUNT_ID, $accountId)
+                    ->order(\Weline\Seo\Model\SeoWebsiteStats::fields_STATS_DATE, 'DESC')
+                    ->select()
+                    ->fetchArray();
+                
+                // 汇总统计数据（去重：每个站点只取最新一条）
+                $processedWebsites = [];
+                $totalStats = [
+                    'indexed_pages' => 0,
+                    'submitted_urls' => 0,
+                    'clicks' => 0,
+                    'impressions' => 0,
+                    'error_count' => 0,
+                    'last_sync_at' => null,
+                ];
+                
+                foreach ($stats as $stat) {
+                    $websiteId = (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_WEBSITE_ID] ?? 0);
+                    if ($websiteId > 0 && !in_array($websiteId, $processedWebsites)) {
+                        $processedWebsites[] = $websiteId;
+                        $totalStats['indexed_pages'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_INDEXED_PAGES] ?? 0);
+                        $totalStats['submitted_urls'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_SUBMITTED_URLS] ?? 0);
+                        $totalStats['clicks'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_CLICKS] ?? 0);
+                        $totalStats['impressions'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_IMPRESSIONS] ?? 0);
+                        $totalStats['error_count'] += (int)($stat[\Weline\Seo\Model\SeoWebsiteStats::fields_ERROR_COUNT] ?? 0);
+                        
+                        // 取最新的同步时间
+                        $syncAt = $stat[\Weline\Seo\Model\SeoWebsiteStats::fields_LAST_SYNC_AT] ?? null;
+                        if ($syncAt && (!$totalStats['last_sync_at'] || $syncAt > $totalStats['last_sync_at'])) {
+                            $totalStats['last_sync_at'] = $syncAt;
+                        }
+                    }
+                }
+                
+                $accountStats[$accountId] = $totalStats;
+            }
+        }
+        
+        // 将绑定数量和统计数据添加到账户数据中
+        foreach ($accounts as &$account) {
+            $accountId = (int)($account['account_id'] ?? 0);
+            $account['bound_websites_count'] = $bindingCounts[$accountId] ?? 0;
+            $account['stats'] = $accountStats[$accountId] ?? null;
+        }
+        unset($account);
 
         // 检测是否是 AJAX 请求（三方调用）
         $xRequestedWith = (string)($this->request->getHeader('X-Requested-With') ?? '');
@@ -313,19 +383,38 @@ class Account extends BackendController
             
             // 找出需要删除的绑定（在旧列表中但不在新列表中）
             $toDelete = array_diff($existingWebsiteIds, $websiteIds);
+            $deletedCount = 0;
             foreach ($toDelete as $websiteId) {
-                $websiteAccountModel->unbindWebsiteAccount($websiteId, $accountId);
+                if ($websiteAccountModel->unbindWebsiteAccount($websiteId, $accountId)) {
+                    $deletedCount++;
+                }
             }
             
             // 找出需要新增的绑定（在新列表中但不在旧列表中）
             $toAdd = array_diff($websiteIds, $existingWebsiteIds);
+            $addedCount = 0;
             foreach ($toAdd as $websiteId) {
                 $websiteAccountModel->bindWebsiteAccount($websiteId, $accountId);
+                $addedCount++;
+            }
+            
+            // 根据操作结果生成消息
+            $message = '';
+            if ($addedCount > 0 && $deletedCount > 0) {
+                $message = __('绑定了 %{1} 个站点，解绑了 %{2} 个站点', [$addedCount, $deletedCount]);
+            } elseif ($addedCount > 0) {
+                $message = __('成功绑定 %{1} 个站点', $addedCount);
+            } elseif ($deletedCount > 0) {
+                $message = __('成功解绑 %{1} 个站点', $deletedCount);
+            } else {
+                $message = __('站点绑定未发生变化');
             }
             
             return $this->jsonResponse([
                 'success' => true,
-                'message' => __('站点绑定成功'),
+                'message' => $message,
+                'added' => $addedCount,
+                'deleted' => $deletedCount,
             ]);
         } catch (\Throwable $e) {
             return $this->jsonResponse([
@@ -504,6 +593,132 @@ class Account extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * 手动同步账户统计数据
+     */
+    #[AclAttribute('Weline_Seo::seo_account_sync_stats', '同步统计数据', 'mdi-sync', '手动同步账户统计数据')]
+    public function syncStats(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('无效的请求方法'),
+            ]);
+        }
+        
+        $accountId = (int)$this->request->getPost('account_id', 0);
+        
+        if ($accountId <= 0) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('账户ID无效'),
+            ]);
+        }
+        
+        try {
+            // 加载账户
+            $account = $this->getAccountModel()->reset()->load($accountId);
+            if (!$account->getId()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('账户不存在'),
+                ]);
+            }
+            
+            $platform = $account->getPlatform();
+            if (empty($platform)) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('账户未配置平台'),
+                ]);
+            }
+            
+            // 获取适配器
+            $adapter = $this->adapterRegistry->getAdapter($platform);
+            if (!$adapter || !$adapter->supportsStats()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('该平台不支持统计数据获取'),
+                ]);
+            }
+            
+            // 获取绑定的站点
+            /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
+            $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+            $bindings = $websiteAccountModel->reset()
+                ->where(\Weline\Seo\Model\SeoWebsiteAccount::fields_ACCOUNT_ID, $accountId)
+                ->select()
+                ->fetchArray();
+            
+            if (empty($bindings)) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('该账户没有绑定任何站点'),
+                ]);
+            }
+            
+            /** @var \Weline\Websites\Model\Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            
+            /** @var \Weline\Seo\Model\SeoWebsiteStats $statsModel */
+            $statsModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteStats::class);
+            
+            $accountConfig = ['config' => $account->getConfigArray()];
+            $syncedCount = 0;
+            $errors = [];
+            
+            foreach ($bindings as $binding) {
+                $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                if ($websiteId <= 0) {
+                    continue;
+                }
+                
+                $website = $websiteModel->reset()->load($websiteId);
+                if (!$website->getId()) {
+                    continue;
+                }
+                
+                $siteUrl = $website->getData('url') ?: '';
+                if (empty($siteUrl)) {
+                    continue;
+                }
+                
+                $result = $adapter->getStats($siteUrl, $accountConfig);
+                
+                if ($result['success'] && !empty($result['data'])) {
+                    $statsRecord = $statsModel->reset();
+                    $statsRecord->getOrCreateTodayStats($websiteId, $accountId, $platform);
+                    $statsRecord->updateStats($result['data']);
+                    $syncedCount++;
+                } else {
+                    $errors[] = $website->getData('name') . ': ' . ($result['message'] ?? __('未知错误'));
+                }
+            }
+            
+            if ($syncedCount > 0) {
+                $message = __('成功同步 %{1} 个站点的统计数据', $syncedCount);
+                if (!empty($errors)) {
+                    $message .= '，' . count($errors) . ' 个失败';
+                }
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => $message,
+                ]);
+            } else {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('同步失败：%{1}', implode('; ', $errors)),
+                ]);
+            }
+            
+        } catch (\Throwable $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('同步失败：%{1}', $e->getMessage()),
+            ]);
+        }
     }
 }
 
