@@ -49,8 +49,10 @@ class Builder extends BackendController
         
         $styleCode = $this->pageService->getStyleCode($page);
         
-        // 扫描并注册组件
-        $this->componentService->scanAndRegister($styleCode);
+        // 扫描并注册组件（包括共享组件和所有其他模板的组件）
+        $this->componentService->scanAndRegister('_shared'); // 共享组件
+        $this->componentService->scanAndRegister($styleCode); // 当前模板组件
+        $this->componentService->scanAndRegisterAll(); // 所有其他模板的组件（跨模板支持）
         
         // 获取或创建页面布局
         $layout = $this->layoutService->getOrCreate($pageId);
@@ -61,8 +63,12 @@ class Builder extends BackendController
             $layout->save();
         }
         
-        // 获取组件
-        $components = $this->componentService->getComponentsByStyle($styleCode);
+        // 获取组件（包含共享组件和兼容组件）
+        $components = $this->componentService->getComponentsByStyle($styleCode, true);
+        
+        // 合并共享组件到 own 列表的末尾（便于使用）
+        $ownComponents = $components['own'] ?? [];
+        $sharedComponents = $components['shared'] ?? [];
         
         // 获取所有可用的样式模板
         $styles = $this->pageService->getAvailableStyles();
@@ -73,8 +79,9 @@ class Builder extends BackendController
             'style_code' => $styleCode,
             'layout' => $layout,
             'layout_config' => $layout->exportConfig(),
-            'own_components' => $components['own'],
-            'compatible_components' => $components['compatible'],
+            'own_components' => $ownComponents,
+            'shared_components' => $sharedComponents,
+            'compatible_components' => $components['compatible'] ?? [],
             'styles' => $styles,
             'page_title' => __('可视化页面构建器') . ' - ' . $page->getData('name'),
         ]);
