@@ -200,22 +200,29 @@ class SeoAccount extends Model
         }
 
         // 添加 platform 字段（v1.0.1）
-        if (!$setup->columnExist(self::fields_PLATFORM)) {
-            $setup->addColumn(
-                self::fields_PLATFORM,
-                TableInterface::column_type_VARCHAR,
-                50,
-                'not null default ""',
-                'Sitemap平台代码：google/bing/baidu等',
-                self::fields_MODULE // 在 module 字段之后
-            );
+        if (!$setup->hasField(self::fields_PLATFORM)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_PLATFORM,
+                    self::fields_MODULE, // 在 module 字段之后
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'not null default \'\'',
+                    'Sitemap平台代码：google/bing/baidu等'
+                )
+                ->alter();
             
-            $setup->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_platform',
-                [self::fields_PLATFORM],
-                '平台索引'
-            );
+            // 添加索引
+            if (!$setup->hasIndex('idx_platform')) {
+                $setup->alterTable()
+                    ->addIndex(
+                        TableInterface::index_type_KEY,
+                        'idx_platform',
+                        [self::fields_PLATFORM],
+                        '平台索引'
+                    )
+                    ->alter();
+            }
         }
     }
 
