@@ -715,13 +715,36 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                             <div class="platform-group" style="border-left: 4px solid <?= $color ?>; margin-left: 15px; margin-top: 10px; border-radius: 4px; overflow: hidden;">
                                                 <!-- 平台头部 -->
                                                 <div class="file-item" style="background: <?= $color ?>15; cursor: pointer;" onclick="toggleScope(this)" data-bs-toggle="collapse" data-bs-target="#platform-<?= htmlspecialchars($websiteCode) ?>-<?= htmlspecialchars($platformCode) ?>">
-                                                    <div class="file-info">
+                                                    <div class="file-info" style="flex: 1;">
                                                         <i class="mdi mdi-cloud-outline file-icon" style="color: <?= $color ?>; font-size: 24px;"></i>
-                                                        <div class="file-details">
-                                                            <span class="file-name">
+                                                        <div class="file-details" style="flex: 1;">
+                                                            <span class="file-name d-flex align-items-center flex-wrap gap-1">
                                                                 <strong style="color: <?= $color ?>;"><?= htmlspecialchars($platformData['platform_name']) ?></strong>
                                                                 <span class="badge ms-2" style="background: <?= $color ?>; color: #fff;"><?= $platformData['module_count'] ?? 0 ?> <lang>个模块</lang></span>
                                                                 <span class="badge bg-secondary ms-1"><?= $platformData['file_count'] ?? 0 ?> <lang>个文件</lang></span>
+                                                                <?php 
+                                                                // 显示 SEO 账户信息
+                                                                $seoAccount = $platformData['seo_account'] ?? null;
+                                                                if ($seoAccount): 
+                                                                ?>
+                                                                <span class="ms-2 text-muted" style="font-size: 12px;">
+                                                                    <i class="mdi mdi-account-key me-1"></i><?= htmlspecialchars($seoAccount['account_name']) ?>
+                                                                </span>
+                                                                <?php if ($seoAccount['is_auto_submit']): ?>
+                                                                <span class="badge bg-success ms-1" title="<?= __('已启用自动提交') ?>">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>自动提交</lang>
+                                                                </span>
+                                                                <?php else: ?>
+                                                                <span class="badge bg-warning text-dark ms-1" title="<?= __('未启用自动提交') ?>">
+                                                                    <i class="mdi mdi-pause-circle"></i> <lang>手动</lang>
+                                                                </span>
+                                                                <?php endif; ?>
+                                                                <?php if ($seoAccount['enable_cron_push']): ?>
+                                                                <span class="badge bg-info ms-1" title="<?= __('定时任务推送URL') ?>">
+                                                                    <i class="mdi mdi-clock-outline"></i> <lang>定时推送</lang>
+                                                                </span>
+                                                                <?php endif; ?>
+                                                                <?php endif; ?>
                                                             </span>
                                                         </div>
                                                     </div>

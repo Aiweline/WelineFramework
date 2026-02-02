@@ -33,6 +33,12 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     public const MAX_SIZE = 52428800; // 50 MB
     public const INDEXING_API_URL = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
     public const INDEXING_API_SCOPE = 'https://www.googleapis.com/auth/indexing';
+    public const WEBMASTER_API_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+    public const SEARCH_ANALYTICS_URL = 'https://searchconsole.googleapis.com/webmasters/v3/sites/%s/searchAnalytics/query';
+    public const SITEMAPS_LIST_URL = 'https://searchconsole.googleapis.com/webmasters/v3/sites/%s/sitemaps';
+    
+    /** @deprecated Google Ping 已于 2023 年弃用 */
+    public const PING_URL = 'https://www.google.com/webmasters/sitemaps/ping?sitemap=';
 
     public function getPlatformCode(): string
     {
@@ -388,5 +394,228 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     protected function base64UrlEncode(string $data): string
     {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Google 支持获取统计数据
+     */
+    public function supportsStats(): bool
+    {
+        return true;
+    }
+
+    /**
+     * 获取 Google Search Console 统计数据
+     * 
+     * 包括：
+     * - 搜索分析数据（点击量、展示量、CTR、平均排名）
+     * - Sitemap 提交状态
+     * - 索引覆盖率（如可用）
+     */
+    public function getStats(string $siteUrl, array $accountConfig): array
+    {
+        $config = $accountConfig['config'] ?? $accountConfig;
+        $proxyConfig = $this->extractProxyConfig($accountConfig);
+        
+        // 验证必要的配置
+        if (empty($config['client_email']) || empty($config['private_key'])) {
+            return [
+                'success' => false,
+                'message' => __('缺少 Service Account 配置'),
+                'data' => [],
+            ];
+        }
+        
+        try {
+            // 获取 Access Token（使用 Webmaster 只读权限）
+            $accessToken = $this->getAccessToken($config, $proxyConfig, self::WEBMASTER_API_SCOPE);
+            if (empty($accessToken)) {
+                return [
+                    'success' => false,
+                    'message' => __('获取 Google Access Token 失败'),
+                    'data' => [],
+                ];
+            }
+            
+            // 格式化站点 URL（Google 要求 URL 编码）
+            $encodedSiteUrl = urlencode($siteUrl);
+            
+            $statsData = [
+                'indexed_pages' => 0,
+                'submitted_urls' => 0,
+                'crawled_pages' => 0,
+                'clicks' => 0,
+                'impressions' => 0,
+                'ctr' => 0.0,
+                'average_position' => 0.0,
+                'error_count' => 0,
+                'warning_count' => 0,
+                'daily_quota' => 200, // Google Indexing API 默认配额
+                'quota_used' => 0,
+                'extra' => [],
+            ];
+            
+            // 1. 获取搜索分析数据（最近 28 天）
+            $searchAnalyticsResult = $this->fetchSearchAnalytics($encodedSiteUrl, $accessToken, $proxyConfig);
+            if ($searchAnalyticsResult['success'] && !empty($searchAnalyticsResult['data'])) {
+                $analyticsData = $searchAnalyticsResult['data'];
+                $statsData['clicks'] = (int)($analyticsData['clicks'] ?? 0);
+                $statsData['impressions'] = (int)($analyticsData['impressions'] ?? 0);
+                $statsData['ctr'] = round(($analyticsData['ctr'] ?? 0) * 100, 2); // 转为百分比
+                $statsData['average_position'] = round($analyticsData['position'] ?? 0, 2);
+            }
+            
+            // 2. 获取 Sitemap 信息
+            $sitemapsResult = $this->fetchSitemapsList($encodedSiteUrl, $accessToken, $proxyConfig);
+            if ($sitemapsResult['success'] && !empty($sitemapsResult['data'])) {
+                $sitemapsData = $sitemapsResult['data'];
+                $totalSubmitted = 0;
+                $totalIndexed = 0;
+                $errors = 0;
+                $warnings = 0;
+                
+                foreach ($sitemapsData as $sitemap) {
+                    $contents = $sitemap['contents'] ?? [];
+                    foreach ($contents as $content) {
+                        $totalSubmitted += (int)($content['submitted'] ?? 0);
+                        $totalIndexed += (int)($content['indexed'] ?? 0);
+                    }
+                    $errors += (int)($sitemap['errors'] ?? 0);
+                    $warnings += (int)($sitemap['warnings'] ?? 0);
+                }
+                
+                $statsData['submitted_urls'] = $totalSubmitted;
+                $statsData['indexed_pages'] = $totalIndexed;
+                $statsData['error_count'] = $errors;
+                $statsData['warning_count'] = $warnings;
+                $statsData['extra']['sitemaps'] = $sitemapsData;
+            }
+            
+            return [
+                'success' => true,
+                'message' => __('成功获取 Google Search Console 统计数据'),
+                'data' => $statsData,
+            ];
+            
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => __('获取统计数据失败：%{1}', $e->getMessage()),
+                'data' => [],
+            ];
+        }
+    }
+
+    /**
+     * 获取搜索分析数据
+     */
+    protected function fetchSearchAnalytics(string $encodedSiteUrl, string $accessToken, array $proxyConfig): array
+    {
+        $url = sprintf(self::SEARCH_ANALYTICS_URL, $encodedSiteUrl);
+        
+        // 请求最近 28 天的汇总数据
+        $startDate = date('Y-m-d', strtotime('-28 days'));
+        $endDate = date('Y-m-d', strtotime('-1 day'));
+        
+        $requestBody = json_encode([
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'dimensions' => [], // 空维度表示汇总数据
+            'rowLimit' => 1,
+        ]);
+        
+        $ch = curl_init();
+        $curlOptions = [
+            CURLOPT_URL => $url,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $requestBody,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/json',
+            ],
+            CURLOPT_SSL_VERIFYPEER => false,
+        ];
+        
+        if (!empty($proxyConfig['proxy'])) {
+            $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
+            if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
+                $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+            }
+        }
+        
+        curl_setopt_array($ch, $curlOptions);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($error || $httpCode !== 200) {
+            return ['success' => false, 'data' => [], 'error' => $error ?: "HTTP $httpCode"];
+        }
+        
+        $data = json_decode($response, true);
+        
+        // 汇总数据在 rows[0] 中
+        if (!empty($data['rows'][0])) {
+            return ['success' => true, 'data' => $data['rows'][0]];
+        }
+        
+        // 如果没有行数据，但响应成功，返回默认值
+        return [
+            'success' => true,
+            'data' => [
+                'clicks' => 0,
+                'impressions' => 0,
+                'ctr' => 0,
+                'position' => 0,
+            ],
+        ];
+    }
+
+    /**
+     * 获取 Sitemap 列表和状态
+     */
+    protected function fetchSitemapsList(string $encodedSiteUrl, string $accessToken, array $proxyConfig): array
+    {
+        $url = sprintf(self::SITEMAPS_LIST_URL, $encodedSiteUrl);
+        
+        $ch = curl_init();
+        $curlOptions = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+            ],
+            CURLOPT_SSL_VERIFYPEER => false,
+        ];
+        
+        if (!empty($proxyConfig['proxy'])) {
+            $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
+            if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
+                $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+            }
+        }
+        
+        curl_setopt_array($ch, $curlOptions);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($error || $httpCode !== 200) {
+            return ['success' => false, 'data' => [], 'error' => $error ?: "HTTP $httpCode"];
+        }
+        
+        $data = json_decode($response, true);
+        
+        return [
+            'success' => true,
+            'data' => $data['sitemap'] ?? [],
+        ];
     }
 }

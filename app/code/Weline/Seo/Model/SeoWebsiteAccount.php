@@ -205,71 +205,81 @@ class SeoWebsiteAccount extends Model
         }
 
         // 修改唯一索引：从 website_id 改为 (website_id, account_id)，支持多平台绑定（v1.0.1）
-        if ($setup->indexExist('unique_website')) {
-            $setup->dropIndex('unique_website');
+        if ($setup->hasIndex('unique_website')) {
+            $setup->alterTable()
+                ->dropIndex('unique_website')
+                ->alter();
         }
         
-        if (!$setup->indexExist('unique_website_account')) {
-            $setup->addIndex(
-                TableInterface::index_type_UNIQUE,
-                'unique_website_account',
-                [self::fields_WEBSITE_ID, self::fields_ACCOUNT_ID],
-                '站点-账户组合唯一索引'
-            );
+        if (!$setup->hasIndex('unique_website_account')) {
+            $setup->alterTable()
+                ->addIndex(
+                    TableInterface::index_type_UNIQUE,
+                    'unique_website_account',
+                    [self::fields_WEBSITE_ID, self::fields_ACCOUNT_ID],
+                    '站点-账户组合唯一索引'
+                )
+                ->alter();
         }
         
-        if (!$setup->indexExist('idx_website')) {
-            $setup->addIndex(
-                TableInterface::index_type_KEY,
-                'idx_website',
-                [self::fields_WEBSITE_ID],
-                '站点索引'
-            );
+        if (!$setup->hasIndex('idx_website')) {
+            $setup->alterTable()
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_website',
+                    [self::fields_WEBSITE_ID],
+                    '站点索引'
+                )
+                ->alter();
         }
         
         // 添加频率和配置字段（v1.0.2）
-        if (!$setup->columnExist(self::fields_SITEMAP_FREQUENCY)) {
-            $setup->addColumn(
-                self::fields_SITEMAP_FREQUENCY,
-                TableInterface::column_type_VARCHAR,
-                20,
-                'default "daily"',
-                'Sitemap生成频率：realtime/hourly/daily/weekly/monthly/manual',
-                self::fields_IS_AUTO_SUBMIT
-            );
+        if (!$setup->hasField(self::fields_SITEMAP_FREQUENCY)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_SITEMAP_FREQUENCY,
+                    TableInterface::column_type_VARCHAR,
+                    20,
+                    'default "daily"',
+                    'Sitemap生成频率：realtime/hourly/daily/weekly/monthly/manual'
+                )
+                ->alter();
         }
         
-        if (!$setup->columnExist(self::fields_CRAWL_FREQUENCY)) {
-            $setup->addColumn(
-                self::fields_CRAWL_FREQUENCY,
-                TableInterface::column_type_VARCHAR,
-                20,
-                'default "weekly"',
-                '抓取频率（changefreq）：always/hourly/daily/weekly/monthly/yearly/never',
-                self::fields_SITEMAP_FREQUENCY
-            );
+        if (!$setup->hasField(self::fields_CRAWL_FREQUENCY)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_CRAWL_FREQUENCY,
+                    TableInterface::column_type_VARCHAR,
+                    20,
+                    'default "weekly"',
+                    '抓取频率（changefreq）：always/hourly/daily/weekly/monthly/yearly/never'
+                )
+                ->alter();
         }
         
-        if (!$setup->columnExist(self::fields_PRIORITY)) {
-            $setup->addColumn(
-                self::fields_PRIORITY,
-                TableInterface::column_type_DECIMAL,
-                '3,2',
-                'default 0.50',
-                'URL优先级（0.0-1.0）',
-                self::fields_CRAWL_FREQUENCY
-            );
+        if (!$setup->hasField(self::fields_PRIORITY)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_PRIORITY,
+                    TableInterface::column_type_DECIMAL,
+                    '3,2',
+                    'default 0.50',
+                    'URL优先级（0.0-1.0）'
+                )
+                ->alter();
         }
         
-        if (!$setup->columnExist(self::fields_CONFIG_JSON)) {
-            $setup->addColumn(
-                self::fields_CONFIG_JSON,
-                TableInterface::column_type_TEXT,
-                0,
-                '',
-                '其他配置（JSON格式）',
-                self::fields_PRIORITY
-            );
+        if (!$setup->hasField(self::fields_CONFIG_JSON)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_CONFIG_JSON,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    '其他配置（JSON格式）'
+                )
+                ->alter();
         }
     }
 
@@ -381,7 +391,9 @@ class SeoWebsiteAccount extends Model
         
         // 如果找到记录，删除它
         if ($this->getId()) {
-            return (bool)$this->delete();
+            // 必须调用 fetch() 来执行 DELETE SQL
+            $this->delete()->fetch();
+            return true;
         }
         
         return false;

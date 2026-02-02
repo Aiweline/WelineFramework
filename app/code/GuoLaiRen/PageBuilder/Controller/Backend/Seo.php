@@ -363,6 +363,10 @@ class Seo extends BaseController
             'naver' => ['name' => 'Naver', 'color' => '#03C75A'],
         ];
         
+        // 获取 SEO 账户信息服务
+        /** @var \Weline\Seo\Service\WebSitemapData $webSitemapData */
+        $webSitemapData = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Seo\Service\WebSitemapData::class);
+        
         // 构建站点 code 到信息的映射
         $websiteMap = [];
         foreach ($websites as $website) {
@@ -399,6 +403,30 @@ class Seo extends BaseController
             $platforms = [];
             $platformDirs = glob($siteDir . '/*', GLOB_ONLYDIR);
             $totalFiles = 0;
+            
+            // 获取站点绑定的 SEO 账户信息（按平台分组）
+            $websiteAccountsInfo = [];
+            try {
+                $accountsData = $webSitemapData->getWebsiteAccountsWithPlatforms($websiteInfo['website_id']);
+                foreach ($accountsData as $accInfo) {
+                    $pCode = $accInfo['platform_code'] ?? '';
+                    if ($pCode) {
+                        $account = $accInfo['account'];
+                        $binding = $accInfo['binding'] ?? [];
+                        $websiteAccountsInfo[$pCode] = [
+                            'account_id' => $account->getId(),
+                            'account_name' => $account->getData('name') ?: $account->getData('provider'),
+                            'is_active' => $account->isActive(),
+                            'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 0) === 1,
+                            'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::fields_SITEMAP_FREQUENCY] ?? 'daily',
+                            'enable_cron_push' => (int)$account->getData('enable_cron_push_urls') === 1,
+                            'enable_cron_sitemap' => (int)$account->getData('enable_cron_sitemap') === 1,
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                // 忽略获取账户信息失败
+            }
             
             foreach ($platformDirs as $platformDir) {
                 $platformCode = basename($platformDir);
@@ -469,6 +497,8 @@ class Seo extends BaseController
                         'modules' => $modules,
                         'module_count' => count($modules),
                         'file_count' => count($sitemapFiles) + ($platformIndex ? 1 : 0),
+                        // SEO 账户信息
+                        'seo_account' => $websiteAccountsInfo[$platformCode] ?? null,
                     ];
                 }
             }
