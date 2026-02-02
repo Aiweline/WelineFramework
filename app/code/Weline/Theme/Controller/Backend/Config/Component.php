@@ -103,7 +103,7 @@ class Component extends BackendController
                 return $this->fetchJson($this->error(__('参数保存失败')));
             }
         } catch (\Exception $e) {
-            return $this->fetchJson($this->error(__('保存失败：%1', $e->getMessage())));
+            return $this->fetchJson($this->error(__('保存失败：%{error}', ['error' => $e->getMessage()])));
         }
     }
 }
