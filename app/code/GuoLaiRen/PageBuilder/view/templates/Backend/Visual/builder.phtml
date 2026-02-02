@@ -8,6 +8,7 @@
  * @var \GuoLaiRen\PageBuilder\Model\PageLayout $layout
  * @var array $layout_config
  * @var array $own_components
+ * @var array $shared_components
  * @var array $compatible_components
  * @var array $styles
  */
@@ -18,6 +19,7 @@ $styleCode = $this->getData('style_code');
 $layout = $this->getData('layout');
 $layoutConfig = $this->getData('layout_config');
 $ownComponents = $this->getData('own_components') ?? [];
+$sharedComponents = $this->getData('shared_components') ?? [];
 $compatibleComponents = $this->getData('compatible_components') ?? [];
 $styles = $this->getData('styles') ?? [];
 ?>
@@ -158,11 +160,25 @@ $styles = $this->getData('styles') ?? [];
                     <li class="nav-item">
                         <a class="nav-link active" data-bs-toggle="tab" href="#tab-own-components">
                             <i class="mdi mdi-star"></i> <?= __('当前模板') ?>
+                            <?php if (!empty($ownComponents)): ?>
+                            <span class="badge bg-primary ms-1"><?= count($ownComponents) ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
+                    <?php if (!empty($sharedComponents)): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#tab-shared-components">
+                            <i class="mdi mdi-share-variant"></i> <?= __('共享组件') ?>
+                            <span class="badge bg-success ms-1"><?= count($sharedComponents) ?></span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#tab-other-components">
                             <i class="mdi mdi-puzzle"></i> <?= __('跨模板组件') ?>
+                            <?php if (!empty($compatibleComponents)): ?>
+                            <span class="badge bg-info ms-1"><?= array_sum(array_map('count', $compatibleComponents)) ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                 </ul>
@@ -207,6 +223,38 @@ $styles = $this->getData('styles') ?? [];
                             <?php endif; ?>
                         </div>
                     </div>
+                    
+                    <!-- 共享组件 -->
+                    <?php if (!empty($sharedComponents)): ?>
+                    <div class="tab-pane fade" id="tab-shared-components">
+                        <div class="vb-component-list">
+                            <div class="alert alert-success py-2 mb-3">
+                                <i class="mdi mdi-information-outline me-1"></i>
+                                <?= __('共享组件可在任何模板中使用，样式自动适配') ?>
+                            </div>
+                            <?php foreach ($sharedComponents as $component): ?>
+                            <div class="vb-component-item" 
+                                 draggable="true"
+                                 ondragstart="dragComponent(event)"
+                                 data-component="<?= htmlspecialchars($component->getData('code')) ?>"
+                                 data-from-template="_shared">
+                                <div class="vb-component-item-icon">
+                                    <i class="mdi mdi-share-variant text-success"></i>
+                                </div>
+                                <div class="vb-component-item-info">
+                                    <div class="vb-component-item-name"><?= htmlspecialchars($component->getData('name')) ?></div>
+                                    <div class="vb-component-item-type">
+                                        <span class="badge bg-success"><?= htmlspecialchars($component->getData('category')) ?></span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-success" onclick="addComponent('<?= htmlspecialchars($component->getData('code')) ?>', '_shared')">
+                                    <i class="mdi mdi-plus"></i>
+                                </button>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     
                     <!-- 跨模板组件 -->
                     <div class="tab-pane fade" id="tab-other-components">
