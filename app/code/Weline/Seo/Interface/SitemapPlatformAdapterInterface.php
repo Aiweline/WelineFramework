@@ -122,4 +122,39 @@ interface SitemapPlatformAdapterInterface
      * @return string
      */
     public function getIndexUrl(string $baseUrl, string $websiteCode): string;
+
+    /**
+     * 检查适配器是否支持获取统计数据
+     *
+     * @return bool
+     */
+    public function supportsStats(): bool;
+
+    /**
+     * 获取站点在该平台的统计数据
+     *
+     * 从平台 API 获取索引量、点击量、展示量等数据
+     *
+     * @param string $siteUrl 站点 URL
+     * @param array $accountConfig SEO 账户配置
+     * @return array 统计数据 [
+     *     'success' => bool,
+     *     'message' => string,
+     *     'data' => [
+     *         'indexed_pages' => int,      // 已索引页面数
+     *         'submitted_urls' => int,     // 已提交 URL 数
+     *         'crawled_pages' => int,      // 已抓取页面数
+     *         'clicks' => int,             // 点击量
+     *         'impressions' => int,        // 展示量
+     *         'ctr' => float,              // 点击率
+     *         'average_position' => float, // 平均排名
+     *         'error_count' => int,        // 错误数
+     *         'warning_count' => int,      // 警告数
+     *         'daily_quota' => int,        // 每日配额
+     *         'quota_used' => int,         // 已使用配额
+     *         'extra' => array,            // 额外数据
+     *     ],
+     * ]
+     */
+    public function getStats(string $siteUrl, array $accountConfig): array;
 }

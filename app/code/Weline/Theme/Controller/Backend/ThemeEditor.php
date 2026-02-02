@@ -628,7 +628,7 @@ class ThemeEditor extends BackendController
             $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
 
             if (!$themeId) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('主题 ID 不能为空'),
                 ]);
@@ -639,27 +639,26 @@ class ThemeEditor extends BackendController
                 ->where('theme_id', $themeId)
                 ->where('page_type', $pageType)
                 ->where('status', 'draft')
-                ->delete()
-                ->fetch();
+                ->delete();
 
             // 从已发布版本重新初始化草稿
             $result = $this->layoutService->initDraftFromPublished($themeId, $pageType);
 
             if ($result) {
-                return $this->json([
+                return $this->fetchJson([
                     'success' => true,
                     'message' => __('已成功恢复到原始布局'),
                 ]);
             }
 
-            return $this->json([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('恢复原始布局失败'),
             ]);
         } catch (\Exception $e) {
-            return $this->json([
+            return $this->fetchJson([
                 'success' => false,
-                'message' => __('恢复失败: %1', $e->getMessage()),
+                'message' => __('恢复失败: %{1}', $e->getMessage()),
             ]);
         }
     }

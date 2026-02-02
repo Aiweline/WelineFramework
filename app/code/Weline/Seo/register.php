@@ -15,7 +15,7 @@ Register::register(
     Register::MODULE,
     'Weline_Seo',
     __DIR__,
-    '1.0.0',
+    '1.1.0',  // 新增 SeoWebsiteStats 统计模型、平台适配器 getStats() 接口、StatsSync 定时任务
     'SEO 集成与智能优化模块',
     [
         'Weline_Ai',
