@@ -1476,6 +1476,15 @@ class ThemeEditor extends BackendController
         $layoutType = $this->request->getParam('layout_type', 'homepage');
         $layoutOption = $this->request->getParam('layout_option', 'default');
 
+        // 检查布局模板文件是否存在
+        $relativePath = "theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
+        $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
+        
+        if (!file_exists($templateFile)) {
+            // 布局文件不存在，返回错误页面
+            return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
+        }
+
         // 设置编辑/预览模式
         $this->assign('editor_mode', true);
         $this->assign('preview_mode', true); // 标记为预览模式，Observer 会读取草稿数据
@@ -1493,10 +1502,134 @@ class ThemeEditor extends BackendController
         ]);
 
         // 返回编译后的布局（在 iframe 中渲染）
-        // 注意：URL 应该带有 preview_mode=1 参数，让 Observer 读取草稿数据
         $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
+        $html = $this->fetch($templatePath);
         
-        return $this->fetch($templatePath);
+        // 注入编辑模式的 CSS 和 JS
+        $html = $this->injectEditorModeAssets($html);
+        
+        return $html;
+    }
+    
+    /**
+     * 注入编辑模式的 CSS 和 JS 到 HTML 中
+     */
+    private function injectEditorModeAssets(string $html): string
+    {
+        // 使用框架的静态资源获取方法
+        $cssUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
+        $jsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
+        
+        // #region agent log
+        $logData = json_encode(['location'=>'ThemeEditor.php:injectEditorModeAssets','message'=>'Injecting assets (fixed v2)','data'=>['cssUrl'=>$cssUrl,'jsUrl'=>$jsUrl,'htmlLen'=>strlen($html),'hasHead'=>stripos($html,'</head>')!==false,'hasBody'=>stripos($html,'</body>')!==false],'timestamp'=>time()*1000,'sessionId'=>'debug-session','hypothesisId'=>'C']);
+        @file_put_contents('e:\\WelineFramework\\DEV-workspace\\.cursor\\debug.log', $logData."\n", FILE_APPEND);
+        // #endregion
+        
+        // 编辑模式 CSS
+        $editorCss = <<<HTML
+<!-- Theme Editor Mode CSS -->
+<link rel="stylesheet" href="{$cssUrl}">
+HTML;
+        
+        // 编辑模式 JS
+        $editorJs = <<<HTML
+<!-- Theme Editor Mode JS -->
+<script src="{$jsUrl}"></script>
+HTML;
+        
+        // 在 </head> 前注入 CSS
+        if (stripos($html, '</head>') !== false) {
+            $html = str_ireplace('</head>', $editorCss . "\n</head>", $html);
+        } else {
+            // 如果没有 </head>，在开头添加
+            $html = $editorCss . "\n" . $html;
+        }
+        
+        // 在 </body> 前注入 JS
+        if (stripos($html, '</body>') !== false) {
+            $html = str_ireplace('</body>', $editorJs . "\n</body>", $html);
+        } else {
+            // 如果没有 </body>，在末尾添加
+            $html .= "\n" . $editorJs;
+        }
+        
+        return $html;
+    }
+    
+    /**
+     * 渲染布局文件不存在的错误页面
+     */
+    private function renderLayoutNotFoundError(string $layoutType, string $layoutOption): string
+    {
+        $html = <<<HTML
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>布局不存在</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .error-container {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+        }
+        .error-icon {
+            font-size: 64px;
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0 0 10px;
+            color: #333;
+            font-size: 24px;
+        }
+        p {
+            color: #666;
+            margin: 0 0 20px;
+            line-height: 1.6;
+        }
+        .layout-info {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #495057;
+            margin-bottom: 20px;
+        }
+        .hint {
+            font-size: 14px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">⚠️</div>
+        <h1>布局文件不存在</h1>
+        <p>请求的布局模板文件未找到，请选择其他布局类型。</p>
+        <div class="layout-info">
+            布局类型: {$layoutType}<br>
+            布局选项: {$layoutOption}
+        </div>
+        <p class="hint">请在左侧面板选择一个有效的布局类型</p>
+    </div>
+</body>
+</html>
+HTML;
+        return $html;
     }
 
     /**

@@ -71,29 +71,32 @@ $colors = $this->getData('colors') ?? [];
                     <div class="product-list-wrapper">
                         <!-- ========== 筛选器侧边栏区域 ========== -->
                         <if condition="meta.showFilters">
-                            <aside class="product-list-filters"
-                                   data-wslot="list-filters"
-                                   data-wslot-name="筛选器区域"
-                                   data-wslot-accept="attribute-filter,price-filter,category-filter,rating-filter"
-                                   data-wslot-multiple="true">
+                            <w:slot id="list-filters"
+                                    name="筛选器区域"
+                                    accept="attribute-filter,price-filter,category-filter,rating-filter"
+                                    multiple="true"
+                                    position="sidebar"
+                                    wrapper="aside"
+                                    class="product-list-filters">
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::filters-before</w:hook>
                                 <div class="slot-placeholder" data-placeholder="list-filters">
                                     <span class="placeholder-icon">🔍</span>
                                     <span class="placeholder-text">筛选器区域 - 拖拽筛选部件到此处</span>
                                 </div>
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::filters-after</w:hook>
-                            </aside>
+                            </w:slot>
                         </if>
                         
                         <!-- ========== 产品列表主内容区域 ========== -->
                         <div class="product-list-content">
                             <!-- ========== 工具栏区域 ========== -->
                             <if condition="meta.showToolbar">
-                                <div class="product-list-toolbar"
-                                     data-wslot="list-toolbar"
-                                     data-wslot-name="工具栏区域"
-                                     data-wslot-accept="sort-options,view-switcher,page-size-selector,active-filters"
-                                     data-wslot-multiple="true">
+                                <w:slot id="list-toolbar"
+                                        name="工具栏区域"
+                                        accept="sort-options,view-switcher,page-size-selector,active-filters"
+                                        multiple="true"
+                                        position="content"
+                                        class="product-list-toolbar">
                                     <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-before</w:hook>
                                     <w:hook>WeShop_Product::frontend::layouts::product_list::toolbar-content<else/>
                                         <div class="slot-placeholder" data-placeholder="list-toolbar">
@@ -102,15 +105,16 @@ $colors = $this->getData('colors') ?? [];
                                         </div>
                                     </w:hook>
                                     <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-after</w:hook>
-                                </div>
+                                </w:slot>
                             </if>
                             
                             <!-- ========== 产品网格区域 ========== -->
-                            <div class="product-list-grid"
-                                 data-wslot="list-grid"
-                                 data-wslot-name="产品网格区域"
-                                 data-wslot-accept="product-grid,product-list-view"
-                                 data-wslot-exclusive="true">
+                            <w:slot id="list-grid"
+                                    name="产品网格区域"
+                                    accept="product-grid,product-list-view"
+                                    exclusive="true"
+                                    position="content"
+                                    class="product-list-grid">
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::grid-before</w:hook>
                                 <w:hook>WeShop_Product::frontend::layouts::product_list::grid-content<else/>
                                     <if condition="meta.content">
@@ -123,14 +127,15 @@ $colors = $this->getData('colors') ?? [];
                                     </if>
                                 </w:hook>
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::grid-after</w:hook>
-                            </div>
+                            </w:slot>
                             
                             <!-- ========== 分页区域 ========== -->
-                            <div class="product-list-pagination"
-                                 data-wslot="list-pagination"
-                                 data-wslot-name="分页区域"
-                                 data-wslot-accept="pagination,load-more"
-                                 data-wslot-exclusive="true">
+                            <w:slot id="list-pagination"
+                                    name="分页区域"
+                                    accept="pagination,load-more"
+                                    exclusive="true"
+                                    position="content"
+                                    class="product-list-pagination">
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-before</w:hook>
                                 <w:hook>WeShop_Product::frontend::layouts::product_list::pagination-content<else/>
                                     <div class="slot-placeholder" data-placeholder="list-pagination">
@@ -139,18 +144,20 @@ $colors = $this->getData('colors') ?? [];
                                     </div>
                                 </w:hook>
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-after</w:hook>
-                            </div>
+                            </w:slot>
                         </div>
                     </div>
                 </div>
             </main>
             
             <!-- ========== 推荐产品区域 ========== -->
-            <section class="product-list-recommendations"
-                     data-wslot="list-recommendations"
-                     data-wslot-name="推荐产品区域"
-                     data-wslot-accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
-                     data-wslot-multiple="true">
+            <w:slot id="list-recommendations"
+                    name="推荐产品区域"
+                    accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="product-list-recommendations">
                 <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-before</w:hook>
                 <div class="container">
                     <div class="slot-placeholder" data-placeholder="list-recommendations">
@@ -159,7 +166,7 @@ $colors = $this->getData('colors') ?? [];
                     </div>
                 </div>
                 <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-after</w:hook>
-            </section>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -227,84 +234,7 @@ $colors = $this->getData('colors') ?? [];
         background: var(--color-bg-secondary, #f8f9fa);
     }
     
-    /* 插槽占位符 */
-    .slot-placeholder {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 40px 20px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border: 2px dashed #dee2e6;
-        border-radius: 8px;
-        margin: 10px 0;
-        text-align: center;
-        color: #6c757d;
-    }
-    
-    .slot-placeholder .placeholder-icon {
-        font-size: 32px;
-        margin-bottom: 10px;
-    }
-    
-    .slot-placeholder .placeholder-text {
-        font-size: 14px;
-    }
-    
-    /* 编辑模式下的插槽样式 */
-    body.editor-mode [data-wslot] {
-        outline: 2px dashed transparent;
-        outline-offset: -2px;
-        transition: outline 0.3s ease, background-color 0.3s ease;
-        position: relative;
-    }
-    
-    body.editor-mode [data-wslot]:hover {
-        outline-color: #6366f1;
-        background-color: rgba(99, 102, 241, 0.05);
-    }
-    
-    body.editor-mode [data-wslot].drag-over {
-        outline-color: #10b981;
-        outline-style: solid;
-        background-color: rgba(16, 185, 129, 0.1);
-    }
-    
-    body.editor-mode [data-wslot]::before {
-        content: attr(data-wslot-name);
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        color: #fff;
-        font-size: 10px;
-        font-weight: 600;
-        padding: 3px 10px;
-        border-radius: 4px;
-        opacity: 0;
-        transition: opacity 0.3s;
-        z-index: 100;
-        pointer-events: none;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
-    }
-    
-    body.editor-mode [data-wslot]:hover::before,
-    body.editor-mode [data-wslot].drag-over::before {
-        opacity: 1;
-    }
-    
-    body.editor-mode .slot-placeholder {
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    
-    body.editor-mode .slot-placeholder:hover {
-        border-color: #007bff;
-        background: linear-gradient(135deg, #e7f1ff 0%, #cce5ff 100%);
-        color: #0056b3;
-    }
+    /* 编辑模式样式由 editor-mode.css 统一管理 */
     
     /* 响应式设计 */
     @media (max-width: 992px) {
@@ -333,68 +263,6 @@ $colors = $this->getData('colors') ?? [];
     }
     </style>
     
-    <!-- 编辑模式脚本 -->
-    <?php if ($this->getData('editor_mode')): ?>
-    <script>
-    (function() {
-        document.body.classList.add('editor-mode');
-        
-        document.querySelectorAll('[data-wslot]').forEach(slot => {
-            slot.addEventListener('click', function(e) {
-                e.stopPropagation();
-                
-                const slotData = {
-                    id: this.dataset.wslot,
-                    name: this.dataset.wslotName || this.dataset.wslot,
-                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-                    multiple: this.dataset.wslotMultiple === 'true',
-                    exclusive: this.dataset.wslotExclusive === 'true'
-                };
-                
-                if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'slot-selected', slot: slotData }, '*');
-                }
-                
-                document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
-                this.classList.add('slot-active');
-            });
-            
-            slot.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.classList.add('drag-over');
-            });
-            
-            slot.addEventListener('dragleave', function(e) {
-                if (!this.contains(e.relatedTarget)) {
-                    this.classList.remove('drag-over');
-                }
-            });
-            
-            slot.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.classList.remove('drag-over');
-                
-                let widgetData;
-                try {
-                    const jsonData = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
-                    if (jsonData) widgetData = JSON.parse(jsonData);
-                } catch (err) { return; }
-                
-                if (!widgetData) return;
-                
-                const slotData = {
-                    id: this.dataset.wslot,
-                    name: this.dataset.wslotName || this.dataset.wslot,
-                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : []
-                };
-                
-                if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'widget-dropped', widget: widgetData, slot: slotData }, '*');
-                }
-            });
-        });
-    })();
-    </script>
-    <?php endif; ?>
+    <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
 </body>
 </html>
