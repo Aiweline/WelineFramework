@@ -89,9 +89,21 @@ class SitemapRegistryService
                     $filePath = str_replace('\\', '/', $filePath);
                     
                     if (strpos($filePath, 'SitemapProvider/') === 0) {
-                        // 从 file_path 推断类名
-                        // 例如: SitemapProvider/PageBuilderSitemapProvider.php
-                        $class = $this->inferClassName($sourceModule, $extension);
+                        // 优先使用扫描时提取的完整类名（解决大小写问题）
+                        $class = $extension['class_name'] ?? null;
+                        
+                        // 如果没有预存类名，回退到推断（兼容旧版本 extends.php）
+                        if (!$class) {
+                            $class = $this->inferClassName($sourceModule, $extension);
+                        }
+                        
+                        // 如果类不存在，尝试手动加载文件（解决 Linux 大小写问题）
+                        if ($class && !class_exists($class)) {
+                            $sourceFile = $extension['source_file'] ?? '';
+                            if ($sourceFile && file_exists($sourceFile)) {
+                                require_once $sourceFile;
+                            }
+                        }
                         
                         if ($class && class_exists($class)) {
                             try {
@@ -202,7 +214,21 @@ class SitemapRegistryService
                     $isSitemapProvider = strpos($filePath, 'SitemapProvider/') === 0;
                     
                     if ($isSitemapUrlProvider || $isSitemapProvider) {
-                        $class = $this->inferClassName($sourceModule, $extension);
+                        // 优先使用扫描时提取的完整类名（解决大小写问题）
+                        $class = $extension['class_name'] ?? null;
+                        
+                        // 如果没有预存类名，回退到推断（兼容旧版本 extends.php）
+                        if (!$class) {
+                            $class = $this->inferClassName($sourceModule, $extension);
+                        }
+                        
+                        // 如果类不存在，尝试手动加载文件（解决 Linux 大小写问题）
+                        if ($class && !class_exists($class)) {
+                            $sourceFile = $extension['source_file'] ?? '';
+                            if ($sourceFile && file_exists($sourceFile)) {
+                                require_once $sourceFile;
+                            }
+                        }
                         
                         if ($class && class_exists($class)) {
                             try {
