@@ -12,7 +12,7 @@ declare(strict_types=1);
  * - 自动被 SEO 模块的定时任务发现和调用
  */
 
-namespace GuoLaiRen\PageBuilder\extends\module\Weline_Seo\SitemapProvider;
+namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Seo\SitemapProvider;
 
 use GuoLaiRen\PageBuilder\Service\SitemapService;
 use Weline\Framework\Manager\ObjectManager;
