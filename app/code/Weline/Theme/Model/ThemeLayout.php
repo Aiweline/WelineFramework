@@ -6,8 +6,10 @@ namespace Weline\Theme\Model;
 
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Theme\Service\LayoutDataService;
 
 /**
  * 主题布局模型
@@ -56,10 +58,25 @@ class ThemeLayout extends Model
     public const AREA_FOOTER = 'footer';
 
     /**
-     * 获取所有支持的页面类型
+     * 获取所有支持的页面类型（布局类型）
+     * 
+     * 动态从 LayoutDataService 获取，支持子主题新增布局
+     * 如果服务不可用，返回默认的硬编码列表作为回退
      */
     public static function getPageTypes(): array
     {
+        try {
+            /** @var LayoutDataService $layoutDataService */
+            $layoutDataService = ObjectManager::getInstance(LayoutDataService::class);
+            $types = $layoutDataService->getAllLayoutTypes();
+            if (!empty($types)) {
+                return $types;
+            }
+        } catch (\Throwable $e) {
+            // 服务不可用，使用默认列表
+        }
+
+        // 回退：返回默认的硬编码列表
         return [
             self::PAGE_TYPE_HOME => __('首页'),
             self::PAGE_TYPE_CATEGORY => __('分类页'),
