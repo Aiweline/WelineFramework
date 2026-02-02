@@ -257,46 +257,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
     min-height: 50px;
 }
 
-/* 插槽占位符 */
-.slot-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 30px 20px;
-    border: 2px dashed #ddd;
-    border-radius: 8px;
-    color: #999;
-    font-size: 14px;
-    background: rgba(0,0,0,0.02);
-    text-align: center;
-}
-
-.slot-placeholder i {
-    font-size: 32px;
-    opacity: 0.5;
-}
-
-.slot-placeholder small {
-    font-size: 12px;
-    opacity: 0.7;
-}
-
-.slot-placeholder-large {
-    min-height: 200px;
-}
-
-.slot-placeholder-vertical {
-    min-height: 300px;
-}
-
-/* 编辑模式下高亮插槽 */
-.content-slot[data-slot]:hover,
-.content-slot[data-wslot]:hover {
-    outline: 2px dashed #007bff;
-    outline-offset: 2px;
-}
+/* 编辑模式样式由 editor-mode.css 统一管理 */
 
 /* slot 选中状态（点击后） */
 .content-slot.slot-selected,

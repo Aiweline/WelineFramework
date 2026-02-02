@@ -46,6 +46,20 @@ endif;
 <link href="<?= $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/css/app' . ($themeConfig->getThemeModel() ? '-' . $themeConfig->getThemeModel() : '') . '.min.css') ?>"
       rel="stylesheet" type="text/css"/>
 <?php
+// 始终加载主题基础变量CSS（所有变量的默认值）
+?>
+<theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/variables/_spacing.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/variables/_borders.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/variables/_shadows.css</theme:css>
+<?php
+// 根据当前主题模式加载暗色/亮色覆盖
+$currentThemeMode = $themeConfig->getThemeModel(); // 'dark', 'light', 或空
+if ($currentThemeMode === 'dark'):
+?>
+<theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
+<?php endif; ?>
+<?php
 // 加载主题色系和变量CSS文件（预览配置）
 $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
 $previewThemeId = $session->getData('preview_theme_id');

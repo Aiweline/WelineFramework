@@ -102,11 +102,12 @@ $this->assign('title', $title);
                     <div class="category-filter-overlay" id="category-filter-overlay"></div>
 
                     <section class="category-grid-content">
-                        <div class="category-grid-container"
-                             data-wslot="category-products"
-                             data-wslot-name="分类产品区域"
-                             data-wslot-accept="product-grid,product-list-view"
-                             data-wslot-multiple="true">
+                        <w:slot id="category-products"
+                                name="分类产品区域"
+                                accept="product-grid,product-list-view"
+                                multiple="true"
+                                position="content"
+                                class="category-grid-container">
                             <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
                                 <if condition="meta.content || content">
                                     {{meta.content ?: content}}
@@ -117,7 +118,7 @@ $this->assign('title', $title);
                                     </div>
                                 </if>
                             </w:hook>
-                        </div>
+                        </w:slot>
                     </section>
                 </div>
 

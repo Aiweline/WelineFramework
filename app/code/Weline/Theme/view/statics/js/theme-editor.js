@@ -137,6 +137,11 @@
             fitWidgetPreviews();
         }, 200));
 
+        // 加载版本列表（初始化时获取当前版本显示）
+        if (state.themeId) {
+            loadVersions();
+        }
+
         console.log('Theme Editor initialized', {
             apiBase: config.apiBase,
             apiSaveWidget: config.apiSaveWidget,
@@ -223,14 +228,20 @@
                 return;
             }
 
-            // 点击区域标签或区域本身时，选中区域并过滤部件
+            // 点击区域标签、区域本身、或区域占位符时，选中区域并过滤部件
             const areaLabel = e.target.closest('.area-label');
+            const areaDescription = e.target.closest('.area-description');
+            const slotPlaceholder = e.target.closest('.slot-placeholder-large');
             const previewArea = e.target.closest('.preview-area');
             
-            if (areaLabel || (previewArea && !e.target.closest('.area-widgets'))) {
-                // 点击区域标签或区域空白处（非部件列表区域）
-                const area = areaLabel ? areaLabel.closest('.preview-area') : previewArea;
+            // 如果点击的是区域标签、区域描述、占位符、或非部件列表的区域空白处
+            if (areaLabel || areaDescription || slotPlaceholder || (previewArea && !e.target.closest('.preview-widget-item'))) {
+                // 点击区域标签或区域空白处（排除已有部件）
+                const area = previewArea || (areaLabel ? areaLabel.closest('.preview-area') : null);
                 if (area && area.dataset.area) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:structureAreaClick',message:'Structure area clicked',data:{areaCode:area.dataset.area,areaClassName:area.className,clickedElement:e.target.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+                    // #endregion
                     selectArea(area);
                     return;
                 }
@@ -419,17 +430,61 @@
     }
 
     /**
+     * 从 slotId 推断所属的父区域
+     * 用于将子插槽（如 logo, footer-social）映射到父区域（header, footer）
+     * @param {string} slotId 插槽ID
+     * @returns {string} 区域代码（header, content, footer）
+     */
+    function inferAreaFromSlotId(slotId) {
+        if (!slotId) return 'content';
+        
+        // 已知的 header 子插槽
+        const headerSlots = ['logo', 'search', 'user-area', 'navigation', 'header-search', 'account', 'mini-cart-icon', 'language-switcher', 'currency-switcher', 'cart-icon'];
+        
+        // 已知的 footer 子插槽
+        const footerSlots = ['footer-social', 'footer-links', 'footer-copyright', 'footer-payment', 'footer-newsletter'];
+        
+        // 精确匹配
+        if (slotId === 'header') return 'header';
+        if (slotId === 'footer') return 'footer';
+        if (slotId === 'content') return 'content';
+        
+        // 检查是否是 header 子插槽
+        if (headerSlots.includes(slotId)) return 'header';
+        
+        // 检查是否是 footer 子插槽（包括前缀匹配）
+        if (footerSlots.includes(slotId) || slotId.startsWith('footer-')) return 'footer';
+        
+        // 检查是否以 header- 开头
+        if (slotId.startsWith('header-')) return 'header';
+        
+        // 默认归属于 content 区域
+        return 'content';
+    }
+
+    /**
      * 处理插槽选中
      */
     function handleSlotSelected(slot) {
         console.log('插槽被选中:', slot);
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:handleSlotSelected',message:'Slot selected - entry',data:{slot:slot,slotId:slot?.id,slotArea:slot?.area},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
+        // #endregion
         
         // 保存当前选中的插槽
         state.selectedSlot = slot;
         
         // 根据插槽 ID 确定区域并过滤部件
         const slotId = slot.id || '';
-        const areaCode = slot.area || slotId;
+        // 优先使用 slot.area（来自 position 属性），否则从 slotId 推断
+        let areaCode = slot.area || inferAreaFromSlotId(slotId);
+        
+        console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', slot.area, 'resolved areaCode:', areaCode);
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:handleSlotSelected',message:'Area code resolved',data:{slotId:slotId,areaCode:areaCode,hasArea:!!slot.area},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         
         // 调用区域过滤函数，隐藏不适合该区域的部件
         if (areaCode) {
@@ -3966,13 +4021,22 @@
             
             if (!slotId) return;
             
-            console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr);
+            // 读取 slot 的 position 属性（区域定位）
+            const positionAttr = slotEl.getAttribute('data-wslot-position') || 
+                                slotEl.getAttribute('data-position') || '';
             
-            // 构造 slot 信息
+            console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr, 'position:', positionAttr);
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:iframeSlotClick',message:'Slot clicked in iframe',data:{slotId:slotId,slotName:slotName,acceptAttr:acceptAttr,positionAttr:positionAttr,slotElTagName:slotEl?.tagName,slotElClassName:slotEl?.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,E'})}).catch(()=>{});
+            // #endregion
+            
+            // 构造 slot 信息，area 优先使用 position 属性
             const slotInfo = {
                 id: slotId,
                 name: slotName,
-                accept: acceptAttr
+                accept: acceptAttr,
+                area: positionAttr || ''  // 使用 position 作为区域
             };
             
             // 调用 slot 选中处理函数（这会过滤部件并滚动）
@@ -4506,13 +4570,18 @@
     }
 
     /**
-     * 取消选中
+     * 取消选中并关闭配置面板
      */
     function deselectWidget() {
         document.querySelectorAll('.preview-widget-item.selected').forEach(el => {
             el.classList.remove('selected');
         });
         state.selectedWidget = null;
+
+        // 关闭配置面板
+        if (elements.configPanel) {
+            elements.configPanel.classList.remove('show');
+        }
 
         // 显示空状态
         if (elements.configContent) {
@@ -5475,6 +5544,10 @@
      * @param {Array} rejectTypes 该区域拒绝的部件类型（从 data-wslot-reject 获取）
      */
     function filterWidgetsByArea(areaCode, rejectTypes = []) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea',message:'Filter called',data:{areaCode:areaCode,rejectTypes:rejectTypes},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        
         // 如果没有指定区域，显示所有部件
         if (!areaCode) {
             document.querySelectorAll('.widget-item.draggable').forEach(item => {
@@ -5601,6 +5674,12 @@
             // 只有当区域允许且类型未被拒绝时才能放置
             const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
             
+            // #region agent log
+            if (widgetType === 'header' || widgetType === 'footer') {
+                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea:loop',message:'Header/Footer widget check',data:{widgetCode:widgetCode,widgetType:widgetType,widgetPositions:widgetPositions,allowedAreas:allowedAreas,areaCode:areaCode,isTypeRejected:isTypeRejected,canPlace:canPlace,finalRejectTypes:finalRejectTypes},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D'})}).catch(()=>{});
+            }
+            // #endregion
+            
             // 清除所有匹配相关的类
             item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
@@ -5634,6 +5713,13 @@
             }
         });
 
+        // #region agent log
+        const visibleWidgets = document.querySelectorAll('.widget-item.draggable:not([style*="display: none"])');
+        const headerTypeWidgets = document.querySelectorAll('.widget-item.draggable[data-widget-type="header"]');
+        const footerTypeWidgets = document.querySelectorAll('.widget-item.draggable[data-widget-type="footer"]');
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea',message:'Filter result summary',data:{areaCode:areaCode,visibleCount:visibleWidgets.length,headerTypeCount:headerTypeWidgets.length,footerTypeCount:footerTypeWidgets.length,hasMatchInGroup:Object.fromEntries(hasMatchInGroup)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D'})}).catch(()=>{});
+        // #endregion
+        
         // 隐藏没有匹配部件的分组，展开有匹配的分组
         document.querySelectorAll('.widget-group').forEach(group => {
             const groupType = group.dataset.type || '';

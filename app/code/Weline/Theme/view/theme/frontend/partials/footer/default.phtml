@@ -50,7 +50,16 @@ $class = $meta['class'] ?? '';
 // 直接使用colors数组，无需重复读取和处理
 $colors = $this->getData('colors') ?? [];
 ?>
-<footer id="footer" class="weline-footer <?= htmlspecialchars($class) ?>" data-layout="default" data-layout-type="default" data-layout-option="default">
+<footer id="footer" 
+        class="weline-footer <?= htmlspecialchars($class) ?>" 
+        data-layout="default" 
+        data-layout-type="default" 
+        data-layout-option="default"
+        data-wslot="footer"
+        data-wslot-name="整体底部"
+        data-wslot-accept="footer"
+        data-wslot-exclusive="true"
+        data-wslot-position="footer">
     <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
     
     <w:block>Weline\Frontend\Block\Footer\Base</w:block>

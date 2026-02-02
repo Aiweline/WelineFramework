@@ -8,7 +8,11 @@
  * @meta.theme {default="dark",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  */
 
-[data-theme="dark"] {
+/* 支持多种暗色模式触发方式 */
+[data-theme="dark"],
+[data-theme-mode="dark"],
+[data-bs-theme="dark"],
+[data-layout-mode="dark"] {
     /* ========================================
        文本色 - 需要变亮
        ======================================== */

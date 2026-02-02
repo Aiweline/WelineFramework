@@ -116,7 +116,7 @@ if (!function_exists('getWidgetIcon')) {
             <div class="version-selector-wrapper">
                 <button type="button" class="btn btn-outline-secondary btn-version-toggle" onclick="toggleVersionPanel()">
                     <i class="ri-history-line"></i>
-                    <span id="currentVersionDisplay"><?= __('版本') ?></span>
+                    <span id="currentVersionDisplay"><?= __('加载中...') ?></span>
                     <i class="ri-arrow-down-s-line"></i>
                 </button>
                 
@@ -1239,6 +1239,11 @@ body{
     flex-direction: column;
 }
 
+/* 结构视图需要允许滚动 */
+.preview-view-structure.active {
+    overflow: auto;
+}
+
 /* iframe 实时预览 */
 .preview-view-preview {
     position: relative;
@@ -1359,7 +1364,10 @@ body{
 /* 结构视图 */
 .preview-view-structure {
     padding: 24px;
-    overflow: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    height: 100%;
+    max-height: calc(100vh - 120px);
 }
 
 .structure-frame {
@@ -1368,7 +1376,7 @@ body{
     background: var(--te-bg-card);
     border-radius: var(--te-radius-lg);
     box-shadow: var(--te-shadow-lg);
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--te-border);
 }
 
@@ -3051,16 +3059,9 @@ body{
     position: relative;
 }
 
-.btn-version-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    font-size: 14px;
-}
-
 .btn-version-toggle .ri-arrow-down-s-line {
-    font-size: 12px;
+    font-size: 10px;
+    margin-left: 2px;
     transition: transform 0.2s;
 }
 

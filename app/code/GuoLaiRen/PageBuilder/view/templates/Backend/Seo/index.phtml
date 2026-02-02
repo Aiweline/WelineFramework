@@ -750,8 +750,217 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         
         .sitemap-child-file .file-meta {
             font-size: 0.75rem;
+            color: var(--backend-color-text-tertiary, #adb5bd);
+            margin-left: var(--backend-spacing-sm, 8px);
+        }
+        
+        /* ================================================================
+           暗色模式显式覆盖 - 确保暗色模式下正确显示
+           ================================================================ */
+        [data-theme-mode="dark"] .seo-accordion-item,
+        [data-bs-theme="dark"] .seo-accordion-item,
+        [data-layout-mode="dark"] .seo-accordion-item {
+            background: #2d2d2d;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme-mode="dark"] .seo-accordion-header,
+        [data-bs-theme="dark"] .seo-accordion-header,
+        [data-layout-mode="dark"] .seo-accordion-header {
+            background: #2d2d2d;
+        }
+        
+        [data-theme-mode="dark"] .seo-accordion-header:hover,
+        [data-bs-theme="dark"] .seo-accordion-header:hover,
+        [data-layout-mode="dark"] .seo-accordion-header:hover {
+            background: #3a3a3a;
+        }
+        
+        [data-theme-mode="dark"] .seo-accordion-header h5,
+        [data-bs-theme="dark"] .seo-accordion-header h5,
+        [data-layout-mode="dark"] .seo-accordion-header h5 {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .seo-accordion-header i.toggle-icon,
+        [data-bs-theme="dark"] .seo-accordion-header i.toggle-icon,
+        [data-layout-mode="dark"] .seo-accordion-header i.toggle-icon {
             color: #adb5bd;
-            margin-left: 8px;
+        }
+        
+        [data-theme-mode="dark"] .seo-accordion-body,
+        [data-bs-theme="dark"] .seo-accordion-body,
+        [data-layout-mode="dark"] .seo-accordion-body {
+            background: #1a1a1a;
+            border-top-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme-mode="dark"] .usage-guide,
+        [data-bs-theme="dark"] .usage-guide,
+        [data-layout-mode="dark"] .usage-guide {
+            background: #2d2d2d;
+        }
+        
+        [data-theme-mode="dark"] .usage-guide-header h6,
+        [data-bs-theme="dark"] .usage-guide-header h6,
+        [data-layout-mode="dark"] .usage-guide-header h6 {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .usage-guide-body ul,
+        [data-bs-theme="dark"] .usage-guide-body ul,
+        [data-layout-mode="dark"] .usage-guide-body ul {
+            color: #adb5bd;
+        }
+        
+        [data-theme-mode="dark"] .seo-table,
+        [data-bs-theme="dark"] .seo-table,
+        [data-layout-mode="dark"] .seo-table {
+            background: #2d2d2d;
+        }
+        
+        [data-theme-mode="dark"] .seo-table th,
+        [data-bs-theme="dark"] .seo-table th,
+        [data-layout-mode="dark"] .seo-table th {
+            background: #343a40;
+            color: #e9ecef;
+            border-bottom-color: #495057;
+        }
+        
+        [data-theme-mode="dark"] .seo-table td,
+        [data-bs-theme="dark"] .seo-table td,
+        [data-layout-mode="dark"] .seo-table td {
+            color: #e9ecef;
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme-mode="dark"] .seo-table tr:hover td,
+        [data-bs-theme="dark"] .seo-table tr:hover td,
+        [data-layout-mode="dark"] .seo-table tr:hover td {
+            background: #3a3a3a;
+        }
+        
+        [data-theme-mode="dark"] .domain-config-card,
+        [data-bs-theme="dark"] .domain-config-card,
+        [data-layout-mode="dark"] .domain-config-card {
+            background: #2d2d2d;
+            border-color: #495057;
+        }
+        
+        [data-theme-mode="dark"] .domain-config-header,
+        [data-bs-theme="dark"] .domain-config-header,
+        [data-layout-mode="dark"] .domain-config-header {
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme-mode="dark"] .domain-name,
+        [data-bs-theme="dark"] .domain-name,
+        [data-layout-mode="dark"] .domain-name {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .config-field,
+        [data-bs-theme="dark"] .config-field,
+        [data-layout-mode="dark"] .config-field {
+            background: #343a40;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme-mode="dark"] .config-field label,
+        [data-bs-theme="dark"] .config-field label,
+        [data-layout-mode="dark"] .config-field label {
+            color: #adb5bd;
+        }
+        
+        [data-theme-mode="dark"] .config-field select,
+        [data-theme-mode="dark"] .config-field input,
+        [data-bs-theme="dark"] .config-field select,
+        [data-bs-theme="dark"] .config-field input,
+        [data-layout-mode="dark"] .config-field select,
+        [data-layout-mode="dark"] .config-field input {
+            background: #2d2d2d;
+            border-color: #495057;
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .provider-item,
+        [data-bs-theme="dark"] .provider-item,
+        [data-layout-mode="dark"] .provider-item {
+            background: #343a40;
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-website-card,
+        [data-bs-theme="dark"] .sitemap-website-card,
+        [data-layout-mode="dark"] .sitemap-website-card {
+            background: #2d2d2d;
+            border-color: #495057;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-platform-item,
+        [data-bs-theme="dark"] .sitemap-platform-item,
+        [data-layout-mode="dark"] .sitemap-platform-item {
+            background: #343a40;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-module-header,
+        [data-bs-theme="dark"] .sitemap-module-header,
+        [data-layout-mode="dark"] .sitemap-module-header {
+            background: rgba(85, 110, 230, 0.15);
+        }
+        
+        [data-theme-mode="dark"] .sitemap-module-name,
+        [data-bs-theme="dark"] .sitemap-module-name,
+        [data-layout-mode="dark"] .sitemap-module-name {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .website-details-container,
+        [data-bs-theme="dark"] .website-details-container,
+        [data-layout-mode="dark"] .website-details-container {
+            background: #343a40;
+        }
+        
+        [data-theme-mode="dark"] .binding-table-wrapper,
+        [data-bs-theme="dark"] .binding-table-wrapper,
+        [data-layout-mode="dark"] .binding-table-wrapper {
+            background: #343a40;
+        }
+        
+        [data-theme-mode="dark"] .empty-state,
+        [data-bs-theme="dark"] .empty-state,
+        [data-layout-mode="dark"] .empty-state {
+            color: #6c757d;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-file-item:hover,
+        [data-bs-theme="dark"] .sitemap-file-item:hover,
+        [data-layout-mode="dark"] .sitemap-file-item:hover {
+            background: #3a3a3a;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-file-name,
+        [data-bs-theme="dark"] .sitemap-file-name,
+        [data-layout-mode="dark"] .sitemap-file-name {
+            color: #e9ecef;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-children,
+        [data-bs-theme="dark"] .sitemap-children,
+        [data-layout-mode="dark"] .sitemap-children {
+            border-left-color: #495057;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-child-file:hover,
+        [data-bs-theme="dark"] .sitemap-child-file:hover,
+        [data-layout-mode="dark"] .sitemap-child-file:hover {
+            background: #343a40;
+        }
+        
+        [data-theme-mode="dark"] .sitemap-child-file a,
+        [data-bs-theme="dark"] .sitemap-child-file a,
+        [data-layout-mode="dark"] .sitemap-child-file a {
+            color: #e9ecef;
         }
     </style>
 </head>
