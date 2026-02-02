@@ -1025,6 +1025,32 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
                                                     <div class="platform-badge" style="background-color: <?= htmlspecialchars($platform['platform_color']) ?>;">
                                                         <?= htmlspecialchars($platform['platform_name']) ?>
                                                     </div>
+                                                    <?php 
+                                                    // 显示 SEO 账户信息
+                                                    $seoAccount = $platform['seo_account'] ?? null;
+                                                    if ($seoAccount): 
+                                                    ?>
+                                                    <div class="seo-account-info d-inline-flex align-items-center gap-1 ms-2" style="font-size: 12px;">
+                                                        <span class="text-muted">
+                                                            <i class="mdi mdi-account-key"></i>
+                                                            <?= htmlspecialchars($seoAccount['account_name']) ?>
+                                                        </span>
+                                                        <?php if ($seoAccount['is_auto_submit']): ?>
+                                                        <span class="badge bg-success" style="font-size: 10px;" title="<?= __('已启用自动提交') ?>">
+                                                            <i class="mdi mdi-check-circle"></i> <lang>自动</lang>
+                                                        </span>
+                                                        <?php else: ?>
+                                                        <span class="badge bg-warning text-dark" style="font-size: 10px;" title="<?= __('未启用自动提交') ?>">
+                                                            <i class="mdi mdi-pause-circle"></i> <lang>手动</lang>
+                                                        </span>
+                                                        <?php endif; ?>
+                                                        <?php if ($seoAccount['enable_cron_push']): ?>
+                                                        <span class="badge bg-info" style="font-size: 10px;" title="<?= __('定时推送') ?>">
+                                                            <i class="mdi mdi-clock-outline"></i>
+                                                        </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <?php endif; ?>
                                                     <div class="sitemap-file-tree">
                                                         <!-- 主索引文件（可展开） -->
                                                         <?php if ($platform['index']): ?>
