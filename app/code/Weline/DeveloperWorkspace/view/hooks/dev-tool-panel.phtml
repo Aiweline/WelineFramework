@@ -1401,17 +1401,6 @@ const DevToolPanel = (function() {
                 correctPanelPosition(panel);
                 updateExpandDirection();
                 updateContainerPosition();
-                
-                console.log('屏幕尺寸变化，已重新调整面板位置:', {
-                    viewport: {
-                        width: window.innerWidth,
-                        height: window.innerHeight
-                    },
-                    panelPosition: {
-                        x: parseInt(panel.style.left),
-                        y: parseInt(panel.style.top)
-                    }
-                });
             }
         });
     }
@@ -1543,13 +1532,6 @@ const DevToolPanel = (function() {
                 
                 // 同步container位置
                 updateContainerPosition();
-                
-                console.log('开发工具面板位置已自动纠正:', {
-                    original: { x: currentX, y: currentY },
-                    corrected: { x: correctedX, y: correctedY },
-                    windowSize: { width: windowWidth, height: windowHeight },
-                    containerSize: { width: width, height: height }
-                });
             }
         }
     }
@@ -1857,12 +1839,6 @@ const DevToolPanel = (function() {
             if (!state.collapsed) {
                 updateExpandDirection();
             }
-            
-            console.log('拖动结束，位置已保存:', {
-                x: finalX, 
-                y: finalY,
-                collapsed: state.collapsed
-            });
         });
     }
     

@@ -10,6 +10,21 @@ $accounts = $accounts ?? [];
 $scope = $scope ?? '';
 $module = $module ?? '';
 $isAjax = $is_ajax ?? false;
+
+// 平台颜色映射
+$platformColors = [
+    'google' => '#4285F4',
+    'bing' => '#00809D',
+    'baidu' => '#2932E1',
+    'yandex' => '#FF0000',
+    'naver' => '#03C75A',
+];
+
+// 辅助函数：获取平台颜色
+function getPlatformColor($platform, $colors) {
+    $platform = strtolower(trim($platform));
+    return $colors[$platform] ?? '#6c757d';
+}
 ?>
 
 <?php if (!$isAjax): ?>
@@ -81,13 +96,13 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <table class="table table-striped mb-0">
                                 <thead>
                                 <tr>
+                                    <th style="width: 30px;"></th>
                                     <th><lang>ID</lang></th>
                                     <th><lang>名称</lang></th>
                                     <th><lang>供应商</lang></th>
-                                    <th><lang>Scope</lang></th>
+                                    <th><lang>绑定站点</lang></th>
+                                    <th><lang>SEO 数据</lang></th>
                                     <th><lang>启用</lang></th>
-                                    <th><lang>URL定时推送</lang></th>
-                                    <th><lang>Sitemap定时提交</lang></th>
                                     <th><lang>操作</lang></th>
                                 </tr>
                                 </thead>
@@ -99,12 +114,63 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php foreach ($accounts as $account): ?>
+                                    <?php foreach ($accounts as $account): 
+                                        $accountId = (int)($account['account_id'] ?? 0);
+                                        $boundCount = (int)($account['bound_websites_count'] ?? 0);
+                                        $stats = $account['stats'] ?? null;
+                                        $hasStats = $stats && ($stats['indexed_pages'] > 0 || $stats['clicks'] > 0 || $stats['impressions'] > 0);
+                                    ?>
                                         <tr>
-                                            <td><?= (int)($account['account_id'] ?? 0) ?></td>
-                                            <td><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></td>
-                                            <td><?= htmlspecialchars((string)($account['provider'] ?? ''), ENT_QUOTES) ?></td>
-                                            <td><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></td>
+                                            <td>
+                                                <?php if ($hasStats): ?>
+                                                <button class="btn btn-sm btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#stats-<?= $accountId ?>" aria-expanded="false">
+                                                    <i class="mdi mdi-chevron-down"></i>
+                                                </button>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= $accountId ?></td>
+                                            <td>
+                                                <strong><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></strong>
+                                                <br>
+                                                <small class="text-muted"><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></small>
+                                            </td>
+                                            <td>
+                                                <span class="badge" style="background-color: <?= getPlatformColor($account['platform'] ?? $account['provider'] ?? '', $platformColors) ?>;">
+                                                    <?= htmlspecialchars((string)($account['platform'] ?? $account['provider'] ?? ''), ENT_QUOTES) ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <?php if ($boundCount > 0): ?>
+                                                <span class="badge bg-success"><?= $boundCount ?> <lang>个站点</lang></span>
+                                                <?php else: ?>
+                                                <span class="badge bg-secondary"><lang>未绑定</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($hasStats): ?>
+                                                <div class="d-flex flex-wrap gap-2" style="font-size: 12px;">
+                                                    <span class="text-success" title="<?= __('已收录页面') ?>">
+                                                        <i class="mdi mdi-check-circle"></i> <?= number_format($stats['indexed_pages']) ?>
+                                                    </span>
+                                                    <span class="text-primary" title="<?= __('点击量') ?>">
+                                                        <i class="mdi mdi-cursor-default-click"></i> <?= number_format($stats['clicks']) ?>
+                                                    </span>
+                                                    <span class="text-info" title="<?= __('展示量') ?>">
+                                                        <i class="mdi mdi-eye"></i> <?= number_format($stats['impressions']) ?>
+                                                    </span>
+                                                    <?php if ($stats['error_count'] > 0): ?>
+                                                    <span class="text-danger" title="<?= __('错误数') ?>">
+                                                        <i class="mdi mdi-alert-circle"></i> <?= number_format($stats['error_count']) ?>
+                                                    </span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if ($stats['last_sync_at']): ?>
+                                                <small class="text-muted d-block"><?= __('同步') ?>: <?= date('m-d H:i', strtotime($stats['last_sync_at'])) ?></small>
+                                                <?php endif; ?>
+                                                <?php else: ?>
+                                                <span class="text-muted" style="font-size: 12px;"><lang>暂无数据</lang></span>
+                                                <?php endif; ?>
+                                            </td>
                                             <td>
                                                 <?php if ((int)($account['is_active'] ?? 0) === 1): ?>
                                                     <span class="badge bg-success"><lang>启用</lang></span>
@@ -113,38 +179,85 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <?php endif; ?>
                                             </td>
                                             <td>
-                                                <?php if ((int)($account['enable_cron_push_urls'] ?? 0) === 1): ?>
-                                                    <span class="badge bg-success"><lang>开启</lang></span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-secondary"><lang>关闭</lang></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ((int)($account['enable_cron_sitemap'] ?? 0) === 1): ?>
-                                                    <span class="badge bg-success"><lang>开启</lang></span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-secondary"><lang>关闭</lang></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-primary me-1"
-                                                        onclick="loadSeoAccountForm(<?= (int)($account['account_id'] ?? 0) ?>)"
-                                                        data-bs-toggle="offcanvas" 
-                                                        data-bs-target="#seoAccountOffcanvas">
-                                                    <i class="mdi mdi-pencil me-1"></i>
-                                                    <lang>编辑</lang>
-                                                </button>
-                                                <button type="button" 
-                                                        class="btn btn-sm btn-outline-success"
-                                                        onclick="loadWebsiteBindingForm(<?= (int)($account['account_id'] ?? 0) ?>)"
-                                                        data-bs-toggle="offcanvas" 
-                                                        data-bs-target="#websiteBindingOffcanvas">
-                                                    <i class="mdi mdi-web me-1"></i>
-                                                    <lang>绑定站点</lang>
-                                                </button>
+                                                <div class="btn-group">
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-primary"
+                                                            onclick="loadSeoAccountForm(<?= $accountId ?>)"
+                                                            data-bs-toggle="offcanvas" 
+                                                            data-bs-target="#seoAccountOffcanvas"
+                                                            title="<?= __('编辑') ?>">
+                                                        <i class="mdi mdi-pencil"></i>
+                                                    </button>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-success"
+                                                            onclick="loadWebsiteBindingForm(<?= $accountId ?>)"
+                                                            data-bs-toggle="offcanvas" 
+                                                            data-bs-target="#websiteBindingOffcanvas"
+                                                            title="<?= __('绑定站点') ?>">
+                                                        <i class="mdi mdi-web"></i>
+                                                        <?php if ($boundCount > 0): ?>
+                                                        <span class="badge bg-light text-dark"><?= $boundCount ?></span>
+                                                        <?php endif; ?>
+                                                    </button>
+                                                    <?php if ($boundCount > 0): ?>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-info"
+                                                            onclick="syncAccountStats(<?= $accountId ?>)"
+                                                            title="<?= __('同步统计数据') ?>">
+                                                        <i class="mdi mdi-sync"></i>
+                                                    </button>
+                                                    <?php endif; ?>
+                                                </div>
                                             </td>
                                         </tr>
+                                        <?php if ($hasStats): ?>
+                                        <tr class="collapse" id="stats-<?= $accountId ?>">
+                                            <td colspan="8" class="bg-light p-3">
+                                                <div class="row g-3">
+                                                    <div class="col-md-3">
+                                                        <div class="card border-success h-100">
+                                                            <div class="card-body text-center">
+                                                                <h4 class="text-success mb-1"><?= number_format($stats['indexed_pages']) ?></h4>
+                                                                <small class="text-muted"><lang>已收录</lang></small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="card border-primary h-100">
+                                                            <div class="card-body text-center">
+                                                                <h4 class="text-primary mb-1"><?= number_format($stats['clicks']) ?></h4>
+                                                                <small class="text-muted"><lang>点击量</lang></small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="card border-info h-100">
+                                                            <div class="card-body text-center">
+                                                                <h4 class="text-info mb-1"><?= number_format($stats['impressions']) ?></h4>
+                                                                <small class="text-muted"><lang>展示量</lang></small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="card border-warning h-100">
+                                                            <div class="card-body text-center">
+                                                                <h4 class="text-warning mb-1"><?= number_format($stats['submitted_urls']) ?></h4>
+                                                                <small class="text-muted"><lang>已提交URL</lang></small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <?php if ($stats['last_sync_at']): ?>
+                                                <div class="text-end mt-2">
+                                                    <small class="text-muted">
+                                                        <i class="mdi mdi-clock-outline me-1"></i>
+                                                        <lang>最后同步</lang>: <?= $stats['last_sync_at'] ?>
+                                                    </small>
+                                                </div>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                                 </tbody>
@@ -652,14 +765,39 @@ function clearAllSelections() {
 
 // 保存站点绑定
 function saveWebsiteBindings() {
+    // 如果没有选择任何站点，询问是否要解绑所有站点
     if (selectedWebsiteIds.length === 0) {
-        showMessage('warning', '<?= __("请至少选择一个站点") ?>');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __("确认解绑") ?>',
+                text: '<?= __("您没有选择任何站点，这将解绑该账户下的所有站点。确定要继续吗？") ?>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: '<?= __("确认解绑") ?>',
+                cancelButtonText: '<?= __("取消") ?>'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    doSaveWebsiteBindings([]);
+                }
+            });
+        } else {
+            if (confirm('<?= __("您没有选择任何站点，这将解绑该账户下的所有站点。确定要继续吗？") ?>')) {
+                doSaveWebsiteBindings([]);
+            }
+        }
         return;
     }
     
+    doSaveWebsiteBindings(selectedWebsiteIds);
+}
+
+// 实际执行保存绑定
+function doSaveWebsiteBindings(websiteIds) {
     const data = {
         account_id: currentAccountId,
-        website_ids: selectedWebsiteIds
+        website_ids: websiteIds
     };
     
     // 禁用保存按钮
@@ -724,6 +862,57 @@ document.getElementById('websiteBindingOffcanvas')?.addEventListener('hidden.bs.
         `;
     }
 });
+
+// ==================== 统计数据同步 ====================
+
+// 同步账户统计数据
+function syncAccountStats(accountId) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<?= __("同步统计数据") ?>',
+            text: '<?= __("正在从搜索引擎平台获取最新统计数据...") ?>',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    } else {
+        showMessage('info', '<?= __("正在同步...") ?>');
+    }
+    
+    const formData = new FormData();
+    formData.append('account_id', accountId);
+    
+    fetch('<?= $this->getBackendUrl('seo/backend/account/syncStats') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(resp => {
+        if (typeof Swal !== 'undefined') {
+            Swal.close();
+        }
+        
+        if (resp.success) {
+            showMessage('success', resp.message || '<?= __("同步成功") ?>');
+            // 刷新页面以显示新数据
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', resp.message || '<?= __("同步失败") ?>');
+        }
+    })
+    .catch(error => {
+        if (typeof Swal !== 'undefined') {
+            Swal.close();
+        }
+        console.error('Error:', error);
+        showMessage('error', '<?= __("请求失败，请检查网络连接") ?>');
+    });
+}
 </script>
 
 </body>

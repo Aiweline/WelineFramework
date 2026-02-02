@@ -405,6 +405,16 @@
         // 保存当前选中的插槽
         state.selectedSlot = slot;
         
+        // 根据插槽 ID 确定区域并过滤部件
+        const slotId = slot.id || '';
+        const areaCode = slot.area || slotId;
+        
+        // 调用区域过滤函数，隐藏不适合该区域的部件
+        if (areaCode) {
+            filterWidgetsByArea(areaCode);
+            state.selectedArea = areaCode;
+        }
+        
         // 高亮右侧部件列表中可放入该插槽的部件并排序
         let acceptCodes = slot.accept || [];
         // 确保 acceptCodes 是数组
@@ -557,10 +567,6 @@
             const widgetType = dataSource.dataset?.widgetType || dataSource.getAttribute?.('data-widget-type');
             const widgetName = dataSource.dataset?.widgetName || dataSource.getAttribute?.('data-widget-name') || widgetCode || '未知部件';
             
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:renderSlotWidgetsConfig',message:'Widget data extraction',data:{layoutId,widgetCode,widgetModule,widgetType,widgetName,datasetWidgetName:dataSource.dataset?.widgetName,attrWidgetName:dataSource.getAttribute?.('data-widget-name'),dataSourceTagName:dataSource.tagName,dataSourceClassName:dataSource.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,E'})}).catch(()=>{});
-            // #endregion
-            
             // 只添加有 layoutId 的部件
             if (layoutId) {
                 widgetsData.push({
@@ -695,17 +701,8 @@
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
                 
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadWidgetConfigForAccordion',message:'Before generateWidgetConfigForm call',data:{layoutId,paramsKeys:Object.keys(params),widgetConfigKeys:Object.keys(widgetConfig)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
-                
                 // 生成配置表单
                 const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
-                
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadWidgetConfigForAccordion',message:'After generateWidgetConfigForm call',data:{layoutId,formHtmlType:typeof formHtml,formHtmlLength:formHtml?.length,isPromise:formHtml instanceof Promise,formHtmlPreview:String(formHtml).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
-                
                 configBody.innerHTML = formHtml;
                 
                 // 绑定表单事件
@@ -729,10 +726,6 @@
      * 优先使用后端 API 渲染，失败时回退到前端渲染
      */
     async function generateWidgetConfigForm(layoutId, params, formConfig) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:entry',message:'Function entry',data:{layoutId,paramsKeys:Object.keys(params||{}),formConfigKeys:Object.keys(formConfig||{}),apiParamRenderForm:config.apiParamRenderForm},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
-        
         if (!params || Object.keys(params).length === 0) {
             return `<div class="config-empty-state">
                 <i class="ri-settings-3-line"></i>
@@ -754,23 +747,13 @@
                 }),
             });
             
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:apiResponse',message:'Backend API response',data:{responseOk:response.ok,responseStatus:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
-            
             if (response.ok) {
                 const html = await response.text();
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:htmlResult',message:'Backend HTML result',data:{htmlLength:html?.length,hasError:html?.includes('alert-danger'),htmlPreview:html?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-                // #endregion
                 if (html && !html.includes('alert-danger')) {
                     return html;
                 }
             }
         } catch (err) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:error',message:'Backend API error',data:{error:err?.message || String(err)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
             console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
         
@@ -3263,6 +3246,7 @@
         };
         
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
+        // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
             'header': ['header'],
             'footer': ['footer'],
@@ -3276,12 +3260,13 @@
             'search': ['header', 'content'],
             'breadcrumb': ['content'],
             'pagination': ['content'],
-            'social': ['footer', 'left_sidebar', 'right_sidebar'],
-            'newsletter': ['footer', 'left_sidebar', 'right_sidebar'],
+            'social': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
+            'newsletter': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
             'testimonial': ['content'],
             'faq': ['content'],
             'video': ['content', 'banner'],
             'content': ['content', 'left_sidebar', 'right_sidebar'],
+            'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
         
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
@@ -3303,7 +3288,12 @@
             // 没有 position 限制，根据 type 推断
             if (widgetType && typeToAreasMap[widgetType]) {
                 allowedAreas = typeToAreasMap[widgetType];
-                console.log('highlightAllowedAreas - inferred from type:', widgetType, '-> areas:', allowedAreas);
+                // container 类型没有 position 时不允许放置（必须有明确 position）
+                if (widgetType === 'container' && allowedAreas.length === 0) {
+                    console.log('highlightAllowedAreas - container type requires explicit position');
+                } else {
+                    console.log('highlightAllowedAreas - inferred from type:', widgetType, '-> areas:', allowedAreas);
+                }
             } else {
                 // 如果没有类型信息，默认只允许 content 区域
                 allowedAreas = ['content'];
@@ -3429,6 +3419,7 @@
         }
         
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
+        // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
             'header': ['header'],
             'footer': ['footer'],
@@ -3442,18 +3433,20 @@
             'search': ['header', 'content'],
             'breadcrumb': ['content'],
             'pagination': ['content'],
-            'social': ['footer', 'left_sidebar', 'right_sidebar'],
-            'newsletter': ['footer', 'left_sidebar', 'right_sidebar'],
+            'social': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
+            'newsletter': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
             'testimonial': ['content'],
             'faq': ['content'],
             'video': ['content', 'banner'],
             'content': ['content', 'left_sidebar', 'right_sidebar'],
+            'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
         
         // 如果没有 position 限制，根据 type 推断
         if (!positions || !Array.isArray(positions) || positions.length === 0) {
             if (widgetType && typeToAreasMap[widgetType]) {
                 // 使用类型推断的区域
+                // 注意：container 类型在 typeToAreasMap 中为空数组，必须有明确 position
                 const inferredAreas = typeToAreasMap[widgetType];
                 const result = inferredAreas.includes(areaCode);
                 console.log('isAllowedArea - inferred from type:', widgetType, '-> areas:', inferredAreas, '-> result:', result);
@@ -5431,6 +5424,7 @@
         };
 
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
+        // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
             'header': ['header'],
             'footer': ['footer'],
@@ -5444,12 +5438,13 @@
             'search': ['header', 'content'],
             'breadcrumb': ['content'],
             'pagination': ['content'],
-            'social': ['footer', 'left_sidebar', 'right_sidebar'],
-            'newsletter': ['footer', 'left_sidebar', 'right_sidebar'],
+            'social': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
+            'newsletter': ['footer', 'left_sidebar', 'right_sidebar', 'content'],
             'testimonial': ['content'],
             'faq': ['content'],
             'video': ['content', 'banner'],
             'content': ['content', 'left_sidebar', 'right_sidebar'],
+            'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
         
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
@@ -5496,14 +5491,24 @@
                 // 没有 position 限制，根据 type 推断
                 if (widgetType && typeToAreasMap[widgetType]) {
                     allowedAreas = typeToAreasMap[widgetType];
+                    // container 类型没有 position 时不允许放置（必须有明确 position）
+                    if (widgetType === 'container' && allowedAreas.length === 0) {
+                        allowedAreas = [];
+                    }
                 } else {
                     // 如果没有类型信息，默认只允许 content 区域
                     allowedAreas = ['content'];
                 }
             } else if (widgetPositions.includes('*') || widgetPositions.includes('all')) {
-                // 通配符，允许所有
+                // 通配符，允许所有区域（但仍受 areaExclusiveTypes 约束）
                 isUniversal = true;
                 allowedAreas = ['header', 'content', 'footer', 'left_sidebar', 'right_sidebar', 'banner'];
+                // 对于通配符部件，如果类型是 header/footer，从允许区域中移除不兼容的区域
+                if (widgetType === 'header') {
+                    allowedAreas = allowedAreas.filter(a => a !== 'footer');
+                } else if (widgetType === 'footer') {
+                    allowedAreas = allowedAreas.filter(a => a !== 'header');
+                }
             } else {
                 // 收集部件允许放置的所有区域
                 widgetPositions.forEach(pos => {
@@ -5520,7 +5525,7 @@
             
             // 只有当区域允许且类型未被拒绝时才能放置
             const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
-
+            
             // 清除所有匹配相关的类
             item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
@@ -5983,6 +5988,28 @@
             // 获取当前站点的基础 URL
             const currentOrigin = window.location.origin;
             const baseUrl = config.apiBase?.replace(/\/theme\/backend\/theme-editor.*$/, '') || '';
+            
+            // iframe 内区域点击事件处理，用于过滤部件面板
+            iframeDoc.addEventListener('click', function(e) {
+                // 检查是否点击了区域元素
+                const themeArea = e.target.closest('.theme-area[data-area]');
+                if (themeArea && !e.target.closest('[data-layout-id]') && !e.target.closest('a')) {
+                    const areaCode = themeArea.getAttribute('data-area');
+                    if (areaCode) {
+                        // 调用父窗口的 filterWidgetsByArea 函数
+                        filterWidgetsByArea(areaCode);
+                        // 更新状态
+                        state.selectedArea = areaCode;
+                        // 高亮当前区域
+                        iframeDoc.querySelectorAll('.theme-area').forEach(el => el.classList.remove('area-selected'));
+                        themeArea.classList.add('area-selected');
+                        // 显示提示
+                        const areaName = areaCode.charAt(0).toUpperCase() + areaCode.slice(1);
+                        showToast(`已筛选 "${areaName}" 区域的部件`, 'info');
+                        return;
+                    }
+                }
+            });
             
             // 拦截所有链接点击
             iframeDoc.addEventListener('click', function(e) {
