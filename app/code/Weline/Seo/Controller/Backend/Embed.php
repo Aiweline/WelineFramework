@@ -27,7 +27,7 @@ use Weline\Seo\Service\SuggestionService;
  * 
  * @package Weline_Seo
  */
-#[Acl('Weline_Seo::seo_embed', 'SEO嵌入式管理', 'mdi-view-compact-outline', 'SEO嵌入式管理界面', 'Weline_Backend::business_module')]
+#[Acl('Weline_Seo::seo_embed', 'SEO嵌入式管理', 'mdi-view-compact-outline', 'SEO嵌入式管理界面', 'Weline_Seo::seo_management')]
 class Embed extends BaseController
 {
     private ObjectManager $objectManager;
