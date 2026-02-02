@@ -55,7 +55,7 @@ class ParamRender extends BackendController
             $html = $this->paramTypeRenderer->renderForm($layoutId, $params, $config);
             return $html;
         } catch (\Exception $e) {
-            return '<div class="alert alert-danger">' . __('渲染表单失败: %1', $e->getMessage()) . '</div>';
+            return '<div class="alert alert-danger">' . __('渲染表单失败: %{error}', ['error' => $e->getMessage()]) . '</div>';
         }
     }
 
@@ -86,7 +86,7 @@ class ParamRender extends BackendController
             $html = $this->paramTypeRenderer->renderField($key, $param, $value, $layoutId);
             return $html;
         } catch (\Exception $e) {
-            return '<div class="alert alert-danger">' . __('渲染字段失败: %1', $e->getMessage()) . '</div>';
+            return '<div class="alert alert-danger">' . __('渲染字段失败: %{error}', ['error' => $e->getMessage()]) . '</div>';
         }
     }
 

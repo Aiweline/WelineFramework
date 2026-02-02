@@ -415,7 +415,7 @@ class Layout extends BackendController
         $availableLayouts = $this->getAvailableLayouts($theme, $area);
         foreach ($layouts as $layoutType => $option) {
             if (!isset($availableLayouts[$layoutType])) {
-                return $this->fetchJson($this->error(__('布局类型不存在：%1', $layoutType)));
+                return $this->fetchJson($this->error(__('布局类型不存在：%{type}', ['type' => $layoutType])));
             }
             
             // 检查选项是否存在（支持新格式和旧格式）
@@ -435,7 +435,7 @@ class Layout extends BackendController
             }
             
             if (!$found) {
-                return $this->fetchJson($this->error(__('布局选项无效：%1/%2', $layoutType, $option)));
+                return $this->fetchJson($this->error(__('布局选项无效：%{type}/%{option}', ['type' => $layoutType, 'option' => $option])));
             }
         }
 
@@ -511,7 +511,7 @@ class Layout extends BackendController
                 return $this->json(['code' => 500, 'msg' => __('文件保存失败')]);
             }
         } catch (\Exception $e) {
-            return $this->json(['code' => 500, 'msg' => __('上传出错: %1', $e->getMessage())]);
+            return $this->json(['code' => 500, 'msg' => __('上传出错: %{error}', ['error' => $e->getMessage()])]);
         }
     }
 
@@ -2569,7 +2569,7 @@ class Layout extends BackendController
         $filePath = $this->resolveColorFilePath($theme, $area, $colorFile, $colorValue);
         
         if (!$filePath || !file_exists($filePath)) {
-            return $this->fetchJson($this->error(__('色系文件不存在：%1', $colorFile)));
+            return $this->fetchJson($this->error(__('色系文件不存在：%{file}', ['file' => $colorFile])));
         }
         
         // 读取CSS文件内容
@@ -2628,7 +2628,7 @@ class Layout extends BackendController
         $filePath = $this->resolveColorFilePath($theme, $area, $colorFile, $colorValue);
         
         if (!$filePath || !file_exists($filePath)) {
-            return $this->fetchJson($this->error(__('色系文件不存在：%1', $colorFile)));
+            return $this->fetchJson($this->error(__('色系文件不存在：%{file}', ['file' => $colorFile])));
         }
         
         // 读取CSS文件内容
@@ -3027,7 +3027,7 @@ class Layout extends BackendController
             // 忽略错误
         }
 
-        return $this->fetchJson($this->success(__('已保存 %1 个变量', $savedCount), [
+        return $this->fetchJson($this->success(__('已保存 %{count} 个变量', ['count' => $savedCount]), [
             'saved_count' => $savedCount,
             'preview_url' => $previewUrl
         ]));
@@ -3111,7 +3111,7 @@ class Layout extends BackendController
             // 忽略错误
         }
 
-        return $this->fetchJson($this->success(__('已保存 %1 个变量', $savedCount), [
+        return $this->fetchJson($this->success(__('已保存 %{count} 个变量', ['count' => $savedCount]), [
             'saved_count' => $savedCount,
             'preview_url' => $previewUrl
         ]));
@@ -3169,7 +3169,7 @@ class Layout extends BackendController
 
         ThemeData::clearCache();
 
-        return $this->fetchJson($this->success(__('已保存 %1 个参数', $savedCount), [
+        return $this->fetchJson($this->success(__('已保存 %{count} 个参数', ['count' => $savedCount]), [
             'saved_count' => $savedCount
         ]));
     }

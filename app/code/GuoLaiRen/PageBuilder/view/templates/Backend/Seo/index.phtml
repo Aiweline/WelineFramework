@@ -31,31 +31,40 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
     <script src="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.all.min.js)"></script>
     
     <style>
-        /* 手风琴样式 */
+        /* ================================================================
+           手风琴样式 - 使用主题 CSS 变量适配亮色/暗色模式
+           ================================================================ */
         .seo-accordion {
-            margin-bottom: 20px;
+            margin-bottom: var(--backend-spacing-md, 20px);
         }
         
         .seo-accordion-item {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 15px;
+            background: var(--backend-color-card-bg, #fff);
+            border-radius: var(--backend-border-radius-md, 8px);
+            box-shadow: var(--backend-card-shadow, 0 2px 8px rgba(0,0,0,0.06));
+            margin-bottom: var(--backend-spacing-md, 15px);
             overflow: hidden;
+            border: 1px solid var(--backend-color-border-light, transparent);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .seo-accordion-item:hover {
+            border-color: var(--backend-color-border-default, #dee2e6);
         }
         
         .seo-accordion-header {
-            padding: 18px 24px;
+            padding: var(--backend-spacing-md, 18px) var(--backend-spacing-lg, 24px);
             cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
             user-select: none;
             transition: all 0.3s ease;
+            background: var(--backend-color-card-bg, transparent);
         }
         
         .seo-accordion-header:hover {
-            background:rgb(216, 216, 216);
+            background: var(--backend-color-bg-tertiary, #e9ecef);
         }
         
         .seo-accordion-header h5 {
@@ -64,11 +73,13 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             font-size: 1.1rem;
             display: flex;
             align-items: center;
+            color: var(--backend-color-text-primary, #212529);
         }
         
         .seo-accordion-header i.toggle-icon {
             font-size: 1.5rem;
             transition: transform 0.3s ease;
+            color: var(--backend-color-text-secondary, #6c757d);
         }
         
         .seo-accordion-header.collapsed i.toggle-icon {
@@ -76,21 +87,25 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .seo-accordion-body {
-            padding: 24px;
+            padding: var(--backend-spacing-lg, 24px);
             display: none;
+            background: var(--backend-color-bg-primary, #fff);
+            border-top: 1px solid var(--backend-color-border-light, #e9ecef);
         }
         
         .seo-accordion-body.show {
             display: block;
         }
         
-        /* 使用指南样式 */
+        /* ================================================================
+           使用指南样式 - 使用主题 CSS 变量
+           ================================================================ */
         .usage-guide {
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
-            padding: 16px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            background: var(--backend-color-bg-secondary, #f8f9fa);
+            border-left: 4px solid var(--backend-color-primary, #667eea);
+            padding: var(--backend-spacing-md, 16px) var(--backend-spacing-md, 20px);
+            border-radius: var(--backend-border-radius-md, 8px);
+            margin-bottom: var(--backend-spacing-md, 20px);
         }
         
         .usage-guide-header {
@@ -103,12 +118,12 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         
         .usage-guide-header h6 {
             margin: 0;
-            color: #333;
+            color: var(--backend-color-text-primary, #333);
             font-weight: 600;
         }
         
         .usage-guide-body {
-            margin-top: 12px;
+            margin-top: var(--backend-spacing-sm, 12px);
             display: none;
         }
         
@@ -117,48 +132,59 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .usage-guide-body ul {
-            margin: 8px 0 0 0;
-            padding-left: 20px;
-            color: #666;
+            margin: var(--backend-spacing-sm, 8px) 0 0 0;
+            padding-left: var(--backend-spacing-md, 20px);
+            color: var(--backend-color-text-secondary, #666);
         }
         
         .usage-guide-body li {
-            margin-bottom: 6px;
+            margin-bottom: var(--backend-spacing-xs, 6px);
             font-size: 0.9rem;
         }
         
-        /* 表格样式 */
+        /* ================================================================
+           表格样式 - 使用主题 CSS 变量
+           ================================================================ */
         .seo-table {
             width: 100%;
             margin-bottom: 0;
+            background: var(--backend-color-table-bg, #fff);
         }
         
         .seo-table th {
-            background: #f8f9fa;
+            background: var(--backend-color-bg-secondary, #f8f9fa);
             font-weight: 600;
-            color: #333;
-            padding: 12px;
-            border-bottom: 2px solid #dee2e6;
+            color: var(--backend-color-text-primary, #333);
+            padding: var(--backend-padding-table-cell, 12px);
+            border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
         }
         
         .seo-table td {
-            padding: 12px;
+            padding: var(--backend-padding-table-cell, 12px);
             vertical-align: middle;
+            color: var(--backend-color-text-primary, #333);
+            border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
         }
         
-        /* 展开按钮 */
+        .seo-table tr:hover td {
+            background: var(--backend-color-table-bg-hover, #f8f9fa);
+        }
+        
+        /* ================================================================
+           展开按钮 - 使用主题 CSS 变量
+           ================================================================ */
         .expand-toggle {
-            padding: 4px 8px !important;
+            padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 8px) !important;
             border: none !important;
             background: transparent !important;
-            color: #6c757d;
+            color: var(--backend-color-text-secondary, #6c757d);
             transition: all 0.2s ease;
         }
         
         .expand-toggle:hover {
-            color: #6366f1;
-            background: #f0f0ff !important;
-            border-radius: 6px;
+            color: var(--backend-color-primary, #6366f1);
+            background: var(--backend-color-primary-bg-subtle, rgba(99, 102, 241, 0.1)) !important;
+            border-radius: var(--backend-border-radius, 6px);
         }
         
         .expand-toggle i {
@@ -170,13 +196,15 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             transform: rotate(90deg);
         }
         
-        /* 账户行样式 */
+        /* ================================================================
+           账户行样式 - 使用主题 CSS 变量
+           ================================================================ */
         .account-row {
             transition: background-color 0.2s ease;
         }
         
         .account-row.expanded {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            background: var(--backend-color-primary-bg-subtle, rgba(99, 102, 241, 0.08));
         }
         
         /* 站点详情行 */
@@ -185,7 +213,8 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .website-details-container {
-            padding: 20px;
+            padding: var(--backend-spacing-md, 20px);
+            background: var(--backend-color-bg-secondary, #f8f9fa);
             animation: slideDown 0.3s ease;
         }
         
@@ -200,172 +229,184 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             }
         }
         
-        /* 域名配置卡片 */
+        /* ================================================================
+           域名配置卡片 - 使用主题 CSS 变量
+           ================================================================ */
         .domain-config-card {
-            background: #fff;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
+            background: var(--backend-color-card-bg, #fff);
+            border: 2px solid var(--backend-color-border-default, #e2e8f0);
+            border-radius: var(--backend-border-radius-lg, 12px);
+            padding: var(--backend-spacing-md, 20px);
+            margin-bottom: var(--backend-spacing-md, 16px);
             transition: all 0.3s ease;
         }
         
         .domain-config-card:hover {
-            border-color: #6366f1;
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+            border-color: var(--backend-color-primary, #6366f1);
+            box-shadow: 0 4px 16px rgba(var(--backend-color-primary-rgb, 99, 102, 241), 0.15);
         }
         
         .domain-config-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #f1f5f9;
+            margin-bottom: var(--backend-spacing-md, 16px);
+            padding-bottom: var(--backend-spacing-sm, 12px);
+            border-bottom: 2px solid var(--backend-color-border-light, #f1f5f9);
         }
         
         .domain-name {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #1e293b;
+            color: var(--backend-color-text-primary, #1e293b);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: var(--backend-spacing-sm, 10px);
         }
         
         .domain-name i {
-            color: #6366f1;
+            color: var(--backend-color-primary, #6366f1);
         }
         
         .domain-url {
             font-size: 0.85rem;
-            color: #64748b;
-            margin-top: 4px;
+            color: var(--backend-color-text-secondary, #64748b);
+            margin-top: var(--backend-spacing-xs, 4px);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: var(--backend-spacing-xs, 6px);
         }
         
         .config-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
+            gap: var(--backend-spacing-md, 16px);
         }
         
         .config-field {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            padding: 14px;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+            background: var(--backend-color-bg-secondary, #f8fafc);
+            padding: var(--backend-spacing-md, 14px);
+            border-radius: var(--backend-border-radius-md, 8px);
+            border: 1px solid var(--backend-color-border-light, #e2e8f0);
         }
         
         .config-field label {
             font-size: 0.85rem;
             font-weight: 600;
-            color: #475569;
-            margin-bottom: 6px;
+            color: var(--backend-color-text-secondary, #475569);
+            margin-bottom: var(--backend-spacing-xs, 6px);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: var(--backend-spacing-xs, 6px);
         }
         
         .config-field label i {
-            color: #6366f1;
+            color: var(--backend-color-primary, #6366f1);
             font-size: 1rem;
         }
         
         .config-field select,
         .config-field input {
             width: 100%;
-            padding: 8px 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
+            padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-sm, 12px);
+            border: 2px solid var(--backend-color-border-default, #e2e8f0);
+            border-radius: var(--backend-border-radius, 6px);
             font-size: 0.9rem;
             transition: all 0.2s ease;
+            background: var(--backend-color-input-bg, #fff);
+            color: var(--backend-color-text-primary, #333);
         }
         
         .config-field select:focus,
         .config-field input:focus {
             outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            border-color: var(--backend-color-primary, #6366f1);
+            box-shadow: var(--backend-focus-ring, 0 0 0 3px rgba(99, 102, 241, 0.1));
         }
         
         .config-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 10px;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 2px solid #f1f5f9;
+            gap: var(--backend-spacing-sm, 10px);
+            margin-top: var(--backend-spacing-md, 16px);
+            padding-top: var(--backend-spacing-md, 16px);
+            border-top: 2px solid var(--backend-color-border-light, #f1f5f9);
         }
         
-        /* 无绑定站点提示 */
+        /* ================================================================
+           无绑定站点提示 - 使用主题 CSS 变量
+           ================================================================ */
         .no-websites-hint {
             text-align: center;
-            padding: 40px;
-            background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);
-            border-radius: 12px;
-            border: 2px dashed #fbbf24;
+            padding: var(--backend-spacing-xl, 40px);
+            background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+            border-radius: var(--backend-border-radius-lg, 12px);
+            border: 2px dashed var(--backend-color-warning, #fbbf24);
         }
         
         .no-websites-hint i {
             font-size: 3rem;
-            color: #f59e0b;
+            color: var(--backend-color-warning, #f59e0b);
             opacity: 0.6;
-            margin-bottom: 12px;
+            margin-bottom: var(--backend-spacing-sm, 12px);
         }
         
         .no-websites-hint p {
-            color: #92400e;
+            color: var(--backend-color-text-secondary, #92400e);
             font-size: 1rem;
-            margin: 8px 0;
+            margin: var(--backend-spacing-sm, 8px) 0;
         }
         
         .no-websites-hint button {
-            margin-top: 12px;
+            margin-top: var(--backend-spacing-sm, 12px);
         }
         
-        /* 空状态样式 */
+        /* ================================================================
+           空状态样式 - 使用主题 CSS 变量
+           ================================================================ */
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: #999;
+            padding: var(--backend-spacing-xl, 40px) var(--backend-spacing-md, 20px);
+            color: var(--backend-color-text-tertiary, #999);
         }
         
         .empty-state i {
             font-size: 3rem;
             opacity: 0.3;
-            margin-bottom: 15px;
+            margin-bottom: var(--backend-spacing-md, 15px);
         }
         
         /* Badge */
         .badge-custom {
-            padding: 5px 12px;
-            border-radius: 20px;
+            padding: var(--backend-spacing-xs, 5px) var(--backend-spacing-sm, 12px);
+            border-radius: var(--backend-border-radius-pill, 20px);
             font-size: 0.75rem;
             font-weight: 500;
         }
         
-        /* 绑定表格样式 */
+        /* ================================================================
+           绑定表格样式 - 使用主题 CSS 变量
+           ================================================================ */
         .binding-table {
-            margin-top: 20px;
+            margin-top: var(--backend-spacing-md, 20px);
         }
         
         .binding-table-wrapper {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 15px;
+            background: var(--backend-color-bg-secondary, #f8f9fa);
+            padding: var(--backend-spacing-md, 20px);
+            border-radius: var(--backend-border-radius-md, 8px);
+            margin-top: var(--backend-spacing-md, 15px);
         }
         
-        /* 站点绑定 Offcanvas 样式 */
+        /* ================================================================
+           站点绑定 Offcanvas 样式 - 使用主题 CSS 变量
+           ================================================================ */
         #accountWebsiteBindingOffcanvas .offcanvas-header {
-            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #6366f1 100%);
-            color: #fff;
-            padding: 24px 28px;
+            background: linear-gradient(135deg, var(--backend-color-info, #06b6d4) 0%, var(--backend-color-primary, #6366f1) 100%);
+            color: var(--backend-color-text-inverse, #fff);
+            padding: var(--backend-spacing-lg, 24px) var(--backend-spacing-lg, 28px);
             border-bottom: none;
-            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25);
+            box-shadow: var(--backend-shadow-lg, 0 4px 20px rgba(6, 182, 212, 0.25));
             position: relative;
             overflow: hidden;
         }
@@ -388,13 +429,13 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             z-index: 1;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--backend-spacing-sm, 12px);
         }
         
         #accountWebsiteBindingOffcanvas .offcanvas-title i {
             background: rgba(255,255,255,0.2);
-            padding: 10px;
-            border-radius: 10px;
+            padding: var(--backend-spacing-sm, 10px);
+            border-radius: var(--backend-border-radius, 10px);
             backdrop-filter: blur(10px);
         }
         
@@ -412,25 +453,26 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         #accountWebsiteBindingOffcanvas .border-top {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
-            border-top: 2px solid #e2e8f0 !important;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+            background: var(--backend-color-bg-secondary, #f8fafc) !important;
+            border-top: 2px solid var(--backend-color-border-default, #e2e8f0) !important;
+            box-shadow: var(--backend-shadow-sm, 0 -4px 12px rgba(0,0,0,0.05));
         }
         
         #saveAccountWebsiteBindingsBtn {
-            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            background: linear-gradient(135deg, var(--backend-color-info, #06b6d4) 0%, var(--backend-color-primary, #3b82f6) 100%);
             border: none;
-            padding: 14px;
+            padding: var(--backend-spacing-md, 14px);
             font-weight: 600;
             font-size: 1rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+            border-radius: var(--backend-border-radius, 10px);
+            box-shadow: var(--backend-shadow-md, 0 4px 12px rgba(6, 182, 212, 0.3));
             transition: all 0.3s ease;
+            color: var(--backend-color-text-inverse, #fff);
         }
         
         #saveAccountWebsiteBindingsBtn:hover {
-            background: linear-gradient(135deg, #0891b2 0%, #2563eb 100%);
-            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+            filter: brightness(1.1);
+            box-shadow: var(--backend-shadow-lg, 0 6px 20px rgba(6, 182, 212, 0.4));
             transform: translateY(-2px);
         }
         
@@ -444,124 +486,130 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
             align-items: center;
             justify-content: center;
             min-height: 400px;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
         }
         
         #accountWebsiteBindingContainer .loading-spinner {
             width: 60px;
             height: 60px;
-            border: 4px solid #dbeafe;
-            border-top-color: #06b6d4;
+            border: 4px solid var(--backend-color-border-light, #dbeafe);
+            border-top-color: var(--backend-color-info, #06b6d4);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
         
         #accountWebsiteBindingContainer .loading-text {
-            margin-top: 24px;
-            color: #0369a1;
+            margin-top: var(--backend-spacing-lg, 24px);
+            color: var(--backend-color-info-dark, #0369a1);
             font-size: 1rem;
             font-weight: 500;
             animation: pulse 1.5s ease-in-out infinite;
         }
         
         #accountWebsiteBindingContainer .loading-tips {
-            margin-top: 12px;
-            color: #0c4a6e;
+            margin-top: var(--backend-spacing-sm, 12px);
+            color: var(--backend-color-text-secondary, #0c4a6e);
             font-size: 0.85rem;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--backend-spacing-sm, 8px);
         }
         
         #accountWebsiteBindingContainer .loading-tips i {
-            color: #06b6d4;
+            color: var(--backend-color-info, #06b6d4);
         }
         
-        /* Sitemap 管理样式 */
+        /* ================================================================
+           Sitemap 管理样式 - 使用主题 CSS 变量
+           ================================================================ */
         .provider-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: var(--backend-spacing-sm, 10px);
         }
         
         .provider-item {
-            padding: 8px 12px;
-            background: #f8f9fa;
-            border-radius: 6px;
+            padding: var(--backend-spacing-sm, 8px) var(--backend-spacing-sm, 12px);
+            background: var(--backend-color-bg-secondary, #f8f9fa);
+            border-radius: var(--backend-border-radius, 6px);
             display: flex;
             align-items: center;
+            color: var(--backend-color-text-primary, #333);
         }
         
         .sitemap-website-card {
-            background: #fff;
-            border: 1px solid #e3e6f0;
-            border-radius: 8px;
-            padding: 16px;
+            background: var(--backend-color-card-bg, #fff);
+            border: 1px solid var(--backend-color-border-default, #e3e6f0);
+            border-radius: var(--backend-border-radius-md, 8px);
+            padding: var(--backend-spacing-md, 16px);
         }
         
         .sitemap-website-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-platforms {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: var(--backend-spacing-sm, 12px);
         }
         
         .sitemap-platform-item {
             flex: 1;
             min-width: 200px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 6px;
+            padding: var(--backend-spacing-sm, 12px);
+            background: var(--backend-color-bg-secondary, #f8f9fa);
+            border-radius: var(--backend-border-radius, 6px);
         }
         
         .platform-badge {
-            color: #fff;
-            padding: 4px 12px;
-            border-radius: 4px;
+            color: var(--backend-color-text-inverse, #fff);
+            padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 12px);
+            border-radius: var(--backend-border-radius-sm, 4px);
             font-weight: 600;
             font-size: 0.85rem;
             display: inline-block;
-            margin-bottom: 8px;
+            margin-bottom: var(--backend-spacing-sm, 8px);
         }
         
         .platform-files {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: var(--backend-spacing-xs, 6px);
         }
         
         .file-link {
-            color: #667eea;
+            color: var(--backend-color-primary, #667eea);
             text-decoration: none;
             font-size: 0.9rem;
         }
         
         .file-link:hover {
             text-decoration: underline;
+            color: var(--backend-color-primary-hover, #4857d4);
         }
         
-        /* Sitemap 文件树样式 */
+        /* ================================================================
+           Sitemap 文件树样式 - 使用主题 CSS 变量
+           ================================================================ */
         .sitemap-file-tree {
-            margin-top: 8px;
+            margin-top: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-file-item {
             display: flex;
             align-items: center;
-            padding: 6px 8px;
-            border-radius: 4px;
+            padding: var(--backend-spacing-xs, 6px) var(--backend-spacing-sm, 8px);
+            border-radius: var(--backend-border-radius-sm, 4px);
             cursor: pointer;
             transition: background-color 0.2s;
         }
         
         .sitemap-file-item:hover {
-            background-color: #e9ecef;
+            background-color: var(--backend-color-bg-tertiary, #e9ecef);
         }
         
         .sitemap-file-item.expandable {
@@ -569,8 +617,8 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .sitemap-file-item .file-icon {
-            margin-right: 8px;
-            color: #667eea;
+            margin-right: var(--backend-spacing-sm, 8px);
+            color: var(--backend-color-primary, #667eea);
             transition: transform 0.2s;
         }
         
@@ -581,37 +629,38 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         .sitemap-file-name {
             flex: 1;
             font-size: 0.9rem;
+            color: var(--backend-color-text-primary, #333);
         }
         
         .sitemap-file-meta {
             font-size: 0.8rem;
-            color: #6c757d;
-            margin-left: 8px;
+            color: var(--backend-color-text-secondary, #6c757d);
+            margin-left: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-file-actions {
-            margin-left: 8px;
+            margin-left: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-file-actions a {
-            color: #667eea;
-            padding: 4px 8px;
-            border-radius: 4px;
+            color: var(--backend-color-primary, #667eea);
+            padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 8px);
+            border-radius: var(--backend-border-radius-sm, 4px);
             font-size: 0.8rem;
         }
         
         .sitemap-file-actions a:hover {
-            background-color: #667eea;
-            color: #fff;
+            background-color: var(--backend-color-primary, #667eea);
+            color: var(--backend-color-text-inverse, #fff);
             text-decoration: none;
         }
         
         .sitemap-children {
             display: none;
-            margin-left: 24px;
-            border-left: 2px solid #e3e6f0;
-            padding-left: 12px;
-            margin-top: 4px;
+            margin-left: var(--backend-spacing-lg, 24px);
+            border-left: 2px solid var(--backend-color-border-default, #e3e6f0);
+            padding-left: var(--backend-spacing-sm, 12px);
+            margin-top: var(--backend-spacing-xs, 4px);
         }
         
         .sitemap-children.show {
@@ -619,25 +668,25 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .sitemap-children .sitemap-file-item {
-            padding: 4px 8px;
+            padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-module-group {
-            margin-bottom: 8px;
+            margin-bottom: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-module-header {
             display: flex;
             align-items: center;
-            padding: 4px 8px;
-            background: #f0f4ff;
-            border-radius: 4px;
+            padding: var(--backend-spacing-xs, 4px) var(--backend-spacing-sm, 8px);
+            background: var(--backend-color-primary-bg-subtle, rgba(99, 102, 241, 0.1));
+            border-radius: var(--backend-border-radius-sm, 4px);
             cursor: pointer;
             transition: background-color 0.2s;
         }
         
         .sitemap-module-header:hover {
-            background: #e3e9ff;
+            background: var(--backend-color-primary-bg-light, rgba(99, 102, 241, 0.15));
         }
         
         .sitemap-module-header.expanded .module-expand-icon {
@@ -646,26 +695,26 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         
         .module-expand-icon {
             transition: transform 0.2s;
-            margin-right: 6px;
-            color: #667eea;
+            margin-right: var(--backend-spacing-xs, 6px);
+            color: var(--backend-color-primary, #667eea);
         }
         
         .sitemap-module-name {
             font-weight: 500;
             font-size: 0.85rem;
-            color: #495057;
+            color: var(--backend-color-text-primary, #495057);
         }
         
         .sitemap-module-count {
             font-size: 0.75rem;
-            color: #6c757d;
-            margin-left: 8px;
+            color: var(--backend-color-text-secondary, #6c757d);
+            margin-left: var(--backend-spacing-sm, 8px);
         }
         
         .sitemap-module-files {
             display: none;
-            margin-left: 20px;
-            margin-top: 4px;
+            margin-left: var(--backend-spacing-md, 20px);
+            margin-top: var(--backend-spacing-xs, 4px);
         }
         
         .sitemap-module-files.show {
@@ -675,27 +724,27 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         .sitemap-child-file {
             display: flex;
             align-items: center;
-            padding: 3px 8px;
+            padding: 3px var(--backend-spacing-sm, 8px);
             font-size: 0.85rem;
         }
         
         .sitemap-child-file:hover {
-            background: #f8f9fa;
-            border-radius: 4px;
+            background: var(--backend-color-bg-secondary, #f8f9fa);
+            border-radius: var(--backend-border-radius-sm, 4px);
         }
         
         .sitemap-child-file .file-icon {
-            color: #28a745;
-            margin-right: 6px;
+            color: var(--backend-color-success, #28a745);
+            margin-right: var(--backend-spacing-xs, 6px);
         }
         
         .sitemap-child-file a {
-            color: #495057;
+            color: var(--backend-color-text-primary, #495057);
             text-decoration: none;
         }
         
         .sitemap-child-file a:hover {
-            color: #667eea;
+            color: var(--backend-color-primary, #667eea);
             text-decoration: underline;
         }
         

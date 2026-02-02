@@ -286,7 +286,7 @@ use Weline\Framework\Event\EventsManager;
                                        name="params[<?= htmlspecialchars($paramName) ?>]" 
                                        class="param-value-input"
                                        value="<?= htmlspecialchars($paramValue ?? '') ?>"
-                                       placeholder="<?= $displayDefault ? htmlspecialchars(__('默认值：%1', $displayDefault)) : '' ?>"
+                                       placeholder="<?= $displayDefault ? htmlspecialchars(__('默认值：%{value}', ['value' => $displayDefault])) : '' ?>"
                                        <?= $paramRequired ? 'required' : '' ?>>
                                 <?php
                         }
