@@ -15,6 +15,7 @@ use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\RegisterInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\LayoutDataService;
 
 class Installer implements RegisterInterface
 {
@@ -29,18 +30,26 @@ class Installer implements RegisterInterface
     private Printing $printing;
 
     /**
+     * @var LayoutDataService
+     */
+    private LayoutDataService $layoutDataService;
+
+    /**
      * Installer 初始函数...
      *
      * @param WelineTheme $welineTheme
      * @param Printing $printing
+     * @param LayoutDataService $layoutDataService
      */
     public function __construct(
-        WelineTheme $welineTheme,
-        Printing    $printing
+        WelineTheme       $welineTheme,
+        Printing          $printing,
+        LayoutDataService $layoutDataService
     )
     {
         $this->welineTheme = $welineTheme;
         $this->printing = $printing;
+        $this->layoutDataService = $layoutDataService;
     }
 
     /**
@@ -123,6 +132,14 @@ class Installer implements RegisterInterface
                 }
             }
             $this->printing->success($param['name'] . __("主题{$action_string}完成!"));
+            
+            // 触发布局收集（强制刷新缓存）
+            try {
+                $this->layoutDataService->collectLayouts(true);
+            } catch (\Throwable $e) {
+                // 布局收集失败不影响主题注册
+                $this->printing->warning(__('布局收集失败: ') . $e->getMessage());
+            }
         } catch (\Exception $exception) {
             $this->printing->error($param['name'] . __("主题{$action_string}异常!"));
             $this->printing->error($exception->getMessage());

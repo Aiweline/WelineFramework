@@ -36,45 +36,9 @@
     // DOM 元素
     let elements = {};
 
-    /**
-     * layoutType 到 pageType 的映射
-     * layoutType 是前端布局预览使用的类型
-     * pageType 是数据库存储使用的页面类型
-     */
-    function layoutTypeToPageType(layoutType) {
-        const mapping = {
-            'homepage': 'home',
-            'category': 'category',
-            'product': 'product',
-            'product_list': 'product_list',
-            'cart': 'cart',
-            'checkout': 'checkout',
-            'account': 'account',
-            'search': 'search',
-            'cms': 'cms',
-            'default': 'default',
-        };
-        return mapping[layoutType] || layoutType;
-    }
-
-    /**
-     * pageType 到 layoutType 的映射
-     */
-    function pageTypeToLayoutType(pageType) {
-        const mapping = {
-            'home': 'homepage',
-            'category': 'category',
-            'product': 'product',
-            'product_list': 'product_list',
-            'cart': 'cart',
-            'checkout': 'checkout',
-            'account': 'account',
-            'search': 'search',
-            'cms': 'cms',
-            'default': 'default',
-        };
-        return mapping[pageType] || pageType;
-    }
+    // 注意：pageType 和 layoutType 现在是同一个概念
+    // 之前的 layoutTypeToPageType / pageTypeToLayoutType 转换函数已移除
+    // 页面类型就是布局类型，直接使用 pageType
 
     /**
      * 初始化
@@ -116,7 +80,6 @@
             container: container,
             themeSelect: document.getElementById('themeSelect'),
             pageTypeSelect: document.getElementById('pageTypeSelect'),
-            layoutTypeSelect: document.getElementById('layoutTypeSelect'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
             widgetPanel: document.getElementById('widgetPanel'),
@@ -135,12 +98,10 @@
         };
 
         // 当前布局信息
-        state.layoutType = 'homepage';
+        // pageType 和 layoutType 现在是同一个概念，直接使用 pageType
+        state.layoutType = state.pageType || 'homepage';
         state.layoutOption = 'default';
         state.slots = {}; // 页面插槽信息
-        
-        // 同步 pageType 和 layoutType
-        state.pageType = layoutTypeToPageType(state.layoutType);
 
         // 绑定事件
         bindEvents();
@@ -182,23 +143,25 @@
             });
         }
 
-        // 页面类型选择
+        // 页面类型选择（AJAX 切换，不刷新页面）
         if (elements.pageTypeSelect) {
             elements.pageTypeSelect.addEventListener('change', function() {
                 const pageType = this.value;
-                if (state.themeId) {
-                    window.location.href = `${config.apiBase}?theme_id=${state.themeId}&page_type=${pageType}`;
+                if (state.themeId && pageType) {
+                    // 更新状态
+                    state.pageType = pageType;
+                    state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
+                    
+                    // 更新 URL（不刷新页面，便于分享链接）
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('page_type', pageType);
+                    window.history.replaceState({}, '', url.toString());
+                    
+                    // AJAX 加载新布局预览
+                    loadLayoutPreview();
+                    
+                    showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
-            });
-        }
-
-        // 布局类型选择
-        if (elements.layoutTypeSelect) {
-            elements.layoutTypeSelect.addEventListener('change', function() {
-                state.layoutType = this.value;
-                // 同步更新 pageType，确保保存和加载使用一致的页面类型
-                state.pageType = layoutTypeToPageType(this.value);
-                loadLayoutPreview();
             });
         }
 
@@ -6080,11 +6043,8 @@
                 if (elements.pageTypeSelect) {
                     elements.pageTypeSelect.value = pageType;
                 }
-                if (elements.layoutTypeSelect) {
-                    elements.layoutTypeSelect.value = layoutType;
-                }
                 
-                showToast(`已切换到 ${layoutType} 布局预览`, 'info');
+                showToast(`已切换到 ${pageType} 布局预览`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Preview:', previewUrl.toString());
             }, true); // 使用捕获阶段
             
