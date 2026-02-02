@@ -333,4 +333,78 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
         $bytes /= pow(1024, $pow);
         return round($bytes, $precision) . ' ' . $units[$pow];
     }
+
+    /**
+     * 默认不支持统计数据获取（子类可覆盖）
+     */
+    public function supportsStats(): bool
+    {
+        return false;
+    }
+
+    /**
+     * 默认统计数据获取实现（子类应覆盖）
+     */
+    public function getStats(string $siteUrl, array $accountConfig): array
+    {
+        return [
+            'success' => false,
+            'message' => __('该平台不支持统计数据获取'),
+            'data' => [],
+        ];
+    }
+
+    /**
+     * 发送 HTTP 请求（辅助方法）
+     * 
+     * @param string $url 请求 URL
+     * @param string $method HTTP 方法
+     * @param array $headers 请求头
+     * @param string|array|null $body 请求体
+     * @return array ['success' => bool, 'status_code' => int, 'body' => string, 'error' => string]
+     */
+    protected function httpRequest(
+        string $url,
+        string $method = 'GET',
+        array $headers = [],
+        mixed $body = null
+    ): array {
+        $ch = curl_init();
+        
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CUSTOMREQUEST => strtoupper($method),
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        
+        if (!empty($headers)) {
+            $formattedHeaders = [];
+            foreach ($headers as $key => $value) {
+                $formattedHeaders[] = is_numeric($key) ? $value : "$key: $value";
+            }
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $formattedHeaders);
+        }
+        
+        if ($body !== null) {
+            if (is_array($body)) {
+                $body = json_encode($body);
+            }
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+        
+        $response = curl_exec($ch);
+        $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        return [
+            'success' => $statusCode >= 200 && $statusCode < 300 && $response !== false,
+            'status_code' => $statusCode,
+            'body' => $response ?: '',
+            'error' => $error,
+        ];
+    }
 }
