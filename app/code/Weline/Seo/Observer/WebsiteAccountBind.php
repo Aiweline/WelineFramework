@@ -37,7 +37,7 @@ class WebsiteAccountBind implements ObserverInterface
      * @param Event $event
      * @return void
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $websiteId = (int)$event->getData('website_id');
         $accountId = (int)$event->getData('account_id');
@@ -53,7 +53,7 @@ class WebsiteAccountBind implements ObserverInterface
             $this->seoWebsiteAccountModel->bindWebsiteAccount(
                 $websiteId,
                 $accountId,
-                (bool)$isAutoSubmit
+                ['is_auto_submit' => (bool)$isAutoSubmit]
             );
         } catch (\Exception $e) {
             // 记录错误日志，但不中断流程

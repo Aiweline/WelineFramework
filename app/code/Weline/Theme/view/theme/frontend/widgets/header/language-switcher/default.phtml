@@ -4,10 +4,18 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - show_flag: 显示国旗
- * - show_name: 显示语言名
- * - display_style: 显示样式 (dropdown/inline)
+ * @widget.code {language-switcher}
+ * @widget.name {语言切换}
+ * @widget.description {Header 语言切换器，支持多语言切换}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {user-area}
+ * 
+ * @param show_flag {default=true,type="bool",label="显示国旗"}
+ * @param show_name {default=true,type="bool",label="显示语言名"}
+ * @param display_style {default="dropdown",type="select",label="显示样式",options={dropdown:"下拉菜单",inline:"内联显示"}}
  */
 
 $showFlag = (bool)($this->getData('show_flag') ?? true);

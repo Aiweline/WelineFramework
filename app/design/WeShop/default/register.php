@@ -11,9 +11,9 @@ Register::register(
     \Weline\Theme\Register\TypeInterface::type,
     'WeShop_Default',
     [
-        'name' => 'default',
+        'name' => 'weshop-default',
         'path' => __DIR__,
-        'parent' => ''
+        'parent' => 'default'  // 继承自 Weline 默认主题
     ],
     '1.0.0',
     'WeShop默认主题 - 电商专用主题'

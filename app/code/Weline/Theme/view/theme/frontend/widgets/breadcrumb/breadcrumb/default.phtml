@@ -3,6 +3,20 @@
  * 面包屑导航部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {breadcrumb}
+ * @widget.name {面包屑导航}
+ * @widget.description {显示当前页面的导航路径}
+ * @widget.type {breadcrumb}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * 
+ * @param show_home {default=true,type="bool",label="显示首页"}
+ * @param home_text {default="首页",type="string",label="首页文字"}
+ * @param home_icon {default=true,type="bool",label="显示首页图标"}
+ * @param separator {default="/",type="string",label="分隔符"}
+ * @param show_current {default=true,type="bool",label="显示当前页"}
  */
 
 $showHome = (bool)($this->getData('show_home') ?? true);

@@ -4,14 +4,21 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - background_image: 背景图片
- * - background_color: 背景颜色
- * - text: 促销文字
- * - text_color: 文字颜色
- * - link: 链接地址
- * - closeable: 允许关闭
- * - countdown_end: 倒计时结束时间
+ * @widget.code {promo-banner}
+ * @widget.name {促销横幅}
+ * @widget.description {顶部促销横幅，支持倒计时和关闭功能}
+ * @widget.type {banner}
+ * @widget.area {frontend}
+ * @widget.position {["content", "header"]}
+ * @widget.page_layouts {["*"]}
+ * 
+ * @param background_image {default="",type="image",label="背景图片"}
+ * @param background_color {default="#f8d7da",type="color",label="背景颜色"}
+ * @param text {default="限时特惠！全场满300减50",type="string",label="促销文字"}
+ * @param text_color {default="#721c24",type="color",label="文字颜色"}
+ * @param link {default="",type="string",label="链接地址"}
+ * @param closeable {default=true,type="bool",label="允许关闭"}
+ * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
  */
 
 $backgroundImage = $this->getData('background_image') ?? '';

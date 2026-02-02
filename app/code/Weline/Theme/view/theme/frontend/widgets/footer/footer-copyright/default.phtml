@@ -3,6 +3,22 @@
  * 页脚版权部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {footer-copyright}
+ * @widget.name {版权信息}
+ * @widget.description {Footer 版权和备案信息}
+ * @widget.type {footer}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {copyright}
+ * @widget.exclusive {true}
+ * 
+ * @param copyright_text {default="© {year} {site_name}. All Rights Reserved.",type="string",label="版权文字"}
+ * @param icp_number {default="",type="string",label="ICP备案号"}
+ * @param icp_link {default="https://beian.miit.gov.cn/",type="string",label="ICP备案链接"}
+ * @param police_number {default="",type="string",label="公安备案号"}
+ * @param police_link {default="",type="string",label="公安备案链接"}
  */
 
 $copyrightText = $this->getData('copyright_text') ?? '© {year} {site_name}. All Rights Reserved.';

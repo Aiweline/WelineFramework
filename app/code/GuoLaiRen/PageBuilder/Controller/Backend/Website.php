@@ -17,7 +17,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website as WebsiteModel;
 
-#[Acl('GuoLaiRen_PageBuilder::website_assignment', '站点分配', 'mdi mdi-shield-account', '管理站点与后台用户一对一分配关系')]
+#[Acl('GuoLaiRen_PageBuilder::website_assignment', '站点分配', 'mdi mdi-shield-account', '管理站点与后台用户一对一分配关系', 'GuoLaiRen_PageBuilder::website_management')]
 class Website extends BackendController
 {
     private WebsiteUserModel $websiteUserModel;

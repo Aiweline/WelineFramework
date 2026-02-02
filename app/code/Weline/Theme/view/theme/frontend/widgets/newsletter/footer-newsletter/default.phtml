@@ -3,6 +3,22 @@
  * 页脚邮件订阅部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {footer-newsletter}
+ * @widget.name {页脚订阅}
+ * @widget.description {Footer 区域的邮件订阅表单}
+ * @widget.type {newsletter}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {newsletter}
+ * @widget.exclusive {true}
+ * 
+ * @param title {default="订阅我们的邮件",type="string",label="标题"}
+ * @param description {default="获取最新的优惠信息和新品资讯",type="string",label="描述"}
+ * @param placeholder {default="请输入您的邮箱地址",type="string",label="占位符"}
+ * @param button_text {default="订阅",type="string",label="按钮文字"}
+ * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
  */
 
 $title = $this->getData('title') ?? __('订阅我们的邮件');

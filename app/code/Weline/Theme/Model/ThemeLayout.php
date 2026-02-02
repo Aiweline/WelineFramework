@@ -35,17 +35,17 @@ class ThemeLayout extends Model
     public const STATUS_DRAFT = 'draft';         // 草稿状态（后台编辑）
     public const STATUS_PUBLISHED = 'published'; // 已发布状态（前端可见）
 
-    // 页面类型常量
-    public const PAGE_TYPE_HOME = 'home';
-    public const PAGE_TYPE_CATEGORY = 'category';
-    public const PAGE_TYPE_PRODUCT = 'product';
-    public const PAGE_TYPE_PRODUCT_LIST = 'product_list'; // 产品列表页
-    public const PAGE_TYPE_CMS = 'cms';
-    public const PAGE_TYPE_CART = 'cart';
-    public const PAGE_TYPE_CHECKOUT = 'checkout';
-    public const PAGE_TYPE_ACCOUNT = 'account';
-    public const PAGE_TYPE_SEARCH = 'search';
-    public const PAGE_TYPE_DEFAULT = 'default'; // 通用布局
+    // 页面类型常量（与 layouts 目录名对应）
+    public const PAGE_TYPE_HOME = 'homepage';         // layouts/homepage/
+    public const PAGE_TYPE_CATEGORY = 'category';     // layouts/category/
+    public const PAGE_TYPE_PRODUCT = 'product';       // layouts/product/
+    public const PAGE_TYPE_PRODUCT_LIST = 'product_list'; // layouts/product_list/
+    public const PAGE_TYPE_CMS = 'cms_page';          // layouts/cms_page/
+    public const PAGE_TYPE_CART = 'cart';             // layouts/cart/
+    public const PAGE_TYPE_CHECKOUT = 'checkout';     // layouts/checkout/
+    public const PAGE_TYPE_ACCOUNT = 'account';       // layouts/account/
+    public const PAGE_TYPE_SEARCH = 'search';         // layouts/search/ (待创建)
+    public const PAGE_TYPE_DEFAULT = 'default';       // layouts/default/
 
     // 区域常量
     public const AREA_HEADER = 'header';

@@ -3,6 +3,19 @@
  * 交叉销售部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {cross-sell}
+ * @widget.name {交叉销售}
+ * @widget.description {展示经常一起购买的产品组合}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product", "cart"]}
+ * 
+ * @param title {default="经常一起购买",type="string",label="标题"}
+ * @param limit {default=4,type="number",label="显示数量"}
+ * @param show_add_all_button {default=true,type="bool",label="显示一键添加按钮"}
+ * @param show_total_price {default=true,type="bool",label="显示组合总价"}
  */
 
 $title = (string)($this->getData('title') ?? __('经常一起购买'));
