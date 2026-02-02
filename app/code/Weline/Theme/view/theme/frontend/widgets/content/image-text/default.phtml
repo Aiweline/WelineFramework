@@ -3,6 +3,23 @@
  * 图文组合部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {image-text}
+ * @widget.name {图文组合}
+ * @widget.description {图片和文字的组合布局，支持多种排列方式}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param image {default="",type="image",label="图片"}
+ * @param title {default="",type="string",label="标题"}
+ * @param content {default="",type="textarea",label="内容"}
+ * @param button_text {default="",type="string",label="按钮文字"}
+ * @param button_link {default="",type="string",label="按钮链接"}
+ * @param layout {default="image-left",type="select",label="布局",options={image-left:"图左文右",image-right:"图右文左",image-top:"图上文下"}}
+ * @param image_width {default="50",type="select",label="图片宽度",options={33:"33%",40:"40%",50:"50%",60:"60%"}}
  */
 
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';

@@ -4,6 +4,21 @@
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
     
     <!-- 
+        主题注册安装器事件 - 处理主题类型的注册
+        
+        功能：
+        1. 拦截 register_installer 事件
+        2. 当注册类型为 THEME 时，使用 Theme 模块的安装器
+    -->
+    <event name="Weline_Framework_Register::register_installer">
+        <observer name="Weline_Theme::register_installer"
+                  instance="Weline\Theme\Observer\Register"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    
+    <!-- 
         控制器模板获取前事件 - 根据 layoutType 自动加载主题布局
         
         功能：

@@ -7,6 +7,20 @@
  * 
  * @var array $config 部件配置
  * @var array $children 子部件（按插槽分组）
+ * 
+ * @widget.code {header-container}
+ * @widget.name {Header 容器}
+ * @widget.description {页面头部容器，包含 Logo、搜索框、导航、用户区域等插槽。独占头部区域。}
+ * @widget.type {container}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.is_container {true}
+ * @widget.exclusive {true}
+ * 
+ * @param sticky {default=true,type="bool",label="吸顶效果"}
+ * @param bg_color {default="#ffffff",type="color",label="背景颜色"}
+ * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
 $sticky = $config['sticky'] ?? true;

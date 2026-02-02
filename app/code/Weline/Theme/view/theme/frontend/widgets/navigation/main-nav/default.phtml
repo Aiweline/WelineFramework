@@ -4,11 +4,20 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - menu_style: 菜单样式 (horizontal/vertical/mega)
- * - show_icons: 是否显示图标
- * - max_depth: 最大层级
- * - menu_items: 菜单项数组
+ * @widget.code {main-nav}
+ * @widget.name {主导航菜单}
+ * @widget.description {Header 主导航菜单，支持多级下拉和Mega菜单}
+ * @widget.type {navigation}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {navigation}
+ * @widget.exclusive {true}
+ * 
+ * @param menu_style {default="horizontal",type="select",label="菜单样式",options={horizontal:"水平",vertical:"垂直",mega:"Mega菜单"}}
+ * @param show_icons {default=false,type="bool",label="显示图标"}
+ * @param max_depth {default=3,type="number",label="最大层级"}
+ * @param menu_items {default=[],type="array",label="菜单项",description="菜单项数组，每项包含label、url、icon、children"}
  */
 
 $menuStyle = $this->getData('menu_style') ?? 'horizontal';

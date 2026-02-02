@@ -3,6 +3,21 @@
  * 文本块部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {text-block}
+ * @widget.name {文本块}
+ * @widget.description {富文本内容区块，支持标题和样式设置}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="",type="string",label="标题"}
+ * @param content {default="",type="textarea",label="内容"}
+ * @param alignment {default="left",type="select",label="对齐方式",options={left:"左对齐",center:"居中",right:"右对齐"}}
+ * @param background_color {default="transparent",type="color",label="背景颜色"}
+ * @param padding {default="20px",type="string",label="内边距"}
  */
 
 $title = $this->getData('title') ?? '';

@@ -3,6 +3,19 @@
  * 向上销售部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {up-sell}
+ * @widget.name {向上销售}
+ * @widget.description {推荐更高价值的相关产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * 
+ * @param title {default="您可能还喜欢",type="string",label="标题"}
+ * @param limit {default=4,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列"}}
+ * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = (string)($this->getData('title') ?? __('您可能还喜欢'));

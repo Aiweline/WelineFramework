@@ -125,11 +125,12 @@ $colors = $this->getData('colors') ?? [];
         ?>
         <w:hook>Weline_Theme::frontend::partials::footer::links<else/>
         <?php if (!empty($links) && is_array($links)): ?>
-            <div class="footer-content"
-                 data-wslot="links"
-                 data-wslot-name="链接区"
-                 data-wslot-accept="footer-links"
-                 data-wslot-multiple="true">
+            <w:slot id="footer-links"
+                    name="链接区"
+                    accept="footer-links"
+                    multiple="true"
+                    position="footer"
+                    class="footer-content">
                 <w:hook>Weline_Theme::frontend::partials::footer::section-before</w:hook>
                 
                 <?php foreach ($links as $section): ?>
@@ -154,7 +155,7 @@ $colors = $this->getData('colors') ?? [];
                 <?php endforeach; ?>
                 
                 <w:hook>Weline_Theme::frontend::partials::footer::section-after</w:hook>
-            </div>
+            </w:slot>
         <?php endif; ?>
         </w:hook>
         
@@ -178,11 +179,12 @@ $colors = $this->getData('colors') ?? [];
         <w:hook>Weline_Theme::frontend::partials::footer::social-media<else/>
         <?php if ($showSocialMedia && !empty($socialMedia) && is_array($socialMedia)): ?>
             <w:hook>Weline_Theme::frontend::partials::footer::social-media-before</w:hook>
-            <div class="footer-social-media"
-                 data-wslot="social"
-                 data-wslot-name="社交媒体"
-                 data-wslot-accept="footer-social"
-                 data-wslot-exclusive="true">
+            <w:slot id="footer-social"
+                    name="社交媒体"
+                    accept="footer-social"
+                    exclusive="true"
+                    position="footer"
+                    class="footer-social-media">
                 <div class="social-media-title"><?= __('关注我们') ?></div>
                 <div class="social-media-links">
                     <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-before</w:hook>
@@ -202,22 +204,23 @@ $colors = $this->getData('colors') ?? [];
                     
                     <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-after</w:hook>
                 </div>
-            </div>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::partials::footer::social-media-after</w:hook>
         <?php endif; ?>
         </w:hook>
         
         <!-- 版权区域 Widget Slot -->
-        <div class="footer-bottom"
-             data-wslot="copyright"
-             data-wslot-name="版权信息"
-             data-wslot-accept="footer-copyright"
-             data-wslot-exclusive="true">
+        <w:slot id="footer-copyright"
+                name="版权信息"
+                accept="footer-copyright"
+                exclusive="true"
+                position="footer"
+                class="footer-bottom">
             <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
             <p><?= htmlspecialchars($copyright) ?></p>
             <w:hook>Weline_Theme::frontend::partials::footer::copyright-after</w:hook>
-        </div>
+        </w:slot>
     </div>
     
     <?php if ($showBackToTop): ?>
