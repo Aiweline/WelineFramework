@@ -3,6 +3,18 @@
  * 侧栏广告部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {sidebar-ads}
+ * @widget.name {侧栏广告}
+ * @widget.description {侧边栏广告位，支持多个广告轮换}
+ * @widget.type {sidebar}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param ads {default=[],type="array",label="广告列表",description="每项包含image、link、alt"}
+ * @param show_label {default=true,type="bool",label="显示广告标签"}
  */
 
 $ads = $this->getData('ads') ?? [];

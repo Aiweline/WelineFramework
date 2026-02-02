@@ -88,10 +88,11 @@ final class StageResolver
      *
      * 优先级：
      * 1. 自定义配置（setTagStage）
-     * 2. TagDefinition 元数据
-     * 3. 命名空间前缀匹配
-     * 4. 动态属性判断
-     * 5. 默认编译期
+     * 2. 自定义标签（is_custom）强制编译期 - 这些标签的回调返回 PHP 代码
+     * 3. TagDefinition 元数据
+     * 4. 命名空间前缀匹配
+     * 5. 动态属性判断
+     * 6. 默认编译期
      */
     public function resolve(TagNode $node): string
     {
@@ -101,14 +102,21 @@ final class StageResolver
         if (isset($this->customStages[$tagName])) {
             return $this->customStages[$tagName];
         }
+        
+        // 2. 检查是否是自定义标签（is_custom），这些标签的回调可能返回 PHP 代码
+        // 自定义标签需要在编译期处理，以便返回的 PHP 代码被嵌入模板
+        // 必须在其他检查之前，因为自定义标签可能有命名空间前缀
+        if ($this->isCustomTag($tagName)) {
+            return TagNode::STAGE_COMPILE;
+        }
 
-        // 2. 从 TagDefinition 获取阶段
+        // 3. 从 TagDefinition 获取阶段
         $definitions = $this->getDefinitions();
         if (isset($definitions[$tagName])) {
             return $definitions[$tagName]->stage;
         }
 
-        // 3. 检查命名空间前缀匹配（如 w:template 匹配 template 定义）
+        // 4. 检查命名空间前缀匹配（如 w:template 匹配 template 定义）
         if (str_contains($tagName, ':')) {
             $parts = explode(':', $tagName, 2);
             $namespace = $parts[0];
@@ -128,13 +136,42 @@ final class StageResolver
             return TagNode::STAGE_COMPILE;
         }
 
-        // 4. 根据动态属性判断
+        // 5. 根据动态属性判断
         if ($node->hasDynamicAttrs) {
             return TagNode::STAGE_RUNTIME;
         }
 
-        // 5. 默认编译期
+        // 6. 默认编译期
         return TagNode::STAGE_COMPILE;
+    }
+    
+    /**
+     * 检查标签是否是自定义标签（来自 Weline\Taglib 模块）
+     */
+    private function isCustomTag(string $tagName): bool
+    {
+        // 获取 TaglibRegistry 中的标签定义
+        try {
+            $taglibRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Taglib\TaglibRegistry::class);
+            $tags = $taglibRegistry->getTags();
+            
+            // 直接匹配
+            if (isset($tags[$tagName]) && !empty($tags[$tagName]['is_custom'])) {
+                return true;
+            }
+            
+            // 检查带 w: 前缀的标签
+            if (str_starts_with($tagName, 'w:')) {
+                $baseName = substr($tagName, 2);
+                if (isset($tags[$baseName]) && !empty($tags[$baseName]['is_custom'])) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            // 忽略错误
+        }
+        
+        return false;
     }
 
     /**

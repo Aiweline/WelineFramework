@@ -27,7 +27,7 @@ class UninstallObserver implements ObserverInterface
      * @param Event $event
      * @return void
      */
-    public function execute(Event $event)
+    public function execute(Event &$event): void
     {
         $data = $event->getData();
         

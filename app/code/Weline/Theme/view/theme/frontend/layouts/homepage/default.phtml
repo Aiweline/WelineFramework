@@ -70,11 +70,12 @@ $colors = $this->getData('colors') ?? [];
                     用户通过主题编辑器拖入行列容器、Banner、产品轮播等部件
                     行列等基础容器没有 accept 限制，可以被任何 slot 容纳，也可以容纳任何组件
                 -->
-                <div class="homepage-content-slot" 
-                     data-wslot="content" 
-                     data-wslot-name="内容区域"
-                     data-wslot-multiple="true"
-                     data-wslot-reject="header,footer">
+                <w:slot id="content" 
+                        name="内容区域"
+                        multiple="true"
+                        reject="header,footer"
+                        position="content"
+                        class="homepage-content-slot">
                     <w:hook name="Weline_Theme::frontend::layouts::homepage::content">
                         <if condition="meta.content">
                             {{meta.content}}
@@ -90,7 +91,7 @@ $colors = $this->getData('colors') ?? [];
                             </div>
                         </if>
                     </w:hook>
-                </div>
+                </w:slot>
                 
                 <w:hook>Weline_Theme::frontend::layouts::homepage::main-after</w:hook>
             </main>

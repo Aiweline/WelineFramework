@@ -50,17 +50,39 @@ class ThemeEditor extends BackendController
      */
     public function index()
     {
-        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
         $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        
+        // 获取主题列表页面 URL（用于重定向）
+        $themeListUrl = $this->_url->getBackendUrl('theme/backend');
 
-        // 如果没有指定主题，使用当前激活的主题
-        if (!$themeId) {
+        // 如果明确传入了 theme_id，必须验证其存在性
+        if ($requestedThemeId > 0) {
+            $this->welineTheme->reset()->load($requestedThemeId);
+            if (!$this->welineTheme->getId()) {
+                // 传入的主题 ID 不存在，报错并重定向到主题列表
+                $this->getMessageManager()->addError(__('主题 ID %{1} 不存在！请选择有效的主题。', $requestedThemeId));
+                return $this->redirect($themeListUrl);
+            }
+            $themeId = $requestedThemeId;
+        } else {
+            // 没有指定主题，尝试使用当前激活的主题
             $activeTheme = $this->welineTheme->getActiveTheme();
-            $themeId = $activeTheme->getId() ?: 0;
+            if ($activeTheme && $activeTheme->getId()) {
+                $themeId = (int)$activeTheme->getId();
+                $this->welineTheme->reset()->load($themeId);
+            } else {
+                // 没有激活的主题，报错并重定向到主题列表
+                $this->getMessageManager()->addError(__('系统没有激活的主题！请先选择或激活一个主题。'));
+                return $this->redirect($themeListUrl);
+            }
         }
-
-        // 获取主题信息
-        $this->welineTheme->reset()->load($themeId);
+        
+        // 双重检查：确保加载的主题有效
+        if (!$this->welineTheme->getId()) {
+            $this->getMessageManager()->addError(__('无法加载主题！请检查主题配置。'));
+            return $this->redirect($themeListUrl);
+        }
         
         // 获取所有主题列表
         $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
@@ -123,6 +145,15 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('请选择主题'),
+            ]);
+        }
+        
+        // 验证主题是否存在
+        $this->welineTheme->reset()->load($themeId);
+        if (!$this->welineTheme->getId()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('主题 ID %{1} 不存在', $themeId),
             ]);
         }
 

@@ -3,6 +3,20 @@
  * 社交分享部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {social-share}
+ * @widget.name {社交分享}
+ * @widget.description {社交媒体分享按钮，支持多平台}
+ * @widget.type {social}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["product", "cms_page"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="分享到",type="string",label="标题"}
+ * @param platforms {default=["facebook","twitter","linkedin","whatsapp","email"],type="array",label="分享平台"}
+ * @param style {default="icon",type="select",label="样式",options={icon:"仅图标",icon-text:"图标+文字",button:"按钮"}}
+ * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
  */
 
 $title = $this->getData('title') ?? __('分享到');

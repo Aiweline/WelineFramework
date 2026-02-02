@@ -3,6 +3,20 @@
  * 标签云部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {tags-cloud}
+ * @widget.name {标签云}
+ * @widget.description {以标签云形式展示热门标签}
+ * @widget.type {sidebar}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="热门标签",type="string",label="标题"}
+ * @param limit {default=20,type="number",label="显示数量"}
+ * @param order_by {default="count",type="select",label="排序方式",options={count:"使用次数",name:"名称",random:"随机"}}
+ * @param show_count {default=false,type="bool",label="显示使用次数"}
  */
 
 $title = $this->getData('title') ?? __('热门标签');

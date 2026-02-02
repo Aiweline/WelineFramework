@@ -3,6 +3,21 @@
  * 迷你购物车部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {mini-cart}
+ * @widget.name {迷你购物车}
+ * @widget.description {侧边栏购物车预览，显示商品列表和小计}
+ * @widget.type {sidebar}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="购物车",type="string",label="标题"}
+ * @param max_items {default=5,type="number",label="最多显示数量"}
+ * @param show_subtotal {default=true,type="bool",label="显示小计"}
+ * @param show_checkout_button {default=true,type="bool",label="显示结算按钮"}
+ * @param show_view_cart_button {default=true,type="bool",label="显示查看购物车按钮"}
  */
 
 $title = $this->getData('title') ?? __('购物车');

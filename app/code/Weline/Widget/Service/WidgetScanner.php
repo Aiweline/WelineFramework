@@ -13,14 +13,31 @@ namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Model\Widget\LocalDescription;
 
 /**
  * 部件扫描服务
  * 扫描所有模块的 Widget 扩展
+ * 
+ * 支持两种定义方式：
+ * 1. 简化方式（推荐）：widget.php 只包含模板路径，元数据从模板注释解析
+ * 2. 完整方式（兼容）：widget.php 包含完整的部件配置数组
  */
 class WidgetScanner
 {
+    private ?WidgetTemplateParser $templateParser = null;
+
+    /**
+     * 获取模板解析器
+     */
+    private function getTemplateParser(): WidgetTemplateParser
+    {
+        if ($this->templateParser === null) {
+            $this->templateParser = ObjectManager::getInstance(WidgetTemplateParser::class);
+        }
+        return $this->templateParser;
+    }
     /**
      * 允许的部件类型列表
      */
@@ -116,31 +133,19 @@ class WidgetScanner
                 try {
                     $widgets = include $widgetFile;
                     if (is_array($widgets)) {
-                        foreach ($widgets as $widgetConfig) {
-                            if (!is_array($widgetConfig)) {
-                                continue;
-                            }
-                            
-                            // 验证必需字段
-                            if (empty($widgetConfig['name']) || empty($widgetConfig['type']) || empty($widgetConfig['code'])) {
-                                continue;
-                            }
-                            
-                            $type = $widgetConfig['type'];
-                            $name = $widgetConfig['code'];
-                            
-                            // 验证部件类型
-                            if (!in_array($type, self::ALLOWED_TYPES, true)) {
-                                continue;
-                            }
-                            
-                            // 读取部件配置
-                            $config = $this->readWidgetConfigFromArray($widgetConfig, $sourceModule, $basePath);
+                        foreach ($widgets as $key => $widgetConfig) {
+                            // 处理简化格式和完整格式
+                            $config = $this->processWidgetEntry($widgetConfig, $sourceModule, $basePath, $key);
                             if ($config) {
-                                if (!isset($result[$type])) {
-                                    $result[$type] = [];
+                                $type = $config['type'] ?? '';
+                                $name = $config['code'] ?? '';
+                                
+                                if (!empty($type) && !empty($name) && in_array($type, self::ALLOWED_TYPES, true)) {
+                                    if (!isset($result[$type])) {
+                                        $result[$type] = [];
+                                    }
+                                    $result[$type][$name] = $config;
                                 }
-                                $result[$type][$name] = $config;
                             }
                         }
                     }
@@ -171,36 +176,24 @@ class WidgetScanner
                 try {
                     $widgets = include $widgetFile;
                     if (is_array($widgets)) {
-                        foreach ($widgets as $widgetConfig) {
-                            if (!is_array($widgetConfig)) {
-                                continue;
-                            }
-                            
-                            // 验证必需字段
-                            if (empty($widgetConfig['name']) || empty($widgetConfig['type']) || empty($widgetConfig['code'])) {
-                                continue;
-                            }
-                            
-                            $type = $widgetConfig['type'];
-                            $name = $widgetConfig['code'];
-                            
-                            // 验证部件类型
-                            if (!in_array($type, self::ALLOWED_TYPES, true)) {
-                                continue;
-                            }
-                            
-                            // 如果新方式已经存在同名部件，跳过（扩展注册表优先）
-                            if (isset($result[$type][$name])) {
-                                continue;
-                            }
-                            
-                            // 读取部件配置
-                            $config = $this->readWidgetConfigFromArray($widgetConfig, $moduleName, $basePath);
+                        foreach ($widgets as $key => $widgetConfig) {
+                            // 处理简化格式和完整格式
+                            $config = $this->processWidgetEntry($widgetConfig, $moduleName, $basePath, $key);
                             if ($config) {
-                                if (!isset($result[$type])) {
-                                    $result[$type] = [];
+                                $type = $config['type'] ?? '';
+                                $name = $config['code'] ?? '';
+                                
+                                // 如果已存在同名部件，跳过
+                                if (isset($result[$type][$name])) {
+                                    continue;
                                 }
-                                $result[$type][$name] = $config;
+                                
+                                if (!empty($type) && !empty($name) && in_array($type, self::ALLOWED_TYPES, true)) {
+                                    if (!isset($result[$type])) {
+                                        $result[$type] = [];
+                                    }
+                                    $result[$type][$name] = $config;
+                                }
                             }
                         }
                     }
@@ -326,6 +319,109 @@ class WidgetScanner
         }
 
         return $result;
+    }
+
+    /**
+     * 处理 widget.php 中的单个条目
+     * 
+     * 支持两种格式：
+     * 1. 简化格式（字符串）：模板路径，从模板注释解析元数据
+     *    'Weline_Theme::theme/frontend/widgets/search/header-search/default.phtml'
+     * 
+     * 2. 简化格式（数组，只含 template）：从模板解析，可覆盖部分属性
+     *    ['template' => 'Weline_Theme::...', 'exclusive' => true]
+     * 
+     * 3. 完整格式（数组）：传统的完整配置
+     *    ['name' => '...', 'type' => '...', 'code' => '...', ...]
+     * 
+     * @param mixed $entry widget.php 中的条目
+     * @param string $moduleName 模块名
+     * @param string $basePath 模块基础路径
+     * @param mixed $key 数组键（用于调试）
+     * @return array|null
+     */
+    private function processWidgetEntry($entry, string $moduleName, string $basePath, $key): ?array
+    {
+        try {
+            // 格式1：纯字符串（模板路径）
+            if (is_string($entry)) {
+                return $this->processSimplifiedWidget($entry, [], $moduleName, $basePath);
+            }
+            
+            // 格式2/3：数组
+            if (is_array($entry)) {
+                // 判断是简化格式还是完整格式
+                // 完整格式必须包含 name, type, code
+                $isFullFormat = !empty($entry['name']) && !empty($entry['type']) && !empty($entry['code']);
+                
+                if ($isFullFormat) {
+                    // 完整格式 - 使用原有的处理方式
+                    return $this->readWidgetConfigFromArray($entry, $moduleName, $basePath);
+                }
+                
+                // 简化格式 - 必须包含 template
+                if (!empty($entry['template'])) {
+                    return $this->processSimplifiedWidget($entry['template'], $entry, $moduleName, $basePath);
+                }
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            error_log("处理部件条目失败 (key={$key}): " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 处理简化格式的部件
+     * 
+     * @param string $templatePath 模板路径
+     * @param array $overrides 覆盖的属性
+     * @param string $moduleName 模块名
+     * @param string $basePath 模块基础路径
+     * @return array|null
+     */
+    private function processSimplifiedWidget(
+        string $templatePath, 
+        array $overrides, 
+        string $moduleName, 
+        string $basePath
+    ): ?array {
+        try {
+            // 使用模板解析器解析模板注释
+            $parser = $this->getTemplateParser();
+            $templateConfig = $parser->parse($templatePath);
+            
+            if (empty($templateConfig)) {
+                error_log("无法解析模板: {$templatePath}");
+                return null;
+            }
+            
+            // 合并：模板解析结果 + 覆盖属性
+            $mergedConfig = array_merge($templateConfig, $overrides);
+            
+            // 确保 module 正确
+            if (empty($mergedConfig['module'])) {
+                $mergedConfig['module'] = $moduleName;
+            }
+            
+            // 生成 name（如果未定义）
+            if (empty($mergedConfig['name'])) {
+                $mergedConfig['name'] = $parser->generateName($mergedConfig);
+            }
+            
+            // 验证必需字段
+            if (!$parser->validate($mergedConfig)) {
+                error_log("部件配置验证失败: {$templatePath}");
+                return null;
+            }
+            
+            // 转换为标准的部件配置格式
+            return $this->readWidgetConfigFromArray($mergedConfig, $moduleName, $basePath);
+        } catch (\Exception $e) {
+            error_log("处理简化部件失败: {$templatePath}, 错误: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**

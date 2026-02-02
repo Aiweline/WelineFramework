@@ -4,14 +4,21 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - slides: 轮播图片数组
- * - autoplay: 自动播放
- * - autoplay_speed: 自动播放间隔
- * - show_dots: 显示指示点
- * - show_arrows: 显示箭头
- * - effect: 切换效果
- * - height: 轮播高度
+ * @widget.code {hero-slider}
+ * @widget.name {Hero 轮播图}
+ * @widget.description {首页大图轮播Banner，支持多张图片轮播展示}
+ * @widget.type {banner}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * 
+ * @param slides {default=[],type="array",label="轮播图片",description="图片数组，每项包含image、title、subtitle、link、button_text"}
+ * @param autoplay {default=true,type="bool",label="自动播放"}
+ * @param autoplay_speed {default=5000,type="number",label="播放间隔",description="自动播放间隔（毫秒）"}
+ * @param show_dots {default=true,type="bool",label="显示指示点"}
+ * @param show_arrows {default=true,type="bool",label="显示箭头"}
+ * @param effect {default="slide",type="select",label="切换效果",options={slide:"滑动",fade:"淡入淡出"}}
+ * @param height {default="500px",type="string",label="轮播高度"}
  */
 
 $slides = $this->getData('slides') ?? [];

@@ -3,6 +3,21 @@
  * 分类菜单部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {category-menu}
+ * @widget.name {分类菜单}
+ * @widget.description {Header 分类下拉菜单，支持多级展开}
+ * @widget.type {navigation}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {navigation}
+ * 
+ * @param title {default="全部分类",type="string",label="标题"}
+ * @param max_depth {default=3,type="number",label="最大层级"}
+ * @param show_icons {default=true,type="bool",label="显示图标"}
+ * @param show_count {default=false,type="bool",label="显示产品数量"}
+ * @param expand_on_hover {default=true,type="bool",label="悬停展开"}
  */
 
 $title = $this->getData('title') ?? __('全部分类');

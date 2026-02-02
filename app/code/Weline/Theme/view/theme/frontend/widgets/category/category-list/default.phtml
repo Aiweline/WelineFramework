@@ -3,6 +3,21 @@
  * 分类列表部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {category-list}
+ * @widget.name {分类列表}
+ * @widget.description {以列表形式展示商品分类，支持多级嵌套}
+ * @widget.type {category}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar", "content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="商品分类",type="string",label="标题"}
+ * @param parent_id {default=0,type="number",label="父分类ID",description="0表示显示所有顶级分类"}
+ * @param max_depth {default=2,type="number",label="最大层级"}
+ * @param show_count {default=true,type="bool",label="显示产品数量"}
+ * @param show_image {default=false,type="bool",label="显示分类图片"}
  */
 
 $title = $this->getData('title') ?? __('商品分类');

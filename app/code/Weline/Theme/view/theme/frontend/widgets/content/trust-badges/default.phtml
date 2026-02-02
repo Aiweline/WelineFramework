@@ -3,6 +3,21 @@
  * 信任徽章部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {trust-badges}
+ * @widget.name {信任徽章}
+ * @widget.description {展示安全支付、退款保障等信任标识}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="",type="string",label="标题"}
+ * @param badges {default=[],type="array",label="自定义徽章"}
+ * @param preset_badges {default=["secure-payment","money-back","free-shipping","24-7-support"],type="array",label="预设徽章"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列"}}
+ * @param style {default="icon-text",type="select",label="样式",options={icon-text:"图标+文字",icon-only:"仅图标",card:"卡片"}}
  */
 
 $title = $this->getData('title') ?? '';

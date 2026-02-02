@@ -26,9 +26,9 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
     @template(Weline_Admin::common/head.phtml)
     <title><?= htmlspecialchars($title) ?></title>
     
-    <!-- SweetAlert2 CSS & JS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+    <!-- SweetAlert2 - 从本地加载 -->
+    <link rel="stylesheet" href="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.min.css)">
+    <script src="@static(Weline_Admin::libs/sweetalert2/11/sweetalert2.all.min.js)"></script>
     
     <style>
         /* 手风琴样式 */
@@ -55,7 +55,7 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         }
         
         .seo-accordion-header:hover {
-            background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+            background:rgb(216, 216, 216);
         }
         
         .seo-accordion-header h5 {
@@ -545,6 +545,165 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
         .file-link:hover {
             text-decoration: underline;
         }
+        
+        /* Sitemap 文件树样式 */
+        .sitemap-file-tree {
+            margin-top: 8px;
+        }
+        
+        .sitemap-file-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .sitemap-file-item:hover {
+            background-color: #e9ecef;
+        }
+        
+        .sitemap-file-item.expandable {
+            font-weight: 500;
+        }
+        
+        .sitemap-file-item .file-icon {
+            margin-right: 8px;
+            color: #667eea;
+            transition: transform 0.2s;
+        }
+        
+        .sitemap-file-item.expanded .file-icon.expand-icon {
+            transform: rotate(90deg);
+        }
+        
+        .sitemap-file-name {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+        
+        .sitemap-file-meta {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-left: 8px;
+        }
+        
+        .sitemap-file-actions {
+            margin-left: 8px;
+        }
+        
+        .sitemap-file-actions a {
+            color: #667eea;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .sitemap-file-actions a:hover {
+            background-color: #667eea;
+            color: #fff;
+            text-decoration: none;
+        }
+        
+        .sitemap-children {
+            display: none;
+            margin-left: 24px;
+            border-left: 2px solid #e3e6f0;
+            padding-left: 12px;
+            margin-top: 4px;
+        }
+        
+        .sitemap-children.show {
+            display: block;
+        }
+        
+        .sitemap-children .sitemap-file-item {
+            padding: 4px 8px;
+        }
+        
+        .sitemap-module-group {
+            margin-bottom: 8px;
+        }
+        
+        .sitemap-module-header {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            background: #f0f4ff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .sitemap-module-header:hover {
+            background: #e3e9ff;
+        }
+        
+        .sitemap-module-header.expanded .module-expand-icon {
+            transform: rotate(90deg);
+        }
+        
+        .module-expand-icon {
+            transition: transform 0.2s;
+            margin-right: 6px;
+            color: #667eea;
+        }
+        
+        .sitemap-module-name {
+            font-weight: 500;
+            font-size: 0.85rem;
+            color: #495057;
+        }
+        
+        .sitemap-module-count {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-left: 8px;
+        }
+        
+        .sitemap-module-files {
+            display: none;
+            margin-left: 20px;
+            margin-top: 4px;
+        }
+        
+        .sitemap-module-files.show {
+            display: block;
+        }
+        
+        .sitemap-child-file {
+            display: flex;
+            align-items: center;
+            padding: 3px 8px;
+            font-size: 0.85rem;
+        }
+        
+        .sitemap-child-file:hover {
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .sitemap-child-file .file-icon {
+            color: #28a745;
+            margin-right: 6px;
+        }
+        
+        .sitemap-child-file a {
+            color: #495057;
+            text-decoration: none;
+        }
+        
+        .sitemap-child-file a:hover {
+            color: #667eea;
+            text-decoration: underline;
+        }
+        
+        .sitemap-child-file .file-meta {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
@@ -859,20 +1018,66 @@ $sitemap_module_sitemaps = $this->getData('sitemap_module_sitemaps') ?: [];
                                             </div>
                                             <?php elseif (!empty($siteData['platforms'])): ?>
                                             <div class="sitemap-platforms mt-2">
-                                                <?php foreach ($siteData['platforms'] as $platform): ?>
+                                                <?php foreach ($siteData['platforms'] as $platform): 
+                                                    $platformId = $siteData['website_code'] . '_' . $platform['platform_code'];
+                                                ?>
                                                 <div class="sitemap-platform-item">
                                                     <div class="platform-badge" style="background-color: <?= htmlspecialchars($platform['platform_color']) ?>;">
                                                         <?= htmlspecialchars($platform['platform_name']) ?>
                                                     </div>
-                                                    <div class="platform-files">
+                                                    <div class="sitemap-file-tree">
+                                                        <!-- 主索引文件（可展开） -->
                                                         <?php if ($platform['index']): ?>
-                                                        <a href="<?= htmlspecialchars($platform['index']['url']) ?>" target="_blank" class="file-link">
-                                                            <i class="mdi mdi-file-xml-box me-1"></i>
-                                                            <?= htmlspecialchars($platform['index']['name']) ?>
-                                                            <small class="text-muted">(<?= htmlspecialchars($platform['index']['size_formatted']) ?>)</small>
-                                                        </a>
+                                                        <div class="sitemap-file-item expandable" onclick="toggleSitemapChildren('<?= $platformId ?>')">
+                                                            <i class="mdi mdi-chevron-right file-icon expand-icon" id="icon-<?= $platformId ?>"></i>
+                                                            <i class="mdi mdi-file-xml-box file-icon"></i>
+                                                            <span class="sitemap-file-name"><?= htmlspecialchars($platform['index']['name']) ?></span>
+                                                            <span class="sitemap-file-meta"><?= htmlspecialchars($platform['index']['size_formatted']) ?></span>
+                                                            <div class="sitemap-file-actions" onclick="event.stopPropagation()">
+                                                                <a href="<?= htmlspecialchars($platform['index']['url']) ?>" target="_blank" title="<?= __('打开') ?>">
+                                                                    <i class="mdi mdi-open-in-new"></i>
+                                                                </a>
+                                                            </div>
+                                                        </div>
                                                         <?php endif; ?>
-                                                        <small class="text-muted"><?= $platform['module_count'] ?> <lang>个模块</lang>, <?= $platform['file_count'] ?> <lang>个文件</lang></small>
+                                                        
+                                                        <!-- 子文件列表（模块分组） -->
+                                                        <div class="sitemap-children" id="children-<?= $platformId ?>">
+                                                            <?php if (!empty($platform['modules'])): ?>
+                                                                <?php foreach ($platform['modules'] as $moduleName => $moduleData): 
+                                                                    $moduleId = $platformId . '_' . $moduleName;
+                                                                ?>
+                                                                <div class="sitemap-module-group">
+                                                                    <div class="sitemap-module-header" onclick="toggleModuleFiles('<?= $moduleId ?>')">
+                                                                        <i class="mdi mdi-chevron-right module-expand-icon" id="module-icon-<?= $moduleId ?>"></i>
+                                                                        <span class="sitemap-module-name">
+                                                                            <i class="mdi mdi-folder-outline me-1"></i>
+                                                                            <?= htmlspecialchars(ucfirst($moduleName)) ?>
+                                                                        </span>
+                                                                        <span class="sitemap-module-count"><?= $moduleData['file_count'] ?> <lang>个文件</lang></span>
+                                                                    </div>
+                                                                    <div class="sitemap-module-files" id="module-files-<?= $moduleId ?>">
+                                                                        <?php foreach ($moduleData['files'] as $file): ?>
+                                                                        <div class="sitemap-child-file">
+                                                                            <i class="mdi mdi-file-document-outline file-icon"></i>
+                                                                            <a href="<?= htmlspecialchars($file['url']) ?>" target="_blank">
+                                                                                <?= htmlspecialchars($file['name']) ?>
+                                                                            </a>
+                                                                            <span class="file-meta"><?= htmlspecialchars($file['size_formatted']) ?></span>
+                                                                        </div>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                </div>
+                                                                <?php endforeach; ?>
+                                                            <?php else: ?>
+                                                                <div class="text-muted small p-2">
+                                                                    <i class="mdi mdi-information-outline me-1"></i>
+                                                                    <lang>暂无模块文件</lang>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        
+                                                        <small class="text-muted d-block mt-2"><?= $platform['module_count'] ?> <lang>个模块</lang>, <?= $platform['file_count'] ?> <lang>个文件</lang></small>
                                                     </div>
                                                 </div>
                                                 <?php endforeach; ?>
@@ -1013,7 +1218,7 @@ const i18n = {
     noMatch: '<?= __("无匹配结果") ?>'
 };
 
-// Safe Swal wrapper
+// Safe Swal wrapper (local loading - no async wait needed)
 const SafeSwal = {
     fire: function(config) {
         if (typeof Swal !== 'undefined') {
@@ -1290,6 +1495,30 @@ function toggleAccordion(section) {
     const header = document.querySelector(`[onclick="toggleAccordion('${section}')"]`);
     body.classList.toggle('show');
     header.classList.toggle('collapsed');
+}
+
+// 切换 Sitemap 子文件列表的显示/隐藏
+function toggleSitemapChildren(platformId) {
+    const children = document.getElementById('children-' + platformId);
+    const icon = document.getElementById('icon-' + platformId);
+    const fileItem = icon.closest('.sitemap-file-item');
+    
+    if (children && icon && fileItem) {
+        children.classList.toggle('show');
+        fileItem.classList.toggle('expanded');
+    }
+}
+
+// 切换模块文件列表的显示/隐藏
+function toggleModuleFiles(moduleId) {
+    const files = document.getElementById('module-files-' + moduleId);
+    const icon = document.getElementById('module-icon-' + moduleId);
+    const header = icon.closest('.sitemap-module-header');
+    
+    if (files && icon && header) {
+        files.classList.toggle('show');
+        header.classList.toggle('expanded');
+    }
 }
 
 // 生成 Sitemap（直接生成，不询问确认）

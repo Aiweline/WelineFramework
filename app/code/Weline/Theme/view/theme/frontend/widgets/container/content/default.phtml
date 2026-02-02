@@ -8,6 +8,20 @@
  * 
  * @var array $config 部件配置
  * @var array $children 子部件（按插槽分组）
+ * 
+ * @widget.code {content-container}
+ * @widget.name {Content 容器}
+ * @widget.description {主内容区域容器，包含 Hero、推荐、主内容、侧栏等插槽。支持多种布局。}
+ * @widget.type {container}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.is_container {true}
+ * @widget.exclusive {true}
+ * 
+ * @param layout {default="full-width",type="select",label="布局类型",options={full-width:"全宽",with-left:"带左侧栏",with-right:"带右侧栏",with-both:"双侧栏"}}
+ * @param sidebar_width {default="25",type="select",label="侧栏宽度",options={20:"20%",25:"25%",30:"30%",33:"33%"}}
+ * @param container_width {default="container",type="select",label="容器宽度",options={container:"标准宽度",container-fluid:"全宽",container-lg:"大屏宽度"}}
  */
 
 $layout = $config['layout'] ?? 'full-width';
@@ -31,7 +45,13 @@ if ($layout === 'with-left' || $layout === 'with-right') {
     <div class="<?= htmlspecialchars($containerWidth) ?>">
         
         <!-- Hero 区域（全宽顶部） -->
-        <section class="content-slot slot-hero" data-slot="hero" data-accept="hero-slider,promo-banner" data-exclusive="true">
+        <w:slot id="widget-hero" 
+                name="Hero轮播区域"
+                accept="hero-slider,promo-banner"
+                exclusive="true"
+                position="content"
+                wrapper="section"
+                class="content-slot slot-hero">
             <?php if (!empty($children['hero'])): ?>
                 <?php foreach ($children['hero'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -45,10 +65,16 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                     <small>拖放轮播图或促销横幅到此处</small>
                 </div>
             <?php endif; ?>
-        </section>
+        </w:slot>
         
         <!-- 推荐区域（全宽） -->
-        <section class="content-slot slot-featured" data-slot="featured" data-accept="featured-products,category-grid,deals-of-day">
+        <w:slot id="widget-featured"
+                name="推荐区域"
+                accept="featured-products,category-grid,deals-of-day"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="content-slot slot-featured">
             <?php if (!empty($children['featured'])): ?>
                 <?php foreach ($children['featured'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -62,17 +88,21 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                     <small>推荐产品、分类网格或特价商品</small>
                 </div>
             <?php endif; ?>
-        </section>
+        </w:slot>
         
         <!-- 主内容区域 (带侧栏布局) -->
         <div class="content-body">
             
             <?php if ($layout === 'with-left' || $layout === 'with-both'): ?>
             <!-- 左侧栏 -->
-            <aside class="content-slot slot-sidebar-left" 
-                   data-slot="sidebar-left" 
-                   data-accept="category-filters,category-list,sidebar-menu,sidebar-ads"
-                   style="flex: 0 0 <?= $sidebarWidth ?>%;">
+            <w:slot id="widget-sidebar-left"
+                    name="左侧栏"
+                    accept="category-filters,category-list,sidebar-menu,sidebar-ads"
+                    multiple="true"
+                    position="sidebar"
+                    wrapper="aside"
+                    class="content-slot slot-sidebar-left"
+                    style="flex: 0 0 <?= $sidebarWidth ?>%;">
                 <?php if (!empty($children['sidebar-left'])): ?>
                     <?php foreach ($children['sidebar-left'] as $child): ?>
                         <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -86,14 +116,18 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                         <small>筛选、菜单、广告</small>
                     </div>
                 <?php endif; ?>
-            </aside>
+            </w:slot>
             <?php endif; ?>
             
             <!-- 主内容区 -->
-            <section class="content-slot slot-main" 
-                     data-slot="main" 
-                     data-accept="*"
-                     style="flex: 1;">
+            <w:slot id="widget-main"
+                    name="主内容区"
+                    accept="*"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="content-slot slot-main"
+                    style="flex: 1;">
                 <?php if (!empty($children['main'])): ?>
                     <?php foreach ($children['main'] as $child): ?>
                         <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -107,14 +141,18 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                         <small>产品列表、文章、自定义内容</small>
                     </div>
                 <?php endif; ?>
-            </section>
+            </w:slot>
             
             <?php if ($layout === 'with-right' || $layout === 'with-both'): ?>
             <!-- 右侧栏 -->
-            <aside class="content-slot slot-sidebar-right" 
-                   data-slot="sidebar-right" 
-                   data-accept="mini-cart,recently-viewed,sidebar-newsletter,sidebar-social,tags-cloud"
-                   style="flex: 0 0 <?= $sidebarWidth ?>%;">
+            <w:slot id="widget-sidebar-right"
+                    name="右侧栏"
+                    accept="mini-cart,recently-viewed,sidebar-newsletter,sidebar-social,tags-cloud"
+                    multiple="true"
+                    position="sidebar"
+                    wrapper="aside"
+                    class="content-slot slot-sidebar-right"
+                    style="flex: 0 0 <?= $sidebarWidth ?>%;">
                 <?php if (!empty($children['sidebar-right'])): ?>
                     <?php foreach ($children['sidebar-right'] as $child): ?>
                         <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -128,13 +166,19 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                         <small>购物车、最近浏览、订阅</small>
                     </div>
                 <?php endif; ?>
-            </aside>
+            </w:slot>
             <?php endif; ?>
             
         </div>
         
         <!-- 底部区域（全宽） -->
-        <section class="content-slot slot-bottom" data-slot="bottom" data-accept="testimonials,brand-logos,faq-accordion,trust-badges">
+        <w:slot id="widget-bottom"
+                name="底部区域"
+                accept="testimonials,brand-logos,faq-accordion,trust-badges"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="content-slot slot-bottom">
             <?php if (!empty($children['bottom'])): ?>
                 <?php foreach ($children['bottom'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -148,7 +192,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                     <small>客户评价、品牌Logo、FAQ等</small>
                 </div>
             <?php endif; ?>
-        </section>
+        </w:slot>
         
     </div>
     
@@ -248,9 +292,19 @@ if ($layout === 'with-left' || $layout === 'with-right') {
 }
 
 /* 编辑模式下高亮插槽 */
-.content-slot[data-slot]:hover {
+.content-slot[data-slot]:hover,
+.content-slot[data-wslot]:hover {
     outline: 2px dashed #007bff;
     outline-offset: 2px;
+}
+
+/* slot 选中状态（点击后） */
+.content-slot.slot-selected,
+[data-slot].slot-selected,
+[data-wslot].slot-selected {
+    outline: 3px solid #6366f1 !important;
+    outline-offset: 2px;
+    background: rgba(99, 102, 241, 0.05) !important;
 }
 
 .slot-widget {

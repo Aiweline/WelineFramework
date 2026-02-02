@@ -3,6 +3,22 @@
  * 视频播放器部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {video-player}
+ * @widget.name {视频播放器}
+ * @widget.description {视频播放器，支持YouTube、Vimeo和自托管视频}
+ * @widget.type {video}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param video_type {default="youtube",type="select",label="视频类型",options={youtube:"YouTube",vimeo:"Vimeo",self:"自托管",embed:"嵌入代码"}}
+ * @param video_url {default="",type="string",label="视频URL"}
+ * @param embed_code {default="",type="textarea",label="嵌入代码"}
+ * @param poster {default="",type="image",label="封面图片"}
+ * @param autoplay {default=false,type="bool",label="自动播放"}
+ * @param muted {default=false,type="bool",label="静音播放"}
  */
 
 $videoType = $this->getData('video_type') ?? 'youtube';

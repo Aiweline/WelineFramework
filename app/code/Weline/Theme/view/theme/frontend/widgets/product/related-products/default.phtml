@@ -3,6 +3,19 @@
  * 相关产品部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {related-products}
+ * @widget.name {相关产品}
+ * @widget.description {展示与当前产品相关的其他产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * 
+ * @param title {default="相关产品",type="string",label="标题"}
+ * @param limit {default=4,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
+ * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('相关产品');

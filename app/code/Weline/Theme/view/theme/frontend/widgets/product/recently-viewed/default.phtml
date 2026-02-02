@@ -3,6 +3,21 @@
  * 最近浏览部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {recently-viewed}
+ * @widget.name {最近浏览}
+ * @widget.description {展示用户最近浏览过的产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="最近浏览",type="string",label="标题"}
+ * @param limit {default=6,type="number",label="显示数量"}
+ * @param columns {default="6",type="select",label="每行列数",options={3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
+ * @param show_price {default=true,type="bool",label="显示价格"}
  */
 
 $title = $this->getData('title') ?? __('最近浏览');

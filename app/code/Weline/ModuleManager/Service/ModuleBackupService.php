@@ -46,9 +46,11 @@ class ModuleBackupService
 
         /** @var ModuleTableModel $moduleTableModel */
         $moduleTableModel = ObjectManager::getInstance(ModuleTableModel::class);
-        $collection       = $moduleTableModel->getCollection();
-        $collection->addFieldToFilter(ModuleTableModel::fields_module_name, $moduleName);
-        $moduleTables = $collection->getItems();
+        $moduleTables     = $moduleTableModel
+            ->where(ModuleTableModel::fields_module_name, $moduleName)
+            ->select()
+            ->fetch()
+            ->getItems();
 
         if (empty($moduleTables)) {
             return [
@@ -238,12 +240,14 @@ class ModuleBackupService
     {
         /** @var BackupModel $backupModel */
         $backupModel = ObjectManager::getInstance(BackupModel::class);
-        $collection  = $backupModel->getCollection();
-        $collection->addFieldToFilter(BackupModel::fields_MODULE_NAME, $moduleName);
-        $collection->setOrder(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC');
+        $models      = $backupModel
+            ->where(BackupModel::fields_MODULE_NAME, $moduleName)
+            ->order(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
 
-        $items  = [];
-        $models = $collection->getItems();
+        $items = [];
         foreach ($models as $item) {
             $items[] = $item->getData();
         }
@@ -267,11 +271,13 @@ class ModuleBackupService
     {
         /** @var BackupModel $backupModel */
         $backupModel = ObjectManager::getInstance(BackupModel::class);
-        $collection  = $backupModel->getCollection();
-        $collection->addFieldToFilter(BackupModel::fields_MODULE_NAME, $moduleName);
-        $collection->addFieldToFilter(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp);
+        $items       = $backupModel
+            ->where(BackupModel::fields_MODULE_NAME, $moduleName)
+            ->where(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp)
+            ->select()
+            ->fetch()
+            ->getItems();
 
-        $items = $collection->getItems();
         if (empty($items)) {
             return [
                 'success' => false,
@@ -296,15 +302,18 @@ class ModuleBackupService
     {
         /** @var BackupModel $backupModel */
         $backupModel = ObjectManager::getInstance(BackupModel::class);
-        $collection  = $backupModel->getCollection();
-        $collection->addFieldToFilter(BackupModel::fields_MODULE_NAME, $moduleName);
+        $backupModel->where(BackupModel::fields_MODULE_NAME, $moduleName);
 
         if ($backupTimestamp) {
-            $collection->addFieldToFilter(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp);
+            $backupModel->where(BackupModel::fields_BACKUP_TIMESTAMP, $backupTimestamp);
         }
 
-        $collection->setOrder(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC');
-        $items = $collection->getItems();
+        $items = $backupModel
+            ->order(BackupModel::fields_BACKUP_TIMESTAMP, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
+
         if (empty($items)) {
             return null;
         }

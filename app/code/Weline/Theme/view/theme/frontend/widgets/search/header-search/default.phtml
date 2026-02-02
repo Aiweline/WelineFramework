@@ -4,11 +4,20 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - placeholder: 占位符文字
- * - show_hot_words: 显示热搜词
- * - auto_complete: 启用自动补全
- * - search_type: 搜索范围
+ * @widget.code {header-search}
+ * @widget.name {Header 搜索框}
+ * @widget.description {搜索框部件，支持热词和自动补全}
+ * @widget.type {search}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {search}
+ * @widget.exclusive {true}
+ * 
+ * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}
+ * @param show_hot_words {default=true,type="bool",label="显示热搜词"}
+ * @param auto_complete {default=true,type="bool",label="启用自动补全"}
+ * @param search_type {default="all",type="select",label="搜索范围",options={all:"全站搜索",product:"仅搜商品",category:"仅搜分类"}}
  */
 
 $placeholder = $this->getData('placeholder') ?? __('搜索商品...');
