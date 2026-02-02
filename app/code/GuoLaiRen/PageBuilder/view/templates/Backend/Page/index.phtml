@@ -325,7 +325,7 @@
                                                         <!-- SEO 管理（仅首页） -->
                                                         <li>
                                                             <a class="dropdown-item" 
-                                                               href="<?= $this->getBackendUrl('*/weline_seo/backend/sitemap/index') ?>" 
+                                                               href="<?= $this->getBackendUrl('seo/backend/sitemap') ?>" 
                                                                target="_blank">
                                                                 <i class="mdi mdi-file-search text-primary me-2"></i>
                                                                 <?= __('SEO Sitemap 管理') ?>
@@ -352,7 +352,7 @@
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
                                                             <a class="dropdown-item" 
-                                                               href="<?= $this->getBackendUrl('*/weline_websites/backend/website/edit') ?>?id=<?= $websiteId ?>">
+                                                               href="<?= $this->getBackendUrl('websites/admin/website/edit') ?>?id=<?= $websiteId ?>">
                                                                 <i class="mdi mdi-cog text-secondary me-2"></i>
                                                                 <?= __('站点设置') ?>
                                                             </a>
@@ -802,7 +802,7 @@
                                 <div class="input-group">
                                     <span class="input-group-text">/</span>
                                     <input type="text" class="form-control" id="siteHandle" name="site_handle" 
-                                           placeholder="my-site" pattern="[a-z0-9-]+" required>
+                                           placeholder="my-site" pattern="[a-z0-9\-]+" required>
                                 </div>
                                 <div class="form-text"><?= __('页面URL前缀，如：/my-site（仅小写字母、数字、连字符）') ?></div>
                             </div>
@@ -833,7 +833,7 @@
                                     id="seo_account_quick"
                                     name="seo_account_id"
                                     value="''"
-                                    display="'选择SEO账户（可选）'"
+                                    display="选择SEO账户（可选）"
                                     class="w-100"
                                 />
                             </div>
