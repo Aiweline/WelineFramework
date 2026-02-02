@@ -14,6 +14,14 @@
         apiPublish: '',
         apiPreview: '',
         autoSaveDelay: 1000,
+        // 版本控制 API
+        apiVersions: '',
+        apiSaveVersion: '',
+        apiSwitchVersion: '',
+        apiRestoreOriginal: '',
+        apiPublishVersion: '',
+        apiDeleteVersion: '',
+        apiRenameVersion: '',
     };
 
     // 状态管理
@@ -31,6 +39,11 @@
         previewRefreshInFlight: false,
         previewRefreshQueued: false,
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
+        // 版本控制状态
+        versions: [], // 版本列表
+        currentVersionId: null, // 当前版本ID
+        publishedVersionId: null, // 已发布版本ID
+        versionPanelOpen: false, // 版本面板是否展开
     };
 
     // DOM 元素
@@ -64,6 +77,15 @@
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramRender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
+        
+        // 版本控制 API 端点
+        config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
+        config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
+        config.apiSwitchVersion = container.dataset.apiSwitchVersion || `${config.apiBase}/switch-version`;
+        config.apiRestoreOriginal = container.dataset.apiRestoreOriginal || `${config.apiBase}/restore-original`;
+        config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
+        config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
+        config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
 
         // Preview-related endpoints and call sites (baseline for TDD)
         // - apiRenderWidget: used by renderWidgetPreview()/preview render flows
@@ -5242,14 +5264,60 @@
     }
 
     /**
-     * 保存布局
+     * 保存布局为新版本
      */
     async function saveLayout() {
-        showToast('布局已自动保存', 'info');
+        if (!state.themeId) {
+            showToast('请先选择主题', 'warning');
+            return;
+        }
+
+        try {
+            // 弹出输入版本名称的对话框
+            const versionName = await showPromptDialog(
+                '保存新版本',
+                '请输入版本名称（可选）：',
+                '',
+                '保存',
+                '取消'
+            );
+
+            // 如果用户取消了对话框
+            if (versionName === null) {
+                return;
+            }
+
+            showToast('正在保存版本...', 'info');
+
+            const response = await fetch(config.apiSaveVersion, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    theme_id: state.themeId,
+                    page_type: state.pageType,
+                    version_name: versionName || undefined,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message || '版本已保存', 'success');
+                // 刷新版本列表
+                await loadVersions();
+            } else {
+                showToast(result.message || '保存失败', 'error');
+            }
+        } catch (error) {
+            console.error('[ThemeEditor] Save version error:', error);
+            showToast('保存版本失败：' + error.message, 'error');
+        }
     }
 
     /**
-     * 发布主题
+     * 发布主题（发布当前版本）
      */
     async function publishTheme() {
         if (!state.themeId) {
@@ -5259,7 +5327,7 @@
 
         const confirmed = await showCustomConfirm(
             '确认发布主题？',
-            '确定要发布此主题吗？发布后将生成缓存文件。',
+            '确定要发布当前版本吗？发布后将生成缓存文件，前台将显示此版本的布局。',
             '确认发布',
             '取消'
         );
@@ -5268,23 +5336,30 @@
         }
 
         try {
-            const response = await fetch(config.apiPublish, {
+            showToast('正在发布...', 'info');
+
+            const response = await fetch(config.apiPublishVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ theme_id: state.themeId }),
+                body: JSON.stringify({
+                    theme_id: state.themeId,
+                    page_type: state.pageType,
+                }),
             });
 
             const result = await response.json();
 
             if (result.success) {
-                showToast('主题发布成功', 'success');
+                showToast(result.message || '发布成功', 'success');
+                // 刷新版本列表以更新发布状态
+                await loadVersions();
             } else {
                 showToast(result.message || '发布失败', 'error');
             }
         } catch (err) {
-            console.error('Publish error:', err);
+            console.error('[ThemeEditor] Publish error:', err);
             showToast('发布主题失败', 'error');
         }
     }
@@ -5877,13 +5952,18 @@
     document.head.appendChild(style);
 
     /**
-     * 恢复原始布局
+     * 恢复原始布局（带自动备份）
+     * 
+     * 新行为：
+     * 1. 自动创建当前状态的备份版本
+     * 2. 清空工作区恢复到主题模板原始状态
+     * 3. 创建新的"原始布局"版本
      */
     async function handleRestoreLayout() {
         // 显示确认对话框
         const confirmed = await showCustomConfirm(
             '确认恢复原始布局？',
-            '此操作将清除当前所有未发布的修改，恢复到已发布的原始布局。此操作不可撤销。',
+            '此操作将清空当前布局，恢复到主题模板的原始状态（不包含任何部件）。\n\n系统会自动创建当前状态的备份，您可以随时切换回来。',
             '确认恢复',
             '取消'
         );
@@ -5895,7 +5975,7 @@
         try {
             showToast('正在恢复原始布局...', 'info');
 
-            const response = await fetch(`${config.apiBase}/restore-layout`, {
+            const response = await fetch(config.apiRestoreOriginal, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5910,6 +5990,9 @@
 
             if (result.success) {
                 showToast(result.message || '已恢复到原始布局', 'success');
+                
+                // 刷新版本列表
+                await loadVersions();
                 
                 // 刷新预览
                 setTimeout(() => {
@@ -6246,6 +6329,311 @@
     window.ThemeEditor.deselectArea = deselectArea;
     window.ThemeEditor.selectArea = selectArea;
     window.ThemeEditor.filterWidgetsByArea = filterWidgetsByArea;
+
+    // ==================== 版本控制功能 ====================
+
+    /**
+     * 加载版本列表
+     */
+    async function loadVersions() {
+        if (!state.themeId) {
+            return;
+        }
+
+        try {
+            const url = new URL(config.apiVersions, window.location.origin);
+            url.searchParams.set('theme_id', state.themeId);
+            url.searchParams.set('page_type', state.pageType);
+            url.searchParams.set('limit', '20');
+
+            const response = await fetch(url.toString());
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                state.versions = result.data.versions || [];
+                state.currentVersionId = result.data.current_version_id;
+                state.publishedVersionId = result.data.published_version_id;
+
+                // 更新版本面板 UI
+                renderVersionPanel();
+            }
+        } catch (error) {
+            console.error('[ThemeEditor] Load versions error:', error);
+        }
+    }
+
+    /**
+     * 渲染版本面板
+     */
+    function renderVersionPanel() {
+        const versionList = document.getElementById('versionList');
+        const currentVersionDisplay = document.getElementById('currentVersionDisplay');
+
+        if (!versionList) {
+            return;
+        }
+
+        // 更新当前版本显示
+        if (currentVersionDisplay) {
+            const currentVersion = state.versions.find(v => v.version_id === state.currentVersionId);
+            currentVersionDisplay.textContent = currentVersion ? currentVersion.display_name : '无版本';
+        }
+
+        // 渲染版本列表
+        if (state.versions.length === 0) {
+            versionList.innerHTML = '<div class="version-item empty">暂无版本记录</div>';
+            return;
+        }
+
+        let html = '';
+        for (const version of state.versions) {
+            const isCurrent = version.version_id === state.currentVersionId;
+            const isPublished = version.version_id === state.publishedVersionId;
+            const isAutoBackup = version.is_auto_backup;
+
+            html += `
+                <div class="version-item ${isCurrent ? 'current' : ''} ${isAutoBackup ? 'backup' : ''}" 
+                     data-version-id="${version.version_id}">
+                    <div class="version-info">
+                        <span class="version-name">
+                            ${isAutoBackup ? '<i class="fa fa-history"></i>' : '<i class="fa fa-tag"></i>'}
+                            ${escapeHtml(version.display_name)}
+                        </span>
+                        <span class="version-badges">
+                            ${isCurrent ? '<span class="badge badge-primary">当前</span>' : ''}
+                            ${isPublished ? '<span class="badge badge-success">已发布</span>' : ''}
+                            ${isAutoBackup ? '<span class="badge badge-secondary">备份</span>' : ''}
+                        </span>
+                    </div>
+                    <div class="version-meta">
+                        <span class="version-date">${formatDate(version.created_at)}</span>
+                        ${version.description ? `<span class="version-desc">${escapeHtml(version.description)}</span>` : ''}
+                    </div>
+                    <div class="version-actions">
+                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" onclick="switchToVersion(${version.version_id})">
+                            <i class="fa fa-undo"></i> 切换
+                        </button>` : ''}
+                        ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteVersion(${version.version_id})">
+                            <i class="fa fa-trash"></i>
+                        </button>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        versionList.innerHTML = html;
+    }
+
+    /**
+     * 切换到指定版本
+     */
+    async function switchToVersion(versionId) {
+        if (!state.themeId || !versionId) {
+            return;
+        }
+
+        const confirmed = await showCustomConfirm(
+            '切换版本',
+            '确定要切换到此版本吗？当前工作区的未保存修改将被替换。',
+            '确认切换',
+            '取消'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            showToast('正在切换版本...', 'info');
+
+            const response = await fetch(config.apiSwitchVersion, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    theme_id: state.themeId,
+                    page_type: state.pageType,
+                    version_id: versionId,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message || '已切换版本', 'success');
+
+                // 刷新版本列表
+                await loadVersions();
+
+                // 刷新预览
+                refreshPreview();
+            } else {
+                showToast(result.message || '切换失败', 'error');
+            }
+        } catch (error) {
+            console.error('[ThemeEditor] Switch version error:', error);
+            showToast('切换版本失败：' + error.message, 'error');
+        }
+    }
+
+    /**
+     * 删除版本
+     */
+    async function deleteVersion(versionId) {
+        if (!versionId) {
+            return;
+        }
+
+        const confirmed = await showCustomConfirm(
+            '删除版本',
+            '确定要删除此版本吗？此操作不可撤销。',
+            '确认删除',
+            '取消'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(config.apiDeleteVersion, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    version_id: versionId,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message || '版本已删除', 'success');
+                // 刷新版本列表
+                await loadVersions();
+            } else {
+                showToast(result.message || '删除失败', 'error');
+            }
+        } catch (error) {
+            console.error('[ThemeEditor] Delete version error:', error);
+            showToast('删除版本失败：' + error.message, 'error');
+        }
+    }
+
+    /**
+     * 切换版本面板显示/隐藏
+     */
+    function toggleVersionPanel() {
+        const panel = document.getElementById('versionPanel');
+        if (!panel) return;
+
+        state.versionPanelOpen = !state.versionPanelOpen;
+
+        if (state.versionPanelOpen) {
+            panel.classList.add('open');
+            // 加载版本列表
+            loadVersions();
+        } else {
+            panel.classList.remove('open');
+        }
+    }
+
+    /**
+     * 显示提示输入对话框
+     */
+    function showPromptDialog(title, message, defaultValue = '', confirmText = '确定', cancelText = '取消') {
+        return new Promise((resolve) => {
+            // 创建对话框
+            const overlay = document.createElement('div');
+            overlay.className = 'custom-confirm-overlay';
+            overlay.innerHTML = `
+                <div class="custom-confirm-dialog">
+                    <h3>${escapeHtml(title)}</h3>
+                    <p>${escapeHtml(message)}</p>
+                    <input type="text" class="form-control prompt-input" value="${escapeHtml(defaultValue)}" placeholder="版本名称">
+                    <div class="custom-confirm-buttons">
+                        <button class="btn btn-secondary cancel-btn">${escapeHtml(cancelText)}</button>
+                        <button class="btn btn-primary confirm-btn">${escapeHtml(confirmText)}</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const input = overlay.querySelector('.prompt-input');
+            const confirmBtn = overlay.querySelector('.confirm-btn');
+            const cancelBtn = overlay.querySelector('.cancel-btn');
+
+            // 聚焦输入框
+            setTimeout(() => input.focus(), 100);
+
+            // 确认
+            confirmBtn.addEventListener('click', () => {
+                const value = input.value.trim();
+                overlay.remove();
+                resolve(value);
+            });
+
+            // 取消
+            cancelBtn.addEventListener('click', () => {
+                overlay.remove();
+                resolve(null);
+            });
+
+            // 回车确认
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const value = input.value.trim();
+                    overlay.remove();
+                    resolve(value);
+                }
+            });
+
+            // ESC 取消
+            overlay.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    overlay.remove();
+                    resolve(null);
+                }
+            });
+        });
+    }
+
+    /**
+     * 格式化日期
+     */
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return '刚刚';
+        if (diffMins < 60) return `${diffMins}分钟前`;
+        if (diffHours < 24) return `${diffHours}小时前`;
+        if (diffDays < 7) return `${diffDays}天前`;
+
+        return date.toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
+    // 全局暴露版本控制函数
+    window.switchToVersion = switchToVersion;
+    window.deleteVersion = deleteVersion;
+    window.toggleVersionPanel = toggleVersionPanel;
+    window.loadVersions = loadVersions;
+    window.ThemeEditor.loadVersions = loadVersions;
+    window.ThemeEditor.toggleVersionPanel = toggleVersionPanel;
 
     // 初始化
     document.addEventListener('DOMContentLoaded', init);
