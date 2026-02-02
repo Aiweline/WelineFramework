@@ -6,9 +6,11 @@ namespace Weline\Theme\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeLayoutService;
+use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Theme\Helper\ThemeData;
@@ -21,6 +23,7 @@ class ThemeEditor extends BackendController
 {
     private WelineTheme $welineTheme;
     private ThemeLayoutService $layoutService;
+    private ThemeLayoutVersionService $versionService;
     private ThemeCacheGenerator $cacheGenerator;
     private WidgetPositionResolver $positionResolver;
     private WidgetRegistry $widgetRegistry;
@@ -30,6 +33,7 @@ class ThemeEditor extends BackendController
     public function __construct(
         WelineTheme $welineTheme,
         ThemeLayoutService $layoutService,
+        ThemeLayoutVersionService $versionService,
         ThemeCacheGenerator $cacheGenerator,
         WidgetPositionResolver $positionResolver,
         WidgetRegistry $widgetRegistry,
@@ -38,6 +42,7 @@ class ThemeEditor extends BackendController
     ) {
         $this->welineTheme = $welineTheme;
         $this->layoutService = $layoutService;
+        $this->versionService = $versionService;
         $this->cacheGenerator = $cacheGenerator;
         $this->positionResolver = $positionResolver;
         $this->widgetRegistry = $widgetRegistry;
@@ -455,7 +460,7 @@ class ThemeEditor extends BackendController
             
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('已删除 %1 个孤儿部件', [$deletedCount]),
+                'message' => __('已删除 %{count} 个孤儿部件', ['count' => $deletedCount]),
                 'deleted_count' => $deletedCount,
             ]);
         } catch (\Exception $e) {
@@ -616,51 +621,14 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 发布主题 (将草稿发布为正式版并生成缓存)
-     */
-    /**
-     * 恢复原始布局（从已发布版本重新初始化草稿）
+     * 恢复原始布局（旧 API - 已废弃，保留兼容性）
+     * 
+     * @deprecated 使用 postRestoreOriginal() 代替，支持版本控制和自动备份
      */
     public function postRestoreLayout()
     {
-        try {
-            $themeId = (int)$this->request->getParam('theme_id', 0);
-            $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-            if (!$themeId) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('主题 ID 不能为空'),
-                ]);
-            }
-
-            // 删除当前草稿布局数据
-            $this->themeLayout->reset()
-                ->where('theme_id', $themeId)
-                ->where('page_type', $pageType)
-                ->where('status', 'draft')
-                ->delete();
-
-            // 从已发布版本重新初始化草稿
-            $result = $this->layoutService->initDraftFromPublished($themeId, $pageType);
-
-            if ($result) {
-                return $this->fetchJson([
-                    'success' => true,
-                    'message' => __('已成功恢复到原始布局'),
-                ]);
-            }
-
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('恢复原始布局失败'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('恢复失败: %{1}', $e->getMessage()),
-            ]);
-        }
+        // 委托给新的恢复原始布局 API
+        return $this->postRestoreOriginal();
     }
 
     public function postPublish()
@@ -1036,12 +1004,12 @@ class ThemeEditor extends BackendController
             
             return $this->fetchJson([
                 'success' => true,
-                'message' => $locale ? __('已保存 %1 语言的配置', $locale) : __('配置已保存'),
+                'message' => $locale ? __('已保存 %{locale} 语言的配置', ['locale' => $locale]) : __('配置已保存'),
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('保存失败：%1', $e->getMessage()),
+                'message' => __('保存失败：%{error}', ['error' => $e->getMessage()]),
             ]);
         }
     }
@@ -1635,4 +1603,344 @@ class ThemeEditor extends BackendController
         }
     }
 
+    // ==================== 版本控制 API ====================
+
+    /**
+     * 获取版本列表 (AJAX)
+     * 路由: /backend/theme-editor/versions (GET)
+     */
+    public function getVersions()
+    {
+        $themeId = (int)$this->request->getParam('theme_id');
+        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $limit = (int)$this->request->getParam('limit', 20);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        try {
+            // 初始化版本（如果是首次访问）
+            $this->versionService->initializeVersionIfNeeded($themeId, $pageType);
+
+            $versions = $this->versionService->getVersions($themeId, $pageType, $limit);
+            $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
+            $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType);
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'versions' => $versions,
+                    'current_version_id' => $currentVersion?->getVersionId(),
+                    'published_version_id' => $publishedVersion?->getVersionId(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 保存为新版本 (AJAX)
+     * 路由: /backend/theme-editor/save-version (POST)
+     */
+    public function postSaveVersion()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $versionName = $data['version_name'] ?? $this->request->getParam('version_name');
+        $description = $data['description'] ?? $this->request->getParam('description');
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        try {
+            $version = $this->versionService->saveVersion(
+                themeId: $themeId,
+                pageType: $pageType,
+                name: $versionName,
+                description: $description,
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('已保存为 %{name}', ['name' => $version->getDisplayName()]),
+                'data' => $version->toArray(),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 切换到指定版本 (AJAX)
+     * 路由: /backend/theme-editor/switch-version (POST)
+     */
+    public function postSwitchVersion()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
+
+        if (!$themeId || !$versionId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+
+        try {
+            $result = $this->versionService->switchToVersion($themeId, $pageType, $versionId);
+
+            if ($result) {
+                // 获取更新后的布局数据
+                $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
+
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('已切换到选定版本'),
+                    'data' => [
+                        'layout' => $layout,
+                    ],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('切换版本失败'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 恢复原始布局 (AJAX) - 重构版本
+     * 路由: /backend/theme-editor/restore-original (POST)
+     * 
+     * 新行为：
+     * 1. 自动创建当前状态的备份版本
+     * 2. 清空工作区恢复到主题模板原始状态（不添加任何部件）
+     * 3. 创建新的"原始布局"版本
+     */
+    public function postRestoreOriginal()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        try {
+            $result = $this->versionService->restoreOriginal($themeId, $pageType);
+
+            $backupVersion = $result['backup_version'];
+            $newVersion = $result['new_version'];
+
+            $message = __('已恢复到原始布局');
+            if ($backupVersion) {
+                $message .= ' (' . __('已备份为 %{name}', ['name' => $backupVersion->getDisplayName()]) . ')';
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'backup_version' => $backupVersion?->toArray(),
+                    'new_version' => $newVersion->toArray(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 发布版本 (AJAX)
+     * 路由: /backend/theme-editor/publish-version (POST)
+     */
+    public function postPublishVersion()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type');
+        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        try {
+            // 使用版本服务发布
+            $result = $this->versionService->publishVersion($themeId, $pageType, $versionId);
+
+            if ($result) {
+                // 清除并重建缓存
+                $this->cacheGenerator->clearCache($themeId);
+                $this->cacheGenerator->generate($themeId);
+
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('版本已发布'),
+                ]);
+            }
+
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('发布失败'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 删除版本 (AJAX)
+     * 路由: /backend/theme-editor/delete-version (POST)
+     */
+    public function postDeleteVersion()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
+
+        if (!$versionId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少版本ID'),
+            ]);
+        }
+
+        try {
+            $result = $this->versionService->deleteVersion($versionId);
+
+            if ($result) {
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('版本已删除'),
+                ]);
+            }
+
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('无法删除当前版本或已发布版本'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 重命名版本 (AJAX)
+     * 路由: /backend/theme-editor/rename-version (POST)
+     */
+    public function postRenameVersion()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
+        $newName = $data['version_name'] ?? $this->request->getParam('version_name', '');
+
+        if (!$versionId || empty($newName)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('参数不完整'),
+            ]);
+        }
+
+        try {
+            $result = $this->versionService->renameVersion($versionId, $newName);
+
+            return $this->fetchJson([
+                'success' => $result,
+                'message' => $result ? __('版本已重命名') : __('重命名失败'),
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
 }

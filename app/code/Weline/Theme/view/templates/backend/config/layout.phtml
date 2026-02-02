@@ -9,7 +9,7 @@
 <div class="theme-layout-config">
     <div class="page-header">
         <h1><?= __('主题布局配置') ?></h1>
-        <p class="text-muted"><?= __('主题：%1', $theme->getName()) ?></p>
+        <p class="text-muted"><?= __('主题：%{name}', ['name' => $theme->getName()]) ?></p>
     </div>
 
     <form id="layout-config-form" method="post" action="<?= $this->getUrl('theme/backend/config/layout/save') ?>">

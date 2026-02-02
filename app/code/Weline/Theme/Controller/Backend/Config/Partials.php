@@ -117,7 +117,7 @@ class Partials extends BackendController
         $availablePartials = PartialsScanner::scanPartials($theme, $area);
         foreach ($partials as $type => $option) {
             if (!isset($availablePartials[$type]) || !in_array($option, $availablePartials[$type])) {
-                return $this->fetchJson($this->error(__('Partials 选项无效：%1/%2', $type, $option)));
+                return $this->fetchJson($this->error(__('Partials 选项无效：%{type}/%{option}', ['type' => $type, 'option' => $option])));
             }
         }
 

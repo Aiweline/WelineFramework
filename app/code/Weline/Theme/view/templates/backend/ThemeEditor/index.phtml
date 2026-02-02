@@ -68,7 +68,14 @@ if (!function_exists('getWidgetIcon')) {
      data-api-widget-preview="<?= $this->getUrl('theme/backend/theme-editor/widget-preview') ?>"
      data-api-compile-layout="<?= $this->getUrl('theme/backend/theme-editor/compile-layout') ?>"
      data-api-layout-preview="<?= $this->getUrl('theme/backend/theme-editor/layout-preview') ?>"
-     data-api-save-compiled-layout="<?= $this->getUrl('theme/backend/theme-editor/save-compiled-layout') ?>">
+     data-api-save-compiled-layout="<?= $this->getUrl('theme/backend/theme-editor/save-compiled-layout') ?>"
+     data-api-versions="<?= $this->getUrl('theme/backend/theme-editor/versions') ?>"
+     data-api-save-version="<?= $this->getUrl('theme/backend/theme-editor/save-version') ?>"
+     data-api-switch-version="<?= $this->getUrl('theme/backend/theme-editor/switch-version') ?>"
+     data-api-restore-original="<?= $this->getUrl('theme/backend/theme-editor/restore-original') ?>"
+     data-api-publish-version="<?= $this->getUrl('theme/backend/theme-editor/publish-version') ?>"
+     data-api-delete-version="<?= $this->getUrl('theme/backend/theme-editor/delete-version') ?>"
+     data-api-rename-version="<?= $this->getUrl('theme/backend/theme-editor/rename-version') ?>">
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
@@ -105,13 +112,51 @@ if (!function_exists('getWidgetIcon')) {
         </div>
         
         <div class="toolbar-right">
+            <!-- 版本控制面板 -->
+            <div class="version-selector-wrapper">
+                <button type="button" class="btn btn-outline-secondary btn-version-toggle" onclick="toggleVersionPanel()">
+                    <i class="ri-history-line"></i>
+                    <span id="currentVersionDisplay"><?= __('版本') ?></span>
+                    <i class="ri-arrow-down-s-line"></i>
+                </button>
+                
+                <!-- 版本面板（下拉展开） -->
+                <div id="versionPanel" class="version-panel">
+                    <div class="version-panel-header">
+                        <h5><i class="ri-git-branch-line"></i> <?= __('版本历史') ?></h5>
+                        <button type="button" class="btn btn-sm btn-close-panel" onclick="toggleVersionPanel()">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="version-panel-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveNewVersion" onclick="document.getElementById('btnSave')?.click()">
+                            <i class="ri-save-line"></i> <?= __('保存新版本') ?>
+                        </button>
+                    </div>
+                    
+                    <div class="version-panel-body">
+                        <div id="versionList" class="version-list">
+                            <div class="version-item empty"><?= __('加载中...') ?></div>
+                        </div>
+                    </div>
+                    
+                    <div class="version-panel-footer">
+                        <small class="text-muted">
+                            <i class="ri-information-line"></i>
+                            <?= __('点击"切换"可恢复到历史版本继续编辑') ?>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
             <button type="button" class="btn btn-outline-secondary" id="btnPreview">
                 <i class="ri-eye-line"></i> <?= __('预览') ?>
             </button>
-            <button type="button" class="btn btn-outline-primary" id="btnSave">
-                <i class="ri-save-line"></i> <?= __('保存') ?>
+            <button type="button" class="btn btn-outline-primary" id="btnSave" title="<?= __('保存当前布局为新版本') ?>">
+                <i class="ri-save-line"></i> <?= __('保存版本') ?>
             </button>
-            <button type="button" class="btn btn-primary" id="btnPublish">
+            <button type="button" class="btn btn-primary" id="btnPublish" title="<?= __('发布当前版本到前台') ?>">
                 <i class="ri-upload-cloud-line"></i> <?= __('发布') ?>
             </button>
         </div>
@@ -146,7 +191,7 @@ if (!function_exists('getWidgetIcon')) {
                         <button type="button" class="preview-tab" data-view="structure"><?= __('结构视图') ?></button>
                     </div>
                     <div class="preview-actions">
-                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnRestoreLayout" title="<?= __('恢复到已发布的原始布局（清除当前所有草稿修改）') ?>">
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnRestoreLayout" title="<?= __('恢复到主题模板原始布局（自动创建备份）') ?>">
                             <i class="ri-history-line"></i> <?= __('恢复原始布局') ?>
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPreview" title="<?= __('刷新预览') ?>">
@@ -2996,6 +3041,220 @@ body{
 .widget-action-btn:hover::after {
     opacity: 1;
     transform: translateY(0);
+}
+
+/* ========================================
+   版本控制面板样式
+   ======================================== */
+.version-selector-wrapper {
+    display: inline-block;
+    position: relative;
+}
+
+.btn-version-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.btn-version-toggle .ri-arrow-down-s-line {
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.btn-version-toggle.open .ri-arrow-down-s-line {
+    transform: rotate(180deg);
+}
+
+.version-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1050;
+    width: 380px;
+    max-height: 500px;
+    background: var(--theme-bg, #fff);
+    border: 1px solid var(--theme-border, #ddd);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.version-panel.open {
+    display: flex;
+}
+
+.version-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--theme-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--theme-border, #e9ecef);
+}
+
+.version-panel-header h5 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--theme-text, #333);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.version-panel-header .btn-close-panel {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--theme-text-muted, #999);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    border-radius: 4px;
+}
+
+.version-panel-header .btn-close-panel:hover {
+    color: var(--theme-text, #333);
+    background: var(--theme-bg-hover, rgba(0,0,0,0.05));
+}
+
+.version-panel-actions {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--theme-border, #e9ecef);
+}
+
+.version-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 350px;
+}
+
+.version-panel-footer {
+    padding: 10px 16px;
+    background: var(--theme-bg-secondary, #f8f9fa);
+    border-top: 1px solid var(--theme-border, #e9ecef);
+}
+
+.version-list {
+    padding: 0;
+}
+
+.version-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--theme-border-light, #f0f0f0);
+    transition: background-color 0.15s;
+}
+
+.version-item:last-child {
+    border-bottom: none;
+}
+
+.version-item:hover {
+    background: var(--theme-bg-hover, #f8f9fa);
+}
+
+.version-item.current {
+    background: var(--theme-primary-bg, #e7f3ff);
+    border-left: 3px solid var(--theme-primary, #0d6efd);
+}
+
+.version-item.backup {
+    background: #fff8e1;
+}
+
+.version-item.backup:hover {
+    background: #fff3cd;
+}
+
+.version-item.empty {
+    text-align: center;
+    color: var(--theme-text-muted, #999);
+    padding: 24px;
+}
+
+.version-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.version-name {
+    font-weight: 500;
+    color: var(--theme-text, #333);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.version-name i {
+    font-size: 12px;
+    color: var(--theme-text-muted, #666);
+}
+
+.version-badges {
+    display: flex;
+    gap: 4px;
+}
+
+.version-badges .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.version-badges .badge-primary {
+    background: var(--theme-primary, #0d6efd);
+    color: #fff;
+}
+
+.version-badges .badge-success {
+    background: var(--theme-success, #198754);
+    color: #fff;
+}
+
+.version-badges .badge-secondary {
+    background: var(--theme-secondary, #6c757d);
+    color: #fff;
+}
+
+.version-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--theme-text-muted, #666);
+    margin-bottom: 8px;
+}
+
+.version-desc {
+    font-style: italic;
+    color: var(--theme-text-muted, #888);
+}
+
+.version-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.version-actions .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+@media (max-width: 768px) {
+    .version-panel {
+        width: 100%;
+        max-width: 320px;
+    }
 }
 </style>
 
