@@ -3,6 +3,21 @@
  * 搜索栏部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {search-bar}
+ * @widget.name {搜索栏}
+ * @widget.description {通用搜索栏，可放置在任何位置}
+ * @widget.type {search}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param placeholder {default="搜索...",type="string",label="占位符"}
+ * @param action_url {default="/search",type="string",label="搜索地址"}
+ * @param show_button {default=true,type="bool",label="显示按钮"}
+ * @param button_text {default="",type="string",label="按钮文字"}
+ * @param style {default="default",type="select",label="样式",options={default:"默认",rounded:"圆角",minimal:"极简"}}
  */
 
 $placeholder = $this->getData('placeholder') ?? __('搜索...');

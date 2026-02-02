@@ -12,16 +12,20 @@
 
 ### 核心页面类型
 
-| 类型标识 | 描述 | 示例路由 |
-|---------|------|---------|
-| `default` | 默认/首页 | `/`, `/home` |
-| `cms_page` | CMS 静态页面 | `/about`, `/contact` |
-| `category` | 分类/目录页 | `/category/electronics` |
-| `product` | 产品详情页 | `/product/iphone-15` |
-| `cart` | 购物车页 | `/cart` |
-| `checkout` | 结账页 | `/checkout` |
-| `search` | 搜索结果页 | `/search?q=phone` |
-| `account` | 用户账户页 | `/account`, `/account/orders` |
+页面类型标识与 `layouts/` 目录名一一对应：
+
+| 类型标识 | 布局目录 | 描述 | 示例路由 |
+|---------|---------|------|---------|
+| `homepage` | `layouts/homepage/` | 首页 | `/`, `/home` |
+| `cms_page` | `layouts/cms_page/` | CMS 静态页面 | `/about`, `/contact` |
+| `category` | `layouts/category/` | 分类/目录页 | `/category/electronics` |
+| `product` | `layouts/product/` | 产品详情页 | `/product/iphone-15` |
+| `product_list` | `layouts/product_list/` | 产品列表页 | `/products` |
+| `cart` | `layouts/cart/` | 购物车页 | `/cart` |
+| `checkout` | `layouts/checkout/` | 结账页 | `/checkout` |
+| `search` | `layouts/search/` | 搜索结果页 | `/search?q=phone` |
+| `account` | `layouts/account/` | 用户账户页 | `/account`, `/account/orders` |
+| `default` | `layouts/default/` | 默认布局 | 其他页面 |
 
 ### 通用页面类型
 
@@ -57,7 +61,7 @@
 
 | 部件代码 | 适用页面 | 说明 |
 |---------|---------|------|
-| `hero-slider` | `default`, `cms_page` | 大图轮播 |
+| `hero-slider` | `homepage`, `cms_page` | 大图轮播 |
 | `promo-banner` | `*` | 促销横幅 |
 | `ad-banner` | `*` | 广告横幅 |
 
@@ -65,23 +69,23 @@
 
 | 部件代码 | 适用页面 | 说明 |
 |---------|---------|------|
-| `featured-products` | `default`, `cms_page`, `category` | 推荐产品 |
-| `new-arrivals` | `default`, `cms_page`, `category` | 新品到达 |
-| `bestsellers` | `default`, `cms_page`, `category` | 畅销产品 |
-| `deals-of-day` | `default`, `cms_page` | 今日特价 |
+| `featured-products` | `homepage`, `cms_page`, `category` | 推荐产品 |
+| `new-arrivals` | `homepage`, `cms_page`, `category` | 新品到达 |
+| `bestsellers` | `homepage`, `cms_page`, `category` | 畅销产品 |
+| `deals-of-day` | `homepage`, `cms_page` | 今日特价 |
 | `related-products` | `product` | 相关产品 |
 | `recently-viewed` | `*` | 最近浏览 |
 | `you-may-like` | `*` | 猜你喜欢 |
 | `cross-sell` | `product`, `cart` | 交叉销售 |
 | `up-sell` | `product` | 向上销售 |
-| `product-carousel` | `default`, `cms_page`, `category` | 产品轮播 |
+| `product-carousel` | `homepage`, `cms_page`, `category` | 产品轮播 |
 
 ### Category 部件
 
 | 部件代码 | 适用页面 | 说明 |
 |---------|---------|------|
 | `category-list` | `*` | 分类列表 |
-| `category-grid` | `default`, `cms_page` | 分类网格 |
+| `category-grid` | `homepage`, `cms_page` | 分类网格 |
 | `category-menu` | `*` | 分类菜单 |
 
 ### Sidebar 部件
@@ -104,10 +108,10 @@
 | `image-text` | `*` | 图文组合 |
 | `video-player` | `*` | 视频播放器 |
 | `countdown` | `*` | 倒计时 |
-| `brand-logos` | `default`, `cms_page` | 品牌 Logo |
+| `brand-logos` | `homepage`, `cms_page` | 品牌 Logo |
 | `trust-badges` | `*` | 信任徽章 |
 | `faq-accordion` | `cms_page`, `product` | FAQ 折叠 |
-| `testimonials` | `default`, `cms_page` | 客户评价 |
+| `testimonials` | `homepage`, `cms_page` | 客户评价 |
 
 ### Footer 子部件
 
@@ -127,7 +131,7 @@
 | `search-bar` | `*` | 搜索栏 |
 | `pagination` | `category`, `search`, `cms_page` | 分页 |
 | `social-share` | `product`, `cms_page` | 社交分享 |
-| `newsletter-popup` | `default`, `cms_page` | 订阅弹窗 |
+| `newsletter-popup` | `homepage`, `cms_page` | 订阅弹窗 |
 
 ## 配置说明
 
@@ -139,8 +143,8 @@
     'name'        => '推荐产品',
     'code'        => 'featured-products',
     'type'        => 'product',
-    // 指定适用的页面类型
-    'page_types'  => ['default', 'cms_page', 'category'],
+    // 指定适用的页面类型（使用 layouts/ 目录名）
+    'page_types'  => ['homepage', 'cms_page', 'category'],
     // ...其他配置
 ]
 ```

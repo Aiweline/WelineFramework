@@ -39,14 +39,32 @@
          icon="mdi mdi-palette" 
          order="30"/>
     
-    <!-- 站点分配子菜单（用于管理站点与后台用户一对一关系） -->
+    <!-- 网站管理父级菜单 -->
+    <add source="GuoLaiRen_PageBuilder::website_management" 
+         name="website_management" 
+         title="网站管理" 
+         action=""
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-web" 
+         order="40"/>
+    
+    <!-- 网站列表子菜单 -->
+    <add source="GuoLaiRen_PageBuilder::website_listing" 
+         name="website_listing" 
+         title="网站列表" 
+         action="pagebuilder/backend/websiteManagement/index"
+         parent="GuoLaiRen_PageBuilder::website_management" 
+         icon="mdi mdi-format-list-bulleted" 
+         order="10"/>
+    
+    <!-- 站点分配子菜单 -->
     <add source="GuoLaiRen_PageBuilder::website_assignment" 
          name="website_assignment" 
          title="站点分配" 
          action="pagebuilder/backend/website/index"
-         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         parent="GuoLaiRen_PageBuilder::website_management" 
          icon="mdi mdi-shield-account" 
-         order="40"/>
+         order="20"/>
     
     <!-- 配置子菜单 -->
     <add source="GuoLaiRen_PageBuilder::config" 

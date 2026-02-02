@@ -3,6 +3,21 @@
  * 分页部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {pagination}
+ * @widget.name {分页}
+ * @widget.description {列表分页导航}
+ * @widget.type {pagination}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["category", "search", "cms_page"]}
+ * 
+ * @param style {default="default",type="select",label="样式",options={default:"默认",simple:"简洁",minimal:"极简"}}
+ * @param show_first_last {default=true,type="bool",label="显示首尾按钮"}
+ * @param show_prev_next {default=true,type="bool",label="显示上下页按钮"}
+ * @param page_range {default=5,type="number",label="显示页码数量"}
+ * @param prev_text {default="上一页",type="string",label="上一页文字"}
+ * @param next_text {default="下一页",type="string",label="下一页文字"}
  */
 
 $style = $this->getData('style') ?? 'default';

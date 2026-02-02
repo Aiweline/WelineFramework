@@ -111,8 +111,8 @@
 ### 2.5 页面类型限制 (page_types)
 
 ```php
-'page_types' => ['home', 'category']  // 适用的页面类型
-'page_types' => ['*']                 // 所有页面类型
+'page_layouts' => ['homepage', 'category']  // 适用的布局目录名
+'page_layouts' => ['*']               // 所有布局
 ```
 
 ### 2.6 容器属性 (is_container)
@@ -417,7 +417,7 @@ return [
     'position' => ['content'],
     'exclusive' => false,
     'compatible' => true,
-    'page_types' => ['home', 'category'],
+    'page_layouts' => ['homepage', 'category'],
     'template' => 'Weline_Theme::widgets/product/card.phtml',
 ];
 ```

@@ -4,11 +4,20 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - logo_image: Logo图片URL
- * - logo_text: Logo文字（图片不存在时显示）
- * - logo_link: Logo链接
- * - logo_height: Logo高度(px)
+ * @widget.code {logo}
+ * @widget.name {Header Logo}
+ * @widget.description {网站 Logo，支持图片或文字显示}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {logo}
+ * @widget.exclusive {true}
+ * 
+ * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空使用文字"}
+ * @param logo_text {default="WeShop",type="string",label="Logo文字"}
+ * @param logo_link {default="/",type="string",label="Logo链接"}
+ * @param logo_height {default=40,type="number",label="Logo高度(px)"}
  */
 
 $logoImage = $this->getData('logo_image') ?? '';

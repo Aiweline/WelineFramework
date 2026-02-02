@@ -3,6 +3,21 @@
  * FAQ折叠面板部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {faq-accordion}
+ * @widget.name {FAQ折叠}
+ * @widget.description {常见问题折叠面板，支持展开收起交互}
+ * @widget.type {faq}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["cms_page", "product"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="常见问题",type="string",label="标题"}
+ * @param subtitle {default="",type="string",label="副标题"}
+ * @param faqs {default=[],type="array",label="FAQ列表",description="每项包含question和answer"}
+ * @param expand_first {default=true,type="bool",label="默认展开第一个"}
+ * @param allow_multiple {default=false,type="bool",label="允许同时展开多个"}
  */
 
 $title = $this->getData('title') ?? __('常见问题');

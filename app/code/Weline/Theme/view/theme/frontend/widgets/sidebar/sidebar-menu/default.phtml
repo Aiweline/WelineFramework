@@ -3,6 +3,20 @@
  * 侧栏菜单部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {sidebar-menu}
+ * @widget.name {侧栏菜单}
+ * @widget.description {侧边栏导航菜单，支持多级折叠}
+ * @widget.type {sidebar}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="导航菜单",type="string",label="标题"}
+ * @param menu_items {default=[],type="array",label="菜单项"}
+ * @param collapsed_by_default {default=false,type="bool",label="默认折叠"}
+ * @param show_icons {default=true,type="bool",label="显示图标"}
  */
 
 $title = $this->getData('title') ?? __('导航菜单');

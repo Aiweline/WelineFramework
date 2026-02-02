@@ -3,6 +3,21 @@
  * 猜你喜欢部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {you-may-like}
+ * @widget.name {猜你喜欢}
+ * @widget.description {基于用户行为智能推荐产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="猜你喜欢",type="string",label="标题"}
+ * @param subtitle {default="根据您的浏览记录推荐",type="string",label="副标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列"}}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = (string)($this->getData('title') ?? __('猜你喜欢'));

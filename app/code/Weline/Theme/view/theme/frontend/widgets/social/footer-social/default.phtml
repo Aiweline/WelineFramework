@@ -4,11 +4,15 @@
  * 
  * 显示社交媒体链接图标，支持多种样式和布局
  * 
- * @meta::theme {default=Weline_Theme,name="主题命名空间",description="主题命名空间，用于主题模块的命名空间"}
- * @meta::theme.widget.social {default="社交媒体部件组",name="社交媒体部件组",description="社交媒体部件组，用于给元数据分组"}
- * @meta::theme.widget.social.footer {default="页脚社交图标",name="页脚社交图标",description="页脚社交媒体图标部件"}
- * @meta::theme.widget.social.footer.name {default="页脚社交图标",name="页脚社交图标",description="页脚社交媒体图标部件名称"}
- * @meta::theme.widget.social.footer.description {default="显示社交媒体链接图标",name="显示社交媒体链接图标",description="显示社交媒体链接图标，支持多种样式和布局"}
+ * @widget.code {footer-social}
+ * @widget.name {页脚社交图标}
+ * @widget.description {Footer 区域的社交媒体图标链接}
+ * @widget.type {social}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {social}
+ * @widget.exclusive {true}
  * 
  * @param title {default="",name="标题",description="部件标题，可选",type=string}
  * @param custom_links {default="",name="自定义社交链接",description="JSON格式的自定义社交链接配置，格式：[{\"platform\":\"facebook\",\"url\":\"https://...\"}]",type=string}

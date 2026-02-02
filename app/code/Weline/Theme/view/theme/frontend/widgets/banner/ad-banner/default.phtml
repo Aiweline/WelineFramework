@@ -4,12 +4,19 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - image: 广告图片
- * - link: 链接地址
- * - alt_text: 替代文字
- * - open_new_tab: 新窗口打开
- * - border_radius: 圆角大小
+ * @widget.code {ad-banner}
+ * @widget.name {广告横幅}
+ * @widget.description {通用广告横幅，支持图片链接}
+ * @widget.type {banner}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * 
+ * @param image {default="",type="image",label="广告图片"}
+ * @param link {default="",type="string",label="链接地址"}
+ * @param alt_text {default="广告",type="string",label="替代文字"}
+ * @param open_new_tab {default=false,type="bool",label="新窗口打开"}
+ * @param border_radius {default="8px",type="string",label="圆角大小"}
  */
 
 $image = $this->getData('image') ?? '';

@@ -3,6 +3,23 @@
  * 畅销产品部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {bestsellers}
+ * @widget.name {畅销产品}
+ * @widget.description {展示最受欢迎的热销产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content", "sidebar"]}
+ * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="热销产品",type="string",label="标题"}
+ * @param subtitle {default="最受欢迎的商品",type="string",label="副标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param period {default="month",type="select",label="统计周期",options={week:"本周",month:"本月",year:"本年",all:"全部"}}
+ * @param show_sales_count {default=false,type="bool",label="显示销量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('热销产品');

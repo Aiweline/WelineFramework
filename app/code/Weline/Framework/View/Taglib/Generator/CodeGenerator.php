@@ -321,6 +321,12 @@ final class CodeGenerator
      */
     private function generateBuiltinTag(TagNode $node): ?string
     {
+        // 检查是否是 @tag{...} 格式（内联格式）
+        // 这种格式包含 '=>' 语法（如 @if{$a=>'value'}），应该由 Taglib 回调处理
+        if ($node->selfClosing && $node->rawContent !== '' && str_contains($node->rawContent, '=>')) {
+            return null;  // 让 Taglib 回调函数处理
+        }
+        
         return match ($node->name) {
             'if' => $this->generateIfTag($node),
             'elseif' => $this->generateElseifTag($node),
@@ -419,7 +425,7 @@ final class CodeGenerator
             return '<?php if(true): ?>';
         }
 
-        // 解析变量表达式（如 meta.showHeader => $meta['showHeader']）
+        // 解析变量表达式（如 meta.showHeader => ($meta['showHeader'] ?? null)）
         $condition = $this->parseVarExpression($condition);
 
         $children = $this->generateNodes($node->children);
@@ -435,7 +441,7 @@ final class CodeGenerator
      * 解析变量表达式
      *
      * 将点分表达式转换为 PHP 数组访问语法
-     * 例如：meta.showHeader => $meta['showHeader']
+     * 例如：meta.showHeader => ($meta['showHeader'] ?? null)
      *       $user.name => $user['name']
      *
      * @param string $expr 表达式
@@ -451,7 +457,8 @@ final class CodeGenerator
         // 保留的 PHP 关键字和常量，不应该添加 $ 前缀
         $reserved = ['true', 'false', 'null', 'and', 'or', 'xor', 'not', 'empty', 'isset', 'array', 'new', 'instanceof'];
 
-        // 首先处理带点号的表达式（如 meta.showHeader => $meta['showHeader']）
+        // 首先处理带点号的表达式（如 meta.showHeader => ($meta['showHeader'] ?? null)）
+        // 使用 null 合并运算符确保安全访问，避免 undefined array key 警告
         $pattern = '/\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_.]*)\b/';
         $expr = preg_replace_callback($pattern, function ($matches) {
             $var = $matches[1];
@@ -465,13 +472,15 @@ final class CodeGenerator
                 $result .= "['{$part}']";
             }
 
-            return $result;
+            // 添加 null 合并运算符，确保安全访问
+            return '(' . $result . ' ?? null)';
         }, $expr);
 
         // 然后处理简单变量名（不带 $ 的标识符）
-        // 匹配：非 $ 开头的独立标识符（不在运算符或函数调用中）
+        // 匹配：非 $ 开头的独立标识符，但排除在引号内的标识符（数组键）
+        // 使用负向回顾断言排除紧跟在 [' 或 [" 后面的标识符
         $expr = preg_replace_callback(
-            '/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/',
+            '/(?<![\'"\[])\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?![\'"\]])/',
             function ($matches) use ($reserved) {
                 $var = $matches[1];
                 
@@ -480,7 +489,6 @@ final class CodeGenerator
                     return $var;
                 }
                 
-                // 跳过已经是 PHP 变量的（虽然这个正则不会匹配 $ 开头的）
                 // 跳过纯数字
                 if (is_numeric($var)) {
                     return $var;

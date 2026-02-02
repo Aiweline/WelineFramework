@@ -4,9 +4,17 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - show_symbol: 显示货币符号
- * - show_code: 显示货币代码
+ * @widget.code {currency-switcher}
+ * @widget.name {货币切换}
+ * @widget.description {Header 货币切换器，支持多货币切换}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {user-area}
+ * 
+ * @param show_symbol {default=true,type="bool",label="显示货币符号"}
+ * @param show_code {default=true,type="bool",label="显示货币代码"}
  */
 
 $showSymbol = (bool)($this->getData('show_symbol') ?? true);

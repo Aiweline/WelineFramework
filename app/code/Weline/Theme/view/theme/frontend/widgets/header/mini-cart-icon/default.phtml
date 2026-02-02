@@ -4,10 +4,18 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - show_quantity: 显示数量
- * - show_subtotal: 显示小计
- * - icon_style: 图标样式 (cart/bag/basket)
+ * @widget.code {mini-cart-icon}
+ * @widget.name {Header 购物车}
+ * @widget.description {购物车图标，显示购物车商品数量和小计}
+ * @widget.type {header}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {user-area}
+ * 
+ * @param show_quantity {default=true,type="bool",label="显示数量"}
+ * @param show_subtotal {default=true,type="bool",label="显示小计"}
+ * @param icon_style {default="cart",type="select",label="图标样式",options={cart:"购物车",bag:"购物袋",basket:"购物篮"}}
  */
 
 $showQuantity = (bool)($this->getData('show_quantity') ?? true);

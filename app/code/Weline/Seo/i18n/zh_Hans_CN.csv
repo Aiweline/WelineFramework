@@ -14,10 +14,19 @@
 "IndexNow 请求失败：%{1}","IndexNow 请求失败：%{1}"
 "已通过 IndexNow 通知 Bing 更新","已通过 IndexNow 通知 Bing 更新"
 "IndexNow 请求返回错误码：%{1}","IndexNow 请求返回错误码：%{1}"
+"Google Ping 方式已于 2023 年弃用。请配置 Service Account 使用 Search Console API 提交。","Google Ping 方式已于 2023 年弃用。请配置 Service Account 使用 Search Console API 提交。"
 "Ping 请求失败：%{1}","Ping 请求失败：%{1}"
 "已成功通知 Google 更新 sitemap","已成功通知 Google 更新 sitemap"
 "Ping 请求返回错误码：%{1}","Ping 请求返回错误码：%{1}"
-"Google Search Console API 提交尚未实现，请使用 Ping 方式","Google Search Console API 提交尚未实现，请使用 Ping 方式"
+"缺少 Service Account 配置（client_email 或 private_key）","缺少 Service Account 配置（client_email 或 private_key）"
+"获取 Google Access Token 失败","获取 Google Access Token 失败"
+"Indexing API 请求失败：%{1}","Indexing API 请求失败：%{1}"
+未知错误,未知错误
+"权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者","权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者"
+"Google Indexing API 错误：%{1}","Google Indexing API 错误：%{1}"
+"已成功通过 Indexing API 通知 Google 更新 URL","已成功通过 Indexing API 通知 Google 更新 URL"
+"Indexing API 返回错误码：%{1}","Indexing API 返回错误码：%{1}"
+提交异常：%{1},提交异常：%{1}
 SEO账户配置,SEO账户配置
 账户不存在,账户不存在
 无效的请求方法,无效的请求方法
@@ -360,6 +369,7 @@ Sitemap提交,Sitemap提交
 共,共
 个账户,个账户
 过滤条件,过滤条件
+"Google Search Console API 提交尚未实现，请使用 Ping 方式","Google Search Console API 提交尚未实现，请使用 Ping 方式"
 无效的请求数据,无效的请求数据
 选择要绑定的SEO账户,选择要绑定的SEO账户
 Sitemap频率,Sitemap频率

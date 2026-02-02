@@ -1,9 +1,9 @@
 <?php
 /**
  * 
- * @hook-priority 200   Hook优先级：200（默认值）
+ * @hook-priority 200   Hook优先级：200（高于 Weline_Customer 的 50）
  * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
+ * @hook-solo true     Hook独享：true（独占此 hook，阻止低优先级的 hook 渲染）
  */
 
 use WeShop\Customer\Session\CustomerSession;

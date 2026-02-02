@@ -106,7 +106,14 @@ class Partials extends Block
             $theme->getActiveTheme();
         }
         
+        // 如果没有活动主题，直接跳到默认主题回退逻辑
         if (!$theme->getId()) {
+            // 直接尝试默认主题（Weline_Theme）
+            $defaultPartialsPath = 'Weline_Theme::theme/' . $area . '/partials/' . $type . '/' . $defaultOption . '.phtml';
+            $defaultAbsolutePath = $this->resolveModulePath($defaultPartialsPath);
+            if ($defaultAbsolutePath && is_file($defaultAbsolutePath)) {
+                return $defaultPartialsPath;
+            }
             return null;
         }
         

@@ -3,6 +3,21 @@
  * 订阅弹窗部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {newsletter-popup}
+ * @widget.name {订阅弹窗}
+ * @widget.description {邮件订阅弹窗，支持延迟或滚动触发}
+ * @widget.type {newsletter}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * 
+ * @param title {default="订阅获取优惠",type="string",label="标题"}
+ * @param description {default="订阅我们的邮件，立即获得10%折扣码！",type="string",label="描述"}
+ * @param image {default="",type="image",label="图片"}
+ * @param button_text {default="立即订阅",type="string",label="按钮文字"}
+ * @param trigger {default="delay",type="select",label="触发方式",options={delay:"延迟显示",scroll:"滚动触发",exit:"退出意图"}}
+ * @param trigger_value {default=5,type="number",label="触发值",description="延迟秒数或滚动百分比"}
  */
 
 $title = $this->getData('title') ?? __('订阅获取优惠');

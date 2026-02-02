@@ -428,7 +428,9 @@ class SlotRendererService
             }
             
             // 3.5. 如果仍然没有数据，尝试生成默认布局种子
-            if (!$hasWidgets) {
+            // 注意：仅在前端访问（published状态）时自动seed，编辑器模式（draft状态）不自动seed
+            // 这样可以尊重用户在编辑器中删除部件的操作，避免被删除的部件自动重新创建
+            if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
                 $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
                 if ($seeded) {
                     // 重新获取布局数据

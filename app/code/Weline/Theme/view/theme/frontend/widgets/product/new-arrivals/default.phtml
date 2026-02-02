@@ -3,6 +3,22 @@
  * 新品到达部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {new-arrivals}
+ * @widget.name {新品上架}
+ * @widget.description {展示最新上架的产品}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * 
+ * @param title {default="新品上架",type="string",label="标题"}
+ * @param subtitle {default="发现最新商品",type="string",label="副标题"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param days {default=30,type="number",label="天数范围",description="多少天内上架的算新品"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param show_new_badge {default=true,type="bool",label="显示新品标签"}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('新品上架');

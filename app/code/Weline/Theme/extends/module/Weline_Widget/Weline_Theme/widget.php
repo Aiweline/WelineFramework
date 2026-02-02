@@ -3,22 +3,58 @@
 declare(strict_types=1);
 
 /**
- * 部件规约文件：Weline_Theme 模块的部件定义（集中定义方式）
+ * 部件规约文件：Weline_Theme 模块的部件定义
  * 
- * 格式说明：
- * - 返回一个数组，每个元素代表一个部件定义
- * - 可以在一个文件中定义多个部件，提高效率
- * - 每个部件必须包含：name, type, code, template, area
- * - 可选字段：description, version, author, params, block_class, dependencies, doc
- * - doc 字段：文档路径，相对于模块 doc/widget/ 目录
+ * ============================
+ * 支持两种定义格式：
+ * ============================
  * 
- * 位置约束说明：
- * - position: 指定部件允许放置的位置（header/content/sidebar/footer）
- * - compatible: 部件之间的兼容性（默认排斥，某些sidebar部件可相容）
+ * 【格式1】简化格式（推荐）- 只需模板路径，元数据从模板注释自动解析
+ * 
+ *   return [
+ *       // 纯字符串：模板路径
+ *       'Weline_Theme::theme/frontend/widgets/search/header-search/default.phtml',
+ *       
+ *       // 数组：模板路径 + 可选覆盖
+ *       [
+ *           'template'  => 'Weline_Theme::theme/frontend/widgets/banner/hero-slider/default.phtml',
+ *           'exclusive' => true,  // 覆盖模板中的定义
+ *       ],
+ *   ];
+ * 
+ *   模板中使用 @widget.* 注释定义元数据：
+ *   @widget.code {header-search}
+ *   @widget.name {Header 搜索框}
+ *   @widget.type {search}
+ *   @widget.page_layouts {["*"]}
+ *   @param placeholder {default="搜索...",type="string",label="占位符"}
+ * 
+ * 【格式2】完整格式（兼容旧版）- 在 widget.php 中定义全部配置
+ * 
+ *   return [
+ *       [
+ *           'name'        => 'Header 搜索框',
+ *           'type'        => 'search',
+ *           'code'        => 'header-search',
+ *           'template'    => 'Weline_Theme::...',
+ *           'page_layouts' => ['*'],
+ *           'params'      => [...],
+ *       ],
+ *   ];
+ * 
+ * ============================
+ * 字段说明：
+ * ============================
+ * - page_layouts: 适用的布局目录名（layouts/homepage, layouts/category 等）
+ * - position: 部件允许放置的位置（header/content/sidebar/footer）
+ * - compatible: 部件之间的兼容性
+ * - exclusive: 独占部件（同区域只能有一个）
+ * - is_container: 容器型部件
+ * - slots: 容器内部的插槽定义
  * 
  * 路径规范：
  * - 文件位置：extends/module/Weline_Widget/{ModuleName}/widget.php
- * - 模板路径：使用模块视图路径格式，如 'Weline_Theme::theme/frontend/widgets/{type}/{code}/default.phtml'
+ * - 模板路径：Weline_Theme::theme/frontend/widgets/{type}/{code}/default.phtml
  */
 return [
     // ==================== 容器型部件（独占） ====================
@@ -38,7 +74,7 @@ return [
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/container/header/default.phtml',
         // 适用的页面类型（通用 = 所有页面都可用）
-        'page_types'  => ['*'],  // * 表示所有页面类型
+        'page_layouts' => ['*'],  // * 表示所有页面类型
         // 定义容器内部的插槽
         'slots'       => [
             'logo' => [
@@ -109,7 +145,7 @@ return [
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/container/footer/default.phtml',
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'slots'       => [
             'links' => [
                 'name'     => '链接区插槽',
@@ -180,7 +216,7 @@ return [
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/container/content/default.phtml',
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'slots'       => [
             'hero' => [
                 'name'     => 'Hero 区域',
@@ -267,7 +303,7 @@ return [
         'compatible'  => false,
         'exclusive'   => true,   // 独占 logo 插槽
         'slot'        => 'logo',  // 指定放入容器的 logo 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/header/logo/default.phtml',
@@ -315,7 +351,7 @@ return [
         'compatible'  => false,
         'exclusive'   => true,   // 独占导航插槽
         'slot'        => 'navigation',  // 放入容器的导航插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/navigation/main-nav/default.phtml',
@@ -356,7 +392,7 @@ return [
         'compatible'  => false,
         'exclusive'   => true,   // 独占搜索插槽
         'slot'        => 'search',  // 放入容器的搜索插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/search/header-search/default.phtml',
@@ -399,7 +435,7 @@ return [
         'position'    => ['header'],
         'compatible'  => false,
         'slot'        => 'user-area',  // 放入容器的用户区域插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/header/mini-cart-icon/default.phtml',
@@ -437,7 +473,7 @@ return [
         'position'    => ['header'],
         'compatible'  => false,
         'slot'        => 'user-area',
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/header/account/default.phtml',
@@ -471,7 +507,7 @@ return [
         'position'    => ['header'],
         'compatible'  => true,
         'slot'        => 'user-area',
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/header/language-switcher/default.phtml',
@@ -508,7 +544,7 @@ return [
         'position'    => ['header'],
         'compatible'  => true,
         'slot'        => 'user-area',
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/header/currency-switcher/default.phtml',
@@ -537,7 +573,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page'],  // 仅首页和CMS页面
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页面布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/banner/hero-slider/default.phtml',
@@ -597,7 +633,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['header', 'content'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/banner/promo-banner/default.phtml',
@@ -650,7 +686,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/banner/ad-banner/default.phtml',
@@ -694,7 +730,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page', 'category'],  // 首页、CMS页和分类页
+        'page_layouts' => ['homepage', 'cms_page', 'category'],  // 首页、CMS页和分类页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/featured-products/default.phtml',
@@ -770,7 +806,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page', 'category'],  // 首页、CMS页和分类页
+        'page_layouts' => ['homepage', 'cms_page', 'category'],  // 首页、CMS页和分类页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/new-arrivals/default.phtml',
@@ -838,7 +874,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['default', 'cms_page', 'category'],  // 首页、CMS页和分类页
+        'page_layouts' => ['homepage', 'cms_page', 'category'],  // 首页、CMS页和分类页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
@@ -911,7 +947,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page'],  // 仅首页和CMS页
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/deals-of-day/default.phtml',
@@ -976,7 +1012,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['product'],  // 仅产品详情页
+        'page_layouts' => ['product'],  // 产品详情页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/related-products/default.phtml',
@@ -1024,7 +1060,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/recently-viewed/default.phtml',
@@ -1078,7 +1114,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/you-may-like/default.phtml',
@@ -1132,7 +1168,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['product', 'cart'],  // 产品详情页和购物车页
+        'page_layouts' => ['product', 'cart'],  // 产品页和购物车布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/cross-sell/default.phtml',
@@ -1171,7 +1207,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['product'],  // 仅产品详情页
+        'page_layouts' => ['product'],  // 产品详情页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/product/up-sell/default.phtml',
@@ -1219,7 +1255,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page', 'category'],  // 首页、CMS页和分类页
+        'page_layouts' => ['homepage', 'cms_page', 'category'],  // 首页、CMS页和分类页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/carousel/product-carousel/default.phtml',
@@ -1285,7 +1321,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/category/category-list/default.phtml',
@@ -1335,7 +1371,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page'],  // 首页和CMS页
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/category/category-grid/default.phtml',
@@ -1402,7 +1438,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['header', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/navigation/category-menu/default.phtml',
@@ -1458,7 +1494,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['category', 'search'],  // 仅分类页和搜索页
+        'page_layouts' => ['category', 'search'],  // 分类页和搜索页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/category-filters/default.phtml',
@@ -1483,7 +1519,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-menu/default.phtml',
@@ -1521,7 +1557,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/mini-cart/default.phtml',
@@ -1565,7 +1601,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-newsletter/default.phtml',
@@ -1602,7 +1638,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-ads/default.phtml',
@@ -1630,7 +1666,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/tags-cloud/default.phtml',
@@ -1674,7 +1710,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-social/default.phtml',
@@ -1801,7 +1837,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/content/text-block/default.phtml',
@@ -1849,7 +1885,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/content/image-text/default.phtml',
@@ -1912,7 +1948,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/video/video-player/default.phtml',
@@ -1982,7 +2018,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'header'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/content/countdown/default.phtml',
@@ -2045,7 +2081,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['default', 'cms_page'],  // 首页和CMS页
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/content/brand-logos/default.phtml',
@@ -2106,7 +2142,7 @@ return [
         'position'    => ['footer'],
         'compatible'  => true,
         'slot'        => 'links',  // 放入 Footer 容器的 links 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/footer/footer-links/default.phtml',
@@ -2141,7 +2177,7 @@ return [
         'compatible'  => true,
         'exclusive'   => true,   // 独占 newsletter 插槽
         'slot'        => 'newsletter',  // 放入 Footer 容器的 newsletter 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/newsletter/footer-newsletter/default.phtml',
@@ -2189,7 +2225,7 @@ return [
         'compatible'  => true,
         'exclusive'   => true,   // 独占 social 插槽
         'slot'        => 'social',  // 放入 Footer 容器的 social 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/social/footer-social/default.phtml',
@@ -2331,7 +2367,7 @@ return [
         'compatible'  => true,
         'exclusive'   => true,   // 独占 payment 插槽
         'slot'        => 'payment',  // 放入 Footer 容器的 payment 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/footer/footer-payment/default.phtml',
@@ -2366,7 +2402,7 @@ return [
         'compatible'  => true,
         'exclusive'   => true,   // 独占 copyright 插槽
         'slot'        => 'copyright',  // 放入 Footer 容器的 copyright 插槽
-        'page_types'  => ['*'],  // 所有页面类型
+        'page_layouts' => ['*'],  // 所有页面类型
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/footer/footer-copyright/default.phtml',
@@ -2416,7 +2452,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['product', 'cms_page'],  // 产品页和CMS页
+        'page_layouts' => ['product', 'cms_page'],  // 产品页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/social/social-share/default.phtml',
@@ -2463,7 +2499,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page'],  // 首页和CMS页
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/newsletter/newsletter-popup/default.phtml',
@@ -2536,7 +2572,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['default', 'cms_page'],  // 首页和CMS页
+        'page_layouts' => ['homepage', 'cms_page'],  // 首页和CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/testimonial/testimonials/default.phtml',
@@ -2598,7 +2634,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'footer'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/content/trust-badges/default.phtml',
@@ -2653,7 +2689,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => false,
-        'page_types'  => ['cms_page', 'product'],  // CMS页和产品页
+        'page_layouts' => ['cms_page', 'product'],  // CMS页和产品页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/faq/faq-accordion/default.phtml',
@@ -2703,7 +2739,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/breadcrumb/breadcrumb/default.phtml',
@@ -2745,7 +2781,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content', 'sidebar'],
         'compatible'  => true,
-        'page_types'  => ['*'],  // 所有页面类型（通用）
+        'page_layouts' => ['*'],  // 所有页面类型（通用）
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/search/search-bar/default.phtml',
@@ -2793,7 +2829,7 @@ return [
         'area'        => 'frontend',
         'position'    => ['content'],
         'compatible'  => true,
-        'page_types'  => ['category', 'search', 'cms_page'],  // 分类页、搜索页、CMS页
+        'page_layouts' => ['category', 'search', 'cms_page'],  // 分类、搜索、CMS页布局
         'module'      => 'Weline_Theme',
         'version'     => '1.0.0',
         'template'    => 'Weline_Theme::theme/frontend/widgets/pagination/pagination/default.phtml',

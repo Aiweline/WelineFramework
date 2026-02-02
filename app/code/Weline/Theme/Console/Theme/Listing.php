@@ -19,9 +19,17 @@ class Listing extends AbstractConsole
     public function execute(array $args = [], array $data = [])
     {
         # 读取主题列表
-        $themes = $this->welineTheme->select()->fetch();
+        $themes = $this->welineTheme->select()->fetch()->getItems();
+        if (empty($themes)) {
+            $this->printing->warning(__('系统未安装任何主题！'));
+            return;
+        }
         foreach ($themes as $theme) {
-            $this->printing->note($theme['name']);
+            $name = is_object($theme) ? $theme->getName() : ($theme['name'] ?? 'Unknown');
+            $id = is_object($theme) ? $theme->getId() : ($theme['theme_id'] ?? 0);
+            $isActive = is_object($theme) ? $theme->getIsActive() : ($theme['is_active'] ?? false);
+            $activeStr = $isActive ? __('【已激活】') : '';
+            $this->printing->note("ID: {$id} - {$name} {$activeStr}");
         }
     }
 

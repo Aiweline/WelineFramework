@@ -3,6 +3,21 @@
  * 品牌Logo部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {brand-logos}
+ * @widget.name {品牌Logo}
+ * @widget.description {展示合作品牌Logo，支持网格和轮播布局}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="合作品牌",type="string",label="标题"}
+ * @param brands {default=[],type="array",label="品牌列表",description="每项包含name、logo、url"}
+ * @param columns {default="6",type="select",label="每行列数",options={4:"4列",5:"5列",6:"6列",8:"8列"}}
+ * @param layout {default="grid",type="select",label="布局",options={grid:"网格",carousel:"轮播"}}
+ * @param grayscale {default=true,type="bool",label="灰度效果"}
  */
 
 $title = $this->getData('title') ?? __('合作品牌');

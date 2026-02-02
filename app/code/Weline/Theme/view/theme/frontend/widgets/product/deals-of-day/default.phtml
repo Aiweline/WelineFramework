@@ -3,6 +3,23 @@
  * 今日特价部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {deals-of-day}
+ * @widget.name {今日特价}
+ * @widget.description {限时抢购特价产品，支持倒计时和库存显示}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * 
+ * @param title {default="今日特价",type="string",label="标题"}
+ * @param subtitle {default="限时抢购，错过不再",type="string",label="副标题"}
+ * @param limit {default=4,type="number",label="显示数量"}
+ * @param show_countdown {default=true,type="bool",label="显示倒计时"}
+ * @param countdown_end {default="",type="string",label="倒计时结束时间"}
+ * @param show_discount_percent {default=true,type="bool",label="显示折扣百分比"}
+ * @param show_stock_bar {default=true,type="bool",label="显示库存进度条"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列"}}
  */
 
 $title = $this->getData('title') ?? __('今日特价');

@@ -3,6 +3,20 @@
  * 邮件订阅（侧栏）部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {sidebar-newsletter}
+ * @widget.name {侧栏订阅}
+ * @widget.description {侧边栏邮件订阅表单}
+ * @widget.type {newsletter}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * 
+ * @param title {default="订阅我们",type="string",label="标题"}
+ * @param description {default="订阅获取最新优惠信息",type="string",label="描述"}
+ * @param button_text {default="订阅",type="string",label="按钮文字"}
+ * @param placeholder {default="请输入邮箱地址",type="string",label="占位符"}
  */
 
 $title = $this->getData('title') ?? __('订阅我们');

@@ -4,16 +4,23 @@
  * 
  * @var \Weline\Framework\View\Template $this
  * 
- * 参数说明：
- * - title: 标题
- * - subtitle: 副标题
- * - product_ids: 产品ID（逗号分隔）
- * - limit: 显示数量
- * - columns: 每行列数
- * - show_price: 显示价格
- * - show_rating: 显示评分
- * - show_add_to_cart: 显示加购按钮
- * - layout: 布局方式 (grid/carousel)
+ * @widget.code {featured-products}
+ * @widget.name {推荐产品}
+ * @widget.description {展示精选推荐产品，支持网格和轮播布局}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * 
+ * @param title {default="推荐产品",type="string",label="标题"}
+ * @param subtitle {default="为您精选的优质商品",type="string",label="副标题"}
+ * @param product_ids {default="",type="string",label="产品ID",description="指定产品ID，逗号分隔"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param show_price {default=true,type="bool",label="显示价格"}
+ * @param show_rating {default=true,type="bool",label="显示评分"}
+ * @param show_add_to_cart {default=true,type="bool",label="显示加购按钮"}
+ * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
 $title = $this->getData('title') ?? __('推荐产品');

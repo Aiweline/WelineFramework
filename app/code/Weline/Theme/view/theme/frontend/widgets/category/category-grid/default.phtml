@@ -3,6 +3,22 @@
  * 分类网格部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {category-grid}
+ * @widget.name {分类网格}
+ * @widget.description {以网格形式展示商品分类}
+ * @widget.type {category}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["homepage", "cms_page"]}
+ * 
+ * @param title {default="热门分类",type="string",label="标题"}
+ * @param subtitle {default="浏览我们的商品分类",type="string",label="副标题"}
+ * @param category_ids {default="",type="string",label="指定分类ID",description="逗号分隔，留空自动获取"}
+ * @param limit {default=8,type="number",label="显示数量"}
+ * @param columns {default="4",type="select",label="每行列数",options={2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
+ * @param show_count {default=true,type="bool",label="显示产品数量"}
+ * @param image_ratio {default="square",type="select",label="图片比例",options={square:"正方形",portrait:"竖向",landscape:"横向"}}
  */
 
 $title = $this->getData('title') ?? __('热门分类');
