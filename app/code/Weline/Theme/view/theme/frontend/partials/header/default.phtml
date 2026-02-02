@@ -254,7 +254,15 @@ $defaultNavItems = [
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 
-<header class="weline-header <?= htmlspecialchars($class ?? '') ?>" data-layout="default" data-layout-type="default" role="banner">
+<header class="weline-header <?= htmlspecialchars($class ?? '') ?>" 
+        data-layout="default" 
+        data-layout-type="default" 
+        role="banner"
+        data-wslot="header"
+        data-wslot-name="整体头部"
+        data-wslot-accept="header"
+        data-wslot-exclusive="true"
+        data-wslot-position="header">
     <w:hook>Weline_Theme::frontend::partials::header::before</w:hook>
     <div class="header-container">
         <!-- 顶部栏：Logo + 配送地址 + 搜索 + 用户功能（参考亚马逊 nav-belt） -->
@@ -268,7 +276,8 @@ $defaultNavItems = [
                          data-wslot="logo" 
                          data-wslot-name="Logo"
                          data-wslot-accept="logo"
-                         data-wslot-exclusive="true">
+                         data-wslot-exclusive="true"
+                         data-wslot-position="header">
                             <a href="/" title="<lang>首页</lang>">
                                 <?php if ($logo): ?>
                                     <img src="<?= htmlspecialchars($logo ?? '') ?>" alt="<lang>网站Logo</lang>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
@@ -301,7 +310,8 @@ $defaultNavItems = [
                          data-wslot="search"
                          data-wslot-name="搜索框"
                          data-wslot-accept="header-search"
-                         data-wslot-exclusive="true">
+                         data-wslot-exclusive="true"
+                         data-wslot-position="header">
                         <form action="/search" method="get" class="header-search-form">
                             <w:hook>
                                 Weline_Theme::frontend::partials::header::search-form-before
@@ -349,7 +359,8 @@ $defaultNavItems = [
                      data-wslot="user-area"
                      data-wslot-name="用户区域"
                      data-wslot-accept="account,mini-cart-icon,language-switcher,currency-switcher"
-                     data-wslot-multiple="true">
+                     data-wslot-multiple="true"
+                     data-wslot-position="header">
                 <!-- 移动端"我的"下拉菜单（合并账户、订单等功能） -->
                 <div class="header-action-item header-my-menu mobile-only" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" aria-label="<lang>我的</lang>">
                     <button type="button" class="action-link my-menu-link" title="<lang>我的</lang>" aria-label="<lang>我的</lang>">
@@ -687,7 +698,8 @@ $defaultNavItems = [
                  data-wslot="navigation"
                  data-wslot-name="导航菜单"
                  data-wslot-accept="main-nav,category-menu"
-                 data-wslot-exclusive="true">
+                 data-wslot-exclusive="true"
+                 data-wslot-position="header">
                 <!-- 横向导航链接（今日特价、Prime Video等） -->
                 <w:hook>header-nav-links<else/>
                     <nav class="header-nav-links">

@@ -69,11 +69,12 @@ $colors = $this->getData('colors') ?? [];
                 <div class="container">
                     <div class="product-detail-wrapper">
                         <!-- ========== 产品主内容区域 ========== -->
-                        <div class="product-detail-content"
-                             data-wslot="product-main"
-                             data-wslot-name="产品主内容区域"
-                             data-wslot-accept="product-gallery,product-info,product-options,add-to-cart"
-                             data-wslot-multiple="true">
+                        <w:slot id="product-main"
+                                name="产品主内容区域"
+                                accept="product-gallery,product-info,product-options,add-to-cart"
+                                multiple="true"
+                                position="content"
+                                class="product-detail-content">
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
                             <w:hook>WeShop_Product::frontend::layouts::product::main-content<else/>
                                 <if condition="meta.content">
@@ -86,33 +87,37 @@ $colors = $this->getData('colors') ?? [];
                                 </if>
                             </w:hook>
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
-                        </div>
+                        </w:slot>
                         
                         <!-- ========== 产品侧边栏区域 ========== -->
                         <if condition="meta.showSidebar">
-                            <aside class="product-detail-sidebar"
-                                   data-wslot="product-sidebar"
-                                   data-wslot-name="产品侧边栏"
-                                   data-wslot-accept="related-products,up-sell,cross-sell,recently-viewed,sidebar-ads"
-                                   data-wslot-multiple="true">
+                            <w:slot id="product-sidebar"
+                                    name="产品侧边栏"
+                                    accept="related-products,up-sell,cross-sell,recently-viewed,sidebar-ads"
+                                    multiple="true"
+                                    position="sidebar"
+                                    wrapper="aside"
+                                    class="product-detail-sidebar">
                                 <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
                                 <div class="slot-placeholder" data-placeholder="product-sidebar">
                                     <span class="placeholder-icon">📌</span>
                                     <span class="placeholder-text">侧边栏区域 - 拖拽推荐部件到此处</span>
                                 </div>
                                 <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
-                            </aside>
+                            </w:slot>
                         </if>
                     </div>
                 </div>
             </main>
             
             <!-- ========== 产品详情标签区域 ========== -->
-            <section class="product-tabs-section"
-                     data-wslot="product-tabs"
-                     data-wslot-name="产品详情标签区域"
-                     data-wslot-accept="product-description,product-specs,product-reviews,product-qa"
-                     data-wslot-multiple="true">
+            <w:slot id="product-tabs"
+                    name="产品详情标签区域"
+                    accept="product-description,product-specs,product-reviews,product-qa"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="product-tabs-section">
                 <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
                 <div class="container">
                     <w:hook>WeShop_Product::frontend::layouts::product::tabs-content<else/>
@@ -123,14 +128,16 @@ $colors = $this->getData('colors') ?? [];
                     </w:hook>
                 </div>
                 <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
-            </section>
+            </w:slot>
             
             <!-- ========== 相关产品推荐区域 ========== -->
-            <section class="product-related-section"
-                     data-wslot="product-related"
-                     data-wslot-name="相关产品推荐"
-                     data-wslot-accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
-                     data-wslot-multiple="true">
+            <w:slot id="product-related"
+                    name="相关产品推荐"
+                    accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="product-related-section">
                 <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
                 <div class="container">
                     <div class="slot-placeholder" data-placeholder="product-related">
@@ -139,7 +146,7 @@ $colors = $this->getData('colors') ?? [];
                     </div>
                 </div>
                 <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
-            </section>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::product::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -194,84 +201,7 @@ $colors = $this->getData('colors') ?? [];
         padding: 2rem 0;
     }
     
-    /* 插槽占位符 */
-    .slot-placeholder {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 40px 20px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border: 2px dashed #dee2e6;
-        border-radius: 8px;
-        margin: 10px 0;
-        text-align: center;
-        color: #6c757d;
-    }
-    
-    .slot-placeholder .placeholder-icon {
-        font-size: 32px;
-        margin-bottom: 10px;
-    }
-    
-    .slot-placeholder .placeholder-text {
-        font-size: 14px;
-    }
-    
-    /* 编辑模式下的插槽样式 */
-    body.editor-mode [data-wslot] {
-        outline: 2px dashed transparent;
-        outline-offset: -2px;
-        transition: outline 0.3s ease, background-color 0.3s ease;
-        position: relative;
-    }
-    
-    body.editor-mode [data-wslot]:hover {
-        outline-color: #6366f1;
-        background-color: rgba(99, 102, 241, 0.05);
-    }
-    
-    body.editor-mode [data-wslot].drag-over {
-        outline-color: #10b981;
-        outline-style: solid;
-        background-color: rgba(16, 185, 129, 0.1);
-    }
-    
-    body.editor-mode [data-wslot]::before {
-        content: attr(data-wslot-name);
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        color: #fff;
-        font-size: 10px;
-        font-weight: 600;
-        padding: 3px 10px;
-        border-radius: 4px;
-        opacity: 0;
-        transition: opacity 0.3s;
-        z-index: 100;
-        pointer-events: none;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
-    }
-    
-    body.editor-mode [data-wslot]:hover::before,
-    body.editor-mode [data-wslot].drag-over::before {
-        opacity: 1;
-    }
-    
-    body.editor-mode .slot-placeholder {
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    
-    body.editor-mode .slot-placeholder:hover {
-        border-color: #007bff;
-        background: linear-gradient(135deg, #e7f1ff 0%, #cce5ff 100%);
-        color: #0056b3;
-    }
+    /* 编辑模式样式由 editor-mode.css 统一管理 */
     
     /* 响应式设计 */
     @media (max-width: 992px) {
@@ -296,68 +226,6 @@ $colors = $this->getData('colors') ?? [];
     }
     </style>
     
-    <!-- 编辑模式脚本 -->
-    <?php if ($this->getData('editor_mode')): ?>
-    <script>
-    (function() {
-        document.body.classList.add('editor-mode');
-        
-        document.querySelectorAll('[data-wslot]').forEach(slot => {
-            slot.addEventListener('click', function(e) {
-                e.stopPropagation();
-                
-                const slotData = {
-                    id: this.dataset.wslot,
-                    name: this.dataset.wslotName || this.dataset.wslot,
-                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-                    multiple: this.dataset.wslotMultiple === 'true',
-                    exclusive: this.dataset.wslotExclusive === 'true'
-                };
-                
-                if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'slot-selected', slot: slotData }, '*');
-                }
-                
-                document.querySelectorAll('[data-wslot]').forEach(s => s.classList.remove('slot-active'));
-                this.classList.add('slot-active');
-            });
-            
-            slot.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.classList.add('drag-over');
-            });
-            
-            slot.addEventListener('dragleave', function(e) {
-                if (!this.contains(e.relatedTarget)) {
-                    this.classList.remove('drag-over');
-                }
-            });
-            
-            slot.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.classList.remove('drag-over');
-                
-                let widgetData;
-                try {
-                    const jsonData = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
-                    if (jsonData) widgetData = JSON.parse(jsonData);
-                } catch (err) { return; }
-                
-                if (!widgetData) return;
-                
-                const slotData = {
-                    id: this.dataset.wslot,
-                    name: this.dataset.wslotName || this.dataset.wslot,
-                    accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : []
-                };
-                
-                if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'widget-dropped', widget: widgetData, slot: slotData }, '*');
-                }
-            });
-        });
-    })();
-    </script>
-    <?php endif; ?>
+    <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
 </body>
 </html>
