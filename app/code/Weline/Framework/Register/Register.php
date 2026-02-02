@@ -383,8 +383,12 @@ class Register implements RegisterDataInterface
         $app_modules = glob(APP_CODE_PATH . '*' . DS . '*' . DS . RegisterInterface::register_file, GLOB_NOSORT) ?: [];
         # 扫描vendor模块
         $vendor_modules = glob(VENDOR_PATH . '*' . DS . '*' . DS . RegisterInterface::register_file, GLOB_NOSORT) ?: [];
-        # 合并
-        return array_merge($vendor_modules, $app_modules);
+        # 扫描主题设计目录 (app/design/Vendor/ThemeName/register.php)
+        $theme_registers = glob(App\Env::path_CODE_DESIGN . '*' . DS . '*' . DS . RegisterInterface::register_file, GLOB_NOSORT) ?: [];
+        # 扫描语言包目录 (app/i18n/Vendor/LocaleCode/register.php)
+        $i18n_registers = glob(App\Env::path_LANGUAGE_PACK . '*' . DS . '*' . DS . RegisterInterface::register_file, GLOB_NOSORT) ?: [];
+        # 合并所有注册文件
+        return array_merge($vendor_modules, $app_modules, $theme_registers, $i18n_registers);
     }
 
     /**

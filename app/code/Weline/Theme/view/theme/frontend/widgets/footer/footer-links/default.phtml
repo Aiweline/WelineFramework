@@ -3,6 +3,18 @@
  * 页脚链接部件
  * 
  * @var \Weline\Framework\View\Template $this
+ * 
+ * @widget.code {footer-links}
+ * @widget.name {页脚链接}
+ * @widget.description {Footer 区域的链接列表，支持多列分组}
+ * @widget.type {footer}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {links}
+ * 
+ * @param link_groups {default=[],type="array",label="链接分组",description="每组包含title和links数组"}
+ * @param columns {default="4",type="select",label="列数",options={2:"2列",3:"3列",4:"4列"}}
  */
 
 $linkGroups = $this->getData('link_groups') ?? [];

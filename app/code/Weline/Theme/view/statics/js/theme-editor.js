@@ -98,6 +98,7 @@
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
+        config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramRender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
 
         // Preview-related endpoints and call sites (baseline for TDD)
@@ -452,6 +453,9 @@
         }
         highlightAcceptableWidgets(acceptCodes);
         
+        // 滚动到高亮的部件（延迟以等待DOM更新）
+        scrollToHighlightedWidgets();
+        
         // 更新左侧配置面板，显示插槽信息
         renderSlotInfoPanel(slot);
         
@@ -746,8 +750,9 @@
     
     /**
      * 生成部件配置表单 HTML
+     * 优先使用后端 API 渲染，失败时回退到前端渲染
      */
-    function generateWidgetConfigForm(layoutId, params, config) {
+    async function generateWidgetConfigForm(layoutId, params, config) {
         if (!params || Object.keys(params).length === 0) {
             return `<div class="config-empty-state">
                 <i class="ri-settings-3-line"></i>
@@ -755,6 +760,38 @@
             </div>`;
         }
         
+        // 尝试使用后端 API 渲染
+        try {
+            const response = await fetch(config.apiParamRenderForm || '/theme/backend/widget/paramRender/form', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    layoutId: layoutId,
+                    params: JSON.stringify(params),
+                    config: JSON.stringify(config || {}),
+                }),
+            });
+            
+            if (response.ok) {
+                const html = await response.text();
+                if (html && !html.includes('alert-danger')) {
+                    return html;
+                }
+            }
+        } catch (err) {
+            console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
+        }
+        
+        // 回退到前端渲染
+        return generateWidgetConfigFormFallback(layoutId, params, config);
+    }
+    
+    /**
+     * 前端回退渲染方法
+     */
+    function generateWidgetConfigFormFallback(layoutId, params, formConfig) {
         // 按类型分组字段
         const basicFields = {};
         const styleFields = {};
@@ -818,6 +855,60 @@
                     <i class="ri-link"></i>
                     <input type="url" class="form-control" id="${fieldId}" name="${key}" value="${value}" placeholder="https://">
                 </div>`;
+            } else if (type === 'image') {
+                fieldHtml += `<div class="image-picker-wrapper">
+                    <div class="image-preview-container${value ? ' has-image' : ''}">
+                        <div class="image-preview" id="${fieldId}_preview">
+                            ${value ? `<img src="${value}" alt="预览">` : '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>'}
+                        </div>
+                    </div>
+                    <div class="image-url-input">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="ri-link"></i></span>
+                            <input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}" placeholder="图片URL">
+                        </div>
+                    </div>
+                </div>`;
+            } else if (type === 'range' || type === 'slider') {
+                const min = param.min || 0;
+                const max = param.max || 100;
+                const step = param.step || 1;
+                fieldHtml += `<div class="range-slider-wrapper">
+                    <div class="range-slider-container">
+                        <input type="range" class="form-range" id="${fieldId}_slider" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                    </div>
+                    <div class="range-value-display">
+                        <input type="number" class="form-control range-value-input" id="${fieldId}" name="${key}" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                    </div>
+                </div>`;
+            } else if (type === 'datetime' || type === 'date' || type === 'time') {
+                const inputType = type === 'date' ? 'date' : (type === 'time' ? 'time' : 'datetime-local');
+                fieldHtml += `<div class="input-group">
+                    <span class="input-group-text"><i class="ri-calendar-event-line"></i></span>
+                    <input type="${inputType}" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}">
+                </div>`;
+            } else if (type === 'array') {
+                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${fieldId}">
+                    <div class="array-items-container" id="${fieldId}_items">
+                        <div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>
+                    </div>
+                    <div class="array-actions">
+                        <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${fieldId}">
+                            <i class="ri-add-line"></i> 添加项目
+                        </button>
+                    </div>
+                    <input type="hidden" id="${fieldId}" name="${key}" value='${JSON.stringify(value || [])}'>
+                </div>`;
+            } else if (type === 'icon') {
+                fieldHtml += `<div class="icon-picker-wrapper">
+                    <div class="icon-preview">
+                        <span class="icon-preview-display">${value ? `<i class="${value}"></i>` : '<i class="ri-add-line placeholder-icon"></i>'}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${fieldId}">
+                            <i class="ri-apps-line"></i> 选择图标
+                        </button>
+                    </div>
+                    <input type="hidden" id="${fieldId}" name="${key}" value="${value || ''}">
+                </div>`;
             } else {
                 fieldHtml += `<input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value}">`;
             }
@@ -861,7 +952,7 @@
         if (Object.keys(basicFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(basicFields)) {
-                fieldsHtml += renderField(key, param, layoutId, config);
+                fieldsHtml += renderField(key, param, layoutId, formConfig);
             }
             groupsHtml += `
                 <div class="config-group">
@@ -878,7 +969,7 @@
         if (Object.keys(styleFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(styleFields)) {
-                fieldsHtml += renderField(key, param, layoutId, config);
+                fieldsHtml += renderField(key, param, layoutId, formConfig);
             }
             groupsHtml += `
                 <div class="config-group">
@@ -895,7 +986,7 @@
         if (Object.keys(linkFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(linkFields)) {
-                fieldsHtml += renderField(key, param, layoutId, config);
+                fieldsHtml += renderField(key, param, layoutId, formConfig);
             }
             groupsHtml += `
                 <div class="config-group collapsed">
@@ -981,12 +1072,360 @@
         container.querySelectorAll('.color-picker-wrapper').forEach(wrapper => {
             const picker = wrapper.querySelector('.form-control-color');
             const text = wrapper.querySelector('.form-control');
+            const transparentBtn = wrapper.querySelector('.btn-transparent');
+            
             if (picker && text) {
-                picker.addEventListener('input', () => text.value = picker.value);
+                picker.addEventListener('input', () => {
+                    text.value = picker.value;
+                    transparentBtn?.classList.remove('active');
+                });
                 text.addEventListener('input', () => {
                     if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) {
                         picker.value = text.value;
+                        transparentBtn?.classList.remove('active');
+                    } else if (text.value.toLowerCase() === 'transparent') {
+                        transparentBtn?.classList.add('active');
                     }
+                });
+            }
+            
+            // 透明按钮
+            if (transparentBtn) {
+                transparentBtn.addEventListener('click', function() {
+                    const targetId = this.dataset.target;
+                    const input = document.getElementById(targetId);
+                    if (input) {
+                        if (input.value.toLowerCase() === 'transparent') {
+                            input.value = '#000000';
+                            this.classList.remove('active');
+                        } else {
+                            input.value = 'transparent';
+                            this.classList.add('active');
+                        }
+                    }
+                });
+            }
+            
+            // 预设颜色按钮
+            wrapper.querySelectorAll('.color-preset-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const targetId = this.dataset.target;
+                    const color = this.dataset.color;
+                    const input = document.getElementById(targetId);
+                    const pickerEl = document.getElementById(targetId + '_picker');
+                    if (input) {
+                        input.value = color;
+                        if (pickerEl && /^#[0-9A-Fa-f]{6}$/.test(color)) {
+                            pickerEl.value = color;
+                        }
+                    }
+                });
+            });
+        });
+        
+        // 范围滑块同步
+        container.querySelectorAll('.range-slider-wrapper').forEach(wrapper => {
+            const slider = wrapper.querySelector('.form-range');
+            const input = wrapper.querySelector('.range-value-input');
+            const label = wrapper.querySelector('.range-value-label');
+            const hidden = wrapper.querySelector('input[type="hidden"]');
+            
+            if (slider && (input || label || hidden)) {
+                slider.addEventListener('input', function() {
+                    if (input) input.value = this.value;
+                    if (label) label.textContent = this.value;
+                    if (hidden) hidden.value = this.value;
+                });
+                
+                if (input) {
+                    input.addEventListener('input', function() {
+                        slider.value = this.value;
+                    });
+                }
+            }
+        });
+        
+        // 图标选择器
+        container.querySelectorAll('.icon-picker-wrapper').forEach(wrapper => {
+            const pickerBtn = wrapper.querySelector('.btn-icon-picker');
+            const clearBtn = wrapper.querySelector('.btn-icon-clear');
+            const panel = wrapper.querySelector('.icon-picker-panel');
+            const preview = wrapper.querySelector('.icon-preview-display');
+            const hidden = wrapper.querySelector('input[type="hidden"]');
+            
+            if (pickerBtn && panel) {
+                pickerBtn.addEventListener('click', function() {
+                    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                });
+            }
+            
+            if (clearBtn && hidden && preview) {
+                clearBtn.addEventListener('click', function() {
+                    hidden.value = '';
+                    preview.innerHTML = '<i class="ri-add-line placeholder-icon"></i>';
+                    this.style.display = 'none';
+                });
+            }
+            
+            // 图标项点击
+            wrapper.querySelectorAll('.icon-picker-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const icon = this.dataset.icon;
+                    if (hidden) hidden.value = icon;
+                    if (preview) preview.innerHTML = `<i class="${icon}"></i>`;
+                    if (panel) panel.style.display = 'none';
+                    if (clearBtn) clearBtn.style.display = 'inline-block';
+                    
+                    // 更新选中状态
+                    wrapper.querySelectorAll('.icon-picker-item').forEach(i => i.classList.remove('selected'));
+                    this.classList.add('selected');
+                });
+            });
+            
+            // 搜索过滤
+            const searchInput = panel?.querySelector('.icon-picker-search input');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const keyword = this.value.toLowerCase();
+                    wrapper.querySelectorAll('.icon-picker-item').forEach(item => {
+                        const iconName = item.dataset.icon?.toLowerCase() || '';
+                        item.style.display = iconName.includes(keyword) ? '' : 'none';
+                    });
+                });
+            }
+            
+            // 自定义图标输入
+            const customInput = panel?.querySelector('.icon-picker-custom input');
+            const applyBtn = panel?.querySelector('.btn-apply-custom');
+            if (customInput && applyBtn) {
+                applyBtn.addEventListener('click', function() {
+                    const icon = customInput.value.trim();
+                    if (icon) {
+                        if (hidden) hidden.value = icon;
+                        if (preview) preview.innerHTML = `<i class="${icon}"></i>`;
+                        if (panel) panel.style.display = 'none';
+                        if (clearBtn) clearBtn.style.display = 'inline-block';
+                    }
+                });
+            }
+        });
+        
+        // 图片选择器
+        container.querySelectorAll('.image-picker-wrapper').forEach(wrapper => {
+            const urlInput = wrapper.querySelector('.image-url-input input');
+            const preview = wrapper.querySelector('.image-preview');
+            const clearBtn = wrapper.querySelector('.btn-clear-image');
+            const uploadBtn = wrapper.querySelector('.btn-upload-image');
+            const fileInput = wrapper.querySelector('.image-file-input');
+            
+            // URL 输入变化时更新预览
+            if (urlInput && preview) {
+                urlInput.addEventListener('input', function() {
+                    const url = this.value.trim();
+                    if (url) {
+                        preview.innerHTML = `<img src="${url}" alt="预览" onerror="this.parentElement.innerHTML='<div class=\\'image-placeholder\\'><i class=\\'ri-image-add-line\\'></i><span>图片加载失败</span></div>'">`;
+                        preview.closest('.image-preview-container')?.classList.add('has-image');
+                    } else {
+                        preview.innerHTML = '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>';
+                        preview.closest('.image-preview-container')?.classList.remove('has-image');
+                    }
+                });
+            }
+            
+            // 清除按钮
+            if (clearBtn && urlInput && preview) {
+                clearBtn.addEventListener('click', function() {
+                    urlInput.value = '';
+                    preview.innerHTML = '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>';
+                    preview.closest('.image-preview-container')?.classList.remove('has-image');
+                });
+            }
+            
+            // 上传按钮
+            if (uploadBtn && fileInput) {
+                uploadBtn.addEventListener('click', () => fileInput.click());
+                fileInput.addEventListener('change', function() {
+                    const file = this.files?.[0];
+                    if (file) {
+                        // TODO: 实现文件上传逻辑
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            if (preview) {
+                                preview.innerHTML = `<img src="${e.target.result}" alt="预览">`;
+                                preview.closest('.image-preview-container')?.classList.add('has-image');
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        });
+        
+        // 数组编辑器
+        container.querySelectorAll('.array-editor-wrapper').forEach(wrapper => {
+            const addBtn = wrapper.querySelector('.btn-add-array-item');
+            const itemsContainer = wrapper.querySelector('.array-items-container');
+            const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+            const template = wrapper.querySelector('template');
+            
+            // 更新隐藏字段值
+            const updateHiddenValue = () => {
+                if (!hiddenInput || !itemsContainer) return;
+                const items = [];
+                itemsContainer.querySelectorAll('.array-item').forEach(item => {
+                    const simpleInput = item.querySelector('.array-item-input');
+                    if (simpleInput) {
+                        items.push(simpleInput.value);
+                    } else {
+                        const obj = {};
+                        item.querySelectorAll('[data-field]').forEach(field => {
+                            const key = field.dataset.field;
+                            if (field.type === 'checkbox') {
+                                obj[key] = field.checked;
+                            } else {
+                                obj[key] = field.value;
+                            }
+                        });
+                        items.push(obj);
+                    }
+                });
+                hiddenInput.value = JSON.stringify(items);
+            };
+            
+            // 添加项目
+            if (addBtn) {
+                addBtn.addEventListener('click', function() {
+                    const maxItems = parseInt(wrapper.dataset.maxItems) || Infinity;
+                    const currentCount = itemsContainer?.querySelectorAll('.array-item').length || 0;
+                    
+                    if (currentCount >= maxItems) {
+                        showToast('已达到最大项目数', 'warning');
+                        return;
+                    }
+                    
+                    // 移除空状态
+                    itemsContainer?.querySelector('.array-empty-state')?.remove();
+                    
+                    // 添加新项
+                    if (template) {
+                        const html = template.innerHTML.replace(/__INDEX__/g, Date.now().toString());
+                        itemsContainer?.insertAdjacentHTML('beforeend', html);
+                    } else {
+                        const index = currentCount;
+                        const itemHtml = `
+                            <div class="array-item" data-index="${index}">
+                                <div class="array-item-handle"><i class="ri-draggable"></i></div>
+                                <div class="array-item-content">
+                                    <input type="text" class="form-control array-item-input" value="">
+                                </div>
+                                <div class="array-item-actions">
+                                    <button type="button" class="btn btn-sm btn-outline-danger btn-remove-array-item">
+                                        <i class="ri-delete-bin-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        itemsContainer?.insertAdjacentHTML('beforeend', itemHtml);
+                    }
+                    
+                    // 绑定新项的事件
+                    const newItem = itemsContainer?.querySelector('.array-item:last-child');
+                    if (newItem) {
+                        bindArrayItemEvents(newItem, updateHiddenValue);
+                    }
+                    
+                    updateHiddenValue();
+                });
+            }
+            
+            // 绑定现有项的事件
+            itemsContainer?.querySelectorAll('.array-item').forEach(item => {
+                bindArrayItemEvents(item, updateHiddenValue);
+            });
+        });
+        
+        // 日期时间快捷按钮
+        container.querySelectorAll('.datetime-shortcuts button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const action = this.dataset.action;
+                const targetId = this.dataset.target;
+                const input = document.getElementById(targetId);
+                if (!input) return;
+                
+                const now = new Date();
+                let newDate;
+                
+                switch (action) {
+                    case 'today':
+                        newDate = now;
+                        break;
+                    case 'tomorrow':
+                        newDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                        break;
+                    case 'next_week':
+                        newDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                        break;
+                }
+                
+                if (newDate) {
+                    if (input.type === 'date') {
+                        input.value = newDate.toISOString().split('T')[0];
+                    } else if (input.type === 'datetime-local') {
+                        input.value = newDate.toISOString().slice(0, 16);
+                    }
+                }
+            });
+        });
+        
+        // 清除日期时间按钮
+        container.querySelectorAll('.btn-clear-datetime').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const targetId = this.dataset.target;
+                const input = document.getElementById(targetId);
+                if (input) input.value = '';
+            });
+        });
+        
+        // URL 测试按钮
+        container.querySelectorAll('.btn-test-url').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const targetId = this.dataset.target;
+                const input = document.getElementById(targetId);
+                if (input?.value) {
+                    window.open(input.value, '_blank');
+                }
+            });
+        });
+        
+        // URL 快捷链接
+        container.querySelectorAll('.url-suggestion-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const targetId = this.dataset.target;
+                const url = this.dataset.url;
+                const input = document.getElementById(targetId);
+                if (input) input.value = url;
+            });
+        });
+        
+        // 多行文本自动调整高度
+        container.querySelectorAll('textarea.auto-resize').forEach(textarea => {
+            const adjustHeight = () => {
+                textarea.style.height = 'auto';
+                textarea.style.height = textarea.scrollHeight + 'px';
+            };
+            textarea.addEventListener('input', adjustHeight);
+            adjustHeight();
+        });
+        
+        // 文本域字符计数
+        container.querySelectorAll('.textarea-counter').forEach(counter => {
+            const wrapper = counter.closest('.textarea-wrapper');
+            const textarea = wrapper?.querySelector('textarea');
+            const currentCount = counter.querySelector('.current-count');
+            
+            if (textarea && currentCount) {
+                textarea.addEventListener('input', function() {
+                    currentCount.textContent = this.value.length;
                 });
             }
         });
@@ -1113,6 +1552,72 @@
                 }
             });
         });
+    }
+    
+    /**
+     * 绑定数组项事件
+     */
+    function bindArrayItemEvents(item, updateCallback) {
+        // 删除按钮
+        const removeBtn = item.querySelector('.btn-remove-array-item');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                const wrapper = item.closest('.array-editor-wrapper');
+                const minItems = parseInt(wrapper?.dataset.minItems) || 0;
+                const itemsContainer = wrapper?.querySelector('.array-items-container');
+                const currentCount = itemsContainer?.querySelectorAll('.array-item').length || 0;
+                
+                if (currentCount <= minItems) {
+                    showToast(`至少需要 ${minItems} 个项目`, 'warning');
+                    return;
+                }
+                
+                item.remove();
+                
+                // 如果没有项目了，显示空状态
+                if (currentCount - 1 === 0 && itemsContainer) {
+                    itemsContainer.innerHTML = '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
+                }
+                
+                updateCallback?.();
+            });
+        }
+        
+        // 输入变化
+        item.querySelectorAll('input, select, textarea').forEach(input => {
+            input.addEventListener('input', updateCallback);
+            input.addEventListener('change', updateCallback);
+        });
+        
+        // 拖拽排序（简单实现）
+        const handle = item.querySelector('.array-item-handle');
+        if (handle) {
+            handle.style.cursor = 'grab';
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                const itemsContainer = item.closest('.array-items-container');
+                if (!itemsContainer) return;
+                
+                const items = Array.from(itemsContainer.querySelectorAll('.array-item'));
+                const startIndex = items.indexOf(item);
+                let currentIndex = startIndex;
+                
+                const onMouseMove = (e) => {
+                    // 简单的拖拽指示
+                    item.style.opacity = '0.5';
+                };
+                
+                const onMouseUp = () => {
+                    item.style.opacity = '';
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    updateCallback?.();
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
     }
     
     /**
@@ -1259,6 +1764,9 @@
         // 高亮右侧部件列表中可放入该插槽的部件并排序
         highlightAcceptableWidgets(accept);
         
+        // 滚动到高亮的部件
+        scrollToHighlightedWidgets();
+        
         showToast(`插槽 "${slot}" 可接受: ${accept.join(', ')}`, 'info');
     }
 
@@ -1404,6 +1912,42 @@
                 group.classList.remove('collapsed');
             }
         });
+    }
+
+    /**
+     * 滚动部件面板到高亮的部件位置
+     * 用于点击插槽后自动定位到匹配的部件
+     */
+    function scrollToHighlightedWidgets() {
+        setTimeout(() => {
+            const widgetPanelContent = document.querySelector('#widgetPanel .panel-content');
+            if (!widgetPanelContent) return;
+            
+            // 找到第一个高亮的部件
+            const firstHighlighted = widgetPanelContent.querySelector('.widget-item.highlighted');
+            
+            if (firstHighlighted) {
+                // 获取部件所在的组
+                const widgetGroup = firstHighlighted.closest('.widget-group');
+                
+                if (widgetGroup) {
+                    // 计算滚动位置（组的顶部位置 - 一些间距）
+                    const groupTop = widgetGroup.offsetTop;
+                    const scrollOffset = Math.max(0, groupTop - 20);
+                    
+                    widgetPanelContent.scrollTo({ 
+                        top: scrollOffset, 
+                        behavior: 'smooth' 
+                    });
+                    
+                    console.log('[scrollToHighlightedWidgets] Scrolled to highlighted widget in group:', widgetGroup.dataset.type);
+                }
+            } else {
+                // 如果没有找到高亮的部件，滚动到顶部
+                widgetPanelContent.scrollTo({ top: 0, behavior: 'smooth' });
+                console.log('[scrollToHighlightedWidgets] No highlighted widget found, scrolled to top');
+            }
+        }, 150); // 延迟150ms等待高亮和排序完成
     }
 
     /**
@@ -2144,12 +2688,12 @@
             position = [];
         }
 
-        let pageTypes = ['*'];
+        let pageLayouts = ['*'];
         try {
-            pageTypes = JSON.parse(this.dataset.widgetPageTypes || '["*"]');
+            pageLayouts = JSON.parse(this.dataset.widgetPageLayouts || '["*"]');
         } catch (err) {
-            console.error('Invalid page_types data:', this.dataset.widgetPageTypes);
-            pageTypes = ['*'];
+            console.error('Invalid page_layouts data:', this.dataset.widgetPageLayouts);
+            pageLayouts = ['*'];
         }
 
         const widgetData = {
@@ -2162,14 +2706,14 @@
             // 插槽相关属性
             slot: this.dataset.widgetSlot || null,
             exclusive: this.dataset.widgetExclusive === '1' || this.dataset.widgetExclusive === 'true',
-            // 页面类型和容器属性
-            pageTypes: pageTypes,
+            // 布局和容器属性
+            pageLayouts: pageLayouts,
             isContainer: this.dataset.widgetIsContainer === '1',
         };
 
-        // 检查部件是否支持当前页面类型
-        if (!isWidgetAllowedForPageType(pageTypes, state.pageType)) {
-            showToast(`部件 "${widgetData.name}" 不支持当前页面类型 "${state.pageType}"`, 'warning');
+        // 检查部件是否支持当前布局
+        if (!isWidgetAllowedForLayout(pageLayouts, state.layoutType)) {
+            showToast(`部件 "${widgetData.name}" 不支持当前布局 "${state.layoutType}"`, 'warning');
             e.preventDefault();
             return;
         }
@@ -2177,7 +2721,7 @@
         // 存储到 state 中，以便在 dragover 和 drop 时使用
         state.draggingWidget = widgetData;
 
-        console.log('Drag start - widget:', widgetData.name, 'position:', widgetData.position, 'slot:', widgetData.slot, 'exclusive:', widgetData.exclusive, 'pageTypes:', widgetData.pageTypes);
+        console.log('Drag start - widget:', widgetData.name, 'position:', widgetData.position, 'slot:', widgetData.slot, 'exclusive:', widgetData.exclusive, 'pageLayouts:', widgetData.pageLayouts);
 
         e.dataTransfer.setData('application/json', JSON.stringify(widgetData));
         e.dataTransfer.effectAllowed = 'copy';
@@ -2187,19 +2731,19 @@
     }
 
     /**
-     * 检查部件是否支持指定的页面类型
+     * 检查部件是否支持指定的布局
      */
-    function isWidgetAllowedForPageType(widgetPageTypes, currentPageType) {
-        // * 表示所有页面类型都可用
-        if (widgetPageTypes.includes('*')) {
+    function isWidgetAllowedForLayout(widgetPageLayouts, currentLayout) {
+        // * 表示所有布局都可用
+        if (widgetPageLayouts.includes('*')) {
             return true;
         }
-        // 检查是否包含当前页面类型
-        if (widgetPageTypes.includes(currentPageType)) {
+        // 检查是否包含当前布局
+        if (widgetPageLayouts.includes(currentLayout)) {
             return true;
         }
-        // default 类型在所有页面都可用
-        if (widgetPageTypes.includes('default')) {
+        // default 布局在所有页面都可用
+        if (widgetPageLayouts.includes('default')) {
             return true;
         }
         return false;
@@ -2718,6 +3262,16 @@
         const widgetType = widgetData ? widgetData.type : null;
         console.log('highlightAllowedAreas - positions:', positions, 'type:', widgetType, 'widget:', widgetData);
         
+        // 区域互斥规则：每个区域不接受哪些类型的部件
+        // content 区域不接受 header 和 footer 类型
+        // header 区域不接受 footer 类型
+        // footer 区域不接受 header 类型
+        const areaExclusiveTypes = {
+            'content': ['header', 'footer'],      // content 区域排除 header、footer 类型
+            'header': ['footer'],                  // header 区域排除 footer 类型
+            'footer': ['header'],                  // footer 区域排除 header 类型
+        };
+        
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         const typeToAreasMap = {
             'header': ['header'],
@@ -2766,9 +3320,14 @@
                 console.log('highlightAllowedAreas - no position and no type, defaulting to content only');
             }
         } else if (positions.includes('*') || positions.includes('all')) {
-            // 通配符，允许所有
-            allowedAreas = [...allAreas];
-            console.log('highlightAllowedAreas - wildcard found, allowing all');
+            // 通配符，根据类型排除不允许的区域
+            allowedAreas = allAreas.filter(area => {
+                if (widgetType && areaExclusiveTypes[area] && areaExclusiveTypes[area].includes(widgetType)) {
+                    return false; // 该区域拒绝该类型
+                }
+                return true;
+            });
+            console.log('highlightAllowedAreas - wildcard found, filtered by type exclusion:', allowedAreas);
         } else {
             // 收集所有允许的区域
             positions.forEach(pos => {
@@ -2786,8 +3345,19 @@
             // 去重
             allowedAreas = [...new Set(allowedAreas)];
         }
+        
+        // 应用区域互斥规则：过滤掉类型被拒绝的区域
+        if (widgetType) {
+            allowedAreas = allowedAreas.filter(area => {
+                if (areaExclusiveTypes[area] && areaExclusiveTypes[area].includes(widgetType)) {
+                    console.log('highlightAllowedAreas - excluding area due to type:', area, 'rejects', widgetType);
+                    return false;
+                }
+                return true;
+            });
+        }
 
-        console.log('highlightAllowedAreas - allowedAreas:', allowedAreas);
+        console.log('highlightAllowedAreas - final allowedAreas:', allowedAreas);
 
         // 高亮允许的区域，标记不允许的区域
         document.querySelectorAll('.preview-area').forEach(area => {
@@ -2850,6 +3420,24 @@
     function isAllowedArea(positions, areaCode, widgetType = null) {
         console.log('isAllowedArea - positions:', positions, 'areaCode:', areaCode, 'type:', widgetType);
         
+        // 区域互斥规则：每个区域不接受哪些类型的部件
+        // content 区域不接受 header 和 footer 类型
+        // header 区域不接受 footer 类型
+        // footer 区域不接受 header 类型
+        const areaExclusiveTypes = {
+            'content': ['header', 'footer'],      // content 区域排除 header、footer 类型
+            'header': ['footer'],                  // header 区域排除 footer 类型
+            'footer': ['header'],                  // footer 区域排除 header 类型
+        };
+        
+        // 检查部件类型是否被当前区域拒绝
+        if (widgetType && areaExclusiveTypes[areaCode]) {
+            if (areaExclusiveTypes[areaCode].includes(widgetType)) {
+                console.log('isAllowedArea - type rejected by area:', widgetType, 'not allowed in', areaCode);
+                return false;
+            }
+        }
+        
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         const typeToAreasMap = {
             'header': ['header'],
@@ -2886,8 +3474,13 @@
             return areaCode === 'content';
         }
 
-        // 如果位置包含 '*' 或 'all'，允许所有区域
+        // 如果位置包含 '*' 或 'all'，检查类型是否被拒绝
         if (positions.includes('*') || positions.includes('all')) {
+            // 即使是通配符，也要检查区域互斥规则
+            if (widgetType && areaExclusiveTypes[areaCode] && areaExclusiveTypes[areaCode].includes(widgetType)) {
+                console.log('isAllowedArea - wildcard but type rejected:', widgetType, 'not allowed in', areaCode);
+                return false;
+            }
             console.log('isAllowedArea - wildcard found, returning true');
             return true;
         }
@@ -3042,6 +3635,16 @@
     }
 
     /**
+     * SVG 图标定义（内联 SVG 替代字体图标，确保 iframe 内可见）
+     */
+    const WIDGET_ACTION_ICONS = {
+        replace: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z"></path></svg>`,
+        delete: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z"></path></svg>`,
+        moveUp: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 10.8284L16.9497 15.778L15.5355 17.1924L12 13.6569L8.46447 17.1924L7.05025 15.778L12 10.8284ZM12 6.00005L17.6569 11.6569L16.2426 13.0711L12 8.82848L7.75736 13.0711L6.34315 11.6569L12 6.00005Z"></path></svg>`,
+        moveDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.1716L16.9497 8.22185L15.5355 6.80764L12 10.3431L8.46447 6.80764L7.05025 8.22185L12 13.1716ZM12 18L17.6569 12.3432L16.2426 10.929L12 15.1716L7.75736 10.929L6.34315 12.3432L12 18Z"></path></svg>`
+    };
+
+    /**
      * 生成部件 hover 操作按钮的 HTML
      * @param {string|number} layoutId - 布局记录 ID
      * @param {string} slotId - 插槽 ID
@@ -3055,21 +3658,21 @@
         
         // 替换按钮 - 所有部件都有
         html += `<button class="btn-widget-replace" title="替换部件" data-action="replace" data-layout-id="${layoutId}" data-slot-id="${slotId}">
-                    <i class="ri-refresh-line"></i>
+                    ${WIDGET_ACTION_ICONS.replace}
                  </button>`;
         
         // 删除按钮 - 所有部件都有
         html += `<button class="btn-widget-delete" title="删除部件" data-action="delete" data-layout-id="${layoutId}" data-slot-id="${slotId}">
-                    <i class="ri-delete-bin-line"></i>
+                    ${WIDGET_ACTION_ICONS.delete}
                  </button>`;
         
         // 非独占部件显示上下移动按钮
         if (!isExclusive) {
             html += `<button class="btn-widget-move-up" title="上移" data-action="move-up" data-layout-id="${layoutId}" ${isFirst ? 'disabled' : ''}>
-                        <i class="ri-arrow-up-line"></i>
+                        ${WIDGET_ACTION_ICONS.moveUp}
                      </button>`;
             html += `<button class="btn-widget-move-down" title="下移" data-action="move-down" data-layout-id="${layoutId}" ${isLast ? 'disabled' : ''}>
-                        <i class="ri-arrow-down-line"></i>
+                        ${WIDGET_ACTION_ICONS.moveDown}
                      </button>`;
         }
         
@@ -3081,10 +3684,6 @@
      * 注入样式到 iframe
      */
     function injectStylesIntoIframe() {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2824',message:'injectStylesIntoIframe called',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
         
@@ -3092,9 +3691,6 @@
         
         // 检查是否已注入
         if (iframeDoc.getElementById('widget-hover-styles')) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2831',message:'Styles already injected',data:{alreadyExists:true},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
             return;
         }
         
@@ -3105,6 +3701,7 @@
             .widget-wrapper {
                 position: relative;
                 transition: box-shadow 0.2s, outline 0.2s;
+                overflow: visible !important;
             }
             .widget-wrapper:hover {
                 outline: 2px solid #4a90d9;
@@ -3116,18 +3713,19 @@
                 outline-offset: 2px;
                 box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.2);
             }
-            /* Hover 操作按钮容器 */
+            /* Hover 操作按钮容器 - 放置在部件内部右上角 */
             .widget-hover-actions {
                 position: absolute;
-                top: -32px;
-                right: 0;
+                top: 4px;
+                right: 4px;
                 display: none;
-                gap: 4px;
+                gap: 3px;
                 z-index: 1000;
-                background: rgba(30, 30, 30, 0.95);
-                padding: 4px 6px;
+                background: rgba(30, 30, 30, 0.92);
+                padding: 4px 5px;
                 border-radius: 6px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(4px);
             }
             .widget-wrapper:hover .widget-hover-actions {
                 display: flex;
@@ -3138,31 +3736,36 @@
                 height: 26px;
                 border: none;
                 border-radius: 4px;
-                background: transparent;
+                background: rgba(255, 255, 255, 0.08);
                 color: #fff;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 transition: background 0.15s, transform 0.1s;
-                font-size: 14px;
+                padding: 0;
+            }
+            .widget-hover-actions button svg {
+                width: 16px;
+                height: 16px;
+                fill: currentColor;
             }
             .widget-hover-actions button:hover {
-                background: rgba(255, 255, 255, 0.15);
-                transform: scale(1.1);
+                background: rgba(255, 255, 255, 0.2);
+                transform: scale(1.08);
             }
             .widget-hover-actions button:active {
                 transform: scale(0.95);
             }
             .widget-hover-actions .btn-widget-delete:hover {
-                background: rgba(220, 53, 69, 0.8);
+                background: rgba(220, 53, 69, 0.85);
             }
             .widget-hover-actions .btn-widget-replace:hover {
-                background: rgba(74, 144, 217, 0.8);
+                background: rgba(74, 144, 217, 0.85);
             }
             .widget-hover-actions .btn-widget-move-up:hover,
             .widget-hover-actions .btn-widget-move-down:hover {
-                background: rgba(40, 167, 69, 0.8);
+                background: rgba(40, 167, 69, 0.85);
             }
             .widget-hover-actions button:disabled {
                 opacity: 0.3;
@@ -3170,7 +3773,7 @@
                 transform: none !important;
             }
             .widget-hover-actions button:disabled:hover {
-                background: transparent;
+                background: rgba(255, 255, 255, 0.08);
             }
             /* 部件拖拽排序样式 */
             .widget-wrapper.dragging {
@@ -3215,10 +3818,6 @@
         `;
         iframeDoc.head.appendChild(style);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2948',message:'Styles injected successfully',data:{styleLength:style.textContent.length,styleIdExists:!!iframeDoc.getElementById('widget-hover-styles')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        
         // 同时注入 Remix Icon 如果不存在
         if (!iframeDoc.querySelector('link[href*="remixicon"]')) {
             const link = iframeDoc.createElement('link');
@@ -3234,15 +3833,8 @@
      * 初始化 iframe 内的部件 hover 操作按钮
      */
     function initWidgetHoverActions() {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2964',message:'initWidgetHoverActions called',data:{hasPreviewFrame:!!elements.previewFrame,hasContentDocument:!!(elements.previewFrame?.contentDocument)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2967',message:'initWidgetHoverActions early return',data:{hasIframe:!!iframe,hasContentDocument:!!(iframe?.contentDocument)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
             return;
         }
         
@@ -3254,20 +3846,12 @@
         // 查找所有已有的部件包装器并添加操作按钮
         const widgetWrappers = iframeDoc.querySelectorAll('[data-layout-id]');
         
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2974',message:'Widget wrappers found',data:{count:widgetWrappers.length,firstFewIds:Array.from(widgetWrappers).slice(0,3).map(w=>w.getAttribute('data-layout-id'))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-        
         widgetWrappers.forEach((wrapper, index) => {
             const layoutId = wrapper.getAttribute('data-layout-id');
             const slotId = wrapper.getAttribute('data-slot-id') || 
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
                            wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
             const isExclusive = isExclusiveSlot(slotId, '');
-            
-            // #region agent log
-            if(index < 2) fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:2989',message:'Processing widget',data:{index,layoutId,slotId,isExclusive,tagName:wrapper.tagName,hasExistingActions:!!wrapper.querySelector('.widget-hover-actions')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
             
             // 检查是否已有操作按钮
             if (wrapper.querySelector('.widget-hover-actions')) return;
@@ -3288,37 +3872,24 @@
             // 添加操作按钮
             const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst, isLast);
             wrapper.insertAdjacentHTML('afterbegin', actionsHtml);
-            
-            // #region agent log
-            if(index < 2) {
-                const actionsEl = wrapper.querySelector('.widget-hover-actions');
-                const computedStyle = actionsEl ? window.getComputedStyle(actionsEl) : null;
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:3001',message:'Actions added to widget',data:{index,layoutId,hasActionsNow:!!actionsEl,actionsHtmlLength:actionsHtml.length,wrapperPosition:getComputedStyle(wrapper).position,wrapperClasses:Array.from(wrapper.classList),actionsDisplay:computedStyle?.display,actionsPosition:computedStyle?.position,actionsTop:computedStyle?.top,actionsRight:computedStyle?.right,actionsZIndex:computedStyle?.zIndex},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-            }
-            // #endregion
         });
         
         // 绑定按钮事件
         bindWidgetActionEvents(iframeDoc);
         
+        // 绑定 slot 点击事件（选中 slot 后过滤部件并滚动）
+        bindSlotClickEvents(iframeDoc);
+        
         // 初始化拖拽排序
         initWidgetSortable();
         
         console.log('[ThemeEditor] Widget hover actions initialized,', widgetWrappers.length, 'widgets processed');
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:3010',message:'initWidgetHoverActions completed',data:{totalWidgets:widgetWrappers.length,eventsBound:true,sortableInitialized:true},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
     }
 
     /**
      * 绑定部件操作按钮事件
      */
     function bindWidgetActionEvents(doc) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:3016',message:'bindWidgetActionEvents called',data:{hasDoc:!!doc,hasBody:!!doc?.body},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
-        
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             const button = e.target.closest('.widget-hover-actions button');
@@ -3333,9 +3904,6 @@
             if (!button) return;
             
             console.log('[ThemeEditor] Widget action button clicked:', button.dataset.action);
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:3022',message:'Widget action button clicked',data:{action:button.dataset.action,layoutId:button.dataset.layoutId,slotId:button.dataset.slotId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
             
             const action = button.dataset.action;
             const layoutId = button.dataset.layoutId;
@@ -3356,6 +3924,64 @@
                     break;
             }
         }, true); // 使用捕获阶段
+    }
+
+    /**
+     * 绑定 iframe 内 slot 的点击事件
+     * 点击 slot 时：选中该 slot，过滤右侧部件列表，并滚动到匹配的部件
+     */
+    function bindSlotClickEvents(doc) {
+        if (!doc || !doc.body) return;
+        
+        // 使用事件委托，监听所有 slot 的点击
+        doc.body.addEventListener('click', function(e) {
+            // 如果点击的是部件或操作按钮，跳过
+            if (e.target.closest('.widget-hover-actions') || 
+                e.target.closest('[data-layout-id]') ||
+                e.target.closest('.widget-wrapper')) {
+                return;
+            }
+            
+            // 查找点击的 slot 元素（支持多种标记方式）
+            const slotEl = e.target.closest('[data-slot]') || 
+                          e.target.closest('[data-wslot]') ||
+                          e.target.closest('.content-slot');
+            
+            if (!slotEl) return;
+            
+            // 获取 slot 信息
+            const slotId = slotEl.getAttribute('data-slot') || 
+                          slotEl.getAttribute('data-wslot') || '';
+            const slotName = slotEl.getAttribute('data-name') ||
+                            slotEl.getAttribute('data-wslot-name') ||
+                            slotEl.querySelector('.slot-placeholder span')?.textContent ||
+                            slotId;
+            const acceptAttr = slotEl.getAttribute('data-accept') ||
+                              slotEl.getAttribute('data-wslot-accept') || '*';
+            
+            if (!slotId) return;
+            
+            console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr);
+            
+            // 构造 slot 信息
+            const slotInfo = {
+                id: slotId,
+                name: slotName,
+                accept: acceptAttr
+            };
+            
+            // 调用 slot 选中处理函数（这会过滤部件并滚动）
+            handleSlotSelected(slotInfo);
+            
+            // 高亮被点击的 slot
+            doc.querySelectorAll('[data-slot], [data-wslot], .content-slot').forEach(el => {
+                el.classList.remove('slot-selected');
+            });
+            slotEl.classList.add('slot-selected');
+            
+        }, false);
+        
+        console.log('[ThemeEditor] Slot click events bound in iframe');
     }
 
     /**
@@ -4804,6 +5430,16 @@
             return;
         }
 
+        // 区域互斥规则：每个区域不接受哪些类型的部件
+        // content 区域不接受 header 和 footer 类型
+        // header 区域不接受 footer 和 content 特定类型
+        // footer 区域不接受 header 和 content 特定类型
+        const areaExclusiveTypes = {
+            'content': ['header', 'footer'],      // content 区域排除 header、footer 类型
+            'header': ['footer'],                  // header 区域排除 footer 类型
+            'footer': ['header'],                  // footer 区域排除 header 类型
+        };
+
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         const typeToAreasMap = {
             'header': ['header'],
@@ -4837,8 +5473,15 @@
             'footer': ['footer'],
         };
         
-        // 合并传入的拒绝类型
+        // 合并传入的拒绝类型和区域互斥规则
         const finalRejectTypes = [...rejectTypes];
+        if (areaExclusiveTypes[areaCode]) {
+            areaExclusiveTypes[areaCode].forEach(type => {
+                if (!finalRejectTypes.includes(type)) {
+                    finalRejectTypes.push(type);
+                }
+            });
+        }
         
         let hasMatchInGroup = new Map();
 
@@ -4882,12 +5525,20 @@
                 isExactMatch = true;
             }
             
-            const canPlace = allowedAreas.includes(areaCode);
+            // 检查部件类型是否被当前区域拒绝
+            const isTypeRejected = finalRejectTypes.includes(widgetType);
+            
+            // 只有当区域允许且类型未被拒绝时才能放置
+            const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
 
             // 清除所有匹配相关的类
-            item.classList.remove('area-matched', 'area-universal', 'area-not-matched');
+            item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
-            if (canPlace) {
+            if (isTypeRejected) {
+                // 类型被拒绝，隐藏部件
+                item.style.display = 'none';
+                item.classList.add('area-rejected');
+            } else if (canPlace) {
                 item.style.display = '';
                 if (isExactMatch && !isUniversal) {
                     // 精确匹配：推荐，带呼吸高亮动画
@@ -5311,9 +5962,6 @@
         // 显示加载状态
         if (elements.previewLoading) {
             elements.previewLoading.classList.remove('hidden');
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:4690',message:'Loading shown in fullReloadPreview',data:{hasHiddenClass:elements.previewLoading.classList.contains('hidden')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H'})}).catch(()=>{});
-            // #endregion
         }
 
         // 刷新 iframe（添加时间戳避免缓存）
@@ -5379,14 +6027,14 @@
                 }
                 
                 // 内部链接 - 转换为预览模式 URL
-                // 根据目标路径判断页面类型
+                // 根据目标路径判断页面类型（pageType = layoutType = 布局目录名）
                 const pathname = targetUrl.pathname;
-                let pageType = 'home';
+                let pageType = 'homepage';
                 let layoutType = 'homepage';
                 
-                // 路径到页面类型的映射
+                // 路径到页面类型的映射（使用布局目录名）
                 if (pathname === '/' || pathname === '' || pathname.endsWith('/index')) {
-                    pageType = 'home';
+                    pageType = 'homepage';
                     layoutType = 'homepage';
                 } else if (pathname.includes('/category/') || pathname.includes('/catalog/')) {
                     pageType = 'category';
@@ -5408,8 +6056,8 @@
                     layoutType = 'search';
                 } else {
                     // CMS 或其他页面
-                    pageType = 'cms';
-                    layoutType = 'cms';
+                    pageType = 'cms_page';
+                    layoutType = 'cms_page';
                 }
                 
                 // 构建预览 URL
@@ -5586,9 +6234,5 @@
     window.ThemeEditor.filterWidgetsByArea = filterWidgetsByArea;
 
     // 初始化
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:4995',message:'DOMContentLoaded listener registered',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
-    
     document.addEventListener('DOMContentLoaded', init);
 })();
