@@ -12,7 +12,7 @@ declare(strict_types=1);
  * - 自动同步 URL 到数据库，由平台适配器生成实际文件
  */
 
-namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Seo\SitemapUrlProvider;
+namespace GuoLaiRen\PageBuilder\extends\module\Weline_Seo\SitemapUrlProvider;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Manager\ObjectManager;
