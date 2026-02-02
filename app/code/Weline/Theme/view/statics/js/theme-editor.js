@@ -557,6 +557,10 @@
             const widgetType = dataSource.dataset?.widgetType || dataSource.getAttribute?.('data-widget-type');
             const widgetName = dataSource.dataset?.widgetName || dataSource.getAttribute?.('data-widget-name') || widgetCode || '未知部件';
             
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:renderSlotWidgetsConfig',message:'Widget data extraction',data:{layoutId,widgetCode,widgetModule,widgetType,widgetName,datasetWidgetName:dataSource.dataset?.widgetName,attrWidgetName:dataSource.getAttribute?.('data-widget-name'),dataSourceTagName:dataSource.tagName,dataSourceClassName:dataSource.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,E'})}).catch(()=>{});
+            // #endregion
+            
             // 只添加有 layoutId 的部件
             if (layoutId) {
                 widgetsData.push({
@@ -691,8 +695,17 @@
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
                 
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadWidgetConfigForAccordion',message:'Before generateWidgetConfigForm call',data:{layoutId,paramsKeys:Object.keys(params),widgetConfigKeys:Object.keys(widgetConfig)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                
                 // 生成配置表单
-                const formHtml = generateWidgetConfigForm(layoutId, params, widgetConfig);
+                const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
+                
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadWidgetConfigForAccordion',message:'After generateWidgetConfigForm call',data:{layoutId,formHtmlType:typeof formHtml,formHtmlLength:formHtml?.length,isPromise:formHtml instanceof Promise,formHtmlPreview:String(formHtml).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                
                 configBody.innerHTML = formHtml;
                 
                 // 绑定表单事件
@@ -715,7 +728,11 @@
      * 生成部件配置表单 HTML
      * 优先使用后端 API 渲染，失败时回退到前端渲染
      */
-    async function generateWidgetConfigForm(layoutId, params, config) {
+    async function generateWidgetConfigForm(layoutId, params, formConfig) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:entry',message:'Function entry',data:{layoutId,paramsKeys:Object.keys(params||{}),formConfigKeys:Object.keys(formConfig||{}),apiParamRenderForm:config.apiParamRenderForm},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+        
         if (!params || Object.keys(params).length === 0) {
             return `<div class="config-empty-state">
                 <i class="ri-settings-3-line"></i>
@@ -733,22 +750,32 @@
                 body: new URLSearchParams({
                     layoutId: layoutId,
                     params: JSON.stringify(params),
-                    config: JSON.stringify(config || {}),
+                    config: JSON.stringify(formConfig || {}),
                 }),
             });
             
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:apiResponse',message:'Backend API response',data:{responseOk:response.ok,responseStatus:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
+            
             if (response.ok) {
                 const html = await response.text();
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:htmlResult',message:'Backend HTML result',data:{htmlLength:html?.length,hasError:html?.includes('alert-danger'),htmlPreview:html?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 if (html && !html.includes('alert-danger')) {
                     return html;
                 }
             }
         } catch (err) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:generateWidgetConfigForm:error',message:'Backend API error',data:{error:err?.message || String(err)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
             console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
         
         // 回退到前端渲染
-        return generateWidgetConfigFormFallback(layoutId, params, config);
+        return generateWidgetConfigFormFallback(layoutId, params, formConfig);
     }
     
     /**
