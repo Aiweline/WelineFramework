@@ -94,19 +94,12 @@ if (!function_exists('getWidgetIcon')) {
                     <?php endforeach; ?>
                 </select>
                 
-                <select id="pageTypeSelect" class="form-select">
+                <select id="pageTypeSelect" class="form-select" title="<?= __('选择页面布局类型') ?>">
                     <?php foreach ($page_types as $code => $label): ?>
                         <option value="<?= $code ?>" <?= $code === $page_type ? 'selected' : '' ?>>
                             <?= htmlspecialchars((string)($label ?? '')) ?>
                         </option>
                     <?php endforeach; ?>
-                </select>
-                
-                <select id="layoutTypeSelect" class="form-select">
-                    <option value="homepage" selected><?= __('首页布局') ?></option>
-                    <option value="category"><?= __('分类页布局') ?></option>
-                    <option value="product"><?= __('产品页布局') ?></option>
-                    <option value="cms"><?= __('CMS页布局') ?></option>
                 </select>
             </div>
         </div>

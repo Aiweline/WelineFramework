@@ -1691,28 +1691,62 @@ class Page extends BackendController
             foreach ($styleList as $style) {
                 $styleCode = $style->getData(Style::fields_CODE);
                 $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+                $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $styleCode);
                 
-                // 检查预览图是否真实存在
+                // 检查预览图是否存在
                 $previewUrl = '';
-                $needsPreview = true;
+                $previewFound = false;
                 
+                // 1. 优先检查数据库中记录的路径
                 if ($previewImage) {
-                    // 尝试多种路径格式
-                    $possiblePaths = [
-                        BP . 'pub/static/' . $previewImage,
-                        BP . 'pub/static/' . ltrim($previewImage, '/'),
-                    ];
+                    $dbImagePath = BP . 'pub/static/' . ltrim($previewImage, '/');
+                    if (file_exists($dbImagePath)) {
+                        $previewUrl = '/static/' . ltrim($previewImage, '/');
+                        $previewUrl .= '?t=' . filemtime($dbImagePath);
+                        $previewFound = true;
+                    }
+                }
+                
+                // 2. 检查标准预览图目录（模板管理生成的预览图）
+                if (!$previewFound) {
+                    $previewDir = BP . 'pub/static/pagebuilder/previews/';
+                    $extensions = ['png', 'jpg', 'webp'];
                     
-                    foreach ($possiblePaths as $path) {
-                        if (file_exists($path)) {
-                            $previewUrl = '/static/' . ltrim($previewImage, '/');
-                            // 添加时间戳防止缓存
-                            $previewUrl .= '?t=' . filemtime($path);
-                            $needsPreview = false;
+                    foreach ($extensions as $ext) {
+                        $previewPath = $previewDir . $safeCode . '.' . $ext;
+                        if (file_exists($previewPath)) {
+                            $previewUrl = '/static/pagebuilder/previews/' . $safeCode . '.' . $ext;
+                            $previewUrl .= '?t=' . filemtime($previewPath);
+                            $previewFound = true;
                             break;
                         }
                     }
                 }
+                
+                // 3. 检查模板源目录中的预览图
+                if (!$previewFound) {
+                    $templateBasePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $styleCode . '/';
+                    $templatePreviews = [
+                        $templateBasePath . 'preview.webp',
+                        $templateBasePath . 'preview.png',
+                        $templateBasePath . 'preview.jpg',
+                    ];
+                    
+                    foreach ($templatePreviews as $previewPath) {
+                        if (file_exists($previewPath)) {
+                            // 使用模块静态资源路由访问
+                            $previewUrl = $this->request->getUrlBuilder()->getBackendUrl(
+                                'pagebuilder/backend/template/previewImage',
+                                ['style_code' => $styleCode]
+                            );
+                            $previewFound = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果没有预览图，才需要生成（只生成一次，生成后保存）
+                $needsPreview = !$previewFound;
                 
                 $formattedStyles[] = [
                     'id' => $style->getId(),
@@ -1720,11 +1754,11 @@ class Page extends BackendController
                     'name' => $style->getData(Style::fields_NAME),
                     'description' => $style->getData(Style::fields_DESCRIPTION),
                     'path' => $style->getData(Style::fields_PATH),
-                    'preview_image' => $previewUrl ?: '',
+                    'preview_image' => $previewUrl,
                     'needs_preview' => $needsPreview,
                     'preview_page_url' => $needsPreview ? $this->request->getUrlBuilder()->getBackendUrl(
                         'pagebuilder/backend/preview/stylePreview',
-                        ['style' => $styleCode]
+                        ['style_code' => $styleCode]
                     ) : '',
                     'supported_types' => $style->getSupportedTypes(),
                 ];
@@ -1950,11 +1984,15 @@ class Page extends BackendController
             if ($seoAccountId > 0 && $websiteId > 0) {
                 try {
                     $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                    $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
-                        'website_id' => $websiteId,
-                        'account_id' => $seoAccountId,
-                        'is_auto_submit' => true,
-                    ]);
+                    // dispatch 的第二个参数必须是变量引用，不能直接传递数组字面量
+                    $eventData = [
+                        'data' => [
+                            'website_id' => $websiteId,
+                            'account_id' => $seoAccountId,
+                            'is_auto_submit' => true,
+                        ],
+                    ];
+                    $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', $eventData);
                 } catch (\Exception $e) {
                     // SEO 账户绑定失败不影响建站结果
                     error_log('[GuoLaiRen_PageBuilder] SEO account bind error: ' . $e->getMessage());
