@@ -2406,25 +2406,32 @@ class Page extends BackendController
                 exit;
             }
             
-            // 获取预览图路径
+            // 获取预览图路径（与 getStyles 方法保持一致的查找逻辑）
             $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
-            
-            if (!$previewImage) {
-                header('HTTP/1.1 404 Not Found');
-                echo 'Preview image not found for this style';
-                exit;
-            }
+            $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $styleCode);
             
             // 构建完整的文件路径（支持多个可能的位置）
             $filePath = null;
-            $possiblePaths = [
-                // 新位置：pub/static 目录
-                BP . 'pub/static/' . $previewImage,
-                // 旧位置：模板目录
-                BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/' . $previewImage,
-                // 直接路径（如果存储的是绝对路径的一部分）
-                BP . $previewImage,
-            ];
+            $possiblePaths = [];
+            
+            // 1. 如果数据库有记录，优先使用
+            if ($previewImage) {
+                $possiblePaths[] = BP . 'pub/static/' . ltrim($previewImage, '/');
+                $possiblePaths[] = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/' . $previewImage;
+                $possiblePaths[] = BP . $previewImage;
+            }
+            
+            // 2. 标准预览图目录（模板管理生成的预览图）
+            $previewDir = BP . 'pub/static/pagebuilder/previews/';
+            $possiblePaths[] = $previewDir . $safeCode . '.png';
+            $possiblePaths[] = $previewDir . $safeCode . '.jpg';
+            $possiblePaths[] = $previewDir . $safeCode . '.webp';
+            
+            // 3. 模板源目录中的预览图
+            $templateBasePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $styleCode . '/';
+            $possiblePaths[] = $templateBasePath . 'preview.webp';
+            $possiblePaths[] = $templateBasePath . 'preview.png';
+            $possiblePaths[] = $templateBasePath . 'preview.jpg';
             
             foreach ($possiblePaths as $path) {
                 if (file_exists($path) && is_file($path)) {
@@ -2435,7 +2442,7 @@ class Page extends BackendController
             
             if (!$filePath) {
                 header('HTTP/1.1 404 Not Found');
-                echo 'Preview image file does not exist: ' . $previewImage . '. Tried paths: ' . implode(', ', $possiblePaths);
+                echo 'Preview image file does not exist for style: ' . $styleCode;
                 exit;
             }
             
