@@ -9,7 +9,7 @@
 !media/.gitkeep
 
 # 保留 sitemaps 目录
-!pub/sitemaps/.gitkeep
+!sitemaps/.gitkeep
 
 # 保留cli-server-router.php
-!pub/cli-server-router.php
+!cli-server-router.php
