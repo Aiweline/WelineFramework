@@ -77,9 +77,18 @@ class SitemapRegistryService
 
             foreach ($extendedBy as $sourceModule => $extensions) {
                 foreach ($extensions as $extension) {
+                    // 检查源模块是否启用
+                    $sourceModuleStatus = $extension['source_module_status'] ?? true;
+                    if (!$sourceModuleStatus) {
+                        continue; // 跳过禁用模块的扩展
+                    }
+                    
                     // 从 file_path 判断是否是 SitemapProvider 扩展
                     $filePath = $extension['file_path'] ?? '';
-                    if (strpos($filePath, 'SitemapProvider/') === 0 || strpos($filePath, 'SitemapProvider\\') === 0) {
+                    // 统一路径分隔符（兼容 Windows 和 Linux）
+                    $filePath = str_replace('\\', '/', $filePath);
+                    
+                    if (strpos($filePath, 'SitemapProvider/') === 0) {
                         // 从 file_path 推断类名
                         // 例如: SitemapProvider/PageBuilderSitemapProvider.php
                         $class = $this->inferClassName($sourceModule, $extension);
@@ -95,6 +104,11 @@ class SitemapRegistryService
                                 if (defined('DEV') && DEV) {
                                     error_log('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
                                 }
+                            }
+                        } else {
+                            // 类不存在时记录日志（帮助调试）
+                            if (defined('DEV') && DEV) {
+                                error_log('SitemapRegistryService: 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
                             }
                         }
                     }
@@ -173,11 +187,19 @@ class SitemapRegistryService
 
             foreach ($extendedBy as $sourceModule => $extensions) {
                 foreach ($extensions as $extension) {
+                    // 检查源模块是否启用
+                    $sourceModuleStatus = $extension['source_module_status'] ?? true;
+                    if (!$sourceModuleStatus) {
+                        continue; // 跳过禁用模块的扩展
+                    }
+                    
                     $filePath = $extension['file_path'] ?? '';
+                    // 统一路径分隔符（兼容 Windows 和 Linux）
+                    $filePath = str_replace('\\', '/', $filePath);
                     
                     // 匹配 SitemapUrlProvider/ 或 SitemapProvider/ 路径
-                    $isSitemapUrlProvider = strpos($filePath, 'SitemapUrlProvider/') === 0 || strpos($filePath, 'SitemapUrlProvider\\') === 0;
-                    $isSitemapProvider = strpos($filePath, 'SitemapProvider/') === 0 || strpos($filePath, 'SitemapProvider\\') === 0;
+                    $isSitemapUrlProvider = strpos($filePath, 'SitemapUrlProvider/') === 0;
+                    $isSitemapProvider = strpos($filePath, 'SitemapProvider/') === 0;
                     
                     if ($isSitemapUrlProvider || $isSitemapProvider) {
                         $class = $this->inferClassName($sourceModule, $extension);
@@ -193,6 +215,11 @@ class SitemapRegistryService
                                 if (defined('DEV') && DEV) {
                                     error_log('SitemapRegistryService: 无法实例化 ' . $class . ': ' . $e->getMessage());
                                 }
+                            }
+                        } else {
+                            // 类不存在时记录日志（帮助调试）
+                            if (defined('DEV') && DEV) {
+                                error_log('SitemapRegistryService (URL): 类不存在 ' . ($class ?? 'null') . ', source_module=' . $sourceModule . ', file_path=' . $filePath);
                             }
                         }
                     }
@@ -266,6 +293,9 @@ class SitemapRegistryService
             return null;
         }
         
+        // 统一路径分隔符（兼容 Windows 和 Linux）
+        $filePath = str_replace('\\', '/', $filePath);
+        
         // 移除 .php 扩展名
         $classPath = str_replace('.php', '', $filePath);
         
@@ -277,9 +307,9 @@ class SitemapRegistryService
         // GuoLaiRen_PageBuilder -> GuoLaiRen\PageBuilder
         $namespace = str_replace('_', '\\', $sourceModule);
         
-        // 完整的类名
-        // GuoLaiRen\PageBuilder\Extends\Module\Weline_Seo\SitemapProvider\PageBuilderSitemapProvider
-        $fullClass = $namespace . '\\Extends\\Module\\Weline_Seo\\' . $classPath;
+        // 完整的类名 - 使用小写 extends/module 目录名（符合框架规约）
+        // GuoLaiRen\PageBuilder\extends\module\Weline_Seo\SitemapProvider\PageBuilderSitemapProvider
+        $fullClass = $namespace . '\\extends\\module\\Weline_Seo\\' . $classPath;
         
         return $fullClass;
     }
