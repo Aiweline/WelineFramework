@@ -168,28 +168,7 @@ $children = $children ?? [];
     width: 100%;
 }
 
-/* 插槽占位符 */
-.slot-placeholder {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 15px;
-    border: 2px dashed #ddd;
-    border-radius: 6px;
-    color: #999;
-    font-size: 13px;
-    background: rgba(0,0,0,0.02);
-}
-
-.slot-placeholder i {
-    font-size: 18px;
-}
-
-/* 编辑模式下高亮插槽 */
-.header-slot[data-slot]:hover {
-    outline: 2px dashed #007bff;
-    outline-offset: 2px;
-}
+/* 编辑模式样式由 editor-mode.css 统一管理 */
 
 .slot-widget {
     position: relative;

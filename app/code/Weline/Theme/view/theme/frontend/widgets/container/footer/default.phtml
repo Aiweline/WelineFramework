@@ -184,25 +184,5 @@ $children = $children ?? [];
     min-height: 40px;
 }
 
-/* 插槽占位符 */
-.footer-slot .slot-placeholder {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 15px 20px;
-    border: 2px dashed rgba(255,255,255,0.3);
-    border-radius: 6px;
-    color: rgba(255,255,255,0.5);
-    font-size: 13px;
-}
-
-.footer-slot .slot-placeholder i {
-    font-size: 18px;
-}
-
-/* 编辑模式高亮 */
-.footer-slot[data-slot]:hover {
-    outline: 2px dashed #007bff;
-    outline-offset: 2px;
-}
+/* 编辑模式样式由 editor-mode.css 统一管理 */
 </style>
