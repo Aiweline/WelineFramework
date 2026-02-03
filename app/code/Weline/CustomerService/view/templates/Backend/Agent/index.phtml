@@ -2,24 +2,248 @@
 /**
  * 客服人员管理页面
  */
+use Weline\Backend\Model\BackendUser;
+use Weline\Framework\Manager\ObjectManager;
+
 $agents = $this->getData('agents') ?? [];
 $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
+$saveUrl = $this->getBackendUrl("customerservice/backend/agent/save");
+$deleteUrl = $this->getBackendUrl("customerservice/backend/agent/delete");
+$statisticsUrl = $this->getBackendUrl("customerservice/backend/agent/getAgentStatistics");
+
+// 获取后台用户列表（用于选择关联用户）
+/** @var BackendUser $backendUser */
+$backendUser = ObjectManager::getInstance(BackendUser::class);
+$backendUsers = $backendUser->reset()->select()->fetch()->getItems();
+
+// 语言列表
+$locales = \Weline\CustomerService\Model\ServiceAgent::getAvailableLocales();
 ?>
 <link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
-<div class="customer-service-agent">
+<style>
+.cs-agent-page .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.cs-agent-page .agent-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.cs-agent-page .agent-table th,
+.cs-agent-page .agent-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+.cs-agent-page .agent-table th {
+    background: var(--bg-secondary, #f5f5f5);
+    font-weight: 600;
+}
+.cs-agent-page .badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+.cs-agent-page .badge-success {
+    background: #28a745;
+    color: white;
+}
+.cs-agent-page .badge-secondary {
+    background: #6c757d;
+    color: white;
+}
+.cs-agent-page .btn-group {
+    display: flex;
+    gap: 8px;
+}
+.cs-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+.cs-modal {
+    background: var(--bg-primary, white);
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90%;
+    max-height: 90vh;
+    overflow: auto;
+}
+.cs-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+.cs-modal-header h3 {
+    margin: 0;
+}
+.cs-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary, #666);
+}
+.cs-modal-body {
+    padding: 20px;
+}
+.cs-form-group {
+    margin-bottom: 16px;
+}
+.cs-form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+.cs-form-group input,
+.cs-form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 4px;
+    font-size: 14px;
+}
+.cs-form-group .form-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cs-form-group .form-check input {
+    width: auto;
+}
+.cs-form-group .form-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary, #666);
+    margin-top: 4px;
+}
+.locale-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 4px;
+    background: var(--bg-secondary, #f9f9f9);
+}
+.locale-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-primary, white);
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.locale-checkbox:hover {
+    background: var(--bg-hover, #e5e5e5);
+}
+.locale-checkbox input {
+    width: auto !important;
+    margin: 0;
+}
+.locale-checkbox input:checked + span {
+    color: var(--primary-color, #667eea);
+    font-weight: 500;
+}
+.locale-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.locale-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--primary-color, #667eea);
+    color: white;
+    border-radius: 3px;
+    font-size: 11px;
+}
+.cs-modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color, #e5e5e5);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.statistics-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+.statistics-modal .modal-content {
+    background: var(--bg-primary, white);
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90%;
+}
+.statistics-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+.statistics-modal .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+}
+.statistics-modal .modal-body {
+    padding: 20px;
+}
+.stat-detail-section {
+    margin-bottom: 16px;
+}
+.stat-detail-section h4 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary, #333);
+}
+.stat-detail-section p {
+    margin: 4px 0;
+    color: var(--text-secondary, #666);
+}
+</style>
+
+<div class="cs-agent-page customer-service-agent">
     <div class="page-header">
         <h1><?= __('客服人员管理') ?></h1>
-        <button class="btn btn-primary" onclick="showAddAgentModal()">
+        <button class="btn btn-primary" onclick="showAgentModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: middle; margin-right: 4px;">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
             <?= __('添加客服') ?>
         </button>
     </div>
     
     <div class="agent-list">
-        <table class="table">
+        <table class="agent-table table">
             <thead>
                 <tr>
                     <th><?= __('ID') ?></th>
                     <th><?= __('客服名称') ?></th>
+                    <th><?= __('关联用户') ?></th>
                     <th><?= __('邮箱') ?></th>
                     <th><?= __('语言') ?></th>
                     <th><?= __('状态') ?></th>
@@ -33,15 +257,33 @@ $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-s
             <tbody>
                 <?php if (empty($agents)): ?>
                     <tr>
-                        <td colspan="10" class="text-center"><?= __('暂无客服人员') ?></td>
+                        <td colspan="11" class="text-center"><?= __('暂无客服人员') ?></td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($agents as $agent): ?>
-                        <tr>
+                        <tr data-agent='<?= htmlspecialchars(json_encode($agent, JSON_UNESCAPED_UNICODE)) ?>'>
                             <td><?= $agent['agent_id'] ?></td>
                             <td><?= htmlspecialchars($agent['name']) ?></td>
+                            <td><?= htmlspecialchars($agent['user_name'] ?? '-') ?></td>
                             <td><?= htmlspecialchars($agent['email']) ?></td>
-                            <td><?= htmlspecialchars($agent['locale']) ?></td>
+                            <td>
+                                <?= htmlspecialchars($locales[$agent['locale']] ?? $agent['locale']) ?>
+                                <?php 
+                                    $supportedLocales = $agent['supported_locales'] ?? null;
+                                    if (is_string($supportedLocales)) {
+                                        $supportedLocales = json_decode($supportedLocales, true);
+                                    }
+                                    if (!empty($supportedLocales) && is_array($supportedLocales)):
+                                ?>
+                                    <div class="locale-tags" title="<?= __('支持的语言') ?>">
+                                        <?php foreach ($supportedLocales as $sl): ?>
+                                            <?php if ($sl !== $agent['locale']): ?>
+                                                <span class="locale-tag"><?= htmlspecialchars($locales[$sl] ?? $sl) ?></span>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ($agent['is_active']): ?>
                                     <span class="badge badge-success"><?= __('激活') ?></span>
@@ -63,15 +305,17 @@ $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-s
                                 ?>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-info" onclick="viewStatistics(<?= $agent['agent_id'] ?>)">
-                                    <?= __('查看统计') ?>
-                                </button>
-                                <button class="btn btn-sm btn-primary" onclick="editAgent(<?= $agent['agent_id'] ?>)">
-                                    <?= __('编辑') ?>
-                                </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteAgent(<?= $agent['agent_id'] ?>)">
-                                    <?= __('删除') ?>
-                                </button>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-info" onclick="viewStatistics(<?= $agent['agent_id'] ?>)" title="<?= __('查看统计') ?>">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" onclick="editAgent(<?= $agent['agent_id'] ?>)" title="<?= __('编辑') ?>">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteAgent(<?= $agent['agent_id'] ?>)" title="<?= __('删除') ?>">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -81,15 +325,175 @@ $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-s
     </div>
 </div>
 
+<!-- 添加/编辑客服弹窗 -->
+<div id="agent-modal" class="cs-modal-overlay" style="display: none;">
+    <div class="cs-modal">
+        <div class="cs-modal-header">
+            <h3 id="modal-title"><?= __('添加客服') ?></h3>
+            <button class="cs-modal-close" onclick="closeAgentModal()">&times;</button>
+        </div>
+        <div class="cs-modal-body">
+            <form id="agent-form">
+                <input type="hidden" id="agent_id" name="agent_id" value="0">
+                
+                <div class="cs-form-group">
+                    <label for="user_id"><?= __('关联后台用户') ?> <span class="text-danger">*</span></label>
+                    <select id="user_id" name="user_id" required>
+                        <option value=""><?= __('请选择用户') ?></option>
+                        <?php foreach ($backendUsers as $user): ?>
+                            <option value="<?= $user['user_id'] ?>"><?= htmlspecialchars($user['username']) ?> (<?= htmlspecialchars($user['realname'] ?? '') ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="cs-form-group">
+                    <label for="name"><?= __('客服名称') ?> <span class="text-danger">*</span></label>
+                    <input type="text" id="name" name="name" required placeholder="<?= __('请输入客服名称') ?>">
+                </div>
+                
+                <div class="cs-form-group">
+                    <label for="email"><?= __('邮箱') ?> <span class="text-danger">*</span></label>
+                    <input type="email" id="email" name="email" required placeholder="<?= __('请输入邮箱地址') ?>">
+                </div>
+                
+                <div class="cs-form-group">
+                    <label for="locale"><?= __('主要语言') ?></label>
+                    <select id="locale" name="locale">
+                        <?php foreach ($locales as $code => $label): ?>
+                            <option value="<?= $code ?>"><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="form-hint"><?= __('客服的首选沟通语言') ?></small>
+                </div>
+                
+                <div class="cs-form-group">
+                    <label><?= __('支持的语言') ?></label>
+                    <div class="locale-checkboxes" id="supported-locales">
+                        <?php foreach ($locales as $code => $label): ?>
+                            <label class="locale-checkbox">
+                                <input type="checkbox" name="supported_locales[]" value="<?= $code ?>">
+                                <span><?= $label ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <small class="form-hint"><?= __('客服可以接待的所有语言（勾选多个可接待全球客户）') ?></small>
+                </div>
+                
+                <div class="cs-form-group">
+                    <label for="max_sessions"><?= __('最大并发会话数') ?></label>
+                    <input type="number" id="max_sessions" name="max_sessions" value="10" min="1" max="100">
+                </div>
+                
+                <div class="cs-form-group">
+                    <div class="form-check">
+                        <input type="checkbox" id="is_active" name="is_active" value="1" checked>
+                        <label for="is_active"><?= __('激活状态') ?></label>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="cs-modal-footer">
+            <button class="btn btn-secondary" onclick="closeAgentModal()"><?= __('取消') ?></button>
+            <button class="btn btn-primary" onclick="saveAgent()"><?= __('保存') ?></button>
+        </div>
+    </div>
+</div>
+
 <script>
-function showAddAgentModal() {
-    // TODO: 实现添加客服弹窗
-    alert('<?= __('添加客服功能待实现') ?>');
+const AgentManager = {
+    saveUrl: '<?= $saveUrl ?>',
+    deleteUrl: '<?= $deleteUrl ?>',
+    statisticsUrl: '<?= $statisticsUrl ?>',
+    agents: <?= json_encode($agents, JSON_UNESCAPED_UNICODE) ?>
+};
+
+function showAgentModal(agentId = 0) {
+    const modal = document.getElementById('agent-modal');
+    const form = document.getElementById('agent-form');
+    const title = document.getElementById('modal-title');
+    
+    form.reset();
+    document.getElementById('agent_id').value = 0;
+    document.getElementById('is_active').checked = true;
+    
+    // 重置所有语言复选框
+    document.querySelectorAll('#supported-locales input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    if (agentId > 0) {
+        title.textContent = '<?= __('编辑客服') ?>';
+        const agent = AgentManager.agents.find(a => parseInt(a.agent_id) === agentId);
+        if (agent) {
+            document.getElementById('agent_id').value = agent.agent_id;
+            document.getElementById('user_id').value = agent.user_id;
+            document.getElementById('name').value = agent.name;
+            document.getElementById('email').value = agent.email;
+            document.getElementById('locale').value = agent.locale;
+            document.getElementById('max_sessions').value = agent.max_sessions;
+            document.getElementById('is_active').checked = agent.is_active == 1;
+            
+            // 设置支持的语言
+            let supportedLocales = agent.supported_locales || [];
+            if (typeof supportedLocales === 'string') {
+                try {
+                    supportedLocales = JSON.parse(supportedLocales);
+                } catch (e) {
+                    supportedLocales = [agent.locale];
+                }
+            }
+            if (!Array.isArray(supportedLocales) || supportedLocales.length === 0) {
+                supportedLocales = [agent.locale];
+            }
+            supportedLocales.forEach(locale => {
+                const checkbox = document.querySelector(`#supported-locales input[value="${locale}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+    } else {
+        title.textContent = '<?= __('添加客服') ?>';
+        // 默认选中简体中文
+        const zhCheckbox = document.querySelector('#supported-locales input[value="zh_Hans_CN"]');
+        if (zhCheckbox) zhCheckbox.checked = true;
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeAgentModal() {
+    document.getElementById('agent-modal').style.display = 'none';
 }
 
 function editAgent(agentId) {
-    // TODO: 实现编辑客服功能
-    alert('<?= __('编辑客服功能待实现') ?>');
+    showAgentModal(agentId);
+}
+
+function saveAgent() {
+    const form = document.getElementById('agent-form');
+    const formData = new FormData(form);
+    
+    // 处理复选框
+    formData.set('is_active', document.getElementById('is_active').checked ? '1' : '0');
+    
+    fetch(AgentManager.saveUrl, {
+        method: 'POST',
+        body: new URLSearchParams(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeAgentModal();
+            location.reload();
+        } else {
+            alert(data.message || '<?= __('保存失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('保存失败') ?>');
+    });
 }
 
 function deleteAgent(agentId) {
@@ -97,19 +501,16 @@ function deleteAgent(agentId) {
         return;
     }
     
-    fetch('<?= $this->getBackendUrl("customerservice/backend/agent/delete") ?>', {
+    fetch(AgentManager.deleteUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
-            agent_id: agentId
-        })
+        body: new URLSearchParams({ agent_id: agentId })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('<?= __('删除成功') ?>');
             location.reload();
         } else {
             alert(data.message || '<?= __('删除失败') ?>');
@@ -122,14 +523,12 @@ function deleteAgent(agentId) {
 }
 
 function viewStatistics(agentId) {
-    // 打开统计详情弹窗或跳转到统计页面
-    const url = '<?= $this->getBackendUrl("customerservice/backend/agent/getAgentStatistics") ?>?agent_id=' + agentId + '&period=all';
+    const url = AgentManager.statisticsUrl + '?agent_id=' + agentId + '&period=all';
     
     fetch(url)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // 显示统计详情
                 showStatisticsModal(data.data);
             } else {
                 alert(data.message || '<?= __('获取统计数据失败') ?>');
@@ -142,7 +541,6 @@ function viewStatistics(agentId) {
 }
 
 function showStatisticsModal(statistics) {
-    // 创建并显示统计详情弹窗
     const modal = document.createElement('div');
     modal.className = 'statistics-modal';
     modal.innerHTML = `
@@ -178,14 +576,29 @@ function showStatisticsModal(statistics) {
         </div>
     `;
     document.body.appendChild(modal);
+    
+    // 点击遮罩层关闭
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
 function formatResponseTime(seconds) {
+    if (!seconds || seconds === 0) return '-';
     if (seconds < 60) {
         return seconds.toFixed(1) + '<?= __('秒') ?>';
     } else {
         return (seconds / 60).toFixed(1) + '<?= __('分钟') ?>';
     }
 }
+
+// 点击遮罩层关闭弹窗
+document.getElementById('agent-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeAgentModal();
+    }
+});
 </script>
 

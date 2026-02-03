@@ -37,29 +37,54 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
         <div class="statistics-cards" id="statistics-cards">
             <div class="stat-card">
                 <div class="stat-icon sessions">
-                    <i class="mdi mdi-message-text"></i>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                    </svg>
                 </div>
                 <div class="stat-content">
                     <div class="stat-value" id="stat-sessions"><?= $statistics['sessions']['total'] ?? 0 ?></div>
                     <div class="stat-label"><?= __('会话数') ?></div>
                     <div class="stat-detail">
-                        <span><?= __('已关闭') ?>: <?= $statistics['sessions']['closed'] ?? 0 ?></span>
-                        <span><?= __('进行中') ?>: <?= $statistics['sessions']['active'] ?? 0 ?></span>
+                        <span><?= __('已关闭') ?>: <span id="stat-closed"><?= $statistics['sessions']['closed'] ?? 0 ?></span></span>
+                        <span><?= __('进行中') ?>: <span id="stat-active"><?= $statistics['sessions']['active'] ?? 0 ?></span></span>
                     </div>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon messages">
-                    <i class="mdi mdi-message-reply"></i>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+                    </svg>
                 </div>
                 <div class="stat-content">
-                    <div class="stat-value" id="stat-messages"><?= $statistics['messages']['total'] ?? 0 ?></div>
+                    <div class="stat-value" id="stat-messages"><?= ($statistics['messages']['agent'] ?? 0) + ($statistics['messages']['customer'] ?? 0) ?></div>
                     <div class="stat-label"><?= __('消息数') ?></div>
+                    <div class="stat-detail">
+                        <span><?= __('客服') ?>: <span id="stat-agent-messages"><?= $statistics['messages']['agent'] ?? 0 ?></span></span>
+                        <span><?= __('客户') ?>: <span id="stat-customer-messages"><?= $statistics['messages']['customer'] ?? 0 ?></span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon response-rate">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="stat-response-rate"><?= $statistics['rates']['response_rate'] ?? 0 ?>%</div>
+                    <div class="stat-label"><?= __('响应率') ?></div>
+                    <div class="stat-detail">
+                        <span><?= __('已响应') ?>: <span id="stat-responded"><?= $statistics['sessions']['responded'] ?? 0 ?></span></span>
+                        <span><?= __('完结率') ?>: <span id="stat-close-rate"><?= $statistics['rates']['close_rate'] ?? 0 ?>%</span></span>
+                    </div>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon response-time">
-                    <i class="mdi mdi-clock-outline"></i>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                    </svg>
                 </div>
                 <div class="stat-content">
                     <div class="stat-value" id="stat-response-time"><?php 
@@ -81,14 +106,15 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
             </div>
             <div class="stat-card">
                 <div class="stat-icon duration">
-                    <i class="mdi mdi-timer"></i>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                    </svg>
                 </div>
                 <div class="stat-content">
                     <div class="stat-value" id="stat-duration"><?= $statistics['session_duration']['average'] ?? 0 ?></div>
                     <div class="stat-label"><?= __('平均会话时长（分钟）') ?></div>
                     <div class="stat-detail">
-                        <span><?= __('最短') ?>: <?= $statistics['session_duration']['min'] ?? 0 ?> <?= __('分钟') ?></span>
-                        <span><?= __('最长') ?>: <?= $statistics['session_duration']['max'] ?? 0 ?> <?= __('分钟') ?></span>
+                        <span><?= __('平均消息') ?>: <span id="stat-msg-per-session"><?= $statistics['rates']['messages_per_session'] ?? 0 ?></span></span>
                     </div>
                 </div>
             </div>
@@ -101,7 +127,9 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
             <div class="sidebar-header">
                 <h2><?= __('会话列表') ?></h2>
                 <button class="btn-refresh" id="refresh-sessions" title="<?= __('刷新') ?>">
-                    <i class="mdi mdi-refresh"></i>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                    </svg>
                 </button>
             </div>
 
@@ -175,7 +203,9 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
             <div class="chat-container" id="chat-container">
                 <div class="chat-empty-state">
                     <div class="empty-icon">
-                        <i class="mdi mdi-message-text"></i>
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                        </svg>
                     </div>
                     <p><?= __('请选择一个会话开始聊天') ?></p>
                 </div>

@@ -10,6 +10,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 
@@ -41,6 +42,7 @@ class LayoutSlotRenderer implements ObserverInterface
     private Request $request;
     private ThemeCacheGenerator $cacheGenerator;
     private Url $url;
+    private PreviewTokenService $previewTokenService;
     private bool $isEnabled = true;
 
     public function __construct(
@@ -48,13 +50,15 @@ class LayoutSlotRenderer implements ObserverInterface
         WelineTheme $welineTheme,
         Request $request,
         ThemeCacheGenerator $cacheGenerator,
-        Url $url
+        Url $url,
+        PreviewTokenService $previewTokenService
     ) {
         $this->slotRenderer = $slotRenderer;
         $this->welineTheme = $welineTheme;
         $this->request = $request;
         $this->cacheGenerator = $cacheGenerator;
         $this->url = $url;
+        $this->previewTokenService = $previewTokenService;
     }
 
     public function execute(Event &$event): void
@@ -79,11 +83,33 @@ class LayoutSlotRenderer implements ObserverInterface
         if ($area !== 'frontend') {
             return;
         }
+        
+        // === 第一步：处理预览模式（独立于插槽处理）===
+        // 检测 URL 参数中的预览 token，如果有效则设置 Cookie（实现预览状态持久化）
+        $urlToken = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
+        if ($urlToken && $this->previewTokenService->validateToken($urlToken)) {
+            // 自动设置 Cookie，这样后续页面跳转不需要每次都带 token 参数
+            $this->previewTokenService->setPreviewCookie($urlToken);
+        }
+        
+        // 预览模式下注入退出预览浮窗和 AJAX 拦截器（非编辑器 iframe 模式）
+        // 这个逻辑必须在插槽检查之前执行，因为即使页面没有插槽，也需要显示退出按钮
+        if ($this->previewTokenService->isPreviewMode()) {
+            $editorMode = $this->request->getParam('editor_mode');
+            // 只在真实前端预览时注入，不在编辑器 iframe 中注入
+            if ($editorMode !== '1' && $editorMode !== 'true') {
+                $html = $this->injectPreviewExitButton($html);
+                $html = $this->injectPreviewInterceptor($html);
+            }
+        }
 
+        // === 第二步：处理插槽替换 ===
         // 检查是否包含插槽标记（支持新旧两种方式）
         // 注意：不再强制检查 isLayoutTemplate，因为 fetch_file_after 事件
         // 获取的是完整渲染后的 HTML，包含所有子模板（如 partials）的内容
         if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
+            // 没有插槽标记，但可能已经注入了预览退出按钮，所以更新事件数据
+            $event->setData('content', $html);
             return;
         }
 
@@ -104,6 +130,8 @@ class LayoutSlotRenderer implements ObserverInterface
         
         // 如果没有主题 ID，无法处理插槽
         if (!$themeId) {
+            // 更新事件数据（可能已注入预览退出按钮）
+            $event->setData('content', $html);
             return;
         }
 
@@ -365,9 +393,10 @@ HTML;
      * 
      * 优先级：
      * 1. URL 参数 status=draft/published（最高优先级，用于版本切换）
-     * 2. editor_mode=1（后台编辑器 iframe，默认加载 draft）
-     * 3. preview_mode=1（前台草稿预览，加载 draft）
-     * 4. 默认（前台正常访问，加载 published）
+     * 2. 预览 Token（URL参数/Cookie/Header）- 新增
+     * 3. editor_mode=1（后台编辑器 iframe，默认加载 draft）
+     * 4. preview_mode=1（前台草稿预览，加载 draft）
+     * 5. 默认（前台正常访问，加载 published）
      * 
      * @return string ThemeLayout::STATUS_DRAFT 或 ThemeLayout::STATUS_PUBLISHED
      */
@@ -382,19 +411,24 @@ HTML;
             return ThemeLayout::STATUS_PUBLISHED;
         }
         
-        // 2. 后台编辑器 iframe 模式：默认加载 draft
+        // 2. 预览 Token 检测（支持 URL参数/Cookie/Header）
+        if ($this->previewTokenService->isPreviewMode()) {
+            return ThemeLayout::STATUS_DRAFT;
+        }
+        
+        // 3. 后台编辑器 iframe 模式：默认加载 draft
         $editorMode = $this->request->getParam('editor_mode');
         if ($editorMode === '1' || $editorMode === 'true') {
             return ThemeLayout::STATUS_DRAFT;
         }
         
-        // 3. 前台草稿预览模式：加载 draft
+        // 4. 前台草稿预览模式：加载 draft（向后兼容）
         $previewMode = $this->request->getParam('preview_mode');
         if ($previewMode === '1' || $previewMode === 'true') {
             return ThemeLayout::STATUS_DRAFT;
         }
         
-        // 4. 检查 referer 是否来自编辑器（备用方案）
+        // 5. 检查 referer 是否来自编辑器（备用方案）
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
         if (strpos($referer, 'theme-editor') !== false) {
             return ThemeLayout::STATUS_DRAFT;
@@ -407,19 +441,24 @@ HTML;
     /**
      * 检测是否为编辑器或预览模式
      * 
-     * 用于判断是否需要显示调试信息（如孤儿部件警告）
+     * 用于判断是否需要显示调试信息（如孤儿部件警告）和注入预览浮窗
      * 
      * @return bool
      */
     private function isEditorOrPreviewMode(): bool
     {
+        // 预览 Token 模式
+        if ($this->previewTokenService->isPreviewMode()) {
+            return true;
+        }
+        
         // 后台编辑器模式
         $editorMode = $this->request->getParam('editor_mode');
         if ($editorMode === '1' || $editorMode === 'true') {
             return true;
         }
         
-        // 前台预览模式
+        // 前台预览模式（向后兼容）
         $previewMode = $this->request->getParam('preview_mode');
         if ($previewMode === '1' || $previewMode === 'true') {
             return true;
@@ -515,5 +554,356 @@ HTML;
     public function setEnabled(bool $enabled): void
     {
         $this->isEnabled = $enabled;
+    }
+    
+    /**
+     * 注入预览退出浮窗
+     * 
+     * 在预览模式下，在页面底部右侧注入一个可拖动的浮窗，
+     * 提供"退出预览"和"发布并退出"两个操作
+     * 
+     * @param string $html 原始 HTML
+     * @return string 注入浮窗后的 HTML
+     */
+    private function injectPreviewExitButton(string $html): string
+    {
+        // 获取预览 Token 数据
+        $tokenData = $this->previewTokenService->getCurrentPreviewData();
+        $token = $this->previewTokenService->getTokenFromRequest() ?? '';
+        
+        // 构建编辑器返回 URL（与后台菜单路由一致：theme/backend/theme-editor）
+        $editorUrl = $this->url->getBackendUrl('theme/backend/theme-editor/index');
+        if ($tokenData && isset($tokenData['theme_id'])) {
+            $editorUrl = $this->url->getBackendUrl('theme/backend/theme-editor/index', [
+                'theme_id' => $tokenData['theme_id'],
+                'page_type' => $tokenData['page_type'] ?? 'homepage'
+            ]);
+        }
+        
+        // API URL（与 index.phtml 中 data-api-* 一致）
+        $exitPreviewUrl = $this->url->getBackendUrl('theme/backend/theme-editor/exit-preview');
+        $publishAndExitUrl = $this->url->getBackendUrl('theme/backend/theme-editor/publish-and-exit');
+        
+        // 浮窗 HTML 和内联样式/脚本
+        $floatHtml = <<<HTML
+<!-- Weline Theme Preview Exit Button -->
+<div id="weline-preview-exit-float" style="
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    left: auto !important;
+    top: auto !important;
+    z-index: 2147483647 !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4) !important;
+    padding: 12px 16px !important;
+    cursor: move !important;
+    user-select: none !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    min-width: 140px !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+    margin: 0 !important;
+    float: none !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: white;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+        </svg>
+        <span style="font-weight: 600; font-size: 14px;">预览模式</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="weline-preview-exit-btn" style="
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.95);
+            color: #667eea;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            width: 100%;
+        " onmouseover="this.style.background='#fff';this.style.transform='translateY(-1px)'" 
+           onmouseout="this.style.background='rgba(255,255,255,0.95)';this.style.transform='translateY(0)'">
+            退出预览
+        </button>
+        <button id="weline-preview-publish-btn" style="
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            width: 100%;
+        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
+           onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+            发布并退出
+        </button>
+    </div>
+    <div style="
+        position: absolute;
+        top: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 4px;
+        background: rgba(255,255,255,0.5);
+        border-radius: 2px;
+    "></div>
+</div>
+<script>
+(function() {
+    var floatEl = document.getElementById('weline-preview-exit-float');
+    var exitBtn = document.getElementById('weline-preview-exit-btn');
+    var publishBtn = document.getElementById('weline-preview-publish-btn');
+    var token = '{$token}';
+    var editorUrl = '{$editorUrl}';
+    var exitUrl = '{$exitPreviewUrl}';
+    var publishUrl = '{$publishAndExitUrl}';
+    
+    // 拖动功能
+    var isDragging = false;
+    var startX, startY, startLeft, startBottom;
+    
+    // 从 localStorage 恢复位置
+    var savedPos = localStorage.getItem('weline_preview_float_pos');
+    if (savedPos) {
+        try {
+            var pos = JSON.parse(savedPos);
+            floatEl.style.right = pos.right + 'px';
+            floatEl.style.bottom = pos.bottom + 'px';
+        } catch(e) {}
+    }
+    
+    floatEl.addEventListener('mousedown', function(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = floatEl.offsetLeft;
+        startBottom = window.innerHeight - floatEl.offsetTop - floatEl.offsetHeight;
+        floatEl.style.transition = 'none';
+    });
+    
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        var newRight = window.innerWidth - startLeft - floatEl.offsetWidth - dx;
+        var newBottom = startBottom - dy;
+        
+        // 边界限制
+        newRight = Math.max(10, Math.min(newRight, window.innerWidth - floatEl.offsetWidth - 10));
+        newBottom = Math.max(10, Math.min(newBottom, window.innerHeight - floatEl.offsetHeight - 10));
+        
+        floatEl.style.right = newRight + 'px';
+        floatEl.style.bottom = newBottom + 'px';
+        floatEl.style.left = 'auto';
+        floatEl.style.top = 'auto';
+    });
+    
+    document.addEventListener('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            floatEl.style.transition = 'transform 0.2s, box-shadow 0.2s';
+            // 保存位置到 localStorage
+            localStorage.setItem('weline_preview_float_pos', JSON.stringify({
+                right: parseInt(floatEl.style.right),
+                bottom: parseInt(floatEl.style.bottom)
+            }));
+        }
+    });
+    
+    // 退出预览按钮
+    exitBtn.addEventListener('click', function() {
+        exitBtn.disabled = true;
+        exitBtn.textContent = '处理中...';
+        
+        fetch(exitUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ token: token })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                // 清除预览 Cookie
+                document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                localStorage.removeItem('weline_preview_float_pos');
+                window.location.href = editorUrl;
+            } else {
+                alert(data.message || '退出预览失败');
+                exitBtn.disabled = false;
+                exitBtn.textContent = '退出预览';
+            }
+        })
+        .catch(function(err) {
+            alert('网络错误，请重试');
+            exitBtn.disabled = false;
+            exitBtn.textContent = '退出预览';
+        });
+    });
+    
+    // 发布并退出按钮
+    publishBtn.addEventListener('click', function() {
+        if (!confirm('确认发布当前预览内容并退出？\\n\\n发布后，所有访客将看到最新的更改。')) {
+            return;
+        }
+        
+        publishBtn.disabled = true;
+        publishBtn.textContent = '发布中...';
+        
+        fetch(publishUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ token: token })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                localStorage.removeItem('weline_preview_float_pos');
+                // 跳转到前台首页（非预览模式）
+                window.location.href = data.redirect_url || '/';
+            } else {
+                alert(data.message || '发布失败');
+                publishBtn.disabled = false;
+                publishBtn.textContent = '发布并退出';
+            }
+        })
+        .catch(function(err) {
+            alert('网络错误，请重试');
+            publishBtn.disabled = false;
+            publishBtn.textContent = '发布并退出';
+        });
+    });
+})();
+</script>
+<!-- /Weline Theme Preview Exit Button -->
+HTML;
+        
+        // 在 </body> 前插入浮窗 HTML
+        if (stripos($html, '</body>') !== false) {
+            $html = str_ireplace('</body>', $floatHtml . '</body>', $html);
+        } else {
+            // 如果没有 </body> 标签，追加到末尾
+            $html .= $floatHtml;
+        }
+        
+        return $html;
+    }
+    
+    /**
+     * 注入预览请求拦截器
+     * 
+     * 拦截所有 fetch 和 XMLHttpRequest 请求，自动添加预览 token header，
+     * 确保整个预览会话中所有 AJAX 请求都携带预览标识
+     * 
+     * @param string $html 原始 HTML
+     * @return string 注入拦截器后的 HTML
+     */
+    private function injectPreviewInterceptor(string $html): string
+    {
+        $token = $this->previewTokenService->getTokenFromRequest() ?? '';
+        $tokenHeader = PreviewTokenService::TOKEN_HEADER;
+        $tokenKey = PreviewTokenService::TOKEN_KEY;
+        
+        if (empty($token)) {
+            return $html;
+        }
+        
+        $interceptorScript = <<<HTML
+<!-- Weline Theme Preview Request Interceptor -->
+<script>
+(function() {
+    var previewToken = '{$token}';
+    var tokenHeader = '{$tokenHeader}';
+    var tokenKey = '{$tokenKey}';
+    
+    // 拦截 fetch 请求
+    var originalFetch = window.fetch;
+    window.fetch = function(input, init) {
+        init = init || {};
+        init.headers = init.headers || {};
+        
+        // 添加预览 token header
+        if (init.headers instanceof Headers) {
+            init.headers.set(tokenHeader, previewToken);
+        } else if (Array.isArray(init.headers)) {
+            init.headers.push([tokenHeader, previewToken]);
+        } else {
+            init.headers[tokenHeader] = previewToken;
+        }
+        
+        // 确保携带 credentials（以发送 Cookie）
+        if (!init.credentials) {
+            init.credentials = 'same-origin';
+        }
+        
+        return originalFetch.call(this, input, init);
+    };
+    
+    // 拦截 XMLHttpRequest
+    var originalXHROpen = XMLHttpRequest.prototype.open;
+    var originalXHRSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+        this._previewIntercepted = true;
+        return originalXHROpen.apply(this, arguments);
+    };
+    
+    XMLHttpRequest.prototype.send = function(body) {
+        if (this._previewIntercepted) {
+            this.setRequestHeader(tokenHeader, previewToken);
+        }
+        return originalXHRSend.apply(this, arguments);
+    };
+    
+    // 为动态创建的链接添加预览参数
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a');
+        if (link && link.href && link.href.indexOf(window.location.origin) === 0) {
+            // 如果链接没有预览 token，添加它
+            if (link.href.indexOf(tokenKey + '=') === -1) {
+                var separator = link.href.indexOf('?') !== -1 ? '&' : '?';
+                // 不修改 href，而是在导航时添加（避免影响显示）
+            }
+        }
+    }, true);
+    
+    console.log('[Weline Preview] 请求拦截器已启用，Token:', previewToken.substring(0, 20) + '...');
+})();
+</script>
+<!-- /Weline Theme Preview Request Interceptor -->
+HTML;
+        
+        // 在 <head> 结束前或 <body> 开始后尽早注入
+        if (stripos($html, '</head>') !== false) {
+            $html = str_ireplace('</head>', $interceptorScript . '</head>', $html);
+        } elseif (stripos($html, '<body') !== false) {
+            // 在 <body> 标签后注入
+            $html = preg_replace('/(<body[^>]*>)/i', '$1' . $interceptorScript, $html, 1);
+        } else {
+            // 在开头注入
+            $html = $interceptorScript . $html;
+        }
+        
+        return $html;
     }
 }

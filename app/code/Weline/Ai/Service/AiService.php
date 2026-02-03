@@ -162,6 +162,32 @@ class AiService
     }
 
     /**
+     * 检查是否默认启用流式输出
+     * 
+     * @return bool
+     */
+    public static function isStreamEnabled(): bool
+    {
+        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
+        return $config['stream']['enabled'] ?? true; // 默认启用
+    }
+
+    /**
+     * 获取流式输出配置
+     * 
+     * @return array
+     */
+    public static function getStreamConfig(): array
+    {
+        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
+        return $config['stream'] ?? [
+            'enabled' => true,
+            'chunk_size' => 1024,
+            'flush_interval' => 100,
+        ];
+    }
+
+    /**
      * 生成文本内容（实例方法）
      * 
      * @param string $prompt 提示词

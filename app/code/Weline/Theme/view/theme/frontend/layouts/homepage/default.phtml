@@ -80,14 +80,61 @@ $colors = $this->getData('colors') ?? [];
                         <if condition="meta.content">
                             {{meta.content}}
                         <else/>
-                            <div class="homepage-default-content">
-                                <div class="container">
-                                    <div class="slot-placeholder" data-placeholder="content">
-                                        <span class="placeholder-icon">📦</span>
-                                        <span class="placeholder-text">内容区域 - 拖拽部件或容器到此处</span>
-                                        <span class="placeholder-hint">支持：行列容器、Banner、产品轮播、分类网格等任意部件</span>
+                            <!-- ========== 默认首页部件 ========== -->
+                            <div class="homepage-default-widgets">
+                                
+                                <!-- 1. Hero 轮播图 -->
+                                <section class="homepage-section section-hero">
+                                    <w:widget type="banner" name="hero-slider" params='{"autoplay":true,"autoplay_speed":5000,"show_dots":true,"show_arrows":true,"height":"500px"}'/>
+                                </section>
+                                
+                                <!-- 2. 推荐产品 -->
+                                <section class="homepage-section section-featured">
+                                    <div class="container">
+                                        <w:widget type="product" name="featured-products" params='{"title":"推荐产品","subtitle":"为您精选的优质商品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true,"layout":"grid"}'/>
                                     </div>
-                                </div>
+                                </section>
+                                
+                                <!-- 3. 分类网格 -->
+                                <section class="homepage-section section-categories">
+                                    <div class="container">
+                                        <w:widget type="category" name="category-grid" params='{"title":"热门分类","subtitle":"探索我们的商品分类","columns":"4","show_product_count":true}'/>
+                                    </div>
+                                </section>
+                                
+                                <!-- 4. 新品上市 -->
+                                <section class="homepage-section section-new-arrivals">
+                                    <div class="container">
+                                        <w:widget type="product" name="new-arrivals" params='{"title":"新品上市","subtitle":"发现最新上架的商品","limit":4,"columns":"4","show_price":true,"show_rating":true}'/>
+                                    </div>
+                                </section>
+                                
+                                <!-- 5. 促销横幅 -->
+                                <section class="homepage-section section-promo">
+                                    <w:widget type="banner" name="promo-banner" params='{"title":"限时特惠","subtitle":"全场满300减50","button_text":"立即抢购","link":"/promotions","background_color":"#f8f9fa"}'/>
+                                </section>
+                                
+                                <!-- 6. 畅销商品 -->
+                                <section class="homepage-section section-bestsellers">
+                                    <div class="container">
+                                        <w:widget type="product" name="bestsellers" params='{"title":"畅销商品","subtitle":"最受欢迎的热销产品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true}'/>
+                                    </div>
+                                </section>
+                                
+                                <!-- 7. 品牌展示 -->
+                                <section class="homepage-section section-brands">
+                                    <div class="container">
+                                        <w:widget type="content" name="brand-logos" params='{"title":"合作品牌","show_title":true}'/>
+                                    </div>
+                                </section>
+                                
+                                <!-- 8. 信任徽章 -->
+                                <section class="homepage-section section-trust">
+                                    <div class="container">
+                                        <w:widget type="content" name="trust-badges" params='{"layout":"horizontal"}'/>
+                                    </div>
+                                </section>
+                                
                             </div>
                         </if>
                     </w:hook>
@@ -152,6 +199,63 @@ $colors = $this->getData('colors') ?? [];
     .homepage-default-content {
         width: 100%;
         padding: 3rem 0;
+    }
+    
+    /* 默认部件容器样式 */
+    .homepage-default-widgets {
+        width: 100%;
+    }
+    
+    /* 首页区块通用样式 */
+    .homepage-section {
+        padding: 3rem 0;
+    }
+    
+    .homepage-section:first-child {
+        padding-top: 0;
+    }
+    
+    /* Hero 轮播区域 - 无内边距 */
+    .section-hero {
+        padding: 0;
+    }
+    
+    /* 推荐产品区域 */
+    .section-featured {
+        background: var(--frontend-color-bg-secondary, #f8f9fa);
+    }
+    
+    /* 分类网格区域 */
+    .section-categories {
+        background: var(--frontend-color-bg-primary, #ffffff);
+    }
+    
+    /* 新品上市区域 */
+    .section-new-arrivals {
+        background: var(--frontend-color-bg-secondary, #f8f9fa);
+    }
+    
+    /* 促销横幅区域 */
+    .section-promo {
+        padding: 0;
+    }
+    
+    /* 畅销商品区域 */
+    .section-bestsellers {
+        background: var(--frontend-color-bg-primary, #ffffff);
+    }
+    
+    /* 品牌展示区域 */
+    .section-brands {
+        background: var(--frontend-color-bg-secondary, #f8f9fa);
+        padding: 2.5rem 0;
+    }
+    
+    /* 信任徽章区域 */
+    .section-trust {
+        background: var(--frontend-color-bg-primary, #ffffff);
+        padding: 2rem 0;
+        border-top: 1px solid var(--frontend-color-border-light, #e9ecef);
     }
     
     /* 容器 */

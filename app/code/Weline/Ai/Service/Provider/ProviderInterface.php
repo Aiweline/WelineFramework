@@ -49,5 +49,19 @@ interface ProviderInterface
      * @return bool
      */
     public function supports(string $modelCode): bool;
+
+    /**
+     * 获取供应商代码
+     * 
+     * @return string
+     */
+    public function getProviderCode(): string;
+
+    /**
+     * 获取该供应商支持的模型列表
+     * 
+     * @return array 返回模型列表，每个模型包含：code, name, description, max_tokens, context_window, input_price, output_price, capabilities
+     */
+    public function getSupportedModels(): array;
 }
 

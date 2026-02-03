@@ -1,0 +1,879 @@
+包太大：%{1},"Package too large: %{1}"
+"onMessage 错误：%{1}","onMessage error: %{1}"
+"onClose 错误：%{1}","onClose error: %{1}"
+"运行模式: 后台运行 (默认)","运行模式: 后台运行 (默认)"
+"运行模式: 前台运行","运行模式: 前台运行"
+检测到服务器已在运行中，强制启动模式将先停止现有服务器...,检测到服务器已在运行中，强制启动模式将先停止现有服务器...
+正在停止现有服务器进程，进程ID：%{1},正在停止现有服务器进程，进程ID：%{1}
+现有服务器已成功停止,现有服务器已成功停止
+停止现有服务器失败，请手动停止后重试,停止现有服务器失败，请手动停止后重试
+通过端口检测到进程，正在停止，进程ID：%{1},通过端口检测到进程，正在停止，进程ID：%{1}
+端口被占用但无法确定进程ID，尝试强制清理端口,端口被占用但无法确定进程ID，尝试强制清理端口
+等待端口释放...,等待端口释放...
+检测到服务器已在运行中！进程ID：%{1},检测到服务器已在运行中！进程ID：%{1}
+已自动更新配置信息。,已自动更新配置信息。
+服务器已在后台运行,服务器已在后台运行
+检测到端口被占用，但无法获取进程信息,检测到端口被占用，但无法获取进程信息
+开发专用，请勿用于生产环境。,开发专用，请勿用于生产环境。
+启用PHP内置本地WebServer服务...,启用PHP内置本地WebServer服务...
+"⚠️  警告：当前处于生产环境模式（%{1}）！","⚠️  警告：当前处于生产环境模式（%{1}）！"
+"⚠️  PHP内置服务器仅供开发和测试使用，不适合生产环境！","⚠️  PHP内置服务器仅供开发和测试使用，不适合生产环境！"
+"⚠️  生产环境请使用Nginx或Apache等专业Web服务器！","⚠️  生产环境请使用Nginx或Apache等专业Web服务器！"
+"⚠️  继续使用PHP内置服务器可能导致性能问题和安全风险！","⚠️  继续使用PHP内置服务器可能导致性能问题和安全风险！"
+"是否仍要在生产模式下启动PHP内置服务器？(输入 y/yes 继续，其他任意键取消):","是否仍要在生产模式下启动PHP内置服务器？(输入 y/yes 继续，其他任意键取消):"
+"⚠️  您已选择在生产模式下使用PHP内置服务器，请自行承担风险！","⚠️  您已选择在生产模式下使用PHP内置服务器，请自行承担风险！"
+使用proc_open启动后台进程,使用proc_open启动后台进程
+proc_open不可用，使用传统方式启动后台进程,proc_open不可用，使用传统方式启动后台进程
+通过端口检测到服务器进程，进程ID：%{1},通过端口检测到服务器进程，进程ID：%{1}
+服务器已在后台启动成功！,服务器已在后台启动成功！
+程序已进入后台运行,程序已进入后台运行
+服务器已在后台启动成功！进程ID：%{1},服务器已在后台启动成功！进程ID：%{1}
+程序已进入后台运行，可以关闭终端,程序已进入后台运行，可以关闭终端
+服务器启动成功！进程ID：%{1},服务器启动成功！进程ID：%{1}
+"按 Ctrl+C 停止服务器","Press Ctrl+C to stop server"
+后台启动失败，请检查端口是否被占用,后台启动失败，请检查端口是否被占用
+正在停止配置中的服务器进程，进程ID：%{1},正在停止配置中的服务器进程，进程ID：%{1}
+配置中的服务器进程已停止！进程ID：%{1},配置中的服务器进程已停止！进程ID：%{1}
+停止配置中的服务器进程失败！进程ID：%{1},停止配置中的服务器进程失败！进程ID：%{1}
+强制停止失败，请尝试手动停止进程。,强制停止失败，请尝试手动停止进程。
+"请尝试使用 -f 参数强制停止或手动停止进程。","请尝试使用 -f 参数强制停止或手动停止进程。"
+"检测到端口 %{1}:%{2} 被占用，但配置信息为空。","检测到端口 %{1}:%{2} 被占用，但配置信息为空。"
+检测到的进程ID：%{1},检测到的进程ID：%{1}
+检测到的进程ID（%{1}）与配置中的进程ID（%{2}）不一致。,检测到的进程ID（%{1}）与配置中的进程ID（%{2}）不一致。
+正在停止检测到的进程，进程ID：%{1},正在停止检测到的进程，进程ID：%{1}
+"是否要停止此进程？使用 -f 参数直接停止。","是否要停止此进程？使用 -f 参数直接停止。"
+端口监听进程已停止！进程ID：%{1},端口监听进程已停止！进程ID：%{1}
+停止端口监听进程失败！进程ID：%{1},停止端口监听进程失败！进程ID：%{1}
+"端口 %{1}:%{2} 被占用，但无法确定进程ID。","端口 %{1}:%{2} 被占用，但无法确定进程ID。"
+请手动检查端口占用情况。,请手动检查端口占用情况。
+"未检测到服务器运行（端口 %{1}:%{2} 未被占用）。","未检测到服务器运行（端口 %{1}:%{2} 未被占用）。"
+"服务器未运行（端口 %{1}:%{2} 未被占用）。","服务器未运行（端口 %{1}:%{2} 未被占用）。"
+服务器停止操作完成！,服务器停止操作完成！
+"停止PHP内置本地WebServer服务。使用 -f 或 --force 参数强制停止。","停止PHP内置本地WebServer服务。使用 -f 或 --force 参数强制停止。"
+"Weline Server 压力测试","Weline Server 压力测试"
+"无法连接到服务器 %{1}:%{2}","无法连接到服务器 %{1}:%{2}"
+服务器连接成功，开始压测...,服务器连接成功，开始压测...
+手动指定,手动指定
+未检测到运行中的服务器,未检测到运行中的服务器
+"检测到多个服务器实例，使用默认实例 [default]","检测到多个服务器实例，使用默认实例 [default]"
+"检测到多个服务器实例，使用实例 [%{1}]","检测到多个服务器实例，使用实例 [%{1}]"
+"需要 curl 扩展支持","curl extension required"
+"进度：%{1}% (%{2}/%{3})","Progress: %{1}% (%{2}/%{3})"
+压测结果报告,"Benchmark Report"
+总请求数：%{1},"Total requests: %{1}"
+成功请求：%{1},"Successful requests: %{1}"
+失败请求：%{1},"Failed requests: %{1}"
+错误率：%{1}%,"Error rate: %{1}%"
+"总耗时：%{1} 秒","Total time: %{1} seconds"
+QPS：%{1},"QPS: %{1}"
+延迟统计（毫秒）,"Latency Statistics (ms)"
+平均：%{1},"Avg: %{1}"
+最小：%{1},"Min: %{1}"
+最大：%{1},"Max: %{1}"
+中位数：%{1},"Median: %{1}"
+P95：%{1},"P95: %{1}"
+P99：%{1},"P99: %{1}"
+报告已保存：%{1},"Report saved: %{1}"
+"对 Weline Server 进行压力测试","对 Weline Server 进行压力测试"
+自动探测运行中的服务器并进行压力测试,自动探测运行中的服务器并进行压力测试
+并发数（默认：100）,并发数（默认：100）
+总请求数（默认：10000）,总请求数（默认：10000）
+请求路径（默认：/）,请求路径（默认：/）
+指定端口（可选，默认自动探测）,指定端口（可选，默认自动探测）
+"指定主机（可选，默认 127.0.0.1）","指定主机（可选，默认 127.0.0.1）"
+显示帮助信息,"Show help"
+基本压测（自动探测）,基本压测（自动探测）
+高并发,高并发
+指定端口,"Specify port"
+"Weline Server 性能优化指南","Weline Server 性能优化指南"
+"📋 您的 PHP 环境","📋 您的 PHP 环境"
+"PHP 版本","PHP 版本"
+"PHP 路径","PHP 路径"
+配置文件,配置文件
+扩展目录,扩展目录
+操作系统,操作系统
+"⚡ 优化状态","⚡ 优化状态"
+已优化,已优化
+当前加成,当前加成
+潜在提升,潜在提升
+"⚠️ 待优化项：","⚠️ 待优化项："
+"✅ 所有优化项已配置完成！","✅ 所有优化项已配置完成！"
+"📖 在线优化指南","📖 在线优化指南"
+访问以下链接查看详细的安装步骤：,访问以下链接查看详细的安装步骤：
+"🔒 安全策略：仅允许后台本地 AJAX 请求","🔒 安全策略：仅允许后台本地 AJAX 请求"
+"💡 需要先登录后台才能访问","💡 需要先登录后台才能访问"
+"🚀 快速优化","🚀 快速优化"
+"📦 %{1}","📦 %{1}"
+文件：%{1},文件：%{1}
+显示性能优化文档链接,显示性能优化文档链接
+"Weline Server","Weline Server"
+┌──────────────────────────────────────────────────────────────────────────────────────┐,┌──────────────────────────────────────────────────────────────────────────────────────┐
+├──────────────────────────────────────────────────────────────────────────────────────┤,├──────────────────────────────────────────────────────────────────────────────────────┤
+└──────────────────────────────────────────────────────────────────────────────────────┘,└──────────────────────────────────────────────────────────────────────────────────────┘
+运行中,Running
+已停止,Stopped
+"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)","[WLS] = Weline Server (high-perf)  |  [CLI] = PHP Built-in (dev)"
+没有找到任何服务器实例,"No server instances found"
+═══════════════════════════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════════════════════════
+服务器实例详细列表,"Server Instance Details"
+"PHP 内置服务器","PHP Built-in Server"
+───────────────────────────────────────────────────────────────────────────────,───────────────────────────────────────────────────────────────────────────────
+"[%{1}] ● 运行中","[%{1}] ● 运行中"
+"[%{1}] ○ 已停止","[%{1}] ○ 已停止"
+"├─ 服务类型   : %{1}","├─ 服务类型   : %{1}"
+"├─ 监听地址   : %{1}:%{2}","├─ 监听地址   : %{1}:%{2}"
+"├─ Worker 数  : %{1}","├─ Worker 数  : %{1}"
+"├─ 运行模式   : %{1}","├─ 运行模式   : %{1}"
+守护进程,"Daemon mode"
+前台模式,"Foreground mode"
+"├─ 启动时间   : %{1}","├─ 启动时间   : %{1}"
+"└─ 运行时长   : %{1}","└─ 运行时长   : %{1}"
+"总计：%{1} 个实例","Total: %{1} instance(s)"
+"列出所有服务器实例（CLI 和 Weline Server）","List all server instances (CLI and Weline Server)"
+"列出所有服务器实例及其状态，包括 Weline Server 和 PHP CLI 服务器","List all server instances and status, including Weline Server and PHP CLI server"
+仅显示运行中的实例,"Show running instances only"
+显示详细信息,"Show detailed info"
+"按类型过滤：weline 或 cli","Filter by type: weline or cli"
+"以 JSON 格式输出","Output in JSON format"
+显示所有实例,显示所有实例
+"仅 Weline Server","Weline Server only"
+"仅 CLI 服务器","CLI server only"
+仅运行中,"Running only"
+详细信息,"Detailed info"
+"Weline Server 多进程模式","Weline Server 多进程模式"
+基础端口：%{1},基础端口：%{1}
+进程数量：%{1},进程数量：%{1}
+平台：%{1},平台：%{1}
+检查端口...,检查端口...
+"端口 %{1} 已被占用，尝试释放...","端口 %{1} 已被占用，尝试释放..."
+"无法释放端口 %{1}","无法释放端口 %{1}"
+端口检查通过,端口检查通过
+"启动 Worker 进程...","启动 Worker 进程..."
+"Worker #%{1} 启动成功（端口: %{2}）%{3}","Worker #%{1} 启动成功（端口: %{2}）%{3}"
+"Worker #%{1} 启动失败：%{2}","Worker #%{1} 启动失败：%{2}"
+验证进程状态...,验证进程状态...
+"Worker #%{1} (:%{2}) - 运行中","Worker #%{1} (:%{2}) - 运行中"
+"Worker #%{1} (:%{2}) - 未响应","Worker #%{1} (:%{2}) - 未响应"
+启动结果,启动结果
+"成功启动：%{1}/%{2} 个进程","成功启动：%{1}/%{2} 个进程"
+启动方式：%{1},启动方式：%{1}
+测试命令：,测试命令：
+压测命令：,压测命令：
+停止命令：,停止命令：
+进程控制函数状态：,进程控制函数状态：
+"⚠️ 性能优化建议","⚠️ 性能优化建议"
+当前使用备用方案（%{1}）启动进程，性能可能受限。,当前使用备用方案（%{1}）启动进程，性能可能受限。
+"建议在 php.ini 中启用以下函数以获得最佳性能：","建议在 php.ini 中启用以下函数以获得最佳性能："
+修改方法：,修改方法：
+"1. 找到 php.ini 文件：%{1}","1. 找到 php.ini 文件：%{1}"
+"2. 找到 disable_functions 配置项","2. 找到 disable_functions 配置项"
+"3. 移除以上函数名，保存并重启服务","3. 移除以上函数名，保存并重启服务"
+启用后，服务器性能将有质的飞跃！🚀,启用后，服务器性能将有质的飞跃！🚀
+"进程控制核心函数，支持双向通信和精确的 PID 管理","进程控制核心函数，支持双向通信和精确的 PID 管理"
+进程资源释放，防止僵尸进程,进程资源释放，防止僵尸进程
+实时获取进程状态，支持进程监控,实时获取进程状态，支持进程监控
+真正的进程分叉，共享内存，性能最优,真正的进程分叉，共享内存，性能最优
+创建守护进程，脱离终端控制,创建守护进程，脱离终端控制
+轻量级进程通信,轻量级进程通信
+进程管理辅助函数,进程管理辅助函数
+没有可用的进程创建函数,没有可用的进程创建函数
+"多进程模式启动 Weline Server","多进程模式启动 Weline Server"
+启动多个独立进程以提高并发性能,启动多个独立进程以提高并发性能
+监听地址（默认：127.0.0.1）,监听地址（默认：127.0.0.1）
+基础端口（默认：8080）,基础端口（默认：8080）
+进程数量（默认：4）,进程数量（默认：4）
+"启动 4 个进程","启动 4 个进程"
+"启动 8 个进程","启动 8 个进程"
+"停止 Weline Server 多进程","停止 Weline Server 多进程"
+"Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止","Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止"
+"Worker #%{1} (端口: %{2}) 已停止","Worker #%{1} (端口: %{2}) 已停止"
+"Worker #%{1} (端口: %{2}) 未运行","Worker #%{1} (端口: %{2}) 未运行"
+"已停止 %{1}/%{2} 个进程","已停止 %{1}/%{2} 个进程"
+"停止多进程 Weline Server","停止多进程 Weline Server"
+"停止多个 Worker 进程","停止多个 Worker 进程"
+"停止 4 个进程","停止 4 个进程"
+"正在重启 Weline Server...","Restarting Weline Server..."
+"重启 Weline 常驻内存 HTTP 服务器","Restart Weline persistent HTTP server"
+"重启 Weline Server（先停止再启动）","Restart Weline Server (stop then start)"
+监听地址（默认：0.0.0.0）,"Listen address (default: 0.0.0.0)"
+监听端口（默认：8080）,"Listen port (default: 8080)"
+"Worker 进程数（默认：4）","Worker count (default: 4)"
+重启服务器,"Restart server"
+重启并更改端口,"Restart with new port"
+"Weline Server 不可用：%{1}","Weline Server unavailable: %{1}"
+"自动回退到 PHP 内置 CLI 服务器...","Falling back to PHP built-in CLI server..."
+已生成新证书：%{1},"Generated new certificate: %{1}"
+使用已有证书：%{1},"Using existing certificate: %{1}"
+证书有效期至：%{1},"Certificate valid until: %{1}"
+检测到服务器已运行，正在重启...,检测到服务器已运行，正在重启...
+╔════════════════════════════════════════════════════╗,╔════════════════════════════════════════════════════╗
+╚════════════════════════════════════════════════════╝,╚════════════════════════════════════════════════════╝
+默认值,默认值
+env.servers.%{1},env.servers.%{1}
+env.server,env.server
+命令行参数,命令行参数
+"SSL 证书文件不存在：%{1}","SSL 证书文件不存在：%{1}"
+"SSL 私钥文件不存在：%{1}","SSL 私钥文件不存在：%{1}"
+手动配置,"Manually configured"
+"正在为 %{1} 准备 SSL 证书...","Preparing SSL certificate for %{1}..."
+无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线,无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线
+后台运行,后台运行
+已启用,已启用
+未启用,未启用
+智能模式,智能模式
+进程函数：%{1},进程函数：%{1}
+"✓ 服务器已在运行中","✓ 服务器已在运行中"
+实例名称：%{1},实例名称：%{1}
+监听端口：%{1},监听端口：%{1}
+如需重启服务器，请使用以下命令：,如需重启服务器，请使用以下命令：
+或,或
+其他操作：,其他操作：
+已停止现有服务器,已停止现有服务器
+检查端口可用性...,检查端口可用性...
+"端口 %{1} 已被占用，强制释放...","端口 %{1} 已被占用，强制释放..."
+"端口 %{1} 已被占用","端口 %{1} 已被占用"
+"使用 -r 参数强制重启，或手动停止占用该端口的进程","使用 -r 参数强制重启，或手动停止占用该端口的进程"
+"无法释放端口 %{1}，请手动停止占用该端口的进程","无法释放端口 %{1}，请手动停止占用该端口的进程"
+"├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功","├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功"
+"├─ Worker #%{1} (端口: %{2}) - 启动失败","├─ Worker #%{1} (端口: %{2}) - 启动失败"
+"├─ Worker #%{1} (%{2}:%{3}) - 运行中 ✓","├─ Worker #%{1} (%{2}:%{3}) - 运行中 ✓"
+"├─ Worker #%{1} (:%{2}) - 未响应 ✗","├─ Worker #%{1} (:%{2}) - 未响应 ✗"
+"启动结果：%{1}/%{2} 个进程运行中","启动结果：%{1}/%{2} 个进程运行中"
+"字节码缓存，提升 PHP 执行速度 50%+","字节码缓存，提升 PHP 执行速度 50%+"
+"原生 Socket 支持，提升网络性能","原生 Socket 支持，提升网络性能"
+"进程控制核心函数，支持精确的 PID 管理","进程控制核心函数，支持精确的 PID 管理"
+"真正的进程分叉，共享内存，性能最优（仅 Linux/Mac）","真正的进程分叉，共享内存，性能最优（仅 Linux/Mac）"
+内存限制,内存限制
+执行时间限制（0=无限制）,执行时间限制（0=无限制）
+"CLI 模式开启 OPCache","CLI 模式开启 OPCache"
+"JIT 编译器（PHP 8+）","JIT 编译器（PHP 8+）"
+"JIT 缓冲区大小","JIT 缓冲区大小"
+"（Windows 建议不超过 CPU 核心数）","（Windows 建议不超过 CPU 核心数）"
+"当前 Worker 数：%{1}，推荐：%{2}","当前 Worker 数：%{1}，推荐：%{2}"
+"使用 -c %{1} 参数或在 env.server.worker_count 设置","使用 -c %{1} 参数或在 env.server.worker_count 设置"
+缺少扩展：%{1},缺少扩展：%{1}
+"在 php.ini 中启用：extension=%{1}","在 php.ini 中启用：extension=%{1}"
+函数被禁用：proc_open,函数被禁用：proc_open
+"从 disable_functions 中移除 proc_open","从 disable_functions 中移除 proc_open"
+函数被禁用：pcntl_fork,函数被禁用：pcntl_fork
+"从 disable_functions 中移除 pcntl_fork","从 disable_functions 中移除 pcntl_fork"
+内存限制较低：%{1},内存限制较低：%{1}
+"在 php.ini 设置 memory_limit = 256M","在 php.ini 设置 memory_limit = 256M"
+"OPCache CLI 模式未启用","OPCache CLI 模式未启用"
+"启用后可提升 CLI 脚本执行速度","启用后可提升 CLI 脚本执行速度"
+"在 php.ini 设置 opcache.enable_cli = 1","在 php.ini 设置 opcache.enable_cli = 1"
+"JIT 编译器未启用","JIT 编译器未启用"
+"PHP 8 JIT 可提升 CPU 密集型任务性能 2-3 倍","PHP 8 JIT 可提升 CPU 密集型任务性能 2-3 倍"
+"在 php.ini 设置 opcache.jit = tracing","在 php.ini 设置 opcache.jit = tracing"
+"未安装 event 扩展，使用 stream_select 回退方案","未安装 event 扩展，使用 stream_select 回退方案"
+"安装后性能提升 100-200%%，QPS 从 15,000 提升至 30,000+","安装后性能提升 100-200%%，QPS 从 15,000 提升至 30,000+"
+"Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event","Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event"
+"Linux/Mac: pecl install event && echo ""extension=event"" >> php.ini","Linux/Mac: pecl install event && echo ""extension=event"" >> php.ini"
+"可选：安装 ev 扩展可获得更高性能","可选：安装 ev 扩展可获得更高性能"
+"基于 libev，比 libevent 更轻量","基于 libev，比 libevent 更轻量"
+"pecl install ev","pecl install ev"
+"✅ 当前配置已达最佳性能！","✅ 当前配置已达最佳性能！"
+"📊 性能优化建议","📊 性能优化建议"
+"🚨 关键性能问题（强烈建议解决）：","🚨 关键性能问题（强烈建议解决）："
+"当前性能：%{1} → 优化后：%{2}","当前性能：%{1} → 优化后：%{2}"
+"⚠️ 影响性能的配置：","⚠️ 影响性能的配置："
+"💡 可选优化：","💡 可选优化："
+"📁 PHP 配置文件：%{1}","📁 PHP 配置文件：%{1}"
+"🔥 解决关键问题后，性能将提升 100-200%%！","🔥 解决关键问题后，性能将提升 100-200%%！"
+"💪 优化后，服务器性能将有质的飞跃！","💪 优化后，服务器性能将有质的飞跃！"
+╔══════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════╗
+╠══════════════════════════════════════════════════════════════╣,╠══════════════════════════════════════════════════════════════╣
+╚══════════════════════════════════════════════════════════════╝,╚══════════════════════════════════════════════════════════════╝
+"启动 Weline 常驻内存 HTTP 服务器","Start Weline persistent HTTP server"
+"启动 Weline 高性能常驻内存服务器","Start Weline high-performance persistent server"
+实例名称（默认：default）,"Instance name (default: default)"
+"使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）","使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）"
+基础端口（默认：9981）,基础端口（默认：9981）
+"Worker 进程数（默认：auto 智能模式）","Worker 进程数（默认：auto 智能模式）"
+守护进程模式（默认）,守护进程模式（默认）
+"运行模式：io（I/O密集）或 cpu（CPU密集）","运行模式：io（I/O密集）或 cpu（CPU密集）"
+强制重启（如服务器已运行，则先停止再启动）,强制重启（如服务器已运行，则先停止再启动）
+"前台运行（仅 --cli 时有效）","前台运行（仅 --cli 时有效）"
+"SSL 证书文件路径（启用 HTTPS）","SSL 证书文件路径（启用 HTTPS）"
+"SSL 私钥文件路径（启用 HTTPS）","SSL 私钥文件路径（启用 HTTPS）"
+配置优先级,配置优先级
+"命令行参数 > env.servers.[name] > env.server > 默认值","命令行参数 > env.servers.[name] > env.server > 默认值"
+"worker_count 设为 ""auto"" 时根据 CPU 核心数和模式自动计算","worker_count 设为 ""auto"" 时根据 CPU 核心数和模式自动计算"
+事件循环,事件循环
+"自动选择最优：Event 扩展 > stream_select","自动选择最优：Event 扩展 > stream_select"
+多进程,Multi-process
+"优先级：proc_open > pcntl_fork > exec","优先级：proc_open > pcntl_fork > exec"
+"HTTPS 支持","HTTPS 支持"
+"自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key","自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key"
+"SSL 协议","SSL 协议"
+"支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本","支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本"
+启动默认实例,"Start default instance"
+"使用 CLI 服务器","Use CLI server"
+短命令,短命令
+启动命名实例,"Start named instance"
+CPU密集模式,CPU密集模式
+强制重启,强制重启
+"启用 HTTPS","启用 HTTPS"
+查看状态,"View status"
+停止服务,停止服务
+压力测试,压力测试
+优化指南,优化指南
+"Weline Server 状态","Weline Server status"
+没有运行中的服务器实例,没有运行中的服务器实例
+"使用 server:status <name> 查看详细状态","使用 server:status <name> 查看详细状态"
+"使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
+"实例 [%{1}] 不存在","Instance [%{1}] not found"
+"实例 [%{1}] 状态","实例 [%{1}] 状态"
+"Worker 进程状态：","Worker 进程状态："
+"状态：全部运行中 (%{1}/%{2})","状态：全部运行中 (%{1}/%{2})"
+"状态：部分运行 (%{1}/%{2})","状态：部分运行 (%{1}/%{2})"
+"状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
+"测试请求：curl http://%{1}:%{2}/","测试请求：curl http://%{1}:%{2}/"
+"查看 Weline Server 运行状态","View Weline Server status"
+"查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
+实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
+查看所有实例,"View all instances"
+查看指定实例,"View specific instance"
+"使用 server:listing 查看所有实例","使用 server:listing 查看所有实例"
+"停止 Weline Server","停止 Weline Server"
+"停止 Worker 进程...","停止 Worker 进程..."
+"├─ Worker #%{1} (端口: %{2}) - 已停止 ✓","├─ Worker #%{1} (端口: %{2}) - 已停止 ✓"
+"├─ Worker #%{1} (端口: %{2}) - 未运行","├─ Worker #%{1} (端口: %{2}) - 未运行"
+"实例 [%{1}] 已停止，共停止 %{2}/%{3} 个进程","实例 [%{1}] 已停止，共停止 %{2}/%{3} 个进程"
+没有正在运行的实例,"No running instances"
+停止所有服务器实例,停止所有服务器实例
+"发现 %{1} 个 Weline Server 实例","发现 %{1} 个 Weline Server 实例"
+"正在停止实例 [%{1}]...","正在停止实例 [%{1}]..."
+"所有 Weline Server 实例已停止","所有 Weline Server 实例已停止"
+"正在停止 PHP 内置服务器 (cli-server)...","正在停止 PHP 内置服务器 (cli-server)..."
+"PHP 内置服务器已停止","PHP 内置服务器已停止"
+"停止 Weline Server 或 PHP 内置服务器实例","停止 Weline Server 或 PHP 内置服务器实例"
+"停止正在运行的 Weline Server 或 PHP 内置服务器实例","停止正在运行的 Weline Server 或 PHP 内置服务器实例"
+"实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
+"停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","停止所有运行中的实例（含 Weline Server 与 CLI 服务器）"
+强制停止,"Force stop"
+停止默认实例,"Stop default instance"
+停止指定实例,"Stop specific instance"
+"停止 PHP 内置服务器","停止 PHP 内置服务器"
+停止所有实例,"Stop all instances"
+"请指定域名：--domain example.com","请指定域名：--domain example.com"
+"正在为 %{1} 申请 SSL 证书...","Requesting SSL certificate for %{1}..."
+联系邮箱：%{1},"Contact email: %{1}"
+Webroot：%{1},"Webroot: %{1}"
+"Webroot 目录不存在：%{1}","Webroot directory not found: %{1}"
+"✓ 证书申请成功！","✓ Certificate request successful!"
+证书路径：%{1},"Certificate path: %{1}"
+私钥路径：%{1},"Private key path: %{1}"
+到期时间：%{1},"Expires at: %{1}"
+"启用 HTTPS：","Enable HTTPS:"
+"✗ 证书申请失败：%{1}","✗ Certificate request failed: %{1}"
+未找到域名证书：%{1},"Domain certificate not found: %{1}"
+"正在续签 %{1} 的证书...","Renewing certificate for %{1}..."
+"✓ 证书续签成功","✓ Certificate renewed successfully"
+"✗ 证书续签失败：%{1}","✗ Certificate renewal failed: %{1}"
+"检查需要续签的证书（%{1} 天内过期）...","Checking certificates needing renewal (expiring within %{1} days)..."
+没有需要续签的证书,"No certificates need renewal"
+"✓ %{1} - 续签成功","✓ %{1} - 续签成功"
+"✗ %{1} - 续签失败：%{2}","✗ %{1} - 续签失败：%{2}"
+"续签完成：成功 %{1} 个，失败 %{2} 个","Renewal complete: %{1} succeeded, %{2} failed"
+暂无证书记录,"No certificate records"
+"SSL 证书列表","SSL 证书列表"
+域名,域名
+状态,状态
+HTTPS,HTTPS
+到期时间,"Expires At"
+自动续签,"Auto Renew"
+有效,Active
+已过期,Expired
+待申请,Pending
+错误,Error
+"Weline Server SSL 证书管理","Weline Server SSL Certificate Management"
+证书总数：%{1},"Total certificates: %{1}"
+有效证书：%{1},"Active certificates: %{1}"
+"HTTPS 启用：%{1}","HTTPS enabled: %{1}"
+即将过期（30天内）：%{1},"Expiring soon (within 30 days): %{1}"
+可用命令：,"Available commands:"
+"- 查看证书列表","- View certificate list"
+"- 申请新证书","- Request new certificate"
+"- 续签到期证书","- Renew expiring certificates"
+"- 同步网站域名","- Sync website domains"
+"- 启用 HTTPS","- Enable HTTPS"
+"- 禁用 HTTPS","- Disable HTTPS"
+"从 Weline_Websites 同步域名...","Syncing domains from Weline_Websites..."
+未找到任何网站域名,"No website domains found"
+"找到 %{1} 个域名","Found %{1} domains"
+"✓ %{1} - 已有有效证书","✓ %{1} - 已有有效证书"
+"→ %{1} - 申请证书...","→ %{1} - 申请证书..."
+"✓ 成功","✓ 成功"
+"✗ 失败：%{1}","✗ 失败：%{1}"
+启用,Enabling
+禁用,Disabling
+"正在 %{1} %{2} 的 HTTPS...","%{1} HTTPS for %{2}..."
+"✓ %{1}","✓ %{1}"
+重要：请重启服务器使配置生效,"Important: Please restart server for changes to take effect"
+"✗ %{1}","✗ %{1}"
+操作：status/list/request/renew/sync/enable/disable,"Action: status/list/request/renew/sync/enable/disable"
+指定域名,指定域名
+"Webroot 路径（默认：pub/）","Webroot path (default: pub/)"
+提前续签天数（默认：30）,"Renewal advance days (default: 30)"
+显示证书状态概览（默认）,"Show certificate status overview (default)"
+列出所有证书,"List all certificates"
+申请新证书,"Request new certificate"
+续签到期证书,"Renew expiring certificates"
+同步网站域名并申请证书,"Sync website domains and request certificates"
+"启用指定域名的 HTTPS","Enable HTTPS for specified domain"
+"禁用指定域名的 HTTPS","Disable HTTPS for specified domain"
+列出证书,列出证书
+申请证书,"Request Certificate"
+续签证书,续签证书
+同步并申请,"Sync and request"
+"禁用 HTTPS","禁用 HTTPS"
+访问被拒绝：仅允许本地请求,访问被拒绝：仅允许本地请求
+"仅支持 AJAX 请求","仅支持 AJAX 请求"
+服务器启动命令已发送,服务器启动命令已发送
+服务器已停止,服务器已停止
+停止失败,停止失败
+服务器已重启,服务器已重启
+"SSL 证书管理","SSL Certificate Management"
+请指定域名,"Please specify domain"
+请指定联系邮箱,请指定联系邮箱
+未找到证书记录,"Certificate record not found"
+证书已删除,"Certificate deleted"
+"同步完成，新增 %{1} 个域名","Sync complete, added %{1} domains"
+请选择要签发证书的域名,"Please select domains to issue certificates"
+证书签发成功,"Certificate issued successfully"
+证书签发失败,"Certificate issue failed"
+"签发完成：成功 %{1} 个，失败 %{2} 个","Issue completed: %{1} succeeded, %{2} failed"
+"需要安装 event 扩展","Event extension required"
+读事件处理错误：%{1},"Read event error: %{1}"
+写事件处理错误：%{1},"Write event error: %{1}"
+信号处理错误：%{1},"Signal handler error: %{1}"
+定时器执行错误：%{1},"Timer execution error: %{1}"
+"安装 %{1} 可提升性能至 %{2}","安装 %{1} 可提升性能至 %{2}"
+"性能提升 100-200%%，支持更多并发连接","性能提升 100-200%%，支持更多并发连接"
+证书签发完成,"Certificate Issued"
+"当 SSL 证书成功签发后触发，允许其他模块监听并处理证书签发后的逻辑，如同步 HTTPS 状态。","Triggered when SSL certificate is successfully issued. Allows other modules to listen and handle post-issuance logic, such as syncing HTTPS status."
+证书禁用,"Certificate Disabled"
+"当 HTTPS 被禁用或证书失效时触发，允许其他模块监听并回退 HTTPS 状态。","Triggered when HTTPS is disabled or certificate becomes invalid. Allows other modules to listen and rollback HTTPS status."
+证书更新,"Certificate Renewed"
+"当 SSL 证书续签或更新时触发，允许其他模块监听并处理证书更新后的逻辑。","Triggered when SSL certificate is renewed. Allows other modules to listen and handle post-renewal logic."
+请求域名列表,"Request Domain List"
+"当 Server 模块需要获取可选域名列表时触发，允许其他模块（如 Websites）提供域名数据。","Triggered when Server module needs to get available domain list. Allows other modules (like Websites) to provide domain data."
+"SSL 证书自动续签","SSL Certificate Auto Renewal"
+"每天检查即将到期的证书（%{1} 天内），自动续签","Check expiring certificates daily (within %{1} days) and auto-renew"
+没有需要续签的证书,"No certificates need renewal"
+续签成功,"Renewal successful"
+续签失败,"Renewal failed"
+续签异常,"Renewal exception"
+"证书自动续签完成：检查 %{1} 个，成功 %{2} 个，失败 %{3} 个，跳过 %{4} 个","Certificate auto-renewal completed: checked %{1}, renewed %{2}, failed %{3}, skipped %{4}"
+"证书自动续签任务失败：%{1}","Certificate auto-renewal task failed: %{1}"
+"高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理","High-performance async persistent server, supports HTTP/WebSocket/TCP/UDP protocols with multi-instance management"
+"Windows 系统不支持 pcntl 扩展，Weline Server 无法使用多进程模式","Windows does not support pcntl extension, Weline Server cannot use multi-process mode"
+"缺少 sockets 扩展","Missing sockets extension"
+未知原因,"Unknown reason"
+秒,second(s)
+分,minute(s)
+小时,hour(s)
+天,day(s)
+请求处理错误：%{1},请求处理错误：%{1}
+未找到,未找到
+"Event 扩展","Event 扩展"
+"基于 libevent 的高性能事件循环","基于 libevent 的高性能事件循环"
+"pcntl_fork 函数","pcntl_fork 函数"
+"使用 exec 备用方案","使用 exec 备用方案"
+原生进程分叉，更低开销,原生进程分叉，更低开销
+"OPCache 扩展","OPCache 扩展"
+"字节码缓存，提升 PHP 执行速度","字节码缓存，提升 PHP 执行速度"
+每次请求重新编译,每次请求重新编译
+使用缓存的字节码,使用缓存的字节码
+"JIT 编译器","JIT 编译器"
+"PHP 8 即时编译器，显著提升 CPU 密集型任务性能","PHP 8 即时编译器，显著提升 CPU 密集型任务性能"
+解释执行,解释执行
+"编译执行，接近 C 语言性能","编译执行，接近 C 语言性能"
+"Sockets 扩展","Sockets 扩展"
+"底层 Socket 操作，更精细的控制","底层 Socket 操作，更精细的控制"
+"使用 stream_socket","使用 stream_socket"
+"使用原生 socket","使用原生 socket"
+"proc_open 函数","proc_open 函数"
+"使用 exec 备用","使用 exec 备用"
+精确控制子进程,精确控制子进程
+"HTTPS/SSL 配置","HTTPS/SSL 配置"
+安全加密,安全加密
+"为服务器启用 HTTPS 加密传输，保护数据安全","为服务器启用 HTTPS 加密传输，保护数据安全"
+"HTTP 明文传输","HTTP 明文传输"
+"HTTPS 加密传输","HTTPS 加密传输"
+跨平台,跨平台
+"需要 PHP 编译时启用 OpenSSL 支持","需要 PHP 编译时启用 OpenSSL 支持"
+"一、获取 SSL 证书","一、获取 SSL 证书"
+"您可以通过以下方式获取 SSL 证书","您可以通过以下方式获取 SSL 证书"
+"1. 免费证书（推荐）","1. 免费证书（推荐）"
+"使用 certbot 自动获取和续期","使用 certbot 自动获取和续期"
+"2. 自签名证书（开发环境）","2. 自签名证书（开发环境）"
+仅用于开发测试，浏览器会显示安全警告,仅用于开发测试，浏览器会显示安全警告
+"3. 商业证书","3. 商业证书"
+适合企业生产环境,适合企业生产环境
+二、证书文件准备,二、证书文件准备
+确保证书文件格式正确,确保证书文件格式正确
+"证书文件 (cert.pem)","证书文件 (cert.pem)"
+包含服务器证书，可选包含中间证书链,包含服务器证书，可选包含中间证书链
+"私钥文件 (key.pem)","私钥文件 (key.pem)"
+服务器私钥，必须无密码保护,服务器私钥，必须无密码保护
+"请妥善保管，设置严格权限 (chmod 600)","请妥善保管，设置严格权限 (chmod 600)"
+"三、启动 HTTPS 服务器","三、启动 HTTPS 服务器"
+"服务器支持多域名证书，自动检测 app/etc/ssl/ 目录","Server supports multi-domain certificates, auto-detecting app/etc/ssl/ directory"
+多域名证书目录结构（推荐）,"Multi-domain certificate directory structure (recommended)"
+每个域名一个目录，自动匹配证书,"One directory per domain, auto-matching certificates"
+支持的证书文件名格式（按优先级）,支持的证书文件名格式（按优先级）
+将证书文件放入对应域名目录，服务器启动时自动检测,"Place certificate files in corresponding domain directory, auto-detected at startup"
+自动申请证书,"Auto request certificate"
+查看证书状态,"View certificate status"
+同步网站域名,"Sync website domains"
+自动检测方式（推荐）,自动检测方式（推荐）
+"将证书放入 app/etc/ 目录后直接启动","将证书放入 app/etc/ 目录后直接启动"
+"服务器自动检测并启用 HTTPS","服务器自动检测并启用 HTTPS"
+手动指定方式,手动指定方式
+"配置文件方式 (env.php)","配置文件方式 (env.php)"
+"在 env.php 中配置 SSL 证书","在 env.php 中配置 SSL 证书"
+"支持的 SSL/TLS 协议","支持的 SSL/TLS 协议"
+"服务器支持所有 TLS 协议，默认使用最高可用版本","服务器支持所有 TLS 协议，默认使用最高可用版本"
+"推荐，最安全（PHP 7.4+）","推荐，最安全（PHP 7.4+）"
+广泛支持，安全,广泛支持，安全
+兼容旧系统,兼容旧系统
+"四、验证 HTTPS","四、验证 HTTPS"
+"确认 HTTPS 服务器正常运行","确认 HTTPS 服务器正常运行"
+浏览器访问,浏览器访问
+命令行测试,命令行测试
+"-k 参数用于忽略自签名证书警告","-k 参数用于忽略自签名证书警告"
+五、生产环境建议,五、生产环境建议
+"使用 443 端口（标准 HTTPS 端口）","使用 443 端口（标准 HTTPS 端口）"
+"配置 HTTP 到 HTTPS 重定向","配置 HTTP 到 HTTPS 重定向"
+"启用 HSTS（HTTP Strict Transport Security）","启用 HSTS（HTTP Strict Transport Security）"
+"使用 TLS 1.2 或更高版本","使用 TLS 1.2 或更高版本"
+"1. 下载扩展","1. 下载扩展"
+"访问 PECL 下载对应版本","访问 PECL 下载对应版本"
+"选择版本：PHP %{1}, %{2}, %{3}","选择版本：PHP %{1}, %{2}, %{3}"
+"2. 复制 DLL 文件","2. 复制 DLL 文件"
+"将 php_event.dll 复制到扩展目录","将 php_event.dll 复制到扩展目录"
+"3. 编辑 php.ini","3. 编辑 php.ini"
+"在 php.ini 中添加扩展","在 php.ini 中添加扩展"
+"4. 重启服务器","4. 重启服务器"
+"重启 Weline Server","重启 Weline Server"
+"1. 安装依赖","1. 安装依赖"
+"安装 libevent 开发库","安装 libevent 开发库"
+"2. 安装扩展","2. 安装扩展"
+"使用 PECL 安装","使用 PECL 安装"
+"3. 启用扩展","3. 启用扩展"
+"在 php.ini 中添加","在 php.ini 中添加"
+"pcntl 扩展不支持 Windows 平台，系统将自动使用备用方案","pcntl 扩展不支持 Windows 平台，系统将自动使用备用方案"
+"1. 编辑 php.ini","1. 编辑 php.ini"
+"找到 disable_functions 行，删除 pcntl_fork","找到 disable_functions 行，删除 pcntl_fork"
+"2. 重启 PHP-FPM（如有）","2. 重启 PHP-FPM（如有）"
+已安装,已安装
+"pcntl_fork 已可用","pcntl_fork 已可用"
+"1. 启用 OPCache","1. 启用 OPCache"
+"在 php.ini 中取消注释","在 php.ini 中取消注释"
+"1. 安装 OPCache","1. 安装 OPCache"
+"%{1}. 启用 CLI 模式","%{1}. 启用 CLI 模式"
+"%{1}. 推荐配置","%{1}. 推荐配置"
+"优化 OPCache 配置","优化 OPCache 配置"
+"JIT 需要 PHP 8.0+，当前版本：%{1}","JIT 需要 PHP 8.0+，当前版本：%{1}"
+"1. 确保 OPCache 已启用","1. 确保 OPCache 已启用"
+"JIT 依赖 OPCache","JIT 依赖 OPCache"
+"2. 配置 JIT","2. 配置 JIT"
+"3. 重启服务器","3. 重启服务器"
+"sockets 扩展已可用","sockets 扩展已可用"
+"1. 启用扩展","1. 启用扩展"
+"1. 安装扩展","1. 安装扩展"
+已可用,已可用
+"proc_open 函数已启用","proc_open 函数已启用"
+"找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
+实例不存在,"Instance not found"
+使用已有证书,"Using existing certificate"
+生成私钥失败,"Failed to generate private key"
+"生成 CSR 失败","Failed to generate CSR"
+签发证书失败,"Failed to sign certificate"
+导出私钥失败,"Failed to export private key"
+保存证书文件失败,"Failed to save certificate file"
+保存私钥文件失败,"Failed to save private key file"
+自签证书生成成功,"Self-signed certificate generated successfully"
+更新证书记录失败：%{1},"Update certificate record failed: %{1}"
+证书签发事件调度失败：%{1},"Certificate issued event dispatch failed: %{1}"
+证书禁用事件调度失败：%{1},"Certificate disabled event dispatch failed: %{1}"
+证书更新事件调度失败：%{1},"Certificate renewed event dispatch failed: %{1}"
+请求域名列表失败：%{1},"Request domain list failed: %{1}"
+手动禁用,"Manually disabled"
+无法创建账户密钥,"Cannot create account key"
+证书申请成功,"Certificate request successful"
+"无法获取 ACME 目录","Cannot get ACME directory"
+无法生成域名密钥,"Cannot generate domain key"
+账户注册失败,"Account registration failed"
+创建订单失败,"Order creation failed"
+获取授权失败,"Authorization retrieval failed"
+获取授权详情失败,"Authorization details retrieval failed"
+"未找到 HTTP-01 验证方式","HTTP-01 challenge not found"
+创建验证文件失败,"Challenge file creation failed"
+域名验证失败,"Domain validation failed"
+"提交 CSR 失败","CSR submission failed"
+等待证书颁发超时,"Certificate issuance timeout"
+下载证书失败,"Certificate download failed"
+"证书文件不存在，无法启用 HTTPS","Certificate files not found, cannot enable HTTPS"
+证书已过期，请先续签,"Certificate expired, please renew first"
+用户手动禁用,"User manually disabled"
+"HTTPS 已启用","HTTPS enabled"
+"HTTPS 已禁用","HTTPS disabled"
+定时器间隔必须大于0,"Timer interval must be greater than 0"
+"定时器需要 pcntl 扩展或事件循环支持","Timer requires pcntl extension or event loop support"
+加载中...,加载中...
+正在加载优化指南...,正在加载优化指南...
+加载失败,加载失败
+重试,重试
+未知错误,未知错误
+"基于您当前的 PHP 环境自动生成的优化建议","基于您当前的 PHP 环境自动生成的优化建议"
+生成时间,生成时间
+本地访问,本地访问
+"您的 PHP 环境","您的 PHP 环境"
+"PHP 可执行文件","PHP 可执行文件"
+"php.ini 配置文件","php.ini 配置文件"
+线程安全模式,线程安全模式
+"下载扩展时选择 TS 版本","下载扩展时选择 TS 版本"
+"下载扩展时选择 NTS 版本","下载扩展时选择 NTS 版本"
+优化概览,优化概览
+待优化,待优化
+未优化时：,未优化时：
+优化后：,优化后：
+此优化项已配置完成！,此优化项已配置完成！
+完成后重启服务器,完成后重启服务器
+完成以上优化后，需要重启服务器使配置生效：,完成以上优化后，需要重启服务器使配置生效：
+复制命令,复制命令
+验证优化结果,验证优化结果
+重启后可以运行压力测试查看性能提升：,重启后可以运行压力测试查看性能提升：
+安装步骤,安装步骤
+文件位置：,文件位置：
+添加内容：,添加内容：
+复制,复制
+执行命令：,执行命令：
+选择您的系统：,选择您的系统：
+打开下载页面,打开下载页面
+已复制到剪贴板,已复制到剪贴板
+"Weline Server 管理","Weline Server 管理"
+正在加载服务器状态...,正在加载服务器状态...
+服务器状态,服务器状态
+刷新,刷新
+实例总数,实例总数
+优化项,优化项
+"PHP 环境","PHP 环境"
+线程安全,线程安全
+服务器实例,服务器实例
+启动新实例,启动新实例
+暂无服务器实例,暂无服务器实例
+运行,运行
+启动服务器,启动服务器
+实例名称,实例名称
+监听地址,监听地址
+端口范围,端口范围
+"Worker 数","Worker 数"
+操作,操作
+重启,重启
+停止,停止
+启动,启动
+性能优化,性能优化
+可优化,可优化
+已最优,已最优
+查看安装指南,查看安装指南
+正在启动...,正在启动...
+启动成功,启动成功
+启动失败,启动失败
+正在停止...,正在停止...
+停止成功,停止成功
+正在重启...,正在重启...
+重启成功,重启成功
+重启失败,重启失败
+"请输入 Worker 数量（留空使用默认）","请输入 Worker 数量（留空使用默认）"
+正在启动新实例...,正在启动新实例...
+同步域名,"Sync Domains"
+证书总数,"Total Certificates"
+"HTTPS 启用","HTTPS Enabled"
+即将过期,"Expiring Soon"
+证书列表,"Certificate List"
+"点击""申请证书""开始为您的域名申请 SSL 证书","点击""申请证书""开始为您的域名申请 SSL 证书"
+颁发机构,Issuer
+"剩余 %{1} 天","%{1} days remaining"
+申请,申请
+续签,Renew
+使用说明,"Usage Guide"
+命令行操作,"Command Line Operations"
+证书存储位置,"Certificate Storage Location"
+证书文件存储在：,"Certificate files stored at:"
+证书链,"Certificate Chain"
+私钥,"Private Key"
+中间证书,"Intermediate Certificate"
+"申请 SSL 证书","Request SSL Certificate"
+请确保域名已正确解析到本服务器,"Please ensure the domain is correctly resolved to this server"
+联系邮箱,"Contact Email"
+取消,取消
+请重启服务器使配置生效,"Please restart server to apply changes"
+确定要为此域名申请证书吗？,"Are you sure you want to request a certificate for this domain?"
+请输入联系邮箱,"Please enter contact email"
+正在申请证书，请稍候...,"Requesting certificate, please wait..."
+确定要续签此证书吗？,"Are you sure you want to renew this certificate?"
+正在续签证书，请稍候...,"Renewing certificate, please wait..."
+确定要删除此证书吗？此操作不可恢复！,"Are you sure you want to delete this certificate? This action cannot be undone!"
+请输入联系邮箱（用于申请证书）,"Please enter contact email (for certificate request)"
+无效的监听地址：%{1},"Invalid listen address: %{1}"
+"Windows 模式：单进程运行","Windows mode: single process"
+"Weline Server 只能在 CLI 模式下运行","Weline Server can only run in CLI mode"
+"用法：php yourfile.php {start|stop|restart|reload|status}","Usage: php yourfile.php {start|stop|restart|reload|status}"
+"Fork 失败","Fork failed"
+"setsid 失败","setsid 失败"
+"二次 Fork 失败","Second fork failed"
+"无法保存 PID 到 %{1}","Cannot save PID to %{1}"
+高性能异步常驻内存服务器,高性能异步常驻内存服务器
+守护进程模式运行，PID：%{1},"Running in daemon mode, PID: %{1}"
+"警告：用户 %{1} 不存在","Warning: User %{1} not found"
+"警告：无法切换用户到 %{1}","Warning: Cannot switch user to %{1}"
+"onWorkerStart 错误：%{1}","onWorkerStart error: %{1}"
+"无法创建 Socket：[%{1}] %{2}","Cannot create socket: [%{1}] %{2}"
+"onConnect 错误：%{1}","onConnect error: %{1}"
+"Worker [%{1}] 退出，退出码：%{2}，正在重启...","Worker [%{1}] exited with code %{2}, restarting..."
+"onWorkerStop 错误：%{1}","onWorkerStop error: %{1}"
+"正在停止所有 Worker...","Stopping all workers..."
+"Windows 不支持重载功能","Windows does not support reload"
+"Weline Server 未运行","Weline Server is not running"
+"Weline Server 正在运行，Master PID：%{1}","Weline Server is running, Master PID: %{1}"
+"Weline Server 已停止","Weline Server stopped"
+"使用 server:status 查看所有实例","使用 server:status 查看所有实例"
+"发现 %{1} 个实例","发现 %{1} 个实例"
+所有实例已停止,所有实例已停止
+"停止 Weline 常驻内存 HTTP 服务器","Stop Weline persistent HTTP server"
+"停止正在运行的 Weline Server 实例","停止正在运行的 Weline Server 实例"
+停止所有运行中的实例,"Stop all running instances"
+"├─ Worker #%{1} (端口: %{2}) - 启动成功","├─ Worker #%{1} (端口: %{2}) - 启动成功"
+"├─ Worker #%{1} (:%{2}) - 运行中 ✓","├─ Worker #%{1} (:%{2}) - 运行中 ✓"
+"🔐 访问令牌有效期：24 小时","🔐 访问令牌有效期：24 小时"
+"💡 此链接仅允许本地访问或使用令牌访问","💡 此链接仅允许本地访问或使用令牌访问"
+"启动跨平台多进程 HTTP 服务器","启动跨平台多进程 HTTP 服务器"
+"Worker 进程数（默认：CPU 核心数）","Worker 进程数（默认：CPU 核心数）"
+守护进程模式,守护进程模式
+访问被拒绝,访问被拒绝
+无法访问此页面,无法访问此页面
+获取访问权限,获取访问权限
+在命令行中运行以下命令获取访问链接：,在命令行中运行以下命令获取访问链接：
+生成时间：%{1},生成时间：%{1}
+"可优化 +%{1}","可优化 +%{1}"
+目标：http://%{1}:%{2}%{3},目标：http://%{1}:%{2}%{3}
+并发数：%{1},并发数：%{1}
+总请求：%{1},总请求：%{1}
+压测脚本不存在：%{1},压测脚本不存在：%{1}
+"对 Weline Server 进行压力测试，测量 QPS 和响应延迟","对 Weline Server 进行压力测试，测量 QPS 和响应延迟"
+目标主机（默认：127.0.0.1）,目标主机（默认：127.0.0.1）
+目标端口（默认：8888）,目标端口（默认：8888）
+基本压测,基本压测
+"测试 JSON 接口","测试 JSON 接口"
+"正在启动 Weline Server...","Starting Weline Server..."
+监听地址：http://%{1}:%{2},"Listen address: http://%{1}:%{2}"
+"Worker 进程数：%{1}","Worker count: %{1}"
+运行模式：守护进程,"Mode: daemon"
+运行模式：前台运行,"Mode: foreground"
+"Worker #%{1} 已启动","Worker #%{1} started"
+"Worker #%{1} 已停止","Worker #%{1} stopped"
+"启动高性能常驻内存 HTTP 服务器","Start high-performance persistent HTTP server"
+以守护进程模式运行,"Run in daemon mode"
+基本启动,"Basic start"
+状态：未运行,"Status: not running"
+"状态：未运行（无效的 PID 文件）","Status: not running (invalid PID file)"
+状态：运行中,"Status: running"
+"Master PID：%{1}","Master PID: %{1}"
+"PID 文件：%{1}","PID file: %{1}"
+状态：已停止（进程不存在）,"Status: stopped (process not exist)"
+"正在清理过期的 PID 文件...","Cleaning expired PID file..."
+"内存占用：%{1} MB","Memory usage: %{1} MB"
+进程详情：,"Process details:"
+"Worker PIDs：%{1}","Worker PIDs: %{1}"
+日志文件：%{1},"Log file: %{1}"
+（日志文件不存在）,"(Log file not exist)"
+"日志大小：%{1} KB","Log size: %{1} KB"
+"最近 %{1} 条日志：","Last %{1} log entries:"
+"查看 Weline Server 运行状态和进程信息","View Weline Server status and process info"
+"显示最近 n 条日志（默认 20）","Show last n log entries (default 20)"
+查看日志,"View log"
+"无效的 PID 文件","Invalid PID file"
+"正在停止 Weline Server（PID: %{1}）...","Stopping Weline Server (PID: %{1})..."
+"进程不存在，清理 PID 文件","Process not exist, cleaning PID file"
+停止失败：%{1},"Stop failed: %{1}"
+"Weline Server 已强制停止","Weline Server 已强制停止"
+"无法停止进程，请手动终止 PID: %{1}","无法停止进程，请手动终止 PID: %{1}"
+"停止正在运行的 Weline Server","Stop running Weline Server"
+停止服务器,"Stop server"
+"高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议","High-performance async persistent server, supports HTTP/WebSocket/TCP/UDP protocols"
+"请先启动服务器：php bin/w server:start -p %{1}","Please start server first: php bin/w server:start -p %{1}"
+无效的实例名称：%{1}，只允许字母、数字、下划线和横线,"Invalid instance name: %{1}, only letters, numbers, underscores and hyphens allowed"
+"实例 [%{1}] 已在运行！","Instance [%{1}] is already running!"
+"使用 server:stop %{1} 停止该实例","Use server:stop %{1} to stop this instance"
+"端口 %{1} 已被实例 [%{2}] 占用！","Port %{1} is already used by instance [%{2}]!"
+"实例 [%{1}] Worker #%{2} 已启动","Instance [%{1}] Worker #%{2} started"
+"实例 [%{1}] Worker #%{2} 已停止","Instance [%{1}] Worker #%{2} stopped"
+实例名称（默认：default），用于管理多个服务器实例,"Instance name (default: default), for managing multiple server instances"
+"启动高性能常驻内存 HTTP 服务器，支持多实例管理","Start high-performance persistent HTTP server with multi-instance support"
+"启动 Weline 常驻内存 HTTP 服务器（支持多实例）","Start Weline persistent HTTP server (multi-instance support)"
+启动多实例,"Start multiple instances"
+查看实例,"View instances"
+"实例 [%{1}] 未在运行","Instance [%{1}] is not running"
+"使用 server:list 查看所有实例","Use server:list to view all instances"
+已清理实例信息文件,"Instance info files cleaned"
+"实例 [%{1}] 已成功停止","Instance [%{1}] stopped successfully"
+"无法停止实例 [%{1}]，请手动终止 PID: %{2}","Cannot stop instance [%{1}], please manually kill PID: %{2}"
+"正在停止 %{1} 个实例...","Stopping %{1} instance(s)..."
+"停止完成：成功 %{1} 个，失败 %{2} 个","Stop completed: %{1} succeeded, %{2} failed"
+强制停止（SIGKILL）,"Force stop (SIGKILL)"
+实例名称（不指定则显示所有实例）,"Instance name (shows all if not specified)"
+显示所有实例状态,"Show all instance status"
+查看实例日志,"View instance logs"
+"列出所有 Weline Server 实例","List all Weline Server instances"
+"列出所有 Weline Server 实例及其状态","List all Weline Server instances and their status"
+"JSON 输出","JSON output"
+"使用 server:status <name> 查看详情，使用 server:stop <name> 停止实例","Use server:status <name> for details, server:stop <name> to stop"
+"正在停止 Weline Server","Stopping Weline Server"
+日志文件不存在：%{1},"Log file not found: %{1}"
+"Worker 进程：%{1}","Worker processes: %{1}"
+"PHP 内置 CLI 服务器","PHP Built-in CLI Server"
+高性能异步服务器,"High-performance Async Server"
+"强制使用 PHP 内置 CLI 服务器（开发模式）","Force use PHP built-in CLI server (development mode)"
+"启动 HTTP 服务器。默认使用高性能 Weline Server，Windows 自动回退到 CLI 服务器","Start HTTP server. Uses high-performance Weline Server by default, auto fallback to CLI server on Windows"
+"监听端口（默认：8080，CLI 默认：9981）","Listen port (default: 8080, CLI default: 9981)"
+"Worker 进程数（默认：4，仅 Weline Server）","Worker count (default: 4, Weline Server only)"
+"前台运行（仅 CLI 服务器）","Run in foreground (CLI server only)"
+查看所有服务器,"View all servers"
+服务器实例列表,"Server Instance List"
+服务类型,"Server type"
+"CLI 服务器未在运行","CLI server is not running"
+"正在停止 PHP 内置 CLI 服务器...","Stopping PHP built-in CLI server..."
+"实例名称（default / cli / cli-server 或 Weline 实例名）","Instance name (default / cli / cli-server or Weline instance)"
+"停止所有运行中的实例（含 CLI 和 Weline）","Stop all running instances (CLI and Weline)"
+"停止 CLI 服务器","Stop CLI server"
+"点击申请证书""开始为您的域名申请 SSL 证书""","Click 'Request Certificate' to apply for SSL certificate for your domain"
+"Let's Encrypt 要求提供联系邮箱","Let's Encrypt requires a contact email"
+"使用 Let's Encrypt 自动管理 SSL 证书","Automatically manage SSL certificates with Let's Encrypt"
+"联系邮箱（Let's Encrypt 要求）","Contact email (required by Let's Encrypt)"
+"使用 Let's Encrypt 测试环境","Use Let's Encrypt staging environment"
+"Let's Encrypt 自动申请/续签 SSL 证书","Let's Encrypt auto request/renew SSL certificates"
+"  ✓ %{1} - 续签成功","  ✓ %{1} - Renewed successfully"
+"  ✗ %{1} - 续签失败：%{2}","  ✗ %{1} - Renewal failed: %{2}"
+"  ✓ %{1} - 已有有效证书","  ✓ %{1} - Already has valid certificate"
+"  → %{1} - 申请证书...","  → %{1} - Requesting certificate..."
+"    ✓ 成功","    ✓ Success"
+"    ✗ 失败：%{1}","    ✗ Failed: %{1}"
+"使用 Let's Encrypt 自动申请免费证书","Auto request free certificate using Let's Encrypt"
+"自动检测 (app/etc/ssl/%{1})","Auto-detected (app/etc/ssl/%{1})"
+"Weline Self-Signed","Weline Self-Signed"
+开发环境自签证书,"Self-signed certificate for development"
+本地域名自动使用自签证书,"Local domains automatically use self-signed certificates"
+"生产环境自动申请 Let's Encrypt 证书","Production environments automatically request Let's Encrypt certificates"
+"HTTPS 默认启用","HTTPS enabled by default"
+"服务器默认启用 HTTPS 加密传输","Server enables HTTPS encrypted transport by default"
+域名解析到本地地址，使用自签证书,"Domain resolves to local address, using self-signed certificate"
+域名解析到私有网络，使用自签证书,"Domain resolves to private network, using self-signed certificate"
+证书类型,"Certificate Type"
+精确域名,"Exact Domain"
+泛域名,"Wildcard Domain"
+证书类型：%{1},"Certificate type: %{1}"
+"本期仅支持单域名证书（HTTP-01），泛域名证书需 DNS-01，列为后续阶段","This release only supports single-domain certificates (HTTP-01). Wildcard certificates require DNS-01, planned for a future release."

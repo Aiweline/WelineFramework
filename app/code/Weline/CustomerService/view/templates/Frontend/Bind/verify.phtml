@@ -1,0 +1,206 @@
+<?php
+/**
+ * 邮箱绑定验证结果页面
+ */
+$success = $this->getData('success') ?? false;
+$message = $this->getData('message') ?? '';
+$email = $this->getData('email') ?? '';
+?>
+<!DOCTYPE html>
+<html lang="<?= $this->getLocale() ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= __('邮箱绑定验证') ?></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .verify-container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+        
+        .verify-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+        }
+        
+        .verify-icon.success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .verify-icon.error {
+            background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+            color: white;
+        }
+        
+        .verify-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        
+        .verify-message {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        
+        .verify-email {
+            background: #f8f9fa;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 24px;
+            display: inline-block;
+        }
+        
+        .verify-email strong {
+            color: #667eea;
+        }
+        
+        .verify-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 1px solid #dee2e6;
+        }
+        
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+        
+        .help-text {
+            margin-top: 24px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .help-text a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .help-text a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 480px) {
+            .verify-container {
+                padding: 30px 20px;
+            }
+            
+            .verify-title {
+                font-size: 20px;
+            }
+            
+            .verify-message {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="verify-container">
+        <?php if ($success): ?>
+            <div class="verify-icon success">
+                <span>✓</span>
+            </div>
+            <h1 class="verify-title"><?= __('邮箱绑定成功') ?></h1>
+            <p class="verify-message"><?= htmlspecialchars($message) ?></p>
+            <?php if ($email): ?>
+                <div class="verify-email">
+                    <?= __('已绑定邮箱') ?>: <strong><?= htmlspecialchars($email) ?></strong>
+                </div>
+            <?php endif; ?>
+            <div class="verify-actions">
+                <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
+            </div>
+            <p class="help-text">
+                <?= __('绑定成功后，您将收到客服回复的邮件通知') ?>
+            </p>
+        <?php else: ?>
+            <div class="verify-icon error">
+                <span>✗</span>
+            </div>
+            <h1 class="verify-title"><?= __('验证失败') ?></h1>
+            <p class="verify-message"><?= htmlspecialchars($message) ?></p>
+            <div class="verify-actions">
+                <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
+                <button class="btn btn-secondary" onclick="history.back()"><?= __('返回上一页') ?></button>
+            </div>
+            <p class="help-text">
+                <?= __('如有问题，请') ?> <a href="javascript:void(0)" onclick="openChat()"><?= __('联系客服') ?></a>
+            </p>
+        <?php endif; ?>
+    </div>
+    
+    <script>
+    function openChat() {
+        // 尝试打开客服聊天窗口
+        if (typeof CustomerServiceWidget !== 'undefined') {
+            CustomerServiceWidget.toggleChat();
+        } else {
+            // 如果客服组件不可用，跳转到首页
+            window.location.href = '/';
+        }
+    }
+    </script>
+</body>
+</html>

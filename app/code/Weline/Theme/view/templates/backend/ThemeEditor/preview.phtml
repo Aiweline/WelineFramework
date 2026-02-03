@@ -79,13 +79,13 @@ function renderWidget($template, array $widget, array $children = []): string {
             $config['children'] = $childrenHtml;
         }
         
-        $html = $template->fetchTagHtml($widgetTemplate, $config);
+        $html = $template->fetchHtml($widgetTemplate, $config);
         
         // 包装部件，添加编辑属性
         return sprintf(
             '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-config=\'%s\'>%s</div>',
             $layoutId,
-            htmlspecialchars((string)($widgetCode ?? ''))),
+            htmlspecialchars((string)($widgetCode ?? '')),
             htmlspecialchars(json_encode($config)),
             $html
         );
@@ -98,7 +98,7 @@ function renderWidget($template, array $widget, array $children = []): string {
                 </div>
             </div>',
             $layoutId,
-            htmlspecialchars((string)($widgetCode ?? ''))),
+            htmlspecialchars((string)($widgetCode ?? '')),
             htmlspecialchars((string)($e->getMessage() ?? ''))
         );
     }
@@ -120,7 +120,7 @@ function renderWidgetPlaceholder(array $widget): string {
             </div>
         </div>',
         $layoutId,
-        htmlspecialchars((string)($widgetCode ?? ''))),
+        htmlspecialchars((string)($widgetCode ?? '')),
         htmlspecialchars((string)($name ?? ''))
     );
 }
