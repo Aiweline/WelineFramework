@@ -20,6 +20,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Data\HtmlInterface;
+use Weline\Theme\Service\PreviewTokenService;
 
 trait TraitTemplate
 {
@@ -296,13 +297,66 @@ trait TraitTemplate
         }
         $data = str_replace('\\', '/', $data);
         $data = str_replace('//', '/', $data);
-        # 是否静态文件添加
-        if ($rand_version_with_system and ($type === 'statics' && Env::getInstance()->getConfig('static_file_rand_version'))) {
-            $version = random_int(10000, 100000);
-            $data .= '?v=' . $version;
+        
+        # 静态资源版本号处理
+        if ($rand_version_with_system && ($type === 'statics' || $type === 'theme')) {
+            // 先移除已存在的版本号参数（防止重复添加）
+            $data = preg_replace('/[?&]v=[^&]*/', '', $data);
+            // 清理可能残留的 ? 或 &
+            $data = rtrim($data, '?&');
+            
+            $version = $this->getStaticResourceVersion();
+            if ($version) {
+                // 始终使用 ? 作为第一个参数分隔符
+                $data .= '?v=' . $version;
+            } elseif (Env::getInstance()->getConfig('static_file_rand_version')) {
+                // 回退到随机版本号
+                $version = random_int(10000, 100000);
+                $data .= '?v=' . $version;
+            }
         }
-        $this->viewCache->set($cache_key, $data);
+        
+        // 静态资源不缓存带版本号的 URL（版本号需要动态计算）
+        // 只缓存基础 URL 可能导致问题，这里选择不缓存静态资源 URL
+        if ($type !== 'statics' && $type !== 'theme') {
+            $this->viewCache->set($cache_key, $data);
+        }
         return $data;
+    }
+    
+    /**
+     * 获取静态资源版本号
+     * 
+     * 优先级：
+     * 1. 预览模式：使用预览 Token
+     * 2. 系统配置的静态版本号（发布时更新）
+     * 3. 返回 null（使用默认随机版本号）
+     * 
+     * @return string|null 版本号
+     */
+    private function getStaticResourceVersion(): ?string
+    {
+        // 1. 检查预览模式
+        try {
+            $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+            if ($previewTokenService->isPreviewMode()) {
+                $token = $previewTokenService->getTokenFromRequest();
+                if ($token) {
+                    // 使用 token 的前 8 位作为版本号
+                    return 'preview_' . substr($token, 0, 8);
+                }
+            }
+        } catch (\Throwable $e) {
+            // PreviewTokenService 不可用时忽略
+        }
+        
+        // 2. 读取系统配置的静态版本号
+        $staticVersion = Env::getInstance()->getConfig('theme/static_version');
+        if ($staticVersion) {
+            return $staticVersion;
+        }
+        
+        return null;
     }
 
     /**

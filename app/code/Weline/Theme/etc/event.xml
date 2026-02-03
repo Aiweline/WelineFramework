@@ -56,4 +56,19 @@
                   sort="100"/>
     </event>
     
+    <!-- 
+        系统升级后事件 - 推送预览绕过规则到 CDN
+        
+        功能：
+        1. 在模块安装或升级后触发
+        2. 推送 CDN 规则以绕过包含预览 Token 的请求缓存
+    -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Theme::setup_upgrade_after"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="200"/>
+    </event>
+    
 </config>

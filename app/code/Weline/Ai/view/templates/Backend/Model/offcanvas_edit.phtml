@@ -393,7 +393,7 @@ if (!empty($displayConfig)) {
                                     <?= __('超时时间（秒）') ?>
                                 </label>
                                 <?php 
-                                    $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : '120';
+                                    $timeout = $model && isset($model->getConfig()['timeout']) ? $model->getConfig()['timeout'] : '180';
                                 ?>
                                 <input type="number" 
                                        class="form-control" 
@@ -401,9 +401,9 @@ if (!empty($displayConfig)) {
                                        name="config[timeout]" 
                                        value="<?= $timeout ?>" 
                                        min="0"
-                                       placeholder="120">
+                                       placeholder="180">
                                 <div class="form-text">
-                                    <?= __('API请求超时时间，0表示不限制，默认120秒') ?> 
+                                    <?= __('API请求超时时间，0表示不限制，默认180秒') ?> 
                                 </div>
                             </div>
                         </div>

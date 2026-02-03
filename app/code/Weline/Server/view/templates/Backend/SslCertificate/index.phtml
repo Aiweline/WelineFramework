@@ -1,0 +1,439 @@
+<?php
+/**
+ * SSL 证书管理界面
+ * 
+ * @var array $certificates 证书列表
+ * @var array $stats 统计信息
+ */
+
+$certificates = $certificates ?? [];
+$stats = $stats ?? [];
+?>
+
+<div class="container-fluid py-4">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">
+            <i class="bi bi-shield-lock me-2"></i>
+            <?= __('SSL 证书管理') ?>
+        </h4>
+        <div>
+            <button type="button" class="btn btn-outline-secondary me-2" onclick="syncDomains()">
+                <i class="bi bi-arrow-repeat me-1"></i>
+                <?= __('同步域名') ?>
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#requestModal">
+                <i class="bi bi-plus-lg me-1"></i>
+                <?= __('申请证书') ?>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-file-earmark-lock fs-4 text-primary"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0"><?= $stats['total'] ?? 0 ?></h3>
+                            <small class="text-muted"><?= __('证书总数') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 bg-success bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-check-circle fs-4 text-success"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0"><?= $stats['https_enabled'] ?? 0 ?></h3>
+                            <small class="text-muted"><?= __('HTTPS 启用') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 bg-warning bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-exclamation-triangle fs-4 text-warning"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0"><?= $stats['expiring_soon'] ?? 0 ?></h3>
+                            <small class="text-muted"><?= __('即将过期') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 bg-danger bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-x-circle fs-4 text-danger"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0"><?= $stats['expired'] ?? 0 ?></h3>
+                            <small class="text-muted"><?= __('已过期') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 证书列表 -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent">
+            <h5 class="mb-0"><?= __('证书列表') ?></h5>
+        </div>
+        <div class="card-body p-0">
+            <?php if (empty($certificates)): ?>
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="text-muted mt-2"><?= __('暂无证书记录') ?></p>
+                    <p class="text-muted small"><?= __('点击"申请证书"开始为您的域名申请 SSL 证书') ?></p>
+                </div>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th><?= __('域名') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('HTTPS') ?></th>
+                                <th><?= __('到期时间') ?></th>
+                                <th><?= __('颁发机构') ?></th>
+                                <th><?= __('自动续签') ?></th>
+                                <th class="text-end"><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($certificates as $cert): ?>
+                                <?php
+                                $domain = $cert[\Weline\Server\Model\SslCertificate::fields_DOMAIN];
+                                $status = $cert[\Weline\Server\Model\SslCertificate::fields_STATUS];
+                                $httpsEnabled = $cert[\Weline\Server\Model\SslCertificate::fields_HTTPS_ENABLED];
+                                $expiresAt = $cert[\Weline\Server\Model\SslCertificate::fields_EXPIRES_AT];
+                                $issuer = $cert[\Weline\Server\Model\SslCertificate::fields_ISSUER];
+                                $autoRenew = $cert[\Weline\Server\Model\SslCertificate::fields_AUTO_RENEW];
+                                $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
+                                $daysLeft = $cert['_days_left'] ?? null;
+                                
+                                $statusBadge = match ($status) {
+                                    'active' => 'bg-success',
+                                    'expired' => 'bg-danger',
+                                    'pending' => 'bg-warning',
+                                    'error' => 'bg-danger',
+                                    default => 'bg-secondary',
+                                };
+                                $statusText = match ($status) {
+                                    'active' => __('有效'),
+                                    'expired' => __('已过期'),
+                                    'pending' => __('待申请'),
+                                    'error' => __('错误'),
+                                    default => $status,
+                                };
+                                ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= htmlspecialchars($domain) ?></strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge <?= $statusBadge ?>"><?= $statusText ?></span>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   id="https_<?= md5($domain) ?>"
+                                                   <?= $httpsEnabled ? 'checked' : '' ?>
+                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
+                                                   onchange="toggleHttps('<?= htmlspecialchars($domain) ?>', this.checked)">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <?php if ($expiresAt): ?>
+                                            <span class="<?= $expiryStatus === 'expired' ? 'text-danger' : ($expiryStatus === 'warning' ? 'text-warning' : '') ?>">
+                                                <?= $expiresAt ?>
+                                            </span>
+                                            <?php if ($daysLeft !== null): ?>
+                                                <br>
+                                                <small class="text-muted">
+                                                    <?= $daysLeft > 0 ? __('剩余 %{1} 天', [$daysLeft]) : __('已过期') ?>
+                                                </small>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars($issuer ?: '-') ?></td>
+                                    <td>
+                                        <?php if ($autoRenew): ?>
+                                            <i class="bi bi-check-circle text-success"></i>
+                                        <?php else: ?>
+                                            <i class="bi bi-x-circle text-muted"></i>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <?php if ($status === 'pending' || $status === 'error'): ?>
+                                                <button type="button" class="btn btn-outline-primary" 
+                                                        onclick="requestCertificate('<?= htmlspecialchars($domain) ?>')">
+                                                    <i class="bi bi-download"></i> <?= __('申请') ?>
+                                                </button>
+                                            <?php else: ?>
+                                                <button type="button" class="btn btn-outline-primary" 
+                                                        onclick="renewCertificate('<?= htmlspecialchars($domain) ?>')">
+                                                    <i class="bi bi-arrow-repeat"></i> <?= __('续签') ?>
+                                                </button>
+                                            <?php endif; ?>
+                                            <button type="button" class="btn btn-outline-danger" 
+                                                    onclick="deleteCertificate('<?= htmlspecialchars($domain) ?>')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <!-- 帮助说明 -->
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-transparent">
+            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i><?= __('使用说明') ?></h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><?= __('命令行操作') ?></h6>
+                    <pre class="bg-light p-3 rounded"><code># <?= __('查看证书状态') ?>
+php bin/w server:ssl:auto
+
+# <?= __('申请新证书') ?>
+php bin/w server:ssl:auto request -d example.com -e admin@example.com
+
+# <?= __('续签到期证书') ?>
+php bin/w server:ssl:auto renew
+
+# <?= __('同步网站域名') ?>
+php bin/w server:ssl:auto sync -e admin@example.com</code></pre>
+                </div>
+                <div class="col-md-6">
+                    <h6><?= __('证书存储位置') ?></h6>
+                    <p class="text-muted"><?= __('证书文件存储在：') ?></p>
+                    <code>app/etc/ssl/{domain}/</code>
+                    <ul class="mt-2 text-muted small">
+                        <li><code>fullchain.pem</code> - <?= __('证书链') ?></li>
+                        <li><code>privkey.pem</code> - <?= __('私钥') ?></li>
+                        <li><code>chain.pem</code> - <?= __('中间证书') ?></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 申请证书模态框 -->
+<div class="modal fade" id="requestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('申请 SSL 证书') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="requestForm">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('域名') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="domain" required 
+                               placeholder="example.com">
+                        <small class="text-muted"><?= __('请确保域名已正确解析到本服务器') ?></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('联系邮箱') ?> <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" required 
+                               placeholder="admin@example.com">
+                        <small class="text-muted"><?= __("Let's Encrypt 要求提供联系邮箱") ?></small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" onclick="submitRequest()">
+                    <i class="bi bi-download me-1"></i><?= __('申请证书') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const baseUrl = '<?= $this->getUrl('backend/server/ssl-certificate/') ?>';
+
+// 切换 HTTPS
+async function toggleHttps(domain, enabled) {
+    try {
+        const response = await fetch(baseUrl + 'toggle-https', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `domain=${encodeURIComponent(domain)}&enabled=${enabled ? 1 : 0}`
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            if (enabled) {
+                AdminToast.warning('<?= __('请重启服务器使配置生效') ?>');
+            }
+        } else {
+            AdminToast.error(result.message);
+            // 恢复开关状态
+            document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, '')).checked = !enabled;
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+
+// 申请证书
+async function requestCertificate(domain) {
+    if (!confirm('<?= __('确定要为此域名申请证书吗？') ?>')) return;
+    
+    const email = prompt('<?= __('请输入联系邮箱') ?>', 'admin@' + domain);
+    if (!email) return;
+    
+    AdminToast.info('<?= __('正在申请证书，请稍候...') ?>');
+    
+    try {
+        const response = await fetch(baseUrl + 'request', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `domain=${encodeURIComponent(domain)}&email=${encodeURIComponent(email)}`
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            AdminToast.error(result.message);
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+
+// 续签证书
+async function renewCertificate(domain) {
+    if (!confirm('<?= __('确定要续签此证书吗？') ?>')) return;
+    
+    AdminToast.info('<?= __('正在续签证书，请稍候...') ?>');
+    
+    try {
+        const response = await fetch(baseUrl + 'renew', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `domain=${encodeURIComponent(domain)}`
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            AdminToast.error(result.message);
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+
+// 删除证书
+async function deleteCertificate(domain) {
+    if (!confirm('<?= __('确定要删除此证书吗？此操作不可恢复！') ?>')) return;
+    
+    try {
+        const response = await fetch(baseUrl + 'delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `domain=${encodeURIComponent(domain)}`
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            AdminToast.error(result.message);
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+
+// 同步域名
+async function syncDomains() {
+    const email = prompt('<?= __('请输入联系邮箱（用于申请证书）') ?>', 'admin@localhost');
+    if (!email) return;
+    
+    try {
+        const response = await fetch(baseUrl + 'sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `email=${encodeURIComponent(email)}`
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            AdminToast.error(result.message);
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+
+// 提交申请
+async function submitRequest() {
+    const form = document.getElementById('requestForm');
+    const formData = new FormData(form);
+    
+    AdminToast.info('<?= __('正在申请证书，请稍候...') ?>');
+    
+    try {
+        const response = await fetch(baseUrl + 'request', {
+            method: 'POST',
+            body: new URLSearchParams(formData)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            AdminToast.success(result.message);
+            bootstrap.Modal.getInstance(document.getElementById('requestModal')).hide();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            AdminToast.error(result.message);
+        }
+    } catch (e) {
+        AdminToast.error(e.message);
+    }
+}
+</script>

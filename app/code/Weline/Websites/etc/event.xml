@@ -20,4 +20,38 @@
                   disabled="false"
                   shared="true" sort="100"/>
     </event>
+    
+    <!-- ========== Server 模块事件观察者 ========== -->
+    
+    <!--证书签发完成：同步域名 HTTPS 状态-->
+    <event name="Weline_Server::domain::certificate_issued">
+        <observer name="Weline_Websites::sync_https_status" 
+                  instance="Weline\Websites\Observer\SyncHttpsStatus"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
+    <!--证书禁用：回退 HTTPS 状态-->
+    <event name="Weline_Server::domain::certificate_disabled">
+        <observer name="Weline_Websites::rollback_https_status" 
+                  instance="Weline\Websites\Observer\RollbackHttpsStatus"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
+    <!--证书更新：同步更新状态-->
+    <event name="Weline_Server::domain::certificate_renewed">
+        <observer name="Weline_Websites::update_certificate_status" 
+                  instance="Weline\Websites\Observer\UpdateCertificateStatus"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
+    <!--请求域名列表：提供域名数据-->
+    <event name="Weline_Server::integration::domain_list_requested">
+        <observer name="Weline_Websites::provide_domain_list" 
+                  instance="Weline\Websites\Observer\ProvideDomainList"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
 </config>

@@ -22,6 +22,10 @@
         apiPublishVersion: '',
         apiDeleteVersion: '',
         apiRenameVersion: '',
+        // 前端预览 API
+        apiStartPreview: '',
+        apiExitPreview: '',
+        apiPublishAndExit: '',
     };
 
     // 状态管理
@@ -86,6 +90,11 @@
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
         config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
+        
+        // 前端预览 API 端点
+        config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
+        config.apiExitPreview = container.dataset.apiExitPreview || `${config.apiBase}/exit-preview`;
+        config.apiPublishAndExit = container.dataset.apiPublishAndExit || `${config.apiBase}/publish-and-exit`;
 
         // Preview-related endpoints and call sites (baseline for TDD)
         // - apiRenderWidget: used by renderWidgetPreview()/preview render flows
@@ -114,6 +123,7 @@
             btnPreview: document.getElementById('btnPreview'),
             btnSave: document.getElementById('btnSave'),
             btnPublish: document.getElementById('btnPublish'),
+            btnFrontendPreview: document.getElementById('btnFrontendPreview'),
             btnRestoreLayout: document.getElementById('btnRestoreLayout'),
             btnRefreshPreview: document.getElementById('btnRefreshPreview'),
             btnFullscreenPreview: document.getElementById('btnFullscreenPreview'),
@@ -288,6 +298,9 @@
 
         // 预览按钮
         elements.btnPreview?.addEventListener('click', openPreview);
+        
+        // 前端预览按钮
+        elements.btnFrontendPreview?.addEventListener('click', openFrontendPreview);
 
         // 配置表单提交（左侧面板）
         document.addEventListener('submit', function(e) {
@@ -5452,6 +5465,47 @@
     }
     
     /**
+     * 打开前端真实 URL 预览
+     * 
+     * 生成预览 Token 并跳转到真实的前端页面
+     * 预览模式下会显示可拖动的退出预览浮窗
+     */
+    async function openFrontendPreview() {
+        if (!state.themeId) {
+            showToast('请先选择主题', 'warning');
+            return;
+        }
+
+        try {
+            showToast('正在启动预览...', 'info');
+
+            const response = await fetch(config.apiStartPreview, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    theme_id: state.themeId,
+                    page_type: state.pageType,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.preview_url) {
+                // 打开新窗口预览
+                window.open(result.data.preview_url, '_blank');
+                showToast('预览已在新窗口打开', 'success');
+            } else {
+                showToast(result.message || '启动预览失败', 'error');
+            }
+        } catch (err) {
+            console.error('[ThemeEditor] Start preview error:', err);
+            showToast('启动预览失败', 'error');
+        }
+    }
+    
+    /**
      * 打开新窗口预览已发布版本
      */
     function openPublishedPreview() {
@@ -6631,40 +6685,105 @@
      */
     function showPromptDialog(title, message, defaultValue = '', confirmText = '确定', cancelText = '取消') {
         return new Promise((resolve) => {
-            // 创建对话框
-            const overlay = document.createElement('div');
-            overlay.className = 'custom-confirm-overlay';
-            overlay.innerHTML = `
-                <div class="custom-confirm-dialog">
-                    <h3>${escapeHtml(title)}</h3>
-                    <p>${escapeHtml(message)}</p>
-                    <input type="text" class="form-control prompt-input" value="${escapeHtml(defaultValue)}" placeholder="版本名称">
-                    <div class="custom-confirm-buttons">
-                        <button class="btn btn-secondary cancel-btn">${escapeHtml(cancelText)}</button>
-                        <button class="btn btn-primary confirm-btn">${escapeHtml(confirmText)}</button>
+            // 创建对话框容器
+            const container = document.createElement('div');
+            container.className = 'prompt-dialog-container';
+            container.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 100000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            container.innerHTML = `
+                <div class="prompt-dialog-overlay" style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                "></div>
+                <div class="prompt-dialog-box" style="
+                    position: relative;
+                    background: #fff;
+                    border-radius: 8px;
+                    padding: 24px;
+                    min-width: 400px;
+                    max-width: 500px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                    animation: slideDown 0.3s ease;
+                ">
+                    <h4 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #333;">${escapeHtml(title)}</h4>
+                    <p style="margin: 0 0 16px 0; font-size: 14px; color: #666; line-height: 1.5;">${escapeHtml(message)}</p>
+                    <input type="text" class="prompt-input" value="${escapeHtml(defaultValue)}" placeholder="版本名称" style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        margin-bottom: 20px;
+                        box-sizing: border-box;
+                    ">
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="cancel-btn" style="
+                            padding: 8px 20px;
+                            border-radius: 6px;
+                            border: none;
+                            cursor: pointer;
+                            font-size: 14px;
+                            background: #6c757d;
+                            color: #fff;
+                        ">${escapeHtml(cancelText)}</button>
+                        <button class="confirm-btn" style="
+                            padding: 8px 20px;
+                            border-radius: 6px;
+                            border: none;
+                            cursor: pointer;
+                            font-size: 14px;
+                            background: #007bff;
+                            color: #fff;
+                        ">${escapeHtml(confirmText)}</button>
                     </div>
                 </div>
             `;
 
-            document.body.appendChild(overlay);
+            document.body.appendChild(container);
 
-            const input = overlay.querySelector('.prompt-input');
-            const confirmBtn = overlay.querySelector('.confirm-btn');
-            const cancelBtn = overlay.querySelector('.cancel-btn');
+            const input = container.querySelector('.prompt-input');
+            const confirmBtn = container.querySelector('.confirm-btn');
+            const cancelBtn = container.querySelector('.cancel-btn');
+            const overlay = container.querySelector('.prompt-dialog-overlay');
 
             // 聚焦输入框
             setTimeout(() => input.focus(), 100);
 
+            // 清理函数
+            const cleanup = () => {
+                container.remove();
+            };
+
             // 确认
             confirmBtn.addEventListener('click', () => {
                 const value = input.value.trim();
-                overlay.remove();
+                cleanup();
                 resolve(value);
             });
 
             // 取消
             cancelBtn.addEventListener('click', () => {
-                overlay.remove();
+                cleanup();
+                resolve(null);
+            });
+            
+            // 点击遮罩关闭
+            overlay.addEventListener('click', () => {
+                cleanup();
                 resolve(null);
             });
 
@@ -6672,15 +6791,15 @@
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     const value = input.value.trim();
-                    overlay.remove();
+                    cleanup();
                     resolve(value);
                 }
             });
 
             // ESC 取消
-            overlay.addEventListener('keydown', (e) => {
+            container.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
-                    overlay.remove();
+                    cleanup();
                     resolve(null);
                 }
             });

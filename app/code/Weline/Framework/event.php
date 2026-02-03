@@ -53,17 +53,7 @@ return [
         'doc' => 'module/模块安装后.md',
     ],
     
-    // ========== 服务器事件 ==========
-    'Weline_Framework_Server::start_after' => [
-        'name' => __('服务器启动后'),
-        'description' => __('服务器启动完成后触发，允许其他模块执行启动后的操作。'),
-        'doc' => 'server/服务器启动后.md',
-    ],
-    'Weline_Framework_Server::stop_after' => [
-        'name' => __('服务器停止后'),
-        'description' => __('服务器停止后触发，允许其他模块执行停止后的清理操作。'),
-        'doc' => 'server/服务器停止后.md',
-    ],
+    // 服务器启动/停止事件已迁移至 Weline_Server 模块（Weline_Server::start_after / Weline_Server::stop_after）
     
     // ========== 路由事件 ==========
     'Weline_Framework_Router::before_start' => [
