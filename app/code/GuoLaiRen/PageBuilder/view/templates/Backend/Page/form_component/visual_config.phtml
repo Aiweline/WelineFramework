@@ -1813,6 +1813,13 @@ function openVisualConfig(passedHandle) {
             });
         }
     }
+    
+    // 延迟检查是否有未保存的AI组件
+    setTimeout(() => {
+        if (typeof checkUnsavedAiComponent === 'function') {
+            checkUnsavedAiComponent();
+        }
+    }, 1000);
 }
 
 // AI生成状态标志，用于禁止在生成时关闭可视化配置

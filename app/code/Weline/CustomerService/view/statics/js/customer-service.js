@@ -17,7 +17,9 @@ const CustomerServiceWidget = (function() {
         isPolling: false,
         pollInterval: null,
         lastMessageId: 0,
-        locale: 'zh_Hans_CN'
+        locale: 'zh_Hans_CN',
+        displayMode: 'translated', // translated, both, original
+        settingsOpen: false
     };
     
     /**
@@ -33,13 +35,56 @@ const CustomerServiceWidget = (function() {
                 const parsed = JSON.parse(savedState);
                 state.sessionToken = parsed.sessionToken || null;
                 state.locale = parsed.locale || 'zh_Hans_CN';
+                state.displayMode = parsed.displayMode || 'translated';
             } catch (e) {
                 console.error('Failed to load saved state:', e);
             }
         }
         
+        // 初始化UI状态
+        initUIState();
+        
         // 初始化会话
         initSession();
+    }
+    
+    /**
+     * 初始化UI状态
+     */
+    function initUIState() {
+        // 设置语言选择器
+        const localeSelect = document.getElementById('cs-locale-select');
+        if (localeSelect) {
+            localeSelect.value = state.locale;
+        }
+        
+        // 设置显示模式选择器
+        const displayModeSelect = document.getElementById('cs-display-mode');
+        if (displayModeSelect) {
+            displayModeSelect.value = state.displayMode;
+        }
+    }
+    
+    /**
+     * 切换设置面板
+     */
+    function toggleSettings() {
+        const panel = document.getElementById('cs-settings-panel');
+        if (panel) {
+            state.settingsOpen = !state.settingsOpen;
+            panel.style.display = state.settingsOpen ? 'block' : 'none';
+        }
+    }
+    
+    /**
+     * 更改显示模式
+     */
+    function changeDisplayMode(mode) {
+        state.displayMode = mode;
+        saveState();
+        
+        // 重新渲染消息
+        loadMessages();
     }
     
     /**
@@ -47,15 +92,16 @@ const CustomerServiceWidget = (function() {
      */
     async function initSession() {
         try {
-            const response = await fetch(config.chatUrl + '/getSession', {
+            // GET 请求使用 URL 参数
+            const params = new URLSearchParams({
+                session_token: state.sessionToken || '',
+                locale: state.locale
+            });
+            const response = await fetch(config.chatUrl + '/getSession?' + params.toString(), {
                 method: 'GET',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    session_token: state.sessionToken || '',
-                    locale: state.locale
-                })
+                    'Accept': 'application/json',
+                }
             });
             
             const data = await response.json();
@@ -217,13 +263,17 @@ const CustomerServiceWidget = (function() {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'cs-message ' + message.sender_type;
         messageDiv.dataset.messageId = message.message_id;
+        // 存储原始消息数据用于重新渲染
+        messageDiv.dataset.content = message.content || '';
+        messageDiv.dataset.translatedContent = message.translated_content || '';
+        messageDiv.dataset.sourceLocale = message.source_locale || '';
+        messageDiv.dataset.targetLocale = message.target_locale || '';
         
         const bubble = document.createElement('div');
         bubble.className = 'cs-message-bubble';
         
-        // 显示翻译后的内容（如果有）
-        const displayContent = message.translated_content || message.content;
-        bubble.textContent = displayContent;
+        // 根据显示模式渲染内容
+        renderMessageContent(bubble, message);
         
         const timeDiv = document.createElement('div');
         timeDiv.className = 'cs-message-time';
@@ -237,6 +287,77 @@ const CustomerServiceWidget = (function() {
         if (scroll) {
             scrollToBottom();
         }
+    }
+    
+    /**
+     * 根据显示模式渲染消息内容
+     */
+    function renderMessageContent(bubble, message) {
+        const original = message.content || '';
+        const translated = message.translated_content || original;
+        const hasTranslation = translated && translated !== original;
+        const sourceLocale = message.source_locale || '';
+        
+        bubble.innerHTML = '';
+        
+        switch (state.displayMode) {
+            case 'both':
+                if (hasTranslation) {
+                    // 显示原文
+                    const originalDiv = document.createElement('div');
+                    originalDiv.className = 'cs-message-original';
+                    const originalLabel = document.createElement('span');
+                    originalLabel.className = 'cs-message-label';
+                    originalLabel.textContent = getLocaleName(sourceLocale);
+                    originalDiv.appendChild(originalLabel);
+                    originalDiv.appendChild(document.createTextNode(original));
+                    bubble.appendChild(originalDiv);
+                    
+                    // 显示译文
+                    const translatedDiv = document.createElement('div');
+                    translatedDiv.className = 'cs-message-translated';
+                    const translatedLabel = document.createElement('span');
+                    translatedLabel.className = 'cs-message-label';
+                    translatedLabel.textContent = getLocaleName(state.locale);
+                    translatedDiv.appendChild(translatedLabel);
+                    translatedDiv.appendChild(document.createTextNode(translated));
+                    bubble.appendChild(translatedDiv);
+                } else {
+                    bubble.textContent = original;
+                }
+                break;
+                
+            case 'original':
+                bubble.textContent = original;
+                break;
+                
+            case 'translated':
+            default:
+                bubble.textContent = translated;
+                break;
+        }
+    }
+    
+    /**
+     * 获取语言名称
+     */
+    function getLocaleName(locale) {
+        const names = {
+            'zh_Hans_CN': '中文',
+            'zh_Hant_TW': '繁體',
+            'en_US': 'EN',
+            'ja_JP': '日本語',
+            'ko_KR': '한국어',
+            'fr_FR': 'FR',
+            'de_DE': 'DE',
+            'es_ES': 'ES',
+            'pt_BR': 'PT',
+            'ru_RU': 'RU',
+            'ar_SA': 'AR',
+            'th_TH': 'TH',
+            'vi_VN': 'VI'
+        };
+        return names[locale] || locale;
     }
     
     /**
@@ -448,7 +569,8 @@ const CustomerServiceWidget = (function() {
     function saveState() {
         localStorage.setItem('cs_widget_state', JSON.stringify({
             sessionToken: state.sessionToken,
-            locale: state.locale
+            locale: state.locale,
+            displayMode: state.displayMode
         }));
     }
     
@@ -456,8 +578,10 @@ const CustomerServiceWidget = (function() {
     return {
         init,
         toggleChat,
+        toggleSettings,
         sendMessage,
         changeLanguage,
+        changeDisplayMode,
         showBindPrompt,
         closeBindModal,
         sendBindEmail

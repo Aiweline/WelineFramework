@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Websites',
     __DIR__,
-    '1.0.0',
+    '1.3.0',
     '<a href="https://bbs.aiweline.com">系统组件模块: 多网站</a>',
     [
         'Weline_Acl',

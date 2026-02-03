@@ -534,7 +534,6 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                 <?= __('选择样式模板') ?> <span class="text-danger">*</span>
                             </label>
                             <?php if ($isEdit && $page && $page->getId()): ?>
-                                <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
                             <div class="d-flex gap-2">
                                 <button type="button" 
                                         class="btn btn-sm btn-primary" 
@@ -551,6 +550,9 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             </div>
                             <?php endif; ?>
                         </div>
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
+                        <?php endif; ?>
                         
                         <!-- 隐藏的select用于表单提交 -->
                         <select class="d-none" id="style" name="style" required>

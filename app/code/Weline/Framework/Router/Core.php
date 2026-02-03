@@ -668,6 +668,20 @@ class Core
         
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
+            
+            // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
+            $currentHeaders = headers_list();
+            foreach ($currentHeaders as $header) {
+                if (stripos($header, 'Content-Type: text/event-stream') !== false) {
+                    // 清理输出缓冲区并直接返回（流式响应已经发送）
+                    while (ob_get_level() > 0) {
+                        ob_end_flush();
+                    }
+                    $this->is_match = true;
+                    return;
+                }
+            }
+            
             # ----------事件：处理url之前 开始------------
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];

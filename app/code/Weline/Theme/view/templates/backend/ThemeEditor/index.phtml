@@ -75,7 +75,10 @@ if (!function_exists('getWidgetIcon')) {
      data-api-restore-original="<?= $this->getUrl('theme/backend/theme-editor/restore-original') ?>"
      data-api-publish-version="<?= $this->getUrl('theme/backend/theme-editor/publish-version') ?>"
      data-api-delete-version="<?= $this->getUrl('theme/backend/theme-editor/delete-version') ?>"
-     data-api-rename-version="<?= $this->getUrl('theme/backend/theme-editor/rename-version') ?>">
+     data-api-rename-version="<?= $this->getUrl('theme/backend/theme-editor/rename-version') ?>"
+     data-api-start-preview="<?= $this->getUrl('theme/backend/theme-editor/start-preview') ?>"
+     data-api-exit-preview="<?= $this->getUrl('theme/backend/theme-editor/exit-preview') ?>"
+     data-api-publish-and-exit="<?= $this->getUrl('theme/backend/theme-editor/publish-and-exit') ?>">
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
@@ -150,8 +153,11 @@ if (!function_exists('getWidgetIcon')) {
                 </div>
             </div>
             
-            <button type="button" class="btn btn-outline-secondary" id="btnPreview">
+            <button type="button" class="btn btn-outline-secondary" id="btnPreview" title="<?= __('后台预览') ?>">
                 <i class="ri-eye-line"></i> <?= __('预览') ?>
+            </button>
+            <button type="button" class="btn btn-outline-info" id="btnFrontendPreview" title="<?= __('在真实前端页面中预览，可查看完整效果') ?>">
+                <i class="ri-external-link-line"></i> <?= __('前端预览') ?>
             </button>
             <button type="button" class="btn btn-outline-primary" id="btnSave" title="<?= __('保存当前布局为新版本') ?>">
                 <i class="ri-save-line"></i> <?= __('保存版本') ?>

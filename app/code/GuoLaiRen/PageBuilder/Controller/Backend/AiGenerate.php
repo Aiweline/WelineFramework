@@ -995,6 +995,200 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * AI 流式生成组件
+     * 
+     * GET /pagebuilder/backend/ai-generate/component-stream?params=base64编码的JSON
+     * 
+     * 使用 Server-Sent Events (SSE) 实时输出生成过程
+     */
+    public function componentStream(): void
+    {
+        // 禁用输出缓冲（在设置头之前）
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // 设置 SSE 头
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no'); // 禁用 nginx 缓冲
+        
+        // 立即刷新头信息
+        flush();
+        
+        try {
+            // 从 GET 参数获取 base64 编码的 JSON 参数
+            $paramsRaw = $this->request->getParam('params', '');
+            $input = [];
+            
+            // 确保参数是字符串
+            if (is_array($paramsRaw)) {
+                // 如果是数组，直接使用
+                $input = $paramsRaw;
+            } elseif (is_string($paramsRaw) && !empty($paramsRaw)) {
+                // 如果是 base64 字符串，解码
+                $paramsJson = base64_decode($paramsRaw);
+                if ($paramsJson !== false) {
+                    $input = json_decode($paramsJson, true) ?: [];
+                }
+            }
+            
+            $styleCode = $input['style_code'] ?? 'tpmst';
+            $region = $input['region'] ?? 'content';
+            $name = trim($input['name'] ?? '');
+            $description = trim($input['description'] ?? '');
+            $style = $input['style'] ?? 'modern';
+            $fieldsInput = trim($input['fields'] ?? '');
+            $referenceComponent = $input['reference_component'] ?? '';
+            $referenceCode = $input['reference_code'] ?? '';
+            
+            if (empty($name) || empty($description)) {
+                $this->sendSseEvent('error', ['message' => __('组件名称和描述不能为空')]);
+                return;
+            }
+            
+            // 发送开始事件
+            $this->sendSseEvent('start', [
+                'message' => __('开始生成组件...'),
+                'name' => $name,
+                'region' => $region
+            ]);
+            
+            // 生成组件代码
+            $componentCode = $this->generateComponentCode($name, $region);
+            
+            // 解析配置字段
+            $configFields = $this->parseConfigFields($fieldsInput, $componentCode);
+            
+            // 构建AI提示词
+            $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
+            
+            $this->sendSseEvent('prompt', [
+                'message' => __('提示词已构建'),
+                'prompt_length' => strlen($prompt)
+            ]);
+            
+            // 流式调用 AI 生成
+            $aiService = ObjectManager::getInstance(AiService::class);
+            $locale = State::getLang() ?: 'zh_Hans_CN';
+            
+            $fullContent = '';
+            $chunkCount = 0;
+            
+            $this->sendSseEvent('generating', ['message' => __('AI 正在生成代码...')]);
+            
+            // 使用流式 API
+            $aiService->generateStream(
+                $prompt,
+                function($chunk, $isComplete) use (&$fullContent, &$chunkCount) {
+                    $fullContent .= $chunk;
+                    $chunkCount++;
+                    
+                    // 每收到数据块就发送给前端
+                    $this->sendSseEvent('chunk', [
+                        'content' => $chunk,
+                        'total_length' => strlen($fullContent),
+                        'chunk_count' => $chunkCount
+                    ]);
+                    
+                    // 刷新输出
+                    if (connection_status() !== CONNECTION_NORMAL) {
+                        return false; // 客户端断开连接
+                    }
+                    return true;
+                },
+                null, // 自动选择模型
+                'pagebuilder_component_generation',
+                $locale,
+                ['reference_component' => $referenceComponent, 'reference_code' => $referenceCode]
+            );
+            
+            $this->sendSseEvent('parsing', ['message' => __('解析 AI 响应...')]);
+            
+            // 解析AI响应
+            $aiData = $this->parseComponentResponse($fullContent);
+            
+            // 使用CodeFixer预处理AI返回的数据
+            $codeFixer = ObjectManager::getInstance(CodeFixer::class);
+            $aiData = $codeFixer->fixAiData($aiData);
+            
+            // 使用框架构建器组装完整组件
+            $frameworkBuilder = ObjectManager::getInstance(FrameworkBuilder::class);
+            $useFramework = $frameworkBuilder->frameworkExists($region);
+            
+            $componentInfo = [
+                'name' => $name,
+                'name_en' => $this->generateEnglishName($name),
+                'description' => $description,
+            ];
+            
+            if ($useFramework) {
+                $phtmlCode = $frameworkBuilder->buildComponent($region, $componentInfo, $aiData);
+            } else {
+                $phtmlCode = $aiData['phtml'] ?? '';
+            }
+            
+            // 构建组件信息
+            $component = [
+                'code' => $componentCode,
+                'name' => $name,
+                'name_en' => $this->generateEnglishName($name),
+                'description' => $description,
+                'region' => $region,
+                'category' => $region,
+                'style_code' => $styleCode,
+                'file' => "{$region}/{$componentCode}.phtml",
+                'phtml_code' => $phtmlCode,
+                'config_schema' => $configFields,
+                'ai_data' => $aiData,
+            ];
+            
+            // 验证组件
+            $componentValidation = $this->validateGeneratedComponent($component, $styleCode);
+            
+            // 生成预览
+            $preview = $this->generateComponentPreview($phtmlCode);
+            
+            // 发送完成事件
+            $this->sendSseEvent('complete', [
+                'success' => true,
+                'component' => $component,
+                'validation' => $componentValidation,
+                'preview' => $preview,
+                'use_framework' => $useFramework,
+                'final_prompt' => $prompt
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->sendSseEvent('error', [
+                'message' => $e->getMessage()
+            ]);
+        }
+        
+        // 发送结束事件并终止脚本
+        $this->sendSseEvent('done', ['message' => __('生成完成')]);
+        exit(); // 必须终止，防止框架后续处理覆盖 SSE 输出
+    }
+    
+    /**
+     * 发送 SSE 事件
+     * 
+     * @param string $event 事件名称
+     * @param array $data 数据
+     */
+    private function sendSseEvent(string $event, array $data): void
+    {
+        echo "event: {$event}\n";
+        echo "data: " . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+        
+        if (ob_get_level()) {
+            ob_flush();
+        }
+        flush();
+    }
+
+    /**
      * AI生成组件
      * 
      * POST /pagebuilder/backend/ai-generate/component
@@ -1181,6 +1375,7 @@ class AiGenerate extends BackendController
                 'validation' => $componentValidation,
                 'preview' => $this->generateComponentPreview($phtmlCode),
                 'use_framework' => $frameworkBuilder->frameworkExists($region),
+                'final_prompt' => $prompt, // 返回最终提示词，供前端预览和复制
             ]);
             
         } catch (\Exception $e) {
@@ -1192,11 +1387,21 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 保存生成的组件
+     * 保存生成的组件（别名方法，兼容不同路由方式）
      * 
-     * POST /pagebuilder/backend/ai-generate/saveComponent
+     * POST /pagebuilder/backend/ai-generate/save-component
      */
     public function saveComponent(): string
+    {
+        return $this->postSave_component();
+    }
+    
+    /**
+     * 保存生成的组件
+     * 
+     * POST /pagebuilder/backend/ai-generate/save-component
+     */
+    public function postSave_component(): string
     {
         if (!$this->request->isPost()) {
             return $this->fetchJson([

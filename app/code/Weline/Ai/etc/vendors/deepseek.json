@@ -20,5 +20,37 @@
     "rate_limits": {
         "requests_per_minute": 60,
         "tokens_per_minute": 100000
-    }
+    },
+    "models": [
+        {
+            "code": "deepseek-chat",
+            "name": "DeepSeek Chat",
+            "description": "DeepSeek通用对话模型",
+            "max_tokens": 4096,
+            "context_window": 32768,
+            "input_price": 0.14,
+            "output_price": 0.28,
+            "capabilities": ["chat", "code"]
+        },
+        {
+            "code": "deepseek-coder",
+            "name": "DeepSeek Coder",
+            "description": "专为代码生成和理解优化的模型",
+            "max_tokens": 4096,
+            "context_window": 16384,
+            "input_price": 0.14,
+            "output_price": 0.28,
+            "capabilities": ["chat", "code"]
+        },
+        {
+            "code": "deepseek-reasoner",
+            "name": "DeepSeek Reasoner",
+            "description": "擅长复杂推理任务的模型",
+            "max_tokens": 8192,
+            "context_window": 64000,
+            "input_price": 0.55,
+            "output_price": 2.19,
+            "capabilities": ["chat", "reasoning", "code"]
+        }
+    ]
 }

@@ -53,7 +53,8 @@
     "dragonmantank/cron-expression": "^3.4",
     "studio-42/elfinder": "^2.1.65",
     "weline/base": "@dev",
-    "lipis/flag-icons": "^7.5"
+    "lipis/flag-icons": "^7.5",
+    "jeremykendall/php-domain-parser": "^6.0"
   },
   "repositories": [
     {

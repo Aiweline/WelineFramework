@@ -131,8 +131,8 @@ class Query extends CommandAbstract
         }
 
         try {
-            // 获取数据库连接
-            $connection = $this->dbManager->getConnection($connectionName ?? 'default');
+            // 获取数据库连接（使用 create 确保连接已创建）
+            $connection = $this->dbManager->create($connectionName ?? 'default');
             
             $this->printer->note(__('执行SQL: %{1}', [$sql]));
             $startTime = microtime(true);

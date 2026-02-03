@@ -96,8 +96,18 @@ class Agent extends BackendController
             $name = trim($this->request->getPost('name', ''));
             $email = trim($this->request->getPost('email', ''));
             $locale = trim($this->request->getPost('locale', 'zh_Hans_CN'));
+            $supportedLocales = $this->request->getPost('supported_locales', []);
             $isActive = (int)$this->request->getPost('is_active', 1);
             $maxSessions = (int)$this->request->getPost('max_sessions', 10);
+            
+            // 确保支持的语言列表是数组
+            if (!is_array($supportedLocales)) {
+                $supportedLocales = [];
+            }
+            // 确保主语言在支持的语言列表中
+            if (!in_array($locale, $supportedLocales)) {
+                array_unshift($supportedLocales, $locale);
+            }
 
             if (empty($name)) {
                 return $this->jsonResponse(false, __('客服名称不能为空'));
@@ -125,6 +135,7 @@ class Agent extends BackendController
                 ->setName($name)
                 ->setEmail($email)
                 ->setLocale($locale)
+                ->setSupportedLocales($supportedLocales)
                 ->setIsActive((bool)$isActive)
                 ->setMaxSessions($maxSessions)
                 ->setData(ServiceAgent::fields_updated_at, date('Y-m-d H:i:s'));
