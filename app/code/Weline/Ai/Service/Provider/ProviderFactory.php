@@ -39,9 +39,9 @@ class ProviderFactory
      * @var array
      */
     private array $providerClasses = [
+        AnthropicProvider::class,
         OpenAiProvider::class,
         // 可以添加更多提供者：
-        // ClaudeProvider::class,
         // GeminiProvider::class,
     ];
 

@@ -1,6 +1,8 @@
 <?php
 
-namespace Weline\Framework\Console\Console\Server;
+declare(strict_types=1);
+
+namespace Weline\Server\Console\Console\Server;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
@@ -128,7 +130,7 @@ class Stop implements CommandInterface
             'stopped_pids' => $this->getStoppedPids(),
             'stop_time' => time()
         ];
-        $eventManager->dispatch('Weline_Framework_Server::stop_after', $eventData);
+        $eventManager->dispatch('Weline_Server::stop_after', $eventData);
         
         // 清理配置
         $this->clearServerConfig();

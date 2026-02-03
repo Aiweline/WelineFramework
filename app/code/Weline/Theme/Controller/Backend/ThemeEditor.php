@@ -8,6 +8,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\EditorLockService;
+use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
@@ -29,6 +31,8 @@ class ThemeEditor extends BackendController
     private WidgetRegistry $widgetRegistry;
     private ThemeLayout $themeLayout;
     private Meta $meta;
+    private PreviewTokenService $previewTokenService;
+    private EditorLockService $editorLockService;
 
     public function __construct(
         WelineTheme $welineTheme,
@@ -38,7 +42,9 @@ class ThemeEditor extends BackendController
         WidgetPositionResolver $positionResolver,
         WidgetRegistry $widgetRegistry,
         ThemeLayout $themeLayout,
-        Meta $meta
+        Meta $meta,
+        PreviewTokenService $previewTokenService,
+        EditorLockService $editorLockService
     ) {
         $this->welineTheme = $welineTheme;
         $this->layoutService = $layoutService;
@@ -48,6 +54,8 @@ class ThemeEditor extends BackendController
         $this->widgetRegistry = $widgetRegistry;
         $this->themeLayout = $themeLayout;
         $this->meta = $meta;
+        $this->previewTokenService = $previewTokenService;
+        $this->editorLockService = $editorLockService;
     }
 
     /**
@@ -194,6 +202,58 @@ class ThemeEditor extends BackendController
             'success' => true,
             'data' => $widgets,
             'page_type' => $pageType,
+        ]);
+    }
+    
+    /**
+     * 获取指定 slot 的推荐部件 (AJAX)
+     * 
+     * 精细筛选逻辑：
+     * - 顶层独占区域（header/footer）：返回独占大部件
+     * - 子 slot（logo/search 等）：返回匹配该 slot 的小部件
+     * - content 区域：返回所有适用的部件（非独占）
+     * 
+     * 参数：
+     * - slot_id: slot ID（必填）
+     * - area: 区域代码（可选，如 header/content/footer）
+     * - page_type: 页面类型（可选）
+     */
+    public function getWidgetsForSlot()
+    {
+        $slotId = $this->request->getParam('slot_id', '');
+        $area = $this->request->getParam('area', null);
+        $pageType = $this->request->getParam('page_type', null);
+        
+        if (empty($slotId)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少 slot_id 参数'),
+            ]);
+        }
+        
+        // 获取精细筛选的部件
+        $result = $this->layoutService->getWidgetsForSlot($slotId, $area, $pageType);
+        
+        // 预编译预览 HTML
+        if (!empty($result['exclusive_widgets'])) {
+            foreach ($result['exclusive_widgets'] as &$widget) {
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+            }
+        }
+        if (!empty($result['regular_widgets'])) {
+            foreach ($result['regular_widgets'] as &$widget) {
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+            }
+        }
+        if (!empty($result['matched_widgets'])) {
+            foreach ($result['matched_widgets'] as &$widget) {
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+            }
+        }
+        
+        return $this->fetchJson([
+            'success' => true,
+            'data' => $result,
         ]);
     }
 
@@ -2075,5 +2135,454 @@ HTML;
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    // ==================== 前端预览 API ====================
+
+    /**
+     * 启动前端预览 (AJAX)
+     * 路由: /backend/theme-editor/start-preview (POST)
+     * 
+     * 生成预览 Token 并返回前端预览 URL
+     */
+    public function postStartPreview()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        try {
+            // 生成预览 Token
+            $token = $this->previewTokenService->generateToken($themeId, $pageType, $versionId);
+            
+            // 构建前端预览 URL
+            // 触发 hook 允许其他模块（如多站点模块）修改基础 URL
+            // 使用 getBaseHost() 获取仅主机部分（如 http://127.0.0.1:9981）
+            $baseUrl = $this->request->getBaseHost();
+            
+            // 分发事件获取自定义预览 URL
+            $eventData = [
+                'base_url' => $baseUrl,
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+            ];
+            $this->getEventManager()->dispatch('Weline_Theme::build_preview_url', $eventData);
+            
+            // 如果事件修改了 base_url，使用修改后的值
+            if (isset($eventData['base_url']) && $eventData['base_url'] !== $baseUrl) {
+                $baseUrl = $eventData['base_url'];
+            }
+            
+            // 根据页面类型构建预览路径
+            $previewPath = $this->getPreviewPathByPageType($pageType);
+            
+            // 构建完整预览 URL，携带 token 参数
+            $previewUrl = rtrim($baseUrl, '/') . $previewPath;
+            $previewUrl .= (strpos($previewUrl, '?') !== false ? '&' : '?') 
+                        . PreviewTokenService::TOKEN_KEY . '=' . urlencode($token);
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('预览已启动'),
+                'data' => [
+                    'token' => $token,
+                    'preview_url' => $previewUrl,
+                    'expires_in' => 3600, // 1 小时
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 退出前端预览 (AJAX)
+     * 路由: /backend/theme-editor/exit-preview (POST)
+     * 
+     * 删除预览 Token
+     */
+    public function postExitPreview()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $token = $data['token'] ?? $this->request->getParam('token', '');
+
+        // 如果没有传入 token，尝试从请求中获取
+        if (empty($token)) {
+            $token = $this->previewTokenService->getTokenFromRequest();
+        }
+
+        if (empty($token)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少预览 Token'),
+            ]);
+        }
+
+        try {
+            // 获取 token 数据用于返回编辑器 URL
+            $tokenData = $this->previewTokenService->validateToken($token);
+            
+            // 删除 token
+            $result = $this->previewTokenService->deleteToken($token);
+
+            // 构建编辑器返回 URL
+            $editorUrl = $this->_url->getBackendUrl('theme-editor/index');
+            if ($tokenData) {
+                $editorUrl = $this->_url->getBackendUrl('theme-editor/index', [
+                    'theme_id' => $tokenData['theme_id'] ?? 0,
+                    'page_type' => $tokenData['page_type'] ?? 'homepage',
+                ]);
+            }
+
+            return $this->fetchJson([
+                'success' => $result,
+                'message' => $result ? __('已退出预览模式') : __('退出预览失败'),
+                'data' => [
+                    'editor_url' => $editorUrl,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 发布并退出预览 (AJAX)
+     * 路由: /backend/theme-editor/publish-and-exit (POST)
+     * 
+     * 发布当前预览内容并退出预览模式
+     */
+    public function postPublishAndExit()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $token = $data['token'] ?? $this->request->getParam('token', '');
+
+        // 如果没有传入 token，尝试从请求中获取
+        if (empty($token)) {
+            $token = $this->previewTokenService->getTokenFromRequest();
+        }
+
+        if (empty($token)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少预览 Token'),
+            ]);
+        }
+
+        try {
+            // 验证 token 并获取数据
+            $tokenData = $this->previewTokenService->validateToken($token);
+            
+            if (!$tokenData) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('预览 Token 已过期或无效'),
+                ]);
+            }
+
+            $themeId = (int)($tokenData['theme_id'] ?? 0);
+            $pageType = $tokenData['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME;
+
+            if (!$themeId) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('Token 中缺少主题信息'),
+                ]);
+            }
+
+            // 1. 发布布局
+            $publishResult = $this->layoutService->publishLayout($themeId, $pageType);
+            if (!$publishResult) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('发布布局失败'),
+                ]);
+            }
+
+            // 2. 清除并重建缓存
+            $this->cacheGenerator->clearCache($themeId);
+            $this->cacheGenerator->generate($themeId);
+
+            // 3. 删除预览 token
+            $this->previewTokenService->deleteToken($token);
+
+            // 4. 获取前端首页 URL（非预览模式）
+            $frontendUrl = $this->request->getBaseHost() . '/';
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('主题已发布'),
+                'data' => [
+                    'redirect_url' => $frontendUrl,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 根据页面类型获取预览路径
+     * 
+     * @param string $pageType 页面类型
+     * @return string 预览路径
+     */
+    private function getPreviewPathByPageType(string $pageType): string
+    {
+        $pathMap = [
+            ThemeLayout::PAGE_TYPE_HOME => '/',
+            ThemeLayout::PAGE_TYPE_CATEGORY => '/category/default',
+            ThemeLayout::PAGE_TYPE_PRODUCT => '/product/default',
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST => '/products',
+            ThemeLayout::PAGE_TYPE_CMS => '/page/default',
+            ThemeLayout::PAGE_TYPE_CART => '/cart',
+            ThemeLayout::PAGE_TYPE_CHECKOUT => '/checkout',
+            ThemeLayout::PAGE_TYPE_ACCOUNT => '/account',
+            ThemeLayout::PAGE_TYPE_SEARCH => '/search',
+        ];
+
+        return $pathMap[$pageType] ?? '/';
+    }
+
+    // ==================== 编辑锁定 API ====================
+
+    /**
+     * 检查编辑锁定状态 (AJAX)
+     * 路由: /backend/theme-editor/check-lock (GET)
+     * 
+     * 返回当前锁定状态，如果被其他用户锁定，返回锁定信息
+     */
+    public function getCheckLock()
+    {
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        // 获取当前用户信息
+        $userId = $this->session->getLoginUserID() ?: 0;
+        $userName = $this->session->getLoginUsername() ?: '';
+
+        // 尝试获取锁定
+        $result = $this->editorLockService->acquireLock($themeId, $pageType, $userId, $userName);
+
+        return $this->fetchJson([
+            'success' => $result['success'],
+            'message' => $result['message'],
+            'data' => [
+                'lock_info' => $result['lock_info'] ?? null,
+                'is_locked_by_other' => !$result['success'],
+            ],
+        ]);
+    }
+
+    /**
+     * 释放编辑锁定 (AJAX)
+     * 路由: /backend/theme-editor/release-lock (POST)
+     */
+    public function postReleaseLock()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        $userId = $this->session->getLoginUserID() ?: 0;
+        $result = $this->editorLockService->releaseLock($themeId, $pageType, $userId);
+
+        return $this->fetchJson([
+            'success' => $result,
+            'message' => $result ? __('已释放编辑锁定') : __('释放锁定失败'),
+        ]);
+    }
+
+    /**
+     * 更新编辑活动时间 (AJAX)
+     * 路由: /backend/theme-editor/update-activity (POST)
+     * 
+     * 用于保持锁定活跃，防止自动过期
+     */
+    public function postUpdateActivity()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        $userId = $this->session->getLoginUserID() ?: 0;
+        $result = $this->editorLockService->updateActivity($themeId, $pageType, $userId);
+
+        return $this->fetchJson([
+            'success' => $result,
+        ]);
+    }
+
+    /**
+     * 请求接管编辑 (AJAX)
+     * 路由: /backend/theme-editor/request-takeover (POST)
+     */
+    public function postRequestTakeover()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        $userId = $this->session->getLoginUserID() ?: 0;
+        $userName = $this->session->getLoginUsername() ?: '';
+
+        $result = $this->editorLockService->requestTakeover($themeId, $pageType, $userId, $userName);
+
+        return $this->fetchJson($result);
+    }
+
+    /**
+     * 检查是否有接管请求 (AJAX)
+     * 路由: /backend/theme-editor/check-takeover-request (GET)
+     * 
+     * 当前锁定者调用此接口检查是否有人请求接管
+     */
+    public function getCheckTakeoverRequest()
+    {
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        $takeoverRequest = $this->editorLockService->getTakeoverRequest($themeId, $pageType);
+
+        return $this->fetchJson([
+            'success' => true,
+            'data' => [
+                'has_takeover_request' => $takeoverRequest !== null,
+                'takeover_request' => $takeoverRequest,
+            ],
+        ]);
+    }
+
+    /**
+     * 强制接管编辑 (AJAX)
+     * 路由: /backend/theme-editor/force-takeover (POST)
+     */
+    public function postForceTakeover()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ]);
+        }
+
+        $userId = $this->session->getLoginUserID() ?: 0;
+        $userName = $this->session->getLoginUsername() ?: '';
+
+        $result = $this->editorLockService->forceTakeover($themeId, $pageType, $userId, $userName);
+
+        return $this->fetchJson($result);
     }
 }

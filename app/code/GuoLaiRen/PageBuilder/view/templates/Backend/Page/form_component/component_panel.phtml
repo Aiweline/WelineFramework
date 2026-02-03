@@ -789,15 +789,48 @@ html[data-theme="dark"] .component-tag.other,
     font-size: 0.75rem;
     padding: 0.2rem 0.5rem;
 }
+
+/* 全屏预览弹窗样式 */
+.swal2-fullscreen-preview-popup {
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+}
+
+.swal2-fullscreen-preview-popup .swal2-html-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-height: none !important;
+}
+
+.swal2-fullscreen-preview-popup .swal2-close {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 200;
+    background: rgba(255,255,255,0.9);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.swal2-fullscreen-preview-popup .swal2-close:hover {
+    background: #fff;
+    color: #dc3545;
+}
 </style>
 
 <!-- 组件面板 -->
 <div class="component-panel" id="componentPanel">
     <div class="component-panel-header">
         <h6><i class="mdi mdi-puzzle"></i> <?= __('组件库') ?></h6>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-1">
             <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 4px 8px; font-size: 11px;" onclick="openAiGenerateComponent()" title="<?= __('AI生成组件') ?>">
                 <i class="mdi mdi-auto-fix"></i>
+            </button>
+            <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; border: none; padding: 4px 8px; font-size: 11px;" onclick="openImportJsonDialog()" title="<?= __('导入 JSON 预览') ?>">
+                <i class="mdi mdi-code-json"></i>
             </button>
             <button type="button" class="component-panel-toggle" onclick="toggleComponentPanel()" title="<?= __('收起/展开') ?>">
                 <i class="mdi mdi-chevron-right"></i>
@@ -1860,18 +1893,20 @@ function checkUnsavedAiComponent() {
             customClass: { container: 'swal2-dark-theme' }
         }).then((result) => {
             if (result.isConfirmed) {
-                // 恢复组件
+                // 恢复组件（包括最终提示词）
                 window.currentGeneratedComponent = {
                     component: savedComponent.component,
                     templateContent: savedComponent.templateContent,
                     validation: savedComponent.validation || { valid: true },
-                    preview: savedComponent.preview || ''
+                    preview: savedComponent.preview || '',
+                    finalPrompt: savedComponent.finalPrompt || ''
                 };
                 showGeneratedComponent({
                     component: savedComponent.component,
                     validation: savedComponent.validation || { valid: true },
                     preview: savedComponent.preview || '',
-                    result: savedComponent.result
+                    result: savedComponent.result,
+                    final_prompt: savedComponent.finalPrompt || ''
                 });
             } else if (result.isDenied) {
                 // 丢弃
@@ -1984,6 +2019,236 @@ function openAiGenerateComponent() {
     });
 }
 
+// 打开导入 JSON 预览弹窗
+function openImportJsonDialog() {
+    if (typeof Swal === 'undefined') {
+        alert('<?= __('SweetAlert2 未加载') ?>');
+        return;
+    }
+    
+    // JSON 格式示例
+    const phpTag = '<' + '?php';
+    const jsonExample = `{
+  "component": {
+    "code": "content-my-component",
+    "name": "我的组件",
+    "region": "content",
+    "phtml_code": "${phpTag} // 组件代码 ?" + ">"
+  }
+}`;
+    
+    Swal.fire({
+        title: '<i class="mdi mdi-code-json"></i> <?= __('导入 JSON 预览组件') ?>',
+        html: `
+            <div style="text-align: left;">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="mdi mdi-information"></i> <?= __('粘贴之前导出的 JSON 或直接粘贴组件代码') ?>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><?= __('JSON 数据') ?></label>
+                    <textarea id="importJsonContent" class="form-control" rows="10" placeholder='${jsonExample}' style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;"></textarea>
+                </div>
+                <div class="card bg-dark text-light mb-2">
+                    <div class="card-header py-1 small" style="cursor: pointer;" onclick="document.getElementById('json-format-examples').style.display = document.getElementById('json-format-examples').style.display === 'none' ? 'block' : 'none'">
+                        <i class="mdi mdi-help-circle"></i> <?= __('支持的格式（点击展开）') ?>
+                    </div>
+                    <div class="card-body py-2 small" id="json-format-examples" style="display: none;">
+                        <p class="mb-2"><strong><?= __('格式1：完整导出格式') ?></strong></p>
+                        <pre style="font-size: 10px; background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 10px;">{ "component": { "phtml_code": "..." }, "final_prompt": "..." }</pre>
+                        <p class="mb-2"><strong><?= __('格式2：简化组件格式') ?></strong></p>
+                        <pre style="font-size: 10px; background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 10px;">{ "phtml_code": "&lt;?php // 代码 ?&gt;" }</pre>
+                        <p class="mb-2"><strong><?= __('格式3：纯代码格式') ?></strong></p>
+                        <pre style="font-size: 10px; background: #1a1a1a; padding: 8px; border-radius: 4px;">{ "code": "&lt;?php // 直接粘贴PHTML代码 ?&gt;" }</pre>
+                    </div>
+                </div>
+            </div>
+        `,
+        width: '700px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="mdi mdi-eye"></i> <?= __('预览组件') ?>',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonColor: '#f5576c',
+        customClass: { container: 'swal2-dark-theme' },
+        preConfirm: () => {
+            const jsonContent = document.getElementById('importJsonContent').value.trim();
+            
+            if (!jsonContent) {
+                Swal.showValidationMessage('<?= __('请粘贴 JSON 内容') ?>');
+                return false;
+            }
+            
+            try {
+                const data = JSON.parse(jsonContent);
+                return data;
+            } catch (e) {
+                Swal.showValidationMessage('<?= __('JSON 格式错误') ?>: ' + e.message);
+                return false;
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            importAndPreviewJson(result.value);
+        }
+    });
+}
+
+// 导入 JSON 并预览组件
+function importAndPreviewJson(jsonData) {
+    try {
+        // 解析 JSON 数据，支持多种格式
+        let componentData = {};
+        let validation = { valid: true };
+        let finalPrompt = '';
+        let templateContent = '';
+        
+        console.log('[导入JSON] 接收数据:', jsonData);
+        
+        // 格式1：完整导出格式 { component: { phtml_code: "..." }, ... }
+        if (jsonData.component && typeof jsonData.component === 'object') {
+            console.log('[导入JSON] 检测到完整导出格式');
+            componentData = jsonData.component;
+            validation = jsonData.validation || { valid: true };
+            finalPrompt = jsonData.final_prompt || '';
+            templateContent = componentData.phtml_code || componentData.template_content || '';
+        }
+        // 格式2：API 返回格式 { success: true, component: { ... } }
+        else if (jsonData.success !== undefined && jsonData.component) {
+            console.log('[导入JSON] 检测到API返回格式');
+            componentData = jsonData.component;
+            validation = jsonData.validation || { valid: true };
+            finalPrompt = jsonData.final_prompt || '';
+            templateContent = componentData.phtml_code || componentData.template_content || '';
+        }
+        // 格式3：简化格式 { phtml_code: "..." } 或 { template_content: "..." }
+        else if (jsonData.phtml_code || jsonData.template_content) {
+            console.log('[导入JSON] 检测到简化组件格式');
+            componentData = jsonData;
+            templateContent = jsonData.phtml_code || jsonData.template_content || '';
+        }
+        // 格式4：纯代码格式 { code: "PHP代码" }
+        else if (jsonData.code && typeof jsonData.code === 'string' && jsonData.code.includes('<' + '?')) {
+            console.log('[导入JSON] 检测到纯代码格式');
+            templateContent = jsonData.code;
+            componentData = {
+                name: '<?= __("导入的组件") ?>',
+                region: 'content',
+                category: 'content'
+            };
+        }
+        // 格式5：result 包装格式 { result: { template_content: "..." } }
+        else if (jsonData.result && jsonData.result.template_content) {
+            console.log('[导入JSON] 检测到result包装格式');
+            templateContent = jsonData.result.template_content;
+            componentData = jsonData.result;
+            validation = jsonData.validation || { valid: true };
+            finalPrompt = jsonData.final_prompt || '';
+        }
+        // 格式6：preview 格式（从生成结果复制）
+        else if (jsonData.preview && (jsonData.preview.html || typeof jsonData.preview === 'string')) {
+            console.log('[导入JSON] 检测到preview格式');
+            // 尝试从其他字段获取代码
+            templateContent = jsonData.component?.phtml_code || jsonData.result?.template_content || '';
+            componentData = jsonData.component || {};
+            validation = jsonData.validation || { valid: true };
+            finalPrompt = jsonData.final_prompt || '';
+        }
+        else {
+            // 打印所有键帮助调试
+            console.error('[导入JSON] 无法识别的格式，JSON 键:', Object.keys(jsonData));
+            throw new Error('<?= __("无法识别的 JSON 格式。请确保 JSON 包含以下字段之一：") ?>\n' +
+                '• component.phtml_code\n' +
+                '• phtml_code\n' +
+                '• template_content\n' +
+                '• code (PHP代码)\n\n' +
+                '<?= __("当前 JSON 包含的键") ?>: ' + Object.keys(jsonData).join(', '));
+        }
+        
+        if (!templateContent) {
+            console.error('[导入JSON] 未找到模板内容，componentData:', componentData);
+            throw new Error('<?= __('JSON 中缺少组件代码。请确保包含 phtml_code 或 template_content 字段，且值不为空。') ?>');
+        }
+        
+        console.log('[导入JSON] 成功提取模板内容，长度:', templateContent.length);
+        
+        // 生成预览
+        generatePreviewFromCode(templateContent, componentData, validation, finalPrompt);
+        
+    } catch (error) {
+        console.error('[导入JSON] 错误:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('导入失败') ?>',
+            html: `<div style="text-align: left; white-space: pre-wrap; font-size: 13px;">${error.message || '<?= __('未知错误') ?>'}</div>`,
+            customClass: { container: 'swal2-dark-theme' }
+        });
+    }
+}
+
+// 从代码生成预览
+async function generatePreviewFromCode(templateContent, componentData, validation, finalPrompt) {
+    // 显示加载状态
+    Swal.fire({
+        title: '<?= __('正在生成预览...') ?>',
+        html: '<div class="spinner-border text-primary" role="status"></div>',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        customClass: { container: 'swal2-dark-theme' }
+    });
+    
+    try {
+        // 调用后端生成预览
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/preview') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                template_content: templateContent,
+                category: componentData.region || componentData.category || 'content'
+            })
+        });
+        
+        let previewResult = { success: false, html: '' };
+        
+        if (response.ok) {
+            const responseText = await response.text();
+            try {
+                previewResult = safeJsonParse(responseText);
+            } catch (e) {
+                console.warn('预览响应解析失败:', e);
+            }
+        }
+        
+        // 显示导入的组件
+        showGeneratedComponent({
+            component: {
+                ...componentData,
+                phtml_code: templateContent
+            },
+            validation: validation,
+            preview: previewResult.success ? previewResult : { html: previewResult.html || '', error: previewResult.error || '' },
+            result: { template_content: templateContent },
+            final_prompt: finalPrompt
+        });
+        
+    } catch (error) {
+        console.error('生成预览失败:', error);
+        
+        // 即使预览失败，也显示组件（只是没有预览）
+        showGeneratedComponent({
+            component: {
+                ...componentData,
+                phtml_code: templateContent
+            },
+            validation: validation,
+            preview: { success: false, html: '', error: error.message },
+            result: { template_content: templateContent },
+            final_prompt: finalPrompt
+        });
+    }
+}
+
 // 加载参考组件列表
 async function loadReferenceComponents(region, selectedCode = '') {
     const select = document.getElementById('aiReferenceComponent');
@@ -2055,19 +2320,35 @@ function clearAiParams() {
     }
 }
 
-// 使用AI生成组件
+// 使用AI流式生成组件
 async function generateComponentWithAi(params) {
-    // 显示生成中状态
+    // 显示流式生成界面
     Swal.fire({
-        title: '<?= __('AI 正在生成组件...') ?>',
+        title: '<i class="mdi mdi-robot"></i> <?= __('AI 正在生成组件...') ?>',
         html: `
-            <div class="text-center">
-                <div class="spinner-border text-primary mb-3" role="status"></div>
-                <p class="mb-1"><?= __('正在分析需求并生成代码...') ?></p>
-                <p class="text-muted small"><?= __('这可能需要 10-30 秒') ?></p>
-                ${params.referenceComponent ? `<p class="text-info small"><i class="mdi mdi-information"></i> <?= __('使用参考组件') ?>: ${params.referenceComponent}</p>` : ''}
+            <div style="text-align: left;">
+                <div class="mb-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="spinner-grow spinner-grow-sm text-primary me-2" id="ai-gen-spinner"></div>
+                        <span id="ai-gen-status"><?= __('准备中...') ?></span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="ai-gen-progress" style="width: 5%"></div>
+                    </div>
+                </div>
+                <div class="card" style="background: #1e1e1e; max-height: 300px; overflow: auto;">
+                    <div class="card-header py-2 small" style="background: #2d2d2d; color: #888;">
+                        <i class="mdi mdi-console"></i> <?= __('生成日志') ?>
+                        <span class="float-end" id="ai-gen-chars">0 <?= __('字符') ?></span>
+                    </div>
+                    <div class="card-body p-2">
+                        <pre id="ai-gen-output" style="margin: 0; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word; min-height: 100px;"></pre>
+                    </div>
+                </div>
+                ${params.referenceComponent ? `<p class="text-info small mt-2 mb-0"><i class="mdi mdi-information"></i> <?= __('使用参考组件') ?>: ${params.referenceComponent}</p>` : ''}
             </div>
         `,
+        width: '700px',
         allowOutsideClick: false,
         showConfirmButton: false,
         customClass: { container: 'swal2-dark-theme' }
@@ -2077,6 +2358,7 @@ async function generateComponentWithAi(params) {
         // 如果选择了参考组件，先获取其代码
         let referenceCode = '';
         if (params.referenceComponent) {
+            updateStreamStatus('<?= __('获取参考组件...') ?>', 10);
             try {
                 const refResponse = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/code') ?>?component_code=' + encodeURIComponent(params.referenceComponent) + '&style_code=' + encodeURIComponent(currentStyleCode), {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -2092,49 +2374,107 @@ async function generateComponentWithAi(params) {
             }
         }
         
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/component') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                style_code: currentStyleCode,
-                region: params.region,
-                name: params.name,
-                description: params.description,
-                style: params.style,
-                fields: params.fields,
-                reference_component: params.referenceComponent,
-                reference_code: referenceCode
-            })
+        updateStreamStatus('<?= __('连接 AI 服务...') ?>', 15);
+        
+        // 构建参数并 base64 编码
+        const streamParams = {
+            style_code: currentStyleCode,
+            region: params.region,
+            name: params.name,
+            description: params.description,
+            style: params.style,
+            fields: params.fields,
+            reference_component: params.referenceComponent,
+            reference_code: referenceCode
+        };
+        const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
+        
+        // 使用 EventSource 进行流式请求（GET）
+        const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/component-stream') ?>?params=' + encodeURIComponent(paramsBase64);
+        
+        let result = null;
+        let totalChars = 0;
+        
+        await new Promise((resolve, reject) => {
+            const eventSource = new EventSource(streamUrl);
+            
+            eventSource.onopen = function() {
+                updateStreamStatus('<?= __('AI 正在生成...') ?>', 20);
+            };
+            
+            eventSource.addEventListener('start', function(e) {
+                const data = JSON.parse(e.data);
+                result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('prompt', function(e) {
+                const data = JSON.parse(e.data);
+                result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('generating', function(e) {
+                const data = JSON.parse(e.data);
+                result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('chunk', function(e) {
+                const data = JSON.parse(e.data);
+                if (data.total_length) {
+                    totalChars = data.total_length;
+                }
+                result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('parsing', function(e) {
+                const data = JSON.parse(e.data);
+                result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('complete', function(e) {
+                const data = JSON.parse(e.data);
+                result = data;
+                eventSource.close();
+                resolve();
+            });
+            
+            eventSource.addEventListener('error', function(e) {
+                if (e.data) {
+                    const data = JSON.parse(e.data);
+                    eventSource.close();
+                    reject(new Error(data.message || '<?= __('生成失败') ?>'));
+                }
+            });
+            
+            eventSource.addEventListener('done', function(e) {
+                eventSource.close();
+                resolve();
+            });
+            
+            eventSource.onerror = function(e) {
+                eventSource.close();
+                // 如果已经有结果，不算错误
+                if (result && result.success) {
+                    resolve();
+                } else {
+                    reject(new Error('<?= __('连接中断') ?>'));
+                }
+            };
         });
         
-        // 检查响应状态
-        if (!response.ok) {
-            throw new Error(`<?= __('服务器错误') ?>: ${response.status} ${response.statusText}`);
+        // 检查最终结果
+        if (result && result.success) {
+            updateStreamStatus('<?= __('生成完成！') ?>', 100);
+            
+            // 短暂延迟后显示结果
+            setTimeout(() => {
+                showGeneratedComponent(result);
+            }, 500);
+        } else if (result && result.message) {
+            throw new Error(result.message);
         }
-        
-        // 先获取响应文本
-        const responseText = await response.text();
-        
-        // 尝试解析JSON
-        let result;
-        try {
-            result = safeJsonParse(responseText);
-        } catch (parseError) {
-            console.error('<?= __('响应解析失败') ?>:', responseText.substring(0, 500));
-            throw new Error('<?= __('服务器返回了无效的响应，可能是AI服务出错。请重试。') ?>');
-        }
-        
-        if (!result.success) {
-            throw new Error(result.message || '<?= __('生成失败') ?>');
-        }
-        
-        // 显示生成结果
-        showGeneratedComponent(result);
         
     } catch (error) {
+        console.error('流式生成失败:', error);
         Swal.fire({
             icon: 'error',
             title: '<?= __('生成失败') ?>',
@@ -2151,11 +2491,362 @@ async function generateComponentWithAi(params) {
             customClass: { container: 'swal2-dark-theme' }
         }).then((result) => {
             if (result.isConfirmed) {
-                // 重新打开生成弹窗
                 openAiGenerateComponent();
             }
         });
     }
+}
+
+// 更新流式生成状态
+function updateStreamStatus(message, progress) {
+    const statusEl = document.getElementById('ai-gen-status');
+    const progressEl = document.getElementById('ai-gen-progress');
+    if (statusEl) statusEl.textContent = message;
+    if (progressEl) progressEl.style.width = progress + '%';
+}
+
+// 处理流式事件
+function handleStreamEvent(data, currentResult, totalChars) {
+    const outputEl = document.getElementById('ai-gen-output');
+    const charsEl = document.getElementById('ai-gen-chars');
+    
+    // 根据事件类型处理
+    if (data.message && !data.content && !data.success) {
+        // 状态消息
+        updateStreamStatus(data.message, Math.min(90, 20 + (totalChars / 100)));
+        if (outputEl) {
+            outputEl.textContent += '▶ ' + data.message + '\n';
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+    }
+    
+    if (data.content) {
+        // AI 生成的内容块
+        if (outputEl) {
+            // 显示内容摘要（避免显示太长的代码）
+            const preview = data.content.length > 100 ? data.content.substring(0, 100) + '...' : data.content;
+            outputEl.textContent += preview;
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+        if (charsEl && data.total_length) {
+            charsEl.textContent = data.total_length + ' <?= __('字符') ?>';
+        }
+        updateStreamStatus('<?= __('AI 正在生成...') ?> (' + (data.total_length || 0) + ' <?= __('字符') ?>)', Math.min(85, 20 + (data.total_length / 50)));
+    }
+    
+    if (data.success !== undefined) {
+        // 完成事件
+        return data;
+    }
+    
+    return currentResult;
+}
+
+// 构建可复制的提示词和代码区域HTML
+function buildCopyableSectionsHtml(templateContent, finalPrompt) {
+    // 转义HTML用于显示
+    const escapeHtml = (str) => {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+    
+    let html = '<div class="row g-3 mb-3">';
+    
+    // 左侧：最终提示词
+    html += `
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff;">
+                    <span><i class="mdi mdi-robot"></i> <?= __('AI 提示词') ?></span>
+                    <button type="button" class="btn btn-sm btn-light" onclick="copyToClipboard('prompt-content', this)">
+                        <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
+                    </button>
+                </div>
+                <div class="card-body p-2" style="background: #1e1e1e; max-height: 200px; overflow: auto;">
+                    <pre id="prompt-content" style="margin: 0; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(finalPrompt || '<?= __('提示词未返回') ?>')}</pre>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 右侧：生成的代码
+    html += `
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: #fff;">
+                    <span><i class="mdi mdi-code-tags"></i> <?= __('生成的代码') ?></span>
+                    <button type="button" class="btn btn-sm btn-light" onclick="copyToClipboard('code-content', this)">
+                        <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
+                    </button>
+                </div>
+                <div class="card-body p-2" style="background: #1e1e1e; max-height: 200px; overflow: auto;">
+                    <pre id="code-content" style="margin: 0; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(templateContent || '<?= __('代码未生成') ?>')}</pre>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    html += '</div>';
+    
+    // 添加完整 JSON 编辑区域（可折叠、可编辑、实时预览）
+    const jsonContent = JSON.stringify(buildExportableJson(), null, 2);
+    html += `
+        <div class="card mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; cursor: pointer;" onclick="toggleJsonExport()">
+                <span><i class="mdi mdi-code-json"></i> <?= __('JSON 数据') ?> <small class="opacity-75">(<?= __('可编辑并预览') ?>)</small></span>
+                <div class="d-flex align-items-center">
+                    <button type="button" class="btn btn-sm btn-warning me-1" onclick="event.stopPropagation(); applyJsonChanges()" title="<?= __('应用更改并预览') ?>">
+                        <i class="mdi mdi-refresh"></i> <?= __('应用') ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light me-1" onclick="event.stopPropagation(); copyJsonContent()" title="<?= __('复制 JSON') ?>">
+                        <i class="mdi mdi-content-copy"></i>
+                    </button>
+                    <i class="mdi mdi-chevron-down" id="json-export-chevron"></i>
+                </div>
+            </div>
+            <div class="card-body p-0" id="json-export-body" style="display: none;">
+                <textarea id="json-edit-content" class="form-control" rows="8" style="font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; background: #1e1e1e; color: #d4d4d4; border: none; border-radius: 0; resize: vertical;">${escapeHtml(jsonContent)}</textarea>
+                <div class="px-2 py-1" style="background: #2d2d2d; border-top: 1px solid #444;">
+                    <small class="text-muted"><i class="mdi mdi-information"></i> <?= __('修改 JSON 后点击「应用」按钮预览效果，或直接粘贴新的 JSON') ?></small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+// 构建可导出的 JSON 对象
+function buildExportableJson() {
+    if (!window.currentGeneratedComponent) {
+        return { error: '<?= __('无组件数据') ?>' };
+    }
+    
+    const comp = window.currentGeneratedComponent;
+    return {
+        version: '1.0',
+        exported_at: new Date().toISOString(),
+        component: {
+            code: comp.component?.code || '',
+            name: comp.component?.name || '',
+            name_en: comp.component?.name_en || '',
+            description: comp.component?.description || '',
+            region: comp.component?.region || comp.component?.category || 'content',
+            category: comp.component?.category || comp.component?.region || 'content',
+            style_code: comp.component?.style_code || '',
+            phtml_code: comp.templateContent || comp.component?.phtml_code || '',
+            config_schema: comp.component?.config_schema || {},
+            ai_data: comp.component?.ai_data || {}
+        },
+        validation: comp.validation || { valid: true },
+        final_prompt: comp.finalPrompt || ''
+    };
+}
+
+// 复制 JSON 内容
+function copyJsonContent() {
+    const textarea = document.getElementById('json-edit-content');
+    if (!textarea) return;
+    
+    navigator.clipboard.writeText(textarea.value).then(() => {
+        // 显示成功提示
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-check"></i>';
+        btn.classList.remove('btn-light');
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-light');
+        }, 1500);
+    }).catch(err => {
+        console.error('复制失败:', err);
+        textarea.select();
+    });
+}
+
+// 应用 JSON 更改并预览
+async function applyJsonChanges() {
+    const textarea = document.getElementById('json-edit-content');
+    if (!textarea) return;
+    
+    const jsonContent = textarea.value.trim();
+    if (!jsonContent) {
+        Swal.showValidationMessage('<?= __('JSON 内容为空') ?>');
+        return;
+    }
+    
+    let jsonData;
+    try {
+        jsonData = JSON.parse(jsonContent);
+    } catch (e) {
+        Swal.fire({
+            icon: 'error',
+            title: '<?= __('JSON 格式错误') ?>',
+            text: e.message,
+            customClass: { container: 'swal2-dark-theme' }
+        });
+        return;
+    }
+    
+    // 关闭当前弹窗
+    Swal.close();
+    
+    // 导入并预览
+    importAndPreviewJson(jsonData);
+}
+
+// 打开全屏预览
+function openFullscreenPreview() {
+    const previewHtml = window.currentGeneratedComponent?.preview?.html || 
+                        window.currentGeneratedComponent?.preview || '';
+    
+    if (!previewHtml) {
+        Swal.fire({
+            icon: 'warning',
+            title: '<?= __('无法全屏预览') ?>',
+            text: '<?= __('预览内容为空') ?>',
+            customClass: { container: 'swal2-dark-theme' }
+        });
+        return;
+    }
+    
+    // 创建全屏预览弹窗
+    Swal.fire({
+        title: null,
+        html: `
+            <div style="position: relative; width: 100%; height: calc(90vh - 60px);">
+                <div style="position: absolute; top: 10px; right: 10px; z-index: 100; display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
+                        <i class="mdi mdi-monitor"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('tablet')" title="<?= __('平板') ?>">
+                        <i class="mdi mdi-tablet"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('mobile')" title="<?= __('手机') ?>">
+                        <i class="mdi mdi-cellphone"></i>
+                    </button>
+                </div>
+                <div id="fullscreen-preview-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; background: #e0e0e0; padding: 20px; overflow: auto;">
+                    <iframe id="fullscreen-preview-iframe" srcdoc="${previewHtml.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
+                </div>
+            </div>
+        `,
+        width: '95vw',
+        padding: '10px',
+        showCloseButton: true,
+        showConfirmButton: false,
+        customClass: { 
+            container: 'swal2-dark-theme',
+            popup: 'swal2-fullscreen-preview-popup'
+        },
+        didOpen: () => {
+            // 默认桌面模式
+            setPreviewDevice('desktop');
+        }
+    });
+}
+
+// 设置预览设备尺寸
+function setPreviewDevice(device) {
+    const iframe = document.getElementById('fullscreen-preview-iframe');
+    const container = document.getElementById('fullscreen-preview-container');
+    if (!iframe || !container) return;
+    
+    // 移除所有设备按钮的激活状态
+    container.parentElement.querySelectorAll('.btn-light').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-light');
+    });
+    
+    // 激活当前设备按钮
+    const deviceIcons = { desktop: 'mdi-monitor', tablet: 'mdi-tablet', mobile: 'mdi-cellphone' };
+    const activeBtn = container.parentElement.querySelector(`.mdi.${deviceIcons[device]}`);
+    if (activeBtn) {
+        activeBtn.closest('button').classList.remove('btn-light');
+        activeBtn.closest('button').classList.add('btn-primary');
+    }
+    
+    // 设置尺寸
+    switch (device) {
+        case 'mobile':
+            iframe.style.width = '375px';
+            iframe.style.maxWidth = '375px';
+            iframe.style.height = '667px';
+            break;
+        case 'tablet':
+            iframe.style.width = '768px';
+            iframe.style.maxWidth = '768px';
+            iframe.style.height = '100%';
+            break;
+        case 'desktop':
+        default:
+            iframe.style.width = '100%';
+            iframe.style.maxWidth = '100%';
+            iframe.style.height = '100%';
+            break;
+    }
+}
+
+// 切换 JSON 导出区域显示/隐藏
+function toggleJsonExport() {
+    const body = document.getElementById('json-export-body');
+    const chevron = document.getElementById('json-export-chevron');
+    if (body && chevron) {
+        if (body.style.display === 'none') {
+            body.style.display = 'block';
+            chevron.classList.remove('mdi-chevron-down');
+            chevron.classList.add('mdi-chevron-up');
+        } else {
+            body.style.display = 'none';
+            chevron.classList.remove('mdi-chevron-up');
+            chevron.classList.add('mdi-chevron-down');
+        }
+    }
+}
+
+// 复制内容到剪贴板的通用函数
+function copyToClipboard(elementId, buttonElement) {
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error('Element not found:', elementId);
+        return;
+    }
+    
+    const text = element.textContent || element.innerText;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        // 显示复制成功提示
+        const originalText = buttonElement.innerHTML;
+        buttonElement.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已复制') ?>';
+        buttonElement.classList.remove('btn-light');
+        buttonElement.classList.add('btn-success');
+        setTimeout(() => {
+            buttonElement.innerHTML = originalText;
+            buttonElement.classList.remove('btn-success');
+            buttonElement.classList.add('btn-light');
+        }, 2000);
+    }).catch(err => {
+        console.error('复制失败:', err);
+        // 回退方案：选中文本
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // 提示用户手动复制
+        buttonElement.innerHTML = '<i class="mdi mdi-cursor-text"></i> <?= __('请Ctrl+C') ?>';
+        setTimeout(() => {
+            buttonElement.innerHTML = '<i class="mdi mdi-content-copy"></i> <?= __('复制') ?>';
+        }, 3000);
+    });
 }
 
 // 显示生成的组件结果
@@ -2167,12 +2858,16 @@ function showGeneratedComponent(result) {
     // 优先使用 result.result.template_content，然后是 component.phtml_code
     const templateContent = result.result?.template_content || component.phtml_code || '';
     
+    // 获取最终提示词（优先使用参数传递的，其次使用已保存的）
+    const finalPrompt = result.final_prompt || (window.currentGeneratedComponent?.finalPrompt) || '';
+    
     // 保存当前组件数据到全局变量，供微调使用
     window.currentGeneratedComponent = {
         component: component,
         templateContent: templateContent,
         validation: validation,
-        preview: preview
+        preview: preview,
+        finalPrompt: finalPrompt
     };
     
     // 如果result.result存在，合并到component中
@@ -2242,9 +2937,14 @@ function showGeneratedComponent(result) {
             <div class="card mb-3">
                 <div class="card-header py-2 d-flex justify-content-between align-items-center">
                     <span><i class="mdi mdi-eye"></i> <?= __('预览') ?></span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showGeneratedCode()">
-                        <i class="mdi mdi-code-tags"></i> <?= __('查看代码') ?>
-                    </button>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="openFullscreenPreview()" title="<?= __('全屏预览') ?>">
+                            <i class="mdi mdi-fullscreen"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showGeneratedCode()">
+                            <i class="mdi mdi-code-tags"></i> <?= __('查看代码') ?>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0" style="background: #f8f9fa;">
                     <iframe id="component-preview-iframe" srcdoc="${previewHtml.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" style="width: 100%; height: 280px; border: none;"></iframe>
@@ -2281,6 +2981,9 @@ function showGeneratedComponent(result) {
     const hasError = previewFailed || !validation.valid;
     const errorHint = hasError ? '<small class="text-warning"><i class="mdi mdi-lightbulb"></i> 已自动填入错误修复提示词，点击微调让AI修复</small>' : '';
     
+    // 构建可复制的提示词和代码区域HTML
+    const copyableSectionHtml = buildCopyableSectionsHtml(templateContent, window.currentGeneratedComponent.finalPrompt);
+    
     // 构建内联微调面板HTML
     const refinePanelHtml = `
         <div class="card border-primary">
@@ -2313,6 +3016,7 @@ function showGeneratedComponent(result) {
             <div style="text-align: left; max-height: 70vh; overflow-y: auto;">
                 ${validationHtml}
                 ${previewSectionHtml}
+                ${copyableSectionHtml}
                 ${refinePanelHtml}
             </div>
         `,
@@ -2449,12 +3153,13 @@ async function executeInlineRefine() {
         // 关闭当前弹窗并重新显示（更新后的预览）
         Swal.close();
         
-        // 重新显示生成结果
+        // 重新显示生成结果（保留原始的最终提示词）
         showGeneratedComponent({
             component: window.currentGeneratedComponent.component,
             validation: window.currentGeneratedComponent.validation || { valid: true },
             preview: result.preview || window.currentGeneratedComponent.preview,
-            result: result.result
+            result: result.result,
+            final_prompt: window.currentGeneratedComponent.finalPrompt || ''
         });
         
     } catch (error) {
@@ -2819,10 +3524,7 @@ async function refineComponentWithAi(adjustmentPrompt) {
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
     initComponentPanel();
-    
-    // 延迟检查是否有未保存的AI组件（等待页面完全加载）
-    setTimeout(() => {
-        checkUnsavedAiComponent();
-    }, 1500);
+    // 注意：未保存AI组件的检查已移至 openVisualConfig() 函数中
+    // 在打开可视化配置时才提示恢复
 });
 </script>

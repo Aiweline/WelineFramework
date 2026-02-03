@@ -132,5 +132,37 @@ class MockProvider implements ProviderInterface
         // 模拟提供者支持所有模型
         return true;
     }
+
+    /**
+     * 获取供应商代码
+     * 
+     * @return string
+     */
+    public function getProviderCode(): string
+    {
+        return 'mock';
+    }
+
+    /**
+     * 获取该供应商支持的模型列表
+     * 
+     * @return array
+     */
+    public function getSupportedModels(): array
+    {
+        // 模拟提供者返回一个测试模型
+        return [
+            [
+                'code' => 'mock-model',
+                'name' => 'Mock Model',
+                'description' => '用于测试的模拟模型',
+                'max_tokens' => 4096,
+                'context_window' => 8192,
+                'input_price' => 0,
+                'output_price' => 0,
+                'capabilities' => ['chat', 'code']
+            ]
+        ];
+    }
 }
 

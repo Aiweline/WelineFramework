@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\ThemeLayout;
@@ -118,9 +119,10 @@ readonly class ThemeLayoutVersionService
      * 恢复原始布局
      * 
      * 流程：
-     * 1. 创建当前状态的备份版本
-     * 2. 清空 draft 工作区
-     * 3. 创建新的"原始布局"版本（空布局，不添加任何部件）
+     * 1. 获取当前版本或 draft 数据作为备份来源
+     * 2. 创建备份版本（如果有数据）
+     * 3. 清空 draft 工作区
+     * 4. 创建新的"原始布局"版本（空布局，不添加任何部件）
      *
      * @param int $themeId 主题ID
      * @param string $pageType 页面类型
@@ -129,33 +131,61 @@ readonly class ThemeLayoutVersionService
      */
     public function restoreOriginal(int $themeId, string $pageType, ?int $userId = null): array
     {
-        // 1. 获取当前 draft 数据
+        // 1. 获取当前版本
+        $currentVersion = $this->getCurrentVersion($themeId, $pageType);
+        
+        // 2. 获取当前 draft 数据
         $currentDraftData = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
 
-        // 检查是否有数据需要备份
-        $hasWidgets = false;
+        // 3. 确定备份数据来源：优先使用 draft，如果 draft 为空则使用当前版本的快照
+        $backupData = null;
+        $backupSource = null;
+        
+        // 检查 draft 是否有 widgets
+        $draftHasWidgets = false;
         foreach ($currentDraftData as $area => $areaData) {
             if (!empty($areaData['widgets'])) {
-                $hasWidgets = true;
+                $draftHasWidgets = true;
                 break;
+            }
+        }
+        
+        if ($draftHasWidgets) {
+            // Draft 有数据，使用 draft 作为备份
+            $backupData = $currentDraftData;
+            $backupSource = 'draft';
+        } elseif ($currentVersion) {
+            // Draft 为空，但有当前版本，使用当前版本的快照作为备份
+            $versionSnapshot = $currentVersion->getSnapshotData();
+            $versionHasWidgets = false;
+            if (is_array($versionSnapshot)) {
+                foreach ($versionSnapshot as $area => $areaData) {
+                    if (!empty($areaData['widgets'])) {
+                        $versionHasWidgets = true;
+                        break;
+                    }
+                }
+            }
+            if ($versionHasWidgets) {
+                $backupData = $versionSnapshot;
+                $backupSource = 'version';
             }
         }
 
         $backupVersion = null;
 
-        // 2. 如果有内容，创建备份版本
-        if ($hasWidgets) {
-            $currentVersion = $this->getCurrentVersion($themeId, $pageType);
+        // 4. 如果有数据需要备份，创建备份版本
+        if ($backupData !== null) {
             $backupVersionNumber = $this->getNextVersionNumber($themeId, $pageType);
 
             $backupVersion = $this->createVersion(
                 themeId: $themeId,
                 pageType: $pageType,
                 versionNumber: $backupVersionNumber,
-                snapshotData: $currentDraftData,
+                snapshotData: $backupData,
                 type: ThemeLayoutVersion::TYPE_AUTO_BACKUP,
                 name: __('备份') . ' - ' . date('Y-m-d H:i:s'),
-                description: __('恢复原始布局前的自动备份'),
+                description: __('恢复原始布局前的自动备份') . ($backupSource === 'version' ? ' (' . __('来自版本') . ')' : ''),
                 parentVersionId: $currentVersion?->getVersionId(),
                 isCurrent: false,
                 isPublished: false,
@@ -163,13 +193,13 @@ readonly class ThemeLayoutVersionService
             );
         }
 
-        // 3. 清空当前 draft
+        // 5. 清空当前 draft
         $this->clearDraft($themeId, $pageType);
 
-        // 4. 取消所有 is_current 标记
+        // 6. 取消所有 is_current 标记（备份版本之后再取消，确保备份版本能正确引用父版本）
         $this->unsetCurrentVersion($themeId, $pageType);
 
-        // 5. 创建新的"原始布局"版本（空快照）
+        // 7. 创建新的"原始布局"版本（空快照）
         $emptySnapshot = $this->getEmptyLayoutSnapshot();
         $newVersionNumber = $this->getNextVersionNumber($themeId, $pageType);
 
@@ -222,7 +252,39 @@ readonly class ThemeLayoutVersionService
         $version->setIsPublished(true)->save();
 
         // 3. 使用现有的发布逻辑（draft -> published）
-        return $this->layoutService->publishLayout($themeId, $pageType);
+        $result = $this->layoutService->publishLayout($themeId, $pageType);
+        
+        // 4. 更新静态资源版本号
+        if ($result) {
+            $this->updateStaticVersion($themeId);
+        }
+
+        return $result;
+    }
+    
+    /**
+     * 更新静态资源版本号
+     * 
+     * 版本号格式：{themeVersion}_{timestamp}
+     * 例如：1.0.0_1738500000
+     * 
+     * @param int $themeId 主题ID
+     */
+    private function updateStaticVersion(int $themeId): void
+    {
+        try {
+            // 获取主题版本号
+            $theme = $this->welineTheme->reset()->load($themeId);
+            $themeVersion = $theme->getData('version') ?: '1.0.0';
+            
+            // 生成静态版本号：主题版本_时间戳
+            $staticVersion = $themeVersion . '_' . time();
+            
+            // 保存到系统配置
+            Env::getInstance()->setConfig('theme/static_version', $staticVersion);
+        } catch (\Exception $e) {
+            // 静默失败，不影响发布流程
+        }
     }
 
     /**
