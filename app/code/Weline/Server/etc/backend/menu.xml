@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Weline Server - 后台菜单配置
+ * 
+ * @author Aiweline
+ * @email aiweline@qq.com
+ */
+-->
+<config>
+    <menu>
+        <!-- 系统菜单下的服务器管理 -->
+        <item name="system" title="系统管理" class="bi-gear" sort="100">
+            <item name="server" title="服务器管理" class="bi-hdd-rack" sort="10">
+                <item name="manager" title="服务器实例" url="backend/server/server-manager" class="bi-server" sort="1"/>
+                <item name="ssl" title="SSL证书管理" url="backend/server/ssl-certificate" class="bi-shield-lock" sort="2"/>
+                <item name="optimization" title="性能优化指南" url="backend/server/optimization-guide" class="bi-lightning-charge" sort="3"/>
+            </item>
+        </item>
+    </menu>
+</config>

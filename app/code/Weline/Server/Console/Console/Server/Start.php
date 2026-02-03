@@ -1,6 +1,8 @@
 <?php
 
-namespace Weline\Framework\Console\Console\Server;
+declare(strict_types=1);
+
+namespace Weline\Server\Console\Console\Server;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
@@ -30,7 +32,7 @@ class Start implements CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
-        $port = $args['port'] ?? $args['p'] ?? '9981';
+        $port = (int) ($args['port'] ?? $args['p'] ?? 9981);
         
         # 检查是否是前台运行（默认后台运行，除非明确指定前台）
         # 如果用户指定了 -f 或 --foreground，则前台运行；否则默认后台运行
@@ -45,6 +47,14 @@ class Start implements CommandInterface
             $this->printer->note(__('运行模式: 后台运行 (默认)'));
         } else {
             $this->printer->note(__('运行模式: 前台运行'));
+        }
+        
+        // 同端口只能存在一个服务器：若该端口被 Weline Server 占用，先停止 WLS 再启动 CLI
+        $mainStop = ObjectManager::getInstance(\Weline\Server\Console\Server\Stop::class);
+        if ($mainStop->stopWelineServerOnPort($port)) {
+            $this->printer->note(__('已停止占用端口 %{1} 的 Weline Server，以便启动 CLI 服务器', [$port]));
+            $this->printer->note(__('等待端口释放...'));
+            sleep(2);
         }
         
         // 检查服务是否已经运行
@@ -96,7 +106,7 @@ class Start implements CommandInterface
                     'force' => true,
                     'reason' => 'force_restart'
                 ];
-                $eventManager->dispatch('Weline_Framework_Server::stop_after', $stopEventData);
+                $eventManager->dispatch('Weline_Server::stop_after', $stopEventData);
                 
             } else {
                 // 非强制模式：显示现有服务器信息
@@ -189,6 +199,9 @@ class Start implements CommandInterface
             $this->printer->error(__('⚠️  您已选择在生产模式下使用PHP内置服务器，请自行承担风险！'));
         }
         
+        // 启动前确保端口已释放：可能被 Weline Server 占用但实例文件未找到，按端口强杀
+        $this->ensurePortFreeBeforeStart($host, $port);
+        
         // 启动服务器并记录进程ID
         $pid = Server::instance($host, $port, $backend);
         
@@ -239,7 +252,7 @@ class Start implements CommandInterface
                 'start_time' => time(),
                 'force' => $force
             ];
-            $eventManager->dispatch('Weline_Framework_Server::start_after', $eventData);
+            $eventManager->dispatch('Weline_Server::start_after', $eventData);
             
             if ($backend) {
                 $this->printer->success(__('服务器已在后台启动成功！进程ID：%{1}', [$pid]));
@@ -328,6 +341,31 @@ class Start implements CommandInterface
         }
         
         return null;
+    }
+
+    /**
+     * 启动前确保端口已释放（按端口强杀占用进程，避免 Weline Server 占端口但实例文件未找到时 CLI 无法绑定）
+     */
+    private function ensurePortFreeBeforeStart(string $host, int $port): void
+    {
+        $maxTries = 3;
+        for ($i = 0; $i < $maxTries; $i++) {
+            $connection = @fsockopen($host, $port, $errno, $errstr, 1);
+            if ($connection === false || !is_resource($connection)) {
+                return;
+            }
+            fclose($connection);
+            $pid = $this->getProcessIdByPort($port);
+            if ($pid) {
+                $this->printer->note(__('端口 %{1} 仍被占用（PID：%{2}），正在停止以便启动 CLI 服务器...', [$port, $pid]));
+                $this->stopExistingServer($pid);
+                sleep(2);
+            } else {
+                $this->printer->warning(__('端口 %{1} 被占用但无法获取进程ID，请手动停止后重试', [$port]));
+                return;
+            }
+        }
+        $this->printer->warning(__('端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听', [$port]));
     }
 
     /**

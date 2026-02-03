@@ -16,6 +16,7 @@ namespace Weline\Ai\Controller\Backend;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -1637,6 +1638,78 @@ class Model extends BackendController
                 'failed' => $failedCount
             ]
         ]);
+    }
+
+    /**
+     * 获取所有供应商及其支持的模型列表
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_providers', '获取AI供应商列表', 'mdi-domain', '获取AI供应商及模型列表')]
+    public function getProviders(): string
+    {
+        try {
+            $providers = VendorConfigManager::getAllProvidersWithModels();
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'data' => $providers
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('获取供应商列表失败: %{1}', [$e->getMessage()])
+            ]);
+        }
+    }
+
+    /**
+     * 获取指定供应商支持的模型列表
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_provider_models', '获取供应商模型列表', 'mdi-format-list-bulleted', '获取指定供应商支持的模型列表')]
+    public function getProviderModels(): string
+    {
+        $providerCode = $this->request->getGet('provider') ?? $this->request->getPost('provider');
+        
+        if (empty($providerCode)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('供应商代码不能为空')
+            ]);
+        }
+        
+        try {
+            $providerConfig = VendorConfigManager::getProviderConfig($providerCode);
+            
+            if (!$providerConfig) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('不支持的供应商: %{1}', [$providerCode])
+                ]);
+            }
+            
+            $models = VendorConfigManager::getProviderModels($providerCode);
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'data' => [
+                    'provider' => [
+                        'code' => $providerCode,
+                        'name' => $providerConfig['name'] ?? $providerCode,
+                        'description' => $providerConfig['description'] ?? '',
+                        'base_url' => $providerConfig['base_url'] ?? '',
+                    ],
+                    'models' => $models
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('获取模型列表失败: %{1}', [$e->getMessage()])
+            ]);
+        }
     }
 
     /**

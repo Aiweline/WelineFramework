@@ -37,5 +37,14 @@
                   shared="true" 
                   sort="100"/>
     </event>
+    
+    <!-- CDN统一请求事件 -->
+    <event name="Weline_Cdn::request">
+        <observer name="Weline_Cdn::request_handler" 
+                  instance="Weline\Cdn\Observer\CdnRequest" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
 </config>
 

@@ -130,6 +130,41 @@ class VendorConfigManager
     }
 
     /**
+     * 获取指定供应商支持的模型列表
+     * 
+     * @param string $providerCode
+     * @return array
+     */
+    public static function getProviderModels(string $providerCode): array
+    {
+        $config = self::getProviderConfig($providerCode);
+        return $config['models'] ?? [];
+    }
+
+    /**
+     * 获取所有供应商及其模型列表
+     * 
+     * @return array
+     */
+    public static function getAllProvidersWithModels(): array
+    {
+        $providers = self::getSupportedProviders();
+        $result = [];
+        
+        foreach ($providers as $providerCode => $config) {
+            $result[$providerCode] = [
+                'name' => $config['name'] ?? $providerCode,
+                'code' => $providerCode,
+                'description' => $config['description'] ?? '',
+                'base_url' => $config['base_url'] ?? '',
+                'models' => $config['models'] ?? [],
+            ];
+        }
+        
+        return $result;
+    }
+
+    /**
      * 加载所有供应商配置文件
      * 
      * @return void

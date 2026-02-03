@@ -32,14 +32,24 @@ class StatisticsService
     {
         $dateRange = $this->getDateRange($period);
         
+        $totalSessions = $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end']);
+        $closedSessions = $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end'], ChatSession::STATUS_CLOSED);
+        $activeSessions = $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end'], ChatSession::STATUS_ACTIVE);
+        $respondedSessions = $this->getRespondedSessionCount($agentId, $dateRange['start'], $dateRange['end']);
+        $customerMessages = $this->getCustomerMessageCount($agentId, $dateRange['start'], $dateRange['end']);
+        $agentMessages = $this->getMessageCount($agentId, $dateRange['start'], $dateRange['end']);
+        
         return [
             'sessions' => [
-                'total' => $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end']),
-                'closed' => $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end'], ChatSession::STATUS_CLOSED),
-                'active' => $this->getSessionCount($agentId, $dateRange['start'], $dateRange['end'], ChatSession::STATUS_ACTIVE),
+                'total' => $totalSessions,
+                'closed' => $closedSessions,
+                'active' => $activeSessions,
+                'responded' => $respondedSessions,
             ],
             'messages' => [
-                'total' => $this->getMessageCount($agentId, $dateRange['start'], $dateRange['end']),
+                'total' => $agentMessages + $customerMessages,
+                'agent' => $agentMessages,
+                'customer' => $customerMessages,
             ],
             'response_time' => [
                 'average' => $this->getAverageResponseTime($agentId, $dateRange['start'], $dateRange['end']),
@@ -50,6 +60,11 @@ class StatisticsService
                 'average' => $this->getAverageSessionDuration($agentId, $dateRange['start'], $dateRange['end']),
                 'min' => $this->getMinSessionDuration($agentId, $dateRange['start'], $dateRange['end']),
                 'max' => $this->getMaxSessionDuration($agentId, $dateRange['start'], $dateRange['end']),
+            ],
+            'rates' => [
+                'response_rate' => $totalSessions > 0 ? round(($respondedSessions / $totalSessions) * 100, 1) : 0,
+                'close_rate' => $totalSessions > 0 ? round(($closedSessions / $totalSessions) * 100, 1) : 0,
+                'messages_per_session' => $closedSessions > 0 ? round($agentMessages / $closedSessions, 1) : 0,
             ],
             'period' => $period,
             'date_range' => $dateRange,
@@ -122,7 +137,7 @@ class StatisticsService
     }
 
     /**
-     * 统计消息数量
+     * 统计客服消息数量
      * 
      * @param int $agentId 客服ID
      * @param string $startDate 开始日期
@@ -140,6 +155,91 @@ class StatisticsService
             ->where(ChatMessage::fields_created_at, $startDate, '>=')
             ->where(ChatMessage::fields_created_at, $endDate, '<=')
             ->count();
+    }
+
+    /**
+     * 统计客户消息数量（客服会话中的客户消息）
+     * 
+     * @param int $agentId 客服ID
+     * @param string $startDate 开始日期
+     * @param string $endDate 结束日期
+     * @return int
+     */
+    public function getCustomerMessageCount(int $agentId, string $startDate, string $endDate): int
+    {
+        /** @var ChatSession $session */
+        $session = ObjectManager::getInstance(ChatSession::class);
+        
+        // 获取该客服的所有会话ID
+        $sessions = $session->reset()
+            ->where(ChatSession::fields_agent_id, $agentId)
+            ->where(ChatSession::fields_created_at, $startDate, '>=')
+            ->where(ChatSession::fields_created_at, $endDate, '<=')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        if (empty($sessions)) {
+            return 0;
+        }
+        
+        $sessionIds = array_column($sessions, 'session_id');
+        
+        /** @var ChatMessage $message */
+        $message = ObjectManager::getInstance(ChatMessage::class);
+        
+        return (int)$message->reset()
+            ->where(ChatMessage::fields_session_id, $sessionIds, 'IN')
+            ->where(ChatMessage::fields_sender_type, ChatMessage::SENDER_TYPE_CUSTOMER)
+            ->where(ChatMessage::fields_created_at, $startDate, '>=')
+            ->where(ChatMessage::fields_created_at, $endDate, '<=')
+            ->count();
+    }
+
+    /**
+     * 统计已响应的会话数量（客服有回复的会话）
+     * 
+     * @param int $agentId 客服ID
+     * @param string $startDate 开始日期
+     * @param string $endDate 结束日期
+     * @return int
+     */
+    public function getRespondedSessionCount(int $agentId, string $startDate, string $endDate): int
+    {
+        /** @var ChatSession $session */
+        $session = ObjectManager::getInstance(ChatSession::class);
+        
+        // 获取该客服的所有会话
+        $sessions = $session->reset()
+            ->where(ChatSession::fields_agent_id, $agentId)
+            ->where(ChatSession::fields_created_at, $startDate, '>=')
+            ->where(ChatSession::fields_created_at, $endDate, '<=')
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        if (empty($sessions)) {
+            return 0;
+        }
+        
+        $respondedCount = 0;
+        
+        foreach ($sessions as $sessionData) {
+            $sessionId = (int)$sessionData['session_id'];
+            
+            /** @var ChatMessage $message */
+            $message = ObjectManager::getInstance(ChatMessage::class);
+            $hasResponse = $message->reset()
+                ->where(ChatMessage::fields_session_id, $sessionId)
+                ->where(ChatMessage::fields_sender_type, ChatMessage::SENDER_TYPE_AGENT)
+                ->count();
+            
+            if ($hasResponse > 0) {
+                $respondedCount++;
+            }
+        }
+        
+        return $respondedCount;
     }
 
     /**

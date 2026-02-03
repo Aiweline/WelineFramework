@@ -79,8 +79,8 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认120秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 120);
+        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制，确保有足够的时间完成请求
         if ($timeout > 0) {
@@ -174,8 +174,8 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认120秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 120);
+        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 调试日志：记录超时时间的来源和值
         if (DEV) {
@@ -571,11 +571,32 @@ class OpenAiProvider implements ProviderInterface
      */
     public function supports(string $modelCode): bool
     {
-        // 支持OpenAI和兼容OpenAI API的模型（如DeepSeek、Claude等）
+        // 支持OpenAI和兼容OpenAI API的模型（如DeepSeek等，但不包括Claude，Claude使用AnthropicProvider）
         return str_contains($modelCode, 'gpt') 
             || str_contains($modelCode, 'openai') 
             || str_contains($modelCode, 'deepseek')
-            || str_contains($modelCode, 'claude');
+            || str_starts_with($modelCode, 'o1-')
+            || str_starts_with($modelCode, 'o3-');
+    }
+
+    /**
+     * 获取供应商代码
+     * 
+     * @return string
+     */
+    public function getProviderCode(): string
+    {
+        return 'openai';
+    }
+
+    /**
+     * 获取该供应商支持的模型列表
+     * 
+     * @return array
+     */
+    public function getSupportedModels(): array
+    {
+        return VendorConfigManager::getProviderModels($this->getProviderCode());
     }
 
     /**

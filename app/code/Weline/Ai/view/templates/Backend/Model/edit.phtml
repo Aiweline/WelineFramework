@@ -281,10 +281,10 @@ if (empty($providerConfig) && !empty($config)) {
                                    class="form-control" 
                                    id="timeout" 
                                    name="config[timeout]" 
-                                   value="<?= $config['timeout'] ?? '120' ?>"
+                                   value="<?= $config['timeout'] ?? '180' ?>"
                                    min="0"
-                                   placeholder="120">
-                            <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认120秒') ?></small>
+                                   placeholder="180">
+                            <small class="form-text text-muted"><?= __('API请求超时时间，0表示不限制，默认180秒') ?></small>
                         </div>
                     </div>
                     

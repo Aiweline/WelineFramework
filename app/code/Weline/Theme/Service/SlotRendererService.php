@@ -72,6 +72,24 @@ class SlotRendererService
         // 按插槽 ID 组织部件
         $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
         
+        // 调试日志（开发模式）
+        if (defined('DEV') && DEV) {
+            $widgetCount = 0;
+            foreach ($slotWidgets as $slotId => $widgets) {
+                $widgetCount += count($widgets);
+            }
+            error_log(sprintf(
+                '[SlotRenderer] processSlots: themeId=%d, pageType=%s, status=%s, slots=%d, widgets=%d',
+                $themeId,
+                $pageType,
+                $status,
+                count($slotWidgets),
+                $widgetCount
+            ));
+            foreach ($slotWidgets as $slotId => $widgets) {
+                error_log(sprintf('[SlotRenderer]   Slot "%s": %d widgets', $slotId, count($widgets)));
+            }
+        }
 
         // 使用 DOM 解析处理插槽（更可靠）
         $html = $this->processSlotsWithDom($html, $slotWidgets);
@@ -566,6 +584,18 @@ class SlotRendererService
                 }
 
                 $slotWidgets[$slotId][] = $widget;
+                
+                // 调试日志（开发模式）
+                if (defined('DEV') && DEV) {
+                    error_log(sprintf(
+                        '[SlotRenderer] Organized widget: code=%s, module=%s, slot_id=%s (from db: %s), area=%s',
+                        $widget['widget_code'] ?? '',
+                        $widget['widget_module'] ?? '',
+                        $slotId,
+                        $widget['slot_id'] ?? '(null)',
+                        $area
+                    ));
+                }
             }
         }
 

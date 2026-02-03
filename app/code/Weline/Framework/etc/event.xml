@@ -2,16 +2,6 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <!-- 服务器启动事件 -->
-    <event name="Weline_Framework_Server::start_after">
-        <observer name="Weline_Framework_Server::start_logger" instance="Weline\Framework\Console\Console\Server\Observer\ServerStartObserver" disabled="false" shared="true" sort="10"/>
-    </event>
-    
-    <!-- 服务器停止事件 -->
-    <event name="Weline_Framework_Server::stop_after">
-        <observer name="Weline_Framework_Server::stop_logger" instance="Weline\Framework\Console\Console\Server\Observer\ServerStopObserver" disabled="false" shared="true" sort="10"/>
-    </event>
-    
     <!-- 系统升级后扫描数据库适配器（只在系统升级完成后扫描一次，避免重复扫描） -->
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>

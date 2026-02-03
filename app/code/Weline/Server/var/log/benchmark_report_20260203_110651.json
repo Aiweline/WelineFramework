@@ -1,0 +1,16 @@
+{
+    "total_requests": 100,
+    "success_count": 0,
+    "error_count": 100,
+    "error_rate": 100,
+    "total_time_seconds": 300.077,
+    "qps": 0,
+    "latency_ms": {
+        "avg": 0,
+        "min": 0,
+        "max": 0,
+        "median": 0,
+        "p95": 0,
+        "p99": 0
+    }
+}

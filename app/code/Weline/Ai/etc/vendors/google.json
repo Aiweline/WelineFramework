@@ -20,5 +20,47 @@
     "rate_limits": {
         "requests_per_minute": 60,
         "tokens_per_minute": 200000
-    }
+    },
+    "models": [
+        {
+            "code": "gemini-2.0-flash-exp",
+            "name": "Gemini 2.0 Flash",
+            "description": "Gemini 2.0 实验版，支持多模态",
+            "max_tokens": 8192,
+            "context_window": 1048576,
+            "input_price": 0.00,
+            "output_price": 0.00,
+            "capabilities": ["chat", "vision", "code"]
+        },
+        {
+            "code": "gemini-1.5-pro",
+            "name": "Gemini 1.5 Pro",
+            "description": "强大的多模态模型，支持长上下文",
+            "max_tokens": 8192,
+            "context_window": 2097152,
+            "input_price": 1.25,
+            "output_price": 5.00,
+            "capabilities": ["chat", "vision", "code"]
+        },
+        {
+            "code": "gemini-1.5-flash",
+            "name": "Gemini 1.5 Flash",
+            "description": "快速响应的多模态模型",
+            "max_tokens": 8192,
+            "context_window": 1048576,
+            "input_price": 0.075,
+            "output_price": 0.30,
+            "capabilities": ["chat", "vision", "code"]
+        },
+        {
+            "code": "gemini-pro",
+            "name": "Gemini Pro",
+            "description": "Gemini Pro 通用模型",
+            "max_tokens": 8192,
+            "context_window": 32768,
+            "input_price": 0.50,
+            "output_price": 1.50,
+            "capabilities": ["chat", "code"]
+        }
+    ]
 }

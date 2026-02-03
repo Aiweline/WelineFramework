@@ -210,13 +210,46 @@ return [
     // 部署环境
     'deploy' => 'dev',  // dev, test, prod
     
-    // 服务器配置（开发服务器）
+    // 服务器配置（Weline Server 高性能 HTTP 服务器）
     'server' => [
-        'host' => '127.0.0.1',  // 服务器地址
-        'port' => 9981,         // 服务器端口
-        'pid' => null,          // 进程ID（运行时自动设置）
-        'start_time' => null,   // 启动时间（运行时自动设置）
-        'status' => 'stopped',  // 服务器状态：stopped, running
+        // 基础配置
+        'host' => '127.0.0.1',      // 监听地址（127.0.0.1=本地, 0.0.0.0=所有网卡）
+        'port' => 9981,             // 监听端口（默认 9981）
+        
+        // Worker 进程配置
+        'worker_count' => 'auto',   // Worker 进程数：
+                                    // - 'auto': 智能模式，根据服务器性能自动推算
+                                    //   公式：CPU核心数 * 2（I/O密集型）或 CPU核心数（CPU密集型）
+                                    // - 数字（如 4, 8）: 固定进程数
+        
+        // 性能调优（可选）
+        'mode' => 'io',             // 工作模式：
+                                    // - 'io': I/O密集型（默认，Worker = CPU * 2）
+                                    // - 'cpu': CPU密集型（Worker = CPU）
+        'max_connections' => 10000, // 单进程最大连接数（默认 10000）
+        'max_request' => 100000,    // 单进程最大请求数后重启（0=不重启）
+        
+        // 运行时状态（自动管理，无需手动配置）
+        'pid' => null,              // 主进程 PID
+        'start_time' => null,       // 启动时间戳
+        'status' => 'stopped',      // 状态：stopped, running
+    ],
+    
+    // 多实例服务器配置（可选）
+    // 用于同时运行多个服务器实例（如 API 服务器、WebSocket 服务器）
+    'servers' => [
+        // 'api' => [
+        //     'host' => '127.0.0.1',
+        //     'port' => 9001,
+        //     'worker_count' => 4,
+        //     'mode' => 'io',
+        // ],
+        // 'websocket' => [
+        //     'host' => '0.0.0.0',
+        //     'port' => 9002,
+        //     'worker_count' => 2,
+        //     'mode' => 'cpu',
+        // ],
     ],
     
     // 调试配置（可选）

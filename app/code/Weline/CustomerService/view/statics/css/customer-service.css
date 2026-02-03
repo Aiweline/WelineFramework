@@ -2,6 +2,13 @@
  * 客服服务模块样式文件
  */
 
+/* SVG 图标通用样式 */
+.cs-icon {
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
 /* 客服组件容器 */
 .customer-service-widget {
     position: fixed;
@@ -25,7 +32,11 @@
     transition: all 0.3s ease;
     position: relative;
     color: white;
-    font-size: 24px;
+}
+
+.cs-chat-button .cs-icon {
+    width: 28px;
+    height: 28px;
 }
 
 .cs-chat-button:hover {
@@ -106,6 +117,47 @@
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* 设置面板 */
+.cs-settings-panel {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 12px 15px;
+}
+
+.cs-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.cs-settings-item:last-child {
+    margin-bottom: 0;
+}
+
+.cs-settings-item label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+}
+
+.cs-settings-item select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+    min-width: 120px;
+}
+
+.cs-settings-item select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
 /* 聊天消息区域 */
 .cs-chat-body {
     flex: 1;
@@ -160,6 +212,45 @@
     color: #999;
     margin-top: 4px;
     padding: 0 4px;
+}
+
+/* 双语消息显示 */
+.cs-message-original {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(128, 128, 128, 0.3);
+}
+
+.cs-message-translated {
+    font-size: 14px;
+}
+
+.cs-message-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.cs-message.customer .cs-message-original {
+    border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 语言标签 */
+.cs-lang-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.cs-message.customer .cs-lang-tag {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* 聊天输入区域 */

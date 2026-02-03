@@ -1,18 +1,18 @@
 <{{target_tag}} class='{{target_button_class}}' type='button' data-bs-toggle='offcanvas'
-data-bs-target='#{{id}}' aria-controls='{{id}}'>
-<has name='icon'>
-    <i class='{{icon}}'></i>
-</has>
-<lang>{{target_button_text|'添加'}}</lang>
+data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
+<?php if (!empty($icon)): ?>
+    <i class='<?= $icon ?>'></i>
+<?php endif; ?>
+<lang>{{target_button_text|''}}</lang>
 </{{target_tag}}>
 <!-- {{id}} -->
 <div class='offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
      aria-labelledby='{{id}}Label'>
     <div class='offcanvas-header'>
         <h5 id='{{id}}Label'>
-            <has name='icon'>
-                <i class='{{icon}}'></i>
-            </has>
+            <?php if (!empty($icon)): ?>
+                <i class='<?= $icon ?>'></i>
+            <?php endif; ?>
             <lang>{{title|''}}</lang>
         </h5>
         <has name='close_button_show'>
