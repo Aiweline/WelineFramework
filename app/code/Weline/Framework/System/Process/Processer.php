@@ -372,27 +372,21 @@ class Processer
     {
         $pid = self::getData($pname, 'pid') ?: 0;
         if ($pid) {
-            return $pid;
+            // 验证 PID 是否仍在运行
+            if (self::isRunningByPid($pid)) {
+                return $pid;
+            }
         }
         # 分系统环境
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            # windows环境通过命令行获取cmd进程后处理
-            $command = 'wmic process where "name=\'cmd.exe\'" get ProcessId,CommandLine /format:list';
-            exec($command, $output);
-            foreach ($output as $out_key => $line) {
-                if (empty($line)) {
-                    continue;
-                }
-                $line = html_entity_decode($line);
-                if (str_contains($line, $pname)) {
-                    $pid = (int)explode('=', $output[$out_key + 1])[1] ?? 0;
-                    self::setPid($pname, $pid);
-                    return $pid;
-                }
-            }
-            return 0;
+            # Windows: 使用 tasklist 替代 wmic（更现代、更可靠）
+            return self::findPhpProcessPid($pname);
         } else {
-            return (int)exec('ps aux | egrep "' . $pname . '" | grep -v grep | tail -n 1 | awk \'{print $2}\'');
+            $result = (int)exec('ps aux | egrep "' . $pname . '" | grep -v grep | tail -n 1 | awk \'{print $2}\'');
+            if ($result > 0) {
+                self::setPid($pname, $result);
+            }
+            return $result;
         }
     }
 

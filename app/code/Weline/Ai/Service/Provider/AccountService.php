@@ -12,6 +12,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\Provider\ProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\OpenAiProvider;
+use Weline\Ai\Service\Provider\AnthropicProvider;
 use Weline\Framework\App\Env;
 
 /**
@@ -273,10 +274,15 @@ class AccountService
      */
     public function getProviderInstance(string $providerCode): ?ProviderInterface
     {
-        // 目前所有供应商都使用OpenAI兼容的API
-        // 后续可以根据providerCode返回不同的实现
         try {
-            $provider = $this->objectManager->make(OpenAiProvider::class);
+            // 根据供应商代码返回对应的Provider实例
+            $providerClass = match ($providerCode) {
+                'anthropic' => AnthropicProvider::class,
+                'openai', 'deepseek' => OpenAiProvider::class,
+                default => OpenAiProvider::class, // 默认使用OpenAI兼容的Provider
+            };
+            
+            $provider = $this->objectManager->make($providerClass);
             if (!$provider instanceof ProviderInterface) {
                 Env::log('ai_provider_test.log', sprintf('[getProviderInstance][error] provider=%s error=返回的对象不是ProviderInterface实例', $providerCode));
                 return null;
@@ -339,5 +345,26 @@ class AccountService
             ->select()
             ->fetchArray();
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * 获取指定供应商支持的模型列表
+     * 
+     * @param string $providerCode
+     * @return array
+     */
+    public function getProviderModels(string $providerCode): array
+    {
+        return VendorConfigManager::getProviderModels($providerCode);
+    }
+
+    /**
+     * 获取所有供应商及其支持的模型列表
+     * 
+     * @return array
+     */
+    public function getAllProvidersWithModels(): array
+    {
+        return VendorConfigManager::getAllProvidersWithModels();
     }
 }

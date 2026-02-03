@@ -689,12 +689,47 @@ class ThemeLayoutService
     }
 
     /**
+     * 独占区域定义
+     * header 和 footer 是独占区域，选中整个区域时应显示独占大部件
+     * content 不是独占区域，可以放置多个部件
+     */
+    public const EXCLUSIVE_AREAS = ['header', 'footer'];
+    
+    /**
+     * 子 slot 到父区域的映射
+     * 用于判断一个 slot 是顶层区域还是子 slot
+     */
+    public const SUB_SLOTS_MAP = [
+        // Header 区域的子 slots
+        'logo' => 'header',
+        'search' => 'header',
+        'navigation' => 'header',
+        'user-area' => 'header',
+        'account' => 'header',
+        'cart' => 'header',
+        'wishlist' => 'header',
+        'language' => 'header',
+        'currency' => 'header',
+        // Footer 区域的子 slots
+        'copyright' => 'footer',
+        'links' => 'footer',
+        'social' => 'footer',
+        'newsletter' => 'footer',
+        'payment' => 'footer',
+    ];
+    
+    /**
      * 获取可用的部件列表（按类型分组）
      * 
      * @param string|null $pageType 页面类型，用于过滤部件。null 则不过滤
+     * @param array|null $filterOptions 筛选选项：
+     *   - slot_id: string|null 当前选中的 slot ID
+     *   - slot_level: string 'top'(顶层区域) 或 'sub'(子 slot)
+     *   - area: string|null 区域代码 (header/content/footer)
+     *   - show_exclusive_only: bool 是否只显示独占部件
      * @return array
      */
-    public function getAvailableWidgets(?string $pageType = null): array
+    public function getAvailableWidgets(?string $pageType = null, ?array $filterOptions = null): array
     {
         $widgets = $this->widgetRegistry->getRegistry();
 
@@ -811,6 +846,13 @@ class ThemeLayoutService
                     $widget['params'] = $translatedParams;
                 }
                 
+                // 应用筛选选项（如果提供）
+                if ($filterOptions !== null) {
+                    if (!$this->matchesSlotFilter($widget, $filterOptions)) {
+                        continue; // 跳过不匹配筛选条件的部件
+                    }
+                }
+                
                 // 添加到分组
                 if (!isset($grouped[$type])) {
                     $grouped[$type] = [
@@ -824,6 +866,177 @@ class ThemeLayoutService
         }
 
         return $grouped;
+    }
+    
+    /**
+     * 检查部件是否匹配 slot 筛选条件
+     * 
+     * 筛选逻辑：
+     * 1. 顶层独占区域（header/footer）：只显示 exclusive=true 的大部件
+     * 2. 子 slot（logo/search/navigation 等）：显示匹配该 slot 的小部件
+     * 3. content 区域：显示所有适用于 content 位置的部件（非独占）
+     * 
+     * @param array $widget 部件配置
+     * @param array $filterOptions 筛选选项
+     * @return bool
+     */
+    private function matchesSlotFilter(array $widget, array $filterOptions): bool
+    {
+        $slotId = $filterOptions['slot_id'] ?? null;
+        $area = $filterOptions['area'] ?? null;
+        $showExclusiveOnly = $filterOptions['show_exclusive_only'] ?? false;
+        
+        // 如果没有指定 slot 或 area，返回所有部件
+        if (!$slotId && !$area) {
+            return true;
+        }
+        
+        $widgetExclusive = $widget['exclusive'] ?? false;
+        $widgetSlot = $widget['slot'] ?? null;
+        $widgetPositions = $widget['position'] ?? [];
+        $widgetType = $widget['type'] ?? '';
+        
+        // 确保 positions 是数组
+        if (!is_array($widgetPositions)) {
+            $widgetPositions = [$widgetPositions];
+        }
+        
+        // 检查是否是子 slot
+        $isSubSlot = isset(self::SUB_SLOTS_MAP[$slotId]);
+        $parentArea = $isSubSlot ? self::SUB_SLOTS_MAP[$slotId] : null;
+        
+        // 检查当前区域是否是独占区域
+        $isExclusiveArea = in_array($area, self::EXCLUSIVE_AREAS);
+        
+        // 情况1：选中的是子 slot（如 logo、search、navigation）
+        if ($isSubSlot) {
+            // 子 slot 内只显示匹配该 slot 的小部件
+            // 部件的 slot 属性必须与选中的 slot 匹配
+            if ($widgetSlot === $slotId) {
+                return true;
+            }
+            // 或者部件 position 包含该 slot
+            if (in_array($slotId, $widgetPositions)) {
+                return true;
+            }
+            return false;
+        }
+        
+        // 情况2：选中的是顶层独占区域（header/footer）
+        if ($isExclusiveArea && ($area === $slotId || $slotId === null)) {
+            // 独占区域只显示 exclusive=true 的大部件
+            if ($showExclusiveOnly) {
+                return $widgetExclusive === true;
+            }
+            // 否则显示所有 position 包含该区域的部件
+            // 但独占大部件应优先显示
+            if (in_array($area, $widgetPositions) || in_array('*', $widgetPositions)) {
+                return true;
+            }
+            return false;
+        }
+        
+        // 情况3：选中的是 content 区域（非独占）
+        if ($area === 'content' || $slotId === 'content') {
+            // content 区域显示所有 position 包含 content 的部件
+            // 但排除 header 和 footer 类型的部件
+            if ($widgetType === 'header' || $widgetType === 'footer') {
+                return false;
+            }
+            if (in_array('content', $widgetPositions) || in_array('*', $widgetPositions)) {
+                return true;
+            }
+            return false;
+        }
+        
+        // 默认：根据 position 匹配
+        if ($area && (in_array($area, $widgetPositions) || in_array('*', $widgetPositions))) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 获取指定 slot 的推荐部件
+     * 
+     * @param string $slotId slot ID
+     * @param string|null $area 区域代码
+     * @param string|null $pageType 页面类型
+     * @return array 包含 exclusive_widgets 和 regular_widgets 两个数组
+     */
+    public function getWidgetsForSlot(string $slotId, ?string $area = null, ?string $pageType = null): array
+    {
+        // 判断是否是子 slot
+        $isSubSlot = isset(self::SUB_SLOTS_MAP[$slotId]);
+        $parentArea = $isSubSlot ? self::SUB_SLOTS_MAP[$slotId] : null;
+        $effectiveArea = $area ?? $parentArea ?? $slotId;
+        
+        // 检查是否是独占区域
+        $isExclusiveArea = in_array($effectiveArea, self::EXCLUSIVE_AREAS);
+        
+        // 获取所有部件
+        $allWidgets = $this->getAvailableWidgets($pageType);
+        
+        $exclusiveWidgets = [];  // 独占大部件
+        $regularWidgets = [];     // 普通小部件
+        $matchedWidgets = [];     // 精确匹配的部件
+        
+        foreach ($allWidgets as $type => $group) {
+            foreach ($group['widgets'] as $widget) {
+                $widgetExclusive = $widget['exclusive'] ?? false;
+                $widgetSlot = $widget['slot'] ?? null;
+                $widgetPositions = $widget['position'] ?? [];
+                $widgetType = $widget['type'] ?? '';
+                
+                if (!is_array($widgetPositions)) {
+                    $widgetPositions = [$widgetPositions];
+                }
+                
+                // 子 slot 筛选
+                if ($isSubSlot) {
+                    if ($widgetSlot === $slotId || in_array($slotId, $widgetPositions)) {
+                        $matchedWidgets[] = $widget;
+                    }
+                    continue;
+                }
+                
+                // 顶层区域筛选
+                $positionMatches = in_array($effectiveArea, $widgetPositions) || in_array('*', $widgetPositions);
+                
+                // 排除不兼容类型
+                if ($effectiveArea === 'content' && ($widgetType === 'header' || $widgetType === 'footer')) {
+                    continue;
+                }
+                if ($effectiveArea === 'header' && $widgetType === 'footer') {
+                    continue;
+                }
+                if ($effectiveArea === 'footer' && $widgetType === 'header') {
+                    continue;
+                }
+                
+                if (!$positionMatches) {
+                    continue;
+                }
+                
+                // 分类：独占 vs 普通
+                if ($widgetExclusive) {
+                    $exclusiveWidgets[] = $widget;
+                } else {
+                    $regularWidgets[] = $widget;
+                }
+            }
+        }
+        
+        return [
+            'slot_id' => $slotId,
+            'area' => $effectiveArea,
+            'is_sub_slot' => $isSubSlot,
+            'is_exclusive_area' => $isExclusiveArea,
+            'exclusive_widgets' => $exclusiveWidgets,  // 独占大部件（用于替换整个区域）
+            'regular_widgets' => $regularWidgets,       // 普通部件（可多个排列）
+            'matched_widgets' => $matchedWidgets,       // 精确匹配子 slot 的部件
+        ];
     }
 
     /**

@@ -1463,13 +1463,6 @@ const DevToolPanel = (function() {
         }
         
         if (needSnap) {
-            console.log('开发工具面板大部分不可见，自动贴边:', {
-                currentPosition: { x: currentX, y: currentY },
-                visibleWidth: visibleWidth,
-                windowSize: { width: windowWidth, height: windowHeight },
-                containerSize: { width: width, height: height }
-            });
-            
             // 调用贴边函数自动贴到最近的边
             snapToNearestEdge(panelEl);
         } else {
@@ -1595,7 +1588,6 @@ const DevToolPanel = (function() {
                     // 只在展开状态下才收起
                     if (!state.collapsed) {
                         DevToolPanel.toggle();
-                        console.log('Header双击收起面板');
                     }
                 }
             });
@@ -1656,8 +1648,6 @@ const DevToolPanel = (function() {
                         clientX: triggerMouseDownX,
                         clientY: triggerMouseDownY
                     });
-                    
-                    console.log('检测到位移，开始拖动触发器');
                 }
             });
             
@@ -1670,7 +1660,6 @@ const DevToolPanel = (function() {
                 if (!hasMoved && !state.isDragging && state.collapsed) {
                     e.stopPropagation();
                     DevToolPanel.toggle();
-                    console.log('触发器点击展开面板（无位移）');
                 }
                 
                 // 重置状态
@@ -1730,8 +1719,6 @@ const DevToolPanel = (function() {
             state.panelStartY = parseInt(panelEl.style.top) || 0;
             
             panelEl.classList.add('dragging');
-            
-            console.log('开始拖动触发器小块');
         }
         
         // 启动Header拖动（展开状态下拖动整个面板）
@@ -1743,8 +1730,6 @@ const DevToolPanel = (function() {
             state.panelStartY = parseInt(panelEl.style.top) || 0;
             
             panelEl.classList.add('dragging');
-            
-            console.log('开始拖动面板Header');
         }
         
         document.addEventListener('mousemove', function(e) {
@@ -1926,12 +1911,6 @@ const DevToolPanel = (function() {
             state.panelX = newX;
             state.panelY = newY;
             saveState();
-            
-            console.log('面板已贴边:', {
-                position: { x: newX, y: newY },
-                edge: minDist === distToLeft ? '左' : minDist === distToRight ? '右' : minDist === distToTop ? '上' : '下',
-                collapsed: wasCollapsed
-            });
         }, 300);
     }
 
@@ -1966,10 +1945,6 @@ const DevToolPanel = (function() {
             panel.classList.add('expand-up'); // 靠底部，向上展开
         }
         
-        console.log('展开方向已更新:', {
-            position: {x, y},
-            direction: minDist === distToLeft ? '向右' : minDist === distToRight ? '向左' : minDist === distToTop ? '向下' : '向上'
-        });
     }
     
     // ========== 面板控制 ==========
@@ -1985,8 +1960,6 @@ const DevToolPanel = (function() {
         
         // 保存状态（触发器位置保持不变）
         saveState();
-        
-        console.log('面板' + (state.collapsed ? '收起' : '展开'));
     }
     
     // ========== 关闭面板（删除Cookie） ==========
@@ -2011,8 +1984,6 @@ const DevToolPanel = (function() {
         if (panel) {
             panel.style.display = 'none';
         }
-        
-        console.log('开发工具面板已关闭，Cookie已删除');
         
         // 延迟刷新页面，给用户反馈时间
         setTimeout(() => {

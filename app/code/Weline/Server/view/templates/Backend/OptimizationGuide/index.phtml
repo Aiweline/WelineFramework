@@ -1,0 +1,399 @@
+<?php
+/**
+ * 性能优化指南 - 动态文档（AJAX 加载）
+ * 
+ * 安全策略：内容通过本地 AJAX 请求加载，拒绝外网访问
+ * 
+ * @var \Weline\Framework\View\Template $block
+ */
+$block->setTitle(__('Weline Server 性能优化指南'));
+$apiUrl = $block->getUrl('backend/server/optimization-guide/api-data');
+?>
+
+<div class="optimization-guide" id="optimization-guide-container">
+    <!-- 加载中状态 -->
+    <div id="loading-state" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden"><?= __('加载中...') ?></span>
+        </div>
+        <p class="mt-3 text-muted"><?= __('正在加载优化指南...') ?></p>
+    </div>
+    
+    <!-- 错误状态 -->
+    <div id="error-state" class="d-none">
+        <div class="alert alert-danger">
+            <h5><i class="bi bi-exclamation-triangle me-2"></i><?= __('加载失败') ?></h5>
+            <p id="error-message"></p>
+            <button class="btn btn-outline-danger" onclick="loadGuideData()">
+                <i class="bi bi-arrow-clockwise"></i> <?= __('重试') ?>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 内容容器（AJAX 加载后填充） -->
+    <div id="content-container" class="d-none"></div>
+</div>
+
+<style>
+.guide-header {
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--w-box-bg) 0%, var(--bs-primary-bg-subtle) 100%);
+    border-radius: 8px;
+}
+.step-card {
+    background: var(--w-box-bg);
+}
+.user-select-all {
+    user-select: all;
+}
+.optimization-card {
+    transition: all 0.3s ease;
+}
+.optimization-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+</style>
+
+<script>
+const API_URL = '<?= $apiUrl ?>';
+
+// 页面加载时获取数据
+document.addEventListener('DOMContentLoaded', loadGuideData);
+
+async function loadGuideData() {
+    showLoading();
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin' // 携带 Cookie 进行后台认证
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || '<?= __('未知错误') ?>');
+        }
+        
+        renderContent(data);
+        showContent();
+        
+    } catch (error) {
+        console.error('Failed to load optimization guide:', error);
+        showError(error.message);
+    }
+}
+
+function showLoading() {
+    document.getElementById('loading-state').classList.remove('d-none');
+    document.getElementById('error-state').classList.add('d-none');
+    document.getElementById('content-container').classList.add('d-none');
+}
+
+function showError(message) {
+    document.getElementById('loading-state').classList.add('d-none');
+    document.getElementById('error-state').classList.remove('d-none');
+    document.getElementById('content-container').classList.add('d-none');
+    document.getElementById('error-message').textContent = message;
+}
+
+function showContent() {
+    document.getElementById('loading-state').classList.add('d-none');
+    document.getElementById('error-state').classList.add('d-none');
+    document.getElementById('content-container').classList.remove('d-none');
+}
+
+function renderContent(data) {
+    const container = document.getElementById('content-container');
+    const { php_info, summary, is_windows } = data;
+    
+    let html = `
+        <!-- 标题 -->
+        <div class="guide-header mb-4">
+            <h2><i class="bi bi-lightning-charge text-warning"></i> <?= __('Weline Server 性能优化指南') ?></h2>
+            <p class="text-muted"><?= __('基于您当前的 PHP 环境自动生成的优化建议') ?></p>
+            <p class="small">
+                <span class="badge bg-info"><?= __('生成时间') ?>: ${new Date().toLocaleString()}</span>
+                <span class="badge bg-secondary ms-2">${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</span>
+                <span class="badge bg-success ms-2"><?= __('本地访问') ?> ✓</span>
+            </p>
+        </div>
+        
+        <!-- 环境信息 -->
+        <div class="card mb-4" id="environment">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-gear me-2"></i><?= __('您的 PHP 环境') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="30%"><?= __('PHP 版本') ?></th>
+                            <td><code>${escapeHtml(php_info.version)}</code></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('PHP 可执行文件') ?></th>
+                            <td>
+                                <code class="user-select-all">${escapeHtml(php_info.binary)}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.binary)}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('php.ini 配置文件') ?></th>
+                            <td>
+                                <code class="user-select-all">${escapeHtml(php_info.ini_path)}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.ini_path)}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('扩展目录') ?></th>
+                            <td>
+                                <code class="user-select-all">${escapeHtml(php_info.ext_dir)}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.ext_dir)}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('线程安全模式') ?></th>
+                            <td>
+                                ${php_info.thread_safe 
+                                    ? '<span class="badge bg-info">Thread Safe (TS)</span> <span class="text-muted ms-2"><?= __('下载扩展时选择 TS 版本') ?></span>'
+                                    : '<span class="badge bg-success">Non-Thread Safe (NTS)</span> <span class="text-muted ms-2"><?= __('下载扩展时选择 NTS 版本') ?></span>'
+                                }
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 优化概览 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><?= __('优化概览') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="display-4 text-success">${summary.installed}</div>
+                        <div class="text-muted"><?= __('已优化') ?></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-4 text-warning">${summary.missing}</div>
+                        <div class="text-muted"><?= __('待优化') ?></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-4 text-info">${escapeHtml(summary.current_boost)}</div>
+                        <div class="text-muted"><?= __('当前加成') ?></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-4 text-primary">${escapeHtml(summary.potential_boost)}</div>
+                        <div class="text-muted"><?= __('潜在提升') ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 渲染优化项
+    for (const [key, opt] of Object.entries(summary.optimizations)) {
+        if (opt.priority === 'skip') continue;
+        
+        const isInstalled = opt.installed || false;
+        const headerClass = isInstalled ? 'bg-success text-white' : 'bg-warning';
+        const iconClass = isInstalled ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill';
+        
+        html += `
+            <div class="card mb-4 optimization-card" id="${key}">
+                <div class="card-header ${headerClass}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi ${iconClass} me-2"></i>
+                            ${escapeHtml(opt.name)}
+                        </h5>
+                        <span class="badge bg-light text-dark">${escapeHtml(opt.impact)}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="lead">${escapeHtml(opt.description)}</p>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-secondary">
+                                <strong><?= __('未优化时：') ?></strong><br>
+                                ${escapeHtml(opt.performance?.without || '')}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-success">
+                                <strong><?= __('优化后：') ?></strong><br>
+                                ${escapeHtml(opt.performance?.with || '')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${!isInstalled && opt.install?.steps ? renderInstallSteps(opt.install.steps, php_info) : ''}
+                    ${isInstalled ? '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i><?= __('此优化项已配置完成！') ?></div>' : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 重启服务器
+    html += `
+        <div class="card mb-4 border-primary" id="restart">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i><?= __('完成后重启服务器') ?></h5>
+            </div>
+            <div class="card-body">
+                <p><?= __('完成以上优化后，需要重启服务器使配置生效：') ?></p>
+                
+                <div class="p-3 bg-dark text-light rounded mb-3">
+                    <code class="user-select-all fs-5">php bin/w server:stop && php bin/w server:start</code>
+                </div>
+                
+                <button class="btn btn-primary" onclick="copyText('php bin/w server:stop && php bin/w server:start')">
+                    <i class="bi bi-clipboard"></i> <?= __('复制命令') ?>
+                </button>
+                
+                <hr>
+                
+                <h6><?= __('验证优化结果') ?></h6>
+                <p><?= __('重启后可以运行压力测试查看性能提升：') ?></p>
+                <pre class="bg-dark text-light p-3 rounded">php bin/w server:benchmark</pre>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function renderInstallSteps(steps, phpInfo) {
+    let html = `<h6 class="mt-4 mb-3"><i class="bi bi-list-ol me-2"></i><?= __('安装步骤') ?></h6><div class="installation-steps">`;
+    
+    for (const step of steps) {
+        html += `<div class="step-card mb-3 p-3 border rounded">`;
+        html += `<h6 class="text-primary">${escapeHtml(step.title || '')}</h6>`;
+        
+        if (step.description) {
+            html += `<p class="mb-2">${escapeHtml(step.description)}</p>`;
+        }
+        
+        if (step.path) {
+            html += `
+                <div class="mb-2">
+                    <strong><?= __('文件位置：') ?></strong>
+                    <code class="user-select-all">${escapeHtml(step.path)}</code>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyText('${escapeJs(step.path)}')">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        if (step.content) {
+            html += `
+                <div class="mb-2">
+                    <strong><?= __('添加内容：') ?></strong>
+                    <pre class="bg-dark text-light p-2 rounded user-select-all">${escapeHtml(step.content)}</pre>
+                    <button class="btn btn-sm btn-outline-primary" onclick="copyText(\`${escapeJs(step.content)}\`)">
+                        <i class="bi bi-clipboard"></i> <?= __('复制') ?>
+                    </button>
+                </div>
+            `;
+        }
+        
+        if (step.command) {
+            html += `
+                <div class="mb-2">
+                    <strong><?= __('执行命令：') ?></strong>
+                    <pre class="bg-dark text-light p-2 rounded user-select-all">${escapeHtml(step.command)}</pre>
+                    <button class="btn btn-sm btn-outline-primary" onclick="copyText('${escapeJs(step.command)}')">
+                        <i class="bi bi-clipboard"></i> <?= __('复制') ?>
+                    </button>
+                </div>
+            `;
+        }
+        
+        if (step.commands) {
+            html += `<div class="mb-2"><strong><?= __('选择您的系统：') ?></strong><div class="mt-2">`;
+            for (const [os, cmd] of Object.entries(step.commands)) {
+                html += `
+                    <div class="mb-2">
+                        <span class="badge bg-info me-2">${escapeHtml(os)}</span>
+                        <code class="user-select-all">${escapeHtml(cmd)}</code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(cmd)}')">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                `;
+            }
+            html += `</div></div>`;
+        }
+        
+        if (step.url) {
+            html += `
+                <div class="mb-2">
+                    <a href="${escapeHtml(step.url)}" target="_blank" class="btn btn-sm btn-primary">
+                        <i class="bi bi-box-arrow-up-right"></i> <?= __('打开下载页面') ?>
+                    </a>
+                </div>
+            `;
+        }
+        
+        if (step.note) {
+            html += `
+                <div class="alert alert-info mb-0 mt-2">
+                    <i class="bi bi-info-circle me-2"></i>
+                    ${escapeHtml(step.note)}
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function escapeJs(text) {
+    if (text === null || text === undefined) return '';
+    return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
+function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        AdminToast.success('<?= __('已复制到剪贴板') ?>');
+    }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        AdminToast.success('<?= __('已复制到剪贴板') ?>');
+    });
+}
+</script>

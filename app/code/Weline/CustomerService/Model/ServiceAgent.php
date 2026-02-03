@@ -24,6 +24,7 @@ class ServiceAgent extends Model
     public const fields_name = 'name';
     public const fields_email = 'email';
     public const fields_locale = 'locale';
+    public const fields_supported_locales = 'supported_locales';
     public const fields_is_active = 'is_active';
     public const fields_max_sessions = 'max_sessions';
     public const fields_created_at = 'created_at';
@@ -42,7 +43,19 @@ class ServiceAgent extends Model
 
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 升级逻辑
+        // 添加支持的语言列表字段
+        if (!$setup->hasField(self::fields_supported_locales)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_supported_locales,
+                    self::fields_locale, // 在 locale 字段之后添加
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    '支持的语言列表(JSON)'
+                )
+                ->alter();
+        }
     }
 
     public function install(ModelSetup $setup, Context $context): void
@@ -122,6 +135,66 @@ class ServiceAgent extends Model
     public function setMaxSessions(int $maxSessions): static
     {
         return $this->setData(self::fields_max_sessions, $maxSessions);
+    }
+
+    /**
+     * 获取支持的语言列表
+     * @return array
+     */
+    public function getSupportedLocales(): array
+    {
+        $data = $this->getData(self::fields_supported_locales);
+        if (empty($data)) {
+            // 默认返回主语言
+            return [$this->getLocale()];
+        }
+        
+        $locales = json_decode($data, true);
+        return is_array($locales) ? $locales : [$this->getLocale()];
+    }
+
+    /**
+     * 设置支持的语言列表
+     * @param array $locales
+     * @return static
+     */
+    public function setSupportedLocales(array $locales): static
+    {
+        return $this->setData(self::fields_supported_locales, json_encode($locales));
+    }
+
+    /**
+     * 检查是否支持某个语言
+     * @param string $locale
+     * @return bool
+     */
+    public function supportsLocale(string $locale): bool
+    {
+        $supported = $this->getSupportedLocales();
+        return in_array($locale, $supported, true);
+    }
+
+    /**
+     * 获取所有可用语言列表（静态方法）
+     * @return array
+     */
+    public static function getAvailableLocales(): array
+    {
+        return [
+            'zh_Hans_CN' => '简体中文',
+            'zh_Hant_TW' => '繁體中文',
+            'en_US' => 'English',
+            'ja_JP' => '日本語',
+            'ko_KR' => '한국어',
+            'fr_FR' => 'Français',
+            'de_DE' => 'Deutsch',
+            'es_ES' => 'Español',
+            'pt_BR' => 'Português',
+            'ru_RU' => 'Русский',
+            'ar_SA' => 'العربية',
+            'th_TH' => 'ไทย',
+            'vi_VN' => 'Tiếng Việt',
+        ];
     }
 }
 

@@ -1,0 +1,479 @@
+<?php
+/**
+ * 服务器管理 - 首页（AJAX 加载）
+ * 
+ * 安全策略：内容通过本地 AJAX 请求加载，拒绝外网访问
+ * 
+ * @var \Weline\Framework\View\Template $block
+ */
+$block->setTitle(__('Weline Server 管理'));
+$statusApiUrl = $block->getUrl('backend/server/server-manager/status');
+$startApiUrl = $block->getUrl('backend/server/server-manager/start');
+$stopApiUrl = $block->getUrl('backend/server/server-manager/stop');
+$restartApiUrl = $block->getUrl('backend/server/server-manager/restart');
+$guideUrl = $block->getUrl('backend/server/optimization-guide');
+?>
+
+<div class="server-manager" id="server-manager-container">
+    <!-- 加载中状态 -->
+    <div id="loading-state" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden"><?= __('加载中...') ?></span>
+        </div>
+        <p class="mt-3 text-muted"><?= __('正在加载服务器状态...') ?></p>
+    </div>
+    
+    <!-- 错误状态 -->
+    <div id="error-state" class="d-none">
+        <div class="alert alert-danger">
+            <h5><i class="bi bi-exclamation-triangle me-2"></i><?= __('加载失败') ?></h5>
+            <p id="error-message"></p>
+            <button class="btn btn-outline-danger" onclick="loadServerData()">
+                <i class="bi bi-arrow-clockwise"></i> <?= __('重试') ?>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 内容容器 -->
+    <div id="content-container" class="d-none"></div>
+</div>
+
+<style>
+.stat-card {
+    text-align: center;
+    padding: 1rem;
+    border-radius: 8px;
+    background: var(--w-box-bg);
+}
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+.stat-label {
+    color: var(--w-muted-color);
+    font-size: 0.875rem;
+}
+.optimization-card {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--w-border-color);
+    height: 100%;
+    transition: all 0.3s ease;
+}
+.optimization-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.optimization-card.installed {
+    background: var(--bs-success-bg-subtle);
+    border-color: var(--bs-success-border-subtle);
+}
+.optimization-card.missing {
+    background: var(--bs-warning-bg-subtle);
+    border-color: var(--bs-warning-border-subtle);
+}
+.server-action-btn {
+    min-width: 36px;
+}
+</style>
+
+<script>
+const STATUS_API_URL = '<?= $statusApiUrl ?>';
+const START_API_URL = '<?= $startApiUrl ?>';
+const STOP_API_URL = '<?= $stopApiUrl ?>';
+const RESTART_API_URL = '<?= $restartApiUrl ?>';
+const GUIDE_URL = '<?= $guideUrl ?>';
+
+let refreshInterval = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadServerData();
+    // 每 30 秒自动刷新
+    refreshInterval = setInterval(loadServerData, 30000);
+});
+
+async function loadServerData() {
+    try {
+        const response = await fetch(STATUS_API_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || '<?= __('未知错误') ?>');
+        }
+        
+        renderContent(data);
+        showContent();
+        
+    } catch (error) {
+        console.error('Failed to load server data:', error);
+        showError(error.message);
+    }
+}
+
+function showLoading() {
+    document.getElementById('loading-state').classList.remove('d-none');
+    document.getElementById('error-state').classList.add('d-none');
+    document.getElementById('content-container').classList.add('d-none');
+}
+
+function showError(message) {
+    document.getElementById('loading-state').classList.add('d-none');
+    document.getElementById('error-state').classList.remove('d-none');
+    document.getElementById('content-container').classList.add('d-none');
+    document.getElementById('error-message').textContent = message;
+}
+
+function showContent() {
+    document.getElementById('loading-state').classList.add('d-none');
+    document.getElementById('error-state').classList.add('d-none');
+    document.getElementById('content-container').classList.remove('d-none');
+}
+
+function renderContent(data) {
+    const container = document.getElementById('content-container');
+    const { servers, summary, php_info } = data;
+    
+    const runningCount = Object.values(servers).filter(s => s.running).length;
+    const totalCount = Object.keys(servers).length;
+    
+    let html = `
+        <!-- 状态概览 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    <?= __('服务器状态') ?>
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadServerData()">
+                        <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
+                    </button>
+                    <a href="${GUIDE_URL}" class="btn btn-sm btn-outline-info ms-2">
+                        <i class="bi bi-book"></i> <?= __('优化指南') ?>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value text-success">${runningCount}</div>
+                            <div class="stat-label"><?= __('运行中') ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value text-primary">${totalCount}</div>
+                            <div class="stat-label"><?= __('实例总数') ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value ${summary.missing > 0 ? 'text-warning' : 'text-success'}">
+                                ${summary.installed}/${summary.total}
+                            </div>
+                            <div class="stat-label"><?= __('优化项') ?></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- PHP 环境信息 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <?= __('PHP 环境') ?>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <th width="40%"><?= __('PHP 版本') ?></th>
+                                <td><code>${escapeHtml(php_info.version)}</code></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('PHP 路径') ?></th>
+                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.binary)}">${escapeHtml(php_info.binary)}</code></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('配置文件') ?></th>
+                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.ini_path)}">${escapeHtml(php_info.ini_path)}</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <th width="40%"><?= __('扩展目录') ?></th>
+                                <td><code class="text-truncate d-inline-block" style="max-width: 300px;" title="${escapeHtml(php_info.ext_dir)}">${escapeHtml(php_info.ext_dir)}</code></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('操作系统') ?></th>
+                                <td><code>${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</code></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('线程安全') ?></th>
+                                <td>${php_info.thread_safe ? '<span class="badge bg-success">TS</span>' : '<span class="badge bg-info">NTS</span>'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 服务器实例列表 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-hdd-rack me-2"></i>
+                    <?= __('服务器实例') ?>
+                </h5>
+                <button class="btn btn-sm btn-success" onclick="startNewServer()">
+                    <i class="bi bi-plus-lg"></i> <?= __('启动新实例') ?>
+                </button>
+            </div>
+            <div class="card-body">
+    `;
+    
+    if (totalCount === 0) {
+        html += `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox display-1"></i>
+                <p class="mt-3"><?= __('暂无服务器实例') ?></p>
+                <p class="small"><?= __('运行') ?> <code>php bin/w server:start</code> <?= __('启动服务器') ?></p>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th><?= __('实例名称') ?></th>
+                            <th><?= __('监听地址') ?></th>
+                            <th><?= __('端口范围') ?></th>
+                            <th><?= __('Worker 数') ?></th>
+                            <th><?= __('状态') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const [name, server] of Object.entries(servers)) {
+            const port = server.port || 9981;
+            const count = server.count || 1;
+            const endPort = port + count - 1;
+            const isRunning = server.running || false;
+            
+            html += `
+                <tr data-instance="${escapeHtml(name)}">
+                    <td><strong>${escapeHtml(name)}</strong></td>
+                    <td><code>${escapeHtml(server.host || '127.0.0.1')}</code></td>
+                    <td><code>${port} - ${endPort}</code></td>
+                    <td>${count}</td>
+                    <td>
+                        ${isRunning 
+                            ? '<span class="badge bg-success"><i class="bi bi-circle-fill me-1"></i><?= __('运行中') ?></span>'
+                            : '<span class="badge bg-secondary"><i class="bi bi-circle me-1"></i><?= __('已停止') ?></span>'
+                        }
+                    </td>
+                    <td>
+                        ${isRunning ? `
+                            <button class="btn btn-sm btn-warning server-action-btn" onclick="restartServer('${escapeHtml(name)}')" title="<?= __('重启') ?>">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger server-action-btn" onclick="stopServer('${escapeHtml(name)}')" title="<?= __('停止') ?>">
+                                <i class="bi bi-stop-fill"></i>
+                            </button>
+                        ` : `
+                            <button class="btn btn-sm btn-success server-action-btn" onclick="startServer('${escapeHtml(name)}')" title="<?= __('启动') ?>">
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                        `}
+                    </td>
+                </tr>
+            `;
+        }
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    html += `
+            </div>
+        </div>
+        
+        <!-- 性能优化项 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning-charge me-2"></i>
+                    <?= __('性能优化') ?>
+                    <span class="badge bg-${summary.missing > 0 ? 'warning' : 'success'} ms-2">
+                        ${summary.missing > 0 ? '<?= __('可优化') ?> +' + summary.potential_boost : '<?= __('已最优') ?>'}
+                    </span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+    `;
+    
+    for (const [key, opt] of Object.entries(summary.optimizations)) {
+        if (opt.priority === 'skip') continue;
+        
+        const isInstalled = opt.installed || false;
+        
+        html += `
+            <div class="col-md-4 mb-3">
+                <div class="optimization-card ${isInstalled ? 'installed' : 'missing'}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">${escapeHtml(opt.name)}</h6>
+                            <p class="small text-muted mb-2">${escapeHtml(opt.description)}</p>
+                        </div>
+                        <span class="badge bg-${isInstalled ? 'success' : 'warning'}">
+                            ${isInstalled ? '<?= __('已安装') ?>' : escapeHtml(opt.impact)}
+                        </span>
+                    </div>
+                    ${!isInstalled ? `
+                        <a href="${GUIDE_URL}#${key}" class="btn btn-sm btn-outline-primary w-100 mt-2">
+                            <i class="bi bi-book"></i> <?= __('查看安装指南') ?>
+                        </a>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+async function startServer(instance) {
+    AdminToast.info('<?= __('正在启动...') ?>');
+    
+    try {
+        const response = await fetch(START_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'instance=' + encodeURIComponent(instance),
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        AdminToast.success(data.message || '<?= __('启动成功') ?>');
+        setTimeout(loadServerData, 1000);
+        
+    } catch (error) {
+        AdminToast.error('<?= __('启动失败') ?>: ' + error.message);
+    }
+}
+
+async function stopServer(instance) {
+    AdminToast.info('<?= __('正在停止...') ?>');
+    
+    try {
+        const response = await fetch(STOP_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'instance=' + encodeURIComponent(instance),
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        AdminToast.success(data.message || '<?= __('停止成功') ?>');
+        setTimeout(loadServerData, 500);
+        
+    } catch (error) {
+        AdminToast.error('<?= __('停止失败') ?>: ' + error.message);
+    }
+}
+
+async function restartServer(instance) {
+    AdminToast.info('<?= __('正在重启...') ?>');
+    
+    try {
+        const response = await fetch(RESTART_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'instance=' + encodeURIComponent(instance),
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        AdminToast.success(data.message || '<?= __('重启成功') ?>');
+        setTimeout(loadServerData, 1500);
+        
+    } catch (error) {
+        AdminToast.error('<?= __('重启失败') ?>: ' + error.message);
+    }
+}
+
+function startNewServer() {
+    const workers = prompt('<?= __('请输入 Worker 数量（留空使用默认）') ?>:', '');
+    if (workers !== null) {
+        AdminToast.info('<?= __('正在启动新实例...') ?>');
+        
+        const body = 'instance=default' + (workers ? '&workers=' + workers : '');
+        
+        fetch(START_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body,
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(data => {
+            AdminToast.success(data.message || '<?= __('启动成功') ?>');
+            setTimeout(loadServerData, 1000);
+        })
+        .catch(error => {
+            AdminToast.error('<?= __('启动失败') ?>: ' + error.message);
+        });
+    }
+}
+</script>
