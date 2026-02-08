@@ -602,9 +602,9 @@ class Docs extends FrontendController
             // 从数据库获取可用的语言列表
             $availableLocales = $this->getAvailableLocales();
             
-            // 获取API area配置
-            $apiArea = \Weline\Framework\App\Env::get('api') ?: 'api';
-            $apiAdminArea = \Weline\Framework\App\Env::get('api_admin') ?: 'api_admin';
+            // 获取 REST API 区域配置（使用新的 area_routes 配置）
+            $apiArea = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
+            $apiAdminArea = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin';
             
             // 传递给模板
             $this->assign('currentCurrency', $currentCurrency);

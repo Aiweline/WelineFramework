@@ -12,10 +12,17 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Exception\DbException;
 
 trait SqlTrait
 {
+    /**
+     * parserFiled 解析结果缓存（进程级，纯函数式，WLS 下无需跨请求重置）
+     * @var array<string, string>
+     */
+    private static array $parserFiledCache = [];
+
     /**
      * AST 结构变量声明
      * 用于 IDE 类型提示，确保 AST 结构完整
@@ -76,6 +83,8 @@ trait SqlTrait
         'not in',
         'find_in_set',
         '=',
+        'is null',
+        'is not null',
     ];
     private static $special_fields = [
         'order',
@@ -83,7 +92,8 @@ trait SqlTrait
         'table',
         'fields',
     ];
-    public ConnectorInterface $connection;
+    /** 未调用 setConnector/setConnection 前为 null，避免 typed property 未初始化致命错误 */
+    public ?ConnectorInterface $connection = null;
     public string $db_name = 'default';
 
     public function __sleep()
@@ -109,11 +119,17 @@ trait SqlTrait
      */
     public function getConnection(): ConnectorInterface
     {
+        if ($this->connection === null) {
+            throw new DbException(__('数据库连接未设置，请先调用 setConnector() 或 setConnection()。'));
+        }
         return $this->connection;
     }
 
     public function getConnector(): ConnectorInterface
     {
+        if ($this->connection === null) {
+            throw new DbException(__('数据库连接未设置，请先调用 setConnector() 或 setConnection()。'));
+        }
         return $this->connection;
     }
 
@@ -134,6 +150,18 @@ trait SqlTrait
     public function setConnector(ConnectorInterface $connection): void
     {
         $this->connection = $connection;
+    }
+
+    /**
+     * 获取封装后的数据库连接（推荐在框架内部使用，替代 getLink）
+     * @since 1.0.0
+     */
+    public function getConnectionInterface(): DbConnectionInterface
+    {
+        if ($this->connection === null) {
+            throw new DbException(__('数据库连接未设置，请先调用 setConnector() 或 setConnection()。'));
+        }
+        return $this->connection->getWrappedConnection();
     }
 
 
@@ -234,6 +262,11 @@ trait SqlTrait
             return $field;
         }
         if (is_string($field)) {
+            $orig = $field;
+            if (isset(self::$parserFiledCache[$orig])) {
+                $field = self::$parserFiledCache[$orig];
+                return $field;
+            }
             # 以()号隔开
             if (str_contains($field, '(')) {
                 $field = explode('(', $field);
@@ -241,6 +274,7 @@ trait SqlTrait
                     $f = self::parserFiled($f);
                 }
                 $field = implode('(', $field);
+                self::$parserFiledCache[$orig] = $field;
                 return $field;
             }
             if (str_contains($field, ')')) {
@@ -249,6 +283,7 @@ trait SqlTrait
                     $f = self::parserFiled($f);
                 }
                 $field = implode(')', $field);
+                self::$parserFiledCache[$orig] = $field;
                 return $field;
             }
             # 以逗号隔开
@@ -259,14 +294,16 @@ trait SqlTrait
                 }
                 $field = implode(',', $field);
                 if (str_contains($field, '``')) {
-                    return str_replace('``', '`', $field);
+                    $field = str_replace('``', '`', $field);
                 }
+                self::$parserFiledCache[$orig] = $field;
                 return $field;
             }
             if (str_starts_with($field, '"') || str_starts_with($field, "'")) {
                 if (str_contains($field, '``')) {
-                    return str_replace('``', '`', $field);
+                    $field = str_replace('``', '`', $field);
                 }
+                self::$parserFiledCache[$orig] = $field;
                 return $field;
             }
             # 如果没有空格，也没有.和等于符号【单纯字段】直接加上·
@@ -279,6 +316,7 @@ trait SqlTrait
                     $field = str_replace('``', '`', $field);
                 }
                 $field = str_replace('`*`', '*', $field);
+                self::$parserFiledCache[$orig] = $field;
                 return $field;
             }
             $field = preg_replace('/\s+/', ' ', $field);
@@ -306,6 +344,7 @@ trait SqlTrait
             }
             $field = implode(' ', $field_arr);
             $field = str_replace('`*`', '*', $field);
+            self::$parserFiledCache[$orig] = $field;
         } elseif (is_array($field)) {
             foreach ($field as $field_key => $value) {
                 unset($field[$field_key]);
@@ -313,8 +352,8 @@ trait SqlTrait
                 $field[$field_key] = $value;
             }
         }
-        if (str_contains($field, '``')) {
-            return str_replace('``', '`', $field);
+        if (is_string($field) && str_contains($field, '``')) {
+            $field = str_replace('``', '`', $field);
         }
         return $field;
     }

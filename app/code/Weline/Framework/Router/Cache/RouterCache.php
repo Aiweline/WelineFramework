@@ -55,6 +55,27 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     }
 
     /**
+     * @DESC         |获取区域键（前后端区分，确保前后端使用不同的缓存键）
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2025/02/04
+     * 参数区：
+     * @param Request|RequestAbstract|null $request
+     * @return string
+     */
+    public static function getAreaKey(Request|RequestAbstract|null $request = null): string
+    {
+        if ($request === null) {
+            // 避免创建 Request 实例时触发循环，直接从 $_SERVER 获取
+            $area = $_SERVER['WELINE_AREA'] ?? 'frontend';
+            return $area;
+        }
+        $area = $request->getServer('WELINE_AREA') ?? 'frontend';
+        return $area;
+    }
+
+    /**
      * @DESC         |规范化 URI（去除查询参数和尾部斜杠，空则使用 '/'）
      *                确保缓存键只基于路径部分，不包含查询参数，避免相同路径因查询参数不同而生成不同的缓存键
      *
@@ -91,9 +112,10 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     public static function buildUrlCacheKey(string $uri, string $method = 'GET', Request|RequestAbstract|null $request = null): string
     {
         $domain_key = self::getDomainKey($request);
+        $area_key = self::getAreaKey($request);
         $uri = self::normalizeUri($uri);
         $method = $method ?: 'GET';
-        return 'url_cache_key_' . $domain_key . '_' . $uri . '_' . $method;
+        return 'url_cache_key_' . $domain_key . '_' . $area_key . '_' . $uri . '_' . $method;
     }
 
     /**
@@ -111,9 +133,10 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     public static function buildRuleCacheKey(string $uri, string $method = 'GET', Request|RequestAbstract|null $request = null): string
     {
         $domain_key = self::getDomainKey($request);
+        $area_key = self::getAreaKey($request);
         $uri = self::normalizeUri($uri);
         $method = $method ?: 'GET';
-        return 'rule_data_cache_key_' . $domain_key . '_' . $uri . '_' . $method;
+        return 'rule_data_cache_key_' . $domain_key . '_' . $area_key . '_' . $uri . '_' . $method;
     }
 
     /**
@@ -131,9 +154,10 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     public static function buildRouterStartCacheKey(string $uri, string $method = 'GET', Request|RequestAbstract|null $request = null): string
     {
         $domain_key = self::getDomainKey($request);
+        $area_key = self::getAreaKey($request);
         $uri = self::normalizeUri($uri);
         $method = $method ?: 'GET';
-        return 'router_start_cache_key_' . $domain_key . '_' . $uri . '_' . $method;
+        return 'router_start_cache_key_' . $domain_key . '_' . $area_key . '_' . $uri . '_' . $method;
     }
 
     /**
@@ -154,6 +178,7 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
     public static function buildUnifiedRequestCacheKey(string $uri, string $method = 'GET', Request|RequestAbstract|null $request = null): string
     {
         $method = $method ?: 'GET';
+        $area_key = self::getAreaKey($request);
         
         // 获取完整URI（包含协议、域名、端口、路径、查询参数等所有信息）
         // WELINE_FULL_REQUEST_URI 在 App.php 中保存，包含完整的URL信息
@@ -165,7 +190,8 @@ class RouterCache extends \Weline\Framework\Cache\CacheFactory
         }
         
         // 直接使用 WELINE_FULL_REQUEST_URI 构建缓存键，包含所有信息（域名、端口、查询参数等）
-        // 格式：unified_request_cache_{full_uri}_{method}
-        return 'unified_request_cache_' . $fullUri . '_' . $method;
+        // 加上 area_key 确保前后端区分
+        // 格式：unified_request_cache_{area}_{full_uri}_{method}
+        return 'unified_request_cache_' . $area_key . '_' . $fullUri . '_' . $method;
     }
 }

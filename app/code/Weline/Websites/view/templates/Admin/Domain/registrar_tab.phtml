@@ -1,0 +1,268 @@
+<?php
+/**
+ * 域名商管理 Tab 内容
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $adapter_options 适配器选项列表
+ * @var array $accounts 域名商账号列表
+ */
+$adapterOptions = $adapter_options ?? [];
+$accounts = $accounts ?? [];
+?>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><?= __('域名商账号管理') ?></h5>
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#accountFormModal" onclick="resetAccountForm()">
+        <i class="mdi mdi-plus me-1"></i><?= __('添加账号') ?>
+    </button>
+</div>
+
+<?php if (empty($accounts)): ?>
+    <div class="text-center py-5 text-muted">
+        <i class="mdi mdi-store-outline" style="font-size:3rem;"></i>
+        <p class="mt-2"><?= __('暂无域名商账号，请点击"添加账号"配置域名服务商。') ?></p>
+    </div>
+<?php else: ?>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th><?= __('渠道') ?></th>
+                    <th><?= __('账号名称') ?></th>
+                    <th><?= __('区域') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('创建时间') ?></th>
+                    <th class="text-end"><?= __('操作') ?></th>
+                </tr>
+            </thead>
+            <tbody id="accounts-table-body">
+                <?php foreach ($accounts as $account): ?>
+                    <tr>
+                        <td>
+                            <strong><?= htmlspecialchars($account['registrar_name'] ?? $account['registrar_code'] ?? '-') ?></strong>
+                        </td>
+                        <td><?= htmlspecialchars($account['account_name'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($account['region'] ?? '-') ?></td>
+                        <td>
+                            <?php if (($account['status'] ?? '') === 'active'): ?>
+                                <span class="badge bg-success status-badge"><?= __('正常') ?></span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary status-badge"><?= __('禁用') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($account['created_at'] ?? '-') ?></td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-outline-info btn-sm" title="<?= __('测试连接') ?>"
+                                    onclick="testAccountConnection(<?= (int)($account['account_id'] ?? 0) ?>, '<?= htmlspecialchars($account['registrar_code'] ?? '') ?>')">
+                                <i class="mdi mdi-lan-connect"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('编辑') ?>"
+                                    onclick="editAccount(<?= htmlspecialchars(json_encode($account, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)">
+                                <i class="mdi mdi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>"
+                                    onclick="removeAccount(<?= (int)($account['account_id'] ?? 0) ?>)">
+                                <i class="mdi mdi-delete"></i>
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>
+
+<!-- 添加/编辑账号 Modal -->
+<div class="modal fade" id="accountFormModal" tabindex="-1" aria-labelledby="accountFormModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountFormModalLabel"><?= __('域名商账号配置') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="account-form">
+                    <input type="hidden" name="account_id" id="form-account-id" value="0">
+
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('域名商渠道') ?> <span class="text-danger">*</span></label>
+                        <select name="registrar_code" id="form-registrar-code" class="form-select" required onchange="onRegistrarChange(this.value)">
+                            <option value=""><?= __('请选择域名商') ?></option>
+                            <?php foreach ($adapterOptions as $opt): ?>
+                                <option value="<?= htmlspecialchars($opt['code']) ?>"
+                                        data-description="<?= htmlspecialchars($opt['description'] ?? '') ?>">
+                                    <?= htmlspecialchars($opt['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text" id="registrar-description"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('账号名称') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="account_name" id="form-account-name" class="form-control" required
+                               placeholder="<?= __('如：主账号、生产环境') ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">API Key</label>
+                        <input type="text" name="api_key" id="form-api-key" class="form-control"
+                               placeholder="<?= __('留空表示不修改（编辑时）') ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">API Secret</label>
+                        <input type="password" name="api_secret" id="form-api-secret" class="form-control"
+                               placeholder="<?= __('留空表示不修改（编辑时）') ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('区域') ?></label>
+                        <input type="text" name="region" id="form-region" class="form-control"
+                               placeholder="<?= __('如：us-east-1、cn-hangzhou') ?>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('状态') ?></label>
+                        <select name="status" id="form-status" class="form-select">
+                            <option value="active"><?= __('启用') ?></option>
+                            <option value="disabled"><?= __('禁用') ?></option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('额外配置') ?> <small class="text-muted">(JSON)</small></label>
+                        <textarea name="extra_config" id="form-extra-config" class="form-control" rows="3"
+                                  placeholder='<?= __('如：{"tenant_id": "xxx"}') ?>'></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" onclick="saveAccount()">
+                    <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var saveAccountUrl = '<?= $this->getUrl('*/admin/domain/save-account') ?>';
+var deleteAccountUrl = '<?= $this->getUrl('*/admin/domain/account') ?>';
+var testConnectionUrl = '<?= $this->getUrl('*/admin/domain/test-connection') ?>';
+
+function resetAccountForm() {
+    document.getElementById('form-account-id').value = '0';
+    document.getElementById('form-registrar-code').value = '';
+    document.getElementById('form-account-name').value = '';
+    document.getElementById('form-api-key').value = '';
+    document.getElementById('form-api-secret').value = '';
+    document.getElementById('form-region').value = '';
+    document.getElementById('form-status').value = 'active';
+    document.getElementById('form-extra-config').value = '';
+    document.getElementById('registrar-description').textContent = '';
+    document.getElementById('accountFormModalLabel').textContent = '<?= __('添加域名商账号') ?>';
+}
+
+function editAccount(account) {
+    document.getElementById('form-account-id').value = account.account_id || '0';
+    document.getElementById('form-registrar-code').value = account.registrar_code || '';
+    document.getElementById('form-account-name').value = account.account_name || '';
+    document.getElementById('form-api-key').value = '';
+    document.getElementById('form-api-secret').value = '';
+    document.getElementById('form-region').value = account.region || '';
+    document.getElementById('form-status').value = account.status || 'active';
+    document.getElementById('form-extra-config').value = account.extra_config || '';
+    document.getElementById('accountFormModalLabel').textContent = '<?= __('编辑域名商账号') ?>';
+
+    var modal = new bootstrap.Modal(document.getElementById('accountFormModal'));
+    modal.show();
+}
+
+function onRegistrarChange(code) {
+    var select = document.getElementById('form-registrar-code');
+    var option = select.options[select.selectedIndex];
+    var desc = option ? option.getAttribute('data-description') : '';
+    document.getElementById('registrar-description').textContent = desc || '';
+}
+
+function saveAccount() {
+    var form = document.getElementById('account-form');
+    var formData = new FormData(form);
+
+    fetch(saveAccountUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.code === 200) {
+            showToast(data.msg || '<?= __('保存成功') ?>', 'success');
+            setTimeout(function() { location.reload(); }, 800);
+        } else {
+            showToast(data.msg || '<?= __('保存失败') ?>', 'error');
+        }
+    })
+    .catch(function(err) {
+        showToast('<?= __('请求失败') ?>: ' + err.message, 'error');
+    });
+}
+
+function removeAccount(accountId) {
+    if (!accountId) return;
+    Swal.fire({
+        title: '<?= __('确认删除') ?>',
+        text: '<?= __('删除后无法恢复，确定要删除此账号吗？') ?>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#f46a6a',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonText: '<?= __('确定删除') ?>'
+    }).then(function(result) {
+        if (result.isConfirmed) {
+            var formData = new FormData();
+            formData.append('account_id', accountId);
+            fetch(deleteAccountUrl, {
+                method: 'DELETE',
+                body: formData
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    showToast(data.msg || '<?= __('删除成功') ?>', 'success');
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    showToast(data.msg || '<?= __('删除失败') ?>', 'error');
+                }
+            })
+            .catch(function(err) {
+                showToast('<?= __('请求失败') ?>: ' + err.message, 'error');
+            });
+        }
+    });
+}
+
+function testAccountConnection(accountId, registrarCode) {
+    showToast('<?= __('正在测试连接...') ?>', 'info');
+    var formData = new FormData();
+    formData.append('account_id', accountId);
+    formData.append('registrar_code', registrarCode);
+
+    fetch(testConnectionUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.code === 200) {
+            showToast(data.msg || '<?= __('连接成功') ?>', 'success');
+        } else {
+            showToast(data.msg || '<?= __('连接失败') ?>', 'error');
+        }
+    })
+    .catch(function(err) {
+        showToast('<?= __('测试失败') ?>: ' + err.message, 'error');
+    });
+}
+</script>

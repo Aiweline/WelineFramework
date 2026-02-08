@@ -1,4 +1,21 @@
 搜索AI模型...,"Searching for AI models..."
+"ai:agent:scan 扫描并注册智能体","ai:agent:scan 扫描并注册智能体"
+显示帮助信息,显示帮助信息
+显示详细信息,显示详细信息
+扫描并注册所有智能体,扫描并注册所有智能体
+显示详细的扫描过程,显示详细的扫描过程
+"每个智能体必须实现 AgentInterface 接口。","每个智能体必须实现 AgentInterface 接口。"
+开始扫描智能体...,开始扫描智能体...
+未发现任何智能体,未发现任何智能体
+"成功扫描 %{count} 个智能体","成功扫描 %{count} 个智能体"
+描述,Description
+场景,场景
+工具数,工具数
+最大迭代,最大迭代
+个工具,个工具
+智能体扫描完成,智能体扫描完成
+扫描智能体失败,扫描智能体失败
+错误堆栈,错误堆栈
 加载A/B测试失败：%{1},加载A/B测试失败：%{1}
 适配器ID不能为空,"Adapter ID cannot be empty."
 适配器不存在,"The adapter does not exist."
@@ -273,15 +290,36 @@ API密钥未配置或配置不完整,"API key is not configured or incomplete"
 没有可用的供应商账户，请先配置供应商账户,"No available provider account, please configure provider account first"
 供应商账户信息不完整，缺少：%{field},"Provider account information is incomplete, missing: %{field}"
 供应商账户信息不完整，请检查配置,"Provider account information is incomplete, please check configuration"
+"AI 智能体注册表","AI 智能体注册表"
+智能体代码,智能体代码
+智能体名称,智能体名称
+智能体描述,智能体描述
+版本,Version
+类名,"Class name"
+文件路径,文件路径
+"支持的场景码 JSON","支持的场景码 JSON"
+工具数量,工具数量
+最大循环轮次,最大循环轮次
+来源模块,来源模块
+是否激活,是否激活
+创建时间,"Create time"
+更新时间,"Update time"
+智能体代码索引,智能体代码索引
+激活状态索引,激活状态索引
+来源模块索引,来源模块索引
 "扫描到 %{count} 个场景适配器","Scanned %{count} scene adapters"
+"扫描到 %{count} 个智能体","扫描到 %{count} 个智能体"
 开始扫描AI模块资源...,开始扫描AI模块资源...
 正在扫描场景适配器...,正在扫描场景适配器...
 未发现新的场景适配器,未发现新的场景适配器
+正在扫描智能体...,正在扫描智能体...
+未发现新的智能体,未发现新的智能体
 正在扫描AI模型...,正在扫描AI模型...
 "扫描到 %{count} 个AI模型","扫描到 %{count} 个AI模型"
 未发现新的AI模型,未发现新的AI模型
 AI模块资源扫描完成,AI模块资源扫描完成
 "AI模块资源扫描失败: %{error}","AI模块资源扫描失败: %{error}"
+"智能体类 %{1} 必须实现 AgentInterface 接口","智能体类 %{1} 必须实现 AgentInterface 接口"
 "指定的模型 ""%{1}"" 不存在","指定的模型 ""%{1}"" 不存在"
 "指定的模型 ""%{1}"" 未激活","指定的模型 ""%{1}"" 未激活"
 "场景 ""%{1}"" 未配置默认模型","场景 ""%{1}"" 未配置默认模型"
@@ -297,6 +335,7 @@ AI模块资源扫描完成,AI模块资源扫描完成
 "场景适配器不存在: %{code}","Scenario adapter does not exist: %{code}"
 没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
 没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
+智能体不存在：%{1},智能体不存在：%{1}
 模型不存在：%{1},"Model does not exist: %{1}"
 账户余额不足，当前余额：%{1}，需要：%{2},"Insufficient account balance, current balance: %{1}, required: %{2}"
 "模型不存在: %{code}","Model does not exist: %{code}"
@@ -348,8 +387,6 @@ id属性不能为空,"The id attribute cannot be empty."
 适配器ID,"Adapter ID"
 适配器代码,"Adapter code"
 适配器名称,"Adapter name"
-版本,Version
-描述,Description
 状态,Status
 激活,Activate
 未激活,"Not activated"
@@ -357,11 +394,8 @@ id属性不能为空,"The id attribute cannot be empty."
 参数模板,"Parameter template"
 使用示例,"Usage example"
 实例信息,"Instance Information"
-类名,"Class name"
 运行时版本,"Runtime version"
 时间信息,"Time information"
-创建时间,"Create time"
-更新时间,"Update time"
 确认切换状态,确认切换状态
 确定要切换适配器状态吗？,"Are you sure you want to switch the adapter status?"
 确定切换,确定切换

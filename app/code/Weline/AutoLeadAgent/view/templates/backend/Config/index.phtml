@@ -555,7 +555,7 @@ if (is_array($targetSites)) {
 
                                     <!-- 模型列表与详情 -->
                                     <div class="row">
-                                        <div class="col-md-6">
+                                        <div class="col-md-12">
                                             <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
                                                 <table class="table table-sm table-hover align-middle mb-0">
                                                     <thead class="table-light">
@@ -572,7 +572,7 @@ if (is_array($targetSites)) {
                                                 </table>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-12">
                                             <div class="border rounded p-2 h-100 d-flex flex-column" id="hf_model_detail_panel">
                                                 <h6 class="mb-2">
                                                     <?= __('模型详情') ?>
@@ -643,37 +643,9 @@ if (is_array($targetSites)) {
                                                 <?= __('清空结果') ?>
                                             </button>
                                         </div>
-                                        <div id="hf_agent_test_result" style="display: none;">
-                                            <div class="card bg-light">
-                                                <div class="card-header">
-                                                    <strong><?= __('测试结果') ?></strong>
-                                                    <span class="badge bg-info ms-2" id="hf_agent_test_time"></span>
-                                                </div>
-                                                <div class="card-body">
-                                                    <div class="mb-2">
-                                                        <strong><?= __('输入：') ?></strong>
-                                                        <div class="text-muted small" id="hf_agent_test_input_display"></div>
-                                                    </div>
-                                                    <div class="mb-2">
-                                                        <strong><?= __('智能体响应：') ?></strong>
-                                                        <div class="mt-1" id="hf_agent_test_output"></div>
-                                                    </div>
-                                                    <div class="mb-2" id="hf_agent_test_steps" style="display: none;">
-                                                        <strong><?= __('执行步骤：') ?></strong>
-                                                        <div class="mt-1" id="hf_agent_test_steps_content"></div>
-                                                    </div>
-                                                    <div id="hf_agent_test_error" class="alert alert-danger" style="display: none;"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div id="hf_agent_test_loading" style="display: none;">
-                                            <div class="text-center py-3">
-                                                <div class="spinner-border text-primary" role="status">
-                                                    <span class="visually-hidden"><?= __('测试中...') ?></span>
-                                                </div>
-                                                <p class="mt-2 text-muted"><?= __('智能体处理中，请稍候...') ?></p>
-                                            </div>
-                                        </div>
+                                        <!-- 测试结果区域（旧UI隐藏，改用弹窗控制台） -->
+                                        <div id="hf_agent_test_result" style="display: none;"></div>
+                                        <div id="hf_agent_test_loading" style="display: none;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1152,6 +1124,9 @@ function showToast(type, message) {
 <js>Weline_AutoLeadAgent::js/model-inference.js</js>
 <js>Weline_AutoLeadAgent::js/prompts.js</js>
 <js>Weline_AutoLeadAgent::js/mcp-client.js</js>
+<js>Weline_AutoLeadAgent::js/agent-tools.js</js>
+<js>Weline_AutoLeadAgent::js/platform-strategies.js</js>
+<js>Weline_AutoLeadAgent::js/autonomous-pipeline.js</js>
 <js>Weline_AutoLeadAgent::js/react-agent.js</js>
 <js>Weline_AutoLeadAgent::js/model-lifecycle.js</js>
 <js>Weline_AutoLeadAgent::js/config-models.js</js>
@@ -1250,338 +1225,1436 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // 智能体测试功能
+    // ========== 智能体测试控制台（弹窗 + 流式日志） ==========
     var testBtn = document.getElementById('hf_agent_test_btn');
     var testInput = document.getElementById('hf_agent_test_input');
     var testClearBtn = document.getElementById('hf_agent_test_clear_btn');
-    var testResult = document.getElementById('hf_agent_test_result');
-    var testLoading = document.getElementById('hf_agent_test_loading');
-    var testOutput = document.getElementById('hf_agent_test_output');
-    var testInputDisplay = document.getElementById('hf_agent_test_input_display');
-    var testTime = document.getElementById('hf_agent_test_time');
-    var testError = document.getElementById('hf_agent_test_error');
-    var testSteps = document.getElementById('hf_agent_test_steps');
-    var testStepsContent = document.getElementById('hf_agent_test_steps_content');
-    
-    // 初始化测试按钮状态
+
     function updateTestButtonState() {
-        if (testBtn) {
-            // 检查模型是否已加载
-            var modelLoaded = false;
-            if (typeof ModelLifecycle !== 'undefined') {
-                modelLoaded = ModelLifecycle.isLoaded();
-            } else if (typeof HFModelManager !== 'undefined') {
-                modelLoaded = HFModelManager.isLoaded();
-            }
-            testBtn.disabled = !modelLoaded;
-        }
+        if (testBtn) testBtn.disabled = false;
     }
-    
-    // 监听模型状态变化
+
     if (typeof ModelLifecycle !== 'undefined') {
-        // 使用 MutationObserver 监听模型状态变化
-        var observer = new MutationObserver(function(mutations) {
-            updateTestButtonState();
-        });
+        var observer = new MutationObserver(function() { updateTestButtonState(); });
         var statusIcon = document.getElementById('hf-runtime-status-icon');
-        if (statusIcon) {
-            observer.observe(statusIcon, { attributes: true, attributeFilter: ['style'] });
+        if (statusIcon) observer.observe(statusIcon, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    // HTML 转义
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    // 时间戳
+    function ts() {
+        var d = new Date();
+        return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + '.' + ('00' + d.getMilliseconds()).slice(-3);
+    }
+
+    /**
+     * 创建并显示测试控制台弹窗
+     */
+    function createTestConsoleModal(inputText) {
+        // 移除旧弹窗
+        var old = document.getElementById('agentTestConsoleModal');
+        if (old) old.remove();
+
+        var html =
+            '<div class="modal fade" id="agentTestConsoleModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">' +
+            '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
+            '<div class="modal-content" style="height:80vh;">' +
+            '<div class="modal-header py-2" style="background:#1e1e2e;color:#cdd6f4;border-bottom:1px solid #45475a;">' +
+                '<div class="d-flex align-items-center gap-2">' +
+                    '<i class="mdi mdi-console text-success"></i>' +
+                    '<strong style="font-family:monospace;font-size:14px;"><?= __('智能体测试控制台') ?></strong>' +
+                    '<span class="badge bg-secondary ms-2" id="atc-status"><?= __('初始化') ?></span>' +
+                    '<span class="badge bg-dark ms-1" id="atc-timer" style="font-family:monospace;">0.00s</span>' +
+                '</div>' +
+                '<button type="button" class="btn btn-sm btn-outline-light" id="atc-close-btn">' +
+                    '<i class="mdi mdi-close"></i> <?= __('关闭') ?>' +
+                '</button>' +
+            '</div>' +
+            '<div class="modal-body p-0" style="background:#1e1e2e;overflow:hidden;display:flex;flex-direction:column;">' +
+                '<!-- 日志区 -->' +
+                '<div id="atc-log" style="flex:1;overflow-y:auto;padding:8px 12px;font-family:\'Consolas\',\'Monaco\',\'Courier New\',monospace;font-size:12.5px;line-height:1.7;color:#cdd6f4;"></div>' +
+                '<!-- 底部输入栏 -->' +
+                '<div style="padding:8px 12px;background:#313244;border-top:1px solid #45475a;display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+                    '<span style="color:#89b4fa;font-family:monospace;font-size:14px;flex-shrink:0;">$</span>' +
+                    '<input type="text" id="atc-cmd-input" placeholder="<?= __('输入指令后按 Enter 或点击发送...') ?>" ' +
+                        'style="flex:1;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;padding:7px 12px;color:#cdd6f4;font-family:monospace;font-size:13px;outline:none;transition:border-color 0.2s;" ' +
+                        'onfocus="this.style.borderColor=\'#89b4fa\'" onblur="this.style.borderColor=\'#45475a\'">' +
+                    '<button type="button" id="atc-send-btn" style="flex-shrink:0;background:#89b4fa;border:none;border-radius:6px;padding:7px 14px;color:#1e1e2e;font-weight:600;font-size:13px;cursor:pointer;transition:background 0.15s;" ' +
+                        'onmouseenter="this.style.background=\'#74c7ec\'" onmouseleave="this.style.background=\'#89b4fa\'">' +
+                        '<i class="mdi mdi-send"></i> <?= __('发送') ?>' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+            '</div></div></div>' +
+            '<style>' +
+            '#atc-log::-webkit-scrollbar { width: 8px; }' +
+            '#atc-log::-webkit-scrollbar-track { background: #181825; border-radius: 4px; }' +
+            '#atc-log::-webkit-scrollbar-thumb { background: #45475a; border-radius: 4px; border: 2px solid #181825; }' +
+            '#atc-log::-webkit-scrollbar-thumb:hover { background: #585b70; }' +
+            '#atc-log { scrollbar-width: thin; scrollbar-color: #45475a #181825; }' +
+            '</style>';
+
+        document.body.insertAdjacentHTML('beforeend', html);
+
+        var modalEl = document.getElementById('agentTestConsoleModal');
+        var logEl = document.getElementById('atc-log');
+        var statusEl = document.getElementById('atc-status');
+        var timerEl = document.getElementById('atc-timer');
+        var closeBtn = document.getElementById('atc-close-btn');
+        var cmdInput = document.getElementById('atc-cmd-input');
+        var sendBtn = document.getElementById('atc-send-btn');
+
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        // 打开后自动聚焦输入框
+        modalEl.addEventListener('shown.bs.modal', function() {
+            if (cmdInput) { cmdInput.value = inputText; cmdInput.focus(); cmdInput.select(); }
+        }, { once: true });
+
+        // 计时器
+        var timerRunning = false;
+        var startMs = 0;
+        var timerInterval = null;
+        function startTimer() {
+            startMs = performance.now();
+            timerRunning = true;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(function() {
+                if (timerEl && timerRunning) timerEl.textContent = ((performance.now() - startMs) / 1000).toFixed(2) + 's';
+            }, 100);
+        }
+        function stopTimer() {
+            timerRunning = false;
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function scrollBottom() {
+            if (!logEl) return;
+            // 使用 rAF 确保 DOM 渲染后再滚动（解决快速连续追加时不跟进的问题）
+            requestAnimationFrame(function() {
+                logEl.scrollTop = logEl.scrollHeight;
+            });
+        }
+
+        function appendLine(color, prefix, text) {
+            if (!logEl) return;
+            var line = document.createElement('div');
+            line.style.cssText = 'white-space:pre-wrap;word-break:break-all;';
+            line.innerHTML = '<span style="color:#6c7086;">[' + ts() + ']</span> ' +
+                '<span style="color:' + color + ';">' + prefix + '</span> ' +
+                '<span>' + escapeHtml(text) + '</span>';
+            logEl.appendChild(line);
+            scrollBottom();
+        }
+
+        // 分隔线
+        function addSeparator() {
+            if (!logEl) return;
+            var sep = document.createElement('div');
+            sep.style.cssText = 'border-top:1px dashed #45475a;margin:10px 0 6px;';
+            logEl.appendChild(sep);
+            scrollBottom();
+        }
+
+        // 显示指令行
+        function showCommandLine(cmd) {
+            if (!logEl) return;
+            var line = document.createElement('div');
+            line.style.cssText = 'padding:4px 6px;margin:2px 0 4px;background:#313244;border-radius:4px;font-family:monospace;font-size:13px;';
+            line.innerHTML = '<span style="color:#89b4fa;">$</span> <span style="color:#cdd6f4;">' + escapeHtml(cmd) + '</span>';
+            logEl.appendChild(line);
+            scrollBottom();
+        }
+
+        var isRunning = false;
+
+        var api = {
+            el: modalEl,
+            log:     function(t) { appendLine('#a6adc8', '   ', t); },
+            info:    function(t) { appendLine('#89b4fa', '\u2139\ufe0f ', t); },
+            warn:    function(t) { appendLine('#f9e2af', '\u26a0\ufe0f ', t); },
+            error:   function(t) { appendLine('#f38ba8', '\u274c ', t); },
+            success: function(t) { appendLine('#a6e3a1', '\u2705 ', t); },
+            section: function(t) {
+                if (!logEl) return;
+                var line = document.createElement('div');
+                line.style.cssText = 'margin:6px 0 2px;padding:2px 6px;background:#313244;border-radius:3px;color:#89dceb;font-weight:bold;';
+                line.innerHTML = '<span style="color:#6c7086;">[' + ts() + ']</span> \u25b6 ' + escapeHtml(t);
+                logEl.appendChild(line);
+                scrollBottom();
+            },
+            json: function(label, obj) {
+                if (!logEl) return;
+                var line = document.createElement('div');
+                line.style.cssText = 'white-space:pre-wrap;word-break:break-all;';
+                var jsonStr = '';
+                try { jsonStr = JSON.stringify(obj, null, 2); } catch(e) { jsonStr = String(obj); }
+                line.innerHTML = '<span style="color:#6c7086;">[' + ts() + ']</span> ' +
+                    '<span style="color:#cba6f7;">\ud83d\udce6 ' + escapeHtml(label) + '</span>\n' +
+                    '<span style="color:#94e2d5;margin-left:16px;">' + escapeHtml(jsonStr) + '</span>';
+                logEl.appendChild(line);
+                scrollBottom();
+            },
+            setStatus: function(text, color) {
+                if (statusEl) {
+                    statusEl.textContent = text;
+                    statusEl.className = 'badge ms-2 bg-' + (color || 'secondary');
+                }
+            },
+            setRunning: function(running) {
+                isRunning = running;
+                if (sendBtn) {
+                    sendBtn.disabled = running;
+                    sendBtn.style.opacity = running ? '0.5' : '1';
+                }
+                if (cmdInput) cmdInput.disabled = running;
+                if (running) startTimer(); else stopTimer();
+            },
+            close: function() {
+                stopTimer();
+                modal.hide();
+                modalEl.addEventListener('hidden.bs.modal', function() { modalEl.remove(); }, { once: true });
+            },
+            addSeparator: addSeparator,
+            showCommandLine: showCommandLine,
+            getInput: function() { return cmdInput; },
+            isRunning: function() { return isRunning; },
+            /* 创建一个流式输出块 — 逐 token 追加文字，返回 {append, finish, getText, el} */
+            createStreamBlock: function(label) {
+                if (!logEl) return { append: function(){}, finish: function(){}, el: null };
+                var block = document.createElement('div');
+                block.style.cssText = 'margin:4px 0;padding:6px 10px;background:#262637;border-left:3px solid #89b4fa;border-radius:0 4px 4px 0;font-family:monospace;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#cdd6f4;';
+                var labelSpan = document.createElement('div');
+                labelSpan.style.cssText = 'color:#89b4fa;font-weight:bold;font-size:11px;margin-bottom:2px;';
+                labelSpan.innerHTML = '🤖 ' + escapeHtml(label || '<?= __('AI 推理中') ?>') + ' <span class="stream-cursor" style="display:inline-block;width:6px;height:14px;background:#89b4fa;animation:blink 0.8s infinite;vertical-align:middle;margin-left:2px;"></span>';
+                block.appendChild(labelSpan);
+                var textSpan = document.createElement('span');
+                textSpan.style.cssText = 'color:#a6adc8;';
+                block.appendChild(textSpan);
+                logEl.appendChild(block);
+                scrollBottom();
+                // 注入闪烁光标动画
+                if (!document.getElementById('atc-stream-cursor-style')) {
+                    var style = document.createElement('style');
+                    style.id = 'atc-stream-cursor-style';
+                    style.textContent = '@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}';
+                    document.head.appendChild(style);
+                }
+                return {
+                    el: block,
+                    append: function(token) {
+                        textSpan.textContent += token;
+                        scrollBottom();
+                    },
+                    finish: function() {
+                        var cursor = labelSpan.querySelector('.stream-cursor');
+                        if (cursor) cursor.remove();
+                        block.style.borderLeftColor = '#a6e3a1';
+                        labelSpan.style.color = '#a6e3a1';
+                    },
+                    getText: function() {
+                        return textSpan.textContent;
+                    }
+                };
+            }
+        };
+
+        closeBtn.addEventListener('click', function() { api.close(); });
+
+        // 底部输入框：Enter 发送 / 点击发送按钮
+        function submitFromInput() {
+            if (isRunning) return;
+            var cmd = cmdInput ? cmdInput.value.trim() : '';
+            if (!cmd) return;
+            if (cmdInput) { cmdInput.value = ''; }
+            // 触发执行回调
+            if (api.onSubmit) api.onSubmit(cmd);
+        }
+
+        if (cmdInput) {
+            cmdInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitFromInput(); }
+            });
+        }
+        if (sendBtn) {
+            sendBtn.addEventListener('click', submitFromInput);
+        }
+
+        // onSubmit 回调：外部设置
+        api.onSubmit = null;
+
+        return api;
+    }
+
+    // 智能解析常见指令
+    /**
+     * 智能解析指令 — 支持复合命令、URL 开头、多步骤任务分解
+     * 返回 actionPlan 或 taskPlan（多步骤）
+     */
+    function smartParseCommand(input) {
+        var lo = input.toLowerCase().trim();
+        var urlMatch = input.match(/https?:\/\/[^\s]+/i);
+        var url = urlMatch ? urlMatch[0] : null;
+
+        // ── 知名站点别名 ──
+        var sites = { 'google': 'https://www.google.com', '谷歌': 'https://www.google.com', 'baidu': 'https://www.baidu.com', '百度': 'https://www.baidu.com', 'bing': 'https://www.bing.com', '必应': 'https://www.bing.com', 'linkedin': 'https://www.linkedin.com', 'twitter': 'https://twitter.com', 'x.com': 'https://twitter.com', 'facebook': 'https://www.facebook.com', '知乎': 'https://www.zhihu.com', 'zhihu': 'https://www.zhihu.com', 'github': 'https://github.com', 'youtube': 'https://www.youtube.com' };
+
+        // ── 1. 导航指令（可能是复合的：导航 + 后续任务） ──
+        var hasNavKeyword = lo.includes('访问') || lo.includes('打开') || lo.includes('去') || lo.includes('navigate') || lo.includes('open');
+
+        if (hasNavKeyword) {
+            var navUrl = url;
+            var navSiteName = '';
+            if (!navUrl) {
+                for (var k in sites) {
+                    if (lo.includes(k)) { navUrl = sites[k]; navSiteName = k; break; }
+                }
+            }
+            if (navUrl) {
+                // 判断是否有导航之后的实质任务：去掉导航部分，看剩余内容
+                var afterNav = input
+                    .replace(/https?:\/\/[^\s]+/gi, '')
+                    .replace(/(?:你好[，,]?\s*)?(?:帮我|请|请帮我)?\s*(?:访问|打开|去|navigate|open)\s*(?:google|谷歌|百度|baidu|bing|必应|知乎|zhihu|github|youtube|linkedin|twitter|facebook|x\.com)(?:首页|主页|官网|网站|\.com|\.cn)?\s*[，,。]?\s*/gi, '')
+                    .replace(/(?:你好[，,]?\s*)?(?:帮我|请|请帮我)?\s*/gi, '')
+                    .trim();
+                var hasPostTask = afterNav.length > 2 && /找出|找到|查找|搜索|什么|哪些|发生|大事|新闻|提取|联系方式|回答|评论|查询|总结|分析|列出|浏览|看看/.test(afterNav);
+
+                if (hasPostTask) {
+                    // 复合指令：导航到站点 + 后续有任务 → 只返回导航，续行循环会处理后续
+                    return { action: 'go_to_url', params: { url: navUrl }, reason: '<?= __('访问') ?> ' + (navSiteName || navUrl) + '<?= __('（后续将自动执行任务）') ?>' };
+                }
+                // 纯导航
+                return { action: 'go_to_url', params: { url: navUrl }, reason: '<?= __('访问') ?> ' + (navSiteName || navUrl) };
+            }
+        }
+
+        // ── 2. URL 开头 + 后续动作（复合指令）──
+        if (url) {
+            var afterUrl = input.replace(url, '').trim();
+            if (!afterUrl) {
+                // 纯 URL，直接导航
+                return { action: 'go_to_url', params: { url: url }, reason: '<?= __('导航到指定URL') ?>' };
+            }
+            // 复合指令：先导航，后续描述作为自然语言任务
+            return {
+                action: 'multi_step_task',
+                steps: [
+                    { action: 'go_to_url', params: { url: url }, reason: '<?= __('先导航到目标页面') ?>' },
+                    { action: 'natural_language_task', params: { task: afterUrl, fullCommand: input }, reason: '<?= __('执行后续操作') ?>' }
+                ],
+                reason: '<?= __('复合指令：导航 + 自动化任务') ?>',
+                requiresMCP: true
+            };
+        }
+
+        // ── 3. 搜索指令 ──
+        if (lo.includes('搜索') || lo.includes('search') || lo.includes('查找') || lo.includes('找')) {
+            var sm = input.match(/(?:搜索|search|查找|找)\s*[：:"]?\s*(.+)/i);
+            var kw = sm ? sm[1].trim().replace(/["""]/g, '') : '';
+            if (kw) {
+                var engine = 'https://www.google.com/search?q=';
+                if (lo.includes('baidu') || lo.includes('百度')) engine = 'https://www.baidu.com/s?wd=';
+                else if (lo.includes('bing') || lo.includes('必应')) engine = 'https://www.bing.com/search?q=';
+                return { action: 'search_google', params: { query: kw, url: engine + encodeURIComponent(kw) }, reason: '<?= __('搜索关键词') ?>' };
+            }
+        }
+
+        // ── 4. 快照/截图 ──
+        if (lo.includes('快照') || lo.includes('截图') || lo.includes('页面内容') || lo.includes('snapshot')) {
+            return { action: 'browser_snapshot', params: {}, reason: '<?= __('获取当前页面快照') ?>' };
+        }
+
+        // ── 5. 提取信息 ──
+        if (lo.includes('提取') || lo.includes('联系方式') || lo.includes('邮箱') || lo.includes('电话') || lo.includes('extract')) {
+            return { action: 'browser_extract', params: { selectors: { email: true, phone: true } }, reason: '<?= __('提取联系方式') ?>' };
+        }
+
+        // ── 6. 点击操作 ──
+        if (lo.includes('点击') || lo.includes('click')) {
+            var clickMatch = input.match(/(?:点击|click)\s*[：:"]?\s*(.+)/i);
+            var target = clickMatch ? clickMatch[1].trim() : '';
+            var indexMatch = target.match(/第?\s*(\d+)\s*个?/);
+            if (indexMatch) return { action: 'click_element', params: { index: parseInt(indexMatch[1]) }, reason: '<?= __('点击第') ?>' + indexMatch[1] + '<?= __('个元素') ?>' };
+            if (target) return { action: 'click_element', params: { text: target }, reason: '<?= __('点击元素') ?>: ' + target };
+        }
+
+        // ── 7. 输入操作 ──
+        if (lo.includes('输入') || lo.includes('填写') || lo.includes('type') || lo.includes('input')) {
+            var typeMatch = input.match(/(?:输入|填写|type|input)\s*[：:"]?\s*(.+)/i);
+            var text = typeMatch ? typeMatch[1].trim().replace(/["""]/g, '') : '';
+            if (text) return { action: 'input_text', params: { text: text }, reason: '<?= __('输入文本') ?>' };
+        }
+
+        // ── 8. 滚动操作 ──
+        if (lo.includes('滚动') || lo.includes('scroll') || lo.includes('翻页')) {
+            if (lo.includes('顶部') || lo.includes('top')) return { action: 'scroll_to_percent', params: { percent: 0 }, reason: '<?= __('滚动到顶部') ?>' };
+            if (lo.includes('底部') || lo.includes('bottom')) return { action: 'scroll_to_percent', params: { percent: 100 }, reason: '<?= __('滚动到底部') ?>' };
+            var scrollMatch = lo.match(/(\d+)\s*%/);
+            if (scrollMatch) return { action: 'scroll_to_percent', params: { percent: parseInt(scrollMatch[1]) }, reason: '<?= __('滚动到') ?>' + scrollMatch[1] + '%' };
+            return { action: 'scroll_to_percent', params: { percent: 50 }, reason: '<?= __('向下滚动') ?>' };
+        }
+
+        // ── 9. 返回 ──
+        if (lo.includes('返回') || lo.includes('后退') || lo.includes('go back') || lo.includes('back')) {
+            return { action: 'go_back', params: {}, reason: '<?= __('返回上一页') ?>' };
+        }
+
+        // ── 10. 等待 ──
+        if (lo.includes('等待') || lo.includes('wait')) {
+            var waitMatch = lo.match(/(\d+)\s*(?:秒|s|sec)/);
+            return { action: 'wait', params: { seconds: waitMatch ? parseInt(waitMatch[1]) : 3 }, reason: '<?= __('等待') ?>' };
+        }
+
+        // ── 11. 包含任何自然语言动作描述（最后兜底）──
+        var actionKeywords = ['回答', '评论', '点赞', '关注', '发送', '提交', '注册', '登录', '下载', '上传', '分享', '收藏', '转发', '删除', '编辑', '修改', '查看', '浏览'];
+        for (var i = 0; i < actionKeywords.length; i++) {
+            if (lo.includes(actionKeywords[i])) {
+                return {
+                    action: 'natural_language_task',
+                    params: { task: input, fullCommand: input },
+                    reason: '<?= __('自然语言任务：') ?>' + actionKeywords[i],
+                    requiresMCP: true
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /** 是否为导航类工具（执行后需自动快照并展示页面） */
+    function isNavigationTool(action) {
+        return action === 'go_to_url' || action === 'browser_navigate' || action === 'search_google' || action === 'go_back';
+    }
+
+    /** 格式化展示页面快照：标题、URL、内容预览、可交互元素摘要 */
+    function renderPageSnapshot(c, data) {
+        if (!c || !data) return;
+        var title = data.title || '';
+        var url = data.url || '';
+        var textContent = data.textContent || '';
+        var elements = data.interactiveElements || [];
+        var elementCount = data.elementCount != null ? data.elementCount : elements.length;
+
+        c.section('[<?= __("页面") ?>] ' + (title ? escapeHtml(title) : '<?= __("无标题") ?>'));
+        c.log('URL: ' + url);
+        if (textContent) {
+            var preview = textContent.length > 500 ? textContent.substring(0, 500) + '...' : textContent;
+            c.log('<?= __("内容预览") ?>: ' + preview.replace(/\s+/g, ' ').trim());
+        }
+        var linkCount = 0, btnCount = 0, inputCount = 0;
+        elements.forEach(function (el) {
+            var tag = (el.tag || '').toLowerCase();
+            if (tag === 'a') linkCount++;
+            else if (tag === 'button' || (tag === 'input' && (el.type === 'submit' || el.type === 'button'))) btnCount++;
+            else if (tag === 'input' || tag === 'textarea') inputCount++;
+        });
+        c.log('<?= __("发现") ?> ' + elementCount + ' <?= __("个可交互元素") ?>: <?= __("链接") ?> ' + linkCount + ', <?= __("按钮") ?> ' + btnCount + ', <?= __("输入框") ?> ' + inputCount);
+        var showCount = Math.min(10, elements.length);
+        if (showCount > 0) {
+            c.log('<?= __("前") ?> ' + showCount + ' <?= __("个元素") ?>:');
+            for (var i = 0; i < showCount; i++) {
+                var e = elements[i];
+                var tag = e.tag || '?';
+                var text = (e.text || '').substring(0, 40);
+                var href = e.href ? ' -> ' + (e.href.substring(0, 50) + (e.href.length > 50 ? '...' : '')) : '';
+                c.log('  [' + (i + 1) + '] ' + tag + ' "' + text + '"' + href);
+            }
         }
     }
-    
-    if (testBtn) {
-        testBtn.addEventListener('click', async function() {
-            var input = testInput ? testInput.value.trim() : '';
-            if (!input) {
-                if (typeof ConfigUtils !== 'undefined') {
-                    ConfigUtils.safeToast('warning', '<?= __('请输入测试指令') ?>');
+
+    /**
+     * ══════════════════════════════════════════════════════════════
+     * aiPlanNextAction —— AI 驱动的 ReAct 续行决策引擎
+     * 先尝试用 AI 模型分析，失败时回退到智能规则匹配
+     * 返回 actionPlan 对象 或 null（任务完成）
+     * ══════════════════════════════════════════════════════════════
+     */
+    async function aiPlanNextAction(c, originalInput, snapshot, completedActions, mcpAvailable, modelLoaded) {
+        if (!mcpAvailable) return null;
+        var lastAction = completedActions[completedActions.length - 1];
+
+        // ── 构建当前状态描述 ──
+        var pageState = '<?= __('（无页面快照）') ?>';
+        var elementsDesc = '';
+        if (snapshot) {
+            pageState = '<?= __('页面标题') ?>: ' + (snapshot.title || '(<?= __('无') ?>)') + '\n' +
+                'URL: ' + (snapshot.url || '') + '\n' +
+                '<?= __('页面文本') ?> (<?= __('前') ?> 2000 <?= __('字') ?>): ' + ((snapshot.textContent || '').substring(0, 2000));
+            // 列出前 15 个可交互元素
+            var els = snapshot.interactiveElements || [];
+            if (els.length > 0) {
+                var elLines = [];
+                for (var ei = 0; ei < Math.min(els.length, 15); ei++) {
+                    var e = els[ei];
+                    var desc = '[' + (e.index != null ? e.index : ei) + '] ' + (e.tag || '') + ' "' + (e.text || '').substring(0, 40) + '"';
+                    if (e.type) desc += ' type=' + e.type;
+                    if (e.name) desc += ' name=' + e.name;
+                    if (e.placeholder) desc += ' placeholder="' + e.placeholder + '"';
+                    if (e.href) desc += ' -> ' + e.href.substring(0, 60);
+                    elLines.push(desc);
                 }
-                return;
+                elementsDesc = '\n<?= __('可交互元素') ?> (' + els.length + ' <?= __('个') ?>):\n' + elLines.join('\n');
             }
-            
-            // 检查模型是否已加载
+        }
+
+        var historyStr = completedActions.join(' -> ');
+
+        // ── 尝试 AI 决策 ──
+        if (modelLoaded) {
+            var reactPrompt =
+                '你是浏览器自动化 AI Agent 的决策引擎。根据用户原始指令、已完成的步骤、当前页面状态，决定下一步行动。\n\n' +
+                '## 可用动作\n' +
+                '- go_to_url: 导航到URL。参数: {"url":"..."}\n' +
+                '- search_google: Google搜索。参数: {"query":"..."}\n' +
+                '- click_element: 点击元素。参数: {"index":数字}\n' +
+                '- input_and_submit: 在输入框输入并提交。参数: {"index":数字,"text":"...","pressEnter":true}\n' +
+                '- scroll_to_percent: 滚动页面。参数: {"percent":0-100}\n' +
+                '- wait_and_snapshot: 等待并获取页面快照。参数: {"waitMs":毫秒}\n' +
+                '- summarize_page: 总结当前页面内容。参数: {"query":"关注的问题"}\n' +
+                '- extract_page_content: 提取页面联系方式/链接。参数: {}\n' +
+                '- done: 任务已完成，不再需要操作。参数: {"summary":"完成总结"}\n\n' +
+                '## 决策原则\n' +
+                '1. 仔细分析用户原始指令的完整意图，不要只做一半\n' +
+                '2. 如果指令包含"看看/查找/找出/告诉我"等意图，必须持续操作直到获取到信息\n' +
+                '3. 到达搜索引擎首页 → 应该输入搜索词搜索\n' +
+                '4. 到达搜索结果页 → 应该总结结果或点击相关链接\n' +
+                '5. 只有当用户想要的信息已经获取到并展示时，才返回 done\n' +
+                '6. 不要重复已经完成的步骤\n\n' +
+                '## 当前状态\n' +
+                '用户原始指令: "' + originalInput + '"\n' +
+                '已完成步骤: ' + historyStr + '\n' +
+                '当前页面:\n' + pageState + elementsDesc + '\n\n' +
+                '## 输出格式（仅 JSON，不要解释）\n' +
+                '如果任务未完成: {"action":"动作名","params":{参数},"reason":"原因"}\n' +
+                '如果任务已完成: {"action":"done","params":{"summary":"完成总结"},"reason":"任务已完成"}\n';
+
+            try {
+                c.info('<?= __('AI 思考下一步...') ?>');
+                var isExtModel = (typeof ModelLifecycle !== 'undefined' && ModelLifecycle.getState && ModelLifecycle.getState().modelType === 'extension');
+                var raw = null;
+                if (isExtModel) {
+                    raw = await streamGenerate(c, reactPrompt, { maxTokens: 256, temperature: 0.2, label: '<?= __('AI 续行决策') ?>' });
+                } else if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded && HFModelManager.isLoaded()) {
+                    raw = await HFModelManager.generate(reactPrompt, { maxTokens: 256, temperature: 0.2 });
+                }
+                if (raw) {
+                    var rawStr = typeof raw === 'string' ? raw : (raw.text || raw.generated_text || JSON.stringify(raw));
+                    var jsonMatch = rawStr.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        var parsed = JSON.parse(jsonMatch[0]);
+                        if (parsed.action === 'done') {
+                            if (parsed.params && parsed.params.summary) {
+                                c.success('AI: ' + parsed.params.summary);
+                            }
+                            return null;
+                        }
+                        if (parsed.action) {
+                            c.info('AI <?= __('决策') ?>: ' + (parsed.reason || parsed.action));
+                            return parsed;
+                        }
+                    }
+                }
+            } catch (aiErr) {
+                c.warn('AI <?= __('决策失败，回退到规则引擎') ?>: ' + aiErr.message);
+            }
+        }
+
+        // ── 规则引擎回退（AI 不可用或 AI 输出解析失败时） ──
+        c.info('<?= __('规则引擎分析') ?>: lastAction=' + completedActions[completedActions.length - 1] + ', hasSnapshot=' + !!snapshot);
+        var ruleResult = rulePlanNextAction(originalInput, snapshot, completedActions);
+        if (ruleResult) {
+            c.info('<?= __('规则引擎决策') ?>: ' + ruleResult.action + ' - ' + (ruleResult.reason || ''));
+        } else {
+            c.info('<?= __('规则引擎：无后续动作') ?>');
+        }
+        return ruleResult;
+    }
+
+    /* 规则引擎：硬编码的续行逻辑作为 fallback */
+    function rulePlanNextAction(originalInput, snapshot, completedActions) {
+        var lo = originalInput.toLowerCase();
+        var lastAction = completedActions[completedActions.length - 1];
+
+        var wantSearch = /搜索|search|查找|找出|找到|查询|lookup/.test(lo);
+        var wantInfo = /哪些|什么|有什么|发生|新闻|大事|事件|内容|信息|结果|列出|总结|看看|summarize|summary|tell me|find out|what/.test(lo);
+        var wantExtract = /提取|联系方式|邮箱|电话|extract|contact/.test(lo);
+
+        function extractSearchQuery() {
+            var cleaned = originalInput
+                .replace(/https?:\/\/[^\s]+/gi, '')
+                .replace(/(?:你好[，,]?\s*)?(?:帮我|请|请帮我)?\s*(?:访问|打开|去|navigate|open)\s*(?:google|谷歌|百度|baidu|bing|必应|知乎|zhihu|github|youtube|linkedin|twitter|facebook|x\.com)(?:首页|主页|官网|网站|\.com|\.cn)?\s*[，,。]?\s*/gi, '')
+                .replace(/(?:你好[，,]?\s*)?(?:帮我|请|请帮我)?\s*/gi, '')
+                .trim();
+            cleaned = cleaned.replace(/^(?:找出|找到|查找|搜索|查询|告诉我|列出)\s*/gi, '').trim();
+            return cleaned || null;
+        }
+
+        function findSearchInput(snap) {
+            if (!snap) return null;
+            var elements = snap.interactiveElements || [];
+            for (var i = 0; i < elements.length; i++) {
+                var el = elements[i];
+                var tag = (el.tag || '').toLowerCase();
+                var elType = (el.type || '').toLowerCase();
+                var elName = (el.name || '').toLowerCase();
+                var elPlaceholder = (el.placeholder || '').toLowerCase();
+                if ((tag === 'input' && (elType === 'text' || elType === 'search' || elType === ''))
+                    || tag === 'textarea'
+                    || elName.includes('search') || elName.includes('q')
+                    || elPlaceholder.includes('搜索') || elPlaceholder.includes('search')) {
+                    return el;
+                }
+            }
+            return null;
+        }
+
+        // 导航刚完成 → 页面有搜索框且用户想查信息 → 搜索
+        if (lastAction === 'go_to_url' || lastAction === 'browser_navigate') {
+            if (!snapshot) {
+                console.warn('[RuleEngine] No snapshot after navigation — cannot plan next step');
+                return null;
+            }
+            var searchInput = findSearchInput(snapshot);
+            var q = extractSearchQuery();
+            console.log('[RuleEngine] nav done: searchInput=', searchInput ? searchInput.index : 'null', 'wantSearch=', wantSearch, 'wantInfo=', wantInfo, 'query=', q, 'elements=', (snapshot.interactiveElements || []).length);
+            if (searchInput && (wantSearch || wantInfo)) {
+                if (q) {
+                    return {
+                        action: 'input_and_submit',
+                        params: { index: searchInput.index != null ? searchInput.index : null, text: q, pressEnter: true },
+                        reason: '<?= __('在搜索框中输入') ?>: ' + q
+                    };
+                }
+            }
+            if (wantInfo && snapshot.textContent && snapshot.textContent.length > 50) {
+                return { action: 'summarize_page', params: { query: q || originalInput }, reason: '<?= __('分析页面内容') ?>' };
+            }
+        }
+
+        // 搜索/输入提交完成 → 等待结果
+        if (lastAction === 'input_and_submit' || lastAction === 'search_google') {
+            return { action: 'wait_and_snapshot', params: { waitMs: 3000 }, reason: '<?= __('等待搜索结果加载') ?>' };
+        }
+
+        // 快照就绪 → 总结或提取
+        if (lastAction === 'wait_and_snapshot') {
+            if (!snapshot) return null;
+            if (wantExtract) {
+                return { action: 'extract_page_content', params: {}, reason: '<?= __('提取页面信息') ?>' };
+            }
+            if (wantInfo && snapshot.textContent && snapshot.textContent.length > 50) {
+                return { action: 'summarize_page', params: { query: extractSearchQuery() || originalInput }, reason: '<?= __('总结搜索结果') ?>' };
+            }
+        }
+
+        // 总结/提取完成 → 任务结束
+        if (lastAction === 'summarize_page' || lastAction === 'browser_extract' || lastAction === 'extract_page_content') {
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * 通过扩展执行模型推理（支持流式 token 输出）
+     * 通过 content script 中继: 页面 → content → background → offscreen → worker
+     *
+     * @param {string} prompt - 提示词
+     * @param {Object} options - { maxTokens, temperature, onToken: function(token, fullText) }
+     * @returns {Promise<string>} 最终生成的完整文本
+     */
+    function generateViaExtension(prompt, options) {
+        options = options || {};
+        var onToken = typeof options.onToken === 'function' ? options.onToken : null;
+
+        return new Promise(function (resolve, reject) {
+            var inferenceId = 'inf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+            var timer = setTimeout(function () {
+                window.removeEventListener('message', handler);
+                reject(new Error('<?= __('扩展推理超时（120s）') ?>'));
+            }, 120000);
+
+            function handler(event) {
+                if (event.source !== window || !event.data) return;
+                // 流式 token 事件
+                if (event.data.type === 'MODEL_INFERENCE_TOKEN' && event.data.inferenceId === inferenceId) {
+                    if (onToken) {
+                        onToken(event.data.token || '', event.data.fullText || '');
+                    }
+                    return;
+                }
+                // 最终结果
+                if (event.data.type === 'MODEL_INFERENCE_RESPONSE' && event.data.inferenceId === inferenceId) {
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+                    if (event.data.error) {
+                        reject(new Error(event.data.error));
+                    } else if (event.data.response && event.data.response.success) {
+                        // 二次检查：result 本身可能包含 error（offscreen 层错误透传）
+                        var r = event.data.response.result;
+                        if (r && typeof r === 'object' && r.error && !r.text && !r.generated_text) {
+                            reject(new Error(r.error));
+                        } else {
+                            resolve(r);
+                        }
+                    } else {
+                        reject(new Error((event.data.response && event.data.response.error) || '<?= __('推理失败') ?>'));
+                    }
+                }
+            }
+            window.addEventListener('message', handler);
+            window.postMessage({
+                type: 'MODEL_INFERENCE_REQUEST',
+                prompt: prompt,
+                options: { maxTokens: options.maxTokens || 512, temperature: options.temperature || 0.3 },
+                inferenceId: inferenceId
+            }, '*');
+        });
+    }
+
+    /**
+     * 流式推理 — 在控制台中实时显示模型思考过程
+     * @param {Object} c 控制台实例（带 createStreamBlock）
+     * @param {string} prompt 提示词
+     * @param {Object} options { maxTokens, temperature, label }
+     * @returns {Promise<string>} 完整输出文本
+     */
+    async function streamGenerate(c, prompt, options) {
+        options = options || {};
+        var label = options.label || '<?= __('AI 推理中') ?>';
+        var stream = c.createStreamBlock(label);
+        try {
+            var result = await generateViaExtension(prompt, {
+                maxTokens: options.maxTokens || 512,
+                temperature: options.temperature || 0.3,
+                onToken: function(token) {
+                    stream.append(token);
+                }
+            });
+            stream.finish();
+            // 如果流式没收到任何 token（fallback），直接显示最终结果
+            if (!stream.getText() && result) {
+                stream.append(typeof result === 'string' ? result : JSON.stringify(result));
+                stream.finish();
+            }
+            return typeof result === 'string' ? result : (result && (result.text || result.generated_text || JSON.stringify(result)));
+        } catch (err) {
+            stream.finish();
+            throw err;
+        }
+    }
+
+    // ===== 执行单条指令（可复用） =====
+    async function executeCommandInConsole(c, input) {
+        c.showCommandLine(input);
+        c.setRunning(true);
+        c.setStatus('<?= __('运行中') ?>', 'primary');
+
+        try {
+            // ── 检测环境 ──
+            c.section('<?= __('环境检测') ?>');
+
             var modelLoaded = false;
-            if (typeof ModelLifecycle !== 'undefined') {
-                modelLoaded = ModelLifecycle.isLoaded();
-            } else if (typeof HFModelManager !== 'undefined') {
-                modelLoaded = HFModelManager.isLoaded();
-            }
-            
-            if (!modelLoaded) {
-                if (typeof ConfigUtils !== 'undefined') {
-                    ConfigUtils.safeToast('warning', '<?= __('请先加载模型') ?>');
-                }
-                return;
-            }
-            
-            // 检查 MCP 是否可用
+            if (typeof ModelLifecycle !== 'undefined') { modelLoaded = ModelLifecycle.isLoaded(); }
+            else if (typeof HFModelManager !== 'undefined') { modelLoaded = HFModelManager.isLoaded(); }
+            c.log('<?= __('端侧模型') ?>: ' + (modelLoaded ? '<?= __('已加载') ?>' : '<?= __('未加载（将使用智能匹配）') ?>'));
+
             var mcpAvailable = false;
-            var mcpStatus = null;
+            c.log('<?= __('检测浏览器扩展（MCP）...') ?>');
             if (typeof MCPClient !== 'undefined' && MCPClient.isMCPAvailable) {
                 try {
                     mcpAvailable = await MCPClient.isMCPAvailable();
                     if (MCPClient.getMCPStatus) {
-                        mcpStatus = MCPClient.getMCPStatus();
-                        console.log('[Config] MCP 状态:', mcpStatus);
+                        var mcpStatus = MCPClient.getMCPStatus();
+                        c.json('MCP <?= __('状态') ?>', mcpStatus);
                     }
                 } catch (e) {
-                    console.warn('[Config] MCP 检查失败:', e);
+                    c.warn('MCP <?= __('检测异常') ?>: ' + e.message);
                 }
             }
-            
-            if (!mcpAvailable) {
-                // 显示扩展安装引导，附带检测状态
-                showExtensionInstallGuide(mcpStatus);
+            c.log('MCP <?= __('扩展') ?>: ' + (mcpAvailable ? '<?= __('可用') ?>' : '<?= __('不可用（将使用浏览器原生 fallback）') ?>'));
+
+            // ── 指令分析 ──
+            c.section('<?= __('指令分析') ?>');
+            var actionPlan = null;
+
+            if (modelLoaded) {
+                c.info('<?= __('使用 AI 模型分析指令...') ?>');
+                var analysisPrompt = '你是一个浏览器自动化 AI Agent。分析用户指令，规划执行步骤。\n\n' +
+                    '## 可用的 MCP 浏览器工具：\n\n' +
+                    '### 导航工具\n' +
+                    '- go_to_url: 导航到指定 URL。参数: {url: "https://..."}\n' +
+                    '- go_back: 返回上一页。无参数。\n' +
+                    '- search_google: Google 搜索。参数: {query: "关键词"}\n\n' +
+                    '### 页面交互工具\n' +
+                    '- click_element: 点击页面元素。参数: {index: 数字} 或 {text: "按钮文字"}\n' +
+                    '- input_text: 在输入框输入文字。参数: {index: 数字, text: "要输入的内容"}\n' +
+                    '- send_keys: 发送键盘按键。参数: {keys: "Enter"}\n' +
+                    '- get_dropdown_options: 获取下拉菜单选项。参数: {index: 数字}\n' +
+                    '- select_dropdown_option: 选择下拉选项。参数: {index: 数字, option: "选项文本"}\n\n' +
+                    '### 页面信息工具\n' +
+                    '- browser_snapshot: 获取当前页面快照（DOM 结构和可交互元素列表）。无参数。\n' +
+                    '- browser_extract: 提取页面信息。参数: {selectors: {email:true, phone:true}}\n' +
+                    '- cache_content: 缓存页面内容供后续分析。参数: {content: "..."}\n\n' +
+                    '### 滚动工具\n' +
+                    '- scroll_to_percent: 滚动到页面百分比位置。参数: {percent: 0-100}\n' +
+                    '- scroll_to_text: 滚动到包含指定文字的位置。参数: {text: "要找的文字"}\n\n' +
+                    '### 标签页工具\n' +
+                    '- open_tab: 打开新标签页。参数: {url: "..."}\n' +
+                    '- switch_tab: 切换标签页。参数: {tabId: 数字}\n' +
+                    '- close_tab: 关闭标签页。参数: {tabId: 数字}\n\n' +
+                    '### 控制工具\n' +
+                    '- wait: 等待指定秒数。参数: {seconds: 数字}\n' +
+                    '- done: 任务完成。参数: {message: "完成说明"}\n\n' +
+                    '## 输出格式\n\n' +
+                    '如果是单步操作，返回：\n{"action": "工具名", "params": {参数}, "reason": "原因"}\n\n' +
+                    '如果是多步操作（如先导航再操作），返回：\n{"action": "multi_step_task", "steps": [{"action":"go_to_url","params":{"url":"..."},"reason":"..."}, {"action":"browser_snapshot","params":{},"reason":"先获取页面结构"}, ...], "reason": "整体任务说明", "requiresMCP": true}\n\n' +
+                    '重要：对于复杂任务（如"回答问题"），第一步导航，第二步获取页面快照，后续步骤根据快照内容决定。\n\n' +
+                    '## 用户指令\n"' + input + '"\n\n只返回 JSON，不要解释。';
+                try {
+                    var raw = null;
+                    // 优先通过扩展推理（模型在扩展内运行）— 流式输出
+                    var isExtModel = (typeof ModelLifecycle !== 'undefined' && ModelLifecycle.getState && ModelLifecycle.getState().modelType === 'extension');
+                    if (isExtModel) {
+                        raw = await streamGenerate(c, analysisPrompt, { maxTokens: 512, temperature: 0.3, label: '<?= __('AI 分析指令') ?>' });
+                    } else if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded && HFModelManager.isLoaded()) {
+                        c.log('<?= __('通过页面端模型推理...') ?>');
+                        raw = await HFModelManager.generate(analysisPrompt, { maxTokens: 512, temperature: 0.3 });
+                    } else {
+                        raw = await streamGenerate(c, analysisPrompt, { maxTokens: 512, temperature: 0.3, label: '<?= __('AI 分析指令') ?>' });
+                    }
+                    if (raw) {
+                        var rawStr = typeof raw === 'string' ? raw : (raw.text || raw.generated_text || JSON.stringify(raw));
+                        var jsonMatch = rawStr.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) actionPlan = JSON.parse(jsonMatch[0]);
+                    }
+                } catch (modelErr) {
+                    c.warn('<?= __('模型分析失败，降级到智能匹配') ?>: ' + modelErr.message);
+                }
+            }
+
+            if (!actionPlan || !actionPlan.action) {
+                c.info('<?= __('使用智能关键词匹配...') ?>');
+                actionPlan = smartParseCommand(input);
+            }
+
+            // ── 如果还是无法解析，且 MCP 可用，尝试直接委派给扩展 ──
+            if (!actionPlan || !actionPlan.action) {
+                if (mcpAvailable && typeof MCPClient !== 'undefined' && MCPClient.sendTaskToExtension) {
+                    c.info('<?= __('智能匹配无法解析，尝试委派给扩展 Agent 执行...') ?>');
+                    actionPlan = {
+                        action: 'natural_language_task',
+                        params: { task: input, fullCommand: input },
+                        reason: '<?= __('无法本地解析，委派给扩展 AI Agent') ?>',
+                        requiresMCP: true
+                    };
+                } else {
+                    throw new Error('<?= __('无法解析指令。可用命令示例：') ?>\n' +
+                        '  • <?= __('访问') ?> https://www.google.com\n' +
+                        '  • <?= __('搜索 "关键词"') ?>\n' +
+                        '  • https://example.com <?= __('帮我提取联系方式') ?>\n' +
+                        '  • <?= __('点击第3个按钮') ?>\n' +
+                        '  • <?= __('输入 "文字内容"') ?>\n' +
+                        '<?= __('提示：安装浏览器扩展可执行复杂自动化任务') ?>');
+                }
+            }
+
+            c.success('<?= __('解析结果') ?>');
+            c.json('actionPlan', actionPlan);
+
+            // ── 执行操作 ──
+            async function executeSingleAction(plan, stepIndex) {
+                var prefix = stepIndex !== undefined ? ('[<?= __('步骤') ?> ' + (stepIndex + 1) + '] ') : '';
+                c.section(prefix + '<?= __('执行') ?>: ' + plan.action);
+
+                // 自然语言任务 → 委派给扩展 Agent
+                if (plan.action === 'natural_language_task') {
+                    if (!mcpAvailable || typeof MCPClient === 'undefined' || !MCPClient.sendTaskToExtension) {
+                        c.warn('<?= __('此操作需要浏览器扩展 Agent，请确保扩展已安装并启用') ?>');
+                        return { success: false, reason: 'MCP not available' };
+                    }
+                    var taskDesc = (plan.params && plan.params.fullCommand) || (plan.params && plan.params.task) || '';
+                    c.info('<?= __('委派给扩展 Agent') ?>: ' + taskDesc);
+                    c.log('<?= __('扩展将使用内置 AI 分解任务并自动执行...') ?>');
+                    try {
+                        var taskResult = await MCPClient.sendTaskToExtension(taskDesc);
+                        c.success('<?= __('扩展 Agent 已接收任务') ?>');
+                        c.json('<?= __('扩展响应') ?>', taskResult);
+                        return { success: true, method: '<?= __('扩展 Agent') ?>', result: taskResult };
+                    } catch (taskErr) {
+                        c.warn('<?= __('扩展 Agent 执行异常') ?>: ' + taskErr.message);
+                        c.info('<?= __('请确保扩展 Side Panel 已打开，或扩展已配置 API Key') ?>');
+                        return { success: false, error: taskErr.message };
+                    }
+                }
+
+                // ── 输入文本并提交（搜索框输入 → 回车） ──
+                if (plan.action === 'input_and_submit') {
+                    if (!mcpAvailable || typeof MCPClient === 'undefined') {
+                        c.warn('<?= __('需要 MCP 扩展支持') ?>');
+                        return { success: false, reason: 'MCP not available' };
+                    }
+                    var inputText = (plan.params && plan.params.text) || '';
+                    var inputIndex = (plan.params && plan.params.index != null) ? plan.params.index : -1;
+                    c.info('<?= __('输入') ?>: "' + inputText + '"');
+                    try {
+                        // 先点击搜索框（聚焦）— 使用 click_element
+                        if (inputIndex >= 0) {
+                            c.log('<?= __('点击元素') ?> [' + inputIndex + '] <?= __('聚焦') ?>');
+                            await MCPClient.callTool('click_element', { index: inputIndex });
+                            await new Promise(function(r){ setTimeout(r, 500); });
+                        }
+                        // 输入文本 — 使用 input_text，传 snapshotIndex 以精确定位
+                        await MCPClient.callTool('input_text', { snapshotIndex: inputIndex, text: inputText });
+                        c.success('<?= __('已输入文本') ?>');
+                        // 按回车提交 — 使用 send_keys
+                        if (plan.params && plan.params.pressEnter) {
+                            await new Promise(function(r){ setTimeout(r, 300); });
+                            await MCPClient.callTool('send_keys', { keys: 'Enter' });
+                            c.info('<?= __('已按下回车键') ?>');
+
+                            // 等待看页面是否变化（提交是否生效）
+                            await new Promise(function(r){ setTimeout(r, 2000); });
+                            try {
+                                var afterSnap = await MCPClient.callTool('browser_snapshot', {});
+                                var afterData = afterSnap ? ((afterSnap.result !== undefined) ? afterSnap.result : afterSnap) : null;
+                                var afterUrl = afterData && afterData.url ? afterData.url : '';
+                                // 如果页面没变（还在搜索引擎首页），尝试直接导航到搜索结果页
+                                var isStillOnSearchHome = /google\.com\/?(\?|$)|google\.com\.hk\/?(\?|$)|baidu\.com\/?$|bing\.com\/?$/.test(afterUrl);
+                                if (isStillOnSearchHome && inputText) {
+                                    c.log('<?= __('表单提交未生效，直接导航到搜索结果...') ?>');
+                                    var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(inputText);
+                                    if (afterUrl.includes('baidu.com')) searchUrl = 'https://www.baidu.com/s?wd=' + encodeURIComponent(inputText);
+                                    else if (afterUrl.includes('bing.com')) searchUrl = 'https://www.bing.com/search?q=' + encodeURIComponent(inputText);
+                                    await MCPClient.callTool('go_to_url', { url: searchUrl });
+                                    c.success('<?= __('已直接导航到搜索结果') ?>');
+                                }
+                            } catch (_) {}
+                        }
+                        return { success: true, method: 'MCP', result: { action: 'input_and_submit', text: inputText }, action: 'input_and_submit' };
+                    } catch (inputErr) {
+                        c.warn('<?= __('输入操作失败') ?>: ' + inputErr.message);
+                        return { success: false, error: inputErr.message, action: 'input_and_submit' };
+                    }
+                }
+
+                // ── 等待并拍快照 ──
+                if (plan.action === 'wait_and_snapshot') {
+                    var waitMs = (plan.params && plan.params.waitMs) || 3000;
+                    c.info('<?= __('等待页面加载') ?> (' + (waitMs / 1000) + 's)...');
+                    await new Promise(function(r){ setTimeout(r, waitMs); });
+                    try {
+                        var snap = await MCPClient.callTool('browser_snapshot', {});
+                        var snapData = snap ? ((snap.result !== undefined) ? snap.result : snap) : null;
+                        if (snapData) {
+                            renderPageSnapshot(c, snapData);
+                        }
+                        return { success: true, method: 'MCP', result: Object.assign({ _snapshot: snapData }, snapData || {}), action: 'wait_and_snapshot' };
+                    } catch (snapErr) {
+                        c.warn('<?= __('快照失败') ?>: ' + snapErr.message);
+                        return { success: false, error: snapErr.message, action: 'wait_and_snapshot' };
+                    }
+                }
+
+                // ── 总结页面内容（利用页面文本 + 搜索结果提取） ──
+                if (plan.action === 'summarize_page') {
+                    var query = (plan.params && plan.params.query) || input || '';
+                    c.info('<?= __('正在分析页面内容...') ?>');
+                    try {
+                        // 获取最新快照
+                        var summSnap = await MCPClient.callTool('browser_snapshot', {});
+                        var summData = summSnap ? ((summSnap.result !== undefined) ? summSnap.result : summSnap) : null;
+                        if (!summData || !summData.textContent || summData.textContent.length < 30) {
+                            c.warn('<?= __('页面内容不足，无法提取有效信息') ?>');
+                            return { success: false, reason: 'no content', action: 'summarize_page' };
+                        }
+                        var pageText = summData.textContent;
+                        var pageTitle = summData.title || '';
+                        var pageUrl = summData.url || '';
+                        var elements = summData.interactiveElements || [];
+
+                        // 提取搜索结果条目（链接列表）
+                        var resultLinks = [];
+                        for (var ri = 0; ri < elements.length; ri++) {
+                            var el = elements[ri];
+                            if ((el.tag || '').toLowerCase() === 'a' && el.href && el.text && el.text.length > 5) {
+                                // 过滤掉导航和功能链接
+                                var href = el.href || '';
+                                if (href.includes('google.com/search') || href.includes('accounts.google') || href.includes('support.google')) continue;
+                                if (href.startsWith('javascript:')) continue;
+                                resultLinks.push({ title: el.text.substring(0, 80), url: href });
+                            }
+                        }
+
+                        c.section('<?= __('页面分析结果') ?>');
+                        c.log('<?= __('页面标题') ?>: ' + pageTitle);
+                        c.log('<?= __('页面 URL') ?>: ' + pageUrl);
+
+                        // 截取核心内容（去掉导航/页脚噪音）
+                        var coreText = pageText.replace(/\s+/g, ' ').trim();
+                        if (coreText.length > 3000) coreText = coreText.substring(0, 3000);
+
+                        // 尝试通过模型总结
+                        var summarized = false;
+                        var summaryPrompt = '<?= __('请根据以下网页内容，回答用户的问题。') ?>\n\n'
+                            + '<?= __('用户问题') ?>: ' + query + '\n\n'
+                            + '<?= __('网页标题') ?>: ' + pageTitle + '\n'
+                            + '<?= __('网页内容') ?>:\n' + coreText + '\n\n'
+                            + '<?= __('请提取相关信息，用简洁的中文分点列出要点。如果页面内容中没有相关信息，请说明。') ?>';
+
+                        try {
+                            var summaryRaw = null;
+                            var isExtModel = (typeof ModelLifecycle !== 'undefined' && ModelLifecycle.getState && ModelLifecycle.getState().modelType === 'extension');
+                            if (isExtModel) {
+                                summaryRaw = await streamGenerate(c, summaryPrompt, { maxTokens: 1024, temperature: 0.5, label: '<?= __('AI 分析页面内容') ?>' });
+                            } else if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded && HFModelManager.isLoaded()) {
+                                summaryRaw = await HFModelManager.generate(summaryPrompt, { maxTokens: 1024, temperature: 0.5 });
+                            }
+                            if (summaryRaw && summaryRaw.length > 10) {
+                                summarized = true;
+                            }
+                        } catch (summErr) {
+                            c.log('<?= __('AI 模型未就绪，使用规则提取') ?>');
+                        }
+
+                        // 规则兜底：直接展示链接列表 + 内容摘要
+                        if (!summarized) {
+                            if (resultLinks.length > 0) {
+                                c.section('<?= __('页面搜索结果') ?> (' + resultLinks.length + ' <?= __('条') ?>)');
+                                var showMax = Math.min(15, resultLinks.length);
+                                for (var li = 0; li < showMax; li++) {
+                                    c.log((li + 1) + '. ' + resultLinks[li].title);
+                                    c.log('   ' + resultLinks[li].url);
+                                }
+                            }
+                            if (coreText.length > 50) {
+                                c.section('<?= __('内容摘要') ?>');
+                                // 按句子拆分，取前 20 个句子
+                                var sentences = coreText.split(/[。！？\.\!\?]+/).filter(function(s){ return s.trim().length > 10; });
+                                var showSentences = sentences.slice(0, 20);
+                                for (var si = 0; si < showSentences.length; si++) {
+                                    c.log('• ' + showSentences[si].trim());
+                                }
+                            }
+                        }
+
+                        return {
+                            success: true,
+                            method: summarized ? 'AI' : '<?= __('规则提取') ?>',
+                            result: { _snapshot: summData, summary: summarized, linksCount: resultLinks.length },
+                            action: 'summarize_page'
+                        };
+                    } catch (summPageErr) {
+                        c.warn('<?= __('页面分析失败') ?>: ' + summPageErr.message);
+                        return { success: false, error: summPageErr.message, action: 'summarize_page' };
+                    }
+                }
+
+                // ── 画像分析 ──
+                if (plan.action === 'analyze_profile') {
+                    c.info('<?= __('正在分析商家画像...') ?>');
+                    if (typeof AgentTools === 'undefined') {
+                        c.warn('AgentTools <?= __('未加载') ?>');
+                        return { success: false, action: 'analyze_profile' };
+                    }
+                    try {
+                        var profileData = (plan.params && plan.params.profile) || {};
+                        var aiOpts = { useAI: false };
+                        // 如果模型可用，启用 AI 增强（带流式输出）
+                        var isExtModel = (typeof ModelLifecycle !== 'undefined' && ModelLifecycle.getState && ModelLifecycle.getState().modelType === 'extension');
+                        if (isExtModel) {
+                            aiOpts = { useAI: true, generateFn: function(p, o) { return streamGenerate(c, p, Object.assign({ label: '<?= __('AI 画像分析') ?>' }, o || {})); } };
+                        }
+                        var analysis = await AgentTools.analyzeProfile(profileData, aiOpts);
+                        c.section('<?= __('画像分析结果') ?>');
+                        c.log('<?= __('行业') ?>: ' + analysis.industry);
+                        c.log('<?= __('地区') ?>: ' + analysis.region);
+                        c.log('<?= __('搜索词') ?> (' + analysis.searchQueries.length + '): ' + analysis.searchQueries.slice(0, 8).join(' | '));
+                        if (analysis.siteSearchQueries.length > 0) {
+                            c.log('<?= __('站内搜索词') ?> (' + analysis.siteSearchQueries.length + '): ' + analysis.siteSearchQueries.slice(0, 5).join(' | '));
+                        }
+                        c.log('<?= __('平台建议') ?>:');
+                        for (var pi = 0; pi < Math.min(4, analysis.platformHints.length); pi++) {
+                            c.log('  • ' + analysis.platformHints[pi].platform + ': ' + analysis.platformHints[pi].strategy);
+                        }
+                        c.success(analysis.description);
+                        return { success: true, method: aiOpts.useAI ? 'AI+<?= __('规则') ?>' : '<?= __('规则') ?>', result: analysis, action: 'analyze_profile' };
+                    } catch (apErr) {
+                        c.warn('<?= __('画像分析失败') ?>: ' + apErr.message);
+                        return { success: false, error: apErr.message, action: 'analyze_profile' };
+                    }
+                }
+
+                // ── 提取页面结构化内容 ──
+                if (plan.action === 'extract_page_content') {
+                    c.info('<?= __('正在提取页面结构化内容...') ?>');
+                    if (typeof AgentTools === 'undefined') {
+                        c.warn('AgentTools <?= __('未加载') ?>');
+                        return { success: false, action: 'extract_page_content' };
+                    }
+                    try {
+                        var snap = plan.params && plan.params.snapshot;
+                        if (!snap && mcpAvailable) {
+                            var snapRes = await MCPClient.callTool('browser_snapshot', {});
+                            snap = snapRes ? ((snapRes.result !== undefined) ? snapRes.result : snapRes) : null;
+                        }
+                        var extracted = AgentTools.extractStructuredContent(snap);
+                        c.section('<?= __('提取结果') ?>');
+                        c.log(extracted.summary);
+                        if (extracted.contacts.emails.length > 0) c.success('<?= __('邮箱') ?>: ' + extracted.contacts.emails.join(', '));
+                        if (extracted.contacts.phones.length > 0) c.success('<?= __('电话') ?>: ' + extracted.contacts.phones.join(', '));
+                        if (extracted.contacts.wechats.length > 0) c.success('<?= __('微信') ?>: ' + extracted.contacts.wechats.join(', '));
+                        if (extracted.contacts.qqs.length > 0) c.success('QQ: ' + extracted.contacts.qqs.join(', '));
+                        if (extracted.articles.length > 0) {
+                            c.log('<?= __('文章/结果') ?> (' + extracted.articles.length + '):');
+                            for (var ai = 0; ai < Math.min(10, extracted.articles.length); ai++) {
+                                c.log('  ' + (ai + 1) + '. ' + extracted.articles[ai].title);
+                            }
+                        }
+                        return { success: true, method: '<?= __('规则提取') ?>', result: Object.assign({ _snapshot: snap }, extracted), action: 'extract_page_content' };
+                    } catch (epErr) {
+                        c.warn('<?= __('内容提取失败') ?>: ' + epErr.message);
+                        return { success: false, error: epErr.message, action: 'extract_page_content' };
+                    }
+                }
+
+                // ── 客户匹配评估 ──
+                if (plan.action === 'evaluate_customer') {
+                    c.info('<?= __('正在评估客户匹配度...') ?>');
+                    if (typeof AgentTools === 'undefined') {
+                        c.warn('AgentTools <?= __('未加载') ?>');
+                        return { success: false, action: 'evaluate_customer' };
+                    }
+                    try {
+                        var snap = plan.params && plan.params.snapshot;
+                        if (!snap && mcpAvailable) {
+                            var snapRes = await MCPClient.callTool('browser_snapshot', {});
+                            snap = snapRes ? ((snapRes.result !== undefined) ? snapRes.result : snapRes) : null;
+                        }
+                        var profileData = (plan.params && plan.params.profile) || {};
+                        var aiOpts = { useAI: false };
+                        var isExtModel = (typeof ModelLifecycle !== 'undefined' && ModelLifecycle.getState && ModelLifecycle.getState().modelType === 'extension');
+                        if (isExtModel) {
+                            aiOpts = { useAI: true, generateFn: function(p, o) { return streamGenerate(c, p, Object.assign({ label: '<?= __('AI 客户评估') ?>' }, o || {})); } };
+                        }
+                        var evaluation = await AgentTools.evaluateCustomerMatch(snap, profileData, aiOpts);
+                        c.section('<?= __('客户匹配评估') ?>');
+                        var scoreColor = evaluation.score >= 70 ? '#a6e3a1' : evaluation.score >= 40 ? '#f9e2af' : '#f38ba8';
+                        c.log('<?= __('匹配度') ?>: ' + evaluation.score + '/100 (' + (evaluation.isMatch ? '<?= __('匹配') ?>' : '<?= __('不匹配') ?>') + ')');
+                        for (var ri = 0; ri < evaluation.reasons.length; ri++) {
+                            c.log('  • ' + evaluation.reasons[ri]);
+                        }
+                        if (evaluation.matchedKeywords.length > 0) {
+                            c.log('<?= __('命中关键词') ?>: ' + evaluation.matchedKeywords.join(', '));
+                        }
+                        var info = evaluation.extractedInfo;
+                        if (info && info.contacts) {
+                            var ctTotal = (info.contacts.emails || []).length + (info.contacts.phones || []).length + (info.contacts.wechats || []).length;
+                            if (ctTotal > 0) c.success('<?= __('发现') ?> ' + ctTotal + ' <?= __('个联系方式') ?>');
+                        }
+                        return { success: true, method: aiOpts.useAI ? 'AI+<?= __('规则') ?>' : '<?= __('规则') ?>', result: evaluation, action: 'evaluate_customer' };
+                    } catch (ecErr) {
+                        c.warn('<?= __('客户评估失败') ?>: ' + ecErr.message);
+                        return { success: false, error: ecErr.message, action: 'evaluate_customer' };
+                    }
+                }
+
+                // ── 从搜索结果提取线索列表 ──
+                if (plan.action === 'extract_leads') {
+                    c.info('<?= __('正在从搜索结果中提取潜在线索...') ?>');
+                    if (typeof AgentTools === 'undefined') {
+                        c.warn('AgentTools <?= __('未加载') ?>');
+                        return { success: false, action: 'extract_leads' };
+                    }
+                    try {
+                        var snap = plan.params && plan.params.snapshot;
+                        if (!snap && mcpAvailable) {
+                            var snapRes = await MCPClient.callTool('browser_snapshot', {});
+                            snap = snapRes ? ((snapRes.result !== undefined) ? snapRes.result : snapRes) : null;
+                        }
+                        var profileData = (plan.params && plan.params.profile) || {};
+                        var leads = AgentTools.extractLeadsFromSearch(snap, profileData);
+                        c.section('<?= __('潜在线索') ?> (' + leads.length + ')');
+                        for (var li = 0; li < Math.min(15, leads.length); li++) {
+                            var lead = leads[li];
+                            var icon = lead.isProfileUrl ? '👤' : '📄';
+                            c.log(icon + ' [' + lead.score + '<?= __('分') ?>] ' + lead.title);
+                            c.log('   ' + lead.url);
+                            c.log('   <?= __('原因') ?>: ' + lead.reasons.join(', '));
+                        }
+                        if (leads.length === 0) c.log('<?= __('未发现明显的潜在线索') ?>');
+                        return { success: true, method: '<?= __('规则') ?>', result: { leads: leads, _snapshot: snap }, action: 'extract_leads' };
+                    } catch (elErr) {
+                        c.warn('<?= __('线索提取失败') ?>: ' + elErr.message);
+                        return { success: false, error: elErr.message, action: 'extract_leads' };
+                    }
+                }
+
+                // ── 深度提取用户资料（通过 MCP 注入脚本到目标页面） ──
+                if (plan.action === 'extract_user_profile') {
+                    c.info('<?= __('正在深度提取用户资料...') ?>');
+                    if (!mcpAvailable || typeof MCPClient === 'undefined') {
+                        c.warn('<?= __('需要 MCP 扩展支持') ?>');
+                        return { success: false, action: 'extract_user_profile' };
+                    }
+                    try {
+                        var profileResult = await MCPClient.callTool('extract_user_profile', {});
+                        var data = profileResult ? ((profileResult.result !== undefined) ? profileResult.result : profileResult) : null;
+                        if (data) {
+                            c.section('<?= __('用户资料') ?>');
+                            if (data.name) c.log('<?= __('用户名') ?>: ' + data.name);
+                            if (data.bio) c.log('<?= __('简介') ?>: ' + data.bio);
+                            if (data.stats && Object.keys(data.stats).length > 0) {
+                                c.log('<?= __('统计') ?>: ' + Object.entries(data.stats).map(function(e){ return e[0] + ': ' + e[1]; }).join(' | '));
+                            }
+                            var ct = data.contacts || {};
+                            if (ct.emails && ct.emails.length > 0) c.success('<?= __('邮箱') ?>: ' + ct.emails.join(', '));
+                            if (ct.phones && ct.phones.length > 0) c.success('<?= __('电话') ?>: ' + ct.phones.join(', '));
+                            if (ct.wechats && ct.wechats.length > 0) c.success('<?= __('微信') ?>: ' + ct.wechats.join(', '));
+                            if (ct.qqs && ct.qqs.length > 0) c.success('QQ: ' + ct.qqs.join(', '));
+                            if (ct.links && ct.links.length > 0) c.log('<?= __('社交链接') ?>: ' + ct.links.join(', '));
+                            if (data.recentPosts && data.recentPosts.length > 0) {
+                                c.log('<?= __('近期内容') ?> (' + data.recentPosts.length + '):');
+                                for (var pi = 0; pi < data.recentPosts.length; pi++) {
+                                    c.log('  ' + (pi + 1) + '. ' + (data.recentPosts[pi].title || data.recentPosts[pi].preview.substring(0, 60)));
+                                }
+                            }
+                            // 如果有画像，进行评分
+                            if (typeof AgentTools !== 'undefined' && plan.params && plan.params.profile) {
+                                var scoring = AgentTools.scoreLead(data, plan.params.profile);
+                                c.section('<?= __('线索评分') ?>');
+                                c.log('<?= __('得分') ?>: ' + scoring.score + '/100 (<?= __('等级') ?>: ' + scoring.level + ')');
+                                for (var si = 0; si < scoring.reasons.length; si++) {
+                                    c.log('  • ' + scoring.reasons[si]);
+                                }
+                            }
+                        }
+                        return { success: true, method: 'MCP', result: data, action: 'extract_user_profile' };
+                    } catch (eupErr) {
+                        c.warn('<?= __('用户资料提取失败') ?>: ' + eupErr.message);
+                        return { success: false, error: eupErr.message, action: 'extract_user_profile' };
+                    }
+                }
+
+                var toolResult = null;
+                var executionMethod = '';
+
+                // MCP 工具调用
+                if (mcpAvailable && typeof MCPClient !== 'undefined') {
+                    c.info(prefix + '<?= __('通过 MCP 扩展执行') ?>...');
+                    executionMethod = 'MCP';
+                    try {
+                        c.log('<?= __('调用工具') ?>: ' + plan.action + ' ' + JSON.stringify(plan.params || {}));
+                        toolResult = await MCPClient.callTool(plan.action, plan.params || {});
+                        c.success('MCP <?= __('调用成功') ?>');
+                        var navSuccess = toolResult && (toolResult.success === true || (toolResult.result && toolResult.result.success));
+                        if (isNavigationTool(plan.action) && navSuccess) {
+                            c.info('<?= __('页面加载中，等待快照...') ?>');
+                            await new Promise(function (r) { setTimeout(r, 2500); });
+                            try {
+                                var snapshot = await MCPClient.callTool('browser_snapshot', {});
+                                if (snapshot) {
+                                    var snapData = (snapshot.result !== undefined) ? snapshot.result : snapshot;
+                                    renderPageSnapshot(c, snapData);
+                                    if (!toolResult.result) toolResult.result = {};
+                                    toolResult.result._snapshot = snapData;
+                                }
+                            } catch (snapErr) {
+                                c.warn('<?= __('快照失败') ?>: ' + snapErr.message);
+                            }
+                        } else {
+                            c.json('toolResult', toolResult);
+                        }
+                    } catch (mcpErr) {
+                        c.warn('MCP <?= __('调用失败') ?>: ' + mcpErr.message);
+                        toolResult = null;
+                    }
+                }
+
+                // 浏览器原生回退
+                if (!toolResult) {
+                    if (plan.action === 'browser_navigate' || plan.action === 'go_to_url') {
+                        var targetUrl = (plan.params && plan.params.url) || '';
+                        if (targetUrl) {
+                            executionMethod = '<?= __('浏览器原生') ?>';
+                            c.info('<?= __('使用 window.open 打开') ?>: ' + targetUrl);
+                            var newTab = window.open(targetUrl, '_blank');
+                            toolResult = { success: !!newTab, url: targetUrl, method: 'window.open' };
+                            if (newTab) { c.success('<?= __('新标签页已打开') ?>'); }
+                            else { c.warn('<?= __('弹窗被浏览器拦截，请允许弹窗') ?>'); }
+                        }
+                    } else if (plan.action === 'search_google') {
+                        var q = (plan.params && (plan.params.query || plan.params.text)) || '';
+                        var sUrl = (plan.params && plan.params.url) || ('https://www.google.com/search?q=' + encodeURIComponent(q));
+                        if (q || sUrl) {
+                            executionMethod = '<?= __('浏览器原生') ?>';
+                            c.info('<?= __('搜索') ?>: ' + q);
+                            var newTab = window.open(sUrl, '_blank');
+                            toolResult = { success: !!newTab, url: sUrl, method: 'window.open' };
+                        }
+                    }
+                }
+
+                // 统一提取 snapshot 到顶层，确保续行循环能拿到
+                var resultSnapshot = null;
+                if (toolResult) {
+                    resultSnapshot = (toolResult._snapshot) || (toolResult.result && toolResult.result._snapshot) || null;
+                }
+                return { success: !!toolResult, method: executionMethod, result: toolResult, action: plan.action, _snapshot: resultSnapshot };
+            }
+
+            // ── 执行计划（支持多步骤）──
+            var overallResult = null;
+
+            if (actionPlan.action === 'multi_step_task' && actionPlan.steps) {
+                c.section('<?= __('多步骤任务') ?> (' + actionPlan.steps.length + ' <?= __('步') ?>)');
+                for (var si = 0; si < actionPlan.steps.length; si++) {
+                    var stepResult = await executeSingleAction(actionPlan.steps[si], si);
+                    if (!stepResult.success && actionPlan.steps[si].action !== 'natural_language_task') {
+                        c.warn('<?= __('步骤') ?> ' + (si + 1) + ' <?= __('执行失败，继续下一步') ?>');
+                    }
+                    overallResult = stepResult;
+                }
+            } else {
+                overallResult = await executeSingleAction(actionPlan);
+            }
+
+            // ══════════════════════════════════════════════
+            // ReAct 续行循环：观察 → 思考 → 行动，直到任务完成
+            // ══════════════════════════════════════════════
+            var MAX_CONTINUE_ROUNDS = 12;
+            // 从首次执行结果中提取 snapshot
+            var lastSnapshot = (overallResult && overallResult._snapshot)
+                || (overallResult && overallResult.result && overallResult.result._snapshot) || null;
+            var completedActions = [actionPlan.action || (actionPlan.steps && actionPlan.steps.map(function(s){ return s.action; }).join(','))];
+
+            for (var round = 0; round < MAX_CONTINUE_ROUNDS; round++) {
+                // 如果上一步没有快照，主动获取一次
+                if (!lastSnapshot && mcpAvailable && typeof MCPClient !== 'undefined') {
+                    try {
+                        var freshSnap = await MCPClient.callTool('browser_snapshot', {});
+                        if (freshSnap) lastSnapshot = (freshSnap.result !== undefined) ? freshSnap.result : freshSnap;
+                    } catch (_) {}
+                }
+
+                // AI 驱动决策：让模型根据当前状态决定下一步
+                var nextAction = await aiPlanNextAction(c, input, lastSnapshot, completedActions, mcpAvailable, modelLoaded);
+                if (!nextAction) break;
+
+                c.section('<?= __('续行') ?> [' + (round + 1) + '/' + MAX_CONTINUE_ROUNDS + ']: ' + (nextAction.reason || nextAction.action));
+
+                var contResult = await executeSingleAction(nextAction, round);
+                completedActions.push(nextAction.action);
+
+                // 提取 snapshot（统一从顶层 _snapshot 字段取）
+                lastSnapshot = (contResult && contResult._snapshot)
+                    || (contResult && contResult.result && contResult.result._snapshot) || null;
+                overallResult = contResult;
+
+                // done 动作表示任务完成
+                if (nextAction.action === 'done') break;
+
+                await new Promise(function (r) { setTimeout(r, 500); });
+            }
+
+            // ── 完成 ──
+            c.section('<?= __('任务完成') ?>');
+            var stepsStr = completedActions.join(' → ');
+            c.info('<?= __('执行链') ?>: ' + stepsStr + ' (' + completedActions.length + ' <?= __('步') ?>)');
+            if (overallResult && overallResult.success) {
+                if (completedActions.indexOf('summarize_page') >= 0) {
+                    c.success('<?= __('信息收集和分析已完成') ?>');
+                } else if (completedActions.indexOf('input_and_submit') >= 0 || completedActions.indexOf('search_google') >= 0) {
+                    c.success('<?= __('搜索操作已完成') ?>');
+                } else if (completedActions.length === 1 && (completedActions[0] === 'go_to_url' || completedActions[0] === 'browser_navigate')) {
+                    var navSnap = lastSnapshot || (overallResult._snapshot) || null;
+                    c.success('<?= __('已导航到') ?>: ' + (navSnap ? navSnap.title || navSnap.url : ''));
+                } else {
+                    c.success('<?= __('任务已完成') ?>');
+                }
+            } else {
+                c.warn('<?= __('操作可能未完全成功，请检查浏览器扩展状态') ?>');
+            }
+            if (!mcpAvailable) c.warn('<?= __('提示：安装 AutoLeadAgent 扩展可获得更强的自动化能力') ?>');
+
+            c.setStatus('<?= __('就绪') ?>', 'success');
+        } catch (err) {
+            c.error(err.message);
+            c.setStatus('<?= __('失败') ?>', 'danger');
+        } finally {
+            c.setRunning(false);
+        }
+    }
+
+    // ===== 测试按钮 → 打开控制台弹窗 =====
+    var activeConsole = null;
+
+    if (testBtn) {
+        testBtn.addEventListener('click', async function() {
+            var input = testInput ? testInput.value.trim() : '';
+            if (!input) {
+                if (typeof ConfigUtils !== 'undefined') ConfigUtils.safeToast('warning', '<?= __('请输入测试指令') ?>');
                 return;
             }
-            
-            // 显示 MCP 连接成功信息
-            if (mcpStatus && mcpStatus.mcpType) {
-                console.log('[Config] MCP 已连接，类型:', mcpStatus.mcpType);
-            }
-            
-            // 显示加载状态
-            if (testLoading) testLoading.style.display = 'block';
-            if (testResult) testResult.style.display = 'none';
+
             testBtn.disabled = true;
-            
-            var startTime = performance.now();
-            var steps = []; // 记录执行步骤
-            
-            try {
-                // Step 1: 使用模型分析用户指令，确定要执行的操作
-                steps.push({ step: 1, action: '分析指令', status: 'running' });
-                updateStepsDisplay(steps);
-                
-                var analysisPrompt = '你是一个浏览器自动化助手。分析用户指令并返回要执行的操作。\n\n' +
-                    '可用的操作：\n' +
-                    '1. browser_navigate: 导航到URL (参数: url)\n' +
-                    '2. browser_click: 点击元素 (参数: selector)\n' +
-                    '3. browser_type: 在输入框输入文本 (参数: selector, text)\n' +
-                    '4. browser_snapshot: 获取页面快照\n' +
-                    '5. browser_extract: 提取页面信息（邮箱、电话等）\n\n' +
-                    '用户指令: "' + input + '"\n\n' +
-                    '请以JSON格式返回要执行的操作，格式如下：\n' +
-                    '{"action": "操作名称", "params": {参数对象}, "reason": "执行原因"}\n\n' +
-                    '如果是访问网页，返回例如: {"action": "browser_navigate", "params": {"url": "https://www.google.com"}, "reason": "用户要求访问Google"}\n' +
-                    '如果是搜索，返回例如: {"action": "browser_navigate", "params": {"url": "https://www.google.com/search?q=搜索词"}, "reason": "用户要求搜索"}\n\n' +
-                    '只返回JSON，不要其他内容。';
-                
-                var analysisResult = '';
-                if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded()) {
-                    analysisResult = await HFModelManager.generate(analysisPrompt, {
-                        maxTokens: 256,
-                        temperature: 0.3
-                    });
-                }
-                
-                steps[0].status = 'done';
-                steps[0].result = analysisResult.substring(0, 100) + '...';
-                updateStepsDisplay(steps);
-                
-                // Step 2: 解析模型返回的操作
-                steps.push({ step: 2, action: '解析操作', status: 'running' });
-                updateStepsDisplay(steps);
-                
-                var actionPlan = null;
-                try {
-                    // 尝试从响应中提取 JSON
-                    var jsonMatch = analysisResult.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        actionPlan = JSON.parse(jsonMatch[0]);
-                    }
-                } catch (parseError) {
-                    console.warn('[Config] JSON解析失败，尝试智能匹配:', parseError);
-                }
-                
-                // 如果模型返回的不是有效JSON，尝试智能匹配常见指令
-                if (!actionPlan || !actionPlan.action) {
-                    actionPlan = smartParseCommand(input);
-                }
-                
-                if (!actionPlan || !actionPlan.action) {
-                    throw new Error('无法解析指令，请尝试更明确的命令，如"访问 https://www.google.com" 或 "搜索 AI"');
-                }
-                
-                steps[1].status = 'done';
-                steps[1].result = '操作: ' + actionPlan.action + ', 原因: ' + (actionPlan.reason || '用户指令');
-                updateStepsDisplay(steps);
-                
-                // Step 3: 执行浏览器操作
-                steps.push({ step: 3, action: '执行操作: ' + actionPlan.action, status: 'running' });
-                updateStepsDisplay(steps);
-                
-                var toolResult = null;
-                if (typeof MCPClient !== 'undefined') {
-                    // 确保连接到 MCP
-                    if (!MCPClient.isConnected()) {
-                        await MCPClient.connectMCP();
-                    }
-                    
-                    // 调用工具
-                    toolResult = await MCPClient.callTool(actionPlan.action, actionPlan.params || {});
-                }
-                
-                steps[2].status = 'done';
-                steps[2].result = toolResult ? JSON.stringify(toolResult).substring(0, 200) : '执行完成';
-                updateStepsDisplay(steps);
-                
-                var endTime = performance.now();
-                var duration = ((endTime - startTime) / 1000).toFixed(2);
-                
-                // 构建响应文本
-                var responseText = '✅ 操作执行成功！\n\n';
-                responseText += '📋 执行的操作: ' + actionPlan.action + '\n';
-                if (actionPlan.params) {
-                    responseText += '📝 参数: ' + JSON.stringify(actionPlan.params) + '\n';
-                }
-                if (actionPlan.reason) {
-                    responseText += '💡 原因: ' + actionPlan.reason + '\n';
-                }
-                if (toolResult) {
-                    responseText += '\n📊 执行结果:\n';
-                    if (toolResult.url) responseText += '  - URL: ' + toolResult.url + '\n';
-                    if (toolResult.title) responseText += '  - 页面标题: ' + toolResult.title + '\n';
-                    if (toolResult.tabId) responseText += '  - 标签页ID: ' + toolResult.tabId + '\n';
-                    if (toolResult.success !== undefined) responseText += '  - 成功: ' + (toolResult.success ? '是' : '否') + '\n';
-                }
-                
-                // 显示结果
-                if (testLoading) testLoading.style.display = 'none';
-                if (testResult) testResult.style.display = 'block';
-                if (testInputDisplay) testInputDisplay.textContent = input;
-                if (testOutput) testOutput.innerHTML = '<pre style="white-space: pre-wrap; margin: 0;">' + escapeHtml(responseText) + '</pre>';
-                if (testTime) testTime.textContent = duration + ' <?= __('秒') ?>';
-                if (testError) testError.style.display = 'none';
-                if (testSteps) testSteps.style.display = 'block';
-                
-            } catch (error) {
-                console.error('[Config] 智能体测试失败:', error);
-                
-                // 更新失败步骤
-                if (steps.length > 0) {
-                    var lastStep = steps[steps.length - 1];
-                    if (lastStep.status === 'running') {
-                        lastStep.status = 'error';
-                        lastStep.result = error.message;
-                        updateStepsDisplay(steps);
-                    }
-                }
-                
-                if (testLoading) testLoading.style.display = 'none';
-                if (testResult) testResult.style.display = 'block';
-                if (testInputDisplay) testInputDisplay.textContent = input;
-                if (testOutput) testOutput.textContent = '';
-                if (testError) {
-                    testError.style.display = 'block';
-                    testError.textContent = '<?= __('测试失败') ?>: ' + error.message;
-                }
-                if (testSteps) testSteps.style.display = 'block';
-            } finally {
-                testBtn.disabled = false;
-                updateTestButtonState();
-            }
+            var c = createTestConsoleModal(input);
+            activeConsole = c;
+
+            // 绑定持续输入回调
+            c.onSubmit = async function(cmd) {
+                c.addSeparator();
+                await executeCommandInConsole(c, cmd);
+            };
+
+            // 执行首条指令
+            await executeCommandInConsole(c, input);
+            testBtn.disabled = false;
+            updateTestButtonState();
         });
     }
     
-    // 智能解析常见指令
-    function smartParseCommand(input) {
-        var lowerInput = input.toLowerCase();
-        
-        // 访问网站
-        if (lowerInput.includes('访问') || lowerInput.includes('打开') || lowerInput.includes('去')) {
-            // 提取URL
-            var urlMatch = input.match(/https?:\/\/[^\s]+/i);
-            if (urlMatch) {
-                return { action: 'browser_navigate', params: { url: urlMatch[0] }, reason: '用户要求访问指定URL' };
+    // ===== 监听浮动按钮消息（来自扩展 content script） =====
+    window.addEventListener('message', function(event) {
+        if (event.source !== window || !event.data) return;
+
+        // 打开测试控制台
+        if (event.data.type === 'ALA_OPEN_TEST_CONSOLE') {
+            if (activeConsole) return; // 已打开
+            var defaultInput = '<?= __('你好，帮我测试浏览器自动化') ?>';
+            var c = createTestConsoleModal(defaultInput);
+            activeConsole = c;
+            c.onSubmit = async function(cmd) {
+                c.addSeparator();
+                await executeCommandInConsole(c, cmd);
+            };
+        }
+
+        // 执行命令（从浮动按钮的输入栏发来）
+        if (event.data.type === 'ALA_EXECUTE_COMMAND' && event.data.command) {
+            var cmd = event.data.command;
+            if (!activeConsole) {
+                var c = createTestConsoleModal(cmd);
+                activeConsole = c;
+                c.onSubmit = async function(innerCmd) {
+                    c.addSeparator();
+                    await executeCommandInConsole(c, innerCmd);
+                };
             }
-            
-            // 常见网站映射
-            if (lowerInput.includes('google') || lowerInput.includes('谷歌')) {
-                return { action: 'browser_navigate', params: { url: 'https://www.google.com' }, reason: '用户要求访问Google' };
-            }
-            if (lowerInput.includes('baidu') || lowerInput.includes('百度')) {
-                return { action: 'browser_navigate', params: { url: 'https://www.baidu.com' }, reason: '用户要求访问百度' };
-            }
-            if (lowerInput.includes('bing') || lowerInput.includes('必应')) {
-                return { action: 'browser_navigate', params: { url: 'https://www.bing.com' }, reason: '用户要求访问Bing' };
-            }
-            if (lowerInput.includes('linkedin')) {
-                return { action: 'browser_navigate', params: { url: 'https://www.linkedin.com' }, reason: '用户要求访问LinkedIn' };
-            }
-            if (lowerInput.includes('twitter') || lowerInput.includes('x.com')) {
-                return { action: 'browser_navigate', params: { url: 'https://twitter.com' }, reason: '用户要求访问Twitter' };
-            }
-            if (lowerInput.includes('facebook')) {
-                return { action: 'browser_navigate', params: { url: 'https://www.facebook.com' }, reason: '用户要求访问Facebook' };
+            if (activeConsole) {
+                activeConsole.addSeparator();
+                executeCommandInConsole(activeConsole, cmd);
             }
         }
-        
-        // 搜索
-        if (lowerInput.includes('搜索') || lowerInput.includes('search') || lowerInput.includes('查找') || lowerInput.includes('找')) {
-            // 提取搜索关键词
-            var searchMatch = input.match(/(?:搜索|search|查找|找)\s*[：:"]?\s*(.+)/i);
-            var keyword = searchMatch ? searchMatch[1].trim().replace(/["""]/g, '') : '';
-            
-            if (keyword) {
-                // 根据上下文选择搜索引擎
-                if (lowerInput.includes('google') || lowerInput.includes('谷歌')) {
-                    return { action: 'browser_navigate', params: { url: 'https://www.google.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Google搜索关键词' };
-                }
-                if (lowerInput.includes('baidu') || lowerInput.includes('百度')) {
-                    return { action: 'browser_navigate', params: { url: 'https://www.baidu.com/s?wd=' + encodeURIComponent(keyword) }, reason: '使用百度搜索关键词' };
-                }
-                if (lowerInput.includes('bing') || lowerInput.includes('必应')) {
-                    return { action: 'browser_navigate', params: { url: 'https://www.bing.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Bing搜索关键词' };
-                }
-                // 默认使用Google
-                return { action: 'browser_navigate', params: { url: 'https://www.google.com/search?q=' + encodeURIComponent(keyword) }, reason: '使用Google搜索关键词' };
-            }
-        }
-        
-        // 获取页面信息
-        if (lowerInput.includes('快照') || lowerInput.includes('截图') || lowerInput.includes('页面内容')) {
-            return { action: 'browser_snapshot', params: {}, reason: '获取当前页面快照' };
-        }
-        
-        // 提取联系方式
-        if (lowerInput.includes('提取') || lowerInput.includes('获取') || lowerInput.includes('联系方式') || lowerInput.includes('邮箱') || lowerInput.includes('电话')) {
-            return { action: 'browser_extract', params: { selectors: { email: true, phone: true, social: ['linkedin', 'twitter', 'facebook'] } }, reason: '提取页面联系方式' };
-        }
-        
-        return null;
-    }
-    
-    // 更新步骤显示
-    function updateStepsDisplay(steps) {
-        if (!testStepsContent) return;
-        
-        var html = '<ol class="mb-0">';
-        for (var i = 0; i < steps.length; i++) {
-            var s = steps[i];
-            var statusClass = s.status === 'done' ? 'text-success' : (s.status === 'error' ? 'text-danger' : 'text-info');
-            var statusIcon = s.status === 'done' ? 'mdi-check-circle' : (s.status === 'error' ? 'mdi-alert-circle' : 'mdi-loading mdi-spin');
-            html += '<li class="' + statusClass + '">';
-            html += '<i class="mdi ' + statusIcon + ' me-1"></i>';
-            html += escapeHtml(s.action);
-            if (s.result) {
-                html += '<div class="small text-muted ms-3">' + escapeHtml(s.result) + '</div>';
-            }
-            html += '</li>';
-        }
-        html += '</ol>';
-        testStepsContent.innerHTML = html;
-        
-        if (testSteps) testSteps.style.display = 'block';
-    }
-    
-    // HTML转义
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
+    });
+
     // 显示扩展安装引导
     function showExtensionInstallGuide(mcpStatus) {
         mcpStatus = mcpStatus || {};

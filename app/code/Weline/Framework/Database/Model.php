@@ -12,11 +12,30 @@ declare(strict_types=1);
 namespace Weline\Framework\Database;
 
 use Weline\Framework\Database\Helper\Tool;
+use Weline\Framework\Database\Schema\Column;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\LocalModel;
 use Weline\I18n\Model\Locals;
 
+/**
+ * 业务模型基类
+ *
+ * 字段定义（向后兼容）：使用 const fields_* 声明字段名，如 const fields_NAME = 'name';
+ *
+ * 可选 - PHP 8.4+ 类型安全访问（Property Hooks 示例）：
+ *   public string $name {
+ *       get => (string)$this->getData(self::fields_NAME);
+ *       set => $this->setData(self::fields_NAME, trim($value));
+ *   }
+ *
+ * install/upgrade 中可使用 Column 流式 API（\Weline\Framework\Database\Schema\Column）：
+ *   $setup->createTable('注释')
+ *       ->addColumn(Column::integer(self::fields_ID)->primaryKey()->autoIncrement()->comment('ID'))
+ *       ->addColumn(Column::varchar(self::fields_NAME, 255)->notNull()->comment('名称'))
+ *       ->create();
+ * 原有 addColumn(string, string, int, string, string) 签名仍支持。
+ */
 abstract class Model extends AbstractModel implements ModelInterface
 {
     public function columns(): array

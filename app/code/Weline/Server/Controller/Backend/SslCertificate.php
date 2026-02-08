@@ -141,6 +141,12 @@ class SslCertificate extends BaseController
             return $this->fetchJson(['success' => false, 'message' => __('请指定联系邮箱')]);
         }
         
+        // no-SSL 环境下申请证书前提示：Windows 需先安装 event 扩展才能启动 HTTPS
+        $readinessWarning = $this->sslService->getHttpsReadinessWarning();
+        if ($readinessWarning !== null) {
+            return $this->fetchJson(['success' => false, 'message' => $readinessWarning]);
+        }
+        
         $webroot = BP . 'pub';
         $result = $this->sslService->requestCertificate($domain, $webroot, $email, $websiteId);
         

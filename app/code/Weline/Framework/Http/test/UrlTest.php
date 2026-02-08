@@ -20,21 +20,21 @@ class UrlTest extends TestCore
         $_SERVER['REQUEST_SCHEME'] = 'http';
          $_SERVER['SERVER_PORT'] = '80';
         $res = $url->getBackendUrl('backend/system/config/set?key=' .$key_start_page_path . '&value=1');
-        $this->assertEquals('http://localhost/' . Env::get('admin') . '/backend/system/config/set?key=' .$key_start_page_path . '&value=1', $res);
+        $this->assertEquals('http://localhost/' . Env::getAreaRoutePrefix('backend') . '/backend/system/config/set?key=' .$key_start_page_path . '&value=1', $res);
 
         $_SERVER['SERVER_PORT'] = '8080';
         $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'http';
         $_SERVER['WELINE_USER_LANG'] = 'zh_Hans_CN';
         $res = $url->getBackendUrl('backend/system/config/set?key=' . $key_start_page_path . '&value=1');
-        $this->assertEquals('http://localhost:8080/' . Env::get('admin') . '/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
+        $this->assertEquals('http://localhost:8080/' . Env::getAreaRoutePrefix('backend') . '/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
         $_SERVER['WELINE_USER_CURRENCY'] = 'CNY';
 
         $_SERVER['SERVER_PORT'] = '80';
         $res = $url->getBackendUrl('backend/system/config/set?key=' . $key_start_page_path . '&value=1');
-        $this->assertEquals('http://localhost/' . Env::get('admin') . '/CNY/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
+        $this->assertEquals('http://localhost/' . Env::getAreaRoutePrefix('backend') . '/CNY/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
         
         $_SERVER['WELINE_WEBSITE_URL'] = 'https://www.aiweline.com';
         $res = $url->getBackendUrl('backend/system/config/set?key=' . $key_start_page_path . '&value=1');
-        $this->assertEquals('https://www.aiweline.com/' . Env::get('admin') . '/CNY/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
+        $this->assertEquals('https://www.aiweline.com/' . Env::getAreaRoutePrefix('backend') . '/CNY/zh_Hans_CN/backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=1', $res);
     }
 }

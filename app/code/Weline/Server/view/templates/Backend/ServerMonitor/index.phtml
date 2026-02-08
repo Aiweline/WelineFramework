@@ -1,0 +1,516 @@
+<?php
+/**
+ * 服务器监控 - 首页
+ * 
+ * 显示服务器运行状态、Worker/Dispatcher状态、攻击日志统计
+ * 
+ * @var \Weline\Framework\View\Template $block
+ * @var string $instance
+ * @var array $serverStatus
+ * @var array $attackStats
+ * @var array $statusLogs
+ * @var array $serverStats
+ * @var array $masterApiDocs
+ */
+$block->setTitle(__('服务器监控'));
+$statusApiUrl = $block->getUrl('backend/server/server-monitor/status');
+$attacksApiUrl = $block->getUrl('backend/server/server-monitor/attacks');
+$attackLogUrl = $block->getUrl('backend/server/server-monitor/attack-log');
+$apiDocUrl = $block->getUrl('backend/server/server-monitor/api-doc');
+$managerUrl = $block->getUrl('backend/server/server-manager');
+
+use Weline\Server\Model\AttackLog;
+use Weline\Server\Model\ServerStatusLog;
+?>
+
+<div class="server-monitor">
+    <!-- 顶部统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card bg-gradient">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2"><?= __('运行中 Workers') ?></h6>
+                            <h3 class="mb-0" id="running-workers"><?= $serverStats['running_workers'] ?? 0 ?></h3>
+                        </div>
+                        <div class="stat-icon bg-success-subtle text-success">
+                            <i class="bi bi-hdd-stack"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2"><?= __('总连接数') ?></h6>
+                            <h3 class="mb-0" id="total-connections"><?= $serverStats['total_connections'] ?? 0 ?></h3>
+                        </div>
+                        <div class="stat-icon bg-primary-subtle text-primary">
+                            <i class="bi bi-diagram-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2"><?= __('总请求数') ?></h6>
+                            <h3 class="mb-0" id="total-requests"><?= number_format($serverStats['total_requests'] ?? 0) ?></h3>
+                        </div>
+                        <div class="stat-icon bg-info-subtle text-info">
+                            <i class="bi bi-arrow-left-right"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2"><?= __('攻击拦截') ?></h6>
+                            <h3 class="mb-0 <?= ($attackStats['blocked_attacks'] ?? 0) > 0 ? 'text-danger' : '' ?>" id="blocked-attacks">
+                                <?= $attackStats['blocked_attacks'] ?? 0 ?>
+                            </h3>
+                        </div>
+                        <div class="stat-icon bg-danger-subtle text-danger">
+                            <i class="bi bi-shield-exclamation"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- 左侧：进程状态 -->
+        <div class="col-lg-8">
+            <!-- Master/Dispatcher 状态 -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-2 me-2"></i><?= __('进程状态') ?>
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshStatus()">
+                            <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
+                        </button>
+                        <a href="<?= $managerUrl ?>" class="btn btn-sm btn-outline-secondary ms-2">
+                            <i class="bi bi-gear"></i> <?= __('管理') ?>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="process-status-card <?= ($serverStats['master_running'] ?? false) ? 'running' : 'stopped' ?>">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1"><?= __('Master 进程') ?></h6>
+                                        <small class="text-muted"><?= __('主控进程') ?></small>
+                                    </div>
+                                    <span class="badge bg-<?= ($serverStats['master_running'] ?? false) ? 'success' : 'secondary' ?>">
+                                        <?= ($serverStats['master_running'] ?? false) ? __('运行中') : __('已停止') ?>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="process-status-card <?= ($serverStats['dispatcher_running'] ?? false) ? 'running' : 'stopped' ?>">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1"><?= __('Dispatcher 进程') ?></h6>
+                                        <small class="text-muted"><?= __('分流器（Windows）') ?></small>
+                                    </div>
+                                    <span class="badge bg-<?= ($serverStats['dispatcher_running'] ?? false) ? 'success' : 'secondary' ?>">
+                                        <?= ($serverStats['dispatcher_running'] ?? false) ? __('运行中') : __('未启用') ?>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Worker 状态列表 -->
+                    <h6 class="mb-3"><i class="bi bi-hdd-stack me-2"></i><?= __('Worker 进程列表') ?></h6>
+                    <div class="worker-grid" id="worker-grid">
+                        <?php if (empty($statusLogs)): ?>
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox display-6"></i>
+                                <p class="mt-2"><?= __('暂无 Worker 状态数据') ?></p>
+                                <p class="small"><?= __('启动 WLS 服务器后将自动收集状态') ?></p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($statusLogs as $log): ?>
+                                <?php if ($log[ServerStatusLog::fields_PROCESS_TYPE] === ServerStatusLog::PROCESS_TYPE_WORKER): ?>
+                                    <div class="worker-card <?= $log[ServerStatusLog::fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'running' : 'stopped' ?>">
+                                        <div class="worker-header">
+                                            <span class="worker-id">W#<?= $log[ServerStatusLog::fields_WORKER_ID] ?></span>
+                                            <span class="badge bg-<?= $log[ServerStatusLog::fields_STATUS] === ServerStatusLog::STATUS_RUNNING ? 'success' : 'secondary' ?> badge-sm">
+                                                <?= $log[ServerStatusLog::fields_STATUS] ?>
+                                            </span>
+                                        </div>
+                                        <div class="worker-stats">
+                                            <div class="stat-row">
+                                                <span class="label"><?= __('端口') ?></span>
+                                                <span class="value"><?= $log[ServerStatusLog::fields_PORT] ?></span>
+                                            </div>
+                                            <div class="stat-row">
+                                                <span class="label"><?= __('连接') ?></span>
+                                                <span class="value"><?= $log[ServerStatusLog::fields_CONNECTIONS] ?></span>
+                                            </div>
+                                            <div class="stat-row">
+                                                <span class="label"><?= __('请求') ?></span>
+                                                <span class="value"><?= number_format($log[ServerStatusLog::fields_TOTAL_REQUESTS]) ?></span>
+                                            </div>
+                                            <div class="stat-row">
+                                                <span class="label"><?= __('内存') ?></span>
+                                                <span class="value"><?= round(($log[ServerStatusLog::fields_MEMORY_USAGE] ?? 0) / 1024 / 1024, 1) ?> MB</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- API 文档 -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-book me-2"></i><?= __('Master API 接口') ?>
+                    </h5>
+                    <a href="<?= $apiDocUrl ?>" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-right"></i> <?= __('完整文档') ?>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="apiAccordion">
+                        <?php foreach ($masterApiDocs as $idx => $category): ?>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button <?= $idx > 0 ? 'collapsed' : '' ?>" type="button" 
+                                            data-bs-toggle="collapse" data-bs-target="#api-cat-<?= $idx ?>">
+                                        <?= $category['category'] ?>
+                                    </button>
+                                </h2>
+                                <div id="api-cat-<?= $idx ?>" class="accordion-collapse collapse <?= $idx === 0 ? 'show' : '' ?>" 
+                                     data-bs-parent="#apiAccordion">
+                                    <div class="accordion-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th width="20%"><?= __('接口') ?></th>
+                                                        <th width="10%"><?= __('方法') ?></th>
+                                                        <th width="25%"><?= __('路径') ?></th>
+                                                        <th><?= __('说明') ?></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($category['apis'] as $api): ?>
+                                                        <tr>
+                                                            <td><strong><?= $api['name'] ?></strong></td>
+                                                            <td><span class="badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?>"><?= $api['method'] ?></span></td>
+                                                            <td><code><?= htmlspecialchars($api['path']) ?></code></td>
+                                                            <td><?= $api['description'] ?></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧：攻击统计 -->
+        <div class="col-lg-4">
+            <!-- 攻击统计 -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击统计') ?>
+                        <small class="text-muted ms-2"><?= __('近7天') ?></small>
+                    </h5>
+                    <a href="<?= $attackLogUrl ?>" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-list"></i> <?= __('详情') ?>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <?php if (($attackStats['total_attacks'] ?? 0) === 0): ?>
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-shield-check display-6 text-success"></i>
+                            <p class="mt-2"><?= __('暂无攻击记录') ?></p>
+                        </div>
+                    <?php else: ?>
+                        <div class="attack-summary">
+                            <div class="attack-stat-row">
+                                <span class="label"><?= __('总攻击次数') ?></span>
+                                <span class="value text-danger"><?= $attackStats['total_attacks'] ?></span>
+                            </div>
+                            <div class="attack-stat-row">
+                                <span class="label"><?= __('已拦截') ?></span>
+                                <span class="value text-success"><?= $attackStats['blocked_attacks'] ?></span>
+                            </div>
+                            <div class="attack-stat-row">
+                                <span class="label"><?= __('CDN 通知') ?></span>
+                                <span class="value"><?= $attackStats['cdn_notifications'] ?? 0 ?></span>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <h6 class="mb-3"><?= __('按类型分布') ?></h6>
+                        <?php foreach (($attackStats['by_type'] ?? []) as $type => $count): ?>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($type)) ?>">
+                                    <?= AttackLog::getTypeLabel($type) ?>
+                                </span>
+                                <span class="fw-bold"><?= $count ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                        
+                        <?php if (!empty($attackStats['by_severity'])): ?>
+                            <hr>
+                            <h6 class="mb-3"><?= __('按严重程度') ?></h6>
+                            <?php foreach ($attackStats['by_severity'] as $severity => $count): ?>
+                                <?php if ($count > 0): ?>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor($severity) ?>">
+                                            <?= AttackLog::getSeverityLabel($severity) ?>
+                                        </span>
+                                        <span class="fw-bold"><?= $count ?></span>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($attackStats['top_ips'])): ?>
+                            <hr>
+                            <h6 class="mb-3"><?= __('Top 攻击 IP') ?></h6>
+                            <?php $topCount = 0; foreach ($attackStats['top_ips'] as $ip => $count): ?>
+                                <?php if (++$topCount > 5) break; ?>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <code class="small"><?= htmlspecialchars($ip) ?></code>
+                                    <span class="badge bg-danger"><?= $count ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- 快速操作 -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><?= __('快速操作') ?></h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="<?= $managerUrl ?>" class="btn btn-outline-primary">
+                            <i class="bi bi-hdd-rack me-2"></i><?= __('服务器管理') ?>
+                        </a>
+                        <a href="<?= $attackLogUrl ?>" class="btn btn-outline-danger">
+                            <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击日志') ?>
+                        </a>
+                        <a href="<?= $apiDocUrl ?>" class="btn btn-outline-info">
+                            <i class="bi bi-book me-2"></i><?= __('API 文档') ?>
+                        </a>
+                        <button class="btn btn-outline-warning" onclick="cleanupLogs()">
+                            <i class="bi bi-trash me-2"></i><?= __('清理过期日志') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-card {
+    transition: transform 0.2s ease;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+.process-status-card {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--w-border-color);
+    transition: all 0.3s ease;
+}
+.process-status-card.running {
+    border-color: var(--bs-success);
+    background: var(--bs-success-bg-subtle);
+}
+.process-status-card.stopped {
+    border-color: var(--bs-secondary);
+    background: var(--bs-secondary-bg-subtle);
+}
+.worker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+}
+.worker-card {
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--w-border-color);
+    background: var(--w-box-bg);
+    transition: all 0.3s ease;
+}
+.worker-card.running {
+    border-color: var(--bs-success);
+}
+.worker-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.worker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.worker-id {
+    font-weight: bold;
+    font-size: 1rem;
+}
+.worker-stats {
+    font-size: 0.75rem;
+}
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px dashed var(--w-border-color);
+}
+.stat-row:last-child {
+    border-bottom: none;
+}
+.stat-row .label {
+    color: var(--w-muted-color);
+}
+.stat-row .value {
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+.attack-summary {
+    margin-bottom: 1rem;
+}
+.attack-stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--w-border-color);
+}
+.attack-stat-row:last-child {
+    border-bottom: none;
+}
+.attack-stat-row .value {
+    font-weight: bold;
+    font-size: 1.25rem;
+}
+.badge-sm {
+    font-size: 0.65rem;
+    padding: 0.2em 0.4em;
+}
+</style>
+
+<script>
+const STATUS_API_URL = '<?= $statusApiUrl ?>';
+const CLEANUP_API_URL = '<?= $block->getUrl('backend/server/server-monitor/cleanup-logs') ?>';
+
+let refreshTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 每 30 秒自动刷新
+    refreshTimer = setInterval(refreshStatus, 30000);
+});
+
+async function refreshStatus() {
+    try {
+        const response = await fetch(STATUS_API_URL + '?instance=<?= $instance ?>', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            updateStats(data.data);
+        }
+    } catch (error) {
+        console.error('Failed to refresh status:', error);
+    }
+}
+
+function updateStats(data) {
+    const stats = data.server_stats || {};
+    
+    document.getElementById('running-workers').textContent = stats.running_workers || 0;
+    document.getElementById('total-connections').textContent = stats.total_connections || 0;
+    document.getElementById('total-requests').textContent = formatNumber(stats.total_requests || 0);
+}
+
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+async function cleanupLogs() {
+    if (!confirm('<?= __('确定要清理过期日志吗？\n- 状态日志：保留7天\n- 攻击日志：保留30天') ?>')) {
+        return;
+    }
+    
+    AdminToast.info('<?= __('正在清理...') ?>');
+    
+    try {
+        const response = await fetch(CLEANUP_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'status_days=7&attack_days=30',
+            credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            AdminToast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');
+        } else {
+            AdminToast.error(data.message || '<?= __('清理失败') ?>');
+        }
+    } catch (error) {
+        AdminToast.error('<?= __('清理失败') ?>: ' + error.message);
+    }
+}
+</script>

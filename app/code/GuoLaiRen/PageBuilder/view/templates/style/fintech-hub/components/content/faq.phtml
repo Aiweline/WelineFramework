@@ -1,0 +1,252 @@
+<?php
+/**
+ * FinTech Hub - FAQ Section Component
+ * 
+ * 常见问题展示区域，支持手风琴展开效果
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:FAQ
+ * content.title => 标题:text:Frequently asked questions
+ * content.description => 描述:textarea:Everything you need to know about VaultPay. Can't find the answer? Contact our support team.
+ * 
+ * group:faq => FAQ列表
+ * faq.items => FAQ列表:textarea:How secure is my account with VaultPay?|Your account is protected by bank-grade 256-bit AES encryption, two-factor authentication, biometric login, and real-time fraud monitoring. We are PCI DSS Level 1 compliant and regulated by financial authorities.\r\nAre there any hidden fees or charges?|No. VaultPay is committed to transparent pricing. All fees are clearly displayed before you confirm any transaction. Personal accounts enjoy zero monthly maintenance fees.\r\nWhich currencies and countries are supported?|We support 50+ currencies and operate in 150+ countries. Real-time exchange rates are provided with competitive spreads, and local payment methods are available in most regions.\r\nWhat is the KYC verification process?|KYC (Know Your Customer) verification requires a valid government ID and proof of address. The process typically takes under 5 minutes with our AI-powered verification system.\r\nHow fast are international transfers?|Most international transfers arrive within seconds using our instant transfer network. Traditional wire transfers typically settle within 1-2 business days depending on the destination.\r\nIs there a mobile app available?|Yes! VaultPay is available on iOS and Android with full feature parity. Download from the App Store or Google Play to manage your finances on the go.|格式：问题|回答，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['faq_bg'] ?? '#080d1a';
+$textPrimary = $colors['text_primary'] ?? '#f8fafc';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$textMuted = $colors['text_muted'] ?? '#64748b';
+$accentPrimary = $colors['accent_primary'] ?? '#2563eb';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#3b82f6';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(37, 99, 235, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(37, 99, 235, 0.3)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'FAQ';
+$title = $config['content.title'] ?? 'Frequently asked questions';
+$description = $config['content.description'] ?? 'Everything you need to know about VaultPay. Can\'t find the answer? Contact our support team.';
+
+// FAQ列表
+$faqRaw = $config['faq.items'] ?? "How secure is my account with VaultPay?|Your account is protected by bank-grade 256-bit AES encryption, two-factor authentication, biometric login, and real-time fraud monitoring. We are PCI DSS Level 1 compliant and regulated by financial authorities.\nAre there any hidden fees or charges?|No. VaultPay is committed to transparent pricing. All fees are clearly displayed before you confirm any transaction. Personal accounts enjoy zero monthly maintenance fees.\nWhich currencies and countries are supported?|We support 50+ currencies and operate in 150+ countries. Real-time exchange rates are provided with competitive spreads, and local payment methods are available in most regions.\nWhat is the KYC verification process?|KYC (Know Your Customer) verification requires a valid government ID and proof of address. The process typically takes under 5 minutes with our AI-powered verification system.\nHow fast are international transfers?|Most international transfers arrive within seconds using our instant transfer network. Traditional wire transfers typically settle within 1-2 business days depending on the destination.\nIs there a mobile app available?|Yes! VaultPay is available on iOS and Android with full feature parity. Download from the App Store or Google Play to manage your finances on the go.";
+
+$faqs = [];
+$lines = preg_split('/[\r\n]+/', $faqRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('|', $line, 2);
+    $question = trim($parts[0] ?? '');
+    $answer = trim($parts[1] ?? '');
+    
+    if (!empty($question)) {
+        $faqs[] = [
+            'question' => $question,
+            'answer' => $answer,
+        ];
+    }
+}
+
+$instanceId = 'fh-faq-' . uniqid();
+?>
+
+<section class="fh-faq" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: <?= $badgeBg ?>;
+            border: 1px solid <?= $badgeBorder ?>;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item.active {
+            border-color: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-question {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 24px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-question:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        #<?= $instanceId ?> .fh-faq-question-text {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            flex: 1;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-question-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(37, 99, 235, 0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-question-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: <?= $accentPrimaryLight ?>;
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item.active .fh-faq-question-icon {
+            background: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item.active .fh-faq-question-icon svg {
+            fill: #ffffff;
+            transform: rotate(180deg);
+        }
+        
+        #<?= $instanceId ?> .fh-faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-item.active .fh-faq-answer {
+            max-height: 500px;
+        }
+        
+        #<?= $instanceId ?> .fh-faq-answer-content {
+            padding: 0 24px 24px;
+            font-size: 0.95rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .fh-faq-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .fh-faq-question {
+                padding: 16px 20px;
+            }
+            
+            #<?= $instanceId ?> .fh-faq-question-text {
+                font-size: 0.95rem;
+            }
+            
+            #<?= $instanceId ?> .fh-faq-answer-content {
+                padding: 0 20px 20px;
+            }
+        }
+    </style>
+    
+    <div class="fh-faq-container">
+        <div class="fh-faq-header">
+            <div class="fh-faq-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="fh-faq-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="fh-faq-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="fh-faq-list">
+            <?php foreach ($faqs as $index => $faq): ?>
+            <div class="fh-faq-item<?= $index === 0 ? ' active' : '' ?>">
+                <div class="fh-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span class="fh-faq-question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                    <span class="fh-faq-question-icon">
+                        <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </span>
+                </div>
+                <div class="fh-faq-answer">
+                    <div class="fh-faq-answer-content"><?= htmlspecialchars($faq['answer']) ?></div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

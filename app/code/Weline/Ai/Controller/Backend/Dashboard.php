@@ -271,7 +271,7 @@ class Dashboard extends BackendController
             $activeProviderAccounts = $accountModel->reset()
                 ->where(Account::fields_IS_ACTIVE, 1)
                 ->where(Account::fields_CONNECTION_STATUS, 'success')
-                ->where(Account::fields_BALANCE . ' > 0')
+                ->where(Account::fields_BALANCE, 0, '>')
                 ->select()
                 ->count();
         } catch (\Exception $e) {
@@ -586,7 +586,7 @@ class Dashboard extends BackendController
                     ->where(Account::fields_PROVIDER_CODE, $code)
                     ->where(Account::fields_IS_ACTIVE, 1)
                     ->where(Account::fields_CONNECTION_STATUS, 'success')
-                    ->where(Account::fields_BALANCE . ' > 0')
+                    ->where(Account::fields_BALANCE, 0, '>')
                     ->select()
                     ->count();
                 

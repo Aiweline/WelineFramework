@@ -6,7 +6,6 @@
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 use Weline\Framework\App\Exception;
 
 if (!defined('BP')) {
@@ -17,142 +16,24 @@ if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . '
     require BP . 'setup' . DIRECTORY_SEPARATOR . 'index.php';
     exit();
 }
-// 第三方代码目录
-if (!defined('VENDOR_PATH')) {
-    define('VENDOR_PATH', BP . 'vendor' . DIRECTORY_SEPARATOR);
-}
-// 应用代码目录
-if (!defined('APP_CODE_PATH')) {
-    define('APP_CODE_PATH', BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
-}
-// 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前）
-// 说明：类映射缓存在 setup:upgrade 时生成，运行时只读取不更新
-spl_autoload_register(function ($class) {
-    // 静态缓存：记录已加载的文件
-    static $loadedFiles = [];
-    static $classMap = null;
-    static $classMapLoaded = false;
-    
-    // 如果类已加载，直接返回（避免重复检查）
-    if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-        return true;
-    }
-    
-    // 首次调用时加载类映射缓存（仅在生产模式有效）
-    // 缓存文件由 setup:upgrade 命令生成
-    if (!$classMapLoaded) {
-        $classMapLoaded = true;
-        $classMapFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'classmap.php';
-        if (is_file($classMapFile)) {
-            $classMap = @include $classMapFile;
-            if (!is_array($classMap)) {
-                $classMap = null;
-            }
-        }
-    }
-    
-    // 如果有类映射缓存且命中，直接加载
-    if ($classMap !== null && isset($classMap[$class])) {
-        $cachedPath = $classMap[$class];
-        if (!isset($loadedFiles[$cachedPath]) && is_file($cachedPath)) {
-            $loadedFiles[$cachedPath] = true;
-            require_once $cachedPath;
-            return true;
-        }
-    }
-    
-    // 规范化路径
-    $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
-    
-    // 首先检查 generated/code 目录（拦截器类）
-    $generatedPath = BP . 'generated' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . $relativePath;
-    
-    if (!isset($loadedFiles[$generatedPath]) && is_file($generatedPath)) {
-        $loadedFiles[$generatedPath] = true;
-        require_once $generatedPath;
-        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-            return true;
-        }
-    }
-    
-    // 然后检查 app/code 目录
-    $fullPath = APP_CODE_PATH . $relativePath;
-    
-    // 如果文件已被加载过，直接返回
-    if (isset($loadedFiles[$fullPath])) {
-        return true;
-    }
-    
-    // 如果 app/code 下存在该类文件，优先加载它
-    if (is_file($fullPath)) {
-        $loadedFiles[$fullPath] = true;
-        require_once $fullPath;
-        if (class_exists($class, false) || interface_exists($class, false) || trait_exists($class, false)) {
-            return true;
-        }
-        return true;
-    }
-    
-    return false;
-}, true, true);
 
-// 检测Composer自动加载代理
-try {
-    $autoloader = VENDOR_PATH . 'autoload.php';
-    if (is_file($autoloader)) {
-        // 如果是 Web 请求（非 CLI），阻止加载 Pest 测试框架的函数文件
-        if (PHP_SAPI !== 'cli') {
-            if (!function_exists('beforeEach')) {
-                function beforeEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
-            }
-            if (!function_exists('test')) {
-                function test() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
-            }
-            if (!function_exists('it')) {
-                function it() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
-            }
-            if (!function_exists('afterEach')) {
-                function afterEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
-            }
-        }
-        
-        $composerLoader = require $autoloader;
-        
-        // PSR-4 映射优化：缓存由 setup:upgrade 生成，运行时只读取
-        $psr4CacheFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'psr4_map.php';
-        
-        // 尝试加载缓存
-        if (is_file($psr4CacheFile)) {
-            $cachedPsr4 = @include $psr4CacheFile;
-            if (is_array($cachedPsr4) && !empty($cachedPsr4)) {
-                // 直接应用缓存的 PSR-4 映射
-                foreach ($cachedPsr4 as $prefix => $paths) {
-                    $composerLoader->setPsr4($prefix, $paths);
-                }
-            }
-        } else {
-            // 缓存不存在时，实时计算（开发模式或首次运行）
-            $psr4Map = $composerLoader->getPrefixesPsr4();
-            
-            foreach ($psr4Map as $prefix => $paths) {
-                $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, trim($prefix, '\\'));
-                $appCodePath = APP_CODE_PATH . $relativePath . DIRECTORY_SEPARATOR;
-                
-                if (is_dir($appCodePath)) {
-                    $paths = array_filter($paths, function($path) use ($appCodePath) {
-                        $normalizedPath = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-                        return $normalizedPath !== $appCodePath;
-                    });
-                    array_unshift($paths, $appCodePath);
-                    $composerLoader->setPsr4($prefix, array_values($paths));
-                }
-            }
-        }
-    } else {
-        exit('Composer自动加载异常!尝试执行：php composer.phar install');
+// 统一自动加载：app/code 与 generated/code 优先于 vendor（与 WLS worker 共用 app/autoload.php）
+require __DIR__ . DIRECTORY_SEPARATOR . 'autoload.php';
+
+// 如果是 Web 请求（非 CLI），阻止加载 Pest 测试框架的函数文件
+if (PHP_SAPI !== 'cli') {
+    if (!function_exists('beforeEach')) {
+        function beforeEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
     }
-} catch (Exception $exception) {
-    exit('自动加载异常：' . $exception->getMessage());
+    if (!function_exists('test')) {
+        function test() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+    }
+    if (!function_exists('it')) {
+        function it() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+    }
+    if (!function_exists('afterEach')) {
+        function afterEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
+    }
 }
 // 加载通用函数
 
@@ -161,7 +42,16 @@ try {
     /**
      * 初始化应用...
      */
-    \Weline\Framework\App::run();
+    $result = \Weline\Framework\App::run();
+    
+    // 输出正常响应内容
+    if (!empty($result)) {
+        echo $result;
+    }
+} catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+    // 捕获响应终止异常，在 FPM 模式下直接发送响应
+    $e->emit(true);
+    exit(0);
 } catch (Exception $exception) {
     if (DEV) {
         // 美化错误显示

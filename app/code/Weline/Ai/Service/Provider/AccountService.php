@@ -75,7 +75,7 @@ class AccountService
             ->where(Account::fields_IS_DEFAULT, 1)
             ->where(Account::fields_IS_ACTIVE, 1)
             ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::fields_BALANCE . ' > 0')
+            ->where(Account::fields_BALANCE, 0, '>')
             ->find()
             ->fetch();
             
@@ -88,7 +88,7 @@ class AccountService
             ->where(Account::fields_PROVIDER_CODE, $providerCode)
             ->where(Account::fields_IS_ACTIVE, 1)
             ->where(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
-            ->where(Account::fields_BALANCE . ' > 0')
+            ->where(Account::fields_BALANCE, 0, '>')
             ->order(Account::fields_BALANCE, 'DESC')
             ->find()
             ->fetch();

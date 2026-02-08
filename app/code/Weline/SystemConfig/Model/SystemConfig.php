@@ -15,6 +15,7 @@ use Weline\Backend\Cache\BackendCache;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
@@ -99,7 +100,20 @@ class SystemConfig extends \Weline\Framework\Database\Model
             }
         }
         $this->_cache->set($cache_key, $result);
-        return $result;
+
+        // 派发配置读取事件，允许其他模块拦截或修改返回值
+        $eventData = [
+            'key' => $key,
+            'module' => $module,
+            'area' => $area,
+            'value' => $result,
+        ];
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_SystemConfig::domain::config_get', $eventData);
+
+        // 观察者可能修改了 value
+        return $eventData['value'] ?? $result;
     }
 
     /**
@@ -121,6 +135,21 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
         try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+
+            // 派发配置设置前事件，允许其他模块验证或修改配置值
+            $beforeEventData = [
+                'key' => $key,
+                'value' => $value,
+                'module' => $module,
+                'area' => $area,
+            ];
+            $eventsManager->dispatch('Weline_SystemConfig::domain::config_set_before', $beforeEventData);
+
+            // 观察者可能修改了 value
+            $value = (string) ($beforeEventData['value'] ?? $value);
+
             // 使用新模型实例，避免复用旧实例可能残留的查询状态
             /** @var SystemConfig $config */
             $config = ObjectManager::getInstance(SystemConfig::class);
@@ -134,6 +163,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 ])
                 ->find()
                 ->fetch();
+
+            $oldValue = $existing[self::fields_VALUE] ?? null;
             
             if ($existing && isset($existing[self::fields_KEY])) {
                 // 存在则更新
@@ -160,6 +191,17 @@ class SystemConfig extends \Weline\Framework\Database\Model
             // 设置配置缓存
             $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);
+
+            // 派发配置设置后事件，通知其他模块配置已变更
+            $afterEventData = [
+                'key' => $key,
+                'value' => $value,
+                'module' => $module,
+                'area' => $area,
+                'old_value' => $oldValue,
+            ];
+            $eventsManager->dispatch('Weline_SystemConfig::domain::config_set_after', $afterEventData);
+
             return true;
         } catch (\Exception $e) {
             throw new Exception($e->getMessage());

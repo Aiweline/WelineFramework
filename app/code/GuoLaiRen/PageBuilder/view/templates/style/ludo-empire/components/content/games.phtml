@@ -1,0 +1,245 @@
+<?php
+/**
+ * LudoEmpire - Game Modes Component
+ * 
+ * 4种游戏模式展示：经典、快速、锦标赛、团队对战
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Game Modes
+ * content.title => 标题:text:Choose Your Battle
+ * content.description => 描述:textarea:Four exciting ways to play Ludo. Pick your mode and start winning!
+ * 
+ * group:games => 游戏列表
+ * games.items => 游戏列表:textarea:Classic Ludo|🎲|2-4 Players|The timeless board game experience. Roll the dice, move your tokens, and race to the finish!|Play Classic|#|₹50 - ₹5,000\r\nQuick Ludo|⚡|2 Players|Fast-paced 1v1 matches. Perfect for quick gaming sessions!|Quick Match|#|₹10 - ₹1,000\r\nTournament Mode|🏆|8-64 Players|Compete in bracket tournaments. Climb the leaderboard and win big!|Join Tournament|#|₹500 - ₹50,000\r\nTeam Battle|👥|4 Players (2v2)|Team up with a friend and dominate the board together!|Find Team|#|₹100 - ₹10,000|格式：名称|图标|玩家数|描述|按钮文字|链接|奖金，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['games_bg'] ?? '#0d0020';
+$textPrimary = $colors['text_primary'] ?? '#f5f3ff';
+$textSecondary = $colors['text_secondary'] ?? '#c4b5fd';
+$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a78bfa';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$accentTertiary = $colors['accent_tertiary'] ?? '#06b6d4';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(139, 92, 246, 0.12)';
+
+$badge = $config['content.badge'] ?? 'Game Modes';
+$title = $config['content.title'] ?? 'Choose Your Battle';
+$description = $config['content.description'] ?? 'Four exciting ways to play Ludo. Pick your mode and start winning!';
+
+$gamesRaw = $config['games.items'] ?? "Classic Ludo|🎲|2-4 Players|The timeless board game experience. Roll the dice, move your tokens, and race to the finish!|Play Classic|#|₹50 - ₹5,000\nQuick Ludo|⚡|2 Players|Fast-paced 1v1 matches. Perfect for quick gaming sessions!|Quick Match|#|₹10 - ₹1,000\nTournament Mode|🏆|8-64 Players|Compete in bracket tournaments. Climb the leaderboard and win big!|Join Tournament|#|₹500 - ₹50,000\nTeam Battle|👥|4 Players (2v2)|Team up with a friend and dominate the board together!|Find Team|#|₹100 - ₹10,000";
+
+$games = [];
+$lines = preg_split('/[\r\n]+/', $gamesRaw);
+$gameColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f59e0b'];
+foreach ($lines as $i => $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line);
+    $games[] = [
+        'name' => trim($parts[0] ?? ''),
+        'icon' => trim($parts[1] ?? '🎲'),
+        'players' => trim($parts[2] ?? ''),
+        'description' => trim($parts[3] ?? ''),
+        'btn_text' => trim($parts[4] ?? 'Play'),
+        'btn_url' => trim($parts[5] ?? '#'),
+        'prize' => trim($parts[6] ?? ''),
+        'color' => $gameColors[$i % count($gameColors)],
+    ];
+}
+
+$instanceId = 'le-games-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .le-games-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .le-games-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .le-games-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-games-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-games-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+        }
+        
+        #<?= $instanceId ?> .le-games-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .le-game-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            padding: 32px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?> .le-game-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.2);
+        }
+        
+        #<?= $instanceId ?> .le-game-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            border-radius: 20px 20px 0 0;
+        }
+        
+        #<?= $instanceId ?> .le-game-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-game-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 8px;
+        }
+        
+        #<?= $instanceId ?> .le-game-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .le-game-players {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: <?= $accentPrimaryLight ?>;
+            padding: 4px 12px;
+            background: rgba(139, 92, 246, 0.12);
+            border-radius: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-game-prize {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #22c55e;
+        }
+        
+        #<?= $instanceId ?> .le-game-desc {
+            font-size: 0.95rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-game-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 700;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        
+        #<?= $instanceId ?> .le-game-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .le-games-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            #<?= $instanceId ?> .le-games-title {
+                font-size: 1.75rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .le-game-card {
+                padding: 24px;
+            }
+        }
+    </style>
+    
+    <div class="le-games-container">
+        <div class="le-games-header">
+            <div class="le-games-badge"><?= htmlspecialchars($badge) ?></div>
+            <h2 class="le-games-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="le-games-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="le-games-grid">
+            <?php foreach ($games as $index => $game): ?>
+            <div class="le-game-card" style="border-top: 3px solid <?= htmlspecialchars($game['color']) ?>;">
+                <div class="le-game-icon"><?= htmlspecialchars($game['icon']) ?></div>
+                <h3 class="le-game-name"><?= htmlspecialchars($game['name']) ?></h3>
+                <div class="le-game-meta">
+                    <span class="le-game-players"><?= htmlspecialchars($game['players']) ?></span>
+                    <?php if ($game['prize']): ?>
+                    <span class="le-game-prize"><?= htmlspecialchars($game['prize']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <p class="le-game-desc"><?= htmlspecialchars($game['description']) ?></p>
+                <a href="<?= htmlspecialchars($game['btn_url']) ?>" class="le-game-btn"><?= htmlspecialchars($game['btn_text']) ?></a>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

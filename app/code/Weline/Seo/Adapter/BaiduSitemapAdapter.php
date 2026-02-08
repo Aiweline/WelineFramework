@@ -30,7 +30,7 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
     public const MAX_URLS = 50000;
     public const MAX_SIZE = 10485760; // 10 MB（百度限制）
     public const PUSH_API_URL = 'http://data.zz.baidu.com/urls';
-    public const FAST_PUSH_API_URL = 'http://data.zz.baidu.com/urls?type=daily';
+    public const FAST_PUSH_API_URL = 'http://data.zz.baidu.com/urls'; // type=daily 在拼接时追加
 
     public function getPlatformCode(): string
     {
@@ -70,8 +70,15 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function submitSitemap(string $sitemapUrl, array $accountConfig): array
     {
-        $token = $accountConfig['token'] ?? $accountConfig['api_key'] ?? '';
-        $site = $accountConfig['site'] ?? $accountConfig['site_url'] ?? '';
+        // 兼容嵌套和平铺两种 config 格式
+        $config = $accountConfig['config'] ?? $accountConfig;
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            $config = is_array($decoded) ? $decoded : $accountConfig;
+        }
+        
+        $token = $config['token'] ?? $config['api_key'] ?? '';
+        $site = $config['site'] ?? $config['site_url'] ?? '';
         
         if (empty($token)) {
             return [
@@ -88,7 +95,7 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
         }
         
         // 使用快速收录还是普通收录
-        $useFastPush = !empty($accountConfig['use_fast_push']);
+        $useFastPush = !empty($config['use_fast_push']);
         
         return $this->submitViaPushApi($sitemapUrl, $site, $token, $useFastPush);
     }
@@ -102,8 +109,10 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
         string $token,
         bool $useFastPush = false
     ): array {
-        $apiUrl = $useFastPush ? self::FAST_PUSH_API_URL : self::PUSH_API_URL;
-        $apiUrl .= '?site=' . urlencode($site) . '&token=' . urlencode($token);
+        $apiUrl = self::PUSH_API_URL . '?site=' . urlencode($site) . '&token=' . urlencode($token);
+        if ($useFastPush) {
+            $apiUrl .= '&type=daily';
+        }
         
         // 百度 API 接受每行一个 URL
         $postData = $sitemapUrl;
@@ -168,8 +177,10 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function submitUrls(array $urls, string $site, string $token, bool $useFastPush = false): array
     {
-        $apiUrl = $useFastPush ? self::FAST_PUSH_API_URL : self::PUSH_API_URL;
-        $apiUrl .= '?site=' . urlencode($site) . '&token=' . urlencode($token);
+        $apiUrl = self::PUSH_API_URL . '?site=' . urlencode($site) . '&token=' . urlencode($token);
+        if ($useFastPush) {
+            $apiUrl .= '&type=daily';
+        }
         
         // 百度每次最多提交 2000 条
         $chunks = array_chunk($urls, 2000);

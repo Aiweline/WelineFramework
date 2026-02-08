@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\System\Process\Processer;
+
 /**
  * 服务器实例管理服务
  * 
@@ -27,13 +30,13 @@ namespace Weline\Server\Service;
 class ServerInstanceService
 {
     /**
-     * 实例信息存储目录
+     * 实例信息存储目录（与 Start/Stop/WlsInstanceRegistry 一致：var/server/instances/）
      */
     protected function getInstanceDir(): string
     {
-        $dir = BP . 'var/run/server/';
+        $dir = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR;
         if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+            @mkdir($dir, 0755, true);
         }
         return $dir;
     }
@@ -119,10 +122,30 @@ class ServerInstanceService
         $data['running_seconds'] = time() - ($data['started_timestamp'] ?? time());
         $data['running_time'] = $this->formatDuration($data['running_seconds']);
         
-        // 检查进程是否存在
-        $data['is_running'] = $this->isProcessRunning($data['pid'] ?? 0);
+        // WLS：以 worker_pids 或端口占用判断运行状态（Start 保存的 pid 为已退出的 CLI，不作为依据）
+        $data['is_running'] = $this->resolveWlsRunningState($data);
         
         return $data;
+    }
+    
+    /**
+     * 解析 WLS 实例运行状态：优先 worker_pids，其次端口占用，最后主进程 pid
+     */
+    protected function resolveWlsRunningState(array $data): bool
+    {
+        $workerPids = $data['worker_pids'] ?? [];
+        if (is_array($workerPids) && $workerPids !== []) {
+            foreach ($workerPids as $pid) {
+                if ($pid > 0 && Processer::isRunningByPid((int) $pid)) {
+                    return true;
+                }
+            }
+        }
+        $port = (int) ($data['port'] ?? 0);
+        if ($port > 0 && Processer::isPortInUse($port)) {
+            return true;
+        }
+        return $this->isProcessRunning((int) ($data['pid'] ?? 0));
     }
     
     /**

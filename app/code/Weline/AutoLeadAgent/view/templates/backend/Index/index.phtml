@@ -60,19 +60,37 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                     </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <div class="card">
+                                    <div class="card" id="model-status-card">
                                         <div class="card-body">
                                             <!-- 隐藏字段存储模型ID，由 JS 动态更新 -->
                                             <input type="hidden" id="task-page-model-id" value="" data-enabled="0" data-cache-size="0">
-                                            <h5 class="card-title mb-2">
-                                                <i class="mdi mdi-robot text-info me-1"></i>
-                                                <?= __('模型状态') ?>
-                                            </h5>
-                                            <p class="mb-1" id="model-status-indicator">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="mdi mdi-robot text-info me-1"></i>
+                                                    <?= __('AI 模型') ?>
+                                                </h5>
+                                                <!-- 模型开关 -->
+                                                <div class="form-check form-switch mb-0" title="<?= __('加载/卸载模型') ?>">
+                                                    <input class="form-check-input" type="checkbox" role="switch"
+                                                           id="model-power-switch" style="cursor: pointer; width: 2.5em; height: 1.3em;">
+                                                    <label class="form-check-label small" for="model-power-switch" id="model-power-label" style="cursor: pointer;">
+                                                        <?= __('关闭') ?>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <!-- 状态指示器 -->
+                                            <div class="mb-1 d-flex align-items-center gap-2" id="model-status-indicator">
                                                 <span class="badge bg-secondary">
                                                     <i class="mdi mdi-sleep"></i> <?= __('待机') ?>
                                                 </span>
-                                            </p>
+                                            </div>
+                                            <!-- 运行模式指示器 -->
+                                            <div class="mb-1" id="model-runtime-indicator" style="display: none;">
+                                                <small class="d-flex align-items-center gap-1">
+                                                    <span id="model-runtime-icon"></span>
+                                                    <span id="model-runtime-text" class="text-muted"></span>
+                                                </small>
+                                            </div>
                                             <p class="mb-2 small text-muted" id="model-config-summary">
                                                 <?= __('正在检测端侧模型配置...') ?>
                                             </p>
@@ -80,13 +98,21 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                                 <a href="@backend-url('auto-lead-agent/backend/config')"
                                                    class="btn btn-sm btn-outline-primary">
                                                     <i class="mdi mdi-cog-outline"></i>
-                                                    <?= __('配置模型') ?>
+                                                    <?= __('配置') ?>
                                                 </a>
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-secondary"
-                                                        id="reload-model-status-btn">
+                                                        id="reload-model-status-btn"
+                                                        title="<?= __('重新检测模型配置') ?>">
                                                     <i class="mdi mdi-refresh"></i>
-                                                    <?= __('重新检测') ?>
+                                                </button>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-success"
+                                                        id="task-model-load-btn"
+                                                        style="display: none;"
+                                                        title="<?= __('手动加载模型') ?>">
+                                                    <i class="mdi mdi-play"></i>
+                                                    <?= __('加载') ?>
                                                 </button>
                                                 <button type="button"
                                                         class="btn btn-sm btn-warning"
@@ -94,7 +120,7 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                                         style="display: none;"
                                                         title="<?= __('卸载模型以释放内存') ?>">
                                                     <i class="mdi mdi-stop"></i>
-                                                    <?= __('卸载模型') ?>
+                                                    <?= __('卸载') ?>
                                                 </button>
                                             </div>
                                         </div>
@@ -406,51 +432,193 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
 <js>Weline_AutoLeadAgent::js/mcp-client.js</js>
 <js>Weline_AutoLeadAgent::js/hf-model-manager.js</js>
 <js>Weline_AutoLeadAgent::js/model-lifecycle.js</js>
+<js>Weline_AutoLeadAgent::js/agent-tools.js</js>
+<js>Weline_AutoLeadAgent::js/platform-strategies.js</js>
+<js>Weline_AutoLeadAgent::js/autonomous-pipeline.js</js>
 <js>Weline_AutoLeadAgent::js/task-runner.js</js>
 <js>Weline_AutoLeadAgent::js/backend-task-manager.js</js>
 <script>
 // 初始化任务页模型生命周期管理
 document.addEventListener('DOMContentLoaded', function() {
+    // 模型控制元素
+    var powerSwitch = document.getElementById('model-power-switch');
+    var powerLabel = document.getElementById('model-power-label');
+    var loadBtn = document.getElementById('task-model-load-btn');
+    var unloadBtnInit = document.getElementById('task-model-unload-btn');
+    var runtimeIndicator = document.getElementById('model-runtime-indicator');
+    var runtimeIcon = document.getElementById('model-runtime-icon');
+    var runtimeText = document.getElementById('model-runtime-text');
+    var modelCard = document.getElementById('model-status-card');
+    
+    // 当前运行模式: 'none' | 'page' | 'extension'
+    var currentRuntime = 'none';
+    
+    /**
+     * 更新运行模式指示器
+     */
+    function updateRuntimeIndicator(mode) {
+        currentRuntime = mode;
+        if (!runtimeIndicator) return;
+        
+        if (mode === 'page') {
+            runtimeIndicator.style.display = 'block';
+            if (runtimeIcon) runtimeIcon.innerHTML = '<i class="mdi mdi-monitor text-info" style="font-size:14px;"></i>';
+            if (runtimeText) {
+                runtimeText.className = 'text-info';
+                runtimeText.textContent = '<?= __('页面内存模式 — 刷新页面后需重新加载') ?>';
+            }
+        } else if (mode === 'extension') {
+            runtimeIndicator.style.display = 'block';
+            if (runtimeIcon) runtimeIcon.innerHTML = '<i class="mdi mdi-puzzle-check text-success" style="font-size:14px;"></i>';
+            if (runtimeText) {
+                runtimeText.className = 'text-success';
+                runtimeText.textContent = '<?= __('扩展常驻模式 — 刷新页面不丢失') ?>';
+            }
+        } else {
+            runtimeIndicator.style.display = 'none';
+        }
+    }
+    
+    /**
+     * 同步开关状态
+     */
+    function syncPowerSwitch(loaded, loading) {
+        if (!powerSwitch) return;
+        
+        if (loading) {
+            powerSwitch.checked = true;
+            powerSwitch.disabled = true;
+            if (powerLabel) {
+                powerLabel.textContent = '<?= __('加载中...') ?>';
+                powerLabel.className = 'form-check-label small text-warning';
+            }
+        } else if (loaded) {
+            powerSwitch.checked = true;
+            powerSwitch.disabled = false;
+            if (powerLabel) {
+                powerLabel.textContent = '<?= __('运行中') ?>';
+                powerLabel.className = 'form-check-label small text-success fw-bold';
+            }
+        } else {
+            powerSwitch.checked = false;
+            powerSwitch.disabled = false;
+            if (powerLabel) {
+                powerLabel.textContent = '<?= __('关闭') ?>';
+                powerLabel.className = 'form-check-label small text-muted';
+            }
+        }
+    }
+    
+    /**
+     * 更新加载/卸载按钮可见性
+     */
+    function updateActionButtons(loaded, loading) {
+        if (loadBtn) {
+            loadBtn.style.display = (!loaded && !loading) ? 'inline-block' : 'none';
+        }
+        if (unloadBtnInit) {
+            unloadBtnInit.style.display = loaded ? 'inline-block' : 'none';
+        }
+    }
+    
+    /**
+     * 检测扩展端模型是否可用
+     */
+    function checkExtensionModel() {
+        if (typeof HFModelManager === 'undefined' || typeof HFModelManager.generateViaExtension !== 'function') {
+            return Promise.resolve(false);
+        }
+        // 简单的 ping 测试：用 getState 判断是否连接
+        return HFModelManager.generateViaExtension('ping', { maxTokens: 1 })
+            .then(function(result) {
+                return result !== null;
+            })
+            .catch(function() {
+                return false;
+            });
+    }
+    
     if (typeof ModelLifecycle !== 'undefined') {
         ModelLifecycle.init({
             onStatusChange: function(state) {
                 console.log('[TaskPage] 模型状态变化:', state);
-                // 更新模型状态显示
                 var statusIndicator = document.getElementById('model-status-indicator');
-                var unloadBtn = document.getElementById('task-model-unload-btn');
                 
                 if (statusIndicator) {
                     if (state.loaded) {
                         var typeLabel = state.modelType === 'chrome_ai' ? 'Chrome AI' : 'WebLLM';
-                        statusIndicator.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check-circle"></i> 已加载 (' + typeLabel + ')</span>';
+                        statusIndicator.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check-circle"></i> <?= __('已加载') ?> (' + typeLabel + ')</span>';
+                        updateRuntimeIndicator('page');
+                        if (modelCard) modelCard.style.borderColor = 'var(--bs-success)';
                     } else if (state.loading) {
-                        statusIndicator.innerHTML = '<span class="badge bg-warning"><span class="spinner-border spinner-border-sm"></span> 加载中</span>';
+                        statusIndicator.innerHTML = '<span class="badge bg-warning text-dark"><span class="spinner-border spinner-border-sm" style="width:0.8rem;height:0.8rem;"></span> <?= __('加载中') ?></span>';
+                        updateRuntimeIndicator('none');
+                        if (modelCard) modelCard.style.borderColor = 'var(--bs-warning)';
                     } else {
                         statusIndicator.innerHTML = '<span class="badge bg-secondary"><i class="mdi mdi-sleep"></i> <?= __('待机') ?></span>';
+                        // 检查扩展是否有模型
+                        checkExtensionModel().then(function(extAvailable) {
+                            if (extAvailable) {
+                                statusIndicator.innerHTML = '<span class="badge bg-info"><i class="mdi mdi-puzzle-check"></i> <?= __('扩展托管') ?></span>';
+                                updateRuntimeIndicator('extension');
+                                syncPowerSwitch(true, false);
+                                if (modelCard) modelCard.style.borderColor = 'var(--bs-info)';
+                            } else {
+                                updateRuntimeIndicator('none');
+                                if (modelCard) modelCard.style.borderColor = '';
+                            }
+                        });
                     }
                 }
                 
-                if (unloadBtn) {
-                    unloadBtn.style.display = state.loaded ? 'inline-block' : 'none';
-                }
+                syncPowerSwitch(state.loaded, state.loading);
+                updateActionButtons(state.loaded, state.loading);
             },
             onUnload: function() {
                 console.log('[TaskPage] 模型已卸载');
-                // 更新内存显示
                 var memoryIndicator = document.getElementById('memory-usage-indicator');
                 if (memoryIndicator) {
                     memoryIndicator.innerHTML = '<span class="text-muted">-- MB</span>';
                 }
+                updateRuntimeIndicator('none');
+                syncPowerSwitch(false, false);
+                updateActionButtons(false, false);
+                if (modelCard) modelCard.style.borderColor = '';
             }
         });
         
-        // 绑定卸载按钮
-        var unloadBtn = document.getElementById('task-model-unload-btn');
-        if (unloadBtn) {
-            unloadBtn.addEventListener('click', function() {
-                if (confirm('<?= __('确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。') ?>')) {
-                    ModelLifecycle.unloadModel();
+        // 开关切换事件
+        if (powerSwitch) {
+            powerSwitch.addEventListener('change', function() {
+                if (this.checked) {
+                    // 加载模型
+                    if (!ModelLifecycle.isLoaded()) {
+                        console.log('[TaskPage] 开关打开 → 加载模型');
+                        ModelLifecycle.autoLoadModel();
+                    }
+                } else {
+                    // 卸载模型
+                    if (ModelLifecycle.isLoaded()) {
+                        console.log('[TaskPage] 开关关闭 → 卸载模型');
+                        ModelLifecycle.unloadModel();
+                    }
                 }
+            });
+        }
+        
+        // 手动加载按钮
+        if (loadBtn) {
+            loadBtn.addEventListener('click', function() {
+                if (!ModelLifecycle.isLoaded()) {
+                    ModelLifecycle.autoLoadModel();
+                }
+            });
+        }
+        
+        // 卸载按钮
+        if (unloadBtnInit) {
+            unloadBtnInit.addEventListener('click', function() {
+                ModelLifecycle.unloadModel();
             });
         }
     }
@@ -529,6 +697,93 @@ document.addEventListener('DOMContentLoaded', function() {
                     fileName = '...' + fileName.slice(-57);
                 }
                 fileNameText.textContent = fileName;
+            }
+        }
+    });
+    
+    // 监听扩展端模型事件（通过 content script 广播）
+    window.addEventListener('message', function(event) {
+        if (event.source !== window) return;
+        var data = event.data;
+        if (!data || data.type !== 'AUTOLEADAGENT_MODEL_EVENT') return;
+        
+        console.log('[TaskPage] 收到扩展模型事件:', data.event, data.data);
+        
+        var statusIndicator = document.getElementById('model-status-indicator');
+        var runtimeIndicator = document.getElementById('model-runtime-indicator');
+        var runtimeIcon = document.getElementById('model-runtime-icon');
+        var runtimeText = document.getElementById('model-runtime-text');
+        var pwrSwitch = document.getElementById('model-power-switch');
+        var pwrLabel = document.getElementById('model-power-label');
+        var mCard = document.getElementById('model-status-card');
+        
+        if (data.event === 'loaded') {
+            if (statusIndicator) {
+                var mId = (data.data && data.data.modelId) || '';
+                statusIndicator.innerHTML = '<span class="badge bg-info"><i class="mdi mdi-puzzle-check"></i> <?= __('扩展托管') ?>' + (mId ? ' (' + mId + ')' : '') + '</span>';
+            }
+            if (runtimeIndicator) {
+                runtimeIndicator.style.display = 'block';
+                if (runtimeIcon) runtimeIcon.innerHTML = '<i class="mdi mdi-puzzle-check text-success" style="font-size:14px;"></i>';
+                if (runtimeText) {
+                    runtimeText.className = 'text-success';
+                    runtimeText.textContent = '<?= __('扩展常驻模式 — 刷新页面不丢失') ?>';
+                }
+            }
+            if (pwrSwitch) {
+                pwrSwitch.checked = true;
+                pwrSwitch.disabled = false;
+            }
+            if (pwrLabel) {
+                pwrLabel.textContent = '<?= __('运行中') ?>';
+                pwrLabel.className = 'form-check-label small text-success fw-bold';
+            }
+            if (mCard) mCard.style.borderColor = 'var(--bs-info)';
+        } else if (data.event === 'unloaded') {
+            if (statusIndicator) {
+                statusIndicator.innerHTML = '<span class="badge bg-secondary"><i class="mdi mdi-sleep"></i> <?= __('待机') ?></span>';
+            }
+            if (runtimeIndicator) runtimeIndicator.style.display = 'none';
+            if (pwrSwitch) {
+                pwrSwitch.checked = false;
+                pwrSwitch.disabled = false;
+            }
+            if (pwrLabel) {
+                pwrLabel.textContent = '<?= __('关闭') ?>';
+                pwrLabel.className = 'form-check-label small text-muted';
+            }
+            if (mCard) mCard.style.borderColor = '';
+        }
+    });
+
+    // ===== 监听浮动按钮消息（来自扩展 content script） =====
+    window.addEventListener('message', function(floatEvent) {
+        if (floatEvent.source !== window || !floatEvent.data) return;
+
+        // 打开测试控制台 → 跳转到配置页
+        if (floatEvent.data.type === 'ALA_OPEN_TEST_CONSOLE') {
+            window.postMessage({ type: 'AUTOLEADAGENT_REQUEST', payload: { type: 'GET_TARGET_URLS' }, requestId: 'nav_config_' + Date.now() }, '*');
+            // 简单处理：直接跳转配置页
+            var cfgLink = document.querySelector('a[href*="auto-lead-agent/backend/config"]');
+            if (cfgLink) { cfgLink.click(); return; }
+            // 用存储的 URL
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                chrome.storage.local.get(['ala_config_url'], function(data) {
+                    if (data.ala_config_url) window.location.href = data.ala_config_url;
+                });
+            }
+        }
+
+        // 执行命令 → 通过 MCP 扩展直接执行
+        if (floatEvent.data.type === 'ALA_EXECUTE_COMMAND' && floatEvent.data.command) {
+            var cmd = floatEvent.data.command;
+            console.log('[TaskPage] Floating button command:', cmd);
+            if (typeof MCPClient !== 'undefined' && MCPClient.sendTaskToExtension) {
+                MCPClient.sendTaskToExtension(cmd).then(function(result) {
+                    console.log('[TaskPage] Command result:', result);
+                }).catch(function(err) {
+                    console.error('[TaskPage] Command failed:', err);
+                });
             }
         }
     });
@@ -664,12 +919,63 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusText =
                         '<?= __('当前已启用端侧模型：') ?>' + modelId + cachePart;
                     
-                    // 如果模型已启用，触发自动加载
-                    if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
-                        console.log('[TaskPage] 检测到已启用模型，触发自动加载:', modelId);
-                        setTimeout(function() {
-                            ModelLifecycle.autoLoadModel();
-                        }, 300);
+                    // 先检查扩展端是否已有模型加载
+                    if (typeof HFModelManager !== 'undefined' && typeof HFModelManager.getExtensionModelStatus === 'function') {
+                        HFModelManager.getExtensionModelStatus().then(function(extStatus) {
+                            if (extStatus && extStatus.isLoaded) {
+                                console.log('[TaskPage] 扩展端模型已加载:', extStatus.modelId);
+                                var statusIndicator = document.getElementById('model-status-indicator');
+                                if (statusIndicator) {
+                                    statusIndicator.innerHTML = '<span class="badge bg-info"><i class="mdi mdi-puzzle-check"></i> <?= __('扩展托管') ?> (' + (extStatus.modelId || modelId) + ')</span>';
+                                }
+                                var runtimeInd = document.getElementById('model-runtime-indicator');
+                                var runtimeIco = document.getElementById('model-runtime-icon');
+                                var runtimeTxt = document.getElementById('model-runtime-text');
+                                if (runtimeInd) {
+                                    runtimeInd.style.display = 'block';
+                                    if (runtimeIco) runtimeIco.innerHTML = '<i class="mdi mdi-puzzle-check text-success" style="font-size:14px;"></i>';
+                                    if (runtimeTxt) {
+                                        runtimeTxt.className = 'text-success';
+                                        runtimeTxt.textContent = '<?= __('扩展常驻模式 — 刷新页面不丢失') ?>';
+                                    }
+                                }
+                                // 同步开关状态
+                                var pwrSwitch = document.getElementById('model-power-switch');
+                                var pwrLabel = document.getElementById('model-power-label');
+                                if (pwrSwitch) {
+                                    pwrSwitch.checked = true;
+                                    if (pwrLabel) {
+                                        pwrLabel.textContent = '<?= __('运行中') ?>';
+                                        pwrLabel.className = 'form-check-label small text-success fw-bold';
+                                    }
+                                }
+                                var mCard = document.getElementById('model-status-card');
+                                if (mCard) mCard.style.borderColor = 'var(--bs-info)';
+                            } else {
+                                // 扩展端没有模型，尝试页面端自动加载
+                                if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+                                    console.log('[TaskPage] 检测到已启用模型，触发自动加载:', modelId);
+                                    setTimeout(function() {
+                                        ModelLifecycle.autoLoadModel();
+                                    }, 300);
+                                }
+                            }
+                        }).catch(function() {
+                            // 扩展检测失败，回退到页面端加载
+                            if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+                                setTimeout(function() {
+                                    ModelLifecycle.autoLoadModel();
+                                }, 300);
+                            }
+                        });
+                    } else {
+                        // HFModelManager 不支持扩展端检测，直接页面端加载
+                        if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+                            console.log('[TaskPage] 检测到已启用模型，触发自动加载:', modelId);
+                            setTimeout(function() {
+                                ModelLifecycle.autoLoadModel();
+                            }, 300);
+                        }
                     }
                 }
 

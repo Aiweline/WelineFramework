@@ -35,6 +35,7 @@ use Weline\Framework\Setup\Stage\DatabaseUpdateStage;
 use Weline\Framework\Setup\Stage\ModuleSetupStage;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
+use Weline\Framework\Console\Console\Reflection\Compile as ReflectionCompile;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
@@ -255,6 +256,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 检查是否为热更新模式
+        if (isset($args['hot']) || isset($args['h'])) {
+            $this->executeHotReload();
+            return;
+        }
         
         $lockFile = $this->getLockFile();
         $lockHandle = null;
@@ -262,7 +268,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         try {
             // ========== 准备阶段 ==========
-            $this->prepareUpgrade($lockFile, $lockHandle);
+            $this->prepareUpgrade($lockFile, $lockHandle, $args);
             
             // 检查系统是否已安装
             if (!$this->checkSystemInstalled()) {
@@ -276,6 +282,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             
             // ========== 完成阶段 ==========
             $this->completeUpgrade();
+            
+            // 通知 WLS 服务器热重载（如果正在运行）
+            $this->notifyWlsReload();
             
         } catch (\Exception $e) {
             $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
@@ -291,10 +300,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * 
      * @param string $lockFile 锁文件路径
      * @param mixed $lockHandle 锁句柄（引用传递）
+     * @param array $args 命令参数
      * @return void
      * @throws Exception
      */
-    private function prepareUpgrade(string $lockFile, &$lockHandle): void
+    private function prepareUpgrade(string $lockFile, &$lockHandle, array $args = []): void
     {
         // 1. 获取文件锁
         try {
@@ -320,12 +330,127 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 4. 运行 composer dump-autoload（必须在注册表收集之前）
         $this->runComposerDump();
         
-        // 5. 收集框架注册表（必须在升级前完成，确保系统可用）
+        // 5. 环境依赖检测（必须在 extends/注册表更新前执行）
+        $this->checkEnvironmentDependencies($args);
+        
+        // 6. 收集框架注册表（必须在升级前完成，确保系统可用）
         $this->printing->note(__('正在准备系统环境...'));
         $this->collectFrameworkRegistries();
         
-        // 6. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
+        // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
+    }
+    
+    /**
+     * 环境依赖检测
+     * 
+     * 在 extends/注册表更新运行前执行环境依赖检测。
+     * 如果检测不通过，提示用户并提供自动修复选项。
+     * 
+     * @param array $args 命令参数
+     * @return void
+     */
+    private function checkEnvironmentDependencies(array $args): void
+    {
+        // 检查是否跳过环境检测（支持 --force, --skip-env-check, -s）
+        if (isset($args['skip-env-check']) || isset($args['s']) || isset($args['force']) || isset($args['f'])) {
+            $this->printing->note(__('已跳过环境依赖检测'));
+            return;
+        }
+        
+        $this->printing->note(__('正在检测环境依赖...'));
+        
+        try {
+            // 获取收集器和检查器
+            /** @var \Weline\Framework\Env\Service\EnvRequirementsCollector $collector */
+            $collector = ObjectManager::getInstance(\Weline\Framework\Env\Service\EnvRequirementsCollector::class);
+            
+            /** @var \Weline\Framework\Env\Service\EnvChecker $checker */
+            $checker = ObjectManager::getInstance(\Weline\Framework\Env\Service\EnvChecker::class);
+            
+            // 收集环境需求
+            $requirements = $collector->collect();
+            
+            // 执行检测
+            $checker->setRequirements($requirements);
+            $result = $checker->check();
+            
+            if (!$result->hasError()) {
+                $this->printing->success(__('✓ 环境依赖检测通过'));
+                return;
+            }
+            
+            // 环境检测不通过，直接尝试自动修复
+            $this->printing->warning(__('环境依赖检测未通过，正在自动修复...'));
+            $this->printing->note('');
+            
+            /** @var \Weline\Framework\Env\Console\Env\Install $envInstall */
+            $envInstall = ObjectManager::getInstance(\Weline\Framework\Env\Console\Env\Install::class);
+            $envInstall->execute(['y' => true], []);
+            
+            // 修复后重新检测
+            $this->printing->note(__('自动修复完成，重新检测环境...'));
+            $requirements = $collector->collect();
+            $checker->setRequirements($requirements);
+            $result = $checker->check();
+            
+            if (!$result->hasError()) {
+                $this->printing->success(__('✓ 环境问题已全部修复'));
+            } else {
+                // 仍有问题，显示详情并询问用户
+                $this->printing->warning(__('部分问题未能自动修复：'));
+                $this->printing->note('');
+                
+                if ($result->getPhpVersionIssue()) {
+                    $this->printing->error(__('PHP 版本问题: %{issue}', ['issue' => $result->getPhpVersionIssue()]));
+                }
+                
+                $missing = $result->getMissingExtensions();
+                if (!empty($missing)) {
+                    $this->printing->error(__('缺失的扩展: %{exts}', ['exts' => implode(', ', $missing)]));
+                }
+                
+                $disabled = $result->getDisabledFunctions();
+                if (!empty($disabled)) {
+                    $this->printing->error(__('被禁用的函数: %{funcs}', ['funcs' => implode(', ', $disabled)]));
+                }
+                
+                $unsatisfied = $result->getUnsatisfiedItems();
+                if (!empty($unsatisfied)) {
+                    foreach ($unsatisfied as $item) {
+                        $name = $item['name'] ?? __('未命名');
+                        $this->printing->error(__('未满足的依赖: %{name}', ['name' => $name]));
+                    }
+                }
+                
+                $this->printing->note('');
+                $this->printing->warning(__('您可以选择：'));
+                $this->printing->note(__('1. 仍继续升级（可能导致问题）'));
+                $this->printing->note(__('2. 退出升级，手动修复后重试'));
+                $this->printing->setup(__('请选择 (1/2)：'));
+                
+                /** @var \Weline\Framework\App\System $system */
+                $system = ObjectManager::getInstance(\Weline\Framework\App\System::class);
+                $input = trim($system->input() ?? '');
+                
+                if ($input === '1') {
+                    $this->printing->warning(__('您选择继续升级，可能会遇到问题'));
+                } else {
+                    $this->printing->note(__('升级已取消'));
+                    $this->printing->note(__('请运行 php bin/w env:check 查看环境问题'));
+                    $this->printing->note(__('运行 php bin/w env:install 尝试自动修复'));
+                    throw new Exception(__('用户选择退出升级'));
+                }
+            }
+            
+        } catch (Exception $e) {
+            if (strpos($e->getMessage(), '用户选择') !== false) {
+                throw $e;
+            }
+            // 环境检测本身出错，记录警告但不阻断升级
+            \Weline\Framework\App\Env::log_warning('env_check.log', __('环境依赖检测出错: %{1}', [$e->getMessage()]));
+            $this->printing->warning(__('环境依赖检测出错：%{1}，继续执行升级...', [$e->getMessage()]));
+        }
     }
     
     /**
@@ -428,7 +553,36 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 2. 生成 PSR-4 映射缓存
         $this->generatePsr4Cache();
         
+        // 3. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
+        $this->compileReflectionAndFactories();
+        
         $this->printing->success(__('✓ 优化缓存生成完成。'));
+    }
+    
+    /**
+     * 执行 reflection:compile，生成反射元数据和编译型工厂容器
+     * 在子进程中运行，避免代码质量问题导致的 fatal error 阻断升级流程
+     */
+    private function compileReflectionAndFactories(): void
+    {
+        try {
+            $phpBin = PHP_BINARY ?: 'php';
+            $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+            $cmd = '"' . $phpBin . '" "' . $binW . '" reflection:compile 2>&1';
+            $output = [];
+            $exitCode = 0;
+            exec($cmd, $output, $exitCode);
+            $outputStr = implode("\n", $output);
+            // 输出编译结果
+            if ($outputStr) {
+                echo $outputStr . "\n";
+            }
+            if ($exitCode !== 0) {
+                $this->printing->warning(__('反射/工厂编译出现警告（exit=%{1}），不影响系统功能。', [$exitCode]));
+            }
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('反射/工厂编译跳过：%{1}', [$e->getMessage()]));
+        }
     }
     
     /**
@@ -1747,7 +1901,85 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         return '框架代码刷新。';
     }
-
+    
+    /**
+     * 执行热更新模式
+     * 
+     * 向运行中的 WLS Worker 发送 SIGUSR1 信号，触发热重载
+     */
+    private function executeHotReload(): void
+    {
+        $this->printing->note(__('正在执行热更新...'));
+        
+        // 读取服务器配置
+        $serverConfig = Env::getInstance()->getConfig('server');
+        if (empty($serverConfig) || empty($serverConfig['instances'])) {
+            $this->printing->warning(__('未检测到运行中的 WLS 服务器实例。'));
+            $this->printing->note(__('请先启动服务器：php bin/w server:start'));
+            return;
+        }
+        
+        $reloadCount = 0;
+        
+        foreach ($serverConfig['instances'] as $name => $instance) {
+            if (empty($instance['pid'])) {
+                continue;
+            }
+            
+            $pid = (int) $instance['pid'];
+            
+            // 检查进程是否存在
+            if (!$this->isProcessRunning($pid)) {
+                $this->printing->warning(__('实例 %{1} 的主进程 (PID: %{2}) 未运行', [$name, $pid]));
+                continue;
+            }
+            
+            // 发送 SIGUSR1 信号（仅 Linux/Mac）
+            if (\function_exists('posix_kill')) {
+                if (\posix_kill($pid, SIGUSR1)) {
+                    $this->printing->success(__('已向实例 %{1} (PID: %{2}) 发送热重载信号', [$name, $pid]));
+                    $reloadCount++;
+                } else {
+                    $this->printing->error(__('无法向实例 %{1} 发送信号', [$name]));
+                }
+            } else {
+                // Windows 平台暂不支持信号
+                $this->printing->warning(__('Windows 平台暂不支持热更新，请重启服务器：php bin/w server:start -r'));
+            }
+        }
+        
+        if ($reloadCount > 0) {
+            $this->printing->success(__('热更新信号已发送给 %{1} 个实例', [$reloadCount]));
+        } else {
+            $this->printing->warning(__('没有可用的 WLS 实例接收热更新信号'));
+        }
+    }
+    
+    /**
+     * 通知 WLS 服务器热重载
+     */
+    private function notifyWlsReload(): void
+    {
+        // 检查是否有运行中的 WLS 服务器
+        $serverConfig = Env::getInstance()->getConfig('server');
+        if (empty($serverConfig) || empty($serverConfig['instances'])) {
+            return;
+        }
+        
+        $hasRunning = false;
+        foreach ($serverConfig['instances'] as $instance) {
+            if (!empty($instance['pid']) && $this->isProcessRunning((int) $instance['pid'])) {
+                $hasRunning = true;
+                break;
+            }
+        }
+        
+        if ($hasRunning) {
+            $this->printing->note(__('检测到运行中的 WLS 服务器，发送热重载信号...'));
+            $this->executeHotReload();
+        }
+    }
+    
     public function help(): array|string
     {
         // 基于tip的默认help实现
@@ -1758,6 +1990,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--model' => '仅升级数据库模型',
                 '--route' => '仅升级路由',
                 '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
+                '--hot' => '热更新模式，通知运行中的 WLS 服务器重载',
+                '-s, --skip-env-check' => '跳过环境依赖检测',
+                '-f, --force' => '强制升级（跳过环境依赖检测）',
                 '-h, --help' => '显示帮助信息',
             ],
             [],
@@ -1769,8 +2004,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Weline_Demo',
                 '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
                 '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
+                '热更新 WLS 服务器' => 'php bin/w setup:upgrade --hot',
             ],
-            'php bin/w setup:upgrade [--model|--route] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--hot] [-m|--module=<模块名>]'
         );
     }
 
@@ -1969,14 +2205,25 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         Env::set('db', $sandbox_db);
         
-        $admin = Env::get('admin');
-        if (empty($admin)) {
-            Env::set('admin', Text::random_string(32));
-        }
-        
-        $api_admin = Env::get('api_admin');
-        if (empty($api_admin)) {
-            Env::set('api_admin', Text::random_string(32));
+        // 检查并初始化 area_routes 配置
+        $areaRoutes = Env::getAreaRoutes();
+        if (empty($areaRoutes) || empty($areaRoutes['backend']['prefix'] ?? '')) {
+            // 初始化 area_routes 配置
+            $newAreaRoutes = [
+                'backend' => [
+                    'prefix' => $areaRoutes['backend']['prefix'] ?? Text::random_string(32),
+                    'description' => '后台管理',
+                ],
+                'rest_frontend' => [
+                    'prefix' => $areaRoutes['rest_frontend']['prefix'] ?? 'api',
+                    'description' => '前端 REST API',
+                ],
+                'rest_backend' => [
+                    'prefix' => $areaRoutes['rest_backend']['prefix'] ?? Text::random_string(32),
+                    'description' => '后台 REST API',
+                ],
+            ];
+            Env::set('area_routes', $newAreaRoutes);
         }
         
         // 执行模块升级流程（原 module:upgrade 的功能）
@@ -1987,12 +2234,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
         
+        $backendPrefix = Env::getAreaRoutePrefix('backend');
+        $restBackendPrefix = Env::getAreaRoutePrefix('rest_backend');
+        
         $this->printing->success(__('系统识别到您初次安装！已为您初始化安装参数。'), __('安装'));
-        $this->printing->success(__('您的后台入口地址密钥：%{1} ', Env::get('admin')), __('安装'));
-        $this->printing->success(__('您的API后台入口地址密钥：%{1}', Env::get('api_admin')), __('安装'));
+        $this->printing->success(__('您的后台入口地址密钥：%{1} ', $backendPrefix), __('安装'));
+        $this->printing->success(__('您的 REST 后台入口地址密钥：%{1}', $restBackendPrefix), __('安装'));
         $this->printing->success(__('使用server:start命令指定的地址访问网站，默认使用http://127.0.0.1:9981，例如:'), __('安装'));
-        $this->printing->note(__('访问后台：%{1}/admin/login', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
-        $this->printing->note(__('访问后台API：%{1}', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
+        $this->printing->note(__('访问后台：%{1}/admin/login', 'http://127.0.0.1:9981/' . $backendPrefix), __('安装'));
+        $this->printing->note(__('访问后台 REST API：%{1}', 'http://127.0.0.1:9981/' . $restBackendPrefix), __('安装'));
         $this->printing->warning(__('默认使用sqlite作为开发数据库，若要修改数据库，请转到 %{1} 下的env.php按照数组键sample_db中的配置样本，修改db键即可。', APP_ETC_PATH), __('安装'));
         $this->printing->setup(__('由于您属于第一次安装，您可以使用命令行：php bin/w setup:upgrade , 然后使用：php bin/w server:start 快速开启本地开发服务器。'), __('安装'));
         

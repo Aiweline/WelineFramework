@@ -46,5 +46,27 @@
                   shared="true" 
                   sort="0"/>
     </event>
+    
+    <!-- CDN攻击检测信号事件 -->
+    <!-- 由 Server Cron 定时任务检测攻击信号文件后触发 -->
+    <!-- 处理逻辑：接收信号 → 向各 CDN 服务商广播开启攻击防护模式 -->
+    <event name="Weline_Cdn::security::attack_detected">
+        <observer name="Weline_Cdn::attack_signal_handler" 
+                  instance="Weline\Cdn\Observer\AttackSignalHandler" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
+    
+    <!-- CDN攻击恢复信号事件 -->
+    <!-- 由 Server Cron 定时任务检测到攻击恢复（无新攻击超时）后触发 -->
+    <!-- 处理逻辑：接收恢复信号 → 向各 CDN 服务商广播关闭攻击防护模式 -->
+    <event name="Weline_Cdn::security::attack_recovered">
+        <observer name="Weline_Cdn::attack_recovery_handler" 
+                  instance="Weline\Cdn\Observer\AttackRecoveryHandler" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
 </config>
 

@@ -27,7 +27,7 @@ class Sandbox extends FrontendController
         }
         if($this->request->getGet('close')=='on'){
             setcookie('w_sandbox', '', 0, '/', '', false, false);
-            setcookie('w_sandbox', '', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);
+            setcookie('w_sandbox', '', 0, '/' . Env::getAreaRoutePrefix('backend'), '', false, false);
         }
         Message::success(__('沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！'));
         $this->redirect($this->request->getServer('HTTP_REFERER'));
@@ -42,7 +42,7 @@ class Sandbox extends FrontendController
         }
         if($this->request->getGet('enable')=='on'){
             setcookie('w_sandbox', '1', 0, '/', '', false, false);
-            setcookie('w_sandbox', '1', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);
+            setcookie('w_sandbox', '1', 0, '/' . Env::getAreaRoutePrefix('backend'), '', false, false);
         }
         Message::success(__('沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！'));
         $this->redirect($this->request->getServer('HTTP_REFERER'));

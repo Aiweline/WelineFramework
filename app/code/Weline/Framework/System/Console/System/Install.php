@@ -158,8 +158,9 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         $this->runner->installDb(['db' => $db_config, 'sandbox_db' => $sandbox_db_config]);
         $this->printer->note('第四步：数据安装...', '系统');
 //        $this->runner->systemInstall();
-        $initData['admin'] = 'admin_' . uniqid();
-        $initData['api_admin'] = 'api_' . uniqid();
+        // 使用新的参数名
+        $initData['backend'] = 'admin_' . uniqid();
+        $initData['rest_backend'] = 'api_' . uniqid();
         $this->runner->systemInit($initData);
         $this->printer->note('第五步：系统命令更新...', '系统');
         $this->runner->systemCommands();
@@ -172,8 +173,8 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             $file->open($install_file, $file::mode_w);
             $file->close();
         }
-        $this->printer->success(str_pad('admin后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['admin']);
-        $this->printer->success(str_pad('Api后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['api_admin']);
+        $this->printer->success(str_pad('后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['backend']);
+        $this->printer->success(str_pad('REST后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['rest_backend']);
         $this->printer->note('-------------------------------------------------------');
         $this->printer->success('恭喜你！系统安装完成！');
     }

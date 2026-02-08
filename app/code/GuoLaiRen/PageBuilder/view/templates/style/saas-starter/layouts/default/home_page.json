@@ -1,0 +1,101 @@
+{
+    "page_type": "home_page",
+    "name": "首页默认布局",
+    "description": "SaaS Starter 主题首页布局",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "SaaSFlow",
+                    "logo.width": 36,
+                    "navigation.links": "Features=>#features\nPricing=>#pricing\nTestimonials=>#testimonials\nFAQ=>#faq",
+                    "navigation.show_cta": "yes",
+                    "navigation.cta_text": "Start Free Trial",
+                    "navigation.cta_url": "#pricing"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "hero",
+                "enabled": true,
+                "instance_id": "hero-default",
+                "config": {
+                    "content.badge": "Now in Public Beta",
+                    "content.title": "Ship faster with the modern SaaS platform",
+                    "content.description": "Streamline your workflow, automate repetitive tasks, and collaborate seamlessly. Built for modern teams who move fast.",
+                    "cta.primary_text": "Start Free Trial",
+                    "cta.primary_url": "#pricing",
+                    "cta.secondary_text": "Watch Demo",
+                    "cta.secondary_url": "#demo",
+                    "stats.items": "10K+|Active Teams\n99.9%|Uptime SLA\n50+|Integrations"
+                }
+            },
+            {
+                "code": "features",
+                "enabled": true,
+                "instance_id": "features-default",
+                "config": {
+                    "content.badge": "Features",
+                    "content.title": "Everything you need to scale",
+                    "content.description": "Powerful tools designed to help your team work smarter, ship faster, and grow without limits."
+                }
+            },
+            {
+                "code": "pricing",
+                "enabled": true,
+                "instance_id": "pricing-default",
+                "config": {
+                    "content.badge": "Pricing",
+                    "content.title": "Simple, transparent pricing",
+                    "content.description": "No hidden fees. No surprises. Pick a plan that fits your team size and scale as you grow."
+                }
+            },
+            {
+                "code": "testimonials",
+                "enabled": true,
+                "instance_id": "testimonials-default",
+                "config": {
+                    "content.badge": "Testimonials",
+                    "content.title": "Loved by thousands of teams"
+                }
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "cta-banner-default",
+                "config": {
+                    "content.title": "Ready to supercharge your workflow?",
+                    "content.description": "Join 10,000+ teams already using our platform. Start your free 14-day trial today.",
+                    "buttons.primary_text": "Start Free Trial",
+                    "buttons.secondary_text": "Talk to Sales"
+                }
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-default",
+                "config": {
+                    "content.badge": "FAQ",
+                    "content.title": "Frequently asked questions"
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {
+                    "brand.name": "SaaSFlow",
+                    "brand.description": "The modern platform for teams who ship fast. Streamline your workflow with powerful automation."
+                }
+            }
+        ]
+    }
+}

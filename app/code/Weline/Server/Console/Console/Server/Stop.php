@@ -174,19 +174,22 @@ class Stop implements CommandInterface
     }
 
     /**
-     * 清理服务器配置
+     * 清理服务器配置（仅移除运行时字段，保留用户配置如 worker_count、port、mode 等）
      */
     private function clearServerConfig(): void
     {
         $env = Env::getInstance();
-        $config = $env->getConfig();
-        
-        if (isset($config['server'])) {
-            unset($config['server']);
-            // 重新设置整个配置，不传递null值
-            $env->setConfig('server', []);
-            $env->save();
+        $server = $env->get('server');
+        if (!\is_array($server)) {
+            return;
         }
+        $runtimeKeys = ['pid', 'start_time', 'status'];
+        $cleaned = $server;
+        foreach ($runtimeKeys as $key) {
+            unset($cleaned[$key]);
+        }
+        $env->setConfig('server', $cleaned);
+        $env->save();
     }
 
     /**

@@ -88,25 +88,21 @@ class Sitemap extends BackendController
             // 使用注册的 Provider 生成
             if ($useProviders) {
                 $result = $this->generateByProviders($providerModule);
-                $message = __('已同步 %{1} 个URL，生成 %{2} 个sitemap文件', [
-                    $result['total_urls_synced'] ?? 0,
-                    $result['total_files_generated'] ?? 0
-                ]);
+                $message = $this->buildDetailedSummary($result);
                 return $this->jsonResponse(true, $message, $result);
             }
             
-            if ($generateAll) {
-                // 生成全站Sitemap
+            if ($generateAll || $websiteId <= 0) {
+                // 全站生成（包括未选择具体站点的情况）
                 $result = $this->generateAllSitemaps();
+                $message = $this->buildAllSitesSummary($result);
             } else {
                 // 生成指定站点Sitemap
-                if ($websiteId <= 0) {
-                    return $this->jsonResponse(false, __('请选择站点'));
-                }
                 $result = $this->generateSitemapForWebsite($websiteId);
+                $message = $this->buildSingleSiteSummary($result);
             }
             
-            return $this->jsonResponse(true, __('Sitemap生成成功'), $result);
+            return $this->jsonResponse(true, $message, $result);
             
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('生成Sitemap失败：%{1}', $e->getMessage()));
@@ -795,7 +791,8 @@ class Sitemap extends BackendController
         }
         
         // 尝试从原始输入解析
-        $rawInput = file_get_contents('php://input');
+        $rawBodyParams = $this->request->getBodyParams();
+        $rawInput = is_string($rawBodyParams) ? $rawBodyParams : (is_array($rawBodyParams) ? json_encode($rawBodyParams) : '');
         if (empty($rawInput)) {
             return [];
         }
@@ -834,5 +831,167 @@ class Sitemap extends BackendController
             return (int)$value !== 0;
         }
         return (bool)$value;
+    }
+
+    /**
+     * 构建 Provider 生成模式的详细摘要（HTML）
+     *
+     * @param array $result generateByProviders() 返回的结果
+     * @return string
+     */
+    private function buildDetailedSummary(array $result): string
+    {
+        $totalUrlsSynced = $result['total_urls_synced'] ?? 0;
+        $totalFilesGenerated = $result['total_files_generated'] ?? 0;
+        $providerResults = $result['provider_results'] ?? [];
+        $sitemapResults = $result['sitemap_results'] ?? [];
+
+        // 概览
+        $siteCount = count($sitemapResults);
+        $providerCount = count($providerResults);
+        $html = '<div style="text-align:left;">';
+        $html .= '<p><strong>' . __('概览') . '</strong></p>';
+        $html .= '<ul style="margin:0;padding-left:1.2em;">';
+        $html .= '<li>' . __('同步 URL 总数：%{1}', $totalUrlsSynced) . '</li>';
+        $html .= '<li>' . __('生成站点数：%{1}', $siteCount) . '</li>';
+        $html .= '<li>' . __('生成文件总数：%{1}', $totalFilesGenerated) . '</li>';
+        $html .= '<li>' . __('URL Provider 数：%{1}', $providerCount) . '</li>';
+        $html .= '</ul>';
+
+        // Provider 明细
+        if (!empty($providerResults)) {
+            $html .= '<hr style="margin:8px 0;"><p><strong>' . __('Provider 同步明细') . '</strong></p>';
+            $html .= '<ul style="margin:0;padding-left:1.2em;">';
+            foreach ($providerResults as $pr) {
+                $icon = ($pr['success'] ?? false) ? '&#9989;' : '&#10060;';
+                $module = $pr['module'] ?? __('未知');
+                $count = $pr['url_count'] ?? 0;
+                $desc = $pr['description'] ?? '';
+                $line = $icon . ' ' . $module . ($desc ? " ({$desc})" : '') . ' — ' . __('%{1} 个URL', $count);
+                if (!($pr['success'] ?? false) && !empty($pr['error'])) {
+                    $line .= ' <span style="color:#dc3545;">(' . htmlspecialchars($pr['error']) . ')</span>';
+                }
+                $html .= '<li>' . $line . '</li>';
+            }
+            $html .= '</ul>';
+        }
+
+        // 各站点生成明细
+        if (!empty($sitemapResults)) {
+            $html .= '<hr style="margin:8px 0;"><p><strong>' . __('各站点生成明细') . '</strong></p>';
+            $html .= '<ul style="margin:0;padding-left:1.2em;">';
+            foreach ($sitemapResults as $sr) {
+                $wid = $sr['website_id'] ?? '?';
+                $urls = $sr['total_urls'] ?? 0;
+                $files = $sr['total_files'] ?? 0;
+                $platforms = $sr['platform_count'] ?? 0;
+                $hasError = !empty($sr['error']);
+                if ($hasError) {
+                    $html .= '<li>&#10060; ' . __('站点 #%{1}：%{2}', [$wid, $sr['message'] ?? __('生成失败')]) . '</li>';
+                } else {
+                    $html .= '<li>&#9989; ' . __('站点 #%{1}：%{2} 个URL，%{3} 个平台，%{4} 个文件', [$wid, $urls, $platforms, $files]) . '</li>';
+                }
+            }
+            $html .= '</ul>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * 构建全站生成模式的摘要（HTML）
+     *
+     * @param array $results generateAllSitemaps() 返回的结果数组
+     * @return string
+     */
+    private function buildAllSitesSummary(array $results): string
+    {
+        $siteCount = count($results);
+        $totalUrls = 0;
+        $totalFiles = 0;
+        $successCount = 0;
+        $failCount = 0;
+
+        foreach ($results as $r) {
+            if (!empty($r['error'])) {
+                $failCount++;
+            } else {
+                $successCount++;
+                $totalUrls += $r['total_urls'] ?? 0;
+                $totalFiles += $r['total_files'] ?? 0;
+            }
+        }
+
+        $html = '<div style="text-align:left;">';
+        $html .= '<p><strong>' . __('概览') . '</strong></p>';
+        $html .= '<ul style="margin:0;padding-left:1.2em;">';
+        $html .= '<li>' . __('处理站点数：%{1}', $siteCount) . '</li>';
+        $html .= '<li>' . __('成功：%{1}，失败：%{2}', [$successCount, $failCount]) . '</li>';
+        $html .= '<li>' . __('URL 总数：%{1}', $totalUrls) . '</li>';
+        $html .= '<li>' . __('生成文件总数：%{1}', $totalFiles) . '</li>';
+        $html .= '</ul>';
+
+        // 各站点明细
+        if (!empty($results)) {
+            $html .= '<hr style="margin:8px 0;"><p><strong>' . __('各站点明细') . '</strong></p>';
+            $html .= '<ul style="margin:0;padding-left:1.2em;">';
+            foreach ($results as $r) {
+                $wid = $r['website_id'] ?? '?';
+                if (!empty($r['error'])) {
+                    $html .= '<li>&#10060; ' . __('站点 #%{1}：%{2}', [$wid, $r['message'] ?? __('生成失败')]) . '</li>';
+                } else {
+                    $urls = $r['total_urls'] ?? 0;
+                    $files = $r['total_files'] ?? 0;
+                    $platforms = $r['platform_count'] ?? 0;
+                    $html .= '<li>&#9989; ' . __('站点 #%{1}：%{2} 个URL，%{3} 个平台，%{4} 个文件', [$wid, $urls, $platforms, $files]) . '</li>';
+                }
+            }
+            $html .= '</ul>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * 构建单站点生成模式的摘要（HTML）
+     *
+     * @param array $result generateSitemapForWebsite() 返回的结果
+     * @return string
+     */
+    private function buildSingleSiteSummary(array $result): string
+    {
+        $wid = $result['website_id'] ?? '?';
+        $urls = $result['total_urls'] ?? 0;
+        $files = $result['total_files'] ?? 0;
+        $platforms = $result['platform_count'] ?? 0;
+        $hasError = !empty($result['error']);
+
+        if ($hasError) {
+            return __('站点 #%{1} 生成失败：%{2}', [$wid, $result['message'] ?? __('未知错误')]);
+        }
+
+        $html = '<div style="text-align:left;">';
+        $html .= '<p><strong>' . __('站点 #%{1} 生成完毕', $wid) . '</strong></p>';
+        $html .= '<ul style="margin:0;padding-left:1.2em;">';
+        $html .= '<li>' . __('URL 数量：%{1}', $urls) . '</li>';
+        $html .= '<li>' . __('平台数量：%{1}', $platforms) . '</li>';
+        $html .= '<li>' . __('生成文件数：%{1}', $files) . '</li>';
+        $html .= '</ul>';
+
+        // 平台明细
+        if (!empty($result['platforms'])) {
+            $html .= '<hr style="margin:8px 0;"><p><strong>' . __('平台明细') . '</strong></p>';
+            $html .= '<ul style="margin:0;padding-left:1.2em;">';
+            foreach ($result['platforms'] as $platform => $info) {
+                $pFiles = is_array($info) ? ($info['file_count'] ?? count($info['files'] ?? [])) : 0;
+                $html .= '<li>' . htmlspecialchars($platform) . ' — ' . __('%{1} 个文件', $pFiles) . '</li>';
+            }
+            $html .= '</ul>';
+        }
+
+        $html .= '</div>';
+        return $html;
     }
 }

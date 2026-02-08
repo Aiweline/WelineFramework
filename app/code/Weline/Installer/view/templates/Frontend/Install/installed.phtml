@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="<?= $this->getLang() ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?> - Weline Framework</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --warning-color: #f59e0b;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-color) 0%, #1e1b4b 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 3rem;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        .icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(245, 158, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--warning-color);
+        }
+        
+        p {
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+        
+        .btn {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #4f46e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #4338ca;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">🔒</div>
+        <h1><?= $title ?></h1>
+        <p><?= $message ?></p>
+        <a href="/" class="btn"><?= __('返回首页') ?></a>
+    </div>
+</body>
+</html>

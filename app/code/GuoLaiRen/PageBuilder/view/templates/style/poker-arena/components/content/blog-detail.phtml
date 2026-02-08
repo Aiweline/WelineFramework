@@ -1,0 +1,92 @@
+<?php
+/**
+ * PokerArena - Blog Detail Component
+ * 
+ * Blog post detail page with content, sharing, and related articles
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.show_sidebar => 显示侧边栏:select:no|yes,no
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['section_bg_1'] ?? '#071209';
+$textPrimary = $colors['text_primary'] ?? '#ecfdf5';
+$textSecondary = $colors['text_secondary'] ?? '#86efac';
+$textMuted = $colors['text_muted'] ?? '#6b8f7a';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#10b981';
+$accentSecondaryLight = $colors['accent_secondary_light'] ?? '#fbbf24';
+$borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
+
+$contentWidth = $config['layout.content_width'] ?? 'narrow';
+$maxWidth = $contentWidth === 'wide' ? '1000px' : ($contentWidth === 'medium' ? '800px' : '700px');
+
+$page = $this->getData('page');
+$postTitle = $page ? ($page->getData('title') ?? 'Blog Post') : 'Blog Post';
+$postContent = $page ? ($page->getData('content') ?? '') : '';
+$postDate = $page ? ($page->getData('created_at') ?? '') : '';
+$postCategory = $page ? ($page->getData('category') ?? 'Strategy') : 'Strategy';
+
+$instanceId = 'pa-blog-detail-' . uniqid();
+?>
+
+<section class="pa-blog-detail" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 60px 0 100px; }
+        #<?= $instanceId ?> .pa-blog-detail-container { max-width: <?= $maxWidth ?>; margin: 0 auto; padding: 0 20px; }
+        
+        #<?= $instanceId ?> .pa-blog-detail-header { margin-bottom: 40px; }
+        
+        #<?= $instanceId ?> .pa-blog-detail-category {
+            display: inline-block; padding: 6px 14px; background: rgba(4, 120, 87, 0.15);
+            border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+            color: <?= $accentPrimaryLight ?>; margin-bottom: 16px; text-transform: uppercase;
+        }
+        
+        #<?= $instanceId ?> .pa-blog-detail-title { font-size: 2.5rem; font-weight: 800; color: <?= $textPrimary ?>; margin-bottom: 16px; line-height: 1.2; }
+        #<?= $instanceId ?> .pa-blog-detail-meta { font-size: 0.9rem; color: <?= $textMuted ?>; }
+        
+        #<?= $instanceId ?> .pa-blog-detail-content {
+            font-size: 1.05rem; color: <?= $textSecondary ?>; line-height: 1.8;
+        }
+        
+        #<?= $instanceId ?> .pa-blog-detail-content h2 { font-size: 1.75rem; font-weight: 700; color: <?= $textPrimary ?>; margin: 40px 0 16px; }
+        #<?= $instanceId ?> .pa-blog-detail-content h3 { font-size: 1.35rem; font-weight: 700; color: <?= $textPrimary ?>; margin: 32px 0 12px; }
+        #<?= $instanceId ?> .pa-blog-detail-content p { margin-bottom: 20px; }
+        #<?= $instanceId ?> .pa-blog-detail-content a { color: <?= $accentSecondaryLight ?>; text-decoration: underline; }
+        #<?= $instanceId ?> .pa-blog-detail-content ul, #<?= $instanceId ?> .pa-blog-detail-content ol { margin: 16px 0; padding-left: 24px; }
+        #<?= $instanceId ?> .pa-blog-detail-content li { margin-bottom: 8px; list-style: disc; }
+        #<?= $instanceId ?> .pa-blog-detail-content blockquote { border-left: 3px solid <?= $accentPrimaryLight ?>; padding: 16px 24px; margin: 24px 0; background: rgba(4, 120, 87, 0.08); border-radius: 0 8px 8px 0; font-style: italic; }
+        
+        #<?= $instanceId ?> .pa-blog-detail-divider { height: 1px; background: <?= $borderLight ?>; margin: 40px 0; }
+        
+        @media (max-width: 768px) { #<?= $instanceId ?> .pa-blog-detail-title { font-size: 1.75rem; } }
+        @media (max-width: 576px) { #<?= $instanceId ?> { padding: 40px 0 60px; } }
+    </style>
+    
+    <div class="pa-blog-detail-container">
+        <div class="pa-blog-detail-header">
+            <span class="pa-blog-detail-category"><?= htmlspecialchars($postCategory) ?></span>
+            <h1 class="pa-blog-detail-title"><?= htmlspecialchars($postTitle) ?></h1>
+            <?php if ($postDate): ?>
+            <div class="pa-blog-detail-meta"><?= htmlspecialchars($postDate) ?></div>
+            <?php endif; ?>
+        </div>
+        
+        <div class="pa-blog-detail-content">
+            <?= $postContent ?>
+        </div>
+        
+        <div class="pa-blog-detail-divider"></div>
+    </div>
+</section>

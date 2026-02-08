@@ -48,6 +48,18 @@ return [
     // 会话配置
     'session' => [
         'default' => 'file',  // 默认会话驱动：file, mysql, redis
+        
+        // WLS 模式 Session 托管配置
+        // 在 WLS 常驻内存模式下，是否使用内存 Session 驱动（WlsMemorySession）
+        // - true（默认）：使用 WlsMemorySession，内存 + 文件双写，性能最佳
+        //   优点：读写走进程内存，响应速度快；同时写文件保证 Worker 重启后可恢复
+        //   缺点：跨 Worker 进程的 Session 需要通过文件同步，首次读取会读文件
+        // - false：使用原生 PHP Session 机制（session_start）
+        //   优点：兼容性好，Session 数据立即持久化
+        //   缺点：每个请求都要读写文件，性能较低
+        // 开发阶段建议设为 false，避免频繁重启 WLS 导致 Session 丢失
+        'wls_managed' => true,
+        
         'drivers' => [
             'file' => [
                 'path' => 'var/session/',  // 会话文件存储路径
@@ -198,11 +210,30 @@ return [
         'slaves' => [],
     ],
     
-    // 管理后台密钥（生产环境请使用强密钥）
-    'admin' => 'Be7KAJpVt3bwMMejUZa7VbevRM5GVxjQ',
-    
-    // API管理密钥（生产环境请使用强密钥）
-    'api_admin' => '7r1XLapP8oNBJc6grWtUlUqA42e6GZWQ',
+    // 区域路由前缀配置
+    // 用于定义各区域的 URL 前缀
+    // - backend: 后台管理区域，使用随机密钥作为前缀增强安全性
+    // - rest_frontend: 前端 REST API，公开接口，使用简短易记的前缀
+    // - rest_backend: 后台 REST API，管理接口，使用随机密钥
+    // - frontend: 前端页面区域，无需配置（默认无前缀）
+    // 访问路径示例：
+    //   后台管理：https://your-domain.com/{backend.prefix}/dashboard
+    //   前端API：https://your-domain.com/{rest_frontend.prefix}/products
+    //   后台API：https://your-domain.com/{rest_backend.prefix}/users
+    'area_routes' => [
+        'backend' => [
+            'prefix' => 'Be7KAJpVt3bwMMejUZa7VbevRM5GVxjQ',  // 生产环境请使用强密钥
+            'description' => '后台管理',
+        ],
+        'rest_frontend' => [
+            'prefix' => 'api',  // 公开 API，使用简短前缀
+            'description' => '前端 REST API',
+        ],
+        'rest_backend' => [
+            'prefix' => '7r1XLapP8oNBJc6grWtUlUqA42e6GZWQ',  // 生产环境请使用强密钥
+            'description' => '后台 REST API',
+        ],
+    ],
     
     // 用户标识 运行命令会检测用户，防止框架命令被非运行用户执行，导致文件权限问题
     'user' => 'your_username',
@@ -214,7 +245,16 @@ return [
     'server' => [
         // 基础配置
         'host' => '127.0.0.1',      // 监听地址（127.0.0.1=本地, 0.0.0.0=所有网卡）
-        'port' => 9981,             // 监听端口（默认 9981）
+        'port' => 443,              // 监听端口（默认 80/443 省 Nginx；HTTPS 用 443；改 9981 等可自定义）
+        'https' => true,            // 是否 HTTPS（WLS server:start 默认启用 HTTPS；http:request 据此构建请求 URL）
+        
+        // HTTP 重定向配置（HTTPS 模式专用）
+        // HTTPS 模式下会自动启动一个 HTTP Redirect Worker，将 HTTP 请求 301 重定向到 HTTPS
+        // 该 Worker 不加载框架代码，资源占用极低
+        // 'http_redirect_port' => 80,  // HTTP 重定向监听端口（可选）
+                                        // - 不配置时：自动计算（HTTPS端口 - 463，如 443→80, 9443→9980）
+                                        // - 配置 0：禁用 HTTP 重定向
+                                        // - 配置其他端口：使用指定端口
         
         // Worker 进程配置
         'worker_count' => 'auto',   // Worker 进程数：
@@ -228,6 +268,52 @@ return [
                                     // - 'cpu': CPU密集型（Worker = CPU）
         'max_connections' => 10000, // 单进程最大连接数（默认 10000）
         'max_request' => 100000,    // 单进程最大请求数后重启（0=不重启）
+        
+        // 热重载配置（开发模式专用）
+        'hot_reload' => false,      // 是否启用热重载（仅在非守护进程模式下生效）
+        'watch_dirs' => [           // 监控的目录（相对于项目根目录）
+            'app/code',
+            'app/etc',
+        ],
+        'watch_interval' => 1,      // 文件变更检查间隔（秒）
+        
+        // 维护模式检查间隔（WLS 性能优化）
+        // 在 WLS 模式下，维护模式状态会缓存在进程内存中
+        // 此参数控制多久重新检查一次文件标志
+        // - 值越小：响应越快（设置维护模式后几乎立即生效），但文件检查频率越高
+        // - 值越大：响应越慢，但性能越好
+        // - 默认 1 秒：平衡响应速度和性能
+        'maintenance_check_interval' => 1.0,
+        
+        // CLI 命令执行后触发 WLS 重载的前缀（白名单）
+        // 仅此处列出的命令前缀会触发重载；code=代码重载（Worker 重启），cache=仅清缓存
+        // 'reload_prefixes' => [
+        //     'code' => ['setup:', 'command:'],
+        //     'cache' => ['cache:'],
+        // ],
+        
+        // ========== WLS 内存缓存配置 ==========
+        // Worker 进程内的内存缓存，用于加速静态文件响应
+        // 采用冷热淘汰策略：根据访问频率和最近访问时间智能淘汰
+        'cache' => [
+            // 静态文件缓存总上限
+            // - 'auto'：智能模式，根据系统内存自动计算（系统内存的 2%，最小 32MB，最大 256MB）
+            // - '100M'/'100MB'：指定大小（支持 K/KB/M/MB/G/GB 单位）
+            // - 数字：直接指定字节数
+            'static_file_max_total' => 'auto',
+            
+            // 单个静态文件最大缓存大小（超过此大小的文件不缓存，直接从磁盘读取）
+            // 默认 1MB，避免大文件占用过多缓存空间
+            'static_file_max_size' => '1M',
+            
+            // 淘汰阈值：当缓存剩余空间低于此值时，开始冷热淘汰
+            // 默认 5MB，确保有足够空间容纳新缓存项
+            'eviction_threshold' => 5242880,  // 5MB
+            
+            // 启动时内存检查
+            // 如果系统可用内存低于缓存配置 + 50MB 预留，将自动缩减缓存大小
+            // 如果严重不足（低于需求的 50%），Worker 将拒绝启动
+        ],
         
         // 运行时状态（自动管理，无需手动配置）
         'pid' => null,              // 主进程 PID
@@ -307,5 +393,16 @@ return [
     // 国际化配置（旧版配置，建议使用 translation 配置）
     'i18n' => [
         'translate_mode' => 'default',  // 翻译模式：default, online（已废弃，请使用 translation.mode）
+    ],
+    
+    // 系统配置
+    'system' => [
+        // 进程管理器配置（Processer）
+        'processer' => [
+            // 是否启用进程管理日志（默认 false，关闭日志）
+            // 包含：进程生命周期日志（lifecycle.log）、进程输出日志（*.log）
+            // 开发调试时可设为 true，生产环境建议保持 false 以减少磁盘 I/O
+            'log' => false,
+        ],
     ],
 ];

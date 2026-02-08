@@ -117,5 +117,11 @@ interface HookInterface
      * 命名格式：Weline_Admin::backend::layouts::dashboard::main-overview
      */
     const ADMIN_BACKEND_DASHBOARD_MAIN_OVERVIEW = 'Weline_Admin::backend::layouts::dashboard::main-overview';
+
+    // ==================== DeveloperWorkspace Dev Tool Panel ====================
+    /** 开发工具面板 - 在标签栏「耗时统计」之后注入扩展标签 */
+    const DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER = 'Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::tabs-after';
+    /** 开发工具面板 - 在搜索区域之后注入扩展标签的搜索区与注册脚本 */
+    const DEVELOPER_WORKSPACE_DEVTOOL_PANEL_SEARCH_AREAS_AFTER = 'Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::search-areas-after';
 }
 

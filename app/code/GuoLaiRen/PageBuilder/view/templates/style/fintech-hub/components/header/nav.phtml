@@ -1,0 +1,285 @@
+<?php
+/**
+ * FinTech Hub - Header Navigation Component
+ * 
+ * 导航组件，支持从子页面动态获取导航项
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.image => Logo图片URL:textarea:|留空使用默认文字Logo
+ * logo.text => Logo文字:text:VaultPay
+ * logo.width => Logo宽度:number:40|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.items => 导航项配置:textarea:Features=>#features\r\nServices=>#services\r\nAbout=>#stats\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Open Account
+ * navigation.cta_url => CTA按钮链接:text:#hero
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$navBg = $colors['nav_bg'] ?? 'rgba(8, 11, 22, 0.95)';
+$navText = $colors['nav_text'] ?? '#f8fafc';
+$navLink = $colors['nav_link'] ?? '#94a3b8';
+$navLinkHover = $colors['nav_link_hover'] ?? '#3b82f6';
+$accentPrimary = $colors['accent_primary'] ?? '#2563eb';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+
+// Logo配置
+$showLogo = ($config['logo.display'] ?? 'yes') !== 'no';
+$logoImage = $config['logo.image'] ?? '';
+$logoText = $config['logo.text'] ?? 'VaultPay';
+$logoWidth = $config['logo.width'] ?? 40;
+
+// 导航配置
+$navItemsRaw = $config['navigation.items'] ?? "Features=>#features\nServices=>#services\nAbout=>#stats\nFAQ=>#faq\nContact=>/contact";
+$showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
+$ctaText = $config['navigation.cta_text'] ?? 'Open Account';
+$ctaUrl = $config['navigation.cta_url'] ?? '#hero';
+
+// 解析导航项
+$navItems = [];
+$lines = preg_split('/[\r\n]+/', $navItemsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    
+    if (!empty($name)) {
+        $navItems[] = [
+            'name' => $name,
+            'url' => $url ?: '#',
+        ];
+    }
+}
+
+$instanceId = 'fh-nav-' . uniqid();
+?>
+
+<nav class="fh-nav" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            padding: 0 20px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: <?= $navText ?>;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-logo img {
+            height: <?= $logoWidth ?>px;
+            width: auto;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-logo-icon {
+            width: <?= $logoWidth ?>px;
+            height: <?= $logoWidth ?>px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-logo-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: #ffffff;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-link {
+            color: <?= $navLink ?>;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-link:hover {
+            color: <?= $navLinkHover ?>;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: <?= $accentPrimary ?>;
+            transition: width 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-link:hover::after {
+            width: 100%;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-cta {
+            padding: 10px 20px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
+        }
+        
+        #<?= $instanceId ?> .fh-nav-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        
+        #<?= $instanceId ?> .fh-nav-toggle span {
+            width: 24px;
+            height: 2px;
+            background: <?= $navText ?>;
+            transition: all 0.3s ease;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .fh-nav-menu {
+                position: fixed;
+                top: 80px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: <?= $navBg ?>;
+                flex-direction: column;
+                justify-content: flex-start;
+                padding: 40px 20px;
+                gap: 0;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-menu.active {
+                transform: translateX(0);
+            }
+            
+            #<?= $instanceId ?> .fh-nav-links {
+                flex-direction: column;
+                width: 100%;
+                gap: 0;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-link {
+                display: block;
+                padding: 16px 0;
+                font-size: 1.1rem;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                width: 100%;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-link::after {
+                display: none;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-cta {
+                margin-top: 24px;
+                width: 100%;
+                text-align: center;
+                padding: 16px;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-toggle {
+                display: flex;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-toggle.active span:nth-child(1) {
+                transform: rotate(45deg) translate(5px, 5px);
+            }
+            
+            #<?= $instanceId ?> .fh-nav-toggle.active span:nth-child(2) {
+                opacity: 0;
+            }
+            
+            #<?= $instanceId ?> .fh-nav-toggle.active span:nth-child(3) {
+                transform: rotate(-45deg) translate(5px, -5px);
+            }
+        }
+    </style>
+    
+    <!-- Logo -->
+    <?php if ($showLogo): ?>
+    <a href="/" class="fh-nav-logo">
+        <?php if ($logoImage): ?>
+            <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+        <?php else: ?>
+            <span class="fh-nav-logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+            </span>
+        <?php endif; ?>
+        <span><?= htmlspecialchars($logoText) ?></span>
+    </a>
+    <?php endif; ?>
+    
+    <!-- Mobile Toggle -->
+    <button class="fh-nav-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .fh-nav-menu').classList.toggle('active');">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    
+    <!-- Navigation Menu -->
+    <div class="fh-nav-menu">
+        <div class="fh-nav-links">
+            <?php foreach ($navItems as $item): ?>
+            <a href="<?= htmlspecialchars($item['url']) ?>" class="fh-nav-link"><?= htmlspecialchars($item['name']) ?></a>
+            <?php endforeach; ?>
+        </div>
+        
+        <?php if ($showCta): ?>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="fh-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
+        <?php endif; ?>
+    </div>
+</nav>

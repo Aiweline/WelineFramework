@@ -1,3 +1,54 @@
+阿里云域名,"Aliyun Domains"
+"阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","Aliyun domain registration service, supporting domain registration, renewal, DNS resolution, and domain trading."
+区域,Region
+华东1（杭州）,"East China 1 (Hangzhou)"
+华东2（上海）,"East China 2 (Shanghai)"
+华北2（北京）,"North China 2 (Beijing)"
+华南1（深圳）,"South China 1 (Shenzhen)"
+亚太东南（新加坡）,"Asia Pacific Southeast (Singapore)"
+"AccessKey ID 和 AccessKey Secret 不能为空","AccessKey ID and AccessKey Secret cannot be empty"
+"阿里云域名适配器尚未完成 API 对接，请稍后再试。","Aliyun domain adapter API integration not yet complete. Please try again later."
+"Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
+"Access Key ID","Access Key ID"
+"Secret Access Key","Secret Access Key"
+"API Key 和 Secret 不能为空","API Key and Secret cannot be empty"
+"AWS Route53 适配器尚未完成 API 对接，请稍后再试。","AWS Route53 adapter API integration not yet complete. Please try again later."
+"Microsoft Azure 域名注册与 DNS 管理服务，支持域名注册和 Azure DNS Zone 管理。","Microsoft Azure domain registration and DNS management service, supporting domain registration and Azure DNS Zone management."
+"客户端 ID (Client ID)","Client ID"
+"客户端密钥 (Client Secret)","Client Secret"
+"订阅 ID (Subscription ID)","Subscription ID"
+"租户 ID (Tenant ID)","Tenant ID"
+"Client ID 和 Client Secret 不能为空","Client ID and Client Secret cannot be empty"
+"Azure DNS 适配器尚未完成 API 对接，请稍后再试。","Azure DNS adapter API integration not yet complete. Please try again later."
+获取域名商列表失败：%{error},"Failed to get registrar list: %{error}"
+获取账号列表失败：%{error},"Failed to get account list: %{error}"
+域名商渠道和账号名称不能为空,"Registrar provider and account name are required"
+未找到域名商适配器：%{code},"Registrar adapter not found: %{code}"
+账号不存在,"Account not found"
+保存成功,"Saved successfully"
+保存失败：%{error},"Save failed: %{error}"
+"账号 ID 不能为空","Account ID is required"
+删除成功,"Deleted successfully"
+删除失败：%{error},"Delete failed: %{error}"
+连接测试成功,"Connection test successful"
+连接测试失败,"Connection test failed"
+连接测试失败：%{error},"Connection test failed: %{error}"
+连接测试异常：%{error},"Connection test error: %{error}"
+获取适配器列表失败：%{error},"Failed to get adapter list: %{error}"
+请选择域名商账号并输入域名,"Please select an account and enter domains"
+域名列表不能为空,"Domain list cannot be empty"
+域名商账号不存在,"Registrar account not found"
+未找到对应的域名商适配器,"Corresponding registrar adapter not found"
+检查可用性失败：%{error},"Check availability failed: %{error}"
+请选择域名商账号并添加购买域名,"Please select an account and add domains to purchase"
+购买失败：%{error},"Purchase failed: %{error}"
+获取订单列表失败：%{error},"Failed to get order list: %{error}"
+"订单 ID 不能为空","Order ID is required"
+订单不存在,"Order not found"
+获取订单详情失败：%{error},"Failed to get order detail: %{error}"
+请至少填写一个网站地址（域名或域名/子路径）,请至少填写一个网站地址（域名或域名/子路径）
+"该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）","The domain root path is already used by site 「%{1}」. Please use a subpath (e.g. /shop)"
+"该地址 %{1} 已被站点「%{2}」使用","The address %{1} is already used by site 「%{2}」"
 网站保存失败，未能获取网站ID,网站保存失败，未能获取网站ID
 网站添加成功,网站添加成功
 "网站添加失败: %{1}","网站添加失败: %{1}"
@@ -34,16 +85,154 @@
 "HTTPS 状态同步失败：%{1}","HTTPS status sync failed: %{1}"
 网站保存后,网站保存后
 网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
+域名购买成功,"Domain Purchase Success"
+"域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
+"域名商适配器扩展点，用于接入第三方域名注册商 API（如 GoDaddy、Namecheap 等）。适配器实现域名可用性检查、购买和管理功能。","Domain registrar adapter extension point for integrating third-party domain registrar APIs (e.g., GoDaddy, Namecheap). Adapters implement domain availability checking, purchasing, and management."
+"域名商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建PHP文件","Domain registrar adapter implementation class. Create a PHP file in the module's extends/module/Weline_Websites/Registrar/ directory."
+"必须实现 DomainRegistrarInterface 接口","Must implement DomainRegistrarInterface interface"
+返回适配器唯一标识,"Returns adapter unique identifier"
+返回适配器显示名称,"Returns adapter display name"
+返回适配器描述,"Returns adapter description"
+返回适配器版本,"Returns adapter version"
+返回适配器所需的配置字段定义,"Returns adapter required configuration field definitions"
+"测试 API 连通性","Test API connectivity"
+检查域名可用性,"Check domain availability"
+批量检查域名可用性,"Batch check domain availability"
+购买域名,购买域名
+获取已有域名列表,"Get existing domain list"
+获取域名详情,"Get domain detail"
+"GoDaddy、Namecheap、Dynadot 等域名商适配器可通过此扩展点接入","GoDaddy, Namecheap, Dynadot and other registrar adapters can be integrated through this extension point"
+域名管理标签页导航,"Domain Management Tab Navigation"
+"在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","Dynamically append tab buttons in the domain management page navigation area. Other modules (e.g., Server module certificate management) can inject new tabs via this Hook."
+域名管理标签页内容,"Domain Management Tab Content"
+"在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","Dynamically append tab content panels in the domain management page. Used together with the tabs Hook to inject corresponding Tab content."
+域名购买条目表,"Domain Purchase Item Table"
+条目ID,"Item ID"
+订单ID,"Order ID"
+域名,Domain
+购买年限,"Purchase Years"
+绑定站点ID,"Bound Site ID"
+是否自动建站,"Auto-create Site"
+状态,Status
+失败原因,"Error Message"
+价格,Price
+币种,Currency
+创建时间,"Created At"
+域名购买订单表,"Domain Purchase Order Table"
+域名商账号ID,"Registrar Account ID"
+订单号,"Order No."
+域名总数,"Total Domains"
+成功数,"Success Count"
+失败数,"Fail Count"
+更新时间,更新时间
+域名商渠道表,"Domain Registrar Table"
+域名商ID,"Registrar ID"
+适配器标识,"Adapter Code"
+显示名称,"Display Name"
+描述,Description
+域名商账号表,"Registrar Account Table"
+账号ID,"Account ID"
+账号名称,"Account Name"
+"API Key","API Key"
+"API Secret","API Secret"
+额外配置JSON,"Extra Config JSON"
 获取域名列表失败：%{1},"Get domain list failed: %{1}"
 "回退 HTTPS 状态失败：%{1}","Rollback HTTPS status failed: %{1}"
 "同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
 更新证书状态失败：%{1},"Update certificate status failed: %{1}"
 "货币 %{1} 不被当前网站允许","货币 %{1} 不被当前网站允许"
 "语言 %{1} 不被当前网站允许","语言 %{1} 不被当前网站允许"
+购买条目不能为空,"Purchase items cannot be empty"
+购买失败,"Purchase failed"
+"购买完成：%{success} 成功，%{fail} 失败","Purchase completed: %{success} succeeded, %{fail} failed"
+"域名入池失败: %{domain}, 错误: %{error}","Failed to add domain to pool: %{domain}, error: %{error}"
+"域名绑站失败: %{domain}, 错误: %{error}","Failed to bind domain to site: %{domain}, error: %{error}"
+"从 ExtendsData 扫描域名商适配器失败:","从 ExtendsData 扫描域名商适配器失败:"
+"加载域名商适配器失败: %{file}, 错误: %{error}","Failed to load domain registrar adapter: %{file}, error: %{error}"
 访问正常,"Access OK"
 "HTTPS 证书无效，已自动回退 HTTP","HTTPS certificate invalid, automatically rolled back to HTTP"
 "HTTP %{1}","HTTP %{1}"
-"Weline Admin 管理面板","Weline Admin 管理面板"
+域名服务,"Domain Service"
+"Weline Admin 管理面板","Weline Admin Panel"
+后台,Backend
+网站服务,"Website Service"
+域名商管理,"Registrar Management"
+域名购买,"Domain Purchase"
+批量购买域名,"Bulk Domain Purchase"
+选择域名商账号,"Select Registrar Account"
+请选择域名商账号,"Select a registrar account"
+域名列表（一行一个）,"Domain list (one per line)"
+"example.com\nmysite.net\nshop.org","example.com\nmysite.net\nshop.org"
+每行一个域名，支持批量输入多个域名。,"One domain per line. Supports bulk input."
+检查可用性,"Check Availability"
+检查结果,Results
+"请在左侧输入域名并点击""检查可用性""。","请在左侧输入域名并点击""检查可用性""。"
+"0 个可用域名","0 available domains"
+批量购买,"Bulk Purchase"
+购买记录,"Purchase History"
+购买完成后会在此处显示记录。,"Purchase records will be shown here after completion."
+请先选择域名商账号,"Please select a registrar account first"
+请输入域名,"Please enter domains"
+正在检查域名可用性...,"Checking domain availability..."
+检查失败,"Check failed"
+请求失败,"Request failed"
+年限,年限
+绑定站点,绑定站点
+可用,Available
+不可用,Unavailable
+不绑定,"No binding"
+自动新建站点,"Auto-create site"
+个可用域名,"available domains"
+没有可用的域名可以购买,"No available domains to purchase"
+确认购买,"Confirm Purchase"
+即将购买,"About to purchase"
+个域名，确认继续？,"domain(s). Continue?"
+取消,Cancel
+正在提交购买请求...,"Submitting purchase request..."
+购买请求已提交,"Purchase request submitted"
+数量,Count
+时间,Time
+域名商账号管理,"Registrar Account Management"
+添加账号,"Add Account"
+"暂无域名商账号，请点击""添加账号""配置域名服务商。","暂无域名商账号，请点击""添加账号""配置域名服务商。"
+渠道,Provider
+操作,Actions
+正常,Active
+禁用,Disabled
+测试连接,"Test Connection"
+编辑,Edit
+删除,Delete
+域名商账号配置,"Registrar Account Configuration"
+域名商渠道,"Registrar Provider"
+请选择域名商,"Select a registrar"
+如：主账号、生产环境,"e.g. Primary Account, Production"
+留空表示不修改（编辑时）,"Leave empty to keep unchanged (when editing)"
+如：us-east-1、cn-hangzhou,"e.g. us-east-1, cn-hangzhou"
+启用,Enable
+额外配置,"Extra Config"
+"如：{""tenant_id"": ""xxx""}","如：{""tenant_id"": ""xxx""}"
+保存,Save
+添加域名商账号,"Add Registrar Account"
+编辑域名商账号,"Edit Registrar Account"
+保存失败,"Save failed"
+确认删除,"Confirm Delete"
+删除后无法恢复，确定要删除此账号吗？,"This action cannot be undone. Are you sure you want to delete this account?"
+确定删除,确定删除
+删除失败,"Delete failed"
+正在测试连接...,"Testing connection..."
+连接成功,"Connection successful"
+连接失败,"Connection failed"
+测试失败,"Test failed"
+选择域名,"Select Domain"
+从域名池多选域名；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。,"Multi-select from domain pool; code and addresses will auto-fill. Use different sub-paths when same domain is used by multiple sites."
+网站名称,"Website Name"
+请输入网站名称,"Please enter website name"
+网站代码,"Website Code"
+请输入网站代码,"Please enter website code"
+可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
+网站地址,"Website Addresses"
+请至少填写一行地址,"Please enter at least one address line"
+"每行一个地址：可只填域名，或 域名/子路径（如 /shop）。同一域名被多站使用时子路径不能重复，否则会提示已被某站点使用。","One address per line: domain only or domain/subpath (e.g. /shop). Subpath must be unique when same domain is used by multiple sites."
 "业务范围 (Scope)","业务范围 (Scope)"
 如：page_builder、catalog,如：page_builder、catalog
 用于标识站点的业务来源，留空表示通用站点。由系统自动设置，通常无需手动修改。,用于标识站点的业务来源，留空表示通用站点。由系统自动设置，通常无需手动修改。
@@ -52,8 +241,7 @@
 绑定后将自动提交sitemap到该SEO账户的搜索引擎,绑定后将自动提交sitemap到该SEO账户的搜索引擎
 SEO账户管理请前往：,SEO账户管理请前往：
 "SEO管理 > 账户管理","SEO管理 > 账户管理"
-面板,面板
-后台,后台
+面板,Panel
 网站备份,网站备份
 提示,提示
 网站备份功能正在开发中，敬请期待。,网站备份功能正在开发中，敬请期待。
@@ -69,10 +257,7 @@ SEO账户管理请前往：,SEO账户管理请前往：
 网站,网站
 类型,类型
 大小,大小
-创建时间,创建时间
-操作,操作
 下载,下载
-删除,删除
 暂无备份文件,暂无备份文件
 创建备份失败,创建备份失败
 下载备份,下载备份
@@ -84,12 +269,9 @@ SEO账户管理请前往：,SEO账户管理请前往：
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,开启维护模式后，前台将显示维护页面，但后台仍可正常访问。
 网站列表,网站列表
 网站ID,网站ID
-网站名称,网站名称
-域名,域名
 维护模式,维护模式
 暂无网站,暂无网站
 维护中,维护中
-正常,正常
 关闭维护模式,关闭维护模式
 开启维护模式,开启维护模式
 开启,开启
@@ -98,9 +280,6 @@ SEO账户管理请前往：,SEO账户管理请前往：
 维护模式吗？,维护模式吗？
 操作失败,操作失败
 确认,确认
-取消,取消
-删除成功,删除成功
-删除失败,删除失败
 删除请求失败,删除请求失败
 确认删除吗？,确认删除吗？
 搜索菜单,搜索菜单
@@ -133,7 +312,6 @@ RTL模式,RTL模式
 域名池,"Domain Pool"
 根域名,"Root Domain"
 子路径,"Sub Path"
-选择域名,"Select Domain"
 从域名池选择,"Select from Domain Pool"
 添加到域名池,"Add to Domain Pool"
 域名描述,"Domain Description"
@@ -154,3 +332,8 @@ RTL模式,RTL模式
 支持HTTPS,"HTTPS Enabled"
 不支持HTTPS,"HTTPS Disabled"
 有效URL,"Effective URL"
+证书管理,"Certificate Management"
+"暂无域名商账号，请点击添加账号""配置域名服务商。""","No registrar accounts yet. Click ""Add Account"" to configure a domain service provider."
+"请在左侧输入域名并点击检查可用性""。""","Enter domains on the left and click ""Check Availability""."
+"适用于接入更多域名注册商 API，第三方模块可以通过 extends 机制扩展新的域名商","Applicable for integrating more domain registrar APIs. Third-party modules can extend new registrars through the extends mechanism."
+"从 ExtendsData 扫描域名商适配器失败: ","Failed to scan domain registrar adapters from ExtendsData: "

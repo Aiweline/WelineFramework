@@ -1,6 +1,5 @@
 客服人员管理,客服人员管理
 加载客服人员失败：%{1},"Failed to load service agents: %{1}"
-无效的请求方法,"Invalid request method"
 客服名称不能为空,"Service agent name cannot be empty"
 邮箱格式不正确,"Invalid email format"
 请选择后台用户,"Please select a backend user"
@@ -33,6 +32,7 @@
 无权关闭此会话,无权关闭此会话
 会话已关闭,"Session closed"
 关闭会话失败：%{1},"Failed to close session: %{1}"
+获取客服状态失败：%{1},"Failed to get agent status: %{1}"
 会话管理,"Session Management"
 加载会话失败：%{1},"Failed to load sessions: %{1}"
 会话详情,会话详情
@@ -57,6 +57,7 @@
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
 客服系统,"Customer Service System"
 客服服务,"Customer Service"
+检测中...,Checking...
 设置,Settings
 收起,Minimize
 我的语言,"My Language"
@@ -102,6 +103,9 @@
 分钟,minutes
 最长,Longest
 秒,seconds
+客服在线,"Customer Service Online"
+"AI 智能客服","AI Customer Service"
+客服离线,"Customer Service Offline"
 请输入有效的邮箱地址,"Please enter a valid email address"
 会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
 验证邮件已发送，请查收您的邮箱,"Verification email sent, please check your email"
@@ -150,6 +154,11 @@ ID,ID
 默认客服语言,"Default Agent Language"
 English,English
 默认客户语言,"Default Customer Language"
+"当没有客服人员在线时，可启用 AI 自动回复客户消息。","When no service agents are online, AI can be enabled to automatically reply to customer messages."
+"启用 AI 自动回复","Enable AI Auto-Reply"
+"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","When enabled, the client will display blue 'AI Customer Service' status instead of gray 'Offline'"
+"AI 模型","AI Model"
+"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","AI model identifier, configure the corresponding provider in the Weline_Ai module"
 保存配置,"Save Configuration"
 客服,Agent
 工作量统计,"Workload Statistics"
@@ -194,6 +203,7 @@ English,English
 如有问题，请,"If you have any questions, please"
 联系客服,"Contact Customer Service"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"This page is for standalone chat interface. The actual chat function is available through the floating button in the bottom right corner."
+无效的请求方法,"Invalid request method"
 添加客服功能待实现,"Add agent feature to be implemented"
 编辑客服功能待实现,"Edit agent feature to be implemented"
 源文本,翻译文本

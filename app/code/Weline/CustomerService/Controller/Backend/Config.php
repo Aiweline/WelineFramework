@@ -55,14 +55,11 @@ class Config extends BackendController
 
     /**
      * 保存配置
+     * POST /customerservice/backend/config/save
      */
     #[Acl('Weline_CustomerService::config_save', '保存客服配置', 'mdi-content-save', '保存客服配置')]
-    public function save(): string
+    public function postSave(): string
     {
-        if (!$this->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $configs = $this->request->getPost('config', []);
 

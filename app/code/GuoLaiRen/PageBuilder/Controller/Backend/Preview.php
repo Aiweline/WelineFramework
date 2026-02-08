@@ -443,8 +443,8 @@ class Preview extends BackendController
     {
         try {
             // 获取 JSON 请求体
-            $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody ?? '', true);
+            $bodyParams = $this->request->getBodyParams();
+            $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
             
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data) {
@@ -620,7 +620,7 @@ class Preview extends BackendController
             error_log('🔵 resetFieldsToDefault 接口被调用');
             
             // 获取 JSON 请求体
-            $rawBody = file_get_contents('php://input');
+            $rawBody = is_string($this->request->getBodyParams()) ? $this->request->getBodyParams() : json_encode($this->request->getBodyParams());
             error_log('🔵 请求体: ' . $rawBody);
             
             $data = json_decode($rawBody ?? '', true); // 第二个参数 true 表示返回数组而不是对象

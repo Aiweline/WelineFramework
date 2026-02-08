@@ -1,0 +1,217 @@
+<?php
+/**
+ * FinTech Hub - Features Section Component
+ * 
+ * 核心优势展示区域，6列卡片布局
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Core Advantages
+ * content.title => 标题:text:Why choose VaultPay
+ * content.description => 描述:textarea:Built on cutting-edge technology with bank-grade security, offering the tools you need to manage your finances confidently.
+ * 
+ * group:features => 特性列表
+ * features.items => 特性列表:textarea:Instant Transfers|Send money globally in seconds with near-zero latency|💸\r\nSmart Investing|AI-powered portfolio management for optimized returns|📈\r\nBank-Grade Security|Multi-layer encryption and biometric authentication|🔒\r\nMulti-Currency|Support 50+ currencies with real-time exchange rates|🌍\r\nReal-time Analytics|Track spending patterns with intelligent insights|📊\r\nZero Hidden Fees|Transparent pricing with no surprises, ever|💎|格式：标题|描述|图标，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['features_bg'] ?? '#0a0f1e';
+$textPrimary = $colors['text_primary'] ?? '#f8fafc';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$textMuted = $colors['text_muted'] ?? '#64748b';
+$accentPrimary = $colors['accent_primary'] ?? '#2563eb';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#3b82f6';
+$accentSecondary = $colors['accent_secondary'] ?? '#f59e0b';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(37, 99, 235, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(37, 99, 235, 0.3)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'Core Advantages';
+$title = $config['content.title'] ?? 'Why choose VaultPay';
+$description = $config['content.description'] ?? 'Built on cutting-edge technology with bank-grade security, offering the tools you need to manage your finances confidently.';
+
+// 特性列表
+$featuresRaw = $config['features.items'] ?? "Instant Transfers|Send money globally in seconds with near-zero latency|💸\nSmart Investing|AI-powered portfolio management for optimized returns|📈\nBank-Grade Security|Multi-layer encryption and biometric authentication|🔒\nMulti-Currency|Support 50+ currencies with real-time exchange rates|🌍\nReal-time Analytics|Track spending patterns with intelligent insights|📊\nZero Hidden Fees|Transparent pricing with no surprises, ever|💎";
+
+$features = [];
+$lines = preg_split('/[\r\n]+/', $featuresRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    
+    $parts = explode('|', $line);
+    $featureTitle = trim($parts[0] ?? '');
+    $featureDesc = trim($parts[1] ?? '');
+    $featureIcon = trim($parts[2] ?? '⭐');
+    
+    if (!empty($featureTitle)) {
+        $features[] = [
+            'title' => $featureTitle,
+            'description' => $featureDesc,
+            'icon' => $featureIcon,
+        ];
+    }
+}
+
+$instanceId = 'fh-features-' . uniqid();
+?>
+
+<section class="fh-features" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .fh-features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: <?= $badgeBg ?>;
+            border: 1px solid <?= $badgeBorder ?>;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .fh-features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .fh-features-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(37, 99, 235, 0.4);
+            transform: translateY(-6px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        #<?= $instanceId ?> .fh-features-card-icon {
+            width: 64px;
+            height: 64px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .fh-features-card:hover .fh-features-card-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        #<?= $instanceId ?> .fh-features-card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .fh-features-card-desc {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .fh-features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .fh-features-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .fh-features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <div class="fh-features-container">
+        <div class="fh-features-header">
+            <div class="fh-features-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="fh-features-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="fh-features-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="fh-features-grid">
+            <?php foreach ($features as $feature): ?>
+            <div class="fh-features-card">
+                <div class="fh-features-card-icon"><?= $feature['icon'] ?></div>
+                <h3 class="fh-features-card-title"><?= htmlspecialchars($feature['title']) ?></h3>
+                <p class="fh-features-card-desc"><?= htmlspecialchars($feature['description']) ?></p>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

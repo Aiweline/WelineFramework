@@ -220,12 +220,12 @@ class ThemeLayoutService
 
         if ($layoutId) {
             // 更新现有部件
-            $this->themeLayout->reset()->load($layoutId);
+            $this->themeLayout->clearQuery()->load($layoutId);
         } else {
-            // 新建部件
-            $this->themeLayout->reset();
+            // 新建部件 —— WLS 单例下必须彻底清除模型数据（包括主键），否则 save() 会执行 UPDATE 覆盖旧记录
+            $this->themeLayout->clearQuery()->clearData();
         }
-        
+
         $this->themeLayout
             ->setThemeId((int)$data['theme_id'])
             ->setPageType($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT)
@@ -256,7 +256,7 @@ class ThemeLayoutService
     private function removeExclusiveWidgets(int $themeId, string $pageType, string $area, ?string $slotId, string $widgetCode, string $status = ThemeLayout::STATUS_DRAFT): void
     {
         try {
-            $query = $this->themeLayout->reset()
+            $query = $this->themeLayout->clearQuery()
                 ->where(ThemeLayout::fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::fields_STATUS, $status);
@@ -293,6 +293,67 @@ class ThemeLayoutService
         } catch (\Exception $e) {
             // 忽略错误，可能是表不存在
         }
+    }
+
+    /**
+     * 清理孤儿部件：删除同一 slot_id 下的重复记录（只保留最新一条）
+     * 
+     * 孤儿场景：
+     * 1. 同一独占插槽被多次写入（并发/bug），数据库中出现重复
+     * 2. slot_id 为 NULL 的旧数据不再匹配任何插槽
+     * 
+     * @param int $themeId 主题ID
+     * @param string|null $pageType 页面类型（null=所有）
+     * @return int 清理的记录数
+     */
+    public function cleanOrphanWidgets(int $themeId, ?string $pageType = null): int
+    {
+        $cleaned = 0;
+        
+        try {
+            $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
+            
+            foreach ($pageTypes as $type) {
+                foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
+                    $layout = $this->getLayout($themeId, $type, $status);
+                    
+                    // 按 slot_id 分组，找出独占插槽中的重复记录
+                    foreach ($layout as $area => $areaData) {
+                        $slotWidgets = []; // slot_id => [layout_ids...]
+                        
+                        foreach ($areaData['widgets'] as $widget) {
+                            $slotId = $widget['slot_id'] ?? '';
+                            if (empty($slotId)) {
+                                continue; // 跳过无 slot_id 的记录（可能是旧数据）
+                            }
+                            
+                            $slotWidgets[$slotId][] = $widget['layout_id'];
+                        }
+                        
+                        // 如果同一 slot_id 有多条记录，只保留最后一条（layout_id 最大的）
+                        foreach ($slotWidgets as $slotId => $layoutIds) {
+                            if (count($layoutIds) <= 1) {
+                                continue;
+                            }
+                            
+                            // 排序，保留最大的 layout_id
+                            sort($layoutIds);
+                            array_pop($layoutIds); // 移除最后一个（保留）
+                            
+                            // 删除多余的
+                            foreach ($layoutIds as $removeId) {
+                                $this->deleteWidget($removeId);
+                                $cleaned++;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // 清理失败不影响发布
+        }
+        
+        return $cleaned;
     }
 
     /**
@@ -350,8 +411,6 @@ class ThemeLayoutService
                 $pageTypes = array_keys(ThemeLayout::getPageTypes());
             }
 
-            $hasPublishedData = false;
-
             foreach ($pageTypes as $type) {
                 // 1. 获取草稿布局
                 $draftLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_DRAFT);
@@ -365,28 +424,12 @@ class ThemeLayoutService
                     }
                 }
                 
-                // 2. 如果没有草稿数据，检查是否有已发布数据（保持不变）
+                // 如果没有草稿数据，保持已发布数据不变
                 if (!$hasDraftWidgets) {
-                    $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED);
-                    $hasPublishedWidgets = false;
-                    foreach ($publishedLayout as $area => $areaData) {
-                        if (!empty($areaData['widgets'])) {
-                            $hasPublishedWidgets = true;
-                            break;
-                        }
-                    }
-                    
-                    // 如果已发布数据存在，不需要处理这个页面类型
-                    if ($hasPublishedWidgets) {
-                        $hasPublishedData = true;
-                        continue;
-                    }
-                    
-                    // 草稿和已发布都没有数据，跳过（不删除已有数据）
                     continue;
                 }
 
-                // 3. 有草稿数据，删除旧的已发布记录
+                // 2. 删除旧的已发布记录（全量替换，避免残留）
                 $this->themeLayout->reset()
                     ->where(ThemeLayout::fields_THEME_ID, $themeId)
                     ->where(ThemeLayout::fields_PAGE_TYPE, $type)
@@ -394,9 +437,23 @@ class ThemeLayoutService
                     ->delete()
                     ->fetch();
 
-                // 4. 将草稿数据复制为已发布
+                // 3. 去重：按 slot_id 分组，独占插槽只保留最后一条
+                $slotSeen = []; // slot_id => true（用于独占插槽去重）
+                
                 foreach ($draftLayout as $area => $areaData) {
                     foreach ($areaData['widgets'] as $widget) {
+                        $slotId = $widget['slot_id'] ?? null;
+                        
+                        // 独占插槽去重：同一 slot_id 只发布一个部件
+                        if ($slotId) {
+                            $slotKey = $area . '::' . $slotId;
+                            if (isset($slotSeen[$slotKey])) {
+                                // 同一独占插槽已有部件，跳过冗余记录
+                                continue;
+                            }
+                            $slotSeen[$slotKey] = true;
+                        }
+                        
                         $this->saveWidget([
                             'theme_id' => $themeId,
                             'page_type' => $type,
@@ -404,7 +461,7 @@ class ThemeLayoutService
                             'widget_code' => $widget['widget_code'],
                             'widget_module' => $widget['widget_module'],
                             'widget_type' => $widget['widget_type'] ?? '',
-                            'slot_id' => $widget['slot_id'] ?? null,
+                            'slot_id' => $slotId,
                             'config' => $widget['config'] ?? [],
                             'sort_order' => $widget['sort_order'] ?? 0,
                             'is_active' => true,
@@ -412,8 +469,6 @@ class ThemeLayoutService
                         ]);
                     }
                 }
-                
-                $hasPublishedData = true;
             }
 
             return true;
@@ -532,14 +587,29 @@ class ThemeLayoutService
      */
     public function deleteWidget(int $layoutId): bool
     {
-        $this->themeLayout->reset()->load($layoutId);
-        if (!$this->themeLayout->getLayoutId()) {
+
+        $this->themeLayout->clearQuery()->load($layoutId);
+        $loadedId = $this->themeLayout->getLayoutId();
+        
+
+        if (!$loadedId) {
             return false;
         }
 
-        $this->themeLayout->delete()->fetch();
+        // 使用明确的 WHERE 条件删除，不依赖模型内部状态
+        $this->themeLayout->clearQuery()
+            ->where('layout_id', $layoutId)
+            ->delete()
+            ->fetch();
+
+        // 验证删除结果
+        $checkAfter = $this->themeLayout->clearQuery()
+            ->where('layout_id', $layoutId)
+            ->select()
+            ->fetchArray();
         
-        return true;
+        
+        return empty($checkAfter);
     }
 
     /**

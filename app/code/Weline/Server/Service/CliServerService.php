@@ -41,23 +41,14 @@ class CliServerService
         $pid = $serverConfig['pid'] ?? null;
         $startTime = $serverConfig['start_time'] ?? null;
         
-        // 检查进程是否运行
+        // 只通过 PID 检测 CLI 服务器是否运行
+        // 不使用端口回退检测，因为端口可能被 Weline Server 占用，会导致误判
         $isRunning = false;
         if ($pid) {
             $isRunning = Processer::isRunningByPid((int) $pid);
         }
         
-        // 如果进程不存在，检查端口
-        if (!$isRunning) {
-            $connection = @fsockopen($host, (int) $port, $errno, $errstr, 1);
-            if ($connection !== false) {
-                fclose($connection);
-                $isRunning = true;
-                // 尝试获取 PID
-                $pid = $this->getProcessIdByPort((int) $port);
-            }
-        }
-        
+        // PID 不存在或进程未运行，说明 CLI 服务器未启动
         if (!$isRunning) {
             return null;
         }
@@ -90,17 +81,29 @@ class CliServerService
     
     /**
      * 检查 Weline Server 是否可用
-     * 
+     *
+     * Windows 使用 proc_open 或 exec，Linux/Mac 可使用 proc_open、pcntl_fork 或 exec
+     *
      * @return bool
      */
     public function isWelineServerAvailable(): bool
     {
-        // Windows 不支持 pcntl 扩展，Weline Server 无法正常工作
+        // 检查至少有一种可用的进程创建方式
+        $hasProcOpen = \function_exists('proc_open') && !$this->isFunctionDisabled('proc_open');
+        $hasProcClose = \function_exists('proc_close') && !$this->isFunctionDisabled('proc_close');
+        $hasExec = \function_exists('exec') && !$this->isFunctionDisabled('exec');
+        $hasPcntlFork = \function_exists('pcntl_fork') && !$this->isFunctionDisabled('pcntl_fork');
+        
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         
         if ($isWindows) {
-            // Windows 上检查是否有 pcntl 扩展（通常没有）
-            if (!function_exists('pcntl_fork')) {
+            // Windows：proc_open 或 exec 任一可用即可
+            if (!($hasProcOpen && $hasProcClose) && !$hasExec) {
+                return false;
+            }
+        } else {
+            // Linux/Mac：proc_open、pcntl_fork 或 exec 任一可用即可
+            if (!($hasProcOpen && $hasProcClose) && !$hasPcntlFork && !$hasExec) {
                 return false;
             }
         }
@@ -114,16 +117,32 @@ class CliServerService
     }
     
     /**
+     * 检查函数是否被禁用
+     */
+    protected function isFunctionDisabled(string $function): bool
+    {
+        $disabled = \explode(',', \ini_get('disable_functions') ?: '');
+        $disabled = \array_map('trim', $disabled);
+        return \in_array($function, $disabled, true);
+    }
+    
+    /**
      * 获取不可用原因
-     * 
+     *
      * @return string
      */
     public function getUnavailableReason(): string
     {
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         
-        if ($isWindows && !function_exists('pcntl_fork')) {
-            return __('Windows 系统不支持 pcntl 扩展，Weline Server 无法使用多进程模式');
+        $hasProcOpen = \function_exists('proc_open') && !$this->isFunctionDisabled('proc_open');
+        $hasProcClose = \function_exists('proc_close') && !$this->isFunctionDisabled('proc_close');
+        $hasExec = \function_exists('exec') && !$this->isFunctionDisabled('exec');
+        
+        if ($isWindows) {
+            if (!($hasProcOpen && $hasProcClose) && !$hasExec) {
+                return __('Windows 上需要 proc_open 或 exec 函数来启动多进程，请检查 disable_functions 配置');
+            }
         }
         
         if (!extension_loaded('sockets')) {

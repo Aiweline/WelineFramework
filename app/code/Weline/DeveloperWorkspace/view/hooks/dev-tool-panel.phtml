@@ -463,8 +463,8 @@ $panelType = $panelType ?? 'frontend';
     }
 
     .doc-module-tag {
-        background: #e8f5e9;
-        color: #4caf50;
+        background: #dce4dc;
+        color: #5a6b5a !important;
         padding: 2px 6px;
         border-radius: 3px;
         font-size: 10px;
@@ -485,7 +485,7 @@ $panelType = $panelType ?? 'frontend';
         justify-content: space-between;
         margin-bottom: 12px;
         padding-bottom: 8px;
-        border-bottom: 2px solid #667eea;
+        border-bottom: 2px solid #8b9a8b;
     }
 
     .doc-back-btn {
@@ -690,13 +690,13 @@ $panelType = $panelType ?? 'frontend';
     }
 
     .badge-primary {
-        background: #e8eaf6;
-        color: #667eea;
+        background: #e4e6e8;
+        color: #6b7b8b;
     }
 
     .badge-success {
-        background: #e8f5e9;
-        color: #4caf50;
+        background: #dce4dc;
+        color: #5a6b5a !important;
     }
 
     @keyframes spin {
@@ -715,15 +715,15 @@ $panelType = $panelType ?? 'frontend';
     .performance-section {
         margin-bottom: 20px;
         padding: 12px;
-        background: #f8f9fa;
+        background: #f5f4f0;
         border-radius: 6px;
-        border-left: 3px solid #667eea;
+        border-left: 3px solid #8b9a8b;
     }
 
     .performance-section-title {
         font-size: 14px;
         font-weight: 600;
-        color: #333;
+        color: #5c574f;
         margin-bottom: 12px;
         display: flex;
         align-items: center;
@@ -744,7 +744,7 @@ $panelType = $panelType ?? 'frontend';
 
     .performance-label {
         font-size: 13px;
-        color: #666;
+        color: #7d7870;
         display: flex;
         align-items: center;
         gap: 6px;
@@ -753,20 +753,20 @@ $panelType = $panelType ?? 'frontend';
     .performance-value {
         font-size: 13px;
         font-weight: 600;
-        color: #333;
+        color: #5c574f;
         font-family: 'Courier New', monospace;
     }
 
     .performance-value.fast {
-        color: #4caf50;
+        color: #5a6b5a;
     }
 
     .performance-value.medium {
-        color: #ff9800;
+        color: #b8956e;
     }
 
     .performance-value.slow {
-        color: #f44336;
+        color: #a67c6b;
     }
 
     .performance-badge {
@@ -778,26 +778,26 @@ $panelType = $panelType ?? 'frontend';
     }
 
     .performance-badge.fast {
-        background: #e8f5e9;
-        color: #4caf50;
+        background: #dce4dc;
+        color: #5a6b5a !important;
     }
 
     .performance-badge.medium {
-        background: #fff3e0;
-        color: #ff9800;
+        background: #ebe4d8;
+        color: #b8956e !important;
     }
 
     .performance-badge.slow {
-        background: #ffebee;
-        color: #f44336;
+        background: #e8ddd8;
+        color: #a67c6b !important;
     }
 
     .api-request-item {
         padding: 8px;
         margin-bottom: 6px;
-        background: white;
+        background: #faf9f6;
         border-radius: 4px;
-        border-left: 2px solid #667eea;
+        border-left: 2px solid #8b9a8b;
         font-size: 12px;
     }
 
@@ -1194,6 +1194,7 @@ $panelType = $panelType ?? 'frontend';
             <button class="dev-tool-tab" data-tab="performance" onclick="DevToolPanel.switchMainTab(this, 'performance')">
                 <i class="fa fa-clock-o"></i> 耗时统计
             </button>
+            <?= $extraTabsHtml ?? '' ?>
         </div>
         
         <!-- 搜索区域 -->
@@ -1233,6 +1234,16 @@ $panelType = $panelType ?? 'frontend';
                     <i class="fa fa-info-circle"></i> 实时性能监控和耗时统计
                 </div>
             </div>
+            
+            <!-- 扩展注册 API：必须在扩展脚本（如 WLS）之前执行，避免扩展因脚本顺序无法就绪 -->
+            <script>
+            window.DevToolPanelExtensionLoaders = window.DevToolPanelExtensionLoaders || {};
+            window.DevToolPanelRegisterExtensionTab = function(tabId, loadContentFn) {
+                if (typeof tabId !== 'string' || typeof loadContentFn !== 'function') return;
+                window.DevToolPanelExtensionLoaders[tabId] = loadContentFn;
+            };
+            </script>
+            <?= $extraSearchAreasHtml ?? '' ?>
         </div>
         
         <!-- 内容区域 -->
@@ -1352,6 +1363,18 @@ const DevToolPanel = (function() {
         // 如果是性能标签，渲染性能统计
         if (state.activeMainTab === 'performance') {
             renderPerformanceStats();
+        }
+        
+        // 扩展标签：仅当当前为某扩展标签时才加载（由扩展通过 registerExtensionTab 注册，可能稍晚注册）
+        var extTab = state.activeMainTab && state.activeMainTab !== 'routes' && state.activeMainTab !== 'docs' && state.activeMainTab !== 'performance';
+        if (extTab) {
+            (function tryLoadExtension() {
+                if (window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[state.activeMainTab]) {
+                    window.DevToolPanelExtensionLoaders[state.activeMainTab]();
+                } else {
+                    setTimeout(tryLoadExtension, 80);
+                }
+            })();
         }
         
         // 恢复面板位置（包括第一次加载，默认位置0,0也要设置）
@@ -2004,28 +2027,65 @@ const DevToolPanel = (function() {
         const docSearchArea = document.getElementById('doc-search-area');
         const performanceSearchArea = document.getElementById('performance-search-area');
         
+        // 隐藏所有内置搜索区域
+        routeSearchArea.style.display = 'none';
+        docSearchArea.style.display = 'none';
+        performanceSearchArea.style.display = 'none';
+        // 隐藏所有扩展搜索区（约定 id 为 dev-tool-search-area-{tabId}）
+        document.querySelectorAll('[id^="dev-tool-search-area-"]').forEach(el => { el.style.display = 'none'; });
+        
+        // 扩展标签：若加载器尚未注册则短时重试，最多重试几次；重试前检查用户是否已切换标签，避免覆盖
+        const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance';
+        const extSearchArea = document.getElementById('dev-tool-search-area-' + tab);
+        const extLoader = window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[tab];
+        if (isExtensionTab && extSearchArea && !extLoader) {
+            window._devToolExtensionRetryCount = window._devToolExtensionRetryCount || {};
+            window._devToolExtensionRetryCount[tab] = (window._devToolExtensionRetryCount[tab] || 0) + 1;
+            const maxRetries = 5;
+            if (window._devToolExtensionRetryCount[tab] > maxRetries) {
+                extSearchArea.style.display = 'block';
+                const content = document.getElementById('dev-tool-content');
+                if (content) content.innerHTML = '<div class="dev-tool-empty">扩展未就绪，请切换其他标签或刷新页面</div>';
+                return;
+            }
+            extSearchArea.style.display = 'block';
+            const content = document.getElementById('dev-tool-content');
+            if (content) content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载中...</div></div>';
+            setTimeout(function() {
+                if (state.activeMainTab !== tab) return;
+                switchMainTab(button, tab, false);
+            }, 100);
+            return;
+        }
+        
         if (tab === 'routes') {
+            window._devToolExtensionRetryCount = {};
             routeSearchArea.style.display = 'block';
-            docSearchArea.style.display = 'none';
-            performanceSearchArea.style.display = 'none';
             loadRoutes(state.currentRouteType);
         } else if (tab === 'performance') {
-            routeSearchArea.style.display = 'none';
-            docSearchArea.style.display = 'none';
+            window._devToolExtensionRetryCount = {};
             performanceSearchArea.style.display = 'block';
             renderPerformanceStats();
+        } else if (extLoader) {
+            if (window._devToolExtensionRetryCount) window._devToolExtensionRetryCount[tab] = 0;
+            if (extSearchArea) extSearchArea.style.display = 'block';
+            extLoader();
         } else {
-            routeSearchArea.style.display = 'none';
+            window._devToolExtensionRetryCount = {};
             docSearchArea.style.display = 'block';
-            performanceSearchArea.style.display = 'none';
             if (state.currentDocId) {
-                // 如果有打开的文档，恢复它
                 loadDocDetail(state.currentDocId);
             } else {
-                // 否则搜索文档
                 searchDocsAPI();
             }
         }
+    }
+    
+    /** 供扩展模块注册：注册扩展标签的内容加载函数（仅切换到此标签时调用） */
+    function registerExtensionTab(tabId, loadContentFn) {
+        if (typeof tabId !== 'string' || typeof loadContentFn !== 'function') return;
+        window.DevToolPanelExtensionLoaders = window.DevToolPanelExtensionLoaders || {};
+        window.DevToolPanelExtensionLoaders[tabId] = loadContentFn;
     }
 
     // ========== 路由功能 ==========
@@ -2705,6 +2765,7 @@ const DevToolPanel = (function() {
         searchDocs,
         openDoc,
         backToDocList,
+        registerExtensionTab,
     };
 })();
 

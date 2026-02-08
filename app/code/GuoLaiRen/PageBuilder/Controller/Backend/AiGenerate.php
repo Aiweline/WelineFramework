@@ -15,6 +15,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Service\AiService;
+use Weline\Ai\Model\AiModel;
+use Weline\Ai\Service\Provider\ProviderFactory;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\CodeFixer;
@@ -34,6 +36,96 @@ class AiGenerate extends BackendController
     ) {
         $this->pageModel = $pageModel;
         $this->styleModel = $styleModel;
+    }
+
+    /**
+     * 获取当前 AI 服务的基础信息（模型、供应商、适配器等）
+     * 
+     * GET /pagebuilder/backend/ai-generate/ai-info
+     */
+    public function getAi_info(): string
+    {
+        try {
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            /** @var AiModel $aiModel */
+            $aiModel = ObjectManager::getInstance(AiModel::class);
+            
+            // 使用与 componentStream 相同的场景码来定位模型
+            $scenarioCode = 'pagebuilder_component_generation';
+            
+            // 复用 AiService 的 selectModel 逻辑（通过反射调用私有方法）
+            $model = null;
+            try {
+                $ref = new \ReflectionMethod($aiService, 'selectModel');
+                $ref->setAccessible(true);
+                $model = $ref->invoke($aiService, null, $scenarioCode);
+            } catch (\Throwable $e) {
+                // 回退：查询默认激活模型
+                $model = $aiModel->reset()
+                    ->where(AiModel::fields_IS_ACTIVE, 1)
+                    ->where(AiModel::fields_IS_DEFAULT, 1)
+                    ->find()
+                    ->fetch();
+            }
+            
+            if (!$model || !$model->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('未配置可用的 AI 模型'),
+                ]);
+            }
+            
+            // 获取 Provider 信息
+            $providerName = '';
+            try {
+                /** @var ProviderFactory $providerFactory */
+                $providerFactory = ObjectManager::getInstance(ProviderFactory::class);
+                $provider = $providerFactory->getProvider($model);
+                $providerName = $provider->getProviderCode();
+            } catch (\Throwable $e) {
+                $providerName = $model->getVendor() ?: 'unknown';
+            }
+            
+            // 从 provider_config 中获取实际使用的模型标识（可能与 model_code 不同）
+            $providerConfig = $model->getProviderConfig();
+            $actualModel = $providerConfig['model'] ?? $model->getModelCode();
+            
+            // 供应商友好名称映射
+            $vendorLabels = [
+                'openai' => 'OpenAI',
+                'anthropic' => 'Anthropic',
+                'deepseek' => 'DeepSeek',
+                'google' => 'Google',
+                'baidu' => 'Baidu',
+                'alibaba' => 'Alibaba',
+            ];
+            $vendor = $model->getVendor();
+            $vendorLabel = $vendorLabels[$vendor] ?? ucfirst($vendor);
+            
+            // 构建返回数据
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'model_code' => $model->getModelCode(),
+                    'model_name' => $model->getName() ?: $model->getModelCode(),
+                    'actual_model' => $actualModel,
+                    'vendor' => $vendor,
+                    'vendor_label' => $vendorLabel,
+                    'provider' => $providerName,
+                    'max_tokens' => (int)($model->getData(AiModel::fields_MAX_TOKENS) ?: 0),
+                    'is_default' => (bool)$model->getData(AiModel::fields_IS_DEFAULT),
+                    'scenario' => $scenarioCode,
+                    'connection_status' => $model->getData(AiModel::fields_CONNECTION_TEST_STATUS) ?: 'unknown',
+                    'model_source' => $model->getData(AiModel::fields_MODEL_SOURCE) ?: 'remote',
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('获取 AI 信息失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
     }
 
     /**
@@ -1003,19 +1095,12 @@ class AiGenerate extends BackendController
      */
     public function componentStream(): void
     {
-        // 禁用输出缓冲（在设置头之前）
-        while (ob_get_level()) {
-            ob_end_clean();
-        }
-        
-        // 设置 SSE 头
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('Connection: keep-alive');
-        header('X-Accel-Buffering: no'); // 禁用 nginx 缓冲
-        
-        // 立即刷新头信息
-        flush();
+        // SSE 流式生成耗时较长，取消 PHP 执行时间限制
+        @set_time_limit(0);
+
+        // 使用框架的 SseWriter（兼容 WLS 和 FPM 模式）
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
         
         try {
             // 从 GET 参数获取 base64 编码的 JSON 参数
@@ -1044,12 +1129,12 @@ class AiGenerate extends BackendController
             $referenceCode = $input['reference_code'] ?? '';
             
             if (empty($name) || empty($description)) {
-                $this->sendSseEvent('error', ['message' => __('组件名称和描述不能为空')]);
+                $sse->sendEvent('error', ['message' => __('组件名称和描述不能为空')]);
                 return;
             }
             
             // 发送开始事件
-            $this->sendSseEvent('start', [
+            $sse->sendEvent('start', [
                 'message' => __('开始生成组件...'),
                 'name' => $name,
                 'region' => $region
@@ -1064,9 +1149,10 @@ class AiGenerate extends BackendController
             // 构建AI提示词
             $prompt = $this->buildComponentPrompt($name, $description, $region, $style, $configFields, $referenceCode);
             
-            $this->sendSseEvent('prompt', [
+            $sse->sendEvent('prompt', [
                 'message' => __('提示词已构建'),
-                'prompt_length' => strlen($prompt)
+                'prompt_length' => strlen($prompt),
+                'prompt_content' => $prompt
             ]);
             
             // 流式调用 AI 生成
@@ -1076,35 +1162,68 @@ class AiGenerate extends BackendController
             $fullContent = '';
             $chunkCount = 0;
             
-            $this->sendSseEvent('generating', ['message' => __('AI 正在生成代码...')]);
+            $sse->sendEvent('generating', ['message' => __('AI 正在生成代码...')]);
             
             // 使用流式 API
-            $aiService->generateStream(
-                $prompt,
-                function($chunk, $isComplete) use (&$fullContent, &$chunkCount) {
-                    $fullContent .= $chunk;
-                    $chunkCount++;
-                    
-                    // 每收到数据块就发送给前端
-                    $this->sendSseEvent('chunk', [
-                        'content' => $chunk,
-                        'total_length' => strlen($fullContent),
-                        'chunk_count' => $chunkCount
-                    ]);
-                    
-                    // 刷新输出
-                    if (connection_status() !== CONNECTION_NORMAL) {
-                        return false; // 客户端断开连接
-                    }
-                    return true;
-                },
-                null, // 自动选择模型
-                'pagebuilder_component_generation',
-                $locale,
-                ['reference_component' => $referenceComponent, 'reference_code' => $referenceCode]
-            );
+            $streamError = null;
+            try {
+                $reasoningBuffer = '';
+                $aiService->generateStream(
+                    $prompt,
+                    function($chunk) use (&$fullContent, &$chunkCount, $sse) {
+                        $fullContent .= $chunk;
+                        $chunkCount++;
+                        
+                        // 每收到数据块就发送给前端
+                        $sse->sendEvent('chunk', [
+                            'content' => $chunk,
+                            'total_length' => strlen($fullContent),
+                            'chunk_count' => $chunkCount
+                        ]);
+                        
+                        // 检查连接是否仍然有效
+                        if (!$sse->isAlive()) {
+                            return false; // 客户端断开连接
+                        }
+                        return true;
+                    },
+                    null, // 自动选择模型
+                    'pagebuilder_component_generation',
+                    $locale,
+                    [
+                        'reference_component' => $referenceComponent,
+                        'reference_code' => $referenceCode,
+                        'reasoning_callback' => function($chunk) use (&$reasoningBuffer, $sse) {
+                            $reasoningBuffer .= $chunk;
+                            // 实时推送 AI 思考过程
+                            $sse->sendEvent('thinking', [
+                                'content' => $chunk,
+                                'total_length' => strlen($reasoningBuffer),
+                            ]);
+                        },
+                    ]
+                );
+            } catch (\Throwable $e) {
+                // 清理 ANSI 颜色码，避免前端显示乱码
+                $streamError = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
+                $sse->sendEvent('stream_error', [
+                    'message' => __('AI 生成过程出错：%{1}', $streamError),
+                    'chunk_count' => $chunkCount,
+                    'total_length' => strlen($fullContent)
+                ]);
+            }
             
-            $this->sendSseEvent('parsing', ['message' => __('解析 AI 响应...')]);
+            // 检查是否有内容返回
+            if (empty(trim($fullContent))) {
+                $errorMsg = $streamError 
+                    ? __('AI 生成失败：%{1}', $streamError)
+                    : __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
+                $sse->sendEvent('error', ['message' => $errorMsg]);
+                $sse->close();
+                return;
+            }
+            
+            $sse->sendEvent('parsing', ['message' => __('解析 AI 响应...'), 'content_length' => strlen($fullContent)]);
             
             // 解析AI响应
             $aiData = $this->parseComponentResponse($fullContent);
@@ -1151,7 +1270,7 @@ class AiGenerate extends BackendController
             $preview = $this->generateComponentPreview($phtmlCode);
             
             // 发送完成事件
-            $this->sendSseEvent('complete', [
+            $sse->sendEvent('complete', [
                 'success' => true,
                 'component' => $component,
                 'validation' => $componentValidation,
@@ -1160,33 +1279,25 @@ class AiGenerate extends BackendController
                 'final_prompt' => $prompt
             ]);
             
+            // 发送结束事件（使用 complete 方法）
+            $sse->complete(['message' => __('生成完成')]);
+            
         } catch (\Exception $e) {
-            $this->sendSseEvent('error', [
-                'message' => $e->getMessage()
+            // 清理 ANSI 颜色码，避免前端显示乱码
+            $cleanMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
+            // 发送错误事件
+            $sse->sendEvent('error', [
+                'message' => $cleanMsg
             ]);
+            // 即使出错也要正确关闭 SSE 流
+            $sse->close();
         }
         
-        // 发送结束事件并终止脚本
-        $this->sendSseEvent('done', ['message' => __('生成完成')]);
-        exit(); // 必须终止，防止框架后续处理覆盖 SSE 输出
+        // SSE 模式下让方法正常结束，WlsRuntime 会检测 SseContext::isSseEnabled()
+        // 并返回空字符串，不会发送额外响应
+        // 注意：不能使用 exit()，会导致 WLS Worker 进程崩溃
     }
     
-    /**
-     * 发送 SSE 事件
-     * 
-     * @param string $event 事件名称
-     * @param array $data 数据
-     */
-    private function sendSseEvent(string $event, array $data): void
-    {
-        echo "event: {$event}\n";
-        echo "data: " . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
-        
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
-    }
 
     /**
      * AI生成组件
@@ -1203,7 +1314,8 @@ class AiGenerate extends BackendController
         }
 
         try {
-            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $input = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
@@ -1387,31 +1499,15 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 保存生成的组件（别名方法，兼容不同路由方式）
-     * 
-     * POST /pagebuilder/backend/ai-generate/save-component
-     */
-    public function saveComponent(): string
-    {
-        return $this->postSave_component();
-    }
-    
-    /**
      * 保存生成的组件
      * 
      * POST /pagebuilder/backend/ai-generate/save-component
      */
-    public function postSave_component(): string
+    public function postSaveComponent(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('仅支持POST请求')
-            ]);
-        }
-
         try {
-            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $input = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $styleCode = $input['style_code'] ?? 'tpmst';
             $component = $input['component'] ?? [];
@@ -1617,103 +1713,369 @@ class AiGenerate extends BackendController
         $fieldsJson = json_encode($configFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         $region = strtolower($region);
         
-        // 获取框架构建器的提示词指南
-        $frameworkBuilder = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class);
-        $frameworkGuide = $frameworkBuilder->getFrameworkPromptGuide($region);
+        // 根据区域构建精确的 JSON 键说明
+        $jsonKeys = $this->getRegionJsonKeys($region);
+        $jsonExample = $this->getRegionJsonExample($region, $name);
         
-        // 根据区域类型调整提示词
-        $regionDescription = match($region) {
-            'header' => '头部导航组件（框架已包含Logo、导航菜单、CTA按钮的固定结构）',
-            'footer' => '底部组件（框架已包含品牌信息、链接列、社交媒体、版权的固定结构）',
-            default => '内容组件（框架已包含标题、副标题、描述的固定结构）',
-        };
+        // 获取区域特有的组件说明和样例
+        $regionGuide = $this->getRegionComponentGuide($region);
         
         $prompt = <<<PROMPT
-你是一个专业的前端组件开发专家。请为 PageBuilder 的 **{$region}** 区域组件生成代码。
+你是一个专业的前端组件开发专家。
 
-## 重要提示
+# 任务
 
-我们使用**框架模板系统**，你**不需要**生成完整的PHTML文件。框架已经包含了固定的结构和基础样式，你只需要填充特定区域的代码。
+为 PageBuilder 的 **{$region}** 区域生成一个 **{$region} 组件**。
 
-## 组件要求
+| 属性 | 值 |
+|------|-----|
+| 组件名称 | {$name} |
+| 功能描述 | {$description} |
+| 视觉风格 | {$styleGuide} |
 
-- **组件名称**: {$name}
-- **功能描述**: {$description}
-- **组件类型**: {$regionDescription}
-- **视觉风格**: {$styleGuide}
+{$regionGuide}
 
-## 用户额外指定的配置字段
+# 用户额外指定的配置字段
 
 ```json
 {$fieldsJson}
 ```
 
-## 框架说明
+# 编码规范（必须遵守）
 
-{$frameworkGuide}
+## CSS 规范
+1. **所有选择器必须以 `#<?= \$componentId ?>` 开头**，确保样式隔离：
+   - 正确：`#<?= \$componentId ?> .nav-link { ... }`
+   - 错误：`.nav-link { ... }`（全局污染）
+2. **必须使用 CSS 主题色变量**，禁止硬编码颜色值：
+   - `var(--pb-primary)` — 品牌主色
+   - `var(--pb-accent)` — 强调色（按钮、hover 等）
+   - `var(--pb-bg)` — 背景色
+   - `var(--pb-text)` — 正文色
+   - `var(--pb-heading)` — 标题色
+   - `var(--pb-link)` / `var(--pb-link-hover)` — 链接色
+   - `var(--pb-text-muted)` — 次要文字色
+   - `var(--pb-border)` — 边框色
+3. 使用 `clamp()` 实现响应式字体
+4. 使用 CSS Grid 或 Flexbox 布局
+5. CSS class 用 BEM 命名 + 组件前缀
+6. 移动端样式写在 css_responsive 字段中
 
-## 具体要求
+## HTML 规范
+1. 所有动态文本用 `htmlspecialchars()` 转义
+2. 图片有 `alt` 和 `loading="lazy"`
+3. 使用语义化标签
+4. 避免内联 style
 
-PROMPT;
+## php_variables 规范
+- 只用于声明变量：`\$myVar = \$getConfig('key', 'default');`
+- 每行以分号结尾
+- **禁止**：PHP 标签、if/foreach/function/class、echo/print
+- 不需要额外变量则设为空字符串 `""`
 
-        // 根据区域类型添加具体要求
-        if ($region === 'header') {
-            $prompt .= <<<PROMPT
+## js_content 规范
+- 框架已提供 `component` 变量（DOM 元素）
+- 直接写逻辑代码，**禁止** DOMContentLoaded、IIFE 包装
+- **禁止** PHP 标签或 `\$componentId`，用 `component.id`
+- 不需要 JS 则设为 `""`
 
-### Header组件特殊说明
-- 框架已实现：Logo显示、导航菜单（支持从子页面动态获取）、CTA按钮、响应式菜单
-- 你可以添加：额外的装饰元素、动画效果、特殊的交互
-- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
+## extra_fields 规范
+- 格式：每行一个，`group:分组名 => 分组标题` 或 `分组名.字段名 => 标签:类型:默认值|选项`
+- 类型：`text`, `textarea`, `number`, `color`, `select`, `image`
+- 不需要额外字段则设为 `""`
 
-PROMPT;
-        } elseif ($region === 'footer') {
-            $prompt .= <<<PROMPT
+# 返回格式
 
-### Footer组件特殊说明
-- 框架已实现：品牌Logo和描述、两列链接、社交媒体图标、版权信息
-- 你可以添加：额外的链接列、订阅表单、联系信息等
-- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
+请**只返回纯 JSON**（不要包裹在代码块中），格式：
 
-PROMPT;
-        } else {
-            $prompt .= <<<PROMPT
+{$jsonExample}
 
-### Content组件特殊说明
-- 框架已实现：标题、副标题、描述的展示
-- **html_content 是必填的**，这是你需要实现的核心内容区域
-- 根据功能描述实现具体的内容展示（如特性卡片、图片画廊、定价表、FAQ等）
-- CSS中使用 #<?= \$componentId ?> 作为选择器前缀
-- 所有输出使用 htmlspecialchars() 转义
+**JSON 键说明：**
+{$jsonKeys}
 
-PROMPT;
-        }
-        
-        $prompt .= <<<PROMPT
-
-## 样式要求
-
-- {$styleGuide}
-- 响应式设计，支持移动端
-- 使用 CSS 变量或媒体查询适配暗色模式
-
-## 返回格式
-
-请**只返回 JSON**，格式如下：
-```json
-{
-    "extra_fields": "可选：额外的字段定义，每行一个",
-    "php_variables": "可选：额外的PHP变量准备代码",
-    "css_extra": "额外的CSS样式",
-    "css_responsive": "可选：响应式CSS（会放在 @media 块内）",
-    "html_content": "{$region}组件的主体HTML内容",
-    "js_content": "可选：JavaScript代码"
-}
-```
-
-只返回 JSON，不要有其他解释性文字。
+⚠️ 只返回 JSON 对象，不要有任何前后解释文字或代码围栏。
 PROMPT;
 
         return $prompt;
+    }
+    
+    /**
+     * 获取区域专属的组件说明和代码样例
+     * 
+     * 为 AI 提供明确的"这个区域的组件应该长什么样"的指导
+     */
+    private function getRegionComponentGuide(string $region): string
+    {
+        return match($region) {
+            'header' => $this->getHeaderComponentGuide(),
+            'footer' => $this->getFooterComponentGuide(),
+            default  => $this->getContentComponentGuide(),
+        };
+    }
+    
+    /**
+     * Header 组件指南 — 包含具体样例
+     */
+    private function getHeaderComponentGuide(): string
+    {
+        return <<<'GUIDE'
+# 什么是 Header 组件
+
+Header 组件是**网站顶部导航栏**，功能包含：
+- **Logo**（品牌名称 / 图片）
+- **导航菜单**（多个链接项）
+- **CTA 按钮**（如"下载"、"注册"、"联系我们"）
+- **移动端汉堡菜单**（响应式折叠）
+
+## ⚠️ 关键约束
+
+框架已提供如下固定结构和变量（**禁止在你的代码中重复定义**）：
+- `$componentId` — 唯一 ID
+- `$getConfig($key, $default)` — 读取配置
+- `$showLogo`, `$logoImage`, `$logoText`, `$logoWidth` — Logo 配置
+- `$showNav`, `$navItems` — 导航数据（**来自真实子页面**，禁止硬编码导航项）
+- `$showCta`, `$ctaText`, `$ctaUrl` — CTA 按钮
+- `$bgColor`, `$textColor`, `$linkColor`, `$linkHoverColor`, `$accentColor` — 颜色变量
+
+框架已渲染的结构：
+- Logo 区域、导航链接列表、CTA 按钮、汉堡菜单按钮
+- 基础的 Flex 布局、链接颜色、CTA 样式
+
+**你只负责** `css_extra`（增强样式）和 `html_extra`（额外装饰元素），以及 `js_content`（交互逻辑如滚动固定、动画等）。
+
+## Header 组件样例（仅供参考结构）
+
+### 样例1：深色导航栏
+```
+css_extra: 透明渐变背景、滚动后变实色、Logo 发光效果、导航 hover 下划线动画
+html_extra: <div class="header-glow"></div>（装饰光效元素）
+js_content: 滚动检测，添加 scrolled class 改变背景色
+```
+
+### 样例2：透明叠加导航
+```
+css_extra: 绝对定位叠加在首屏上、backdrop-filter 模糊、导航间距加大
+html_extra: 无
+js_content: 滚动距离 > 100px 时添加实色背景
+```
+
+### 样例3：居中 Logo 导航
+```
+css_extra: Logo 居中、导航分左右两侧、悬停变色动画
+html_extra: 无
+js_content: 移动端汉堡菜单展开/收起动画
+```
+
+## 重要
+
+- **你生成的是 header 组件的增强部分**，不是完整页面
+- **禁止**在 html_extra 中输出 `<nav>`、`<ul><li>` 导航列表或 Logo — 框架已处理
+- CSS 专注于：颜色搭配、动画、阴影、布局微调、滚动效果
+- JS 专注于：滚动固定导航、移动端菜单交互
+GUIDE;
+    }
+    
+    /**
+     * Footer 组件指南 — 包含具体样例
+     */
+    private function getFooterComponentGuide(): string
+    {
+        return <<<'GUIDE'
+# 什么是 Footer 组件
+
+Footer 组件是**网站底部区域**，功能包含：
+- **品牌区域**（Logo + 简介描述）
+- **链接列**（快速链接、法律条款等分列）
+- **社交媒体图标**（Facebook、Twitter 等）
+- **版权信息**（© 2025 Brand. All rights reserved.）
+- **可选**：邮件订阅表单、额外声明文字
+
+## ⚠️ 关键约束
+
+框架已提供如下固定结构和变量（**禁止在你的代码中重复定义**）：
+- `$componentId` — 唯一 ID
+- `$getConfig($key, $default)` — 读取配置
+- `$brandName`, `$brandDesc`, `$brandLogo` — 品牌信息
+- `$col1Title`, `$col1Items`, `$col2Title`, `$col2Items` — 两列链接数据
+- `$showSocial`, `$socialLinks` — 社交媒体
+- `$copyrightText`, `$yearDisplay` — 版权信息
+- `$bgColor`, `$textColor`, `$titleColor`, `$linkColor`, `$linkHoverColor`, `$accentColor` — 颜色
+
+框架已渲染的结构：
+- 品牌 Logo/描述、两列链接列表、社交图标、版权栏
+- Grid 布局（2fr 1fr 1fr 1fr）
+
+**你只负责** `css_extra`、`html_extra_column`（第三列链接）、`html_extra`（附加内容如订阅表单）、`footer_extra_text`（底部附加文字）。
+
+## Footer 组件样例（仅供参考结构）
+
+### 样例1：标准多列底部
+```
+css_extra: 深色背景渐变、链接 hover 动画、社交图标悬停发光
+html_extra_column: 第三列"资源"链接
+html_extra: 无
+footer_extra_text: "网站仅供娱乐目的"
+```
+
+### 样例2：简洁单行底部
+```
+css_extra: 单行布局、链接水平排列、分隔符样式
+html_extra_column: 无
+html_extra: 无
+footer_extra_text: 免责声明文字
+```
+
+### 样例3：带订阅表单的底部
+```
+css_extra: 订阅表单样式、输入框+按钮、背景装饰
+html_extra_column: 无
+html_extra: <div class="subscribe-form"><h4>订阅</h4><input placeholder="邮箱"><button>订阅</button></div>
+js_content: 订阅表单提交处理
+```
+
+## 重要
+
+- **你生成的是 footer 组件的增强部分**
+- **禁止**在 html_extra 中重复输出版权信息、社交媒体区域 — 框架已处理
+- `html_extra_column` 用于添加第三列链接，格式同框架中的链接列
+GUIDE;
+    }
+    
+    /**
+     * Content 组件指南 — 包含具体样例
+     */
+    private function getContentComponentGuide(): string
+    {
+        return <<<'GUIDE'
+# 什么是 Content 组件
+
+Content 组件是**页面主体内容区块**，每个组件是一个独立的内容段落，例如：
+- 特性展示卡片、产品网格
+- FAQ 折叠面板
+- 用户评价/推荐语
+- 统计数字展示
+- 图片画廊
+- 定价表
+- 团队成员介绍
+- 时间线
+- CTA 号召行动区域
+
+## ⚠️ 关键约束
+
+框架已提供如下固定结构和变量（**禁止在你的代码中重复定义**）：
+- `$componentId` — 唯一 ID
+- `$getConfig($key, $default)` — 读取配置
+- `$title`, `$subtitle`, `$description` — 区块的标题/副标题/描述（**框架已在头部渲染**）
+- `$bgColor`, `$textColor`, `$titleColor`, `$accentColor` — 颜色变量
+- `$containerWidth`, `$paddingTop`, `$paddingBottom`, `$textAlign` — 布局
+
+框架已渲染的结构：
+- 背景色/渐变/图片
+- 标题区域（副标题 + h2 标题 + 描述段落）
+- `.ai-content-body` 容器（**你的 html_content 放在这里面**）
+
+## Content 组件样例（仅供参考结构）
+
+### 样例1：FAQ 折叠面板
+```
+extra_fields: "group:texts => FAQ内容\ntexts.faq_1_question => 问题1:text:什么是XX?\ntexts.faq_1_answer => 答案1:textarea:XX是..."
+php_variables: "$faqCount = (int)$getConfig('texts.faq_count', '5');"
+css_extra: "#<?= $componentId ?> .faq-item { background: color-mix(in srgb, var(--pb-text) 5%, transparent); border-radius: 8px; margin-bottom: 12px; } ..."
+html_content: "<div class=\"faq-list\"><?php for ($i = 1; $i <= 5; $i++): ?><div class=\"faq-item\"><button class=\"faq-question\"><?= htmlspecialchars($getConfig(\"texts.faq_{$i}_question\", '')) ?></button><div class=\"faq-answer\"><?= htmlspecialchars($getConfig(\"texts.faq_{$i}_answer\", '')) ?></div></div><?php endfor; ?></div>"
+js_content: "component.querySelectorAll(\".faq-question\").forEach(btn => { btn.addEventListener(\"click\", () => btn.parentElement.classList.toggle(\"open\")); });"
+```
+
+### 样例2：特性卡片网格
+```
+extra_fields: "group:cards => 卡片内容\ncards.card_1_icon => 图标1:text:🚀\ncards.card_1_title => 标题1:text:快速\ncards.card_1_desc => 描述1:textarea:极速加载体验"
+css_extra: "#<?= $componentId ?> .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; } #<?= $componentId ?> .feature-card { background: var(--pb-bg); border: 1px solid var(--pb-border); border-radius: 12px; padding: 32px; }"
+html_content: "<div class=\"feature-grid\"><?php for ($i = 1; $i <= 3; $i++): ?><article class=\"feature-card\"><div class=\"feature-card__icon\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_icon\", '⭐')) ?></div><h3 class=\"feature-card__title\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_title\", '')) ?></h3><p class=\"feature-card__desc\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_desc\", '')) ?></p></article><?php endfor; ?></div>"
+```
+
+### 样例3：用户评价轮播
+```
+extra_fields: "group:testimonials => 评价内容\ntestimonials.item_1_name => 用户1:text:张三\ntestimonials.item_1_text => 评价1:textarea:很棒的服务！\ntestimonials.item_1_avatar => 头像1:image:"
+css_extra: 评价卡片样式、头像圆形、星级评分、轮播容器
+html_content: 评价卡片列表，含头像、姓名、文字、星级
+js_content: 轮播切换逻辑
+```
+
+## 重要
+
+- **html_content 是必填字段**，是核心内容区域
+- **禁止**在 html_content 中输出标题/描述（框架头部已处理）
+- 根据用户的功能描述选择合适的内容结构（卡片、列表、表格、表单等）
+- 配置字段（extra_fields）中定义的内容，在 html_content 中通过 `$getConfig()` 读取
+GUIDE;
+    }
+    
+    /**
+     * 获取区域的 JSON 键说明
+     */
+    private function getRegionJsonKeys(string $region): string
+    {
+        $common = <<<'KEYS'
+| 键 | 必填 | 说明 |
+|---|---|---|
+| extra_fields | 否 | 额外配置字段定义，每行一个。为空写 "" |
+| php_variables | 否 | 额外 PHP 变量声明。为空写 "" |
+| css_extra | 是 | CSS 样式（所有选择器以 #$componentId 开头） |
+| js_content | 否 | 纯 JavaScript 代码。为空写 "" |
+KEYS;
+        
+        return match($region) {
+            'header' => $common . <<<'KEYS'
+| html_extra | 否 | header 容器内的额外 HTML |
+KEYS,
+            'footer' => $common . <<<'KEYS'
+| html_extra_column | 否 | 额外的链接列 HTML |
+| html_extra | 否 | 底部额外内容 HTML |
+| footer_extra_text | 否 | 底部额外文字 |
+KEYS,
+            default => $common . <<<'KEYS'
+| html_content | **是** | 核心主体 HTML 内容（放在 .ai-content-body 内） |
+| css_responsive | 否 | 移动端 CSS（放在 @media(max-width:768px) 内） |
+KEYS,
+        };
+    }
+    
+    /**
+     * 获取区域的 JSON 示例
+     */
+    private function getRegionJsonExample(string $region, string $name): string
+    {
+        return match($region) {
+            'header' => <<<'JSON'
+{
+    "extra_fields": "group:effect => 效果设置\neffect.scroll_bg => 滚动后背景色:color:rgba(10,10,15,0.98)\neffect.glow_color => 发光色:color:#7c3aed",
+    "php_variables": "$scrollBg = $getConfig('effect.scroll_bg', 'rgba(10,10,15,0.98)');",
+    "css_extra": "#<?= $componentId ?> { transition: background 0.3s ease, box-shadow 0.3s ease; }\n#<?= $componentId ?>.scrolled { background: <?= htmlspecialchars($scrollBg) ?>; box-shadow: 0 2px 20px rgba(0,0,0,0.3); }\n#<?= $componentId ?> .ai-header-nav-link { position: relative; }\n#<?= $componentId ?> .ai-header-nav-link::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: var(--pb-accent); transition: width 0.3s; }\n#<?= $componentId ?> .ai-header-nav-link:hover::after { width: 100%; }\n#<?= $componentId ?> .ai-header-cta { background: linear-gradient(135deg, var(--pb-accent), var(--pb-primary)); }",
+    "html_extra": "",
+    "js_content": "let lastScroll = 0;\nwindow.addEventListener(\"scroll\", () => {\n    const scrolled = window.scrollY > 50;\n    component.classList.toggle(\"scrolled\", scrolled);\n});"
+}
+JSON,
+            'footer' => <<<'JSON'
+{
+    "extra_fields": "group:subscribe => 订阅设置\nsubscribe.show => 显示订阅:select:yes|yes,no\nsubscribe.title => 标题:text:订阅我们\nsubscribe.placeholder => 占位文字:text:输入您的邮箱",
+    "php_variables": "$showSubscribe = $getConfig('subscribe.show', 'yes') !== 'no';\n$subTitle = $getConfig('subscribe.title', '订阅我们');",
+    "css_extra": "#<?= $componentId ?> .footer-subscribe { margin-top: 16px; }\n#<?= $componentId ?> .footer-subscribe h4 { color: var(--pb-heading); font-size: 1rem; margin-bottom: 12px; }\n#<?= $componentId ?> .footer-subscribe-form { display: flex; gap: 8px; }\n#<?= $componentId ?> .footer-subscribe-form input { flex: 1; padding: 8px 12px; border: 1px solid var(--pb-border); border-radius: 6px; background: transparent; color: var(--pb-text); }\n#<?= $componentId ?> .footer-subscribe-form button { padding: 8px 16px; background: var(--pb-accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }",
+    "html_extra_column": "<h4><?= htmlspecialchars($getConfig('links.column3_title', 'Resources')) ?></h4>\n<ul class=\"ai-footer-links\">\n    <li><a href=\"/docs\">Documentation</a></li>\n    <li><a href=\"/api\">API</a></li>\n</ul>",
+    "html_extra": "<?php if ($showSubscribe): ?>\n<div class=\"footer-subscribe\">\n    <h4><?= htmlspecialchars($subTitle) ?></h4>\n    <div class=\"footer-subscribe-form\">\n        <input type=\"email\" placeholder=\"<?= htmlspecialchars($getConfig('subscribe.placeholder', '输入邮箱')) ?>\">\n        <button type=\"button\">订阅</button>\n    </div>\n</div>\n<?php endif; ?>",
+    "footer_extra_text": "本网站仅供娱乐目的。",
+    "js_content": ""
+}
+JSON,
+            default => <<<'JSON'
+{
+    "extra_fields": "group:cards => 卡片内容\ncards.card_1_icon => 图标1:text:🚀\ncards.card_1_title => 标题1:text:快速高效\ncards.card_1_desc => 描述1:textarea:极速加载体验\ncards.card_2_icon => 图标2:text:🛡️\ncards.card_2_title => 标题2:text:安全可靠\ncards.card_2_desc => 描述2:textarea:企业级安全保障\ncards.card_3_icon => 图标3:text:⚡\ncards.card_3_title => 标题3:text:功能强大\ncards.card_3_desc => 描述3:textarea:丰富的功能模块",
+    "php_variables": "",
+    "css_extra": "#<?= $componentId ?> .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }\n#<?= $componentId ?> .feature-card { background: var(--pb-bg); border: 1px solid var(--pb-border); border-radius: 12px; padding: 32px; transition: transform 0.3s, box-shadow 0.3s; }\n#<?= $componentId ?> .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }\n#<?= $componentId ?> .feature-card__icon { font-size: 2.5rem; margin-bottom: 16px; }\n#<?= $componentId ?> .feature-card__title { font-size: 1.25rem; font-weight: 700; color: var(--pb-heading); margin-bottom: 8px; }\n#<?= $componentId ?> .feature-card__desc { color: var(--pb-text-muted); line-height: 1.6; }",
+    "css_responsive": "#<?= $componentId ?> .feature-grid { grid-template-columns: 1fr; gap: 16px; }\n#<?= $componentId ?> .feature-card { padding: 24px; }",
+    "html_content": "<div class=\"feature-grid\">\n    <?php for ($i = 1; $i <= 3; $i++): ?>\n    <article class=\"feature-card\">\n        <div class=\"feature-card__icon\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_icon\", '⭐')) ?></div>\n        <h3 class=\"feature-card__title\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_title\", '特性 ' . $i)) ?></h3>\n        <p class=\"feature-card__desc\"><?= htmlspecialchars($getConfig(\"cards.card_{$i}_desc\", '描述内容')) ?></p>\n    </article>\n    <?php endfor; ?>\n</div>",
+    "js_content": ""
+}
+JSON,
+        };
     }
     
     /**
@@ -1877,74 +2239,83 @@ CONSTRAINT;
         // 截取参考代码（如果太长，只保留关键部分）
         $refCodeDisplay = $referenceCode;
         if (strlen($referenceCode) > 15000) {
-            // 保留头部（元数据和字段定义）和部分HTML
             $refCodeDisplay = substr($referenceCode, 0, 15000) . "\n\n... [代码过长，已截断] ...";
         }
         
         $prompt = <<<PROMPT
-你是一个专业的前端组件开发专家。请**基于参考组件**为 PageBuilder 生成一个新的 PHP/HTML 组件。
+你是一个专业的前端组件开发专家。请**基于参考组件**为 PageBuilder 生成一个新的 PHTML 组件。
 
-## 重要提示
+# 任务
 
-你需要参考下面提供的**参考组件代码**的结构、规范和编码风格来生成新组件。新组件应该：
-1. **保持相同的代码结构**：包括元数据块(@component_start/@component_end)、字段定义块(@fields_start/@fields_end)的格式
-2. **遵循相同的编码规范**：变量命名、函数使用、CSS组织方式
-3. **使用相同的数据获取方式**：如 \$this->getData('page')、\$this->getData('style_settings') 等
-4. **保持相同的安全处理**：htmlspecialchars() 转义等
-5. **根据新的需求调整内容**：但保持结构稳定
+参考已有组件的代码结构和编码规范，生成一个功能不同但架构一致的新组件。
 
-## 新组件要求
+# 新组件需求
 
-- **组件名称**: {$name}
-- **功能描述**: {$description}
-- **所属区域**: {$region}
-- **视觉风格**: {$styleGuide}
+| 属性 | 值 |
+|------|-----|
+| 组件名称 | {$name} |
+| 功能描述 | {$description} |
+| 所属区域 | {$region} |
+| 视觉风格 | {$styleGuide} |
 
-## 配置字段
+# 参考组件代码
 
-```json
-{$fieldsJson}
-```
-
-## 参考组件代码
-
-请仔细分析以下参考组件的代码结构和规范：
+仔细分析以下参考组件，学习它的：
+1. 代码骨架（@component_start 元数据、@fields_start 字段定义）
+2. PHP 变量准备模式（\$componentId、\$getConfig、\$parseResponsive 等辅助函数）
+3. CSS 组织方式（#\$componentId 前缀、响应式、clamp()）
+4. HTML 结构组织（语义标签、转义、循环渲染）
 
 ```php
 {$refCodeDisplay}
 ```
 
-## 输出要求
+# 生成规则
 
-请生成一个**完整的 PHTML 组件文件**，要求：
+## 必须复用的模式
+- **元数据块**：@component_start / @component_end 格式完全一致
+- **字段定义块**：@fields_start / @fields_end，使用 `group:key => 标题` + `key.field => 标签:类型:默认值` 格式
+- **PHP 数据获取**：复用 \$this->getData('page')、\$getConfig()、\$componentId = '组件名-' . uniqid() 等模式
+- **CSS 隔离**：所有选择器以 `#<?= \$componentId ?>` 开头
+- **HTML 转义**：所有动态输出使用 `htmlspecialchars()`
 
-1. **必须保持参考组件相同的代码结构**：
-   - 顶部 PHP 注释文档格式
-   - @component_start / @component_end 元数据块格式
-   - @fields_start / @fields_end 字段定义格式
-   - 数据获取和处理逻辑
-   - CSS 作用域隔离方式（使用 \$componentId）
+## 必须调整的部分
+- 组件名称、描述、分类改为新需求
+- 字段定义改为新功能所需的配置项
+- HTML 结构改为实现新功能描述的内容
+- CSS 样式匹配 {$styleGuide}
 
-2. **必须遵循参考组件的编码规范**：
-   - 使用相同的辅助函数（如 \$getConfig、\$parseResponsive 等）
-   - 使用相同的变量命名约定
-   - 使用相同的 HTML 结构组织方式
+## 编码质量要求
+- **CSS 颜色必须使用 `var(--pb-*)` 主题色变量**，不要硬编码颜色值：
+  - `var(--pb-primary)` — 品牌主色
+  - `var(--pb-accent)` — 强调色
+  - `var(--pb-bg)` — 背景色
+  - `var(--pb-text)` — 正文色
+  - `var(--pb-heading)` — 标题色
+  - `var(--pb-link)` / `var(--pb-link-hover)` — 链接色
+  - `var(--pb-text-muted)` — 次要文字色
+  - `var(--pb-border)` — 边框色
+- CSS class 命名使用唯一前缀（避免跨模块冲突）
+- CSS 使用 Grid/Flexbox 布局，响应式使用 clamp() + @media
+- 图片有 alt 和 loading="lazy"
+- 使用 BEM 命名风格的 class
+- JS 使用 `document.getElementById('<?= \$componentId ?>')` 获取组件
 
-3. **根据新需求调整**：
-   - 修改组件名称、描述、分类
-   - 修改字段定义以匹配新功能
-   - 修改 HTML 结构以实现新的视觉效果
-   - 修改 CSS 样式以匹配 {$styleGuide}
+## 用户额外指定的配置字段
 
-4. **返回格式**：
-请返回 JSON 格式：
 ```json
-{
-    "phtml": "完整的 PHTML 代码内容"
-}
+{$fieldsJson}
 ```
 
-只返回 JSON，不要有其他内容。
+# 返回格式
+
+返回**纯 JSON**（不要包裹在代码块中）：
+
+{
+    "phtml": "完整的 PHTML 组件文件代码"
+}
+
+⚠️ 只返回 JSON 对象，不要有任何前后解释文字或代码围栏。
 PROMPT;
 
         return $prompt;
@@ -1952,27 +2323,31 @@ PROMPT;
 
     /**
      * 解析组件生成响应
+     * 兼容流式输出可能产生的截断、多余换行、Markdown 包裹等情况
      */
     private function parseComponentResponse(string $response): array
     {
-        // 提取 JSON
-        $json = $response;
-        
-        if (preg_match('/```(?:json)?\s*(\{[\s\S]*?\})\s*```/s', $response, $matches)) {
-            $json = $matches[1];
-        } elseif (preg_match('/(\{[\s\S]*\})/s', $response, $matches)) {
-            $json = $matches[1];
+        $response = trim($response);
+        if ($response === '') {
+            throw new \Exception(__('AI 未返回任何内容，请检查网络或重试'));
         }
-        
-        $data = json_decode($json, true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            // 如果JSON解析失败，尝试直接提取PHTML代码（旧模式兼容）
+
+        // 1. 提取 JSON 字符串（支持多种包裹格式）
+        $json = $this->extractJsonFromResponse($response);
+        if ($json === null) {
+            // 尝试直接提取 PHTML 代码块（旧模式兼容）
             if (preg_match('/```(?:php|phtml|html)?\s*([\s\S]*?)\s*```/s', $response, $matches)) {
-                return ['phtml' => $matches[1]];
+                return ['phtml' => trim($matches[1])];
             }
-            
-            throw new \Exception('AI返回的内容格式不正确: ' . json_last_error_msg());
+            $snippet = mb_substr($response, 0, 200);
+            throw new \Exception(__('AI返回的内容格式不正确：未找到有效 JSON，内容预览：%{1}', $snippet));
+        }
+
+        // 2. 解析 JSON（含常见修复）
+        $data = $this->decodeJsonWithRepair($json);
+        if ($data === null) {
+            $snippet = mb_substr($json, 0, 150);
+            throw new \Exception(__('AI返回的内容格式不正确：JSON 解析失败（%{1}），预览：%{2}', [json_last_error_msg(), $snippet]));
         }
         
         // 标准化字段名称（支持多种命名风格）
@@ -2161,17 +2536,408 @@ PROMPT;
             'region' => $region,
             'category' => $region,
             'type' => 'section',
-            'icon' => 'bi-stars', // AI 生成的组件使用星星图标
-            'sort_order' => 100, // AI生成的组件排在后面
+            'icon' => 'bi-robot', // AI 生成的组件使用机器人图标
+            'sort_order' => 100,
             'is_default' => false,
-            'compatible_styles' => ['*'],
+            'compatible_styles' => ['*'], // 跨模块可用
             'file' => "{$region}/{$code}.phtml",
             'config_schema' => $component['config_schema'] ?? [],
             'ai_generated' => true,
+            'ai_generated_at' => $component['ai_generated_at'] ?? date('Y-m-d\TH:i:s'),
+            'css_prefix' => $component['css_prefix'] ?? ('ai-' . $code),
             'created_at' => date('Y-m-d H:i:s'),
         ];
         
         // 保存
         file_put_contents($jsonPath, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * 从 AI 响应中提取 JSON 字符串
+     * 支持多种包裹格式：```json、```、纯 JSON 等
+     */
+    private function extractJsonFromResponse(string $response): ?string
+    {
+        // 1. 尝试匹配 ```json ... ``` 或 ``` ... ``` 包裹的 JSON
+        if (preg_match('/```(?:json)?\s*(\{[\s\S]*?\})\s*```/s', $response, $matches)) {
+            return trim($matches[1]);
+        }
+        
+        // 2. 尝试匹配最外层的 { ... }（贪婪匹配最后一个 }）
+        if (preg_match('/(\{[\s\S]*\})/s', $response, $matches)) {
+            return trim($matches[1]);
+        }
+        
+        // 3. 如果响应本身就是 JSON 格式
+        $trimmed = trim($response);
+        if (str_starts_with($trimmed, '{') && str_ends_with($trimmed, '}')) {
+            return $trimmed;
+        }
+        
+        return null;
+    }
+
+    /**
+     * 解析 JSON 并尝试修复常见问题
+     */
+    private function decodeJsonWithRepair(string $json): ?array
+    {
+        // 第一次尝试：直接解析
+        $data = json_decode($json, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+            return $data;
+        }
+        
+        // 第二次尝试：字符级遍历修复控制字符（避免 PCRE 回溯爆炸）
+        $fixed = $this->fixControlCharsInJsonStrings($json);
+        $fixed = preg_replace('/,\s*}/', '}', $fixed);
+        $fixed = preg_replace('/,\s*]/', ']', $fixed);
+        
+        $data = json_decode($fixed, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+            return $data;
+        }
+        
+        // 第三次尝试：激进移除所有控制字符
+        $fixed = preg_replace('/[\x00-\x1F\x7F]/u', '', $json);
+        $fixed = preg_replace('/,\s*}/', '}', $fixed);
+        $fixed = preg_replace('/,\s*]/', ']', $fixed);
+        
+        $data = json_decode($fixed, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+            return $data;
+        }
+        
+        // 第四次尝试：修复截断的 JSON（AI 输出可能中途被截断）
+        $repaired = $this->repairTruncatedJson($json);
+        if ($repaired !== null) {
+            $data = json_decode($repaired, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+                return $data;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 字符级遍历：修复 JSON 字符串值内的控制字符
+     * 不使用正则，避免大文本 PCRE 回溯限制问题
+     */
+    private function fixControlCharsInJsonStrings(string $json): string
+    {
+        $len = strlen($json);
+        $result = '';
+        $inString = false;
+        $i = 0;
+        
+        while ($i < $len) {
+            $ch = $json[$i];
+            
+            if ($inString) {
+                if ($ch === '\\' && $i + 1 < $len) {
+                    // 转义序列，原样保留
+                    $result .= $ch . $json[$i + 1];
+                    $i += 2;
+                    continue;
+                }
+                if ($ch === '"') {
+                    // 字符串结束
+                    $result .= $ch;
+                    $inString = false;
+                    $i++;
+                    continue;
+                }
+                // 在字符串内部：替换控制字符
+                $ord = ord($ch);
+                if ($ord < 0x20 || $ord === 0x7F) {
+                    // 控制字符 → 转义
+                    $result .= match ($ch) {
+                        "\n" => '\\n',
+                        "\r" => '\\r',
+                        "\t" => '\\t',
+                        "\x08" => '\\b',
+                        "\x0C" => '\\f',
+                        default => '\\u' . str_pad(dechex($ord), 4, '0', STR_PAD_LEFT),
+                    };
+                } else {
+                    $result .= $ch;
+                }
+            } else {
+                if ($ch === '"') {
+                    $inString = true;
+                }
+                $result .= $ch;
+            }
+            $i++;
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * 修复被截断的 JSON：关闭未闭合的字符串、数组和对象
+     */
+    private function repairTruncatedJson(string $json): ?string
+    {
+        // 先清理控制字符
+        $clean = preg_replace('/[\x00-\x1F\x7F]/u', '', $json);
+        $clean = preg_replace('/,\s*}/', '}', $clean);
+        $clean = preg_replace('/,\s*]/', ']', $clean);
+        
+        // 检测是否像被截断的 JSON（以 { 开头但不以 } 结尾）
+        $trimmed = rtrim($clean);
+        if (!str_starts_with($trimmed, '{')) {
+            return null;
+        }
+        if (str_ends_with($trimmed, '}')) {
+            return null; // 不像截断，已经有闭合的 }
+        }
+        
+        // 逐字符分析，关闭未闭合的结构
+        $stack = [];
+        $inString = false;
+        $len = strlen($trimmed);
+        
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $trimmed[$i];
+            if ($inString) {
+                if ($ch === '\\' && $i + 1 < $len) {
+                    $i++; // 跳过转义字符
+                    continue;
+                }
+                if ($ch === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+            match ($ch) {
+                '"' => $inString = true,
+                '{' => $stack[] = '}',
+                '[' => $stack[] = ']',
+                '}' => array_pop($stack),
+                ']' => array_pop($stack),
+                default => null,
+            };
+        }
+        
+        // 如果还在字符串内，先关闭字符串
+        if ($inString) {
+            $trimmed .= '"';
+        }
+        
+        // 移除可能的尾部不完整键值对（如 "key": 或 "key": "partial）
+        // 尝试截断到最后一个完整的键值对
+        $trimmed = preg_replace('/,\s*"[^"]*"\s*:\s*("([^"\\\\]|\\\\.)*)?$/', '', $trimmed);
+        
+        // 关闭所有未闭合的结构
+        while (!empty($stack)) {
+            $trimmed .= array_pop($stack);
+        }
+        
+        return $trimmed;
+    }
+
+    // ============================================================
+    // 智能体（Agent）相关接口
+    // ============================================================
+
+    /**
+     * 获取当前场景可用的智能体列表
+     * 
+     * GET /pagebuilder/backend/ai-generate/agents
+     */
+    public function getAgents(): string
+    {
+        try {
+            $scenarioCode = $this->request->getParam('scenario', 'pagebuilder_component_generation');
+
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            $agents = $aiService->getAgentsForScenario($scenarioCode);
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'agents' => $agents,
+                    'scenario' => $scenarioCode,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('获取智能体列表失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 智能体模式的组件生成流（SSE）
+     * 
+     * GET /pagebuilder/backend/ai-generate/agent-component-stream?params=<base64JSON>
+     * 
+     * SSE 事件类型：
+     * - start: 开始
+     * - iteration: Tool 调用循环轮次
+     * - tool_call: 智能体调用工具
+     * - tool_result: 工具返回结果
+     * - chunk: 文本片段
+     * - complete: 完成（携带完整组件 JSON）
+     * - error: 错误
+     */
+    public function agentComponentStream(): void
+    {
+        // 智能体多轮迭代耗时较长，取消 PHP 执行时间限制
+        @set_time_limit(0);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            // 解析参数
+            $paramsRaw = $this->request->getParam('params', '');
+            $input = [];
+
+            if (is_array($paramsRaw)) {
+                $input = $paramsRaw;
+            } elseif (is_string($paramsRaw) && !empty($paramsRaw)) {
+                $paramsJson = base64_decode($paramsRaw);
+                if ($paramsJson !== false) {
+                    $input = json_decode($paramsJson, true) ?: [];
+                }
+            }
+
+            $agentCode = $input['agent_code'] ?? 'pagebuilder_component';
+            $styleCode = $input['style_code'] ?? 'tpmst';
+            $region = $input['region'] ?? 'content';
+            $name = trim($input['name'] ?? '');
+            $description = trim($input['description'] ?? '');
+            $style = $input['style'] ?? 'modern';
+            $fieldsInput = trim($input['fields'] ?? '');
+            $referenceComponent = $input['reference_component'] ?? '';
+            $referenceCode = $input['reference_code'] ?? '';
+
+            if (empty($name) || empty($description)) {
+                $sse->sendEvent('error', ['message' => __('组件名称和描述不能为空')]);
+                return;
+            }
+
+            // 发送开始事件
+            $sse->sendEvent('start', [
+                'message' => __('智能体模式：开始生成组件...'),
+                'agent_code' => $agentCode,
+                'name' => $name,
+                'region' => $region,
+            ]);
+
+            // 构建用户提示词
+            $prompt = $this->buildAgentUserPrompt($name, $description, $region, $style, $fieldsInput, $referenceCode);
+
+            $sse->sendEvent('prompt', [
+                'message' => __('提示词已构建'),
+                'prompt_length' => strlen($prompt),
+            ]);
+
+            // 调用智能体
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+
+            $sse->sendEvent('generating', ['message' => __('智能体正在工作...')]);
+
+            $result = $aiService->executeAgent(
+                $agentCode,
+                $prompt,
+                null, // 使用默认模型
+                [
+                    'category' => $region,
+                    'style_code' => $styleCode,
+                    'timeout' => 180,
+                    'max_tokens' => 8000,
+                ],
+                function (string $eventType, array $data) use ($sse) {
+                    // SSE 事件透传
+                    $sse->sendEvent($eventType, $data);
+                }
+            );
+
+            // 处理最终结果
+            if ($result->success) {
+                // 从返回内容中提取并解析 JSON
+                $rawJson = $this->extractJsonFromResponse($result->content);
+                $componentData = $rawJson ? $this->decodeJsonWithRepair($rawJson) : null;
+
+                if ($componentData) {
+                    // 生成组件代码标识
+                    $componentCode = $this->generateComponentCode($name, $region);
+
+                    $sse->sendEvent('complete', [
+                        'success' => true,
+                        'message' => __('组件生成完成'),
+                        'component' => $componentData,
+                        'component_code' => $componentCode,
+                        'agent_code' => $result->agentCode,
+                        'model_code' => $result->modelCode,
+                        'iterations' => $result->iterations,
+                        'tool_calls_count' => count($result->toolCalls),
+                    ]);
+                } else {
+                    // JSON 解析失败，尝试修复
+                    $sse->sendEvent('complete', [
+                        'success' => false,
+                        'message' => __('AI 返回内容不是有效 JSON，请重试'),
+                        'raw_content' => mb_substr($result->content, 0, 2000),
+                    ]);
+                }
+            } else {
+                $errMsg = $result->error ?: __('智能体执行失败');
+                $errMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $errMsg);
+                $sse->sendEvent('error', [
+                    'message' => $errMsg,
+                    'iterations' => $result->iterations,
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            $errorMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
+            error_log("[AgentComponentStream] 错误: " . $errorMsg);
+            $sse->sendEvent('error', ['message' => $errorMsg]);
+        }
+    }
+
+    /**
+     * 构建智能体模式的用户提示词
+     * 
+     * 与 buildComponentPrompt 不同，这里只包含用户需求描述，
+     * 规约和上下文由 Agent 的 system prompt 和 Tool 调用提供
+     */
+    private function buildAgentUserPrompt(
+        string $name,
+        string $description,
+        string $region,
+        string $style,
+        string $fieldsInput,
+        string $referenceCode
+    ): string {
+        $prompt = "请生成一个 PageBuilder 组件：\n\n";
+        $prompt .= "- 组件名称：{$name}\n";
+        $prompt .= "- 功能描述：{$description}\n";
+        $prompt .= "- 所属区域：{$region}\n";
+        $prompt .= "- 视觉风格：{$style}\n";
+
+        if (!empty($fieldsInput)) {
+            $prompt .= "- 自定义配置字段：{$fieldsInput}\n";
+        }
+
+        if (!empty($referenceCode)) {
+            $prompt .= "\n请先使用 `preview_reference_component` 工具查看参考组件「{$referenceCode}」的代码，";
+            $prompt .= "了解其结构和风格，然后在此基础上生成新组件。\n";
+        } else {
+            $prompt .= "\n建议先使用 `list_components` 工具查看当前区域已有组件，";
+            $prompt .= "然后使用 `get_component_framework` 获取区域框架模板。\n";
+        }
+
+        $prompt .= "\n请按照系统提示中的 JSON 格式输出最终结果。";
+
+        return $prompt;
     }
 }

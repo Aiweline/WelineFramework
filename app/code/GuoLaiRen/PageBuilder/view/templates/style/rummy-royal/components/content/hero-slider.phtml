@@ -1,0 +1,354 @@
+<?php
+/**
+ * RummyRoyal - Hero Slider Component
+ * 
+ * 全宽首屏区域，大标题、统计数据、CTA按钮和装饰性扑克牌形状
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 顶部徽章:text:🏆 #1 Rated
+ * content.title => 主标题:textarea:India's Most Trusted Rummy Platform
+ * content.description => 描述:textarea:Join millions of players on India's premier rummy platform. Play skill-based card games, compete in tournaments, and win real cash prizes with instant withdrawals.
+ * 
+ * group:cta => 按钮设置
+ * cta.primary_text => 主按钮文字:text:Play Rummy Now
+ * cta.primary_url => 主按钮链接:text:#games
+ * cta.secondary_text => 次按钮文字:text:Download App
+ * cta.secondary_url => 次按钮链接:text:#download
+ * 
+ * group:stats => 统计数据
+ * stats.items => 统计列表:textarea:5M+|Active Players\r\n₹500Cr+|Winnings Paid\r\n24/7|Live Support|格式：数值|标签，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $colors['hero_bg'] ?? 'linear-gradient(135deg, #1a0a2e 0%, #120520 50%, #0a0514 100%)';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#facc15';
+$accentSecondary = $colors['accent_secondary'] ?? '#dc2626';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+
+$badge = $config['content.badge'] ?? '🏆 #1 Rated';
+$title = $config['content.title'] ?? "India's Most Trusted Rummy Platform";
+$description = $config['content.description'] ?? 'Join millions of players on India\'s premier rummy platform. Play skill-based card games, compete in tournaments, and win real cash prizes with instant withdrawals.';
+
+$primaryBtnText = $config['cta.primary_text'] ?? 'Play Rummy Now';
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#games';
+$secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
+
+$statsRaw = $config['stats.items'] ?? "5M+|Active Players\n₹500Cr+|Winnings Paid\n24/7|Live Support";
+$stats = [];
+$lines = preg_split('/[\r\n]+/', $statsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $value = trim($parts[0] ?? '');
+    $label = trim($parts[1] ?? '');
+    if (!empty($value)) {
+        $stats[] = ['value' => $value, 'label' => $label];
+    }
+}
+
+$instanceId = 'rr-hero-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $heroBg ?>;
+            padding: 120px 0 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?>::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at 20% 50%, rgba(234, 179, 8, 0.1) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(220, 38, 38, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        /* Decorative playing card shapes */
+        #<?= $instanceId ?> .rr-hero-deco-card {
+            position: absolute;
+            width: 80px;
+            height: 120px;
+            border: 2px solid rgba(234, 179, 8, 0.1);
+            border-radius: 12px;
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-deco-card:nth-child(1) {
+            top: 10%;
+            right: 8%;
+            transform: rotate(15deg);
+        }
+        
+        #<?= $instanceId ?> .rr-hero-deco-card:nth-child(2) {
+            top: 60%;
+            right: 12%;
+            transform: rotate(-10deg);
+            width: 60px;
+            height: 90px;
+            border-color: rgba(220, 38, 38, 0.08);
+        }
+        
+        #<?= $instanceId ?> .rr-hero-deco-card:nth-child(3) {
+            bottom: 15%;
+            left: 5%;
+            transform: rotate(25deg);
+            width: 50px;
+            height: 75px;
+            border-color: rgba(234, 179, 8, 0.06);
+        }
+        
+        #<?= $instanceId ?> .rr-hero-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 28px;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-title {
+            font-size: 3.75rem;
+            font-weight: 800;
+            line-height: 1.1;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-title .rr-gold {
+            background: linear-gradient(135deg, #eab308 0%, #facc15 50%, #eab308 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-desc {
+            font-size: 1.2rem;
+            line-height: 1.7;
+            color: <?= $textSecondary ?>;
+            margin-bottom: 40px;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-cta {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 25px rgba(234, 179, 8, 0.4);
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 35px rgba(234, 179, 8, 0.55);
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-primary svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: transparent;
+            color: <?= $accentPrimary ?>;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border: 2px solid rgba(234, 179, 8, 0.4);
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-secondary:hover {
+            background: rgba(234, 179, 8, 0.08);
+            border-color: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-btn-secondary svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            flex-wrap: wrap;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-stat {
+            text-align: center;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-stat-value {
+            font-size: 2.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #eab308, #facc15);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.2;
+        }
+        
+        #<?= $instanceId ?> .rr-hero-stat-label {
+            font-size: 0.9rem;
+            color: <?= $textSecondary ?>;
+            margin-top: 4px;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .rr-hero-title {
+                font-size: 2.75rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> {
+                padding: 100px 0 60px;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-title {
+                font-size: 2.25rem;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-desc {
+                font-size: 1rem;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-stats {
+                gap: 32px;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-stat-value {
+                font-size: 1.75rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .rr-hero-title {
+                font-size: 1.85rem;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-cta {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-btn-primary,
+            #<?= $instanceId ?> .rr-hero-btn-secondary {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            #<?= $instanceId ?> .rr-hero-deco-card {
+                display: none;
+            }
+        }
+    </style>
+    
+    <!-- Decorative playing card shapes -->
+    <div class="rr-hero-deco-card"></div>
+    <div class="rr-hero-deco-card"></div>
+    <div class="rr-hero-deco-card"></div>
+    
+    <div class="rr-hero-container">
+        <?php if ($badge): ?>
+        <div class="rr-hero-badge"><?= htmlspecialchars($badge) ?></div>
+        <?php endif; ?>
+        
+        <h1 class="rr-hero-title"><?= nl2br(htmlspecialchars($title)) ?></h1>
+        
+        <p class="rr-hero-desc"><?= htmlspecialchars($description) ?></p>
+        
+        <div class="rr-hero-cta">
+            <?php if ($primaryBtnText): ?>
+            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="rr-hero-btn-primary">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <?= htmlspecialchars($primaryBtnText) ?>
+            </a>
+            <?php endif; ?>
+            
+            <?php if ($secondaryBtnText): ?>
+            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="rr-hero-btn-secondary">
+                <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                <?= htmlspecialchars($secondaryBtnText) ?>
+            </a>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (!empty($stats)): ?>
+        <div class="rr-hero-stats">
+            <?php foreach ($stats as $stat): ?>
+            <div class="rr-hero-stat">
+                <div class="rr-hero-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                <div class="rr-hero-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</section>

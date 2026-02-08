@@ -18,6 +18,13 @@
          parent="Weline_Websites::website_service"
          icon="mdi mdi-web"
          order="10"/>
+    <add source="Weline_Websites::domain_service"
+         name="domain_service"
+         title="域名服务"
+         action="*/admin/domain/index"
+         parent="Weline_Websites::website_service"
+         icon="mdi mdi-domain"
+         order="15"/>
     <add source="Weline_Websites::website_maintenance"
          name="website_maintenance"
          title="网站维护模式"

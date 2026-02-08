@@ -9,45 +9,120 @@
 
 namespace Weline\Framework\Http;
 
-
-use JetBrains\PhpStorm\NoReturn;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * HTTP 响应类
+ * 
+ * 重构说明：
+ * - 所有终止请求的操作都通过抛出 ResponseTerminateException 及其子类实现
+ * - 不再直接调用 exit()/die()
+ * - 不再判断 WLS_MODE，由 Runtime 层统一处理异常
+ * - 响应头通过 HeaderCollector 收集，由 Runtime 层统一发送
+ */
 class Response implements ResponseInterface
 {
+    /**
+     * HeaderCollector 实例
+     */
+    private ?HeaderCollectorInterface $headerCollector = null;
+    
+    /**
+     * 响应体
+     */
+    private string $body = '';
+    
+    /**
+     * 获取 HeaderCollector
+     */
+    private function getHeaderCollector(): HeaderCollectorInterface
+    {
+        if ($this->headerCollector === null) {
+            $this->headerCollector = HeaderCollector::getInstance();
+        }
+        return $this->headerCollector;
+    }
+
     function getEvenManager(): EventsManager
     {
         return ObjectManager::getInstance(EventsManager::class);
     }
 
-    private Response $instance;
-
-    private array $headers = [];
-
-    public function setHeader(string $header_key, string $header_value): static
-    {
-        $this->headers[$header_key] = $header_value;
-        header("{$header_key}:{$header_value}");
-
-        return $this;
-    }
-
-    public function setHeaders(array $headers): static
-    {
-        $this->headers = array_merge($this->headers, $headers);
-        foreach ($this->headers as $header_key => $header_value) {
-            header("{$header_key}:{$header_value}");
-        }
-
-        return $this;
-    }
-
     public function getRequest(): Request
     {
         return ObjectManager::getInstance(Request::class);
+    }
+    
+    /**
+     * 获取所有响应头
+     * 
+     * @return array<string, string|array>
+     */
+    public function getHeaders(): array
+    {
+        return $this->getHeaderCollector()->getHeaders();
+    }
+    
+    /**
+     * 获取响应体
+     */
+    public function getBody(): string
+    {
+        return $this->body;
+    }
+    
+    /**
+     * 获取状态码
+     */
+    public function getStatusCode(): int
+    {
+        return $this->getHeaderCollector()->getStatusCode();
+    }
+
+    /**
+     * 设置响应头（只收集，不立即发送）
+     */
+    public function setHeader(string $header_key, string $header_value): static
+    {
+        $this->getHeaderCollector()->setHeader($header_key, $header_value);
+        return $this;
+    }
+
+    /**
+     * 批量设置响应头
+     */
+    public function setHeaders(array $headers): static
+    {
+        $this->getHeaderCollector()->setHeaders($headers);
+        return $this;
+    }
+    
+    /**
+     * 发送收集的响应头（由 Runtime 层调用）
+     */
+    public function emitHeaders(): void
+    {
+        $this->getHeaderCollector()->emit();
+    }
+    
+    /**
+     * 设置 Cookie（通过 HeaderCollector）
+     */
+    public function setCookie(
+        string $name,
+        string $value,
+        int $expire = 0,
+        string $path = '/',
+        string $domain = '',
+        bool $secure = false,
+        bool $httpOnly = true,
+        string $sameSite = 'Lax'
+    ): static {
+        $this->getHeaderCollector()->setCookie($name, $value, $expire, $path, $domain, $secure, $httpOnly, $sameSite);
+        return $this;
     }
 
     public function setData(mixed $data): static
@@ -55,28 +130,28 @@ class Response implements ResponseInterface
         /**@var DataObject $dataObject */
         $dataObject = ObjectManager::getInstance(DataObject::class);
         $dataObject->setData($data);
-        if (is_int(strpos($this->getRequest()->getContentType(), 'application/json'))) {
-            header('Content-type: application/json');
-            echo $dataObject->toJson();
-        }
-        if (is_int(strpos($this->getRequest()->getContentType(), 'text/xml'))) {
-            header('Content-type: text/xml');
-            echo $dataObject->toXml();
+        
+        if (\is_int(\strpos($this->getRequest()->getContentType(), 'application/json'))) {
+            $this->setHeader('Content-Type', 'application/json');
+            $this->body = $dataObject->toJson();
+        } elseif (\is_int(\strpos($this->getRequest()->getContentType(), 'text/xml'))) {
+            $this->setHeader('Content-Type', 'text/xml');
+            $this->body = $dataObject->toXml();
         } else {
-            echo $dataObject->toString();
+            $this->body = $dataObject->toString();
         }
+        
         return $this;
     }
 
     /**
-     * @DESC          # 无路由
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2021/9/7 23:06
-     * 参数区：
+     * 无路由处理
+     * 
+     * 始终抛出 NoRouterException，由 Runtime 层统一处理。
+     * 
+     * @throws NoRouterException
      */
-    public function noRouter(int|string $code = 404, string $msg = ''): void
+    public function noRouter(int|string $code = 404, string $msg = ''): never
     {
         if (empty($msg)) {
             switch ($code) {
@@ -93,107 +168,136 @@ class Response implements ResponseInterface
                     $msg = 'Unknown Error';
             }
         }
-        $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before');
-        if (DEV || CLI) {
-            if (!headers_sent()) {
-                http_response_code($code);
-                header('http/2.0 ' . $code . ' ' . $msg);
-                header('status: ' . $code . ' ' . $msg);
-            }
-        } else {
-            http_response_code($code);
-            header('http/2.0 ' . $code . ' ' . $msg);
-            header('status: ' . $code . ' ' . $msg);
-        }
-        if (is_file(BP . 'pub/errors/' . $code . '.php')) {
-            exit(include BP . 'pub/errors/' . $code . '.php');
-        }
-        exit();
-    }
-
-    public function responseHttpCode(int $code = 200): void
-    {
-        http_response_code($code);
-        exit();
-    }
-
-    #[NoReturn]
-    public function redirect(string $url, $code = 302): void
-    {
-        $data = new DataObject(['url' => $url, 'code' => $code]);
-        $this->getEvenManager()->dispatch('Framework_Http::response_redirect_before', $data);
-        $url = $data->getData('url');
-        $code = $data->getData('code');
-        http_response_code($code);
-        Header("Location:$url");
-        exit(0);
-    }
-
-    public function renderJson(array $data): bool|string
-    {
-        Header('Content-Type:application/json; charset=utf-8');
-        return json_encode($data);
+        
+        $eventData = ['code' => $code, 'msg' => $msg];
+        $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before', $eventData);
+        $statusCode = \is_int($code) ? $code : (int) $code;
+        
+        // 始终抛出异常，由 Runtime 层统一处理
+        throw new NoRouterException($statusCode, $msg);
     }
 
     /**
-     * 设置HTTP响应状态码
+     * 响应 HTTP 状态码
      * 
-     * @param int $code HTTP状态码
-     * @return static
+     * @throws ResponseTerminateException
+     */
+    public function responseHttpCode(int $code = 200): never
+    {
+        throw new ResponseTerminateException($code);
+    }
+
+    /**
+     * 重定向
+     * 
+     * 始终抛出 RedirectException，由 Runtime 层统一处理。
+     * 
+     * @throws RedirectException
+     */
+    public function redirect(string $url, int $code = 302): never
+    {
+        // 重定向监控：记录重定向信息
+        $redirectCount = ($_SERVER['REDIRECT_COUNT'] ?? 0) + 1;
+        $_SERVER['REDIRECT_COUNT'] = $redirectCount;
+        $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
+        
+        // 如果重定向次数过多，记录警告
+        if ($redirectCount > 5) {
+            \error_log("[Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$url}");
+        }
+        
+        // 如果重定向次数超过10次，停止重定向循环
+        if ($redirectCount > 10) {
+            \error_log("[Redirect Error] Redirect loop detected! Stopping redirect. Current URI: {$currentUri}, Attempted redirect to: {$url}");
+            throw new \RuntimeException("Redirect loop detected after {$redirectCount} redirects");
+        }
+        
+        // 触发重定向前事件
+        $data = new DataObject(['url' => $url, 'code' => $code]);
+        $this->getEvenManager()->dispatch('Framework_Http::response_redirect_before', $data);
+        $url = $data->getData('url');
+        $code = (int) $data->getData('code');
+        
+        // 始终抛出异常，由 Runtime 层统一处理
+        throw new RedirectException($url, $code);
+    }
+
+    /**
+     * 渲染 JSON 响应
+     */
+    public function renderJson(array $data): string
+    {
+        $this->setHeader('Content-Type', 'application/json; charset=utf-8');
+        return \json_encode($data);
+    }
+
+    /**
+     * 设置 HTTP 响应状态码
      */
     public function setHttpResponseCode(int $code): static
     {
-        http_response_code($code);
+        $this->getHeaderCollector()->setStatusCode($code);
         return $this;
     }
 
     /**
      * 设置响应体内容
-     * 
-     * @param string $body 响应体内容
-     * @return static
      */
     public function setBody(string $body): static
     {
-        echo $body;
+        $this->body = $body;
         return $this;
     }
 
     /**
-     * 发送响应并退出
+     * 发送响应并终止
      * 
-     * @return void
+     * @throws ResponseTerminateException
      */
-    #[NoReturn]
-    public function sendResponse(): void
+    public function sendResponse(): never
     {
-        exit;
+        throw new ResponseTerminateException(
+            $this->getHeaderCollector()->getStatusCode(),
+            $this->body,
+            $this->getHeaderCollector()->getHeaders()
+        );
     }
 
-    /*下载*/
-    public function download(string $file, string $name = '', bool $is_delete = false, bool $exit = true): void
+    /**
+     * 文件下载
+     * 
+     * @throws DownloadException
+     */
+    public function download(string $file, string $name = '', bool $is_delete = false): never
     {
-        if (empty($name)) {
-            $name = basename($file);
-        }
-        if (is_file($file)) {
-            header('Content-Description: File Transfer');
-            header('Content-Type: application/octet-stream');
-            header('Content-Disposition: attachment; filename=' . $name);
-            header('Content-Transfer-Encoding: binary');
-            header('Expires: 0');
-            header('Cache-Control: must-revalidate');
-            header('Pragma: public');
-            header('Content-Length: ' . filesize($file));
-            readfile($file);
-            if ($is_delete) {
-                unlink($file);
-            }
-        } else {
+        if (!\is_file($file)) {
             Message::error(__('文件不存在！'));
+            throw new NoRouterException(404, 'File not found');
         }
-        if ($exit) {
-            exit();
-        }
+        
+        // 始终抛出异常，由 Runtime 层统一处理
+        throw new DownloadException($file, $name, $is_delete);
+    }
+    
+    /**
+     * 构建 ResponseTerminateException
+     * 
+     * 用于需要立即终止请求的场景
+     */
+    public function terminate(): ResponseTerminateException
+    {
+        return new ResponseTerminateException(
+            $this->getHeaderCollector()->getStatusCode(),
+            $this->body,
+            $this->getHeaderCollector()->getHeaders()
+        );
+    }
+    
+    /**
+     * 获取 HeaderCollector 实例（供外部访问）
+     */
+    public function getHeaderCollectorInstance(): HeaderCollectorInterface
+    {
+        return $this->getHeaderCollector();
     }
 }

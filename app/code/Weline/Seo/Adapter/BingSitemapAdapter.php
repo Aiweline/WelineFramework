@@ -71,7 +71,14 @@ class BingSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function submitSitemap(string $sitemapUrl, array $accountConfig): array
     {
-        $apiKey = $accountConfig['api_key'] ?? '';
+        // 兼容嵌套和平铺两种 config 格式
+        $config = $accountConfig['config'] ?? $accountConfig;
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            $config = is_array($decoded) ? $decoded : $accountConfig;
+        }
+        
+        $apiKey = $config['api_key'] ?? '';
         
         if (empty($apiKey)) {
             return [
@@ -82,12 +89,12 @@ class BingSitemapAdapter extends AbstractSitemapPlatformAdapter
         }
 
         // 使用 IndexNow 协议
-        if (!empty($accountConfig['use_indexnow'])) {
-            return $this->submitViaIndexNow($sitemapUrl, $accountConfig);
+        if (!empty($config['use_indexnow'])) {
+            return $this->submitViaIndexNow($sitemapUrl, $config);
         }
         
         // 使用 Webmaster API
-        return $this->submitViaApi($sitemapUrl, $accountConfig);
+        return $this->submitViaApi($sitemapUrl, $config);
     }
 
     /**

@@ -14,6 +14,7 @@ namespace Weline\Websites\Model;
 
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
@@ -492,6 +493,36 @@ class WebsiteDomain extends Model
             ->find()
             ->fetch();
         return $this;
+    }
+
+    /**
+     * 检查 (域名, 子路径) 是否已被其他站点占用
+     *
+     * @param string $domain 域名
+     * @param string $subPath 子路径（如 '' 或 '/shop'）
+     * @param int|null $excludeWebsiteId 排除的网站 ID（编辑时传入当前站 id，不视为冲突）
+     * @return array|null 若被占用返回 ['website_id' => int, 'website_name' => string]，否则 null
+     */
+    public function findConflict(string $domain, string $subPath, ?int $excludeWebsiteId = null): ?array
+    {
+        $domain = \strtolower(\trim($domain));
+        $subPath = $subPath === '' ? '' : (\str_starts_with($subPath, '/') ? $subPath : '/' . $subPath);
+        $row = $this->clearQuery()
+            ->where(self::fields_DOMAIN, $domain)
+            ->where(self::fields_SUB_PATH, $subPath)
+            ->find()
+            ->fetch();
+        if (!$row || !$this->getDomainId()) {
+            return null;
+        }
+        $websiteId = (int) $this->getData(self::fields_WEBSITE_ID);
+        if ($excludeWebsiteId !== null && $websiteId === $excludeWebsiteId) {
+            return null;
+        }
+        $website = ObjectManager::getInstance(Website::class);
+        $website->load($websiteId);
+        $name = $website->getId() ? (string) $website->getData(Website::fields_NAME) : (string) $websiteId;
+        return ['website_id' => $websiteId, 'website_name' => $name];
     }
     
     /**

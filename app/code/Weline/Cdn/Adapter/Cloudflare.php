@@ -490,6 +490,142 @@ class Cloudflare implements AdapterInterface
 
         throw new Core(__('Zone不存在: %{1}', [$domain]));
     }
+    
+    /**
+     * @inheritDoc
+     */
+    public function enableAttackMode(string $zoneId, array $credentials, array $attackData = []): array
+    {
+        // Cloudflare 的 "Under Attack Mode" 设置
+        // API: PATCH /zones/{zone_id}/settings/security_level
+        // 值: "under_attack" 表示开启攻击模式
+        
+        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/settings/security_level';
+        
+        try {
+            $response = $this->makeRequest('PATCH', $url, [
+                'value' => 'under_attack'
+            ], $credentials);
+            
+            if ($response['success'] ?? false) {
+                // 可选：同时封禁攻击者 IP
+                $blockedIps = $this->blockAttackerIps($zoneId, $credentials, $attackData['attacker_ips'] ?? []);
+                
+                return [
+                    'success' => true,
+                    'message' => __('Cloudflare 攻击防护模式已开启'),
+                    'data' => [
+                        'security_level' => 'under_attack',
+                        'blocked_ips' => $blockedIps,
+                    ]
+                ];
+            }
+            
+            return [
+                'success' => false,
+                'message' => $response['errors'][0]['message'] ?? __('开启攻击防护模式失败')
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => __('开启攻击防护模式异常: %{1}', [$e->getMessage()])
+            ];
+        }
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function disableAttackMode(string $zoneId, array $credentials): array
+    {
+        // 将安全级别恢复为 "medium"（默认值）
+        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/settings/security_level';
+        
+        try {
+            $response = $this->makeRequest('PATCH', $url, [
+                'value' => 'medium'
+            ], $credentials);
+            
+            if ($response['success'] ?? false) {
+                return [
+                    'success' => true,
+                    'message' => __('Cloudflare 攻击防护模式已关闭'),
+                    'data' => [
+                        'security_level' => 'medium',
+                    ]
+                ];
+            }
+            
+            return [
+                'success' => false,
+                'message' => $response['errors'][0]['message'] ?? __('关闭攻击防护模式失败')
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => __('关闭攻击防护模式异常: %{1}', [$e->getMessage()])
+            ];
+        }
+    }
+    
+    /**
+     * @inheritDoc
+     */
+    public function supportsAttackMode(): bool
+    {
+        return true;
+    }
+    
+    /**
+     * 封禁攻击者 IP（使用 Cloudflare Access Rules）
+     * 
+     * @param string $zoneId Zone ID
+     * @param array $credentials 凭据
+     * @param array $ips 攻击者 IP 列表
+     * @return array 封禁结果
+     */
+    private function blockAttackerIps(string $zoneId, array $credentials, array $ips): array
+    {
+        if (empty($ips)) {
+            return ['blocked' => 0, 'failed' => 0];
+        }
+        
+        $blocked = 0;
+        $failed = 0;
+        
+        // 限制封禁 IP 数量，避免 API 限流
+        $ipsToBlock = \array_slice($ips, 0, 10);
+        
+        foreach ($ipsToBlock as $ip) {
+            try {
+                // 使用 Zone-level Access Rules API
+                $url = self::API_BASE_URL . '/zones/' . $zoneId . '/firewall/access_rules/rules';
+                
+                $response = $this->makeRequest('POST', $url, [
+                    'mode' => 'block',
+                    'configuration' => [
+                        'target' => 'ip',
+                        'value' => $ip,
+                    ],
+                    'notes' => 'Auto-blocked by WLS attack detection at ' . \date('Y-m-d H:i:s'),
+                ], $credentials);
+                
+                if ($response['success'] ?? false) {
+                    $blocked++;
+                } else {
+                    $failed++;
+                }
+            } catch (\Throwable $e) {
+                $failed++;
+            }
+        }
+        
+        return [
+            'blocked' => $blocked,
+            'failed' => $failed,
+            'total' => \count($ipsToBlock),
+        ];
+    }
 
     /**
      * @DESC          # 发送API请求

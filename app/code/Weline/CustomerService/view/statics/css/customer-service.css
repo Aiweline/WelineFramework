@@ -60,6 +60,57 @@
     font-weight: bold;
 }
 
+/* ======== 在线状态指示器 ======== */
+
+/* 悬浮按钮上的状态点 */
+.cs-status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid white;
+    transition: background-color 0.3s ease;
+}
+
+.cs-status-dot.cs-status-online {
+    background-color: #22c55e; /* 绿色 - 在线 */
+}
+
+.cs-status-dot.cs-status-ai {
+    background-color: #3b82f6; /* 蓝色 - AI接管 */
+}
+
+.cs-status-dot.cs-status-offline {
+    background-color: #9ca3af; /* 灰色 - 离线 */
+}
+
+/* 聊天窗口标题中的状态标签 */
+.cs-status-label {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+    font-weight: 500;
+    line-height: 18px;
+    vertical-align: middle;
+}
+
+/* 状态标签颜色跟随状态点 */
+.cs-status-dot.cs-status-online ~ .cs-badge,
+.cs-status-label {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 通过 JS 动态设置的状态类（与 .cs-status-dot 同步） */
+/* 默认离线状态 */
+.cs-status-label {
+    background-color: rgba(156, 163, 175, 0.15);
+    color: #9ca3af;
+}
+
 /* 聊天窗口 */
 .cs-chat-window {
     position: absolute;

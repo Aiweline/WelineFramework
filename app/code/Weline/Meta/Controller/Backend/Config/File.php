@@ -28,7 +28,8 @@ class File extends BackendController
         $metaModel = ObjectManager::getInstance(MetaModel::class);
         $namespaces = $metaModel->reset()
             ->fields(MetaModel::fields_NAMESPACE)
-            ->where(MetaModel::fields_NAMESPACE . " IS NOT NULL AND " . MetaModel::fields_NAMESPACE . " != ''")
+            ->where(MetaModel::fields_NAMESPACE, null, 'IS NOT NULL')
+            ->where(MetaModel::fields_NAMESPACE, '', '!=')
             ->group(MetaModel::fields_NAMESPACE)
             ->order(MetaModel::fields_NAMESPACE, 'ASC')
             ->select()
@@ -54,7 +55,8 @@ class File extends BackendController
             $typeResult = $metaModel->reset()
                 ->fields(MetaModel::fields_META_TYPE)
                 ->where(MetaModel::fields_NAMESPACE, $namespace)
-                ->where(MetaModel::fields_META_TYPE . " IS NOT NULL AND " . MetaModel::fields_META_TYPE . " != ''")
+                ->where(MetaModel::fields_META_TYPE, null, 'IS NOT NULL')
+                ->where(MetaModel::fields_META_TYPE, '', '!=')
                 ->group(MetaModel::fields_META_TYPE)
                 ->order(MetaModel::fields_META_TYPE, 'ASC')
                 ->select()
@@ -74,7 +76,8 @@ class File extends BackendController
             $categoryResult = $metaModel->reset()
                 ->fields(MetaModel::fields_CATEGORY)
                 ->where(MetaModel::fields_NAMESPACE, $namespace)
-                ->where(MetaModel::fields_CATEGORY . " IS NOT NULL AND " . MetaModel::fields_CATEGORY . " != ''")
+                ->where(MetaModel::fields_CATEGORY, null, 'IS NOT NULL')
+                ->where(MetaModel::fields_CATEGORY, '', '!=')
                 ->group(MetaModel::fields_CATEGORY)
                 ->order(MetaModel::fields_CATEGORY, 'ASC')
                 ->select()
@@ -99,7 +102,8 @@ class File extends BackendController
             $scopeResult = $metaConfigModel->reset()
                 ->fields(MetaConfig::fields_SCOPE)
                 ->where(MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::fields_SCOPE . " IS NOT NULL AND " . MetaConfig::fields_SCOPE . " != ''")
+                ->where(MetaConfig::fields_SCOPE, null, 'IS NOT NULL')
+                ->where(MetaConfig::fields_SCOPE, '', '!=')
                 ->group(MetaConfig::fields_SCOPE)
                 ->order(MetaConfig::fields_SCOPE, 'ASC')
                 ->select()
@@ -116,7 +120,8 @@ class File extends BackendController
             $localeResult = $metaConfigModel->reset()
                 ->fields(MetaConfig::fields_LOCALE)
                 ->where(MetaConfig::fields_NAMESPACE, $namespace)
-                ->where(MetaConfig::fields_LOCALE . " IS NOT NULL AND " . MetaConfig::fields_LOCALE . " != ''")
+                ->where(MetaConfig::fields_LOCALE, null, 'IS NOT NULL')
+                ->where(MetaConfig::fields_LOCALE, '', '!=')
                 ->group(MetaConfig::fields_LOCALE)
                 ->order(MetaConfig::fields_LOCALE, 'ASC')
                 ->select()
@@ -193,7 +198,8 @@ class File extends BackendController
         $metaModel->where(MetaModel::fields_META_TYPE, 'field', '!=');
         
         // 只查询文件路径不为空的记录（文件类型）
-        $metaModel->where(MetaModel::fields_FILE_PATH . " IS NOT NULL AND " . MetaModel::fields_FILE_PATH . " != ''");
+        $metaModel->where(MetaModel::fields_FILE_PATH, null, 'IS NOT NULL');
+        $metaModel->where(MetaModel::fields_FILE_PATH, '', '!=');
 
         if ($area) {
             $metaModel->where(MetaModel::fields_AREA, $area);
@@ -427,7 +433,7 @@ class File extends BackendController
                         ->where(\Weline\Meta\Model\MetaConfig::fields_NAMESPACE, $namespace)
                         ->where(\Weline\Meta\Model\MetaConfig::fields_CONFIG_KEY, $configKey)
                         ->where(\Weline\Meta\Model\MetaConfig::fields_SCOPE, $scope)
-                        ->where(\Weline\Meta\Model\MetaConfig::fields_LOCALE . ' IS NULL');
+                        ->where(\Weline\Meta\Model\MetaConfig::fields_LOCALE, null, 'IS NULL');
                     
                     if ($metaId) {
                         $configQuery->where(\Weline\Meta\Model\MetaConfig::fields_META_ID, $metaId);
@@ -578,9 +584,9 @@ class File extends BackendController
                     // 支持翻译的参数，保存到 I18n Dictionary（通过 MetaTranslation）
                     MetaTranslation::setTranslatedValueWithScope(
                         $metaIdentify . '.param.' . $paramName . '.value',
+                        $newValue,
                         $scope,
-                        $locale,
-                        $newValue
+                        $locale
                     );
                     $savedCount++;
                 } else {

@@ -248,7 +248,8 @@ class Component extends BackendController
     public function postAdd()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -667,7 +668,8 @@ class Component extends BackendController
     public function postValidate()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $componentCode = $body['component_code'] ?? '';
             $region = $body['region'] ?? '';
@@ -871,7 +873,8 @@ class Component extends BackendController
     public function postRemove()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1025,7 +1028,8 @@ class Component extends BackendController
     public function postUpdateConfig()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1157,7 +1161,8 @@ class Component extends BackendController
     public function postReorder()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $pageId = (int)($body['page_id'] ?? 0);
             $region = $body['region'] ?? '';

@@ -85,7 +85,7 @@ class CohereAdapter extends BaseAdapter
     /**
      * @inheritDoc
      */
-    public function testConnection(PlatformAccount $account): PushResult
+    public function testConnection(PlatformAccount $account): bool
     {
         try {
             /** @var SecretStoreService $secretStore */
@@ -93,7 +93,7 @@ class CohereAdapter extends BaseAdapter
             $apiKey = $secretStore->decryptApiKey($account->getData('api_key'));
 
             if (empty($apiKey)) {
-                return new PushResult(false, 'API密钥解密失败');
+                return false;
             }
 
             $headers = [
@@ -108,12 +108,12 @@ class CohereAdapter extends BaseAdapter
             );
 
             if ($this->validateResponse($response)) {
-                return new PushResult(true, '连接测试成功');
+                return true;
             } else {
-                return new PushResult(false, "连接测试失败: HTTP {$response['http_code']}");
+                return false;
             }
         } catch (\Exception $e) {
-            return new PushResult(false, $e->getMessage());
+            return false;
         }
     }
 }

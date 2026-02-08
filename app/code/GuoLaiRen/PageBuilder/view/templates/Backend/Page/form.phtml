@@ -2092,7 +2092,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showHandleChecking();
             
             try {
-                const checkUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/checkHandle') ?>' +
+                const checkUrl = '<?= $this->getBackendUrl('*/backend/page/checkHandle') ?>' +
                     '?handle=' + encodeURIComponent(handle) +
                     '&page_id=' + currentPageId;
                 
@@ -3426,7 +3426,7 @@ async function loadStyleList() {
         styleCardsContainer.innerHTML = '';
         
         // 构建请求 URL
-        const apiUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyles') ?>';
+        const apiUrl = '<?= $this->getBackendUrl('*/backend/page/getStyles') ?>';
         console.log('📡 请求 URL:', apiUrl);
         
         // 发送AJAX请求
@@ -3602,7 +3602,7 @@ function renderStyleCards(styles, currentStyle, currentPageId) {
     
     styleCardsEmpty.style.display = 'none';
     
-    const previewImageUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/stylePreviewImage') ?>';
+    const previewImageUrl = '<?= $this->getBackendUrl('*/backend/page/stylePreviewImage') ?>';
     const previewFullUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/full') ?>';
     
     styles.forEach(style => {
@@ -4402,7 +4402,7 @@ async function autoSaveStyleChange(newStyle) {
         // 更新样式字段
         formData.set('style', newStyle);
         
-        // 发送AJAX请求
+        // 发送AJAX请求（WLS 已支持解析 multipart/form-data）
         const response = await fetch(form.action, {
             method: 'POST',
             headers: {

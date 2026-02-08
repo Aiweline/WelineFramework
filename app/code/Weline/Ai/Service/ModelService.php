@@ -1,7 +1,10 @@
 <?php
-// ...existing code...
+
+declare(strict_types=1);
+
+namespace Weline\Ai\Service;
+
 class ModelService {
-    // ...existing code...
 
     /**
      * 复制模型：默认复用原始供应商引用；当 options['clone_supplier'] = true 时创建新的供应商记录并引用它。
@@ -155,5 +158,4 @@ class ModelService {
         }
     }
 
-    // ...existing code...
 }

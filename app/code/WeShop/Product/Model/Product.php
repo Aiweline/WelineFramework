@@ -611,7 +611,7 @@ class Product extends EavModel
      * 获取事件管理器
      * @return \Weline\Framework\Event\EventsManager
      */
-    protected function getEventManager(): \Weline\Framework\Event\EventsManager
+    public function getEventManager(): \Weline\Framework\Event\EventsManager
     {
         return ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
     }

@@ -1,0 +1,165 @@
+<?php
+/**
+ * PokerArena - About Content Component
+ * 
+ * About page with platform stats, story, responsible gaming values, team
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:About Us
+ * content.title => 标题:text:About PokerArena
+ * content.description => 描述:textarea:Founded by poker enthusiasts, PokerArena was built to create the ultimate online poker experience — fair, fast, and player-first.
+ * 
+ * group:story => 品牌故事
+ * story.title => 故事标题:text:Our Story
+ * story.content => 故事内容:textarea:PokerArena was founded in 2020 by a team of professional poker players and technology experts who believed online poker could be better. We set out to build a platform that combines cutting-edge technology with the authentic feel of live poker. Today, we serve over 500,000 active players across 50+ countries.
+ * 
+ * group:stats => 平台数据
+ * stats.items => 数据列表:textarea:500K+|Active Players\r\n$10M+|Daily Prize Pools\r\n50+|Countries Served\r\n99.9%|Uptime|格式：数值|标签
+ * 
+ * group:values => 价值观
+ * values.items => 价值观列表:textarea:Fair Play|Every hand is dealt with certified RNG technology. We maintain the highest standards of game integrity.\r\nPlayer First|Our platform is designed around player needs — from intuitive UI to responsive support.\r\nResponsible Gaming|We provide tools for self-exclusion, deposit limits, and session time reminders.\r\nInnovation|We continuously invest in technology to deliver the smoothest poker experience possible.|格式：标题|描述
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['about_bg'] ?? '#071209';
+$sectionBg2 = $colors['section_bg_2'] ?? '#0a1f10';
+$textPrimary = $colors['text_primary'] ?? '#ecfdf5';
+$textSecondary = $colors['text_secondary'] ?? '#86efac';
+$textMuted = $colors['text_muted'] ?? '#6b8f7a';
+$accentPrimary = $colors['accent_primary'] ?? '#047857';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#10b981';
+$accentSecondaryLight = $colors['accent_secondary_light'] ?? '#fbbf24';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
+
+$badge = $config['content.badge'] ?? 'About Us';
+$title = $config['content.title'] ?? 'About PokerArena';
+$description = $config['content.description'] ?? 'Founded by poker enthusiasts, PokerArena was built to create the ultimate online poker experience — fair, fast, and player-first.';
+
+$storyTitle = $config['story.title'] ?? 'Our Story';
+$storyContent = $config['story.content'] ?? 'PokerArena was founded in 2020 by a team of professional poker players and technology experts who believed online poker could be better. We set out to build a platform that combines cutting-edge technology with the authentic feel of live poker. Today, we serve over 500,000 active players across 50+ countries.';
+
+$statsRaw = $config['stats.items'] ?? "500K+|Active Players\n\$10M+|Daily Prize Pools\n50+|Countries Served\n99.9%|Uptime";
+$stats = [];
+foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    if (!empty(trim($parts[0] ?? ''))) {
+        $stats[] = ['value' => trim($parts[0]), 'label' => trim($parts[1] ?? '')];
+    }
+}
+
+$valuesRaw = $config['values.items'] ?? "Fair Play|Every hand is dealt with certified RNG technology. We maintain the highest standards of game integrity.\nPlayer First|Our platform is designed around player needs — from intuitive UI to responsive support.\nResponsible Gaming|We provide tools for self-exclusion, deposit limits, and session time reminders.\nInnovation|We continuously invest in technology to deliver the smoothest poker experience possible.";
+$values = [];
+foreach (preg_split('/[\r\n]+/', $valuesRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    if (!empty(trim($parts[0] ?? ''))) {
+        $values[] = ['title' => trim($parts[0]), 'desc' => trim($parts[1] ?? '')];
+    }
+}
+
+$instanceId = 'pa-about-' . uniqid();
+?>
+
+<section class="pa-about" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> .pa-about-hero { background: <?= $sectionBg ?>; padding: 80px 0 60px; text-align: center; }
+        #<?= $instanceId ?> .pa-about-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        #<?= $instanceId ?> .pa-about-badge {
+            display: inline-flex; padding: 8px 18px;
+            background: rgba(4, 120, 87, 0.15); border: 1px solid rgba(4, 120, 87, 0.3);
+            border-radius: 50px; font-size: 0.85rem; font-weight: 600;
+            color: <?= $accentPrimaryLight ?>; margin-bottom: 20px; text-transform: uppercase;
+        }
+        
+        #<?= $instanceId ?> .pa-about-title { font-size: 3rem; font-weight: 900; color: <?= $textPrimary ?>; margin-bottom: 20px; }
+        #<?= $instanceId ?> .pa-about-desc { font-size: 1.15rem; color: <?= $textSecondary ?>; max-width: 700px; margin: 0 auto; line-height: 1.7; }
+        
+        #<?= $instanceId ?> .pa-about-stats { background: <?= $sectionBg2 ?>; padding: 60px 0; }
+        #<?= $instanceId ?> .pa-about-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; text-align: center; }
+        #<?= $instanceId ?> .pa-about-stat-value { font-size: 2.5rem; font-weight: 800; color: <?= $accentSecondaryLight ?>; }
+        #<?= $instanceId ?> .pa-about-stat-label { font-size: 0.9rem; color: <?= $textSecondary ?>; margin-top: 4px; }
+        
+        #<?= $instanceId ?> .pa-about-story { background: <?= $sectionBg ?>; padding: 80px 0; }
+        #<?= $instanceId ?> .pa-about-story-inner { max-width: 800px; margin: 0 auto; }
+        #<?= $instanceId ?> .pa-about-story-title { font-size: 2rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 20px; text-align: center; }
+        #<?= $instanceId ?> .pa-about-story-text { font-size: 1.05rem; color: <?= $textSecondary ?>; line-height: 1.8; text-align: center; }
+        
+        #<?= $instanceId ?> .pa-about-values { background: <?= $sectionBg2 ?>; padding: 80px 0; }
+        #<?= $instanceId ?> .pa-about-values-title { font-size: 2rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 40px; text-align: center; }
+        #<?= $instanceId ?> .pa-about-values-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+        
+        #<?= $instanceId ?> .pa-about-value-card {
+            background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px; padding: 28px; transition: all 0.3s ease;
+        }
+        #<?= $instanceId ?> .pa-about-value-card:hover { border-color: rgba(4, 120, 87, 0.3); transform: translateY(-4px); }
+        #<?= $instanceId ?> .pa-about-value-title { font-size: 1.1rem; font-weight: 700; color: <?= $accentSecondaryLight ?>; margin-bottom: 8px; }
+        #<?= $instanceId ?> .pa-about-value-desc { font-size: 0.9rem; color: <?= $textMuted ?>; line-height: 1.7; }
+        
+        @media (max-width: 992px) { #<?= $instanceId ?> .pa-about-stats-grid { grid-template-columns: repeat(2, 1fr); } #<?= $instanceId ?> .pa-about-title { font-size: 2.25rem; } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .pa-about-stats-grid, #<?= $instanceId ?> .pa-about-values-grid { grid-template-columns: 1fr; } }
+    </style>
+    
+    <div class="pa-about-hero">
+        <div class="pa-about-container">
+            <div class="pa-about-badge"><?= htmlspecialchars($badge) ?></div>
+            <h1 class="pa-about-title"><?= htmlspecialchars($title) ?></h1>
+            <p class="pa-about-desc"><?= htmlspecialchars($description) ?></p>
+        </div>
+    </div>
+    
+    <?php if (!empty($stats)): ?>
+    <div class="pa-about-stats">
+        <div class="pa-about-container">
+            <div class="pa-about-stats-grid">
+                <?php foreach ($stats as $stat): ?>
+                <div>
+                    <div class="pa-about-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                    <div class="pa-about-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <div class="pa-about-story">
+        <div class="pa-about-container">
+            <div class="pa-about-story-inner">
+                <h2 class="pa-about-story-title"><?= htmlspecialchars($storyTitle) ?></h2>
+                <p class="pa-about-story-text"><?= htmlspecialchars($storyContent) ?></p>
+            </div>
+        </div>
+    </div>
+    
+    <?php if (!empty($values)): ?>
+    <div class="pa-about-values">
+        <div class="pa-about-container">
+            <h2 class="pa-about-values-title">Our Values</h2>
+            <div class="pa-about-values-grid">
+                <?php foreach ($values as $val): ?>
+                <div class="pa-about-value-card">
+                    <h3 class="pa-about-value-title"><?= htmlspecialchars($val['title']) ?></h3>
+                    <p class="pa-about-value-desc"><?= htmlspecialchars($val['desc']) ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</section>

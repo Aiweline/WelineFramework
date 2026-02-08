@@ -131,14 +131,11 @@ class Session extends BackendController
 
     /**
      * 关闭会话
+     * POST /customerservice/backend/session/close
      */
     #[Acl('Weline_CustomerService::session_close', '关闭会话', 'mdi-close', '关闭会话')]
-    public function close(): string
+    public function postClose(): string
     {
-        if (!$this->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
 

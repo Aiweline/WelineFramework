@@ -11,6 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Exception;
 
-class QueryException extends \Weline\Framework\Exception\Core
+class QueryException extends DatabaseException
 {
 }

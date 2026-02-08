@@ -19,6 +19,9 @@ use PDOException;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Compiler\Dialect\MysqlDialect;
+use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
+use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
@@ -48,6 +51,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     protected ?PDO $link = null;
+    protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
     protected bool $fromPool = false; // 标记连接是否来自连接池
 
@@ -83,7 +87,22 @@ final class Connector extends Query implements ConnectorInterface
             }
         );
         $this->fromPool = true;
+        try {
+            (new MysqlDialect())->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+        } catch (\Throwable $e) {
+            \Weline\Framework\App\Env::log_warning('database_version.log', __('MySQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]));
+        }
+        $this->wrappedConnection = new PdoConnection($this->link, 'mysql');
         return $this;
+    }
+
+    public function getWrappedConnection(): DbConnectionInterface
+    {
+        $this->create();
+        if ($this->wrappedConnection === null) {
+            $this->wrappedConnection = new PdoConnection($this->link, 'mysql');
+        }
+        return $this->wrappedConnection;
     }
 
     public function close(): void
@@ -94,6 +113,7 @@ final class Connector extends Query implements ConnectorInterface
                 ConnectionPool::releaseConnection($this->link, $this->configProvider);
             }
             $this->link = null;
+            $this->wrappedConnection = null;
             $this->fromPool = false;
         }
     }
@@ -106,8 +126,12 @@ final class Connector extends Query implements ConnectorInterface
         $this->close();
     }
 
+    /**
+     * @deprecated 请使用 getWrappedConnection() 获取连接并调用其方法，后续版本可能移除
+     */
     public function getLink(): PDO
     {
+        $this->create();
         return $this->link;
     }
 

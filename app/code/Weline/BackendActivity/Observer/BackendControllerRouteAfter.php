@@ -45,9 +45,12 @@ class BackendControllerRouteAfter implements ObserverInterface
                 try {
                     /** @var DataObject $data */
 //                    $data = $event->getData('data');
+                    // WLS 模式下 http_response_code() 可能返回 false，需要提供默认值
+                    $responseCode = http_response_code();
+                    $responseCode = ($responseCode === false) ? 200 : (int)$responseCode;
                     $result = $backendActivityLog
 //                        ->setResponse($data->getData('result'))
-                        ->setResponseCode(http_response_code())
+                        ->setResponseCode($responseCode)
                         ->setResponseTime(microtime(true) - START_TIME)
                         ->save();
                 } catch (ModelException $e) {
