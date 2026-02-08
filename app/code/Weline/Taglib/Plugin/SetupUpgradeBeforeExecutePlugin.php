@@ -97,26 +97,8 @@ class SetupUpgradeBeforeExecutePlugin
                         continue; // 跳过不符合接口的类
                     }
                     
-                    // 检查是否为静态类，如果是，使用反射获取静态方法信息
-                    $isStaticClass = false;
-                    $constructor = $refClass->getConstructor();
-                    if (!$constructor || !$constructor->isPublic()) {
-                        // 检查所有公共方法是否都是静态的
-                        $methods = $refClass->getMethods(\ReflectionMethod::IS_PUBLIC);
-                        $allStatic = true;
-                        foreach ($methods as $method) {
-                            if (in_array($method->getName(), ['__construct', '__destruct', '__clone', '__wakeup', '__sleep'])) {
-                                continue;
-                            }
-                            if (!$method->isStatic()) {
-                                $allStatic = false;
-                                break;
-                            }
-                        }
-                        if ($allStatic && !empty($methods)) {
-                            $isStaticClass = true;
-                        }
-                    }
+                    // 与 ObjectManager 一致：使用 ObjectManager::isStaticClass 判断，避免误用 getInstance 导致“不支持静态类实例化”
+                    $isStaticClass = ObjectManager::isStaticClass($item);
                     
                     // 对于静态类，直接使用类名调用静态方法；对于非静态类，尝试实例化
                     if ($isStaticClass) {

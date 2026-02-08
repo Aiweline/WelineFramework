@@ -726,7 +726,8 @@ class Dictionary extends BaseController
             // 已翻译数：该语言已翻译的词汇数（翻译不为空且不等于原文）
             $translated = $this->localeDictionary->reset()
                 ->where($this->localeDictionary::fields_LOCALE_CODE, $localeCode)
-                ->where("translate IS NOT NULL AND translate != ''")
+                ->where('translate', null, 'IS NOT NULL')
+                ->where('translate', '', '!=')
                 ->total();
             
             $untranslated = $total - $translated;

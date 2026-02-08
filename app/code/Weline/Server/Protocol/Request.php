@@ -308,7 +308,7 @@ class Request
     /**
      * 获取请求头
      */
-    public function header(string $name = null, mixed $default = null): mixed
+    public function header(?string $name = null, mixed $default = null): mixed
     {
         if ($name === null) {
             return $this->headers;
@@ -321,7 +321,7 @@ class Request
     /**
      * 获取 GET 参数
      */
-    public function get(string $name = null, mixed $default = null): mixed
+    public function get(?string $name = null, mixed $default = null): mixed
     {
         if ($name === null) {
             return $this->get;
@@ -333,7 +333,7 @@ class Request
     /**
      * 获取 POST 参数
      */
-    public function post(string $name = null, mixed $default = null): mixed
+    public function post(?string $name = null, mixed $default = null): mixed
     {
         if ($name === null) {
             return $this->post;
@@ -345,7 +345,7 @@ class Request
     /**
      * 获取输入参数（GET + POST）
      */
-    public function input(string $name = null, mixed $default = null): mixed
+    public function input(?string $name = null, mixed $default = null): mixed
     {
         $all = array_merge($this->get, $this->post);
         
@@ -359,7 +359,7 @@ class Request
     /**
      * 获取 Cookie
      */
-    public function cookie(string $name = null, mixed $default = null): mixed
+    public function cookie(?string $name = null, mixed $default = null): mixed
     {
         if ($name === null) {
             return $this->cookies;
@@ -371,7 +371,7 @@ class Request
     /**
      * 获取上传的文件
      */
-    public function file(string $name = null): mixed
+    public function file(?string $name = null): mixed
     {
         if ($name === null) {
             return $this->files;

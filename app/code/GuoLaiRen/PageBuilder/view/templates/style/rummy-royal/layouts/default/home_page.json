@@ -1,0 +1,118 @@
+{
+    "page_type": "home_page",
+    "name": "首页默认布局",
+    "description": "RummyRoyal 主题首页布局，完整Rummy游戏平台首页",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "RummyRoyal",
+                    "logo.width": 44,
+                    "navigation.links": "Home=>/\nGames=>#games\nDownload=>#download\nFAQ=>#faq\nContact=>/contact",
+                    "navigation.show_cta": "yes",
+                    "navigation.cta_text": "Play Now",
+                    "navigation.cta_url": "#games"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "hero-slider",
+                "enabled": true,
+                "instance_id": "hero-default",
+                "config": {
+                    "content.badge": "🏆 #1 Rated Rummy App",
+                    "content.title": "India's Most Trusted Rummy Platform",
+                    "content.description": "Join millions of players on India's premier rummy platform. Play skill-based card games, compete in tournaments, and win real cash prizes with instant withdrawals.",
+                    "cta.primary_text": "Play Rummy Now",
+                    "cta.primary_url": "#games",
+                    "cta.secondary_text": "Download App",
+                    "cta.secondary_url": "#download",
+                    "stats.items": "5M+|Active Players\n₹500Cr+|Winnings Paid\n24/7|Live Support"
+                }
+            },
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-default",
+                "config": {
+                    "content.badge": "Game Variants",
+                    "content.title": "Choose Your Rummy Style",
+                    "content.description": "From quick rounds to high-stakes tournaments, we have a rummy format for every player.",
+                    "games.items": "Points Rummy|The fastest format. Play a single deal, score lowest points, and win the pool instantly.|🃏|Play Now\nPool Rummy|Compete until opponents hit the point limit. Strategic play with 101 and 201 pool variants.|🎯|Play Now\nDeals Rummy|Fixed number of deals with chip-based scoring. Perfect for calculated players.|💎|Play Now\nRummy Tournament|Multi-table knockout tournaments with massive prize pools and leaderboard glory.|🏆|Join Now"
+                }
+            },
+            {
+                "code": "advantages",
+                "enabled": true,
+                "instance_id": "advantages-default",
+                "config": {
+                    "content.badge": "Why Choose Us",
+                    "content.title": "The RummyRoyal Advantage",
+                    "content.description": "We provide a safe, fair, and rewarding rummy experience with industry-leading features."
+                }
+            },
+            {
+                "code": "app-download",
+                "enabled": true,
+                "instance_id": "download-default",
+                "config": {
+                    "content.badge": "Download App",
+                    "content.title": "Play Rummy Anytime, Anywhere",
+                    "content.description": "Download the RummyRoyal app for the best mobile rummy experience. Lightweight, secure, and blazing fast tables."
+                }
+            },
+            {
+                "code": "testimonials",
+                "enabled": true,
+                "instance_id": "testimonials-default",
+                "config": {
+                    "content.badge": "Player Reviews",
+                    "content.title": "What Our Players Say",
+                    "content.description": "Thousands of players trust RummyRoyal for a fair and rewarding rummy experience."
+                }
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-default",
+                "config": {
+                    "content.badge": "FAQ",
+                    "content.title": "Frequently Asked Questions",
+                    "content.description": "Everything you need to know about playing rummy on RummyRoyal."
+                }
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "cta-default",
+                "config": {
+                    "content.title": "Ready to Win Big?",
+                    "content.description": "Join millions of rummy players and start winning real cash prizes today. Your first game is just a click away.",
+                    "buttons.primary_text": "Register Now",
+                    "buttons.primary_url": "#",
+                    "buttons.secondary_text": "Download App",
+                    "buttons.secondary_url": "#download"
+                }
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {
+                    "brand.name": "RummyRoyal",
+                    "brand.description": "India's most trusted online rummy platform. Play skill-based card games, win real cash prizes, and enjoy a premium gaming experience.",
+                    "copyright.text": "Play responsibly. Must be 18+ to play. Rummy is a game of skill."
+                }
+            }
+        ]
+    },
+    "notes": "RummyRoyal 完整首页布局配置"
+}

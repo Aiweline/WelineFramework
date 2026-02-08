@@ -68,6 +68,7 @@ setting: {
 1. **跳过提取机制**：
    - 如果script标签包含`data-no-extract="true"`属性，则不会被提取，保留在HTML中
    - 如果script标签是`theme.js`的外部引用（src属性包含theme.js），则不会被提取
+   - **延迟立即加载**：若 script 标签包含 `data-load-order="last"`，其中的 `Weline.declare(..., true, ...)` 调用会延迟到 DOMContentLoaded 后执行，避免栈溢出。详见 [Theme.js 使用指南 - 延迟立即加载](Theme.js使用指南.md#延迟立即加载data-load-order--optionsloadorder)
 
 2. **PHP代码检测**：
    - 在提取JS内容之前，使用正则 `/<\?(?:php|=|\s)/i` 检测PHP标记

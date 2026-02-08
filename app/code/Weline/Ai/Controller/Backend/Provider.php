@@ -628,11 +628,11 @@ class Provider extends BaseController
             }
             
             if ($dateFrom) {
-                $usageModel->where(UsageRecord::fields_CREATED_AT . ' >= ?', strtotime($dateFrom));
+                $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateFrom), '>=');
             }
             
             if ($dateTo) {
-                $usageModel->where(UsageRecord::fields_CREATED_AT . ' <= ?', strtotime($dateTo . ' 23:59:59'));
+                $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
             }
 
             $total = $usageModel->count();
@@ -684,11 +684,11 @@ class Provider extends BaseController
         }
         
         if ($dateFrom) {
-            $usageModel->where(UsageRecord::fields_CREATED_AT . ' >= ?', strtotime($dateFrom));
+            $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateFrom), '>=');
         }
         
         if ($dateTo) {
-            $usageModel->where(UsageRecord::fields_CREATED_AT . ' <= ?', strtotime($dateTo . ' 23:59:59'));
+            $usageModel->where(UsageRecord::fields_CREATED_AT, strtotime($dateTo . ' 23:59:59'), '<=');
         }
         
         $stats = $usageModel->fields(

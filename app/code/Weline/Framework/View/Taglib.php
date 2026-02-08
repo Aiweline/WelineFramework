@@ -297,18 +297,21 @@ class Taglib
             $this->sourceMap->setSourceFile($fileName);
         }
         
-        // 阶段 1: 提取 PHP 代码（每次编译创建新实例，避免嵌套编译时状态污染）
-        $extractor = new PhpExtractor();
+        // 阶段 1: 提取 PHP 代码（复用实例 + reset，避免每次编译创建新对象）
+        $extractor = $this->getPhpExtractor();
+        $extractor->reset();
         $cleanContent = $extractor->extract($content);
         
-        // 阶段 2: 词法分析（每次编译创建新实例）
-        $tokenizer = new Tokenizer();
+        // 阶段 2: 词法分析（复用实例 + reset）
+        $tokenizer = $this->getTokenizer();
+        $tokenizer->reset();
         $tags = $this->getTags($template, $fileName, $content);
         $tokenizer->setFrameworkTags(array_keys($tags));
         $tokens = $tokenizer->tokenize($cleanContent);
         
-        // 阶段 3: 构建 AST（每次编译创建新实例）
-        $astBuilder = new AstBuilder();
+        // 阶段 3: 构建 AST（复用实例 + reset）
+        $astBuilder = $this->getAstBuilder();
+        $astBuilder->reset();
         $astBuilder->setPhpExtractor($extractor);
         $ast = $astBuilder->build($tokens, $fileName);
         
@@ -316,8 +319,9 @@ class Taglib
         $pipeline = $this->getCompilePipeline();
         $ast = $pipeline->process($ast);
         
-        // 阶段 5: 生成代码（每次编译创建新实例，避免回调累积）
-        $generator = new CodeGenerator();
+        // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
+        $generator = $this->getCodeGenerator();
+        $generator->reset();
         $generator->setPhpExtractor($extractor);
         
         // 调试模式：传递 SourceMap 给生成器
@@ -1816,9 +1820,22 @@ class Taglib
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        // 过滤掉包含 :: 的非标准属性（开发模式调试信息）
+                        $filteredAttrs = '';
+                        if (!empty($tag_data[1])) {
+                            $rawAttrs = $tag_data[1];
+                            // 移除包含 :: 的属性（非标准属性名）- 改进正则以匹配完整路径
+                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $rawAttrs);
+                            // 清理多余的空格
+                            $filteredAttrs = trim($filteredAttrs);
+                            
+                            if ($filteredAttrs !== '') {
+                                $filteredAttrs = ' ' . $filteredAttrs;
+                            }
+                        }
                         return match ($tag_key) {
-                            'tag' => "<script {$tag_data[1]} src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}'></script>",
-                            default => "<script src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}'></script>"
+                            'tag' => "<script{$filteredAttrs} src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}'></script>",
+                            default => "<script{$filteredAttrs} src='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}'></script>"
                         };
                     }
             ],
@@ -1826,9 +1843,21 @@ class Taglib
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        // 过滤掉包含 :: 的非标准属性（开发模式调试信息）
+                        $filteredAttrs = '';
+                        if (!empty($tag_data[1])) {
+                            $rawAttrs = $tag_data[1];
+                            // 移除包含 :: 的属性（非标准属性名）- 改进正则以匹配完整路径
+                            $filteredAttrs = preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', $rawAttrs);
+                            // 清理多余的空格
+                            $filteredAttrs = trim($filteredAttrs);
+                            if ($filteredAttrs !== '') {
+                                $filteredAttrs = ' ' . $filteredAttrs;
+                            }
+                        }
                         return match ($tag_key) {
-                            'tag' => "<link {$tag_data[1]} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}' rel=\"stylesheet\" type=\"text/css\"/>",
-                            default => "<link href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}' rel=\"stylesheet\" type=\"text/css\"/>"
+                            'tag' => "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[2]))}' rel=\"stylesheet\" type=\"text/css\"/>",
+                            default => "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($tag_data[1]))}' rel=\"stylesheet\" type=\"text/css\"/>"
                         };
                     }
             ],

@@ -15,6 +15,7 @@ use PDO;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Database\Compiler\PgsqlCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
@@ -560,28 +561,33 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             throw new DbException(__('没有指定table表名！'));
         }
 
-        // 重新排序 where 条件（按索引优化）
         $this->reorderWhereByIndexes();
-
-        // 1. 构建小 AST（结构化描述当前查询）
         $this->buildAst($action);
 
-        // 2. 基于 AST 按 PostgreSQL 方言编译 SQL
-        $this->sql = $this->compileAstToPgsqlSql();
+        $from = $this->ast['from'] ?? [];
+        if (!empty($from['is_subquery']) && !empty($from['subquery_id'])) {
+            $this->sql = $this->compileAstToPgsqlSql();
+        } else {
+            $compiler = new PgsqlCompiler();
+            $options = [
+                'identity_field' => $this->identity_field,
+                'table_alias' => $this->table_alias,
+                'exist_update_sql' => $this->exist_update_sql,
+                'insert_update_fields' => $this->insert_update_fields,
+                'insert_update_where_fields' => $this->insert_update_where_fields,
+            ];
+            $compiled = $compiler->compile($this->ast, $options);
+            $this->sql = $compiled->sql;
+            $this->bound_values = $compiled->bindings;
+        }
 
-        // 3. 规范化 SQL（转换反引号、MySQL 函数等）
         $this->sql = $this->normalizeSql($this->sql);
-        
-        // 4. 在执行前验证并修复 WHERE 子句中的语法错误
-        // 移除末尾的 " AND)" 或 " OR)" 这种语法错误
         $this->sql = preg_replace('/\s+(AND|OR)\s*\)\s*(LIMIT|ORDER|GROUP|HAVING|$)/i', ') $2', $this->sql);
-        // 移除末尾的 " AND" 或 " OR"（不在括号内的情况）
         $this->sql = preg_replace('/\s+(AND|OR)(\s*)(LIMIT|ORDER|GROUP|HAVING|$)/i', ' $3', $this->sql);
-        // 清理多余的空格
         $this->sql = preg_replace('/\s+/', ' ', $this->sql);
         $this->sql = trim($this->sql);
 
-        // 5. 如果 SQL 不为空，准备语句
+
         if (!empty($this->sql)) {
             $this->PDOStatement = $this->preparePgsql($this->sql);
         } else {
@@ -1069,6 +1075,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                     break;
                 default:
+                    // IS NULL / IS NOT NULL 条件不需要绑定值
+                    $lowerCondition = strtolower($where[1]);
+                    if ($lowerCondition === 'is null' || $lowerCondition === 'is not null') {
+                        $wheres .= '(' . $field . ' ' . strtoupper($where[1]) . ')';
+                        if (!$isLast) {
+                            $wheres .= ' ' . $currentLogic;
+                        }
+                        break;
+                    }
+                    
                     if ($where[2] === null) {
                         $wheres .= '(' . $field . ')';
                         if (!$isLast) {

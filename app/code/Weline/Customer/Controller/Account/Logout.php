@@ -48,7 +48,7 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
         // 清除记住我的cookie
         Cookie::set('w_ut', '', -3600, ['path' => '/']);
         Cookie::set('w_sandbox', '', -3600, ['path' => '/']);
-        $adminPath = Env::getInstance()->getConfig('admin') ?? '';
+        $adminPath = Env::getAreaRoutePrefix('backend') ?? '';
         if (!empty($adminPath)) {
             Cookie::set('w_sandbox', '', -3600, ['path' => '/' . ltrim($adminPath, '/')]);
         }

@@ -148,22 +148,17 @@ class AiDefaultModel extends Model
     public function upgrade(ModelSetup $setup, Context $context): void
     {
         // 添加 is_active 字段（如果不存在）
-        if ($setup->tableExist()) {
-            try {
-                // 直接尝试添加列，如果已存在会抛出异常，捕获并忽略
-                $setup->alterTable()
-                    ->addColumn(
-                        self::fields_IS_ACTIVE,
-                        self::fields_PRIORITY, // after priority column
-                        \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
-                        1,
-                        'not null default 1',
-                        '是否激活'
-                    )
-                    ->alter();
-            } catch (\Exception $e) {
-                // 列可能已存在，忽略错误
-            }
+        if ($setup->tableExist() && !$setup->hasField(self::fields_IS_ACTIVE)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_IS_ACTIVE,
+                    self::fields_PRIORITY, // after priority column
+                    \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER,
+                    1,
+                    'not null default 1',
+                    '是否激活'
+                )
+                ->alter();
         }
     }
 

@@ -114,7 +114,7 @@ class SlotRendererService
     }
 
     /**
-     * 使用 DOM 解析处理插槽
+     * 使用 DOM 解析处理插槽（支持嵌套：部件输出的 HTML 可包含子插槽，会被迭代填充）
      */
     private function processSlotsWithDom(string $html, array $slotWidgets): string
     {
@@ -126,38 +126,64 @@ class SlotRendererService
         $html = '<?xml encoding="UTF-8">' . $html;
         $doc->loadHTML($html);
 
-        $xpath = new \DOMXPath($doc);
-
         // 收集模板中存在的所有 slot ID
         $existingSlotIds = [];
-        
-        // 查找所有带 data-wslot 属性的元素（新方式）
-        $slots = $xpath->query("//*[@data-wslot]");
-        foreach ($slots as $slot) {
-            if ($slot instanceof \DOMElement) {
-                $slotId = $slot->getAttribute('data-wslot');
-                if ($slotId) {
-                    $existingSlotIds[$slotId] = true;
-                }
-            }
-            $this->processSlotElement($slot, $slotWidgets, $doc);
-        }
 
-        // 兼容旧方式：查找 widget-slot-area 类
-        $oldSlots = $xpath->query("//*[contains(@class, 'widget-slot-area')]");
-        foreach ($oldSlots as $slot) {
-            if ($slot instanceof \DOMElement) {
-                $slotId = $slot->getAttribute('data-slot-id');
-                if ($slotId) {
-                    $existingSlotIds[$slotId] = true;
-                    $slot->setAttribute('data-wslot', $slotId);
+        // ── 迭代处理嵌套插槽 ──
+        // 父部件渲染后可能产生新的 [data-wslot] 子插槽，需要多轮处理
+        $maxDepth = 10; // 最大嵌套深度，防止死循环
+        for ($depth = 0; $depth < $maxDepth; $depth++) {
+            $xpath = new \DOMXPath($doc); // 每轮重建 XPath（DOM 已被修改）
+
+            // 查找所有 未处理 的 [data-wslot] 元素
+            $slots = $xpath->query("//*[@data-wslot and not(@data-wslot-processed)]");
+            
+            // 兼容旧方式：查找 widget-slot-area 类（仅第一轮）
+            if ($depth === 0) {
+                $oldSlots = $xpath->query("//*[contains(@class, 'widget-slot-area') and not(@data-wslot)]");
+                foreach ($oldSlots as $slot) {
+                    if ($slot instanceof \DOMElement) {
+                        $slotId = $slot->getAttribute('data-slot-id');
+                        if ($slotId) {
+                            $existingSlotIds[$slotId] = true;
+                            $slot->setAttribute('data-wslot', $slotId);
+                            // 不标记 processed，让下面的循环处理
+                        }
+                    }
+                }
+                // 重新查询（包含刚转换的旧插槽）
+                $xpath = new \DOMXPath($doc);
+                $slots = $xpath->query("//*[@data-wslot and not(@data-wslot-processed)]");
+            }
+
+            if ($slots->length === 0) {
+                break; // 没有未处理的插槽了
+            }
+
+            foreach ($slots as $slot) {
+                if ($slot instanceof \DOMElement) {
+                    $slotId = $slot->getAttribute('data-wslot');
+                    if ($slotId) {
+                        $existingSlotIds[$slotId] = true;
+                    }
+                    // 标记为已处理，避免下一轮重复处理
+                    $slot->setAttribute('data-wslot-processed', 'true');
                     $this->processSlotElement($slot, $slotWidgets, $doc);
                 }
             }
         }
-        
+
         // 检测孤儿部件（配置了但找不到对应slot的部件）
         $this->detectOrphanWidgets($slotWidgets, $existingSlotIds);
+        
+        // 清理辅助属性 data-wslot-processed（不输出到最终 HTML）
+        $xpath = new \DOMXPath($doc);
+        $processedSlots = $xpath->query("//*[@data-wslot-processed]");
+        foreach ($processedSlots as $slot) {
+            if ($slot instanceof \DOMElement) {
+                $slot->removeAttribute('data-wslot-processed');
+            }
+        }
 
         // 获取处理后的 HTML
         $result = $doc->saveHTML();
@@ -524,22 +550,25 @@ class SlotRendererService
     private function autoPublishDraft(int $themeId, string $pageType, array $draftLayout): void
     {
         try {
+            // 先获取一次已发布数据（避免循环内 N+1 查询）
+            $existingPublished = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
+            
             // 静默发布：将草稿数据复制到已发布状态
             foreach ($draftLayout as $area => $areaData) {
                 foreach ($areaData['widgets'] ?? [] as $widget) {
-                    // 检查是否已经有已发布的相同部件
-                    $existingPublished = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
+                    // 去重：按 widget_code + widget_module + slot_id 三重匹配
                     $alreadyPublished = false;
+                    $widgetSlotId = $widget['slot_id'] ?? '';
                     foreach ($existingPublished[$area]['widgets'] ?? [] as $existingWidget) {
                         if ($existingWidget['widget_code'] === $widget['widget_code'] 
-                            && $existingWidget['widget_module'] === $widget['widget_module']) {
+                            && $existingWidget['widget_module'] === $widget['widget_module']
+                            && ($existingWidget['slot_id'] ?? '') === $widgetSlotId) {
                             $alreadyPublished = true;
                             break;
                         }
                     }
                     
                     if (!$alreadyPublished) {
-                        // 保存为已发布状态
                         $this->layoutService->saveWidget([
                             'theme_id' => $themeId,
                             'page_type' => $pageType,

@@ -1,0 +1,140 @@
+<?php
+/**
+ * Fitness Pro 模板 - Footer
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * group:brand => 品牌设置
+ * brand.name => 品牌名称:text:FitZone
+ * brand.description => 品牌描述:textarea:Transform your body and mind with expert-led fitness programs. Join our community today.
+ * group:links => 链接设置
+ * links.column1_title => 栏目1标题:text:Classes
+ * links.column1_items => 栏目1链接:textarea:Strength=>#programs\r\nHIIT=>#programs\r\nYoga=>#programs\r\nCrossFit=>#programs|格式：名称=>链接，一行一个
+ * links.column2_title => 栏目2标题:text:Company
+ * links.column2_items => 栏目2链接:textarea:About=>/about\r\nTrainers=>/trainers\r\nCareers=>/careers\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * links.column3_title => 栏目3标题:text:Support
+ * links.column3_items => 栏目3链接:textarea:Help Center=>/help\r\nMembership=>/membership\r\nPrivacy=>/privacy\r\nTerms=>/terms|格式：名称=>链接，一行一个
+ * group:copyright => 版权设置
+ * copyright.text => 版权文字:text:All rights reserved.
+ * group:style => 样式设置
+ * style.background_color => 背景颜色:color:#0a0705
+ * style.text_color => 文字颜色:color:#a68b5b
+ * style.link_color => 链接颜色:color:#d6b87a
+ * style.link_hover_color => 链接悬停颜色:color:#fb923c
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'fitness-pro';
+if (empty($templateCode)) { $templateCode = 'fitness-pro'; }
+$this->assign('template_code', $templateCode);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+if (!function_exists('fp_footer_color')) {
+    function fp_footer_color($c, $k, $d = '') { return $c[$k] ?? $d; }
+}
+if (!function_exists('fp_footer_getConfig')) {
+    function fp_footer_getConfig($s, $k, $d = '') { return $s[$k] ?? $d; }
+}
+
+$brandName = fp_footer_getConfig($styleSettings, 'brand.name', 'FitZone');
+$brandDesc = fp_footer_getConfig($styleSettings, 'brand.description', 'Transform your body and mind with expert-led fitness programs.');
+$col1Title = fp_footer_getConfig($styleSettings, 'links.column1_title', 'Classes');
+$col1Raw = fp_footer_getConfig($styleSettings, 'links.column1_items', "Strength=>#programs\nHIIT=>#programs\nYoga=>#programs\nCrossFit=>#programs");
+$col2Title = fp_footer_getConfig($styleSettings, 'links.column2_title', 'Company');
+$col2Raw = fp_footer_getConfig($styleSettings, 'links.column2_items', "About=>/about\nTrainers=>/trainers\nCareers=>/careers\nContact=>/contact");
+$col3Title = fp_footer_getConfig($styleSettings, 'links.column3_title', 'Support');
+$col3Raw = fp_footer_getConfig($styleSettings, 'links.column3_items', "Help Center=>/help\nMembership=>/membership\nPrivacy=>/privacy\nTerms=>/terms");
+
+$parseLinks = function($raw) {
+    $links = [];
+    foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) $links[] = ['name' => $name, 'url' => $url];
+    }
+    return $links;
+};
+
+$col1Links = $parseLinks($col1Raw);
+$col2Links = $parseLinks($col2Raw);
+$col3Links = $parseLinks($col3Raw);
+
+$copyrightText = fp_footer_getConfig($styleSettings, 'copyright.text', 'All rights reserved.');
+$bgColor = fp_footer_getConfig($styleSettings, 'style.background_color', fp_footer_color($colors, 'footer_bg', '#0a0705'));
+$textColor = fp_footer_getConfig($styleSettings, 'style.text_color', fp_footer_color($colors, 'footer_text', '#a68b5b'));
+$linkColor = fp_footer_getConfig($styleSettings, 'style.link_color', fp_footer_color($colors, 'footer_link', '#d6b87a'));
+$linkHoverColor = fp_footer_getConfig($styleSettings, 'style.link_hover_color', fp_footer_color($colors, 'footer_link_hover', '#fb923c'));
+$textPrimary = fp_footer_color($colors, 'text_primary', '#fef3c7');
+$buttonPrimaryBg = fp_footer_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)');
+$footerBorder = fp_footer_color($colors, 'footer_border', 'rgba(255, 255, 255, 0.06)');
+$currentYear = date('Y');
+?>
+
+<style>
+    .fp-footer { background: <?= htmlspecialchars($bgColor) ?>; padding: 80px 0 0; }
+    .fp-footer-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    .fp-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; padding-bottom: 60px; border-bottom: 1px solid <?= htmlspecialchars($footerBorder) ?>; }
+    .fp-footer-logo { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; color: <?= htmlspecialchars($textPrimary) ?>; margin-bottom: 16px; }
+    .fp-footer-logo-icon { width: 36px; height: 36px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .fp-footer-logo-icon svg { width: 18px; height: 18px; fill: #ffffff; }
+    .fp-footer-brand-desc { font-size: 0.9rem; color: <?= htmlspecialchars($textColor) ?>; line-height: 1.7; max-width: 280px; }
+    .fp-footer-column h4 { font-size: 0.9rem; font-weight: 600; color: <?= htmlspecialchars($textPrimary) ?>; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .fp-footer-links { display: flex; flex-direction: column; gap: 12px; }
+    .fp-footer-link { font-size: 0.9rem; color: <?= htmlspecialchars($linkColor) ?>; text-decoration: none; transition: color 0.3s ease; }
+    .fp-footer-link:hover { color: <?= htmlspecialchars($linkHoverColor) ?>; }
+    .fp-footer-bottom { padding: 24px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .fp-footer-copyright { font-size: 0.85rem; color: <?= htmlspecialchars($textColor) ?>; }
+    @media (max-width: 992px) { .fp-footer-grid { grid-template-columns: 1fr 1fr; } .fp-footer-brand { grid-column: 1 / -1; } }
+    @media (max-width: 576px) { .fp-footer-grid { grid-template-columns: 1fr; gap: 32px; } .fp-footer-bottom { flex-direction: column; text-align: center; } }
+</style>
+
+<footer class="fp-footer">
+    <div class="fp-footer-container">
+        <div class="fp-footer-grid">
+            <div class="fp-footer-brand">
+                <div class="fp-footer-logo">
+                    <span class="fp-footer-logo-icon"><svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg></span>
+                    <span><?= htmlspecialchars($brandName) ?></span>
+                </div>
+                <p class="fp-footer-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+            </div>
+            <div class="fp-footer-column">
+                <h4><?= htmlspecialchars($col1Title) ?></h4>
+                <div class="fp-footer-links">
+                    <?php foreach ($col1Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="fp-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="fp-footer-column">
+                <h4><?= htmlspecialchars($col2Title) ?></h4>
+                <div class="fp-footer-links">
+                    <?php foreach ($col2Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="fp-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="fp-footer-column">
+                <h4><?= htmlspecialchars($col3Title) ?></h4>
+                <div class="fp-footer-links">
+                    <?php foreach ($col3Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="fp-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <div class="fp-footer-bottom">
+            <div class="fp-footer-copyright">&copy; <?= $currentYear ?> <?= htmlspecialchars($brandName) ?>. <?= htmlspecialchars($copyrightText) ?></div>
+        </div>
+    </div>
+</footer>

@@ -69,7 +69,7 @@ class Template extends DataObject
      */
     private CacheInterface $viewCache;
 
-    private static Template $instance;
+    private static ?Template $instance = null;
 
     private function __clone()
     {
@@ -77,11 +77,23 @@ class Template extends DataObject
 
     public static function getInstance(): Template
     {
-        if (!isset(self::$instance)) {
+        if (self::$instance === null) {
             self::$instance = new self();
             self::$instance->init();
         }
         return self::$instance;
+    }
+
+    /**
+     * WLS 状态重置：销毁单例实例，强制下次 getInstance() 重新创建
+     * 
+     * WLS 常驻内存模式下，Template 单例的 _data 数组会残留上个请求的
+     * title、req、env、local、view_dir 等请求级数据，导致页面标题、
+     * 请求参数、模板目录等状态泄漏到下一个请求。
+     */
+    public static function resetInstance(): void
+    {
+        self::$instance = null;
     }
 
     /**

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--订阅管理（在 WeShop 商城主菜单下）-->
+    <add source="WeShop_Subscription::main" name="subscription" title="订阅管理" action=""
+         parent="WeShop_Shop::main"
+         icon="mdi mdi-refresh-auto"
+         order="60"/>
+    <add source="WeShop_Subscription::subscription_list" name="subscription_list" title="订阅列表" action="/*/backend/subscription"
+         parent="WeShop_Subscription::main"
+         icon="mdi mdi-format-list-bulleted"
+         order="10"/>
+    <add source="WeShop_Subscription::plan_list" name="plan_list" title="订阅计划" action="/*/backend/plan"
+         parent="WeShop_Subscription::main"
+         icon="mdi mdi-clipboard-text-outline"
+         order="20"/>
+</menus>

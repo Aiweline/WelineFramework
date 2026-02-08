@@ -36,6 +36,17 @@ class ObjectManager implements ManagerInterface
     private static array $methodParamsMetadata = [];
     
     /**
+     * 预编译反射元数据（从 generated/reflection_metadata.php 加载）
+     * 性能优化：避免 FPM 模式下每次请求都执行反射操作
+     */
+    private static ?array $precompiledMetadata = null;
+    
+    /**
+     * 预编译元数据是否已尝试加载
+     */
+    private static bool $precompiledLoaded = false;
+    
+    /**
      * PHP 8 性能优化：缓存静态类检测结果
      * 格式：['ClassName' => bool]
      */
@@ -64,6 +75,17 @@ class ObjectManager implements ManagerInterface
      * 格式：['ClassName' => bool]
      */
     private static array $interfaceCache = [];
+
+    /**
+     * 编译型工厂容器（从 generated/compiled_factories.php 加载）
+     * 无参 getInstance 时优先使用，避免反射
+     */
+    private static ?array $compiledFactories = null;
+
+    /**
+     * 编译型工厂是否已尝试加载
+     */
+    private static bool $compiledFactoriesLoaded = false;
 
     private function __clone()
     {
@@ -349,6 +371,20 @@ class ObjectManager implements ManagerInterface
         // 解析类名（处理拦截器和工厂类）
         $new_class = self::parserClass($class);
         
+        // 编译工厂快速路径：无参且存在编译闭包时直接实例化，跳过所有反射
+        if ($arguments === []) {
+            self::loadCompiledFactories();
+            if (self::$compiledFactories !== null && isset(self::$compiledFactories[$new_class])) {
+                $new_object = (self::$compiledFactories[$new_class])();
+                $new_object = self::initClassInstance($class, $new_object);
+                self::$instances[$class] = $new_object;
+                if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
+                    self::getCache()->set($class, $new_object);
+                }
+                return $new_object;
+            }
+        }
+        
         // 再次检查解析后的类名是否是接口（防止parserClass返回接口）
         // 必须在isStaticClass之前检查，因为isStaticClass会调用getReflectionInstance
         if (interface_exists($new_class, true)) {
@@ -608,12 +644,45 @@ class ObjectManager implements ManagerInterface
 
     public static function _getInstance($class)
     {
-        return self::$instances[$class];
+        return self::$instances[$class] ?? null;
     }
 
     public static function getInstances(): array
     {
         return self::$instances;
+    }
+
+    /**
+     * 清理所有实例缓存（用于热重载）
+     */
+    public static function clearInstances(): void
+    {
+        self::$instances = [];
+        self::$reflections = [];
+        self::$origin_instances = [];
+    }
+    
+    /**
+     * 移除指定类的实例缓存
+     * 
+     * 用于 WLS 模式下需要在请求间重新创建的单例。
+     * 
+     * @param string $className 类名
+     * @return void
+     */
+    public static function removeInstance(string $className): void
+    {
+        // 移除实例缓存
+        unset(self::$instances[$className]);
+        
+        // 也尝试移除解析后的类名对应的实例
+        if (isset(self::$parsedClasses[$className])) {
+            $resolvedClass = self::$parsedClasses[$className];
+            unset(self::$instances[$resolvedClass]);
+        }
+        
+        // 移除原始实例
+        unset(self::$origin_instances[$className]);
     }
 
     /**
@@ -882,6 +951,42 @@ class ObjectManager implements ManagerInterface
      * @return array
      * @throws Exception
      */
+    /**
+     * 加载预编译反射元数据
+     * 
+     * 从 generated/reflection_metadata.php 加载预编译的类构造函数参数元数据，
+     * 避免运行时反射开销。文件由 reflection:compile 命令生成。
+     * 
+     * 兼容性：如果文件不存在，回退到运行时反射（FPM/WLS 均兼容）
+     */
+    private static function loadPrecompiledMetadata(): void
+    {
+        if (self::$precompiledLoaded) {
+            return;
+        }
+        self::$precompiledLoaded = true;
+        $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
+        if (\is_file($file)) {
+            self::$precompiledMetadata = include $file;
+        }
+    }
+
+    /**
+     * 加载编译型工厂容器（从 generated/compiled_factories.php）
+     * 文件不存在时保持 null，getInstance 回退到反射路径
+     */
+    private static function loadCompiledFactories(): void
+    {
+        if (self::$compiledFactoriesLoaded) {
+            return;
+        }
+        self::$compiledFactoriesLoaded = true;
+        $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'compiled_factories.php';
+        if (\is_file($file)) {
+            self::$compiledFactories = include $file;
+        }
+    }
+    
     protected static function getMethodParams($instance_or_class, string $methodsName = '__construct'): array
     {
         // 获取类名
@@ -890,8 +995,14 @@ class ObjectManager implements ManagerInterface
         
         // 检查元数据缓存
         if (!isset(self::$methodParamsMetadata[$cacheKey])) {
-            // 解析并缓存元数据
-            $metadata = self::parseMethodParamsMetadata($instance_or_class, $methodsName);
+            // 优先使用预编译元数据（避免运行时反射）
+            self::loadPrecompiledMetadata();
+            if (self::$precompiledMetadata !== null && isset(self::$precompiledMetadata[$cacheKey])) {
+                $metadata = self::$precompiledMetadata[$cacheKey];
+            } else {
+                // 回退到运行时反射解析
+                $metadata = self::parseMethodParamsMetadata($instance_or_class, $methodsName);
+            }
             self::$methodParamsMetadata[$cacheKey] = $metadata;
             
             // 优化：如果没有参数，直接返回空数组，不进行后续处理

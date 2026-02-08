@@ -82,14 +82,11 @@ class Agent extends BackendController
 
     /**
      * 保存客服人员
+     * POST /customerservice/backend/agent/save
      */
     #[Acl('Weline_CustomerService::agent_save', '保存客服人员', 'mdi-content-save', '保存客服人员')]
-    public function save(): string
+    public function postSave(): string
     {
-        if (!$this->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $agentId = (int)$this->request->getPost('agent_id', 0);
             $userId = (int)$this->request->getPost('user_id', 0);
@@ -154,14 +151,11 @@ class Agent extends BackendController
 
     /**
      * 删除客服人员
+     * POST /customerservice/backend/agent/remove
      */
     #[Acl('Weline_CustomerService::agent_delete', '删除客服人员', 'mdi-delete', '删除客服人员')]
-    public function delete(): string
+    public function postRemove(): string
     {
-        if (!$this->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $agentId = (int)$this->request->getPost('agent_id', 0);
 
@@ -187,6 +181,7 @@ class Agent extends BackendController
 
     /**
      * 获取客服详细统计（AJAX）
+     * GET /customerservice/backend/agent/agent-statistics
      */
     #[Acl('Weline_CustomerService::agent_statistics', '查看客服统计', 'mdi-chart-line', '查看客服统计')]
     public function getAgentStatistics(): string

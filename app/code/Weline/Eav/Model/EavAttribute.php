@@ -414,7 +414,8 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 ->fields('main_table.code,main_table.eav_entity_id,main_table.name,main_table.type_id,v.value')
                 ->where($attribute::fields_eav_entity_id, $attribute->getEavEntityId())
                 ->where($attribute::fields_code, $attribute->getCode())
-                ->where("v.value !='' or v.value is not null");
+                ->where('v.value', null, 'IS NOT NULL')
+                ->where('v.value', '', '!=');
             $attribute->joinModel(
                 $valueModel,
                 'v',

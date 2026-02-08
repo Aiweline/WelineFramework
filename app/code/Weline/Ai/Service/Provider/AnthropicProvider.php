@@ -98,23 +98,28 @@ class AnthropicProvider implements ProviderInterface
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
-            'max_tokens' => $params['max_tokens'] ?? $config['max_tokens'] ?? 4096,
+            'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
         ];
 
-        // 添加可选参数
+        // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
-            $requestData['temperature'] = $params['temperature'] ?? $config['temperature'] ?? 0.7;
+            $requestData['temperature'] = (float)($params['temperature'] ?? $config['temperature'] ?? 0.7);
         }
         if (isset($params['top_p']) || isset($config['top_p'])) {
-            $requestData['top_p'] = $params['top_p'] ?? $config['top_p'];
+            $requestData['top_p'] = (float)($params['top_p'] ?? $config['top_p']);
         }
         if (isset($params['top_k']) || isset($config['top_k'])) {
-            $requestData['top_k'] = $params['top_k'] ?? $config['top_k'];
+            $requestData['top_k'] = (int)($params['top_k'] ?? $config['top_k']);
         }
         
         // 添加系统消息
         if (!empty($systemMessage)) {
             $requestData['system'] = $systemMessage;
+        }
+
+        // 智能体模式：添加 tools（tool_use）
+        if (!empty($params['tools']) && is_array($params['tools'])) {
+            $requestData['tools'] = $this->convertToolsToAnthropicFormat($params['tools']);
         }
 
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
@@ -137,7 +142,11 @@ class AnthropicProvider implements ProviderInterface
             $timeout
         );
 
-        return [
+        // 提取 tool_calls（智能体模式）
+        $toolCalls = $this->extractToolCalls($response);
+        $stopReason = $response['stop_reason'] ?? '';
+
+        $result = [
             'content' => $this->extractContent($response),
             'usage' => [
                 'prompt_tokens' => $response['usage']['input_tokens'] ?? 0,
@@ -145,8 +154,16 @@ class AnthropicProvider implements ProviderInterface
                 'total_tokens' => ($response['usage']['input_tokens'] ?? 0) + ($response['usage']['output_tokens'] ?? 0),
             ],
             'model' => $response['model'] ?? '',
-            'finish_reason' => $response['stop_reason'] ?? '',
+            'finish_reason' => $stopReason,
         ];
+
+        if (!empty($toolCalls)) {
+            $result['tool_calls'] = $toolCalls;
+            // 保留原始 content blocks 供 agent 构建后续消息
+            $result['assistant_content'] = $response['content'] ?? [];
+        }
+
+        return $result;
     }
 
     /**
@@ -199,24 +216,29 @@ class AnthropicProvider implements ProviderInterface
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
-            'max_tokens' => $params['max_tokens'] ?? $config['max_tokens'] ?? 4096,
+            'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
             'stream' => true,
         ];
 
-        // 添加可选参数
+        // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
-            $requestData['temperature'] = $params['temperature'] ?? $config['temperature'] ?? 0.7;
+            $requestData['temperature'] = (float)($params['temperature'] ?? $config['temperature'] ?? 0.7);
         }
         if (isset($params['top_p']) || isset($config['top_p'])) {
-            $requestData['top_p'] = $params['top_p'] ?? $config['top_p'];
+            $requestData['top_p'] = (float)($params['top_p'] ?? $config['top_p']);
         }
         if (isset($params['top_k']) || isset($config['top_k'])) {
-            $requestData['top_k'] = $params['top_k'] ?? $config['top_k'];
+            $requestData['top_k'] = (int)($params['top_k'] ?? $config['top_k']);
         }
         
         // 添加系统消息
         if (!empty($systemMessage)) {
             $requestData['system'] = $systemMessage;
+        }
+
+        // 智能体模式：添加 tools（tool_use）
+        if (!empty($params['tools']) && is_array($params['tools'])) {
+            $requestData['tools'] = $this->convertToolsToAnthropicFormat($params['tools']);
         }
 
         $totalTokens = [
@@ -257,6 +279,11 @@ class AnthropicProvider implements ProviderInterface
             $timeout
         );
 
+        // 如果流式调用没有返回任何内容，抛出明确错误
+        if (empty(trim($fullContent))) {
+            throw new Exception('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确');
+        }
+
         // 如果没有从API获取到token统计，则估算
         if ($totalTokens['completion_tokens'] === 0) {
             $totalTokens['completion_tokens'] = $this->estimateTokens($fullContent);
@@ -281,6 +308,11 @@ class AnthropicProvider implements ProviderInterface
      */
     private function buildMessages(string $prompt, array $params): array
     {
+        // 智能体模式：使用完整消息历史，需要转换格式
+        if (!empty($params['messages']) && is_array($params['messages'])) {
+            return $this->convertMessagesForAnthropic($params['messages']);
+        }
+
         $messages = [];
 
         // 历史对话（需要转换格式）
@@ -298,12 +330,121 @@ class AnthropicProvider implements ProviderInterface
         }
 
         // 用户消息
-        $messages[] = [
-            'role' => 'user',
-            'content' => $prompt
-        ];
+        if (!empty($prompt)) {
+            $messages[] = [
+                'role' => 'user',
+                'content' => $prompt
+            ];
+        }
 
         return $messages;
+    }
+
+    /**
+     * 将 OpenAI 格式的消息历史转换为 Anthropic 格式
+     * 
+     * 主要差异：
+     * - system 消息单独传，不放在 messages 中
+     * - tool 角色 → tool_result content block
+     * - assistant tool_calls → assistant content blocks with tool_use
+     */
+    private function convertMessagesForAnthropic(array $messages): array
+    {
+        $result = [];
+
+        foreach ($messages as $msg) {
+            $role = $msg['role'] ?? '';
+
+            // 跳过 system（Anthropic 使用单独参数）
+            if ($role === 'system') {
+                continue;
+            }
+
+            // tool 角色的消息转换为 tool_result
+            if ($role === 'tool') {
+                $result[] = [
+                    'role' => 'user',
+                    'content' => [
+                        [
+                            'type' => 'tool_result',
+                            'tool_use_id' => $msg['tool_call_id'] ?? '',
+                            'content' => $msg['content'] ?? '',
+                        ]
+                    ]
+                ];
+                continue;
+            }
+
+            // assistant 消息如果包含 tool_calls，转为 tool_use content blocks
+            if ($role === 'assistant' && !empty($msg['tool_calls'])) {
+                $content = [];
+                // 先添加文本部分
+                if (!empty($msg['content'])) {
+                    $content[] = ['type' => 'text', 'text' => $msg['content']];
+                }
+                // 再添加 tool_use blocks
+                foreach ($msg['tool_calls'] as $tc) {
+                    $arguments = $tc['function']['arguments'] ?? $tc['arguments'] ?? '{}';
+                    if (is_string($arguments)) {
+                        $arguments = json_decode($arguments, true) ?: new \stdClass();
+                    }
+                    $content[] = [
+                        'type' => 'tool_use',
+                        'id' => $tc['id'] ?? uniqid('tu_'),
+                        'name' => $tc['function']['name'] ?? $tc['name'] ?? '',
+                        'input' => $arguments,
+                    ];
+                }
+                $result[] = ['role' => 'assistant', 'content' => $content];
+                continue;
+            }
+
+            // 普通消息
+            $result[] = [
+                'role' => $role,
+                'content' => $msg['content'] ?? ''
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 将框架中间格式的 Tool 定义转换为 Anthropic tool_use 格式
+     */
+    private function convertToolsToAnthropicFormat(array $tools): array
+    {
+        $anthropicTools = [];
+        foreach ($tools as $tool) {
+            $anthropicTools[] = [
+                'name' => $tool['name'],
+                'description' => $tool['description'] ?? '',
+                'input_schema' => $tool['parameters'] ?? ['type' => 'object', 'properties' => new \stdClass()],
+            ];
+        }
+        return $anthropicTools;
+    }
+
+    /**
+     * 从 Anthropic 响应中提取 tool_use blocks
+     */
+    private function extractToolCalls(array $response): array
+    {
+        $toolCalls = [];
+
+        if (!empty($response['content']) && is_array($response['content'])) {
+            foreach ($response['content'] as $block) {
+                if (($block['type'] ?? '') === 'tool_use') {
+                    $toolCalls[] = [
+                        'id' => $block['id'] ?? uniqid('tu_'),
+                        'name' => $block['name'] ?? '',
+                        'arguments' => $block['input'] ?? [],
+                    ];
+                }
+            }
+        }
+
+        return $toolCalls;
     }
 
     /**
@@ -317,6 +458,15 @@ class AnthropicProvider implements ProviderInterface
         // 首先检查params中的system_message
         if (!empty($params['system_message'])) {
             return $params['system_message'];
+        }
+
+        // 智能体模式：从 messages 中提取 system 消息
+        if (!empty($params['messages']) && is_array($params['messages'])) {
+            foreach ($params['messages'] as $message) {
+                if (($message['role'] ?? '') === 'system') {
+                    return $message['content'] ?? '';
+                }
+            }
         }
 
         // 然后从历史记录中查找系统消息
@@ -471,14 +621,23 @@ class AnthropicProvider implements ProviderInterface
         
         error_clear_last();
         
+        // 用于捕获非 SSE 格式的响应（API 错误等）
+        $rawResponseBuffer = '';
+        $hasValidChunk = false;
+        
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
                 if ($elapsedTime >= ($timeLimit - 2)) {
                     return -1;
                 }
+            }
+            
+            // 累积原始响应（限制大小，仅用于错误诊断）
+            if (strlen($rawResponseBuffer) < 4096) {
+                $rawResponseBuffer .= $data;
             }
             
             $lines = explode("\n", $data);
@@ -509,6 +668,7 @@ class AnthropicProvider implements ProviderInterface
                     case 'content_block_delta':
                         $delta = $event['delta'] ?? [];
                         if (($delta['type'] ?? '') === 'text_delta') {
+                            $hasValidChunk = true;
                             $callback($delta['text'] ?? '');
                         }
                         break;
@@ -520,6 +680,11 @@ class AnthropicProvider implements ProviderInterface
                             $callback('', $usage);
                         }
                         break;
+                    
+                    case 'error':
+                        // Anthropic 错误事件
+                        $errorMsg = $event['error']['message'] ?? ($event['message'] ?? 'Unknown Anthropic error');
+                        throw new Exception("Anthropic API 错误: {$errorMsg}");
                 }
             }
             
@@ -528,21 +693,38 @@ class AnthropicProvider implements ProviderInterface
 
         curl_exec($ch);
         
+        // 获取 HTTP 状态码
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        
         $lastError = error_get_last();
         if ($lastError && (
             strpos($lastError['message'], 'Maximum execution time') !== false ||
             strpos($lastError['message'], 'exceeded') !== false
         )) {
+            curl_close($ch);
             throw new Exception($this->getTimeoutErrorMessage($timeout));
         }
         
         $error = curl_error($ch);
+        curl_close($ch);
 
         if ($error) {
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
             throw new Exception("流式API调用失败: {$error}");
+        }
+        
+        // 检查 HTTP 状态码
+        if ($httpCode !== 200) {
+            $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
+            throw new Exception($errorMsg);
+        }
+        
+        // 检查是否收到了有效内容
+        if (!$hasValidChunk && !empty($rawResponseBuffer)) {
+            $errorMsg = $this->parseApiErrorResponse($rawResponseBuffer, $httpCode);
+            throw new Exception($errorMsg);
         }
     }
 
@@ -692,5 +874,51 @@ class AnthropicProvider implements ProviderInterface
         $message = trim(preg_replace('/\s+/', ' ', $message));
         
         return $message;
+    }
+
+    /**
+     * 解析 API 错误响应，提取可读的错误信息
+     */
+    private function parseApiErrorResponse(string $rawResponse, int $httpCode): string
+    {
+        $trimmed = trim($rawResponse);
+        
+        // 尝试解析 JSON 错误响应
+        if (!empty($trimmed)) {
+            $errorData = json_decode($trimmed, true);
+            if (is_array($errorData)) {
+                // Anthropic 格式: {"type": "error", "error": {"type": "...", "message": "..."}}
+                if (isset($errorData['error']['message'])) {
+                    $errType = $errorData['error']['type'] ?? 'api_error';
+                    return "Anthropic API 错误 (HTTP {$httpCode}, {$errType}): " . $errorData['error']['message'];
+                }
+                if (isset($errorData['message'])) {
+                    return "Anthropic API 错误 (HTTP {$httpCode}): " . $errorData['message'];
+                }
+            }
+        }
+        
+        // HTTP 状态码友好提示
+        $statusMessages = [
+            401 => 'API 密钥无效或已过期，请检查 AI 模型配置中的 API Key',
+            403 => 'API 访问被拒绝，请检查账户权限',
+            404 => 'API 端点不存在，请检查 Base URL 配置',
+            429 => 'API 请求频率超限或额度不足，请稍后重试',
+            500 => 'AI 服务内部错误，请稍后重试',
+            502 => 'AI 服务网关错误，请稍后重试',
+            503 => 'AI 服务暂时不可用，请稍后重试',
+            529 => 'Anthropic API 过载，请稍后重试',
+        ];
+        
+        if (isset($statusMessages[$httpCode])) {
+            return "Anthropic API 错误 (HTTP {$httpCode}): " . $statusMessages[$httpCode];
+        }
+        
+        if ($httpCode > 0) {
+            $preview = mb_substr($trimmed, 0, 200);
+            return "Anthropic API 返回异常 (HTTP {$httpCode})" . ($preview ? "，响应: {$preview}" : '');
+        }
+        
+        return "Anthropic API 无响应，请检查网络连接和 API 地址配置";
     }
 }

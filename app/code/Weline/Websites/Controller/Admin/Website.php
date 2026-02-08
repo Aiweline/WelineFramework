@@ -12,7 +12,9 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locals;
 use Weline\Websites\Model\WebsiteCurrency;
+use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
+use Weline\Websites\Model\DomainPool;
 
 #[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理')]
 class Website extends BackendController
@@ -128,42 +130,66 @@ class Website extends BackendController
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             try {
+                $addressLines = \trim((string)($data['address_lines'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines);
+                if (empty($addressList)) {
+                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                }
+                /** @var WebsiteDomain $domainModel */
+                $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+                foreach ($addressList as $item) {
+                    $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], null);
+                    if ($conflict !== null) {
+                        $addr = $item['domain'] . $item['sub_path'];
+                        if ($item['sub_path'] === '') {
+                            throw new \Exception(
+                                __('该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）', [$conflict['website_name']])
+                            );
+                        }
+                        throw new \Exception(
+                            __('该地址 %{1} 已被站点「%{2}」使用', [$addr, $conflict['website_name']])
+                        );
+                    }
+                }
+                // 用第一个地址的域名生成默认 code（若未填）
+                $firstDomain = $addressList[0]['domain'];
+                if (empty(trim((string)($data['code'] ?? '')))) {
+                    $data['code'] = $this->domainToCode($firstDomain);
+                }
+                // 用第一个地址作为主 URL
+                $firstSubPath = $addressList[0]['sub_path'];
+                $data['url'] = 'https://' . $firstDomain . $firstSubPath;
+                
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
                 $languageCodes = $data['language_codes'] ?? [];
                 
-                // 如果默认货币为空，从关联货币中选择第一个
                 if (empty($data['default_currency']) && !empty($currencyCodes)) {
                     $data['default_currency'] = $currencyCodes[0];
                 }
-                
-                // 如果默认语言为空，从关联语言中选择第一个
                 if (empty($data['default_language']) && !empty($languageCodes)) {
                     $data['default_language'] = $languageCodes[0];
                 }
                 
-                // 保存网站基本信息
-                // 确保清除 website_id，避免在添加时使用已有的 ID
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
+                unset($data['address_lines'], $data['domain_values']);
                 $this->website->clearData()->setData($data)->save();
                 $websiteId = $this->website->getId();
                 
-                // 检查是否成功保存（获取到新的 ID）
                 if (empty($websiteId)) {
                     throw new \Exception(__('网站保存失败，未能获取网站ID'));
                 }
                 
-                // 保存关联货币
+                $this->saveWebsiteDomains((int)$websiteId, $addressList);
+                
                 $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
                 $websiteCurrency->setWebsiteCurrencies((int)$websiteId, $currencyCodes);
                 
-                // 保存关联语言
                 $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
                 $websiteLanguage->setWebsiteLanguages((int)$websiteId, $languageCodes);
                 
-                // 绑定 SEO 账户
                 $seoAccountId = (int)($data['seo_account_id'] ?? 0);
                 if ($seoAccountId > 0) {
                     try {
@@ -174,7 +200,6 @@ class Website extends BackendController
                             'is_auto_submit' => true,
                         ]);
                     } catch (\Exception $e) {
-                        // SEO 账户绑定失败不影响网站保存结果
                     }
                 }
                 
@@ -186,7 +211,7 @@ class Website extends BackendController
                 ]);
             } catch (\Exception $e) {
                 $this->redirect('/component/offcanvas/error', [
-                    'msg' => __('网站添加失败: %{1}', $e->getMessage()),
+                    'msg' => __('网站添加失败: %{1}', [$e->getMessage()]),
                     'url' => '/',
                     'reload' => '0',
                     'time' => '3',
@@ -198,6 +223,8 @@ class Website extends BackendController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
+        $this->assign('domain_options', $this->getDomainOptions());
+        $this->assign('address_lines', '');
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -266,45 +293,61 @@ class Website extends BackendController
             $postWebsiteId = (int)$postWebsiteId;
             
             try {
+                $addressLines = \trim((string)($data['address_lines'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines);
+                if (empty($addressList)) {
+                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                }
+                /** @var WebsiteDomain $domainModel */
+                $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+                foreach ($addressList as $item) {
+                    $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], $postWebsiteId);
+                    if ($conflict !== null) {
+                        if ($item['sub_path'] === '') {
+                            throw new \Exception(
+                                __('该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）', [$conflict['website_name']])
+                            );
+                        }
+                        throw new \Exception(
+                            __('该地址 %{1} 已被站点「%{2}」使用', [$item['domain'] . $item['sub_path'], $conflict['website_name']])
+                        );
+                    }
+                }
+                $firstDomain = $addressList[0]['domain'];
+                $firstSubPath = $addressList[0]['sub_path'];
+                $data['url'] = 'https://' . $firstDomain . $firstSubPath;
+                
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
                 $languageCodes = $data['language_codes'] ?? [];
                 
-                // 如果默认货币为空，从关联货币中选择第一个
                 if (empty($data['default_currency']) && !empty($currencyCodes)) {
                     $data['default_currency'] = $currencyCodes[0];
                 }
-                
-                // 如果默认语言为空，从关联语言中选择第一个
                 if (empty($data['default_language']) && !empty($languageCodes)) {
                     $data['default_language'] = $languageCodes[0];
                 }
                 
-                // 确保 website_id 在数据中
                 $data['website_id'] = $postWebsiteId;
-                
-                // 保存网站基本信息
+                unset($data['address_lines'], $data['domain_values']);
                 $this->website->addData($data)->save();
                 
-                // 保存关联货币
+                $this->saveWebsiteDomains($postWebsiteId, $addressList);
+                
                 try {
                     $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
                     $websiteCurrency->setWebsiteCurrencies($postWebsiteId, $currencyCodes);
                 } catch (\Exception $e) {
-                    // 如果关联表不存在，忽略错误
-                    MessageManager::warning(__('保存关联货币失败: %{1}', $e->getMessage()));
+                    MessageManager::warning(__('保存关联货币失败: %{1}', [$e->getMessage()]));
                 }
                 
-                // 保存关联语言
                 try {
                     $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
                     $websiteLanguage->setWebsiteLanguages($postWebsiteId, $languageCodes);
                 } catch (\Exception $e) {
-                    // 如果关联表不存在，忽略错误
-                    MessageManager::warning(__('保存关联语言失败: %{1}', $e->getMessage()));
+                    MessageManager::warning(__('保存关联语言失败: %{1}', [$e->getMessage()]));
                 }
                 
-                // 绑定 SEO 账户
                 $seoAccountId = (int)($data['seo_account_id'] ?? 0);
                 if ($seoAccountId > 0) {
                     try {
@@ -315,17 +358,15 @@ class Website extends BackendController
                             'is_auto_submit' => true,
                         ]);
                     } catch (\Exception $e) {
-                        // SEO 账户绑定失败不影响网站保存结果
                     }
                 }
                 
-                $this->redirect('/component/offcanvas/success',
-                    [
-                        'msg' => __('网站更新成功'),
-                        'url' => '*/admin/website',
-                        'reload' => '1',
-                        'time' => '3',
-                    ]);
+                $this->redirect('/component/offcanvas/success', [
+                    'msg' => __('网站更新成功'),
+                    'url' => '*/admin/website',
+                    'reload' => '1',
+                    'time' => '3',
+                ]);
             } catch (\Exception $e) {
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => $e->getMessage(),
@@ -358,6 +399,9 @@ class Website extends BackendController
         $this->assign('website', $this->website->getData());
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
+        $this->assign('domain_options', $this->getDomainOptions());
+        $addressLines = $this->formatAddressLinesForWebsite($websiteId);
+        $this->assign('address_lines', $addressLines);
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -590,6 +634,104 @@ class Website extends BackendController
         }
         
         return $locales ?: [];
+    }
+
+    /**
+     * 获取域名选项（用于多选，来自域名池）
+     */
+    private function getDomainOptions(): array
+    {
+        try {
+            $pool = ObjectManager::getInstance(DomainPool::class);
+            return $pool->getSelectOptions();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * 解析「网站地址」多行文本为 [['domain' => string, 'sub_path' => string], ...]
+     * 每行：域名 或 域名/子路径（子路径自动加前导 /）
+     */
+    private function parseAddressLines(string $text): array
+    {
+        $list = [];
+        $lines = \preg_split('/\r\n|\r|\n/', $text, -1, \PREG_SPLIT_NO_EMPTY);
+        foreach ($lines as $line) {
+            $line = \trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $line = \preg_replace('#^https?://#i', '', $line);
+            $line = \trim($line, "/ \t");
+            if ($line === '') {
+                continue;
+            }
+            $pos = \strpos($line, '/');
+            if ($pos === false) {
+                $domain = \strtolower($line);
+                $subPath = '';
+            } else {
+                $domain = \strtolower(\substr($line, 0, $pos));
+                $subPath = '/' . \trim(\substr($line, $pos), '/');
+                if ($subPath === '/') {
+                    $subPath = '';
+                }
+            }
+            if ($domain !== '') {
+                $list[] = ['domain' => $domain, 'sub_path' => $subPath];
+            }
+        }
+        return $list;
+    }
+
+    /**
+     * 域名转网站 code：小写，点换下划线
+     */
+    private function domainToCode(string $domain): string
+    {
+        return \str_replace('.', '_', \strtolower(\trim($domain)));
+    }
+
+    /**
+     * 保存站点的域名列表（先删后增，第一个为主域名）
+     */
+    private function saveWebsiteDomains(int $websiteId, array $addressList): void
+    {
+        /** @var WebsiteDomain $model */
+        $model = ObjectManager::getInstance(WebsiteDomain::class);
+        $model->clearQuery()
+            ->where(WebsiteDomain::fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+        $isFirst = true;
+        foreach ($addressList as $item) {
+            $newDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            $newDomain->setWebsiteId($websiteId);
+            $newDomain->setDomain($item['domain']);
+            $newDomain->setSubPath($item['sub_path']);
+            $newDomain->setIsPrimary($isFirst);
+            $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
+            $newDomain->save();
+            $isFirst = false;
+        }
+    }
+
+    /**
+     * 将站点已有域名格式化为多行文本（用于编辑页 address_lines）
+     */
+    private function formatAddressLinesForWebsite(int $websiteId): string
+    {
+        /** @var WebsiteDomain $model */
+        $model = ObjectManager::getInstance(WebsiteDomain::class);
+        $rows = $model->getWebsiteDomains($websiteId);
+        $lines = [];
+        foreach ($rows as $row) {
+            $domain = $row[WebsiteDomain::fields_DOMAIN] ?? '';
+            $subPath = $row[WebsiteDomain::fields_SUB_PATH] ?? '';
+            $lines[] = $domain . $subPath;
+        }
+        return \implode("\n", $lines);
     }
 }
 

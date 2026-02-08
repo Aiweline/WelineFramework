@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    
+    <!-- CLI 命令执行完成后，通知 WLS Worker 重载 -->
+    <event name="Weline_Framework::cli::command_executed">
+        <observer name="Weline_Server::wls_worker_reload" 
+                  instance="Weline\Server\Observer\CliCommandExecutedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="100"/>
+    </event>
+
+    <!-- 系统配置变更后，通知 WLS Worker 重载（仅服务器相关模块） -->
+    <event name="Weline_SystemConfig::domain::config_set_after">
+        <observer name="Weline_Server::config_changed_reload"
+                  instance="Weline\Server\Observer\ConfigChangedObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+    
+    <!-- 缓存清理后通知 WLS 重载内存缓存（服务于 HTTP 请求中的 flush/clear 调用） -->
+    <event name="Weline_Framework_Cache::integration::cache_flushed">
+        <observer name="Weline_Server::cache_flushed_reload"
+                  instance="Weline\Server\Observer\CacheFlushedObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
+    <!-- WLS 模式下接管缓存驱动：File => WlsMemoryCache -->
+    <event name="Weline_Framework_Cache::driver_create_before">
+        <observer name="Weline_Server::cache_driver_interceptor"
+                  instance="Weline\Server\Observer\CacheDriverInterceptor"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    
+    <!-- WLS 模式下接管 Session 驱动：File => WlsMemorySession -->
+    <event name="Weline_Framework_Session::driver_create_before">
+        <observer name="Weline_Server::session_driver_interceptor"
+                  instance="Weline\Server\Observer\SessionDriverInterceptor"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    
+    <!-- 攻击信号处理已改为 Cron 定时任务方式（非阻塞） -->
+    <!-- @see Weline\Server\Cron\AttackSignalMonitor -->
+    <!-- @see Weline\Server\Service\AttackSignalFileService -->
+    
+</config>

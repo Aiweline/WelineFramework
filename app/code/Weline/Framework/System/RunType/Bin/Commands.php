@@ -98,9 +98,9 @@ class Commands
             $tmp[$key] = $value;
             unset($result);
         }
-        // 读取后台以及接口后台地址
-        $tmp['=========Admin后台入口:'] = Env::getInstance()->getConfig('admin', '');
-        $tmp['=========API后台入口:']   = Env::getInstance()->getConfig('api_admin', '');
+        // 读取后台以及接口后台地址（使用新的 area_routes 配置）
+        $tmp['=========后台入口:'] = Env::getAreaRoutePrefix('backend') ?? '';
+        $tmp['=========REST后台入口:'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
 
         return ['data' => $tmp, 'hasErr' => $hasErr, 'msg' => '-------  环境命令初始化...  -------'];
     }

@@ -3265,4 +3265,6 @@ body{
 }
 </style>
 
+<!-- 本地 Remix Icon CSS URL，禁止使用外网 CDN -->
+<script>window.WELINE_REMIXICON_CSS_URL = '<?= $this->getStaticUrl('Weline_Theme::css/remixicon.css') ?>';</script>
 <script src="@static(Weline_Theme::js/theme-editor.js)"></script>

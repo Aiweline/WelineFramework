@@ -132,7 +132,8 @@ class MetaManager implements TaglibInterface
                 $metaModel = ObjectManager::getInstance(MetaModel::class);
                 $namespaces = $metaModel->reset()
                     ->fields(MetaModel::fields_NAMESPACE)
-                    ->where(MetaModel::fields_NAMESPACE . " IS NOT NULL AND " . MetaModel::fields_NAMESPACE . " != ''")
+                    ->where(MetaModel::fields_NAMESPACE, null, 'IS NOT NULL')
+                    ->where(MetaModel::fields_NAMESPACE, '', '!=')
                     ->group(MetaModel::fields_NAMESPACE)
                     ->order(MetaModel::fields_NAMESPACE, 'ASC')
                     ->select()

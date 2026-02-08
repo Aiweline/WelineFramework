@@ -204,7 +204,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     {
         $lifetime = $enabled ? 0 : -1;
         Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/']);
-        $adminPath = Env::getInstance()->getConfig('admin') ?? '';
+        $adminPath = Env::getAreaRoutePrefix('backend') ?? '';
         if (!empty($adminPath)) {
             Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/' . ltrim($adminPath, '/')]);
         }

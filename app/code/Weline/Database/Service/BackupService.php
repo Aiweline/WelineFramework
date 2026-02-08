@@ -85,7 +85,7 @@ class BackupService
             // 获取列数据
             $query = $connection->select()
                 ->from($tableName, ['id', $columnName])
-                ->where("{$columnName} IS NOT NULL");
+                ->where($columnName, null, 'IS NOT NULL');
             $data = $connection->fetchAll($query);
             
             if (empty($data)) {

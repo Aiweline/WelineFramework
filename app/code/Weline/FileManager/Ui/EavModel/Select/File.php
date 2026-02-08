@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 class File implements EavModelInterface
 {
 
-    function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = []): string
+    function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = [], bool $only_custom_options = true): string
     {
         $type               = $attribute->getTypeModel();
         $defaults           = [

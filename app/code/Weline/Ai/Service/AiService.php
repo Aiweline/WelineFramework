@@ -19,10 +19,13 @@ use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Ai\Service\AgentScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
+use Weline\Ai\Interface\AgentInterface;
+use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
@@ -85,6 +88,11 @@ class AiService
     private AccountService $accountService;
 
     /**
+     * @var AgentScanner
+     */
+    private AgentScanner $agentScanner;
+
+    /**
      * 构造函数
      * 
      * @param AiModel $aiModel
@@ -94,6 +102,7 @@ class AiService
      * @param ProviderFactory $providerFactory
      * @param AiUsageLog $usageLog
      * @param AccountService $accountService
+     * @param AgentScanner $agentScanner
      */
     public function __construct(
         AiModel $aiModel,
@@ -102,7 +111,8 @@ class AiService
         I18nIntegration $i18nIntegration,
         ProviderFactory $providerFactory,
         AiUsageLog $usageLog,
-        AccountService $accountService
+        AccountService $accountService,
+        AgentScanner $agentScanner
     ) {
         $this->aiModel = $aiModel;
         $this->defaultModelManager = $defaultModelManager;
@@ -111,6 +121,7 @@ class AiService
         $this->providerFactory = $providerFactory;
         $this->usageLog = $usageLog;
         $this->accountService = $accountService;
+        $this->agentScanner = $agentScanner;
     }
 
     /**
@@ -745,9 +756,11 @@ class AiService
                 ]);
             }
             
-            // 记录错误
+            // 记录错误（保留原始信息用于日志）
             error_log("AI流式API调用失败: " . $e->getMessage());
-            throw new Exception("AI流式生成失败: " . $e->getMessage());
+            // 清理 ANSI 颜色码后再抛出，避免前端显示乱码
+            $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
+            throw new Exception("AI流式生成失败: " . $cleanMessage);
         }
     }
 
@@ -1024,5 +1037,189 @@ class AiService
             'created_at' => date('Y-m-d H:i:s')
         ]);
         $usageLog->save();
+    }
+
+    // ============================================================
+    // 智能体（Agent）相关方法
+    // ============================================================
+
+    /**
+     * 使用智能体执行任务
+     * 
+     * @param string $agentCode 智能体代码
+     * @param string $prompt 用户提示词
+     * @param string|null $modelCode 指定模型代码（null 则使用场景默认模型）
+     * @param array $params 额外参数
+     * @param callable|null $streamCallback SSE 事件回调
+     * @return AgentResult
+     * @throws Exception
+     */
+    public function executeAgent(
+        string $agentCode,
+        string $prompt,
+        ?string $modelCode = null,
+        array $params = [],
+        ?callable $streamCallback = null
+    ): AgentResult {
+        // 1. 获取智能体
+        $agent = $this->agentScanner->getAgent($agentCode);
+        if (!$agent) {
+            throw new Exception(__('智能体不存在：%{1}', [$agentCode]));
+        }
+
+        // 2. 选择模型（优先使用指定模型，否则使用场景默认模型）
+        $scenarioCode = $agent->getScenarios()[0] ?? null;
+        $model = $this->selectModel($modelCode, $scenarioCode);
+        if (!$model) {
+            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
+            throw new Exception($reason);
+        }
+
+        // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
+        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+        if ($providerCode) {
+            $account = $this->accountService->getAvailableAccount($providerCode);
+            if ($account) {
+                $this->injectAccountConfig($model, $account);
+            }
+        }
+
+        // 4. 合并 provider config
+        $this->mergeConfigToProviderConfig($model);
+
+        // 5. 解析配置（API key、base_url 等）
+        $resolvedConfig = $this->resolveModelConfig($model, $params);
+        $params['resolved_config'] = $resolvedConfig;
+        $params['provider_factory'] = $this->providerFactory;
+
+        // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
+        $result = $agent->execute($prompt, $model, $params, $streamCallback);
+        $result->agentCode = $agentCode;
+        $result->modelCode = $model->getModelCode();
+
+        return $result;
+    }
+
+    /**
+     * 使用智能体流式执行任务
+     * 
+     * @param string $agentCode 智能体代码
+     * @param string $prompt 用户提示词
+     * @param callable $callback SSE 事件回调
+     * @param string|null $modelCode 指定模型代码
+     * @param array $params 额外参数
+     * @return void
+     * @throws Exception
+     */
+    public function executeAgentStream(
+        string $agentCode,
+        string $prompt,
+        callable $callback,
+        ?string $modelCode = null,
+        array $params = []
+    ): void {
+        $this->executeAgent($agentCode, $prompt, $modelCode, $params, $callback);
+    }
+
+    /**
+     * 获取场景可用的智能体列表
+     * 
+     * @param string $scenarioCode 场景代码
+     * @return array 智能体信息数组
+     */
+    public function getAgentsForScenario(string $scenarioCode): array
+    {
+        $agents = $this->agentScanner->getAgentsForScenario($scenarioCode);
+        $result = [];
+
+        foreach ($agents as $code => $agent) {
+            $result[] = [
+                'code' => $agent->getCode(),
+                'name' => $agent->getName(),
+                'description' => $agent->getDescription(),
+                'version' => $agent->getVersion(),
+                'scenarios' => $agent->getScenarios(),
+                'tools_count' => count($agent->getTools()),
+                'max_iterations' => $agent->getMaxIterations(),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 获取智能体详情
+     * 
+     * @param string $agentCode 智能体代码
+     * @return array|null
+     */
+    public function getAgentInfo(string $agentCode): ?array
+    {
+        $agent = $this->agentScanner->getAgent($agentCode);
+        if (!$agent) {
+            return null;
+        }
+
+        $tools = [];
+        foreach ($agent->getTools() as $tool) {
+            $tools[] = [
+                'name' => $tool->getName(),
+                'description' => $tool->getDescription(),
+                'parameters' => $tool->getParameters(),
+                'enabled' => $tool->isEnabled(),
+            ];
+        }
+
+        return [
+            'code' => $agent->getCode(),
+            'name' => $agent->getName(),
+            'description' => $agent->getDescription(),
+            'version' => $agent->getVersion(),
+            'scenarios' => $agent->getScenarios(),
+            'tools' => $tools,
+            'max_iterations' => $agent->getMaxIterations(),
+        ];
+    }
+
+    /**
+     * 获取所有活跃的智能体
+     * 
+     * @return array
+     */
+    public function getAllActiveAgents(): array
+    {
+        return $this->agentScanner->getAllActiveAgents();
+    }
+
+    /**
+     * 获取 ProviderFactory（供智能体内部使用）
+     * 
+     * @return ProviderFactory
+     */
+    public function getProviderFactory(): ProviderFactory
+    {
+        return $this->providerFactory;
+    }
+
+    /**
+     * 解析模型配置（API key、base_url 等）
+     * 供智能体调用 Provider 时使用
+     * 
+     * @param AiModel $model
+     * @param array $params
+     * @return array
+     */
+    public function resolveModelConfig(AiModel $model, array $params = []): array
+    {
+        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
+        $userId = $params['user_id'] ?? null;
+        $isBackend = $params['is_backend'] ?? true;
+
+        return $configResolver->resolveConfig(
+            $model->getModelCode(),
+            $params['user_config'] ?? [],
+            $userId ? (int)$userId : null,
+            $isBackend
+        );
     }
 }

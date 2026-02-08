@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="<?= $this->getLocale() ?? 'zh-CN' ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $this->e($title ?? __('在线PSD解析器 - 免费PSD图层提取工具')) ?></title>
+    <meta name="description" content="<?= __('免费在线PSD解析工具，无需安装Photoshop即可查看PSD文件、提取图层、复制文字、下载图片。支持图层预览、文字提取、图片导出。') ?>">
+    <meta name="keywords" content="<?= __('PSD在线解析,在线PS,PSD查看器,图层提取,PSD转PNG,免费PSD工具,Photoshop在线') ?>">
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 0; background: #2c3e50; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+        header { background: #1a252f; padding: 15px; text-align: center; border-bottom: 2px solid #3498db; position: relative; }
+        #drop-zone { border: 2px dashed #3498db; margin: 10px; padding: 20px; border-radius: 8px; cursor: pointer; background: #34495e; transition: 0.3s; }
+        #drop-zone:hover { background: #3d566e; border-color: #5dade2; }
+        #drop-zone.collapsed { padding: 8px 15px; margin: 5px 10px; font-size: 14px; border-style: solid; }
+        #drop-zone.collapsed .reselect-link { margin-left: 10px; color: #5dade2; text-decoration: underline; }
+        #main { flex: 1; display: flex; overflow: hidden; }
+        #layer-panel { width: 380px; background: #ecf0f1; color: #333; overflow-y: auto; padding: 15px; border-right: 5px solid #bdc3c7; }
+        #view-panel { flex: 1; overflow: auto; padding: 20px; background: #95a5a6; text-align: center; }
+        canvas { box-shadow: 0 0 20px rgba(0,0,0,0.5); max-width: 100%; background: #fff; }
+        .card { background: white; border-radius: 5px; padding: 10px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .text-wrap { margin: 8px 0; }
+        .text-box { background: #fffbe6; border-left: 4px solid #f1c40f; padding: 8px; font-size: 13px; color: #7f8c8d; user-select: text; -webkit-user-select: text; white-space: pre-wrap; word-break: break-all; border: 1px solid #f1c40f; border-radius: 2px; }
+        .text-box:focus { outline: 1px solid #3498db; }
+        .layer-img-wrap { position: relative; margin-top: 8px; }
+        .layer-img { max-width: 100%; height: auto; border: 1px solid #ddd; background: #eee; display: block; user-select: none; }
+        .layer-actions { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .layer-actions .btn { font-size: 12px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; background: #3498db; color: #fff; }
+        .layer-actions .btn:hover { background: #2980b9; }
+        .layer-actions .btn-download { background: #27ae60; }
+        .layer-actions .btn-download:hover { background: #219a52; }
+        .badge { font-size: 10px; background: #3498db; color: white; padding: 2px 6px; border-radius: 10px; }
+        .loading { color: #f1c40f; font-weight: bold; }
+        /* 预览区交互层 */
+        #canvas-wrap { position: relative; display: inline-block; }
+        #canvas-wrap canvas, #canvas-wrap img { display: block; height: auto; }
+        #canvas-wrap { transform-origin: 0 0; }
+        #layer-overlay { position: absolute; top: 0; left: 0; z-index: 10; pointer-events: none; }
+        #zoom-indicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 13px; z-index: 100; user-select: none; display: none; transition: opacity 0.3s; }
+        #zoom-indicator .zoom-reset { cursor: pointer; margin-left: 8px; color: #5dade2; text-decoration: underline; font-size: 12px; }
+        .layer-box { position: absolute; border: 2px dashed transparent; box-sizing: border-box; pointer-events: auto; cursor: pointer; transition: all 0.15s; z-index: 11; }
+        .layer-box:hover { border-color: #3498db; }
+        .layer-box.selected { border-color: #e74c3c; border-width: 3px; }
+        .layer-box .layer-label { position: absolute; top: -20px; left: 0; background: #3498db; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+        .layer-box:hover .layer-label, .layer-box.selected .layer-label { opacity: 1; }
+        .layer-box.selected .layer-label { background: #e74c3c; }
+        /* 左侧列表选中态 */
+        .card.selected { outline: 3px solid #e74c3c; background: #ffeaea; }
+        .card.highlight { animation: card-flash 0.5s ease; }
+        @keyframes card-flash { 0%,100% { background: white; } 50% { background: #fffacd; } }
+        /* 树形结构 */
+        .tree-node { margin-left: 0; }
+        .tree-node .tree-node { margin-left: 20px; }
+        .tree-group { margin-bottom: 8px; }
+        .tree-group-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #9b59b6; color: #fff; border-radius: 5px; cursor: pointer; user-select: none; }
+        .tree-group-header:hover { background: #8e44ad; }
+        .tree-toggle { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: transform 0.2s; }
+        .tree-group.collapsed .tree-toggle { transform: rotate(-90deg); }
+        .tree-group.collapsed .tree-children { display: none; }
+        .tree-children { margin-top: 5px; }
+        .tree-layer { margin-bottom: 5px; }
+        /* 可视区域内的图层高亮 */
+        .card.in-viewport, .tree-group.in-viewport > .tree-group-header { border-left: 4px solid #27ae60; }
+        .tree-group.in-viewport > .tree-group-header { background: #27ae60; }
+        /* 语言切换器 */
+        .lang-switcher { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); }
+        .lang-switcher select { background: #34495e; color: #fff; border: 1px solid #5dade2; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+        .lang-switcher select:hover { background: #3d566e; }
+        .lang-switcher select:focus { outline: none; border-color: #3498db; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="lang-switcher" data-i18n-switcher>
+        <select id="lang-select" onchange="switchLanguage(this.value)">
+            <option value="zh_Hans_CN" <?= ($this->getLocale() === 'zh_Hans_CN' ? 'selected' : '') ?>>简体中文</option>
+            <option value="en_US" <?= ($this->getLocale() === 'en_US' ? 'selected' : '') ?>>English</option>
+        </select>
+    </div>
+    <h2><?= __('在线PSD解析器') ?></h2>
+    <p style="margin:5px 0 0;font-size:14px;color:#bdc3c7"><?= __('免费图层提取、文字复制、图片下载') ?></p>
+    <div id="drop-zone"><?= __('点击这里选择 PSD，或把文件拖进来') ?></div>
+</header>
+
+<div id="main">
+    <div id="layer-panel">
+        <h3 style="margin-top:0"><?= __('图层列表') ?> <small id="layer-count" style="font-weight:normal;color:#888"></small></h3>
+        <div id="visible-hint" style="font-size:12px;color:#666;margin-bottom:10px;display:none"><?= __('仅显示当前可视区域的图层') ?></div>
+        <div id="layer-list"><?= __('等待上传文件...') ?></div>
+    </div>
+    <div id="view-panel">
+        <div id="canvas-wrap"></div>
+    </div>
+</div>
+
+<div id="zoom-indicator">100% <span class="zoom-reset" onclick="resetZoom()"><?= __('重置') ?></span></div>
+
+<script src="@static(WelineTools_PsdParser::js/psd.min.js)"></script>
+<script>
+(function () {
+    // psd.min.js 为 CommonJS 打包，需从 require('psd') 挂到 window 供页面使用
+    if (!window.PSD && typeof require === 'function') {
+        try { window.PSD = require('psd'); } catch (e) {}
+    }
+    var PSD = window.PSD;
+    if (!PSD) {
+        document.getElementById('drop-zone').innerHTML = '<?= __("PSD 库未加载，请检查 statics/js/psd.min.js") ?>';
+        return;
+    }
+
+    var dropZone = document.getElementById('drop-zone');
+    var layerList = document.getElementById('layer-list');
+    var canvasWrap = document.getElementById('canvas-wrap');
+    var viewPanel = document.getElementById('view-panel');
+    var visibleHint = document.getElementById('visible-hint');
+    var layerCountEl = document.getElementById('layer-count');
+    var layerPanel = document.getElementById('layer-panel');
+    var zoomIndicator = document.getElementById('zoom-indicator');
+
+    // ========== 自定义滚轮缩放（仅缩放预览区，图层栏不受影响） ==========
+    var currentZoom = 1;
+    var MIN_ZOOM = 0.1;
+    var MAX_ZOOM = 10;
+    var zoomHideTimer = null;
+
+    function showZoomIndicator() {
+        zoomIndicator.style.display = 'block';
+        zoomIndicator.style.opacity = '1';
+        clearTimeout(zoomHideTimer);
+        zoomHideTimer = setTimeout(function() {
+            zoomIndicator.style.opacity = '0';
+            setTimeout(function() { zoomIndicator.style.display = 'none'; }, 300);
+        }, 2000);
+    }
+
+    function applyZoom(newZoom, originX, originY) {
+        newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+        if (newZoom === currentZoom) return;
+
+        // 计算缩放前鼠标在内容中的位置
+        var scrollLeft = viewPanel.scrollLeft;
+        var scrollTop = viewPanel.scrollTop;
+        var contentX = (scrollLeft + originX) / currentZoom;
+        var contentY = (scrollTop + originY) / currentZoom;
+
+        currentZoom = newZoom;
+        canvasWrap.style.transform = 'scale(' + currentZoom + ')';
+
+        // 缩放后保持鼠标指向的内容位置不变
+        viewPanel.scrollLeft = contentX * currentZoom - originX;
+        viewPanel.scrollTop = contentY * currentZoom - originY;
+
+        // 更新覆盖层尺寸（覆盖层在 canvasWrap 内，跟随 transform 缩放，无需额外处理）
+        zoomIndicator.innerHTML = Math.round(currentZoom * 100) + '% <span class="zoom-reset" onclick="resetZoom()"><?= __("重置") ?></span>';
+        showZoomIndicator();
+    }
+
+    // 暴露重置函数到全局
+    window.resetZoom = function() {
+        currentZoom = 1;
+        canvasWrap.style.transform = 'scale(1)';
+        zoomIndicator.innerHTML = '100% <span class="zoom-reset" onclick="resetZoom()"><?= __("重置") ?></span>';
+        showZoomIndicator();
+    };
+
+    // 监听 view-panel 的滚轮事件实现缩放
+    viewPanel.addEventListener('wheel', function(e) {
+        // Ctrl + 滚轮 或 触控板捏合缩放（ctrlKey=true）
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var rect = viewPanel.getBoundingClientRect();
+            var originX = e.clientX - rect.left;
+            var originY = e.clientY - rect.top;
+
+            // deltaY < 0 = 放大, deltaY > 0 = 缩小
+            var zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            applyZoom(currentZoom * zoomFactor, originX, originY);
+        }
+    }, { passive: false });
+
+    // 阻止浏览器默认缩放（仅在 view-panel 区域）
+    viewPanel.addEventListener('gesturestart', function(e) { e.preventDefault(); }, { passive: false });
+    viewPanel.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
+
+    // IntersectionObserver 用于懒加载可视区域的图片
+    var imageObserver = null;
+    if ('IntersectionObserver' in window) {
+        imageObserver = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    var placeholder = entry.target;
+                    if (placeholder.dataset.loaded === 'true') return;
+                    placeholder.dataset.loaded = 'true';
+                    loadLayerImage(placeholder);
+                    imageObserver.unobserve(placeholder);
+                }
+            });
+        }, { root: layerPanel, rootMargin: '100px', threshold: 0.01 });
+        window._imgObserver = imageObserver;
+    }
+
+    function fallbackCopy(text, btnEl) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); if (btnEl) { btnEl.textContent = '<?= __("已复制") ?>'; setTimeout(function () { btnEl.textContent = '<?= __("复制文字") ?>'; }, 1500); } } catch (e) {}
+        document.body.removeChild(ta);
+    }
+
+    function triggerFileInput() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.psd';
+        input.onchange = function (e) { handleFile(e.target.files[0]); };
+        input.click();
+    }
+
+    dropZone.onclick = function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('reselect-link')) return;
+        triggerFileInput();
+    };
+
+    document.ondragover = function (e) { e.preventDefault(); };
+    document.ondrop = function (e) { e.preventDefault(); handleFile(e.dataTransfer.files[0]); };
+
+    function handleFile(file) {
+        if (!file) return;
+        dropZone.classList.remove('collapsed');
+        dropZone.innerHTML = '<span class="loading"><?= __("正在努力加载: %{name} ...") ?></span>'.replace('%{name}', file.name);
+        layerList.innerHTML = '<?= __("正在深度扫描图层...") ?>';
+        canvasWrap.innerHTML = '';
+
+        PSD.fromURL(URL.createObjectURL(file)).then(function (psd) {
+            var mainEl = psd.image.toCanvas ? psd.image.toCanvas() : psd.image.toPng();
+            canvasWrap.appendChild(mainEl);
+
+            // 获取 PSD 原始尺寸
+            var psdWidth = psd.header ? psd.header.width : (mainEl.width || mainEl.naturalWidth || 800);
+            var psdHeight = psd.header ? psd.header.height : (mainEl.height || mainEl.naturalHeight || 600);
+
+            layerList.innerHTML = '';
+            var root = psd.tree();
+            // 使用 descendants() 获取所有图层用于覆盖层
+            var allNodes = root.descendants();
+            console.log('PSD 图层数:', allNodes.length);
+            if (allNodes.length === 0) {
+                allNodes = root.children();
+                console.log('使用 children:', allNodes.length);
+            }
+            var displayNodes = allNodes;
+            // 存储节点用于交互
+            window._psdNodes = displayNodes;
+            window._psdRoot = root; // 保存根节点用于树形渲染
+            window._psdWidth = psdWidth;
+            window._psdHeight = psdHeight;
+            window._psdMainEl = mainEl;
+
+            // 预计算每个图层的位置信息
+            window._psdLayerBounds = displayNodes.map(function(node) {
+                var exported = null;
+                try { exported = node.export(); } catch (e) {}
+                var left = 0, top = 0, width = 0, height = 0;
+                if (exported) {
+                    left = typeof exported.left === 'number' ? exported.left : 0;
+                    top = typeof exported.top === 'number' ? exported.top : 0;
+                    width = typeof exported.width === 'number' ? exported.width : 
+                            (typeof exported.right === 'number' ? exported.right - left : 0);
+                    height = typeof exported.height === 'number' ? exported.height : 
+                             (typeof exported.bottom === 'number' ? exported.bottom - top : 0);
+                }
+                return { left: left, top: top, width: width, height: height, right: left + width, bottom: top + height };
+            });
+
+            // 准备渲染树形图层列表
+            layerList.innerHTML = '';
+            
+            // 创建交互覆盖层（等待 canvas/img 渲染完成）
+            function initOverlay() {
+                var w = mainEl.offsetWidth || mainEl.width || 0;
+                var h = mainEl.offsetHeight || mainEl.height || 0;
+                if (w > 0 && h > 0) {
+                    createLayerOverlay(displayNodes, psdWidth, psdHeight, mainEl);
+                    // 初始渲染可视区域内的图层
+                    updateVisibleLayers();
+                    // 监听滚动更新
+                    viewPanel.addEventListener('scroll', debounce(updateVisibleLayers, 150));
+                } else {
+                    setTimeout(initOverlay, 100);
+                }
+            }
+            if (mainEl.tagName === 'IMG' && !mainEl.complete) {
+                mainEl.onload = function() { setTimeout(initOverlay, 50); };
+            } else {
+                setTimeout(initOverlay, 100);
+            }
+
+            dropZone.classList.add('collapsed');
+            dropZone.innerHTML = '\u2713 <?= __("已加载: %{name}") ?>'.replace('%{name}', file.name) + ' <a href="#" class="reselect-link"><?= __("重新选择") ?></a>';
+            dropZone.querySelector('.reselect-link').onclick = function (e) { e.preventDefault(); e.stopPropagation(); triggerFileInput(); };
+        }).catch(function (err) {
+            console.error(err);
+            dropZone.innerHTML = '<?= __("解析失败！文件可能损坏或版本过高。") ?>';
+            layerList.innerHTML = '<?= __("解析出错，请查看控制台 F12") ?>';
+        });
+    }
+
+    // 防抖函数
+    function debounce(fn, delay) {
+        var timer = null;
+        return function() {
+            var args = arguments;
+            var context = this;
+            clearTimeout(timer);
+            timer = setTimeout(function() { fn.apply(context, args); }, delay);
+        };
+    }
+
+    // 渲染树形图层列表
+    function renderTreeLayers(root) {
+        layerList.innerHTML = '';
+        var children = root.children ? root.children() : [];
+        console.log('树形渲染: 顶层子节点数:', children.length);
+        if (!children || children.length === 0) {
+            // 如果没有 children，尝试使用 descendants
+            var allNodes = window._psdNodes || [];
+            console.log('使用扁平列表渲染, 节点数:', allNodes.length);
+            if (allNodes.length === 0) {
+                layerList.innerHTML = '<div style="color:#999"><?= __("未找到图层") ?></div>';
+                return;
+            }
+            // 扁平渲染（无树形结构的情况）
+            allNodes.forEach(function(node, index) {
+                var card = renderLayerCard(node, index);
+                var layerDiv = document.createElement('div');
+                layerDiv.className = 'tree-node tree-layer';
+                layerDiv.appendChild(card);
+                layerList.appendChild(layerDiv);
+            });
+            return;
+        }
+        // 递归渲染树形结构
+        renderTreeChildren(children, layerList, 0);
+        console.log('树形渲染完成');
+    }
+
+    // 只渲染可视区域内的图层
+    function updateVisibleLayers() {
+        if (!window._psdNodes || !window._psdMainEl || !window._psdLayerBounds) return;
+        
+        var mainEl = window._psdMainEl;
+        var nodes = window._psdNodes;
+        var bounds = window._psdLayerBounds;
+        var psdWidth = window._psdWidth;
+        var psdHeight = window._psdHeight;
+        
+        // 计算 view-panel 可视区域对应的 PSD 坐标（考虑缩放因子）
+        var displayWidth = mainEl.offsetWidth || mainEl.width || psdWidth;
+        var displayHeight = mainEl.offsetHeight || mainEl.height || psdHeight;
+        // 实际显示尺寸 = 原始尺寸 × 缩放倍率
+        var zoomedDisplayWidth = displayWidth * currentZoom;
+        var zoomedDisplayHeight = displayHeight * currentZoom;
+        var scaleX = psdWidth / zoomedDisplayWidth;
+        var scaleY = psdHeight / zoomedDisplayHeight;
+        
+        var scrollLeft = viewPanel.scrollLeft;
+        var scrollTop = viewPanel.scrollTop;
+        var viewWidth = viewPanel.clientWidth;
+        var viewHeight = viewPanel.clientHeight;
+        
+        var wrapRect = canvasWrap.getBoundingClientRect();
+        var panelRect = viewPanel.getBoundingClientRect();
+        var offsetX = wrapRect.left - panelRect.left + scrollLeft;
+        var offsetY = wrapRect.top - panelRect.top + scrollTop;
+        
+        var visibleLeft = Math.max(0, (scrollLeft - offsetX) * scaleX);
+        var visibleTop = Math.max(0, (scrollTop - offsetY) * scaleY);
+        var visibleRight = visibleLeft + viewWidth * scaleX;
+        var visibleBottom = visibleTop + viewHeight * scaleY;
+        
+        // 找出可视区域内的图层并按组分类
+        var visibleByGroup = {}; // { groupPath: [indices] }
+        var visibleCount = 0;
+        
+        for (var i = 0; i < nodes.length; i++) {
+            var b = bounds[i];
+            if (b.width < 5 || b.height < 5) continue;
+            
+            var intersects = !(b.right < visibleLeft || b.left > visibleRight || 
+                               b.bottom < visibleTop || b.top > visibleBottom);
+            
+            if (intersects) {
+                visibleCount++;
+                // 获取图层路径（所属组）
+                var node = nodes[i];
+                var path = getNodePath(node);
+                if (!visibleByGroup[path]) {
+                    visibleByGroup[path] = [];
+                }
+                visibleByGroup[path].push(i);
+            }
+        }
+        
+        // 清空列表并重新渲染可视区域内的图层
+        layerList.innerHTML = '';
+        
+        if (visibleCount === 0) {
+            layerList.innerHTML = '<div style="color:#999;text-align:center;padding:20px"><?= __("当前可视区域没有图层，请滚动预览区") ?></div>';
+        } else {
+            // 按组渲染
+            var paths = Object.keys(visibleByGroup).sort();
+            paths.forEach(function(path) {
+                var indices = visibleByGroup[path];
+                
+                // 显示组路径
+                if (path) {
+                    var groupHeader = document.createElement('div');
+                    groupHeader.className = 'tree-group-header';
+                    groupHeader.style.cssText = 'margin-bottom:5px;font-size:12px;padding:5px 8px;';
+                    groupHeader.innerHTML = '<span class="tree-toggle">▼</span> ' + escapeHtml(path) + ' <small style="opacity:0.7">(' + indices.length + ')</small>';
+                    layerList.appendChild(groupHeader);
+                }
+                
+                // 渲染该组内的图层
+                indices.forEach(function(index) {
+                    var node = nodes[index];
+                    var card = renderLayerCard(node, index);
+                    var layerDiv = document.createElement('div');
+                    layerDiv.className = 'tree-node tree-layer';
+                    if (path) layerDiv.style.marginLeft = '20px';
+                    layerDiv.appendChild(card);
+                    layerList.appendChild(layerDiv);
+                });
+            });
+        }
+        
+        visibleHint.style.display = 'block';
+        visibleHint.textContent = '<?= __("可视区域内") ?>: ' + visibleCount + ' / ' + nodes.length;
+        layerCountEl.textContent = '(' + visibleCount + '/' + nodes.length + ')';
+    }
+    
+    // 获取节点的路径（所属组）
+    function getNodePath(node) {
+        var parts = [];
+        var current = node;
+        try {
+            while (current) {
+                var parent = null;
+                // parent 可能是函数或属性
+                if (typeof current.parent === 'function') {
+                    parent = current.parent();
+                } else if (current.parent) {
+                    parent = current.parent;
+                }
+                
+                if (!parent) break;
+                
+                // 检查是否是根节点
+                var isRoot = false;
+                if (typeof parent.isRoot === 'function') {
+                    isRoot = parent.isRoot();
+                } else if (parent.isRoot !== undefined) {
+                    isRoot = parent.isRoot;
+                }
+                
+                if (!isRoot) {
+                    var parentExported = null;
+                    try { parentExported = parent.export(); } catch (e) {}
+                    var parentName = (parentExported && parentExported.name) || (parent.get ? parent.get('name') : '') || '';
+                    if (parentName) {
+                        parts.unshift(parentName);
+                    }
+                }
+                current = parent;
+            }
+        } catch (e) {
+            console.warn('getNodePath error:', e);
+        }
+        return parts.join(' / ');
+    }
+
+    // 递归渲染子节点
+    function renderTreeChildren(nodes, container, depth) {
+        nodes.forEach(function(node) {
+            var exported = null;
+            try { exported = node.export(); } catch (e) {}
+            
+            var layerName = (exported && exported.name) || (node.get ? node.get('name') : node.name) || '<?= __("未命名图层") ?>';
+            var nodeType = (exported && exported.type) || (node.type ? node.type() : 'layer');
+            var hasChildren = node.hasChildren ? node.hasChildren() : false;
+            var children = hasChildren && node.children ? node.children() : [];
+            
+            // 获取扁平列表中的索引（用于选择联动）
+            var flatIndex = findFlatIndex(node);
+            
+            if (nodeType === 'group' && hasChildren) {
+                // 渲染组
+                var groupDiv = document.createElement('div');
+                groupDiv.className = 'tree-node tree-group';
+                groupDiv.setAttribute('data-layer-index', flatIndex);
+                
+                var header = document.createElement('div');
+                header.className = 'tree-group-header';
+                header.innerHTML = '<span class="tree-toggle">▼</span><strong>' + escapeHtml(layerName) + '</strong> <span class="badge" style="background:#9b59b6"><?= __("组") ?></span> <small style="opacity:0.7">(' + children.length + ')</small>';
+                
+                header.addEventListener('click', function(e) {
+                    if (e.target.closest('.tree-toggle')) {
+                        groupDiv.classList.toggle('collapsed');
+                    } else {
+                        selectLayer(flatIndex);
+                    }
+                });
+                
+                var childrenDiv = document.createElement('div');
+                childrenDiv.className = 'tree-children';
+                
+                groupDiv.appendChild(header);
+                groupDiv.appendChild(childrenDiv);
+                container.appendChild(groupDiv);
+                
+                // 递归渲染子节点
+                renderTreeChildren(children, childrenDiv, depth + 1);
+            } else {
+                // 渲染普通图层
+                var layerDiv = document.createElement('div');
+                layerDiv.className = 'tree-node tree-layer';
+                
+                var card = renderLayerCard(node, flatIndex);
+                layerDiv.appendChild(card);
+                container.appendChild(layerDiv);
+            }
+        });
+    }
+
+    // 查找节点在扁平列表中的索引
+    function findFlatIndex(node) {
+        if (!window._psdNodes) return -1;
+        for (var i = 0; i < window._psdNodes.length; i++) {
+            if (window._psdNodes[i] === node) return i;
+        }
+        return -1;
+    }
+
+    // HTML 转义
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // 渲染图层卡片（提取自 renderSingleNode）
+    function renderLayerCard(node, index) {
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.setAttribute('data-layer-index', index);
+        
+        var exported = null;
+        try { exported = node.export(); } catch (e) {}
+        
+        var layerName = (exported && exported.name) || (node.get ? node.get('name') : node.name) || '<?= __("未命名图层") ?>';
+        var nodeType = (exported && exported.type) || (node.type ? node.type() : 'layer');
+        var typeBadge = nodeType === 'group' ? '<span class="badge" style="background:#9b59b6"><?= __("组") ?></span>' : '<span class="badge"><?= __("图层") ?></span>';
+        var content = '<div><strong>' + escapeHtml(layerName) + '</strong> ' + typeBadge + '</div>';
+
+        // 提取文字
+        var text = '';
+        try {
+            if (exported && exported.text && exported.text.value) {
+                text = exported.text.value;
+            } else {
+                var typeTool = node.get ? node.get('typeTool') : null;
+                if (typeTool && typeTool.export) {
+                    var ttExported = typeTool.export();
+                    text = (ttExported && ttExported.textValue) || (ttExported && ttExported.value) || '';
+                }
+            }
+        } catch (e) {}
+        
+        if (text) {
+            content += '<div class="text-wrap"><div class="text-box" contenteditable="false" title="<?= __("可选中后复制") ?>">' + escapeHtml(text) + '</div><div class="layer-actions"><button type="button" class="btn btn-copy-text"><?= __("复制文字") ?></button></div></div>';
+        }
+
+        // 检查是否有图层图片
+        var w = (exported && exported.width) || (node.get ? node.get('width') : 0);
+        var h = (exported && exported.height) || (node.get ? node.get('height') : 0);
+        var hasImage = w > 0 && h > 0 && (node.layer && node.layer.image);
+
+        card.innerHTML = content;
+
+        // 文字复制按钮事件
+        var textBox = card.querySelector('.text-box');
+        if (textBox) {
+            var copyTextBtn = card.querySelector('.btn-copy-text');
+            copyTextBtn.addEventListener('click', function () {
+                var t = textBox.textContent || textBox.innerText;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(t).then(function () { copyTextBtn.textContent = '<?= __("已复制") ?>'; setTimeout(function () { copyTextBtn.textContent = '<?= __("复制文字") ?>'; }, 1500); }).catch(function () { fallbackCopy(t, copyTextBtn); });
+                } else { fallbackCopy(t, copyTextBtn); }
+            });
+        }
+
+        // 添加图片懒加载占位
+        if (hasImage) {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'layer-img-placeholder';
+            placeholder.style.cssText = 'background:#ddd;color:#666;padding:15px;text-align:center;border-radius:4px;margin-top:8px;min-height:40px;';
+            placeholder.innerHTML = '<?= __("图片") ?> <span style="color:#999">(' + w + ' x ' + h + ')</span> <span class="loading-text" style="color:#3498db"><?= __("滚动到此处自动加载") ?></span>';
+            placeholder._node = node; // 存储节点引用
+            placeholder._layerName = layerName; // 存储图层名称
+            card.appendChild(placeholder);
+            // 使用 IntersectionObserver 懒加载
+            if (window._imgObserver) {
+                window._imgObserver.observe(placeholder);
+            } else if (imageObserver) {
+                imageObserver.observe(placeholder);
+            } else {
+                // 不支持 IntersectionObserver，直接加载
+                setTimeout(function () { loadLayerImage(placeholder); }, 100);
+            }
+        }
+
+        // 点击卡片选中图层
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('.btn')) return; // 排除按钮点击
+            selectLayer(index);
+        });
+
+        return card;
+    }
+
+    // 分批渲染函数（保留用于初始化，但主要用 updateVisibleLayers）
+    function renderNodesBatched(nodes, start, batchSize) {
+        if (!nodes || !nodes.length) {
+            if (start === 0) layerList.innerHTML = '<div style="color:#999"><?= __("未找到图层") ?></div>';
+            return;
+        }
+        var end = Math.min(start + batchSize, nodes.length);
+        for (var i = start; i < end; i++) {
+            renderSingleNode(nodes[i], i);
+        }
+        if (end < nodes.length) {
+            setTimeout(function () { renderNodesBatched(nodes, end, batchSize); }, 50);
+        }
+    }
+
+    function renderSingleNode(node, index) {
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.setAttribute('data-layer-index', index);
+        
+        // 使用 export() 获取完整信息（不打印到控制台，避免卡顿）
+        var exported = null;
+        try { exported = node.export(); } catch (e) {}
+        
+        var layerName = (exported && exported.name) || (node.get ? node.get('name') : node.name) || '<?= __("未命名图层") ?>';
+        var nodeType = (exported && exported.type) || (node.type ? node.type() : 'layer');
+        var typeBadge = nodeType === 'group' ? '<span class="badge" style="background:#9b59b6"><?= __("组") ?></span>' : '<span class="badge"><?= __("图层") ?></span>';
+        var content = '<div><strong>' + layerName + '</strong> ' + typeBadge + '</div>';
+
+        // 提取文字
+        var text = '';
+        try {
+            if (exported && exported.text && exported.text.value) {
+                text = exported.text.value;
+            } else {
+                var typeTool = node.get ? node.get('typeTool') : null;
+                if (typeTool && typeTool.export) {
+                    var ttExported = typeTool.export();
+                    text = (ttExported && ttExported.textValue) || (ttExported && ttExported.value) || '';
+                }
+            }
+        } catch (e) {}
+        
+        if (text) {
+            var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            content += '<div class="text-wrap"><div class="text-box" contenteditable="false" title="<?= __("可选中后复制") ?>">' + escaped + '</div><div class="layer-actions"><button type="button" class="btn btn-copy-text"><?= __("复制文字") ?></button></div></div>';
+        }
+
+        // 检查是否有图层图片
+        var w = (exported && exported.width) || (node.get ? node.get('width') : 0);
+        var h = (exported && exported.height) || (node.get ? node.get('height') : 0);
+        var hasImage = w > 0 && h > 0 && (node.layer && node.layer.image);
+
+        card.innerHTML = content;
+
+        // 文字复制按钮事件
+        var textBox = card.querySelector('.text-box');
+        if (textBox) {
+            (function (tb) {
+                var copyTextBtn = card.querySelector('.btn-copy-text');
+                copyTextBtn.addEventListener('click', function () {
+                    var t = tb.textContent || tb.innerText;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(t).then(function () { copyTextBtn.textContent = '<?= __("已复制") ?>'; setTimeout(function () { copyTextBtn.textContent = '<?= __("复制文字") ?>'; }, 1500); }).catch(function () { fallbackCopy(t, copyTextBtn); });
+                    } else { fallbackCopy(t, copyTextBtn); }
+                });
+            })(textBox);
+        }
+
+        // 图片懒加载：创建占位符，滚动到可视区域时自动加载
+        if (hasImage) {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'layer-img-placeholder';
+            placeholder.style.cssText = 'background:#ddd;color:#666;padding:15px;text-align:center;border-radius:4px;margin-top:8px;min-height:40px;';
+            placeholder.innerHTML = '<?= __("图片") ?> <span style="color:#999">(' + w + ' x ' + h + ')</span> <span class="loading-text" style="color:#3498db"><?= __("滚动到此处自动加载") ?></span>';
+            placeholder._node = node;
+            placeholder._layerName = layerName;
+            card.appendChild(placeholder);
+            if (imageObserver) {
+                imageObserver.observe(placeholder);
+            } else {
+                // 不支持 IntersectionObserver，直接加载
+                setTimeout(function () { loadLayerImage(placeholder); }, 100);
+            }
+        }
+
+        layerList.appendChild(card);
+    }
+
+    // 加载图层图片
+    function loadLayerImage(placeholder) {
+        var node = placeholder._node;
+        var layerName = placeholder._layerName;
+        if (!node || !node.layer || !node.layer.image) {
+            placeholder.innerHTML = '<?= __("无法加载") ?>';
+            return;
+        }
+        placeholder.querySelector('.loading-text').textContent = '<?= __("加载中...") ?>';
+        setTimeout(function () {
+            try {
+                var layerImage = node.layer.image;
+                var imgEl = layerImage.toCanvas ? layerImage.toCanvas() : (layerImage.toPng ? layerImage.toPng() : null);
+                if (imgEl) {
+                    var wrap = document.createElement('div');
+                    wrap.className = 'layer-img-wrap';
+                    var img, dataUrl;
+                    if (imgEl.tagName === 'CANVAS') {
+                        dataUrl = imgEl.toDataURL('image/png');
+                        img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.className = 'layer-img';
+                    } else {
+                        img = imgEl;
+                        img.className = 'layer-img';
+                        dataUrl = img.src || null;
+                    }
+                    wrap.appendChild(img);
+                    if (dataUrl) {
+                        var actions = document.createElement('div');
+                        actions.className = 'layer-actions';
+                        var copyImgBtn = document.createElement('button');
+                        copyImgBtn.type = 'button';
+                        copyImgBtn.className = 'btn';
+                        copyImgBtn.textContent = '<?= __("复制图片") ?>';
+                        var downloadBtn = document.createElement('button');
+                        downloadBtn.type = 'button';
+                        downloadBtn.className = 'btn btn-download';
+                        downloadBtn.textContent = '<?= __("下载图片") ?>';
+                        (function (du) {
+                            copyImgBtn.addEventListener('click', function () {
+                                fetch(du).then(function (r) { return r.blob(); }).then(function (blob) {
+                                    if (navigator.clipboard && navigator.clipboard.write) {
+                                        return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                                    }
+                                }).then(function () { copyImgBtn.textContent = '<?= __("已复制") ?>'; setTimeout(function () { copyImgBtn.textContent = '<?= __("复制图片") ?>'; }, 1500); }).catch(function () { copyImgBtn.textContent = '<?= __("复制失败") ?>'; setTimeout(function () { copyImgBtn.textContent = '<?= __("复制图片") ?>'; }, 1500); });
+                            });
+                            downloadBtn.addEventListener('click', function () {
+                                var a = document.createElement('a');
+                                a.href = du;
+                                a.download = (layerName.replace(/[^\w\u4e00-\u9fa5\-]/g, '_') || 'layer') + '.png';
+                                a.click();
+                            });
+                        })(dataUrl);
+                        actions.appendChild(copyImgBtn);
+                        actions.appendChild(downloadBtn);
+                        wrap.appendChild(actions);
+                    }
+                    placeholder.parentNode.replaceChild(wrap, placeholder);
+                } else {
+                    placeholder.innerHTML = '<?= __("无法加载") ?>';
+                }
+            } catch (e) {
+                console.warn('<?= __("图片渲染跳过") ?>', layerName, e);
+                placeholder.innerHTML = '<?= __("加载失败") ?>';
+            }
+        }, 10);
+    }
+
+    // 创建交互覆盖层（类似 PS 的图层选择）
+    function createLayerOverlay(nodes, psdWidth, psdHeight, mainEl) {
+        // 移除旧的覆盖层
+        var oldOverlay = document.getElementById('layer-overlay');
+        if (oldOverlay) oldOverlay.remove();
+
+        // 获取主预览图的实际显示尺寸
+        var displayWidth = mainEl.offsetWidth || mainEl.width || psdWidth;
+        var displayHeight = mainEl.offsetHeight || mainEl.height || psdHeight;
+        var scaleX = displayWidth / psdWidth;
+        var scaleY = displayHeight / psdHeight;
+
+        console.log('PSD尺寸:', psdWidth, 'x', psdHeight, '显示尺寸:', displayWidth, 'x', displayHeight, '缩放:', scaleX, scaleY);
+
+        // 创建覆盖层
+        var overlay = document.createElement('div');
+        overlay.id = 'layer-overlay';
+        overlay.style.width = displayWidth + 'px';
+        overlay.style.height = displayHeight + 'px';
+        canvasWrap.appendChild(overlay);
+
+        var boxCount = 0;
+        // 为每个有尺寸的图层创建边界框
+        nodes.forEach(function (node, index) {
+            var exported = null;
+            try { exported = node.export(); } catch (e) { console.warn('export失败:', index, e); }
+            
+            // 根据官方文档，export() 返回 left, right, top, bottom, width, height
+            var left = 0, top = 0, width = 0, height = 0, name = '', nodeType = 'layer';
+            
+            if (exported) {
+                left = typeof exported.left === 'number' ? exported.left : 0;
+                top = typeof exported.top === 'number' ? exported.top : 0;
+                // width/height 可能直接存在，也可能需要从 right-left, bottom-top 计算
+                width = typeof exported.width === 'number' ? exported.width : 
+                        (typeof exported.right === 'number' ? exported.right - left : 0);
+                height = typeof exported.height === 'number' ? exported.height : 
+                         (typeof exported.bottom === 'number' ? exported.bottom - top : 0);
+                name = exported.name || '';
+                nodeType = exported.type || 'layer';
+            }
+            
+            // 备用：使用 node.get()
+            if (width === 0 && node.get) {
+                try {
+                    left = node.get('left') || 0;
+                    top = node.get('top') || 0;
+                    width = node.get('width') || 0;
+                    height = node.get('height') || 0;
+                    name = name || node.get('name') || '';
+                } catch (e) {}
+            }
+            
+            name = name || '<?= __("未命名图层") ?>';
+
+            // 调试：输出前几个图层的位置信息
+            if (index < 10) {
+                console.log('图层', index, name, ':', left, top, width, height, nodeType);
+            }
+
+            // 跳过太小或无效的图层
+            if (width < 5 || height < 5) return;
+            // 跳过组（folder）只显示实际图层
+            if (nodeType === 'group') return;
+
+            var box = document.createElement('div');
+            box.className = 'layer-box';
+            box.setAttribute('data-layer-index', index);
+            box.style.left = (left * scaleX) + 'px';
+            box.style.top = (top * scaleY) + 'px';
+            box.style.width = (width * scaleX) + 'px';
+            box.style.height = (height * scaleY) + 'px';
+
+            var label = document.createElement('span');
+            label.className = 'layer-label';
+            label.textContent = name;
+            box.appendChild(label);
+
+            // 点击选中
+            box.addEventListener('click', function (e) {
+                e.stopPropagation();
+                selectLayer(index);
+            });
+
+            // 双击穿透到下层图层
+            box.addEventListener('dblclick', function (e) {
+                e.stopPropagation();
+                selectNextLayerAt(e.clientX, e.clientY, index);
+            });
+
+            overlay.appendChild(box);
+            boxCount++;
+        });
+        
+        console.log('创建了', boxCount, '个图层选择框');
+
+        // 点击预览区空白取消选中
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) {
+                clearSelection();
+            }
+        });
+
+        // 窗口大小变化时重建覆盖层
+        window._resizeOverlayTimer = null;
+        window.addEventListener('resize', function () {
+            clearTimeout(window._resizeOverlayTimer);
+            window._resizeOverlayTimer = setTimeout(function () {
+                if (window._psdNodes && window._psdMainEl) {
+                    createLayerOverlay(window._psdNodes, window._psdWidth, window._psdHeight, window._psdMainEl);
+                }
+            }, 200);
+        });
+    }
+
+    // 双击穿透：选择下一层图层
+    function selectNextLayerAt(clientX, clientY, currentIndex) {
+        // 获取所有在该点重叠的图层框
+        var allBoxes = document.querySelectorAll('.layer-box');
+        var overlappingLayers = [];
+        
+        allBoxes.forEach(function(box) {
+            var rect = box.getBoundingClientRect();
+            // 检查点击点是否在该图层框内
+            if (clientX >= rect.left && clientX <= rect.right && 
+                clientY >= rect.top && clientY <= rect.bottom) {
+                var idx = parseInt(box.getAttribute('data-layer-index'), 10);
+                if (!isNaN(idx)) {
+                    overlappingLayers.push(idx);
+                }
+            }
+        });
+        
+        if (overlappingLayers.length <= 1) return; // 只有一个或没有图层，无需穿透
+        
+        // 按图层索引排序（索引越大越靠前/上层）
+        overlappingLayers.sort(function(a, b) { return b - a; });
+        
+        // 找到当前图层在列表中的位置
+        var currentPos = overlappingLayers.indexOf(currentIndex);
+        if (currentPos === -1) return;
+        
+        // 选择下一层（循环）
+        var nextPos = (currentPos + 1) % overlappingLayers.length;
+        var nextIndex = overlappingLayers[nextPos];
+        
+        selectLayer(nextIndex);
+    }
+
+    // 选中图层
+    var selectedIndex = -1;
+    function selectLayer(index) {
+        // 取消之前的选中
+        clearSelection();
+        selectedIndex = index;
+
+        // 高亮覆盖层的边界框
+        var box = document.querySelector('.layer-box[data-layer-index="' + index + '"]');
+        if (box) box.classList.add('selected');
+
+        // 高亮左侧列表的卡片并滚动到可视区
+        var card = document.querySelector('.card[data-layer-index="' + index + '"]');
+        if (card) {
+            card.classList.add('selected', 'highlight');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 触发图片懒加载
+            var placeholder = card.querySelector('.layer-img-placeholder');
+            if (placeholder && placeholder.dataset.loaded !== 'true') {
+                placeholder.dataset.loaded = 'true';
+                loadLayerImage(placeholder);
+            }
+        }
+    }
+
+    function clearSelection() {
+        selectedIndex = -1;
+        document.querySelectorAll('.layer-box.selected').forEach(function (el) { el.classList.remove('selected'); });
+        document.querySelectorAll('.card.selected').forEach(function (el) { el.classList.remove('selected', 'highlight'); });
+    }
+
+    // 左侧列表卡片点击也触发选中
+    layerList.addEventListener('click', function (e) {
+        var card = e.target.closest('.card[data-layer-index]');
+        if (card) {
+            var index = parseInt(card.getAttribute('data-layer-index'), 10);
+            selectLayer(index);
+        }
+    });
+})();
+
+// 阻止整个页面的浏览器默认 Ctrl+滚轮缩放
+document.addEventListener('wheel', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// 语言切换
+function switchLanguage(lang) {
+    // 使用 Weline.i18n 如果可用
+    if (window.Weline && window.Weline.i18n && typeof window.Weline.i18n.switchLang === 'function') {
+        window.Weline.i18n.switchLang(lang);
+        return;
+    }
+    // 降级：通过 URL 参数切换
+    localStorage.setItem('weline_user_lang', lang);
+    var url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.location.href = url.toString();
+}
+</script>
+</body>
+</html>

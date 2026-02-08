@@ -1,0 +1,145 @@
+<?php
+/**
+ * FinTech Hub 模板 - Content
+ * 
+ * 内容区域渲染文件，通过组件系统加载内容组件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1200|px
+ * layout.padding_vertical => 上下内边距:responsive:60/80|px[MD]
+ * layout.padding_horizontal => 左右内边距:responsive:20/40|px[MD]
+ * 
+ * group:style => 样式设置
+ * style.background_color => 背景颜色:color:#080b16
+ * style.text_color => 文字颜色:color:#94a3b8
+ * style.heading_color => 标题颜色:color:#f8fafc
+ * style.link_color => 链接颜色:color:#3b82f6
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'fintech-hub';
+if (empty($templateCode)) {
+    $templateCode = 'fintech-hub';
+}
+$this->assign('template_code', $templateCode);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 辅助函数
+if (!function_exists('fh_content_color')) {
+    function fh_content_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('fh_content_getConfig')) {
+    function fh_content_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+// 布局配置
+$maxWidth = fh_content_getConfig($styleSettings, 'layout.max_width', '1200');
+$paddingVertical = fh_content_getConfig($styleSettings, 'layout.padding_vertical', '60/80');
+$paddingHorizontal = fh_content_getConfig($styleSettings, 'layout.padding_horizontal', '20/40');
+
+// 样式配置
+$bgColor = fh_content_getConfig($styleSettings, 'style.background_color', fh_content_color($colors, 'body_bg', '#080b16'));
+$textColor = fh_content_getConfig($styleSettings, 'style.text_color', fh_content_color($colors, 'text_secondary', '#94a3b8'));
+$headingColor = fh_content_getConfig($styleSettings, 'style.heading_color', fh_content_color($colors, 'text_primary', '#f8fafc'));
+$linkColor = fh_content_getConfig($styleSettings, 'style.link_color', fh_content_color($colors, 'accent_primary', '#3b82f6'));
+
+// 获取布局配置
+$layoutConfig = $this->getData('layout_config') ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+?>
+
+<style>
+    .fh-content {
+        background: <?= htmlspecialchars($bgColor) ?>;
+        color: <?= htmlspecialchars($textColor) ?>;
+        min-height: 50vh;
+        padding-top: 80px; /* 为固定头部留出空间 */
+    }
+    
+    .fh-content-container {
+        max-width: <?= intval($maxWidth) ?>px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+    
+    .fh-content h1, .fh-content h2, .fh-content h3, .fh-content h4 {
+        color: <?= htmlspecialchars($headingColor) ?>;
+    }
+    
+    .fh-content a {
+        color: <?= htmlspecialchars($linkColor) ?>;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+    
+    .fh-content a:hover {
+        color: <?= htmlspecialchars($linkColor) ?>;
+        opacity: 0.8;
+    }
+</style>
+
+<main class="fh-content">
+    <?php
+    // 映射组件代码到文件路径
+    $componentFiles = [
+        'hero' => 'content/hero.phtml',
+        'features' => 'content/features.phtml',
+        'stats' => 'content/stats.phtml',
+        'services' => 'content/services.phtml',
+        'testimonials' => 'content/testimonials.phtml',
+        'faq' => 'content/faq.phtml',
+    ];
+    
+    // 如果有组件配置，渲染组件
+    if (!empty($contentComponents)) {
+        foreach ($contentComponents as $index => $component) {
+            $componentCode = $component['code'] ?? $component['component'] ?? '';
+            $componentConfig = $component['config'] ?? [];
+            
+            if (empty($componentCode)) continue;
+            
+            $componentFile = $componentFiles[$componentCode] ?? null;
+            if ($componentFile) {
+                $this->assign('component_config', $componentConfig);
+                $this->assign('component_instance_id', 'fh-component-' . $componentCode . '-' . $index);
+                $this->assign('colors', $colors);
+                ?>
+                <div class="fh-component-wrapper" data-component="<?= htmlspecialchars($componentCode) ?>" data-index="<?= $index ?>">
+                    <?= $this->fetchTemplate("GuoLaiRen_PageBuilder::templates/style/fintech-hub/components/{$componentFile}") ?>
+                </div>
+                <?php
+            }
+        }
+    } else {
+        // 默认显示页面内容
+        if ($page) {
+            $pageContent = $page->getData('content') ?? '';
+            if ($pageContent) {
+                echo '<div class="fh-content-container">' . $pageContent . '</div>';
+            }
+        }
+    }
+    ?>
+</main>

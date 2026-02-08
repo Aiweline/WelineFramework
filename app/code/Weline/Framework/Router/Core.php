@@ -32,12 +32,22 @@ class Core
 
     private string $area_router;
 
-    private bool $is_admin;
+    private bool $is_backend;
     private bool $is_match = false;
 
     private CacheInterface $cache;
 
     private ?ProcessUrlCache $processUrlCache = null;
+    
+    /**
+     * 缓存管理器 - 统一缓存操作
+     */
+    private ?CacheManager $cacheManager = null;
+    
+    /**
+     * URL 处理器 - URL 规范化和解析
+     */
+    private ?UrlProcessor $urlProcessor = null;
 
     protected array $router;
     protected string $url;
@@ -63,6 +73,12 @@ class Core
     // 统一缓存结构键名（已移至 RouterCache 类，请使用 RouterCache::UNIFIED_CACHE_*_KEY）
 
     /**
+     * 上次初始化的请求标识
+     * 用于检测是否是新请求，避免重复初始化
+     */
+    private string $lastRequestId = '';
+    
+    /**
      * @DESC         |任何时候都会初始化
      *
      * 参数区：
@@ -70,7 +86,40 @@ class Core
      */
     public function __init(): void
     {
-        $this->request = ObjectManager::getInstance(Request::class);
+        // 检测是否是新请求（通过请求 ID 判断，避免使用 WLS_MODE）
+        // 在常驻内存模式下，Router 是进程级单例，需要每次请求刷新状态
+        // 在 FPM 模式下，每次请求都是新进程，请求 ID 总是不同的
+        $currentRequestId = $this->getCurrentRequestId();
+        $isNewRequest = ($currentRequestId !== $this->lastRequestId);
+        
+        // 【关键】新请求到来时，必须重置所有请求级缓存属性
+        // 这些属性在上一个请求中被填充，如果不清理会导致跨请求状态污染：
+        // - unifiedCacheData：上个请求的统一缓存数据（包含路由、FPC、规则等），不清理会导致新请求使用旧路由
+        // - rule_cache_data / url_cache_data：上个请求的路由规则缓存
+        // - is_match：上个请求的路由匹配标志
+        if ($isNewRequest) {
+            $this->unifiedCacheData = null;
+            $this->rule_cache_data = null;
+            $this->url_cache_data = null;
+            $this->is_match = false;
+            $this->router = [];
+            $this->url = '';
+        }
+        
+        // 优先使用已注册的 Request（支持 WlsRequest 等替代实现）
+        // 检查 ObjectManager 中是否已经有注册的 Request
+        $resolvedClass = ObjectManager::parserClass(Request::class);
+        $resolvedInstance = ObjectManager::_getInstance($resolvedClass);
+        $requestInstance = ObjectManager::_getInstance(Request::class);
+        if ($resolvedInstance !== null) {
+            $this->request = $resolvedInstance;
+        } elseif ($requestInstance !== null) {
+            $this->request = $requestInstance;
+        } else {
+            // 如果没有注册的 Request，从 ObjectManager 获取
+            $this->request = ObjectManager::getInstance(Request::class);
+        }
+        
         if (empty($this->cache)) {
             $this->cache = ObjectManager::getInstance(RouterCache::class . 'Factory');
         }
@@ -78,27 +127,29 @@ class Core
             $this->processUrlCache = new ProcessUrlCache();
         }
 
-        if (empty($this->request_area)) {
+        // 每次新请求都需要重新获取请求级数据
+        // 无需判断 WLS_MODE，通过请求 ID 变化来检测新请求
+        if (empty($this->request_area) || $isNewRequest) {
             $this->request_area = $this->request->getRequestArea();
         }
 
-        if (empty($this->area_router)) {
+        if (empty($this->area_router) || $isNewRequest) {
             $this->area_router = $this->request->getAreaRouter();
         }
-        if (empty($this->is_admin)) {
-            // 优先使用全局变量 WELINE_IS_BACKEND（在 App.php 的 URL 解析阶段已设置）
+        
+        if (empty($this->is_backend) || $isNewRequest) {
+            // 优先使用全局变量 WELINE_IS_BACKEND
             if (isset($_SERVER['WELINE_IS_BACKEND'])) {
-                $this->is_admin = (bool)$_SERVER['WELINE_IS_BACKEND'];
+                $this->is_backend = (bool)$_SERVER['WELINE_IS_BACKEND'];
             } else {
                 // 回退到旧的判断方式
-                $this->is_admin = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
+                $this->is_backend = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
             }
         }
+        
         $this->routerGeneratedGetParams = [];
+        
         // 读取url
-        // 使用统一的缓存键生成方法，自动包含域名信息
-        // 对于统一缓存键（全页缓存），使用 WELINE_FULL_REQUEST_URI（包含协议、域名、端口、路径、查询参数等完整信息）
-        // 对于其他缓存键，使用 REQUEST_URI（纯路径，用于路由匹配）
         $uri = $_SERVER['REQUEST_URI'] ?? $this->request->getUri();
         $method = $this->request->getMethod() ?: 'GET';
         
@@ -108,14 +159,77 @@ class Core
         $this->url_cache_key = RouterCache::buildUrlCacheKey($uri, $method, $this->request);
         $this->rule_cache_key = RouterCache::buildRuleCacheKey($uri, $method, $this->request);
         $this->_router_cache_key = RouterCache::buildRouterStartCacheKey($uri, $method, $this->request);
-        // 统一缓存键使用完整URI（buildUnifiedRequestCacheKey 内部会获取 WELINE_FULL_REQUEST_URI）
-        // 注意：$uri 参数已废弃，buildUnifiedRequestCacheKey 内部会直接使用 WELINE_FULL_REQUEST_URI
         $this->unified_cache_key = RouterCache::buildUnifiedRequestCacheKey('', $method, $this->request);
+        
+        // 初始化 CacheManager
+        if ($this->cacheManager === null) {
+            $this->cacheManager = new CacheManager();
+        }
+        $this->cacheManager->init($this->request);
+        
+        // 初始化 UrlProcessor
+        if ($this->urlProcessor === null) {
+            $this->urlProcessor = new UrlProcessor();
+        }
+        
+        // 更新请求标识
+        $this->lastRequestId = $currentRequestId;
+    }
+    
+    /**
+     * 获取当前请求的唯一标识
+     * 
+     * 使用请求 URI + 请求方法 + 微秒时间戳生成
+     * 足以区分不同的请求
+     */
+    private function getCurrentRequestId(): string
+    {
+        // 使用 RequestContext 的请求 ID（如果可用）
+        if (\class_exists(\Weline\Framework\Runtime\RequestContext::class, false)) {
+            $contextId = \Weline\Framework\Runtime\RequestContext::getRequestId();
+            if ($contextId !== null && $contextId !== '') {
+                return $contextId;
+            }
+        }
+        
+        // 回退：使用请求 URI 生成标识
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $time = $_SERVER['REQUEST_TIME_FLOAT'] ?? \microtime(true);
+        
+        return \md5($uri . $method . $time);
     }
 
     public function getRequest(): Request
     {
         return $this->request;
+    }
+    
+    /**
+     * 获取缓存管理器
+     * 
+     * @return CacheManager
+     */
+    public function getCacheManager(): CacheManager
+    {
+        if ($this->cacheManager === null) {
+            $this->cacheManager = new CacheManager();
+            $this->cacheManager->init($this->request);
+        }
+        return $this->cacheManager;
+    }
+    
+    /**
+     * 获取 URL 处理器
+     * 
+     * @return UrlProcessor
+     */
+    public function getUrlProcessor(): UrlProcessor
+    {
+        if ($this->urlProcessor === null) {
+            $this->urlProcessor = new UrlProcessor();
+        }
+        return $this->urlProcessor;
     }
 
 
@@ -142,6 +256,7 @@ class Core
         # 获取URL
         $this->url = $url = $this->processUrl();
         
+        
         // 性能优化：复用已读取的统一缓存数据
         if ($this->unifiedCacheData === null) {
             $cached = $this->cache->get($this->unified_cache_key);
@@ -162,6 +277,7 @@ class Core
             return $this->route();
         }
         # 后台接口请求
+        
         switch ($this->request_area) {
             case \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND:
             case \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND:
@@ -174,45 +290,81 @@ class Core
             case \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND:
             case \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND:
                 if (($pc_result = $this->Pc($url)) || $this->is_match) {
-                    $result = $pc_result;
-                    return $result;
+                    return $pc_result;
                 }
                 break;
             default:
                 try {
-                    $static = $this->StaticFile($url, true);
-                    if ($static) {
-                        exit();
-                    }
+                    // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
+                    $this->StaticFile($url, true);
+                } catch (\Weline\Framework\Http\StaticFileException $e) {
+                    // 静态文件响应异常，直接向上抛出由 Runtime 层处理
+                    throw $e;
                 } catch (\ReflectionException|Exception $e) {
                     $this->request->getResponse()->noRouter();
                 }
         }
         // 非开发模式（匹配不到任何路由将报错）
         if (PROD) {
+            // 诊断日志：记录 PROD 模式路由 404
+            \error_log('[Router 404] No route matched in PROD mode | URL: ' . ($this->url ?? '(empty)')
+                . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
+                . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
+                . ' | request_area: ' . ($this->request_area ?? '(empty)')
+                . ' | is_backend: ' . ($this->is_backend ? 'true' : 'false')
+            );
             $this->request->getResponse()->noRouter();
         } else {
             // 开发模式(静态资源可访问app本地静态资源)
-            $static = $this->StaticFile($url);
-            if ($static) {
-                exit();
-            }
-            http_response_code(404);
-            throw new Exception('未知的路由！');
+            // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
+            $this->StaticFile($url);
+            // 如果没有抛出异常，说明文件不存在
+            throw new \Weline\Framework\Http\NoRouterException(404, '未知的路由！');
         }
         return '';
+    }
+
+    /**
+     * 获取去除区域路由前缀后的 URL 路径
+     * 
+     * 性能优化：提取重复逻辑，避免在 processUrl() 中多处重复
+     */
+    private function getStrippedUrlPath(): string
+    {
+        $url = $this->request->getUrlPath();
+        if ($this->is_backend || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
+            $url = str_replace($this->area_router, '', $url);
+        }
+        return str_replace('//', '/', $url);
+    }
+    
+    /**
+     * 规范化 URL 尾部：去除 trailing 'index' 段，修复双斜杠
+     * 
+     * 性能优化：提取重复逻辑，避免在 processUrl() 中多处重复
+     * 
+     * @param string $url 原始 URL
+     * @return string 规范化后的 URL
+     */
+    private function normalizeUrlTail(string $url): string
+    {
+        $url = trim($url, self::url_path_split);
+        $url_arr = explode('/', $url);
+        $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
+        while ('index' === array_pop($url_arr)) {
+            $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
+        }
+        $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
+        $url = trim($url, '/');
+        return str_replace('//', '/', $url);
     }
 
     public function processUrl()
     {
         // 后端请求不缓存，直接跳过缓存读取
-        if ($this->is_admin) {
+        if ($this->is_backend) {
             $this->routerGeneratedGetParams = [];
-            $url = $this->request->getUrlPath();
-            if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
-                $url = str_replace($this->area_router, '', $url);
-            }
-            $url = str_replace('//', '/', $url);
+            $url = $this->getStrippedUrlPath();
             # ----------事件：处理url之前 开始------------
             /**@var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -240,19 +392,7 @@ class Core
             $this->request->setData($rule);
             # ----------事件：处理url之前 结束------------
 
-            $url = trim($url, self::url_path_split);
-//            $url = str_replace('.html', '', $url);
-            # 去除后缀index
-            $url_arr = explode('/', $url);
-
-            $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
-            while ('index' === array_pop($url_arr)) {
-                $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
-            }
-            $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
-            $url = trim($url, '/');
-            $url = str_replace('//', '/', $url);
-            return $url;
+            return $this->normalizeUrlTail($url);
         }
         
         // 性能优化：复用已读取的统一缓存数据
@@ -314,10 +454,11 @@ class Core
             $isStaticFile = $this->isStaticFile();
             if ($isStaticFile) {
                 try {
-                    $static = $this->StaticFile($url, true);
-                    if ($static) {
-                        exit();
-                    }
+                    // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
+                    $this->StaticFile($url, true);
+                } catch (\Weline\Framework\Http\StaticFileException $e) {
+                    // 静态文件响应异常，直接向上抛出由 Runtime 层处理
+                    throw $e;
                 } catch (\ReflectionException|Exception $e) {
                     $this->request->getResponse()->noRouter();
                 }
@@ -337,11 +478,7 @@ class Core
                 $this->request->setData($ruleFromCache);
             } else {
                 $this->routerGeneratedGetParams = [];
-                $url = $this->request->getUrlPath();
-                if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
-                    $url = str_replace($this->area_router, '', $url);
-                }
-                $url = str_replace('//', '/', $url);
+                $url = $this->getStrippedUrlPath();
                 # ----------事件：处理url之前 开始------------
                 /**@var EventsManager $eventManager */
                 $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -359,7 +496,6 @@ class Core
                 }
                 /** @var DataObject $ruleData */
                 $rule = $ruleData->getData();
-
                 $this->routerGeneratedGetParams = $this->collectRouterGeneratedGetParams($originalGet);
                 if (!empty($this->routerGeneratedGetParams)) {
                     $this->applyRouterGeneratedGetParams();
@@ -370,18 +506,7 @@ class Core
                 $this->request->setData($rule);
                 # ----------事件：处理url之前 结束------------
 
-                $url = trim($url, self::url_path_split);
-//            $url = str_replace('.html', '', $url);
-                # 去除后缀index
-                $url_arr = explode('/', $url);
-
-                $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
-                while ('index' === array_pop($url_arr)) {
-                    $last_rule_value = $url_arr[array_key_last($url_arr)] ?? '';
-                }
-                $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
-                $url = trim($url, '/');
-                $url = str_replace('//', '/', $url);
+                $url = $this->normalizeUrlTail($url);
                 
                 // 保存到 ProcessUrlCache（可通过 env 配置禁用：cache.status.process_url_cache = 0）
                 $this->processUrlCache->setProcessedUrl(
@@ -420,12 +545,21 @@ class Core
         }
         if (file_exists($router_filepath)) {
             $routers = include $router_filepath;
-            $method = '::' . strtoupper($this->request->getMethod());
+            $requestMethod = strtoupper($this->request->getMethod());
+            $method = '::' . $requestMethod;
+            // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
+            $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
             if (
-                isset($routers[$url]) || isset($routers[$url . $method]) || (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method])))
+                isset($routers[$url]) || isset($routers[$url . $method]) || 
+                ($getFallback && isset($routers[$url . $getFallback])) ||
+                (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method]) || ($getFallback && isset($routers['index/index' . $getFallback]))))
             ) {
                 // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
-                $this->router = $routers[$url] ?? $routers[$url . $method] ?? $routers['index/index'] ?? $routers['index/index' . $method];
+                // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
+                $this->router = $routers[$url] ?? $routers[$url . $method] ?? 
+                    ($getFallback ? ($routers[$url . $getFallback] ?? null) : null) ??
+                    $routers['index/index'] ?? $routers['index/index' . $method] ?? 
+                    ($getFallback ? ($routers['index/index' . $getFallback] ?? null) : null);
                 # 缓存路由结果
                 $this->router['type'] = 'api';
                 $this->cache->set($this->_router_cache_key, $this->router);
@@ -461,21 +595,51 @@ class Core
             $router_filepath = Env::path_FRONTEND_PC_ROUTER_FILE;
         }
         if (is_file($router_filepath)) {
-            $routers = include $router_filepath;
-            $method = '::' . strtoupper($this->request->getMethod());
+            try {
+                $routers = include $router_filepath;
+            } catch (\Throwable $includeE) {
+                throw $includeE;
+            }
+            
+            $requestMethod = strtoupper($this->request->getMethod());
+            $method = '::' . $requestMethod;
+            // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
+            $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
+            // 处理空路径：后台请求使用 'admin' 作为默认路由，前端请求使用 'index/index'
+            $defaultRoute = $is_pc_admin ? 'admin' : 'index/index';
+            
+            // URL 已经正确保留了 admin/ 前缀（如 admin/login），不再需要 adminPrefixedUrl 补丁
             if (
-                isset($routers[$url]) || isset($routers[$url . $method]) || (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method])))
+                isset($routers[$url]) || isset($routers[$url . $method]) || 
+                ($getFallback && isset($routers[$url . $getFallback])) ||
+                (empty($url) && (isset($routers[$defaultRoute]) || isset($routers[$defaultRoute . $method]) || ($getFallback && isset($routers[$defaultRoute . $getFallback]))))
             ) {
                 // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
-                $this->router = $routers[$url] ?? $routers[$url . $method] ?? $routers['index/index'] ?? $routers['index/index' . $method];
+                // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
+                $this->router = $routers[$url] ?? $routers[$url . $method] ?? 
+                    ($getFallback ? ($routers[$url . $getFallback] ?? null) : null) ??
+                    $routers[$defaultRoute] ?? $routers[$defaultRoute . $method] ??
+                    ($getFallback ? ($routers[$defaultRoute . $getFallback] ?? null) : null);
+                
                 # 缓存路由结果
                 $this->router['type'] = 'pc';
                 $this->cache->set($this->_router_cache_key, $this->router);
+                
                 return $this->route();
             }
         }
         // 如果是PC后端请求，找不到路由就直接404
         if ($is_pc_admin) {
+            // 诊断日志：记录后台路由 404 的关键信息，便于排查间歇性 404 问题
+            \error_log('[Router 404] Backend route not found | URL: ' . $url 
+                . ' | Method: ' . ($requestMethod ?? 'GET')
+                . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
+                . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
+                . ' | is_backend: ' . ($this->is_backend ? 'true' : 'false')
+                . ' | area_router: ' . ($this->area_router ?? '(empty)')
+                . ' | router_file: ' . ($router_filepath ?? '(empty)')
+                . ' | file_exists: ' . (isset($router_filepath) && is_file($router_filepath) ? 'true' : 'false')
+            );
             $this->request->getResponse()->noRouter();
         }
 
@@ -492,6 +656,7 @@ class Core
      * @return mixed
      * @throws Exception
      * @throws \ReflectionException
+     * @throws \Weline\Framework\Http\StaticFileException 静态文件响应
      */
     public function StaticFile(string &$url, bool $is_media = false): mixed
     {
@@ -530,10 +695,12 @@ class Core
             $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
             $headers = getallheaders();
             if (isset($headers['If-Modified-Since']) && $headers['If-Modified-Since'] == $fileModificationTime) {
-                header('HTTP/1.1 304 Not Modified');
-                exit();
+                // 304 Not Modified 通过异常处理，由 Runtime 层统一发送
+                throw new \Weline\Framework\Http\StaticFileException($filename, '', [], true);
             }
-            $this->header_cache($fileModificationTime, $filename);
+            
+            // 构建缓存响应头
+            $cacheHeaders = $this->buildCacheHeaders($fileModificationTime, $filename);
 
             $filename_arr = explode('.', $filename);
             $file_ext = end($filename_arr);
@@ -546,13 +713,44 @@ class Core
                 $mime_type = $fi->file($filename);
             }
 
-            // 响应头
-            $this->header_response($mime_type);
-//            header('Content-Length: ' . filesize($filename));
-            readfile($filename);
-            return true;
+            // 合并响应头
+            $responseHeaders = array_merge($cacheHeaders, [
+                'Content-Type' => $mime_type,
+            ]);
+            
+            // 抛出静态文件异常，由 Runtime 层统一处理
+            throw new \Weline\Framework\Http\StaticFileException($filename, $mime_type, $responseHeaders);
         }
         return false;
+    }
+    
+    /**
+     * 构建缓存响应头（不直接发送 header）
+     * 
+     * @param string $fileModificationTime 文件修改时间
+     * @param string $filename 文件名
+     * @return array 响应头数组
+     */
+    private function buildCacheHeaders(string $fileModificationTime, string $filename): array
+    {
+        $headers = [];
+        $filename_arr = explode('.', $filename);
+        $file_ext = end($filename_arr);
+        
+        // 根据环境设置缓存策略
+        if (PROD) {
+            // 生产环境：长缓存
+            $headers['Cache-Control'] = 'public, max-age=31536000';
+            $headers['Expires'] = gmdate('D, d M Y H:i:s', time() + 31536000) . ' GMT';
+        } else {
+            // 开发环境：短缓存，方便调试
+            $headers['Cache-Control'] = 'public, max-age=60';
+            $headers['Expires'] = gmdate('D, d M Y H:i:s', time() + 60) . ' GMT';
+        }
+        
+        $headers['Last-Modified'] = $fileModificationTime;
+        
+        return $headers;
     }
 
 
@@ -580,11 +778,23 @@ class Core
      */
     public function route()
     {
+        // 安全检查：确保 router 存在且格式正确
+        if (empty($this->router) || !\is_array($this->router)) {
+            $this->request->getResponse()->noRouter();
+            return '';
+        }
+        
         # 检测模块状态
-        $module = $this->router['module'];
+        $module = $this->router['module'] ?? null;
+        if (empty($module)) {
+            $this->request->getResponse()->noRouter();
+            return '';
+        }
+        
         if (!Env::getInstance()->getModuleStatus($module)) {
             $this->request->getResponse()->noRouter();
         }
+        
         # 检查headers already sent 是否已发送
         # 页头阻止XSS
         $this->header_xss();
@@ -595,7 +805,7 @@ class Core
         // 使用静态方法 Env::get()，使用点号分隔符访问嵌套配置
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
-        if (!$this->is_admin && $routerCacheEnabled && $frontendCacheEnabled) {
+        if (!$this->is_backend && $routerCacheEnabled && $frontendCacheEnabled) {
             // 性能优化：复用已读取的统一缓存数据
             if ($this->unifiedCacheData === null) {
                 $this->unifiedCacheData = $this->cache->get($this->unified_cache_key);
@@ -630,17 +840,28 @@ class Core
                 return $html;
             }
         }
+        
         # 方法体方法和请求方法不匹配时 禁止访问
-        if ('' !== $this->router['class']['request_method']) {
-            if ($this->router['class']['request_method'] !== $this->request->getMethod()) {
+        # HEAD 请求应该被允许访问 GET 方法的路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
+        $routeMethod = $this->router['class']['request_method'] ?? '';
+        $currentRequestMethod = $this->request->getMethod();
+        if ('' !== $routeMethod) {
+            // HEAD 请求可以访问 GET 路由
+            $isHeadToGet = ($currentRequestMethod === 'HEAD' && $routeMethod === 'GET');
+            if ($routeMethod !== $currentRequestMethod && !$isHeadToGet) {
                 $this->request->getResponse()->noRouter();
             }
         }
+        
         $this->request->setRouter($this->router);
+        
         list($dispatch, $method) = $this->getController($this->router);
+        
         // 解析注解
         $dispatchReflection = ObjectManager::getReflectionInstance($dispatch);
+        
         $attributes = $dispatchReflection->getAttributes();
+        
         foreach ($attributes as $attribute) {
             $dispatchAttribute = ObjectManager::getInstance($attribute->getName(), $attribute->getArguments());
             if (method_exists($dispatchAttribute, 'execute')) {
@@ -650,11 +871,15 @@ class Core
                 }
             }
         }
+        
         /**@var \Weline\Framework\Controller\Core $dispatch */
 //        $dispatch->assign($this->request->getData());
         /**@var EventsManager $eventManager */
+        
         $eventManager = ObjectManager::getInstance(EventsManager::class);
+        
         $eventData = ['route' => $this];
+        
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
@@ -693,7 +918,20 @@ class Core
             
             // 捕获响应头（在控制器执行后）
             $responseHeaders = headers_list();
+        } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
+            // 重定向异常：直接重新抛出，让 WlsRuntime 处理
+            // 异常情况下清理输出缓冲区
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            throw $redirectEx;
         } catch (\Exception $e) {
+            // 异常情况下清理输出缓冲区
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            throw $e;
+        } catch (\Throwable $e) {
             // 异常情况下清理输出缓冲区
             if (ob_get_level() > 0) {
                 ob_end_clean();
@@ -718,7 +956,7 @@ class Core
         // 使用静态方法 Env::get()，使用点号分隔符访问嵌套配置
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
-        if (!$this->is_admin && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
+        if (!$this->is_backend && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 构建统一缓存结构，包含所有请求相关数据
             $unifiedCacheData = [
                 \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_URL_KEY => $this->url,
@@ -753,6 +991,11 @@ class Core
      */
     public function header_xss(): void
     {
+        // 检查 headers 是否已发送
+        if (headers_sent($file, $line)) {
+            return;
+        }
+        
         header("X-Frame-Options: SAMEORIGIN");
         header("X-Content-Type-Options: nosniff");
         header("X-XSS-Protection: 1; mode=block");

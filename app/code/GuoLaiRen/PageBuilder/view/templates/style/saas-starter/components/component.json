@@ -1,0 +1,205 @@
+{
+    "template": "saas-starter",
+    "name": "SaaS Starter",
+    "description": "现代SaaS产品落地页模板，翡翠绿渐变主题，适合软件产品、数字服务推广",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "description": "页面顶部导航区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["header"],
+            "default_component": "header-nav"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "description": "页面主要内容区域",
+            "multiple": true,
+            "required": false,
+            "accepts": ["content", "widget"],
+            "default_components": ["hero", "features", "pricing", "testimonials", "cta-banner", "faq"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "description": "页面底部链接和版权区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["footer"],
+            "default_component": "footer-links"
+        }
+    },
+    "components": {
+        "header-nav": {
+            "name": "导航栏",
+            "name_en": "Navigation Header",
+            "description": "顶部导航，支持Logo、导航链接和CTA按钮",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-menu-button-wide",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "navigation", "cta", "color_scheme"],
+            "file": "header/nav.phtml",
+            "default_config": {
+                "logo.display": "yes",
+                "logo.text": "SaaSFlow",
+                "logo.width": 40,
+                "navigation.show_cta": "yes",
+                "navigation.cta_text": "Start Free Trial",
+                "navigation.cta_url": "#pricing"
+            }
+        },
+        "hero": {
+            "name": "首屏英雄区",
+            "name_en": "Hero Section",
+            "description": "首屏大图区域，包含标题、描述、CTA按钮和产品预览图",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-badge-hd",
+            "sort_order": 10,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "cta", "visual", "style"],
+            "file": "content/hero.phtml",
+            "default_config": {
+                "content.badge": "Now in Public Beta",
+                "content.title": "Ship faster with the modern SaaS platform",
+                "cta.primary_text": "Start Free Trial",
+                "cta.secondary_text": "Watch Demo"
+            }
+        },
+        "features": {
+            "name": "特性展示",
+            "name_en": "Features Section",
+            "description": "展示产品核心功能，支持图标卡片布局",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-stars",
+            "sort_order": 20,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "features", "style"],
+            "file": "content/features.phtml",
+            "default_config": {
+                "content.badge": "Features",
+                "content.title": "Everything you need to scale"
+            }
+        },
+        "pricing": {
+            "name": "定价方案",
+            "name_en": "Pricing Section",
+            "description": "产品定价方案展示，支持3列布局和高亮推荐方案",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-currency-dollar",
+            "sort_order": 30,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "plans", "style"],
+            "file": "content/pricing.phtml",
+            "default_config": {
+                "content.badge": "Pricing",
+                "content.title": "Simple, transparent pricing"
+            }
+        },
+        "testimonials": {
+            "name": "用户评价",
+            "name_en": "Testimonials Section",
+            "description": "客户评价展示，支持头像、评分和评论内容",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-chat-quote",
+            "sort_order": 40,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "testimonials", "style"],
+            "file": "content/testimonials.phtml",
+            "default_config": {
+                "content.badge": "Testimonials",
+                "content.title": "Loved by thousands of teams"
+            }
+        },
+        "cta-banner": {
+            "name": "行动号召",
+            "name_en": "CTA Banner",
+            "description": "醒目的行动号召区域，引导用户注册或试用",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-megaphone",
+            "sort_order": 50,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "buttons", "style"],
+            "file": "content/cta-banner.phtml",
+            "default_config": {
+                "content.title": "Ready to supercharge your workflow?",
+                "buttons.primary_text": "Start Free Trial",
+                "buttons.secondary_text": "Talk to Sales"
+            }
+        },
+        "faq": {
+            "name": "常见问题",
+            "name_en": "FAQ Section",
+            "description": "FAQ手风琴展示，支持展开收起效果",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-question-circle",
+            "sort_order": 60,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["faq", "style"],
+            "file": "content/faq.phtml",
+            "default_config": {
+                "content.badge": "FAQ",
+                "content.title": "Frequently asked questions"
+            }
+        },
+        "footer-links": {
+            "name": "页脚链接",
+            "name_en": "Footer with Links",
+            "description": "底部区域，包含品牌信息、导航链接和版权声明",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "icon": "bi-layout-text-window-reverse",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["style", "layout", "content", "typography"],
+            "file": "footer/links.phtml",
+            "default_config": {
+                "brand.name": "SaaSFlow",
+                "brand.description": "The modern platform for teams who ship fast. Streamline your workflow with powerful automation.",
+                "copyright.text": "All rights reserved."
+            }
+        }
+    },
+    "nav_config": {
+        "description": "导航可使用子页面配置",
+        "use_subpages": true,
+        "subpage_types": ["link", "anchor", "page"],
+        "default_items": [
+            {"text": "Features", "href": "#features", "type": "anchor"},
+            {"text": "Pricing", "href": "#pricing", "type": "anchor"},
+            {"text": "Testimonials", "href": "#testimonials", "type": "anchor"},
+            {"text": "FAQ", "href": "#faq", "type": "anchor"}
+        ]
+    },
+    "config_inheritance": {
+        "description": "组件可以继承模板的配置项",
+        "shared_configs": ["styles", "texts", "color_scheme"]
+    }
+}

@@ -1,0 +1,535 @@
+<?php
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\Framework\Http\Request;
+
+/**
+ * ParameterBag - 请求参数管理类
+ * 
+ * 封装 GET/POST/Body 参数的访问，遵循单一职责原则。
+ * 提供统一的参数访问接口，避免直接访问超全局变量。
+ * 
+ * @since PHP 8.4
+ */
+class ParameterBag
+{
+    /**
+     * GET 参数存储
+     */
+    private array $query = [];
+    
+    /**
+     * POST 参数存储
+     */
+    private array $request = [];
+    
+    /**
+     * Body 参数存储（JSON/表单）
+     */
+    private array $body = [];
+    
+    /**
+     * 原始请求体字符串
+     * FPM 模式：从 php://input 读取
+     * WLS 模式：由 WlsRequest 直接注入
+     */
+    private string $rawBody = '';
+    
+    /**
+     * 合并后的参数缓存
+     */
+    private ?array $allParams = null;
+    
+    /**
+     * 是否已初始化
+     */
+    private bool $initialized = false;
+    
+    /**
+     * 构造函数
+     * 
+     * @param array $query GET 参数（可选，默认从 $_GET 获取）
+     * @param array $request POST 参数（可选，默认从 $_POST 获取）
+     * @param array $body Body 参数（可选，默认从 php://input 获取）
+     */
+    public function __construct(
+        array $query = [],
+        array $request = [],
+        array $body = []
+    ) {
+        $this->query = $query;
+        $this->request = $request;
+        $this->body = $body;
+    }
+    
+    /**
+     * 从超全局变量初始化
+     * 
+     * @return static
+     */
+    public function initFromGlobals(): static
+    {
+        if ($this->initialized) {
+            return $this;
+        }
+        
+        $this->query = $_GET;
+        $this->request = $_POST;
+        $this->body = $this->parseBodyParams();
+        $this->initialized = true;
+        $this->allParams = null; // 清除缓存
+        
+        return $this;
+    }
+    
+    /**
+     * 解析 Body 参数
+     * 
+     * 优先使用已注入的 rawBody（WLS 模式），回退到 php://input（FPM 模式）
+     * 
+     * @return array
+     */
+    private function parseBodyParams(): array
+    {
+        // 优先使用已注入的 rawBody（WLS 模式由 WlsRequest 设置）
+        $rawBody = $this->rawBody;
+        
+        // FPM 模式回退到 php://input
+        if ($rawBody === '') {
+            $rawBody = file_get_contents('php://input') ?: '';
+            $this->rawBody = $rawBody; // 缓存，避免多次读取
+        }
+        
+        if ($rawBody === '') {
+            return [];
+        }
+        
+        // 尝试解析 JSON
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (str_contains($contentType, 'application/json')) {
+            $decoded = json_decode($rawBody, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        
+        // 尝试解析 URL 编码的表单数据
+        if (str_contains($contentType, 'application/x-www-form-urlencoded')) {
+            parse_str($rawBody, $params);
+            return $params;
+        }
+        
+        // 尝试通用解析
+        $params = [];
+        foreach (explode('&', $rawBody) as $pair) {
+            $parts = explode('=', $pair, 2);
+            if (count($parts) === 2) {
+                $key = urldecode($parts[0]);
+                $value = urldecode($parts[1]);
+                // 处理数组参数 (如 items[])
+                if (str_ends_with($key, '[]')) {
+                    $key = rtrim($key, '[]');
+                    $params[$key][] = $value;
+                } else {
+                    $params[$key] = $value;
+                }
+            }
+        }
+        
+        return $params;
+    }
+    
+    // ==================== GET 参数操作 ====================
+    
+    /**
+     * 获取 GET 参数
+     * 
+     * @param string $key 参数名，空字符串返回所有
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public function getQuery(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return $this->query;
+        }
+        return $this->query[$key] ?? $default;
+    }
+    
+    /**
+     * 设置 GET 参数
+     * 
+     * @param string $key 参数名
+     * @param mixed $value 参数值
+     * @return static
+     */
+    public function setQuery(string $key, mixed $value): static
+    {
+        $this->query[$key] = $value;
+        $_GET[$key] = $value; // 同步到超全局变量以保持兼容
+        $this->allParams = null; // 清除缓存
+        return $this;
+    }
+    
+    /**
+     * 检查 GET 参数是否存在
+     * 
+     * @param string $key 参数名
+     * @return bool
+     */
+    public function hasQuery(string $key): bool
+    {
+        return isset($this->query[$key]);
+    }
+    
+    /**
+     * 删除 GET 参数
+     * 
+     * @param string $key 参数名
+     * @return static
+     */
+    public function removeQuery(string $key): static
+    {
+        unset($this->query[$key]);
+        unset($_GET[$key]); // 同步到超全局变量
+        $this->allParams = null;
+        return $this;
+    }
+    
+    /**
+     * 按前缀获取 GET 参数
+     * 
+     * @param string $prefix 前缀
+     * @param bool $filterEmpty 是否过滤空值
+     * @return array
+     */
+    public function getQueryByPrefix(string $prefix, bool $filterEmpty = false): array
+    {
+        $result = [];
+        foreach ($this->query as $key => $value) {
+            if ($filterEmpty && empty($value)) {
+                continue;
+            }
+            if (str_starts_with($key, $prefix)) {
+                $newKey = substr($key, strlen($prefix));
+                $result[$newKey] = $value;
+            }
+        }
+        return $result;
+    }
+    
+    /**
+     * 按前缀设置 GET 参数
+     * 
+     * @param string $prefix 前缀
+     * @param array $data 参数数据
+     * @return static
+     */
+    public function setQueryByPrefix(string $prefix, array $data): static
+    {
+        // 先删除所有带该前缀的参数
+        foreach (array_keys($this->query) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                unset($this->query[$key]);
+                unset($_GET[$key]);
+            }
+        }
+        // 添加新参数
+        foreach ($data as $key => $value) {
+            $fullKey = $prefix . $key;
+            $this->query[$fullKey] = $value;
+            $_GET[$fullKey] = $value;
+        }
+        $this->allParams = null;
+        return $this;
+    }
+    
+    /**
+     * 按前缀删除 GET 参数
+     * 
+     * @param string $prefix 前缀
+     * @return static
+     */
+    public function removeQueryByPrefix(string $prefix): static
+    {
+        foreach (array_keys($this->query) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                unset($this->query[$key]);
+                unset($_GET[$key]);
+            }
+        }
+        $this->allParams = null;
+        return $this;
+    }
+    
+    // ==================== POST 参数操作 ====================
+    
+    /**
+     * 获取 POST 参数
+     * 
+     * @param string $key 参数名，空字符串返回所有
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public function getRequest(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return $this->request;
+        }
+        return $this->request[$key] ?? $default;
+    }
+    
+    /**
+     * 设置 POST 参数
+     * 
+     * @param string $key 参数名
+     * @param mixed $value 参数值
+     * @return static
+     */
+    public function setRequest(string $key, mixed $value): static
+    {
+        $this->request[$key] = $value;
+        $_POST[$key] = $value; // 同步到超全局变量以保持兼容
+        $this->allParams = null;
+        return $this;
+    }
+    
+    /**
+     * 检查 POST 参数是否存在
+     * 
+     * @param string $key 参数名
+     * @return bool
+     */
+    public function hasRequest(string $key): bool
+    {
+        return isset($this->request[$key]);
+    }
+    
+    // ==================== Body 参数操作 ====================
+    
+    /**
+     * 获取 Body 参数
+     * 
+     * @param string $key 参数名，空字符串返回所有
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public function getBody(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return $this->body;
+        }
+        return $this->body[$key] ?? $default;
+    }
+    
+    /**
+     * 检查 Body 参数是否存在
+     * 
+     * @param string $key 参数名
+     * @return bool
+     */
+    public function hasBody(string $key): bool
+    {
+        return isset($this->body[$key]);
+    }
+    
+    /**
+     * 设置 Body 参数（WLS 模式下由 WlsRequest 直接注入已解析的数据）
+     * 
+     * @param array $body 已解析的 Body 参数
+     * @return static
+     */
+    public function setBody(array $body): static
+    {
+        $this->body = $body;
+        $this->allParams = null;
+        return $this;
+    }
+    
+    /**
+     * 设置原始请求体字符串
+     * WLS 模式下由 WlsRequest 注入，替代 php://input
+     * 
+     * @param string $rawBody 原始请求体
+     * @return static
+     */
+    public function setRawBody(string $rawBody): static
+    {
+        $this->rawBody = $rawBody;
+        return $this;
+    }
+    
+    /**
+     * 获取原始请求体字符串
+     * 优先返回已注入的 rawBody（WLS 模式），回退到 php://input（FPM 模式）
+     * 
+     * @return string
+     */
+    public function getRawBody(): string
+    {
+        if ($this->rawBody !== '') {
+            return $this->rawBody;
+        }
+        // FPM 模式回退
+        $this->rawBody = file_get_contents('php://input') ?: '';
+        return $this->rawBody;
+    }
+    
+    // ==================== 合并参数操作 ====================
+    
+    /**
+     * 获取所有参数（合并 GET/POST/Body）
+     * 
+     * @return array
+     */
+    public function all(): array
+    {
+        if ($this->allParams !== null) {
+            return $this->allParams;
+        }
+        
+        // 合并顺序：GET < POST < Body（后者覆盖前者）
+        $this->allParams = array_merge($this->query, $this->request, $this->body);
+        return $this->allParams;
+    }
+    
+    /**
+     * 获取单个参数（从所有来源查找）
+     * 
+     * @param string $key 参数名
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        // 优先级：Body > POST > GET
+        return $this->body[$key] 
+            ?? $this->request[$key] 
+            ?? $this->query[$key] 
+            ?? $default;
+    }
+    
+    /**
+     * 检查参数是否存在（从所有来源查找）
+     * 
+     * @param string $key 参数名
+     * @return bool
+     */
+    public function has(string $key): bool
+    {
+        return isset($this->body[$key]) 
+            || isset($this->request[$key]) 
+            || isset($this->query[$key]);
+    }
+    
+    // ==================== 类型转换辅助 ====================
+    
+    /**
+     * 获取整数参数
+     * 
+     * @param string $key 参数名
+     * @param int $default 默认值
+     * @return int
+     */
+    public function getInt(string $key, int $default = 0): int
+    {
+        return (int) $this->get($key, $default);
+    }
+    
+    /**
+     * 获取浮点数参数
+     * 
+     * @param string $key 参数名
+     * @param float $default 默认值
+     * @return float
+     */
+    public function getFloat(string $key, float $default = 0.0): float
+    {
+        return (float) $this->get($key, $default);
+    }
+    
+    /**
+     * 获取布尔参数
+     * 
+     * @param string $key 参数名
+     * @param bool $default 默认值
+     * @return bool
+     */
+    public function getBool(string $key, bool $default = false): bool
+    {
+        $value = $this->get($key, $default);
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['true', '1', 'yes', 'on'], true);
+        }
+        return (bool) $value;
+    }
+    
+    /**
+     * 获取字符串参数
+     * 
+     * @param string $key 参数名
+     * @param string $default 默认值
+     * @return string
+     */
+    public function getString(string $key, string $default = ''): string
+    {
+        $value = $this->get($key, $default);
+        return is_string($value) ? $value : (string) $value;
+    }
+    
+    /**
+     * 获取数组参数
+     * 
+     * @param string $key 参数名
+     * @param array $default 默认值
+     * @return array
+     */
+    public function getArray(string $key, array $default = []): array
+    {
+        $value = $this->get($key, $default);
+        return is_array($value) ? $value : $default;
+    }
+    
+    // ==================== 重置和清理 ====================
+    
+    /**
+     * 重置所有参数
+     * 
+     * @return static
+     */
+    public function reset(): static
+    {
+        $this->query = [];
+        $this->request = [];
+        $this->body = [];
+        $this->rawBody = '';
+        $this->allParams = null;
+        $this->initialized = false;
+        return $this;
+    }
+    
+    /**
+     * 替换所有参数
+     * 
+     * @param array $query GET 参数
+     * @param array $request POST 参数
+     * @param array $body Body 参数
+     * @return static
+     */
+    public function replace(array $query = [], array $request = [], array $body = []): static
+    {
+        $this->query = $query;
+        $this->request = $request;
+        $this->body = $body;
+        $this->allParams = null;
+        return $this;
+    }
+}

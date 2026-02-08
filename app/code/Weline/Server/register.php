@@ -17,6 +17,6 @@ Register::register(
     Register::MODULE,
     'Weline_Server',
     __DIR__,
-    '1.3.0',
-    __('高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理')
+    '1.5.0',
+    __('高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成')
 );

@@ -268,7 +268,7 @@ class Store extends Model
     /**
      * 获取事件管理器
      */
-    protected function getEventManager(): \Weline\Framework\Event\EventsManager
+    public function getEventManager(): \Weline\Framework\Event\EventsManager
     {
         return ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
     }

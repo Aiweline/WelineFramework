@@ -14,7 +14,15 @@ use Weline\Framework\Database\DbManager\ConfigProviderInterface;
  */
 class ConnectionPool
 {
+    /** 空闲超过此秒数才在取出时做 SELECT 1 验证，减少频繁验证开销 */
+    private const IDLE_VALIDATE_SECONDS = 30;
+
+    /** 池满时重试次数，每次间隔 POOL_FULL_WAIT_US 微秒 */
+    private const POOL_FULL_RETRIES = 3;
+    private const POOL_FULL_WAIT_US = 50_000;
+
     /**
+     * 池中队列元素：PDO 或 array{connection: PDO, last_used: float}（新格式带 last_used）
      * @var array<string, array{pool: \SplQueue, in_use: array, max_size: int, current_size: int}> 连接池存储
      */
     private static array $pools = [];
@@ -57,21 +65,23 @@ class ConnectionPool
 
         $pool = &self::$pools[$poolKey];
 
-        // 如果池中有可用连接，直接返回
+        // 如果池中有可用连接，取出并视情况验证
         if (!$pool['pool']->isEmpty()) {
-            $connection = $pool['pool']->dequeue();
+            $item = $pool['pool']->dequeue();
+            $connection = is_array($item) ? $item['connection'] : $item;
+            $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
             $connectionValid = false;
-            // 验证连接是否仍然有效
-            try {
-                $connection->query('SELECT 1');
+            // 仅当空闲超过阈值时做 SELECT 1 验证，减少高频验证
+            if ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
                 $connectionValid = true;
-            } catch (\PDOException $e) {
-                // 连接已失效，从池中移除，继续创建新连接
-                $pool['current_size']--;
-                // 继续执行创建新连接的逻辑
+            } else {
+                try {
+                    $connection->query('SELECT 1');
+                    $connectionValid = true;
+                } catch (\PDOException $e) {
+                    $pool['current_size']--;
+                }
             }
-            
-            // 如果连接有效，使用它
             if ($connectionValid && $connection instanceof PDO) {
                 $connectionId = spl_object_id($connection);
                 $pool['in_use'][$connectionId] = $connection;
@@ -88,8 +98,31 @@ class ConnectionPool
             return $connection;
         }
 
-        // 池已满，等待或创建临时连接（这里简化处理，直接创建临时连接）
-        // 在实际生产环境中，可以考虑使用信号量或等待机制
+        // 池已满：短暂等待重试，避免无限创建临时连接
+        for ($i = 0; $i < self::POOL_FULL_RETRIES; $i++) {
+            usleep(self::POOL_FULL_WAIT_US);
+            if (!$pool['pool']->isEmpty()) {
+                $item = $pool['pool']->dequeue();
+                $connection = is_array($item) ? $item['connection'] : $item;
+                $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
+                if ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
+                    $connectionValid = true;
+                } else {
+                    try {
+                        $connection->query('SELECT 1');
+                        $connectionValid = true;
+                    } catch (\PDOException $e) {
+                        $pool['current_size']--;
+                        $connectionValid = false;
+                    }
+                }
+                if ($connectionValid && $connection instanceof PDO) {
+                    $connectionId = spl_object_id($connection);
+                    $pool['in_use'][$connectionId] = $connection;
+                    return $connection;
+                }
+            }
+        }
         $connection = $createConnection();
         return $connection;
     }
@@ -111,13 +144,10 @@ class ConnectionPool
         $pool = &self::$pools[$poolKey];
         $connectionId = spl_object_id($connection);
 
-        // 如果连接在使用列表中，归还到池中
+        // 如果连接在使用列表中，归还到池中（带 last_used 供取出时按需验证）
         if (isset($pool['in_use'][$connectionId])) {
             unset($pool['in_use'][$connectionId]);
-            
-            // 优化：跳过连接验证，直接归还到池中（连接验证在获取时进行）
-            // 这样可以避免归还时的验证开销，并且如果连接失效，在下次获取时会检测到
-            $pool['pool']->enqueue($connection);
+            $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
             
             // 注释掉归还时的验证，改为在获取时验证
             // // 检查连接是否仍然有效
@@ -144,8 +174,9 @@ class ConnectionPool
             // 关闭所有连接池
             foreach (self::$pools as $pool) {
                 while (!$pool['pool']->isEmpty()) {
-                    $connection = $pool['pool']->dequeue();
-                    $connection = null; // 释放连接
+                    $item = $pool['pool']->dequeue();
+                    $connection = is_array($item) ? $item['connection'] : $item;
+                    $connection = null;
                 }
                 foreach ($pool['in_use'] as $connection) {
                     $connection = null; // 释放连接
@@ -158,7 +189,8 @@ class ConnectionPool
             if (isset(self::$pools[$poolKey])) {
                 $pool = self::$pools[$poolKey];
                 while (!$pool['pool']->isEmpty()) {
-                    $connection = $pool['pool']->dequeue();
+                    $item = $pool['pool']->dequeue();
+                    $connection = is_array($item) ? $item['connection'] : $item;
                     $connection = null;
                 }
                 foreach ($pool['in_use'] as $connection) {
@@ -238,9 +270,8 @@ class ConnectionPool
         for ($i = 0; $i < $needed && $pool['current_size'] < $poolSize; $i++) {
             try {
                 $connection = $createConnection();
-                // 测试连接是否有效
                 $connection->query('SELECT 1');
-                $pool['pool']->enqueue($connection);
+                $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
                 $pool['current_size']++;
                 $created++;
             } catch (\PDOException $e) {
@@ -263,6 +294,33 @@ class ConnectionPool
         ];
     }
 
+    /**
+     * 请求结束时清理连接状态
+     * 
+     * FPM 下进程结束时 PHP 自动关闭连接，未提交的事务由数据库自动回滚。
+     * WLS 下连接跨请求复用，必须手动清理：
+     * 1. 回滚未提交的事务（防止事务泄漏到下一个请求）
+     * 2. 归还所有"正在使用"的连接到池中（防止连接泄漏）
+     */
+    public static function requestEndCleanup(): void
+    {
+        foreach (self::$pools as $poolKey => &$pool) {
+            foreach ($pool['in_use'] as $connectionId => $connection) {
+                try {
+                    // 回滚未提交的事务
+                    if ($connection->inTransaction()) {
+                        $connection->rollBack();
+                    }
+                } catch (\Throwable $e) {
+                    // 连接可能已断开，忽略回滚错误
+                }
+                unset($pool['in_use'][$connectionId]);
+                $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
+            }
+        }
+        unset($pool);
+    }
+    
     /**
      * 获取所有连接池的键名（用于预热所有连接池）
      * 

@@ -19,6 +19,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Url implements UrlInterface
 {
+    /**
+     * @deprecated WLS 模式下此属性会过期。始终使用 $this->getRequest() 获取当前请求。
+     */
     protected Request $request;
 
     public function __construct(
@@ -26,6 +29,41 @@ class Url implements UrlInterface
     )
     {
         $this->request = $request;
+    }
+    
+    /**
+     * 获取当前请求对象
+     * 
+     * WLS 模式下 Url 是单例，构造函数注入的 $this->request 指向首次创建时的 Request，
+     * 后续请求的新 WlsRequest 被注册到 ObjectManager 后，单例仍持有旧引用。
+     * 此方法始终从 ObjectManager 获取最新的 Request 实例，避免跨请求状态泄漏。
+     * 
+     * @return Request
+     */
+    protected function getRequest(): Request
+    {
+        return ObjectManager::getInstance(Request::class);
+    }
+    
+    /**
+     * 判断当前请求是否为后端区域
+     * 
+     * WLS 模式下必须使用 $_SERVER['WELINE_AREA'] 判断，
+     * 而不是依赖 Request 对象的 isBackend() 方法，
+     * 因为 Url 是单例，其内部的 Request 引用可能指向旧的请求对象。
+     * 
+     * @return bool
+     */
+    protected function isCurrentAreaBackend(): bool
+    {
+        // 优先使用 $_SERVER['WELINE_AREA']，这是每个请求都会更新的
+        $area = $_SERVER['WELINE_AREA'] ?? '';
+        if ($area !== '') {
+            return ($area === 'backend' || $area === 'rest_backend');
+        }
+        
+        // 回退到 Request 对象判断（非 WLS 模式）
+        return $this->getRequest()->isBackend();
     }
 
     /**
@@ -130,8 +168,8 @@ class Url implements UrlInterface
 
     public function getApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
     {
-        # 判断前后端
-        if ($this->request->isBackend()) {
+        # 判断前后端 - WLS 模式下使用 $_SERVER['WELINE_AREA'] 判断，避免对象状态污染
+        if ($this->isCurrentAreaBackend()) {
             return $this->getBackendApiUrl($path, $params, $merge_url_params);
         } else {
             return $this->getFrontendApiUrl($path, $params, $merge_url_params);
@@ -143,17 +181,17 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('api_admin') . '/' . $path;
+                $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('rest_backend') . '/' . $path;
             } else {
                 $url = $path;
             }
         } else {
-            $url = $this->request->getBaseUrl();
+            $url = $this->getRequest()->getBaseUrl();
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -163,7 +201,7 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
@@ -173,12 +211,12 @@ class Url implements UrlInterface
                 $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
                 $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
                 
-                // 获取API area前缀（前端API使用Env::get('api')）
-                $apiArea = Env::get('api') ?: 'api';
-                $apiAreaPrefix = '/' . strtolower($apiArea) . '/';
+                // 获取 REST 前端 API 前缀
+                $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
+                $apiAreaPrefix = '/' . strtolower($restFrontendPrefix) . '/';
                 
                 // 构建URL: /{area_prefix}/{currency}/{language}/{path}
-                $url = $this->request->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/' . ltrim($path, '/');
+                $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
             }
@@ -187,12 +225,12 @@ class Url implements UrlInterface
             $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
             $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
             
-            // 获取API area前缀（前端API使用Env::get('api')）
-            $apiArea = Env::get('api') ?: 'api';
-            $apiAreaPrefix = '/' . strtolower($apiArea) . '/';
+            // 获取 REST 前端 API 前缀
+            $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
+            $apiAreaPrefix = '/' . strtolower($restFrontendPrefix) . '/';
             
             // 构建URL: /{area_prefix}/{currency}/{language}/
-            $url = $this->request->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/';
+            $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/';
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -202,24 +240,25 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . self::getPrefix() . '/' . ltrim($path, '/');
+                $url = $this->getRequest()->getBaseHost() . self::getPrefix() . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
             }
         } else {
-            $url = $this->request->getBaseUrl();
+            $url = $this->getRequest()->getBaseUrl();
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
 
     public function getUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
     {
-        if ($this->request->isBackend()) {
+        // WLS 模式下使用 $_SERVER['WELINE_AREA'] 判断，避免对象状态污染
+        if ($this->isCurrentAreaBackend()) {
             return $this->getBackendUrl($path, $params, $merge_url_params);
         } else {
             return $this->getFrontendUrl($path, $params, $merge_url_params);
@@ -247,17 +286,17 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . '/' . ltrim($path, '/');
+                $url = $this->getRequest()->getBaseHost() . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
             }
         } else {
-            $url = $this->request->getBaseUrl();
+            $url = $this->getRequest()->getBaseUrl();
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -295,20 +334,52 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('admin') . self::getPrefix() . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
+                $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . self::getPrefix() . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
             } else {
                 $url = $path;
             }
         } else {
-            $url = $this->request->getOriginBaseUrl();
+            $url = $this->getRequest()->getOriginBaseUrl();
         }
 
         return $this->extractedUrl($params, $merge_url_params, $url);
+    }
+
+    /**
+     * 获取后端 URL 的路径部分（不含 scheme/host/port），用于前端 fetch 等，相对当前页 origin 请求，避免端口丢失
+     *
+     * @param string $path
+     * @param array  $params
+     * @param bool   $merge_url_params
+     * @return string 以 / 开头的 path + query
+     */
+    public function getBackendUrlPath(string $path = '', array $params = [], bool $merge_url_params = false): string
+    {
+        $full = $this->getBackendUrl($path, $params, $merge_url_params);
+        $pathPart = parse_url($full, PHP_URL_PATH);
+        $query = parse_url($full, PHP_URL_QUERY);
+        return ($pathPart ?? '') . ($query !== null && $query !== '' ? '?' . $query : '');
+    }
+
+    /**
+     * 获取后端 API URL 的路径部分（不含 scheme/host/port），用于前端 fetch 等，相对当前页 origin 请求，避免端口丢失
+     *
+     * @param string $path
+     * @param array  $params
+     * @param bool   $merge_url_params
+     * @return string 以 / 开头的 path + query
+     */
+    public function getBackendApiUrlPath(string $path = '', array $params = [], bool $merge_url_params = true): string
+    {
+        $full = $this->getBackendApiUrl($path, $params, $merge_url_params);
+        $pathPart = parse_url($full, PHP_URL_PATH);
+        $query = parse_url($full, PHP_URL_QUERY);
+        return ($pathPart ?? '') . ($query !== null && $query !== '' ? '?' . $query : '');
     }
 
     public function getOriginBackendUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
@@ -316,17 +387,17 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('backend_router');
+                $router = $this->getRequest()->getRouterData('backend_router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('admin') . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
+                $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
             } else {
                 $url = $path;
             }
         } else {
-            $url = $this->request->getBaseUrl();
+            $url = $this->getRequest()->getBaseUrl();
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -346,7 +417,7 @@ class Url implements UrlInterface
     public function getUri(string $path = ''): string
     {
         if (!$path) {
-            return $this->request->getUri();
+            return $this->getRequest()->getUri();
         }
         if ($position = strpos($path, '?')) {
             $path = substr($path, 0, $position);
@@ -371,7 +442,7 @@ class Url implements UrlInterface
     public function extractedUrl(array $params, bool $merge_url_params = false, string $url = ''): string
     {
         if (empty($url)) {
-            $url = $this->request->getBaseUrl();
+            $url = $this->getRequest()->getBaseUrl();
         }
         $url_params = [];
         if (strpos($url, '?') !== false) {
@@ -407,7 +478,7 @@ class Url implements UrlInterface
             }
         }
         if ($merge_url_params) {
-            $getParams = $this->request->getGet();
+            $getParams = $this->getRequest()->getGet();
             // 过滤掉数组值，只保留字符串值
             foreach ($getParams as $key => $value) {
                 if (is_array($value)) {
@@ -445,19 +516,121 @@ class Url implements UrlInterface
         return false;
     }
 
+    /**
+     * 获取当前请求的协议（静态方法，可在任何地方调用）
+     * 
+     * @return string 'http' 或 'https'
+     */
+    public static function getCurrentScheme(): string
+    {
+        if (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https') {
+            return 'https';
+        }
+        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === '1')) {
+            return 'https';
+        }
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+            return 'https';
+        }
+        if (isset($_SERVER['HTTP_WELINE_ORIGINAL_SCHEME']) && $_SERVER['HTTP_WELINE_ORIGINAL_SCHEME'] === 'https') {
+            return 'https';
+        }
+        if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443') {
+            return 'https';
+        }
+        return 'http';
+    }
+    
+    /**
+     * 确保 URL 使用当前请求的协议
+     * 
+     * @param string $url 原始 URL
+     * @return string 修正协议后的 URL
+     */
+    public static function ensureCurrentScheme(string $url): string
+    {
+        $currentScheme = self::getCurrentScheme();
+        
+        if (\str_starts_with($url, 'http://')) {
+            return $currentScheme . '://' . \substr($url, 7);
+        } elseif (\str_starts_with($url, 'https://')) {
+            return $currentScheme . '://' . \substr($url, 8);
+        }
+        
+        return $url;
+    }
+    
+    /**
+     * 获取静态资源 URL（带版本号）
+     * 
+     * @param string $path 资源路径（相对于 statics 目录）
+     * @param string|null $version 版本号（null 时自动生成）
+     * @return string 完整的静态资源 URL
+     */
+    public function getStaticUrl(string $path, ?string $version = null): string
+    {
+        $baseHost = $this->getRequest()->getBaseHost();
+        $path = \ltrim($path, '/');
+        
+        // 自动添加版本号
+        if ($version === null) {
+            $version = Env::get('static_version') ?: '1.0.0';
+        }
+        
+        $url = $baseHost . '/statics/' . $path;
+        
+        // 添加版本参数
+        if ($version && !\str_contains($url, '?')) {
+            $url .= '?v=' . $version;
+        }
+        
+        return self::removeExtraDoubleSlashes($url);
+    }
+    
+    /**
+     * 获取主题资源 URL
+     * 
+     * @param string $module 模块名
+     * @param string $path 资源路径
+     * @param string $area 区域（frontend/backend）
+     * @return string 完整的主题资源 URL
+     */
+    public function getThemeUrl(string $module, string $path, string $area = 'frontend'): string
+    {
+        $baseHost = $this->getRequest()->getBaseHost();
+        $path = \ltrim($path, '/');
+        $module = \str_replace('_', '/', $module);
+        
+        $url = $baseHost . '/statics/' . $area . '/' . $module . '/' . $path;
+        
+        // 添加版本号
+        $version = Env::get('static_version') ?: '1.0.0';
+        if (!\str_contains($url, '?')) {
+            $url .= '?v=' . $version;
+        }
+        
+        return self::removeExtraDoubleSlashes($url);
+    }
+
     public function getUrlOrigin($s, $use_forwarded_host = false): string
     {
-        $ssl = (!empty($s['HTTPS']) && $s['HTTPS'] == 'on');
-        $sp = strtolower($s['SERVER_PROTOCOL']);
-        if ($sp == 'https' || $sp == 'ssl://' || $sp == 'HTTP/1.1') {
-            $ssl = true;
+        // 使用统一的协议检测方法
+        $protocol = self::getCurrentScheme();
+        
+        $port = $s['SERVER_PORT'] ?? '80';
+        $isDefaultPort = ($protocol === 'https' && $port === '443') || ($protocol === 'http' && $port === '80');
+        $portSuffix = $isDefaultPort ? '' : ':' . $port;
+        
+        $host = ($use_forwarded_host && isset($s['HTTP_X_FORWARDED_HOST'])) 
+            ? $s['HTTP_X_FORWARDED_HOST'] 
+            : ($s['SERVER_NAME'] ?? $s['HTTP_HOST'] ?? 'localhost');
+        
+        // 如果 host 已经包含端口，不重复添加
+        if (\str_contains($host, ':')) {
+            return $protocol . '://' . $host;
         }
-        $protocol = $ssl ? 'https' : 'http';
-        $port = $s['SERVER_PORT'];
-        $port = ((!$ssl && $port == '80') || ($ssl && $port == '443')) ? '' : ':' . $port;
-        $host = ($use_forwarded_host && isset($s['HTTP_X_FORWARDED_HOST'])) ? $s['HTTP_X_FORWARDED_HOST'] : ($s['SERVER_NAME'] ?? null);
-        $host = ($host ?? $s['SERVER_NAME']) . $port;
-        return $protocol . '://' . $host;
+        
+        return $protocol . '://' . $host . $portSuffix;
     }
 
     public function getFullUrl($s, $use_forwarded_host = false): string
@@ -534,6 +707,7 @@ class Url implements UrlInterface
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
+        
         // 防止重入：如果正在解析中，直接返回URL，避免无限循环
         if (self::$parsingInProgress) {
             return $parse_url ?: $_SERVER['REQUEST_URI'] ?? '/';
@@ -550,19 +724,24 @@ class Url implements UrlInterface
         if (empty(self::$parserServer)) {
             self::$parserServer = $_SERVER;
             self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
-            // 获取API area前缀，用于URL匹配和生成
-            $apiArea = Env::get('api');
-            if (empty($apiArea)) {
+            
+            // 使用新的 area_routes 分组配置获取区域前缀
+            $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend');
+            if (empty($restFrontendPrefix)) {
                 // 如果没有配置，使用默认值 'api'
-                self::$parserServer['WELINE_API_AREA'] = 'api';
-                self::$parserServer['WELINE_API_AREA_PREFIX'] = '/api/rest/';
+                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = 'api';
             } else {
-                // 如果配置了，使用配置值（如 'api123'）
-                self::$parserServer['WELINE_API_AREA'] = strtolower($apiArea);
-                self::$parserServer['WELINE_API_AREA_PREFIX'] = '/' . strtolower($apiArea) . '/';
+                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = strtolower($restFrontendPrefix);
             }
-            self::$parserServer['WELINE_API_ADMIN_AREA'] = Env::get('api_admin');
-            self::$parserServer['WELINE_BACKEND_AREA'] = Env::get('admin');
+            self::$parserServer['WELINE_REST_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
+            self::$parserServer['WELINE_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('backend') ?? '';
+            
+            // 保留旧的变量名以兼容，后续可逐步移除
+            self::$parserServer['WELINE_API_AREA'] = self::$parserServer['WELINE_REST_FRONTEND_PREFIX'];
+            self::$parserServer['WELINE_API_AREA_PREFIX'] = '/' . self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] . '/';
+            self::$parserServer['WELINE_API_ADMIN_AREA'] = self::$parserServer['WELINE_REST_BACKEND_PREFIX'];
+            self::$parserServer['WELINE_BACKEND_AREA'] = self::$parserServer['WELINE_BACKEND_PREFIX'];
+            
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
             self::$parserServer['WELINE_AREA'] = 'frontend';
             self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::getCurrency();
@@ -610,6 +789,7 @@ class Url implements UrlInterface
                 // 设置重入保护标志，防止事件处理过程中触发循环
                 self::$parsingInProgress = true;
                 try {
+                    $detectWebsiteStart = \microtime(true);
                     $detect_website_data = new DataObject([
                         'sites' => [],
                         'site_sample' => [
@@ -625,6 +805,11 @@ class Url implements UrlInterface
                     ]);
                     $eventManager = w_obj(EventsManager::class);
                     $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
+                    $detectWebsiteEnd = \microtime(true);
+                    $detectWebsiteDuration = \round(($detectWebsiteEnd - $detectWebsiteStart) * 1000, 2);
+                    if ($detectWebsiteDuration > 100) {
+                        \error_log('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
+                    }
                     $sites = $detect_website_data->getData('sites');
                     # 找出站点链接最长的，依次写入self::$parserSites
                     $tmp = [];
@@ -652,11 +837,26 @@ class Url implements UrlInterface
         if (!is_array($parsers)) {
             $parsers = [];
         }
-        $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '').(($parsers['port'] ?? '') == '80' || ($parsers['port'] ?? '') == '443' ? '' : ':' . ($parsers['port'] ?? ''));
+        // 构建网站 URL，确保使用当前请求的协议
+        $currentScheme = self::getCurrentScheme();
+        $hostPart = ($parsers['host'] ?? 'localhost');
+        $portPart = ($parsers['port'] ?? '');
+        $portSuffix = ($portPart === '' || $portPart === '80' || $portPart === '443') ? '' : ':' . $portPart;
+        $data['website_url'] = $currentScheme . '://' . $hostPart . $portSuffix;
         self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
         foreach (self::$parserSites as $site_url => $site) {
-            if (str_starts_with($url, $site_url)) {
-                $url = str_replace($site_url, '', $url);
+            $site_url_for_match = self::ensureCurrentScheme($site_url);
+            // 如果站点 URL 无端口，但当前请求有端口，需要补全端口再匹配
+            // 否则 str_starts_with('https://my.com:9981/...', 'https://my.com') 会误匹配
+            // 导致 str_replace 后残留 ':9981/...'，parse_url 无法解析路径
+            $site_parsed_tmp = \parse_url($site_url_for_match);
+            if (!isset($site_parsed_tmp['port']) && !empty($parsers['port'])) {
+                $site_url_for_match = ($site_parsed_tmp['scheme'] ?? 'https') . '://'
+                    . ($site_parsed_tmp['host'] ?? 'localhost')
+                    . ':' . $parsers['port']
+                    . ($site_parsed_tmp['path'] ?? '');
+            }
+            if (str_starts_with($url, $site_url_for_match)) {                $url = str_replace($site_url_for_match, '', $url);
                 $uri = self::parse_url($url, 'path') ?: '';
                 if (isset(self::$parserSiteMatchs[$site_url])) {
                     $data = array_merge((array)$data, self::$parserSiteMatchs[$site_url]);
@@ -668,7 +868,8 @@ class Url implements UrlInterface
                 $data['website'] = $site;
                 self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
                 self::$parserServer['WELINE_WEBSITE_ID'] = $site['website_id'];
-                self::$parserServer['WELINE_WEBSITE_URL'] = $site['url'];
+                // 确保 WELINE_WEBSITE_URL 使用当前请求的协议
+                self::$parserServer['WELINE_WEBSITE_URL'] = self::ensureCurrentScheme($site['url']);
                 self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
                 self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
                 if (empty(self::$parserServer['WELINE_USER_LANG'])) {
@@ -694,7 +895,7 @@ class Url implements UrlInterface
             }
         }
 
-        # 如果网站匹配失败，从完整URL中提取路径部分
+        # 如果网站匹配失败，从完整URL中提取路径部分，并回退到默认网站
         if (!isset($data['website']) && str_contains($url, '://')) {
             $parsed = self::parse_url($url);
             if (isset($parsed['path'])) {
@@ -707,6 +908,42 @@ class Url implements UrlInterface
                 $url = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
                 $uri = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
             }
+            
+            // 域名不匹配时回退到默认网站：
+            // 当使用非配置域名（如 my.com 而非 127.0.0.1）访问时，上方的 str_starts_with 匹配
+            // 全部失败，导致 WELINE_WEBSITE_CODE/ID 为空。
+            // 依赖网站上下文的逻辑（SEO URL 解码、Store 路由、货币/语言默认值等）
+            // 会因缺少网站信息而失败，导致 404。
+            // 修复：从已加载的 parserSites 中选取默认网站，填充网站元数据，
+            // 但不修改 URL（路径已由上方 host 剥离逻辑正确处理）。
+            if (!empty(self::$parserSites)) {
+                $defaultSite = null;
+                // 优先查找 code='default' 的网站
+                foreach (self::$parserSites as $siteUrl => $siteData) {
+                    if (($siteData['code'] ?? '') === 'default') {
+                        $defaultSite = $siteData;
+                        break;
+                    }
+                }
+                // 无 'default' 则取列表中最后一个（排序后最短 URL，通常为根网站）
+                if ($defaultSite === null) {
+                    $defaultSite = end(self::$parserSites);
+                }
+                if ($defaultSite) {
+                    $data['website'] = $defaultSite;
+                    self::$parserServer['WELINE_WEBSITE_CODE'] = $defaultSite['code'] ?? '';
+                    self::$parserServer['WELINE_WEBSITE_ID'] = $defaultSite['website_id'] ?? '';
+                    self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url']; // 使用当前请求的 scheme://host:port
+                    self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $defaultSite['default_currency'] ?? '';
+                    self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $defaultSite['default_language'] ?? '';
+                    if (empty(self::$parserServer['WELINE_USER_LANG'])) {
+                        self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: ($defaultSite['default_language'] ?? '');
+                    }
+                    if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
+                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: ($defaultSite['default_currency'] ?? '');
+                    }
+                }
+            }
         }
 
         # 前缀区域去除
@@ -716,10 +953,25 @@ class Url implements UrlInterface
         foreach (self::$parserMatchs as $match_url => $match_data) {
             if (str_starts_with($url, $match_url)) {
                 $url = str_replace($match_url, '', $url);
-                self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
-                self::$parserServer['REQUEST_URI'] = $url;
-                $data['url'] = $url;
-                return $data;
+                // 关键修复：必须使用缓存的完整 $match_data（包含 server, area, currency 等）
+                // 而不是返回当前局部变量 $data（缺少 server 等关键字段）
+                // 否则 processUrlParse() 无法正确识别后台/前台/API 请求，导致间歇性 404
+                $matchResult = $match_data;
+                $matchResult['url'] = $url;
+                // 更新 server 中的 REQUEST_URI 为当前请求的实际路由部分
+                if (isset($matchResult['server'])) {
+                    $matchResult['server']['ORIGIN_REQUEST_URI'] = $uri;
+                    $matchResult['server']['REQUEST_URI'] = $url;
+                } else {
+                    // 兼容：如果缓存数据意外缺少 server，使用 self::$parserServer
+                    self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
+                    self::$parserServer['REQUEST_URI'] = $url;
+                    $matchResult['server'] = self::$parserServer;
+                }
+                if ($key) {
+                    return $matchResult[$key] ?? '';
+                }
+                return $matchResult;
             }
         }
         # 完全url匹配  比如只有语言，或者只有货币的情况
@@ -735,33 +987,80 @@ class Url implements UrlInterface
             return $url;
         }
         $has_area = $data['has_area'] ?? false;
-        switch ($area) {
-            case self::$parserServer['WELINE_API_AREA']:
-                self::$parserServer['WELINE_AREA'] = 'api';
-                self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_API_AREA_PREFIX'] ?? '/api/rest/';
-                array_shift($splits);
-                $uri = '/' . implode('/', $splits);
+        
+        // 使用 Env::getAreaByRoutePrefix() 动态识别区域
+        // 支持通过 URL 首段匹配 area_routes 配置
+        $matchedArea = Env::getAreaByRoutePrefix($area);
+        
+        if ($matchedArea !== null) {
+            // 匹配到配置的区域前缀
+            switch ($matchedArea) {
+                case 'rest_frontend':
+                    self::$parserServer['WELINE_AREA'] = 'rest_frontend';
+                    self::$parserServer['WELINE_AREA_ROUTE'] = '/' . $area . '/';
+                    array_shift($splits);
+                    $uri = '/' . implode('/', $splits);
+                    $has_area = true;
+                    self::$parserServer['REQUEST_URI'] = $uri;
+                    break;
+                case 'rest_backend':
+                    self::$parserServer['WELINE_AREA'] = 'rest_backend';
+                    self::$parserServer['WELINE_AREA_ROUTE'] = $area;
+                    array_shift($splits);
+                    $uri = '/' . implode('/', $splits);
+                    $has_area = true;
+                    self::$parserServer['REQUEST_URI'] = $uri;
+                    break;
+                case 'backend':
+                    // 后台 URL：/backendKey/USD/zh_Hans_CN/admin/login
+                    // backendKey（如 U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8）已能识别后台
+                    // 去掉首段 backend key，直接使用剩余路径，不需要额外添加 /admin/ 前缀
+                    // REQUEST_URI = /USD/zh_Hans_CN/admin/login（原始路径已包含 admin/）
+                    // WELINE_AREA_ROUTE = ''，路由匹配时无需额外去除前缀
+                    self::$parserServer['WELINE_AREA'] = 'backend';
+                    self::$parserServer['WELINE_AREA_ROUTE'] = '';
+                    array_shift($splits);  // 去掉 backend key
+                    $uri = '/' . implode('/', $splits);
+                    $has_area = true;
+                    self::$parserServer['REQUEST_URI'] = $uri;
+                    break;
+            }
+        } else {
+            // 未匹配到配置的区域前缀，检查路径中是否有 "admin" 或 "backend" 段
+            // 支持 /网站码/admin/login 或 /网站码/模块/backend/控制器 格式
+            $adminSegmentIndex = null;
+            $backendSegmentIndex = null;
+            foreach ($splits as $idx => $seg) {
+                if ($seg === 'admin' && $adminSegmentIndex === null) {
+                    $adminSegmentIndex = $idx;
+                }
+                if ($seg === 'backend' && $idx >= 1 && $backendSegmentIndex === null) {
+                    $backendSegmentIndex = $idx;
+                }
+            }
+            
+            if ($adminSegmentIndex !== null && $adminSegmentIndex > 0) {
+                // 带网站码的后台 URL：/网站码/admin/login
+                self::$parserServer['WELINE_AREA'] = 'backend';
+                self::$parserServer['WELINE_AREA_ROUTE'] = implode('/', array_slice($splits, 0, $adminSegmentIndex));
+                $uri = '/' . implode('/', array_slice($splits, $adminSegmentIndex));
                 $has_area = true;
-                break;
-            case self::$parserServer['WELINE_API_ADMIN_AREA']:
-                self::$parserServer['WELINE_AREA'] = 'api_admin';
-                self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_API_ADMIN_AREA'];
-                array_shift($splits);
-                $uri = '/' . implode('/', $splits);
+                self::$parserServer['REQUEST_URI'] = $uri;
+            } elseif ($backendSegmentIndex !== null) {
+                // 无 admin 段但有 backend 段：/网站码/模块/backend/控制器
+                // 不需要额外添加 /admin/ 前缀，直接使用原始路径
+                $backendPath = implode('/', array_slice($splits, $backendSegmentIndex - 1));
+                self::$parserServer['WELINE_AREA'] = 'backend';
+                self::$parserServer['WELINE_AREA_ROUTE'] = '';
+                $uri = '/' . $backendPath;
                 $has_area = true;
-                break;
-            case self::$parserServer['WELINE_BACKEND_AREA']:
-                self::$parserServer['WELINE_AREA'] = 'admin';
-                self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_BACKEND_AREA'];
-                array_shift($splits);
-                $uri = '/' . implode('/', $splits);
-                $has_area = true;
-                break;
-            default:
+                self::$parserServer['REQUEST_URI'] = $uri;
+            } else {
+                // 默认：前端区域
                 self::$parserServer['WELINE_AREA'] = 'frontend';
                 self::$parserServer['WELINE_AREA_ROUTE'] = '';
-                # frontend 分支也需要重建 $uri，避免包含查询字符串
                 $uri = '/' . implode('/', $splits);
+            }
         }
         $data['has_area'] = $has_area;
         $data['area'] = self::$parserServer['WELINE_AREA'];
@@ -772,7 +1071,7 @@ class Url implements UrlInterface
 
         $data['currency'] = '';
         $data['language'] = '';
-        $data['timezone'] = $data['website']['timezone'] ?? 'Asia/Shanghai';
+        $data['timezone'] = ($data['website'] ?? [])['timezone'] ?? 'Asia/Shanghai';
         # 匹配货币 self::$parserCurrencies 最长倒序
         foreach (self::$parserCurrencies as $currency) {
             if (str_starts_with($url, '/' . $currency)) {
@@ -883,10 +1182,10 @@ class Url implements UrlInterface
         
         // 如果还是没有找到，使用Cookie或默认值
         if (empty($data['currency'])) {
-            $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'] ?? $data['website']['default_currency'] ?? 'CNY';
+            $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'] ?? (($data['website'] ?? [])['default_currency'] ?? null) ?? 'CNY';
         }
         if (empty($data['language'])) {
-            $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? $data['website']['default_language'] ?? 'zh_Hans_CN';
+            $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? (($data['website'] ?? [])['default_language'] ?? null) ?? 'zh_Hans_CN';
         }
         $decode_url = self::decode_url($url);
         if($url !== $decode_url){
@@ -919,7 +1218,9 @@ class Url implements UrlInterface
         # 解析缓存
         self::$parserCache[$url] = $data;
         self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
-        self::$parserServer['REQUEST_URI'] = $pure_uri;
+        // 统一使用 pure_uri（已移除区域、货币、语言前缀的纯路由）
+        // 后台区域通过 WELINE_AREA=backend 识别，不需要在 REQUEST_URI 中保留 admin/ 前缀
+        self::$parserServer['REQUEST_URI'] = '/' . ltrim($pure_uri, '/');
         $data['server'] = self::$parserServer;
         if ($key) {
             return $data[$key] ?? '';
@@ -952,5 +1253,32 @@ class Url implements UrlInterface
             return $url;
         }
         return $url;
+    }
+    
+    /**
+     * 注册静态变量重置到 StateManager
+     * 
+     * 用于 WLS 模式下每个请求后自动清理静态缓存。
+     * 由 StateManager::registerFrameworkResets() 调用。
+     */
+    public static function registerStateResets(): void
+    {
+        if (!\class_exists(\Weline\Framework\Runtime\StateManager::class, false)) {
+            return;
+        }
+        
+        \Weline\Framework\Runtime\StateManager::registerStaticResets(self::class, [
+            'parserServer' => [],
+            'parserSites' => [],
+            'parserCurrencies' => [],
+            'parserLanguages' => [],
+            'parserMatchs' => [],
+            'parserSiteMatchs' => [],
+            'parserUrlCache' => [],
+            'splitUrlCache' => [],
+            'parserCache' => [],
+            'parsingInProgress' => false,
+            'decode_urls' => [],
+        ]);
     }
 }

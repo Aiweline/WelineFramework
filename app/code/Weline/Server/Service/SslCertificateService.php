@@ -71,6 +71,46 @@ class SslCertificateService
      */
     protected SslCertificate $certModel;
     
+    /**
+     * 判断缓存：本地域名 [domain => bool]
+     */
+    protected array $localDomainCache = [];
+    
+    /**
+     * 判断缓存：解析到回环 [domain => bool]
+     */
+    protected array $loopbackResolveCache = [];
+    
+    /**
+     * 判断缓存：回环/内网 IP [ip => bool]
+     */
+    protected array $loopbackIpCache = [];
+    
+    /**
+     * 判断缓存：需要自签证书 [host => bool]
+     */
+    protected array $needsSelfSignedCache = [];
+    
+    /**
+     * DNS 解析缓存 [domain => ip[]]
+     */
+    protected array $dnsResolveCache = [];
+    
+    /**
+     * SAN 条目缓存 [domain => ['dns' => [], 'ip' => []]]
+     */
+    protected array $sanEntriesCache = [];
+    
+    /**
+     * 证书匹配缓存 [certPath:host => bool]
+     */
+    protected array $certMatchCache = [];
+    
+    /**
+     * 证书解析缓存 [certPath => parsed_cert_array|false]
+     */
+    protected array $certParseCache = [];
+    
     public function __construct()
     {
         $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
@@ -104,6 +144,24 @@ class SslCertificateService
     }
     
     /**
+     * 申请/启用 HTTPS 前环境检查（仅 Windows）
+     * 在 no-SSL 环境下申请证书前调用，若当前为 Windows 且未安装 event 扩展，
+     * 返回提示信息：申请证书后无法启动 HTTPS，需先安装 event 扩展。
+     *
+     * @return string|null 需要提示时返回文案，否则返回 null
+     */
+    public function getHttpsReadinessWarning(): ?string
+    {
+        if (!\defined('IS_WIN') || !IS_WIN) {
+            return null;
+        }
+        if (\extension_loaded('event')) {
+            return null;
+        }
+        return __('当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}', ['https://windows.php.net/downloads/pecl/releases/event/']);
+    }
+    
+    /**
      * 检查域名是否为本地开发域名（需要自签证书）
      * 
      * 本地域名包括：
@@ -118,20 +176,25 @@ class SslCertificateService
     {
         $domain = \strtolower(\trim($domain));
         
+        // 缓存命中
+        if (isset($this->localDomainCache[$domain])) {
+            return $this->localDomainCache[$domain];
+        }
+        
         // localhost 或 IP 地址
         if ($domain === 'localhost' || \filter_var($domain, FILTER_VALIDATE_IP)) {
-            return true;
+            return $this->localDomainCache[$domain] = true;
         }
         
         // 本地开发常用后缀
         $localSuffixes = ['.local', '.test', '.dev', '.localhost', '.example'];
         foreach ($localSuffixes as $suffix) {
             if (\str_ends_with($domain, $suffix)) {
-                return true;
+                return $this->localDomainCache[$domain] = true;
             }
         }
         
-        return false;
+        return $this->localDomainCache[$domain] = false;
     }
     
     /**
@@ -147,33 +210,32 @@ class SslCertificateService
     {
         $domain = \strtolower(\trim($domain));
         
+        // 缓存命中
+        if (isset($this->loopbackResolveCache[$domain])) {
+            return $this->loopbackResolveCache[$domain];
+        }
+        
         // 如果已经是 IP 地址，直接检查
         if (\filter_var($domain, FILTER_VALIDATE_IP)) {
-            return $this->isLoopbackIp($domain);
+            return $this->loopbackResolveCache[$domain] = $this->isLoopbackIp($domain);
         }
         
-        // 解析域名获取 IP
-        $ips = @\gethostbynamel($domain);
+        // 解析域名获取 IP（使用缓存）
+        $ips = $this->resolveDomainIps($domain);
         
-        if (!$ips) {
-            // 无法解析域名，可能是本地 hosts 配置
-            // 尝试单个解析
-            $ip = @\gethostbyname($domain);
-            if ($ip === $domain) {
-                // 解析失败，域名无法公网访问，使用自签证书
-                return true;
-            }
-            $ips = [$ip];
+        if (empty($ips)) {
+            // 解析失败，域名无法公网访问，使用自签证书
+            return $this->loopbackResolveCache[$domain] = true;
         }
         
-        // 检查所有解析的 IP 是否都是本地地址
+        // 检查所有解析的 IP 是否有本地地址
         foreach ($ips as $ip) {
             if ($this->isLoopbackIp($ip)) {
-                return true;
+                return $this->loopbackResolveCache[$domain] = true;
             }
         }
         
-        return false;
+        return $this->loopbackResolveCache[$domain] = false;
     }
     
     /**
@@ -184,38 +246,43 @@ class SslCertificateService
      */
     protected function isLoopbackIp(string $ip): bool
     {
+        // 缓存命中
+        if (isset($this->loopbackIpCache[$ip])) {
+            return $this->loopbackIpCache[$ip];
+        }
+        
         // IPv4 回环地址: 127.0.0.0/8
         if (\str_starts_with($ip, '127.')) {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
         // IPv6 回环地址
         if ($ip === '::1') {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
         // 私有地址范围（Let's Encrypt 也无法验证）
         // 10.0.0.0/8
         if (\str_starts_with($ip, '10.')) {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
         // 172.16.0.0/12
         if (\preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $ip)) {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
         // 192.168.0.0/16
         if (\str_starts_with($ip, '192.168.')) {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
         // 169.254.0.0/16 (链路本地)
         if (\str_starts_with($ip, '169.254.')) {
-            return true;
+            return $this->loopbackIpCache[$ip] = true;
         }
         
-        return false;
+        return $this->loopbackIpCache[$ip] = false;
     }
     
     /**
@@ -278,16 +345,8 @@ class SslCertificateService
      */
     public function isCertificateValid(string $certPath): bool
     {
-        if (!\is_file($certPath)) {
-            return false;
-        }
-        
-        $certData = @\file_get_contents($certPath);
-        if (!$certData) {
-            return false;
-        }
-        
-        $cert = @\openssl_x509_parse($certData);
+        // 使用缓存的证书解析
+        $cert = $this->getParsedCertificateRaw($certPath);
         if (!$cert) {
             return false;
         }
@@ -362,6 +421,167 @@ CNF;
     }
     
     /**
+     * 获取用于自签证书的 OpenSSL 配置
+     * 
+     * 自动判断域名是否为本地/内网环境，并生成包含正确 SAN 的配置：
+     * - localhost/127.0.0.1 → DNS:localhost + IP:127.0.0.1
+     * - 内网 IP（10.x, 172.16-31.x, 192.168.x）→ IP:x.x.x.x
+     * - 本地域名（*.local, *.test 等）→ DNS:domain + 解析的 IP
+     * - 解析到内网/回环的公网域名 → DNS:domain + IP:解析地址
+     */
+    protected function getOpensslConfigForSelfSigned(string $domain): array
+    {
+        $opensslConfig = $this->getOpensslConfig();
+        $domain = \strtolower(\trim($domain));
+        
+        // 判断是否需要本地/内网 SAN 配置
+        $needLocalSan = $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
+        if (!$needLocalSan) {
+            return $opensslConfig;
+        }
+        
+        // 收集 SAN 条目
+        $sanEntries = $this->collectSanEntries($domain);
+        if (empty($sanEntries['dns']) && empty($sanEntries['ip'])) {
+            return $opensslConfig;
+        }
+        
+        // 生成 SAN 配置文件（按域名哈希命名，避免冲突）
+        $configHash = \md5($domain . \serialize($sanEntries));
+        $sanConfigPath = $this->certBaseDir . "openssl_san_{$configHash}.cnf";
+        
+        if (!\is_file($sanConfigPath)) {
+            $sanConfig = $this->buildSanOpenSslConfig($domain, $sanEntries);
+            @\file_put_contents($sanConfigPath, $sanConfig);
+        }
+        
+        if (\is_file($sanConfigPath)) {
+            $opensslConfig['config'] = $sanConfigPath;
+        }
+        return $opensslConfig;
+    }
+    
+    /**
+     * 收集域名的 SAN 条目（DNS 和 IP）
+     * 
+     * @param string $domain 域名或 IP
+     * @return array ['dns' => [...], 'ip' => [...]]
+     */
+    protected function collectSanEntries(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        
+        // 缓存命中
+        if (isset($this->sanEntriesCache[$domain])) {
+            return $this->sanEntriesCache[$domain];
+        }
+        
+        $dns = [];
+        $ip = [];
+        
+        // 1. 处理 IP 地址
+        if (\filter_var($domain, FILTER_VALIDATE_IP)) {
+            $ip[] = $domain;
+            // 127.0.0.1 同时加 localhost
+            if ($domain === '127.0.0.1') {
+                $dns[] = 'localhost';
+            }
+            return $this->sanEntriesCache[$domain] = ['dns' => $dns, 'ip' => $ip];
+        }
+        
+        // 2. 处理域名
+        $dns[] = $domain;
+        
+        // localhost 特殊处理：同时包含 127.0.0.1 和 ::1
+        if ($domain === 'localhost') {
+            $ip[] = '127.0.0.1';
+            $ip[] = '::1';
+            return $this->sanEntriesCache[$domain] = ['dns' => $dns, 'ip' => $ip];
+        }
+        
+        // 3. 解析域名获取 IP
+        $resolvedIps = $this->resolveDomainIps($domain);
+        foreach ($resolvedIps as $resolvedIp) {
+            // 只添加本地/内网 IP 到 SAN（公网 IP 不需要）
+            if ($this->isLoopbackIp($resolvedIp)) {
+                $ip[] = $resolvedIp;
+            }
+        }
+        
+        // 如果域名是 *.localhost 类型，也加上 127.0.0.1
+        if (\str_ends_with($domain, '.localhost') && !\in_array('127.0.0.1', $ip, true)) {
+            $ip[] = '127.0.0.1';
+        }
+        
+        return $this->sanEntriesCache[$domain] = ['dns' => \array_unique($dns), 'ip' => \array_unique($ip)];
+    }
+    
+    /**
+     * 解析域名获取所有 IP 地址
+     */
+    protected function resolveDomainIps(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        
+        // 缓存命中
+        if (isset($this->dnsResolveCache[$domain])) {
+            return $this->dnsResolveCache[$domain];
+        }
+        
+        $ips = @\gethostbynamel($domain);
+        if ($ips) {
+            return $this->dnsResolveCache[$domain] = $ips;
+        }
+        // 尝试单个解析
+        $ip = @\gethostbyname($domain);
+        if ($ip !== $domain) {
+            return $this->dnsResolveCache[$domain] = [$ip];
+        }
+        return $this->dnsResolveCache[$domain] = [];
+    }
+    
+    /**
+     * 生成带 SAN 的 OpenSSL 配置文件内容
+     */
+    protected function buildSanOpenSslConfig(string $domain, array $sanEntries): string
+    {
+        $altNames = [];
+        $idx = 1;
+        foreach ($sanEntries['dns'] as $dns) {
+            $altNames[] = "DNS.{$idx} = {$dns}";
+            $idx++;
+        }
+        $idx = 1;
+        foreach ($sanEntries['ip'] as $ipAddr) {
+            $altNames[] = "IP.{$idx} = {$ipAddr}";
+            $idx++;
+        }
+        $altNamesStr = \implode("\n", $altNames);
+        
+        return <<<CNF
+[ req ]
+default_bits = 2048
+default_md = sha256
+distinguished_name = dn
+req_extensions = v3_req
+x509_extensions = v3_req
+
+[ dn ]
+CN = {$domain}
+
+[ v3_req ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = CA:true
+keyUsage = critical, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[ alt_names ]
+{$altNamesStr}
+CNF;
+    }
+    
+    /**
      * 生成自签证书（用于开发环境）
      * 
      * @param string $domain 域名
@@ -376,8 +596,8 @@ CNF;
             $certPath = $certDir . 'fullchain.pem';
             $keyPath = $certDir . 'privkey.pem';
             
-            // 获取 OpenSSL 配置（处理 Windows 兼容性）
-            $opensslConfig = $this->getOpensslConfig();
+            // 获取 OpenSSL 配置（localhost 时含 SAN，便于浏览器认可）
+            $opensslConfig = $this->getOpensslConfigForSelfSigned($domain);
             
             // 生成私钥
             $privateKey = \openssl_pkey_new($opensslConfig);
@@ -1157,17 +1377,37 @@ CNF;
     }
     
     /**
+     * 获取解析后的证书（带缓存）
+     * 
+     * @param string $certPath 证书路径
+     * @return array|false 解析后的证书数组，失败返回 false
+     */
+    protected function getParsedCertificateRaw(string $certPath): array|false
+    {
+        // 缓存命中
+        if (isset($this->certParseCache[$certPath])) {
+            return $this->certParseCache[$certPath];
+        }
+        
+        if (!\is_file($certPath)) {
+            return $this->certParseCache[$certPath] = false;
+        }
+        
+        $certData = @\file_get_contents($certPath);
+        if (!$certData) {
+            return $this->certParseCache[$certPath] = false;
+        }
+        
+        $cert = @\openssl_x509_parse($certData);
+        return $this->certParseCache[$certPath] = ($cert ?: false);
+    }
+    
+    /**
      * 解析证书信息
      */
     public function parseCertificate(string $certPath): array
     {
-        if (!\is_file($certPath)) {
-            return [];
-        }
-        
-        $certData = \file_get_contents($certPath);
-        $cert = \openssl_x509_parse($certData);
-        
+        $cert = $this->getParsedCertificateRaw($certPath);
         if (!$cert) {
             return [];
         }
@@ -1178,6 +1418,92 @@ CNF;
             'issuer' => $cert['issuer']['O'] ?? "Let's Encrypt",
             'subject' => $cert['subject']['CN'] ?? '',
         ];
+    }
+    
+    /**
+     * 检查证书是否适用于给定 host（CN 或 SAN 匹配）
+     * 
+     * 智能匹配规则：
+     * - 直接匹配 CN 或 SAN
+     * - localhost 与 127.0.0.1 视为等价
+     * - 内网 IP 需要证书中明确包含该 IP
+     */
+    public function certificateMatchesHost(string $certPath, string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        $cacheKey = $certPath . ':' . $host;
+        
+        // 缓存命中
+        if (isset($this->certMatchCache[$cacheKey])) {
+            return $this->certMatchCache[$cacheKey];
+        }
+        
+        // 获取解析后的证书（使用缓存）
+        $cert = $this->getParsedCertificateRaw($certPath);
+        if (!$cert) {
+            return $this->certMatchCache[$cacheKey] = false;
+        }
+        
+        $cn = \strtolower(\trim($cert['subject']['CN'] ?? ''));
+        $san = $cert['extensions']['subjectAltName'] ?? '';
+        
+        // 1. 直接匹配 CN
+        if ($cn === $host) {
+            return $this->certMatchCache[$cacheKey] = true;
+        }
+        
+        // 2. localhost/127.0.0.1 互等价
+        $localhostEquivalents = ['localhost', '127.0.0.1'];
+        if (\in_array($host, $localhostEquivalents, true) && \in_array($cn, $localhostEquivalents, true)) {
+            return $this->certMatchCache[$cacheKey] = true;
+        }
+        
+        // 3. 解析 SAN 进行匹配
+        if ($san !== '') {
+            // 标准化 SAN 字符串用于搜索
+            $sanLower = \strtolower($san);
+            
+            // 直接匹配
+            if (\str_contains($sanLower, 'dns:' . $host) || 
+                \str_contains($sanLower, 'dns: ' . $host) ||
+                \str_contains($sanLower, 'ip address:' . $host) ||
+                \str_contains($sanLower, 'ip address: ' . $host)) {
+                return $this->certMatchCache[$cacheKey] = true;
+            }
+            
+            // localhost/127.0.0.1 等价匹配
+            if (\in_array($host, $localhostEquivalents, true)) {
+                foreach ($localhostEquivalents as $equiv) {
+                    if (\str_contains($sanLower, $equiv)) {
+                        return $this->certMatchCache[$cacheKey] = true;
+                    }
+                }
+            }
+        }
+        
+        // 4. 内网 IP 必须证书中明确包含，不做通配
+        return $this->certMatchCache[$cacheKey] = false;
+    }
+    
+    /**
+     * 检查 host 是否为本地或内网地址（需要自签证书）
+     */
+    public function needsSelfSignedCertificate(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        
+        // 缓存命中
+        if (isset($this->needsSelfSignedCache[$host])) {
+            return $this->needsSelfSignedCache[$host];
+        }
+        
+        // IP 地址：检查是否为回环/内网
+        if (\filter_var($host, FILTER_VALIDATE_IP)) {
+            return $this->needsSelfSignedCache[$host] = $this->isLoopbackIp($host);
+        }
+        
+        // 域名：检查是否为本地域名或解析到内网
+        return $this->needsSelfSignedCache[$host] = ($this->isLocalDomain($host) || $this->resolvesToLoopback($host));
     }
     
     /**
@@ -1380,8 +1706,7 @@ CNF;
             @\unlink($cacheFile);
         }
         
-        // 通知服务器重新加载证书配置
-        $reloadFlagFile = Env::VAR_DIR . 'server' . DS . 'ssl_reload_flag';
-        @\file_put_contents($reloadFlagFile, \time());
+        // 通过 IPC 控制通道通知 Master 执行缓存重载（含 SSL 证书缓存刷新）
+        MasterProcess::sendCacheClearCommand('default');
     }
 }

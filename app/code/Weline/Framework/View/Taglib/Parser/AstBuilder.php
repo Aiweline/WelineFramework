@@ -36,6 +36,14 @@ final class AstBuilder
     private ?PhpExtractor $phpExtractor = null;
 
     /**
+     * 重置内部状态，允许实例复用（避免每次编译创建新实例）
+     */
+    public function reset(): void
+    {
+        $this->phpExtractor = null;
+    }
+
+    /**
      * 设置 PHP 提取器
      */
     public function setPhpExtractor(PhpExtractor $extractor): void

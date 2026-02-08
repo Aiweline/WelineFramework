@@ -18,6 +18,9 @@ use PDO;
 use PDOException;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Compiler\Dialect\SqliteDialect;
+use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
+use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -45,6 +48,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     protected ?PDO $link = null;
+    protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
     protected bool $fromPool = false; // 标记连接是否来自连接池
 
@@ -82,17 +86,33 @@ final class Connector extends Query implements ConnectorInterface
             }
         );
         $this->fromPool = true;
+        try {
+            $version = (string)$this->link->query('SELECT sqlite_version()')->fetchColumn();
+            (new SqliteDialect())->validateVersion($version);
+        } catch (\Throwable $e) {
+            \Weline\Framework\App\Env::log_warning('database_version.log', __('SQLite 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]));
+        }
+        $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         return $this;
+    }
+
+    public function getWrappedConnection(): DbConnectionInterface
+    {
+        $this->create();
+        if ($this->wrappedConnection === null) {
+            $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
+        }
+        return $this->wrappedConnection;
     }
 
     public function close(): void
     {
-        // 如果连接来自连接池，归还到池中；否则直接释放
         if ($this->link !== null) {
             if ($this->fromPool) {
                 ConnectionPool::releaseConnection($this->link, $this->configProvider);
             }
             $this->link = null;
+            $this->wrappedConnection = null;
             $this->fromPool = false;
         }
     }
@@ -105,68 +125,32 @@ final class Connector extends Query implements ConnectorInterface
         $this->close();
     }
 
+    /**
+     * @deprecated 请使用 getWrappedConnection() 获取连接并调用其方法，后续版本可能移除
+     */
     public function getLink(): PDO
     {
+        $this->create();
         return $this->link;
     }
 
+    /**
+     * 使用 SQLite 原生 REINDEX 重建表索引（@since SQLite 3.45+）
+     */
     public function reindex(string $table): bool
     {
         $table = self::processName($table);
         if (str_contains($table, '.')) {
-            list($schema, $table) = explode('.', $table);
+            $parts = explode('.', $table, 2);
+            $table = $parts[1] ?? $table;
         }
-        if (empty($schema)) {
-            $schema = $this->configProvider->getDatabase();
-        }
-        # 查询表的存储引擎
-        $RebuildIndexerSql = <<<REBUILD_INDEXER_SQL
-SET @rebuild_indexer_schema = '{$schema}';
-
-SET @rebuild_indexer_table = '{$table}';
-
-SET @rebuild_indexer_sql = '';
-SELECT GROUP_CONCAT(index_field.rebuild_field_sql)
-INTO @rebuild_indexer_sql
-FROM (SELECT--   i.TABLE_NAME,
---   i.INDEX_NAME,
---   GROUP_CONCAT( i.COLUMN_NAME ) AS COLUMN_NAME,
-            CONCAT(
-                    ' DROP ',
-                    IF
-                    (i.INDEX_NAME = 'PRIMARY', ' PRIMARY KEY ', ' INDEX '),
-                    IF
-                    (i.INDEX_NAME = 'PRIMARY', ' ', i.INDEX_NAME),
-                    ' , ADD ',
-                    IF
-                    (i.NON_UNIQUE = '0', IF(i.INDEX_NAME = 'PRIMARY', ' ', ' UNIQUE '), ''),
-                    IF
-                    (i.INDEX_NAME = 'PRIMARY', ' PRIMARY KEY ', ' INDEX '),
-                    IF
-                    (i.INDEX_NAME = 'PRIMARY', ' ', i.INDEX_NAME),
-                    '(',
-                    GROUP_CONCAT('`', i.COLUMN_NAME, '`'), IF(i.COLLATION = 'A', ' ASC ', ' DESC '),
-                    ')',
-                    ' COMMENT \'',
-                    i.INDEX_COMMENT,
-                    '\' USING ',
-                    i.INDEX_TYPE
-            ) AS rebuild_field_sql
-      FROM INFORMATION_SCHEMA.STATISTICS i
-      WHERE i.TABLE_SCHEMA = @rebuild_indexer_schema
-        AND i.TABLE_NAME = @rebuild_indexer_table
-      GROUP BY i.INDEX_NAME
-      ORDER BY i.SEQ_IN_INDEX)
-         AS index_field;
-SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_table, '`',
-              @rebuild_indexer_sql) AS rebuild_indexer_sql;
-REBUILD_INDEXER_SQL;
-        $rebuild_indexer_sql = $this->query($RebuildIndexerSql)->fetch()[4][0]['rebuild_indexer_sql'] ?? '';
-        if (empty($rebuild_indexer_sql)) {
+        $quoted = '"' . str_replace('"', '""', $table) . '"';
+        try {
+            $this->getConnectionInterface()->execute('REINDEX ' . $quoted);
+            return true;
+        } catch (\Throwable $e) {
             return false;
         }
-        $this->query($rebuild_indexer_sql)->fetch();
-        return true;
     }
 
     public function getIndexFields(string $table): array

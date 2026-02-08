@@ -24,8 +24,14 @@ return [
             'description' => '场景适配器扩展点，用于扩展 AI 场景适配功能',
             'required' => true, // 是否必须实现接口
             'multiple' => true  // 是否允许多个实现
+        ],
+        'Agent' => [
+            'path' => 'extends/module/Weline_Ai/Agent',
+            'interface' => 'Weline\Ai\Interface\AgentInterface',
+            'description' => '智能体扩展点，用于扩展 AI 智能体功能（支持 Tool 调用编排）',
+            'required' => true,
+            'multiple' => true
         ]
-        // 可以定义多个扩展点目录
     ]
 ];
 
