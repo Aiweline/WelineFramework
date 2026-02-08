@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api;
 
+use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
@@ -21,6 +22,12 @@ interface ConnectorInterface
     public function create(): static;
 
     public function close(): void;
+
+    /**
+     * 获取封装后的数据库连接（推荐使用，避免直接依赖 PDO）
+     * @since 1.0.0
+     */
+    public function getWrappedConnection(): DbConnectionInterface;
 
     /**
      * @DESC          # 查询

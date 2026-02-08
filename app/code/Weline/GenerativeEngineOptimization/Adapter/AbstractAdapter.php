@@ -21,7 +21,7 @@ use Weline\GenerativeEngineOptimization\Service\SecretStoreService;
  * 
  * @package Weline_GenerativeEngineOptimization
  */
-abstract class AbstractAdapter implements BaseAdapter
+abstract class AbstractAdapter extends BaseAdapter
 {
     protected Platform $platform;
     protected SecretStoreService $secretStore;
@@ -53,25 +53,30 @@ abstract class AbstractAdapter implements BaseAdapter
      * 发送HTTP请求
      * 
      * @param string $url
-     * @param array $options
+     * @param array $headers
+     * @param string $method
+     * @param string $body
      * @return array
      */
-    protected function sendHttpRequest(string $url, array $options = []): array
+    protected function sendHttpRequest(string $url, array $headers = [], string $method = 'POST', string $body = ''): array
     {
         $ch = curl_init($url);
         
-        $defaultOptions = [
+        $curlOptions = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
         ];
-        
-        $mergedOptions = array_merge($defaultOptions, $options);
-        
-        foreach ($mergedOptions as $key => $value) {
-            curl_setopt($ch, $key, $value);
+        if (!empty($headers)) {
+            $curlOptions[CURLOPT_HTTPHEADER] = $headers;
         }
+        if ($body !== '') {
+            $curlOptions[CURLOPT_POSTFIELDS] = $body;
+        }
+        
+        curl_setopt_array($ch, $curlOptions);
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -83,13 +88,14 @@ abstract class AbstractAdapter implements BaseAdapter
                 'success' => false,
                 'error' => $error,
                 'http_code' => $httpCode,
+                'body' => '',
             ];
         }
         
         return [
             'success' => $httpCode >= 200 && $httpCode < 300,
             'http_code' => $httpCode,
-            'response' => $response,
+            'body' => $response,
         ];
     }
 

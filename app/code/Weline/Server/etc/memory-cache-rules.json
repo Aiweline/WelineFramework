@@ -1,0 +1,87 @@
+{
+    "description": "WLS 内存缓存规则配置 - 类 Cloudflare 规则语法",
+    "version": "1.0.0",
+    "documentation": {
+        "syntax": "使用类 Cloudflare 表达式语法定义缓存规则",
+        "operators": {
+            "comparison": ["eq", "ne", "contains", "matches", "starts_with", "ends_with", "in"],
+            "logical": ["and", "or", "not"]
+        },
+        "fields": {
+            "http.request.uri.path": "请求路径，如 /api/users",
+            "http.request.method": "请求方法，如 GET、POST",
+            "http.host": "请求 Host",
+            "http.request.uri": "完整 URI（含查询参数）",
+            "http.request.uri.query": "查询字符串",
+            "http.request.headers[\"name\"]": "请求头，如 http.request.headers[\"accept\"]"
+        }
+    },
+    "rules": [
+        {
+            "id": "static-assets-cache",
+            "name": "静态资源长缓存",
+            "description": "对静态资源（CSS、JS、图片、字体）应用 7 天缓存",
+            "expression": "http.request.uri.path matches \"\\.(css|js|jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|eot|otf)$\"",
+            "action": "cache",
+            "ttl": 604800,
+            "priority": 100,
+            "enabled": true,
+            "cacheable_status_codes": [200, 301, 302]
+        },
+        {
+            "id": "html-page-cache",
+            "name": "HTML 页面缓存",
+            "description": "对 HTML 页面应用短期缓存",
+            "expression": "(http.request.method eq \"GET\") and (http.request.headers[\"accept\"] contains \"text/html\")",
+            "action": "cache",
+            "ttl": 300,
+            "priority": 50,
+            "enabled": true,
+            "cacheable_status_codes": [200]
+        },
+        {
+            "id": "bypass-admin",
+            "name": "绕过后台",
+            "description": "不缓存后台管理页面",
+            "expression": "http.request.uri.path starts_with \"/admin\" or http.request.uri.path starts_with \"/backend\"",
+            "action": "bypass",
+            "priority": 200,
+            "enabled": true
+        },
+        {
+            "id": "bypass-api",
+            "name": "绕过 API",
+            "description": "不缓存 API 请求",
+            "expression": "http.request.uri.path starts_with \"/api/\" or http.request.uri.path starts_with \"/_wls/\"",
+            "action": "bypass",
+            "priority": 200,
+            "enabled": true
+        },
+        {
+            "id": "bypass-user-session",
+            "name": "绕过用户会话",
+            "description": "不缓存需要用户认证的页面",
+            "expression": "http.request.uri.path starts_with \"/customer/\" or http.request.uri.path starts_with \"/checkout/\" or http.request.uri.path starts_with \"/cart/\"",
+            "action": "bypass",
+            "priority": 200,
+            "enabled": true
+        },
+        {
+            "id": "bypass-post-requests",
+            "name": "绕过 POST 请求",
+            "description": "不缓存 POST 请求",
+            "expression": "http.request.method ne \"GET\"",
+            "action": "bypass",
+            "priority": 250,
+            "enabled": true
+        }
+    ],
+    "default_ttl": 3600,
+    "max_cacheable_response_size": 5242880,
+    "notes": {
+        "priority": "数值越大优先级越高，先匹配高优先级规则",
+        "action": "cache = 缓存, bypass = 绕过（不缓存）",
+        "ttl": "缓存生存时间（秒），仅 action=cache 时有效",
+        "cacheable_status_codes": "可缓存的 HTTP 状态码，默认 [200]"
+    }
+}

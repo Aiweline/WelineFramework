@@ -36,7 +36,9 @@ class BackendController extends PcController
     protected function loginCheck(): void
     {
         # 验证除了登录页面以外的所有地址需要登录
-        if (!CLI and !$this->session->isLogin()) {
+        # WLS 模式下 CLI=true 但有 HTTP 请求环境（REQUEST_URI），仍需登录验证
+        $isHttpRequest = !CLI || isset($_SERVER['REQUEST_URI']);
+        if ($isHttpRequest and !$this->session->isLogin()) {
             $whitelist_url_cache_key = 'whitelist_url_cache_key';
             $whitelist_url = $this->cache->get($whitelist_url_cache_key);
             if (!$whitelist_url) {
@@ -47,7 +49,12 @@ class BackendController extends PcController
                 $whitelist_url = $whitelistUrlData->getData('whitelist_url');
                 $this->cache->set($whitelist_url_cache_key, $whitelist_url);
             }
-            if (!in_array($this->request->getRouteUrlPath(), $whitelist_url)) {
+            
+            // getRouteUrlPath() 现在正确返回 admin/login 格式，可以直接与白名单匹配
+            $routeUrlPath = $this->request->getRouteUrlPath();
+            
+            // 检查是否在白名单中
+            if (!in_array($routeUrlPath, $whitelist_url)) {
                 $no_login_url_cache_key = 'no_login_redirect_url';
                 $no_login_redirect_url = $this->cache->get($no_login_url_cache_key);
                 if (!$no_login_redirect_url) {

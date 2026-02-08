@@ -57,7 +57,8 @@ class AiComponent extends BackendController
     public function postGenerate()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $description = $body['description'] ?? '';
             $category = $body['category'] ?? 'content';
@@ -146,7 +147,8 @@ class AiComponent extends BackendController
     public function postGenerateFromSpec()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $spec = $body['spec'] ?? $body;
             
@@ -190,7 +192,8 @@ class AiComponent extends BackendController
     public function postRefine()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $templateContent = $body['template_content'] ?? '';
             $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
@@ -257,7 +260,8 @@ class AiComponent extends BackendController
     public function postPreview()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             // 如果直接提供了模板内容，使用它进行预览
             if (!empty($body['template_content'])) {
@@ -311,7 +315,8 @@ class AiComponent extends BackendController
     public function postSave()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             // 如果提供了已生成的结果
             if (!empty($body['result'])) {
@@ -478,7 +483,8 @@ class AiComponent extends BackendController
     public function postUpdate()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $componentId = (int)($body['id'] ?? 0);
             
@@ -514,7 +520,8 @@ class AiComponent extends BackendController
     public function postDelete()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $componentId = (int)($body['id'] ?? 0);
             
@@ -551,7 +558,8 @@ class AiComponent extends BackendController
     public function postValidate()
     {
         try {
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $bodyParams = $this->request->getBodyParams();
+            $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
             $templateContent = $body['template_content'] ?? '';
             

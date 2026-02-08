@@ -124,7 +124,8 @@ class Config extends BackendController
         // 明确设置响应头为HTML，确保返回HTML而不是JSON
         $this->request->getResponse()->setHeader('Content-Type', 'text/html; charset=utf-8');
         
-        return $this->fetch();
+        // 显式指定 index 模板，避免路由解析为 getConfig 时加载错误的模板
+        return $this->fetch('index');
     }
 
     /**
@@ -627,9 +628,20 @@ class Config extends BackendController
             /** @var ConfigService $configService */
             $configService = ObjectManager::getInstance(ConfigService::class);
 
+            // 兼容 FormData 和 JSON body 两种提交方式
             $modelId = $this->request->getPost('model_id', '');
             $enabled = $this->request->getPost('enabled', false);
             $cacheSize = (int)($this->request->getPost('cache_size', 10240));
+
+            // 如果 getPost 未取到，尝试从 JSON body 读取
+            if (empty($modelId)) {
+                $jsonBody = json_decode($this->request->getBodyParams(false) ?: '{}', true);
+                if (is_array($jsonBody)) {
+                    $modelId = $jsonBody['model_id'] ?? '';
+                    $enabled = $jsonBody['enabled'] ?? false;
+                    $cacheSize = (int)($jsonBody['cache_size'] ?? 10240);
+                }
+            }
 
             if (empty($modelId)) {
                 return $this->fetchJson([

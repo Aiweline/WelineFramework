@@ -1,0 +1,128 @@
+<?php
+/**
+ * SaaS Starter - Hero Section Component
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors
+ * @var array $component_config
+ * 
+ * @fields_start
+ * group:content => 内容设置
+ * content.badge => 顶部徽章文字:text:Now in Public Beta
+ * content.title => 主标题:textarea:Ship faster with the modern SaaS platform
+ * content.description => 描述文字:textarea:Streamline your workflow, automate repetitive tasks, and collaborate seamlessly. Built for modern teams who move fast.
+ * group:cta => 按钮设置
+ * cta.primary_text => 主按钮文字:text:Start Free Trial
+ * cta.primary_url => 主按钮链接:text:#pricing
+ * cta.secondary_text => 次按钮文字:text:Watch Demo
+ * cta.secondary_url => 次按钮链接:text:#demo
+ * group:stats => 数据统计
+ * stats.items => 统计数据:textarea:10K+|Active Teams\r\n99.9%|Uptime SLA\r\n50+|Integrations|格式：数字|描述，一行一个
+ * group:style => 样式设置
+ * style.padding_top => 顶部内边距:number:120|px
+ * style.padding_bottom => 底部内边距:number:80|px
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$heroBg = $colors['hero_bg'] ?? 'linear-gradient(135deg, #0b1a2e 0%, #0b0f19 50%, #0d1117 100%)';
+$textPrimary = $colors['text_primary'] ?? '#f1f5f9';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$accentPrimary = $colors['accent_primary'] ?? '#10b981';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#34d399';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(16, 185, 129, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(16, 185, 129, 0.3)';
+
+$badge = $config['content.badge'] ?? 'Now in Public Beta';
+$title = $config['content.title'] ?? 'Ship faster with the modern SaaS platform';
+$description = $config['content.description'] ?? 'Streamline your workflow, automate repetitive tasks, and collaborate seamlessly. Built for modern teams who move fast.';
+$primaryBtnText = $config['cta.primary_text'] ?? 'Start Free Trial';
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#pricing';
+$secondaryBtnText = $config['cta.secondary_text'] ?? 'Watch Demo';
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#demo';
+
+$statsRaw = $config['stats.items'] ?? "10K+|Active Teams\n99.9%|Uptime SLA\n50+|Integrations";
+$stats = [];
+foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    if (!empty(trim($parts[0] ?? ''))) {
+        $stats[] = ['value' => trim($parts[0]), 'label' => trim($parts[1] ?? '')];
+    }
+}
+
+$paddingTop = $config['style.padding_top'] ?? '120';
+$paddingBottom = $config['style.padding_bottom'] ?? '80';
+$instanceId = 'ss-hero-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $heroBg ?>; padding: <?= intval($paddingTop) ?>px 0 <?= intval($paddingBottom) ?>px; position: relative; overflow: hidden; text-align: center; }
+        #<?= $instanceId ?>::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at 50% 0%, rgba(16,185,129,0.12) 0%, transparent 60%); pointer-events: none; }
+        #<?= $instanceId ?> .ss-hero-container { max-width: 900px; margin: 0 auto; padding: 0 20px; position: relative; z-index: 1; }
+        #<?= $instanceId ?> .ss-hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: <?= $badgeBg ?>; border: 1px solid <?= $badgeBorder ?>; border-radius: 50px; font-size: 0.85rem; font-weight: 500; color: <?= $accentPrimaryLight ?>; margin-bottom: 28px; }
+        #<?= $instanceId ?> .ss-hero-badge-dot { width: 8px; height: 8px; background: <?= $accentPrimary ?>; border-radius: 50%; animation: ss-pulse 2s infinite; }
+        @keyframes ss-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        #<?= $instanceId ?> .ss-hero-title { font-size: 4rem; font-weight: 800; line-height: 1.1; color: <?= $textPrimary ?>; margin-bottom: 24px; letter-spacing: -0.03em; }
+        #<?= $instanceId ?> .ss-hero-title span { background: <?= $buttonPrimaryBg ?>; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        #<?= $instanceId ?> .ss-hero-desc { font-size: 1.25rem; line-height: 1.7; color: <?= $textSecondary ?>; margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        #<?= $instanceId ?> .ss-hero-cta { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 60px; }
+        #<?= $instanceId ?> .ss-hero-btn-primary { display: inline-flex; align-items: center; gap: 10px; padding: 16px 36px; background: <?= $buttonPrimaryBg ?>; color: #fff; font-size: 1.05rem; font-weight: 600; border-radius: 12px; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(16,185,129,0.4); text-decoration: none; }
+        #<?= $instanceId ?> .ss-hero-btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(16,185,129,0.5); }
+        #<?= $instanceId ?> .ss-hero-btn-secondary { display: inline-flex; align-items: center; gap: 10px; padding: 16px 36px; background: transparent; color: <?= $accentPrimaryLight ?>; font-size: 1.05rem; font-weight: 600; border: 2px solid rgba(16,185,129,0.4); border-radius: 12px; transition: all 0.3s ease; text-decoration: none; }
+        #<?= $instanceId ?> .ss-hero-btn-secondary:hover { background: rgba(16,185,129,0.1); border-color: <?= $accentPrimaryLight ?>; }
+        #<?= $instanceId ?> .ss-hero-btn-secondary svg { width: 20px; height: 20px; }
+        #<?= $instanceId ?> .ss-hero-stats { display: flex; justify-content: center; gap: 48px; flex-wrap: wrap; }
+        #<?= $instanceId ?> .ss-hero-stat { text-align: center; }
+        #<?= $instanceId ?> .ss-hero-stat-value { font-size: 2rem; font-weight: 800; color: <?= $accentPrimaryLight ?>; }
+        #<?= $instanceId ?> .ss-hero-stat-label { font-size: 0.9rem; color: <?= $textSecondary ?>; margin-top: 4px; }
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .ss-hero-title { font-size: 2.5rem; }
+            #<?= $instanceId ?> .ss-hero-desc { font-size: 1.05rem; }
+            #<?= $instanceId ?> .ss-hero-cta { flex-direction: column; align-items: center; }
+            #<?= $instanceId ?> .ss-hero-btn-primary, #<?= $instanceId ?> .ss-hero-btn-secondary { width: 100%; max-width: 320px; justify-content: center; }
+            #<?= $instanceId ?> .ss-hero-stats { gap: 24px; }
+        }
+    </style>
+    
+    <div class="ss-hero-container">
+        <?php if ($badge): ?>
+        <div class="ss-hero-badge">
+            <span class="ss-hero-badge-dot"></span>
+            <?= htmlspecialchars($badge) ?>
+        </div>
+        <?php endif; ?>
+        
+        <h1 class="ss-hero-title"><?= nl2br(htmlspecialchars($title)) ?></h1>
+        <p class="ss-hero-desc"><?= htmlspecialchars($description) ?></p>
+        
+        <div class="ss-hero-cta">
+            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="ss-hero-btn-primary">
+                <?= htmlspecialchars($primaryBtnText) ?>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="ss-hero-btn-secondary">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                <?= htmlspecialchars($secondaryBtnText) ?>
+            </a>
+        </div>
+        
+        <?php if (!empty($stats)): ?>
+        <div class="ss-hero-stats">
+            <?php foreach ($stats as $stat): ?>
+            <div class="ss-hero-stat">
+                <div class="ss-hero-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                <div class="ss-hero-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</section>

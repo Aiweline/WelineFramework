@@ -1,0 +1,278 @@
+<?php
+/**
+ * 域名购买 Tab 内容
+ *
+ * 支持批量输入域名、检查可用性、选择绑定站点、批量购买。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $accounts 域名商账号列表（含域名商信息）
+ * @var array $websites 网站列表（供绑定选择）
+ */
+$accounts = $accounts ?? [];
+$websites = $websites ?? [];
+?>
+
+<div class="row">
+    <!-- 左侧：输入区 -->
+    <div class="col-lg-5">
+        <h5 class="mb-3"><?= __('批量购买域名') ?></h5>
+
+        <div class="mb-3">
+            <label class="form-label"><?= __('选择域名商账号') ?> <span class="text-danger">*</span></label>
+            <select id="purchase-account-id" class="form-select">
+                <option value=""><?= __('请选择域名商账号') ?></option>
+                <?php foreach ($accounts as $account): ?>
+                    <?php if (($account['status'] ?? '') === 'active'): ?>
+                        <option value="<?= (int)($account['account_id'] ?? 0) ?>">
+                            <?= htmlspecialchars(($account['registrar_name'] ?? '') . ' - ' . ($account['account_name'] ?? '')) ?>
+                        </option>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label"><?= __('域名列表（一行一个）') ?> <span class="text-danger">*</span></label>
+            <textarea id="purchase-domains-input" class="form-control" rows="8"
+                      placeholder="<?= __("example.com\nmysite.net\nshop.org") ?>"></textarea>
+            <div class="form-text"><?= __('每行一个域名，支持批量输入多个域名。') ?></div>
+        </div>
+
+        <button type="button" class="btn btn-primary w-100" onclick="checkDomainAvailability()">
+            <i class="mdi mdi-magnify me-1"></i><?= __('检查可用性') ?>
+        </button>
+    </div>
+
+    <!-- 右侧：结果区 -->
+    <div class="col-lg-7">
+        <h5 class="mb-3"><?= __('检查结果') ?></h5>
+        <div id="availability-results">
+            <div class="text-center py-5 text-muted">
+                <i class="mdi mdi-dns-outline" style="font-size:3rem;"></i>
+                <p class="mt-2"><?= __('请在左侧输入域名并点击"检查可用性"。') ?></p>
+            </div>
+        </div>
+
+        <!-- 购买确认区域（检查完成后显示） -->
+        <div id="purchase-actions" style="display:none;" class="mt-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong id="purchase-count-text"><?= __('0 个可用域名') ?></strong>
+                        </div>
+                        <button type="button" class="btn btn-success" onclick="submitPurchase()">
+                            <i class="mdi mdi-cart-check me-1"></i><?= __('批量购买') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 购买记录 -->
+        <div class="mt-4">
+            <h6><?= __('购买记录') ?></h6>
+            <div id="purchase-orders-container">
+                <p class="text-muted small"><?= __('购买完成后会在此处显示记录。') ?></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var checkAvailabilityUrl = '<?= $this->getUrl('*/admin/domain/check-availability') ?>';
+var purchaseUrl = '<?= $this->getUrl('*/admin/domain/purchase') ?>';
+var ordersUrl = '<?= $this->getUrl('*/admin/domain/orders') ?>';
+
+// 存储检查结果
+var availabilityResults = [];
+
+function checkDomainAvailability() {
+    var accountId = document.getElementById('purchase-account-id').value;
+    var domainsText = document.getElementById('purchase-domains-input').value.trim();
+
+    if (!accountId) {
+        showToast('<?= __('请先选择域名商账号') ?>', 'warning');
+        return;
+    }
+    if (!domainsText) {
+        showToast('<?= __('请输入域名') ?>', 'warning');
+        return;
+    }
+
+    var container = document.getElementById('availability-results');
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2"><?= __('正在检查域名可用性...') ?></p></div>';
+
+    var formData = new FormData();
+    formData.append('account_id', accountId);
+    formData.append('domains', domainsText);
+
+    fetch(checkAvailabilityUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.code === 200) {
+            availabilityResults = data.data || [];
+            renderAvailabilityResults(availabilityResults);
+        } else {
+            container.innerHTML = '<div class="alert alert-danger">' + (data.msg || '<?= __('检查失败') ?>') + '</div>';
+        }
+    })
+    .catch(function(err) {
+        container.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + err.message + '</div>';
+    });
+}
+
+function renderAvailabilityResults(results) {
+    var container = document.getElementById('availability-results');
+    var availableCount = 0;
+    var websitesJson = <?= json_encode($websites, JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    var html = '<div class="table-responsive"><table class="table table-sm align-middle"><thead class="table-light"><tr>';
+    html += '<th><?= __('域名') ?></th><th><?= __('状态') ?></th><th><?= __('价格') ?></th>';
+    html += '<th><?= __('年限') ?></th><th><?= __('绑定站点') ?></th></tr></thead><tbody>';
+
+    for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        var available = r.available;
+        if (available) availableCount++;
+
+        html += '<tr class="' + (available ? '' : 'table-secondary') + '">';
+        html += '<td><strong>' + escapeHtml(r.domain) + '</strong></td>';
+        html += '<td>' + (available
+            ? '<span class="badge bg-success"><?= __('可用') ?></span>'
+            : '<span class="badge bg-secondary"><?= __('不可用') ?></span>') + '</td>';
+        html += '<td>' + (available && r.price ? (r.currency || '$') + r.price + '/yr' : '-') + '</td>';
+
+        if (available) {
+            html += '<td><input type="number" class="form-control form-control-sm purchase-years" data-index="' + i + '" value="1" min="1" max="10" style="width:70px;"></td>';
+            html += '<td><select class="form-select form-select-sm purchase-bind-site" data-index="' + i + '" style="min-width:160px;">';
+            html += '<option value=""><?= __('不绑定') ?></option>';
+            html += '<option value="__auto__"><?= __('自动新建站点') ?></option>';
+            for (var j = 0; j < websitesJson.length; j++) {
+                var w = websitesJson[j];
+                html += '<option value="' + w.website_id + '">' + escapeHtml(w.name || w.code) + '</option>';
+            }
+            html += '</select></td>';
+        } else {
+            html += '<td>-</td><td>' + (r.message ? '<small class="text-muted">' + escapeHtml(r.message) + '</small>' : '-') + '</td>';
+        }
+        html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+
+    // 显示/隐藏购买按钮区域
+    var actionsDiv = document.getElementById('purchase-actions');
+    var countText = document.getElementById('purchase-count-text');
+    if (availableCount > 0) {
+        actionsDiv.style.display = 'block';
+        countText.textContent = availableCount + ' <?= __('个可用域名') ?>';
+    } else {
+        actionsDiv.style.display = 'none';
+    }
+}
+
+function submitPurchase() {
+    var accountId = document.getElementById('purchase-account-id').value;
+    if (!accountId) {
+        showToast('<?= __('请选择域名商账号') ?>', 'warning');
+        return;
+    }
+
+    // 收集购买项
+    var items = [];
+    for (var i = 0; i < availabilityResults.length; i++) {
+        var r = availabilityResults[i];
+        if (!r.available) continue;
+
+        var yearsInput = document.querySelector('.purchase-years[data-index="' + i + '"]');
+        var bindSelect = document.querySelector('.purchase-bind-site[data-index="' + i + '"]');
+
+        var years = yearsInput ? parseInt(yearsInput.value) || 1 : 1;
+        var bindValue = bindSelect ? bindSelect.value : '';
+
+        items.push({
+            domain: r.domain,
+            years: years,
+            website_id: (bindValue && bindValue !== '__auto__') ? parseInt(bindValue) : 0,
+            auto_create_site: bindValue === '__auto__' ? 'yes' : 'no'
+        });
+    }
+
+    if (items.length === 0) {
+        showToast('<?= __('没有可用的域名可以购买') ?>', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: '<?= __('确认购买') ?>',
+        text: '<?= __('即将购买') ?> ' + items.length + ' <?= __('个域名，确认继续？') ?>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#34c38f',
+        cancelButtonText: '<?= __('取消') ?>',
+        confirmButtonText: '<?= __('确认购买') ?>'
+    }).then(function(result) {
+        if (result.isConfirmed) {
+            executePurchase(accountId, items);
+        }
+    });
+}
+
+function executePurchase(accountId, items) {
+    showToast('<?= __('正在提交购买请求...') ?>', 'info');
+
+    var formData = new FormData();
+    formData.append('account_id', accountId);
+    formData.append('items', JSON.stringify(items));
+
+    fetch(purchaseUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.code === 200) {
+            showToast(data.msg || '<?= __('购买请求已提交') ?>', 'success');
+            loadOrders();
+        } else {
+            showToast(data.msg || '<?= __('购买失败') ?>', 'error');
+        }
+    })
+    .catch(function(err) {
+        showToast('<?= __('请求失败') ?>: ' + err.message, 'error');
+    });
+}
+
+function loadOrders() {
+    fetch(ordersUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.code === 200 && data.data && data.data.length > 0) {
+            var html = '<div class="table-responsive"><table class="table table-sm"><thead class="table-light"><tr>';
+            html += '<th><?= __('订单号') ?></th><th><?= __('数量') ?></th><th><?= __('状态') ?></th><th><?= __('时间') ?></th></tr></thead><tbody>';
+            for (var i = 0; i < data.data.length; i++) {
+                var o = data.data[i];
+                html += '<tr>';
+                html += '<td>' + escapeHtml(o.order_no || '-') + '</td>';
+                html += '<td>' + (o.total_count || 0) + '</td>';
+                html += '<td>' + escapeHtml(o.status || '-') + '</td>';
+                html += '<td>' + escapeHtml(o.created_at || '-') + '</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table></div>';
+            document.getElementById('purchase-orders-container').innerHTML = html;
+        }
+    });
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text || ''));
+    return div.innerHTML;
+}
+</script>

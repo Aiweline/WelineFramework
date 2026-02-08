@@ -1,0 +1,27 @@
+{
+    "page_type": "contact_page",
+    "name": "联系页面布局",
+    "description": "PokerArena 主题联系我们页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "contact-content",
+                "enabled": true,
+                "instance_id": "contact-default",
+                "config": {
+                    "content.badge": "Get in Touch",
+                    "content.title": "Contact Us",
+                    "content.description": "Have questions? Our support team is available 24/7 to help with anything you need."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "联系页面布局，继承首页头尾"
+}

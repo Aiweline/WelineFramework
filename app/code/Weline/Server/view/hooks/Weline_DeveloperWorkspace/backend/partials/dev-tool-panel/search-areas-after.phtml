@@ -1,0 +1,273 @@
+<?php
+/**
+ * Weline_Server - 开发工具面板扩展搜索区与 WLS 加载逻辑
+ * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::search-areas-after
+ * 本模块自行判断是否为 WLS 模式，仅在此标签下且需展示时才请求并渲染。
+ *
+ * @hook-priority 200
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+?>
+<!-- WLS 扩展：搜索区 -->
+<div id="dev-tool-search-area-wls" style="display: none;">
+    <div style="padding: 8px; font-size: 12px; color: #7d7870; display: flex; align-items: center; gap: 8px;">
+        <i class="fa fa-server"></i>
+        <span>WLS (Weline Server) 性能监控</span>
+        <button type="button" id="dev-tool-wls-refresh-btn" class="dev-tool-quick-btn" style="margin-left: auto; background: #8b9a8b; color: #f5f4f0;">
+            <i class="fa fa-refresh"></i> 刷新
+        </button>
+    </div>
+</div>
+<style>
+/* WLS 扩展样式 - 莫兰迪色系 */
+.wls-stats { padding: 12px; }
+.wls-section { margin-bottom: 20px; padding: 16px; background: #f5f4f0; border-radius: 8px; border: 1px solid #d4d0c8; position: relative; overflow: hidden; }
+.wls-section::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, #8b9a8b 0%, #7a8b7a 100%); }
+.wls-section-title { font-size: 14px; font-weight: 600; color: #5c574f !important; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.wls-section-title i { color: #6b7b6b !important; }
+.wls-section { color: #5c574f !important; }
+.wls-section * { color: inherit; }
+.wls-worker-card { background: #faf9f6; border: 1px solid #d4d0c8; border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: all 0.3s ease; }
+.wls-worker-card:hover { border-color: #8b9a8b; box-shadow: 0 4px 12px rgba(139, 154, 139, 0.2); }
+.wls-worker-card.current { border-color: #6b7b6b; background: #dce4dc !important; }
+.wls-worker-card.current .wls-worker-id,
+.wls-worker-card.current .wls-worker-stats,
+.wls-worker-card.current .wls-stat-label,
+.wls-worker-card.current .wls-stat-value,
+.wls-worker-card.current span { color: #4a524a !important; }
+.wls-worker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wls-worker-id { font-weight: 600; color: #5c574f !important; display: flex; align-items: center; gap: 6px; }
+.wls-worker-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.wls-stat-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #d4d0c8; }
+.wls-stat-item:last-child { border-bottom: none; }
+.wls-stat-label { font-size: 12px; color: #7d7870 !important; }
+.wls-stat-value { font-size: 12px; font-weight: 600; color: #5c574f !important; font-family: 'Courier New', monospace; }
+.wls-stat-value.highlight { color: #5a6b5a !important; }
+.wls-summary-bar { background: #dce4dc !important; color: #4a524a !important; margin-bottom: 12px; padding: 8px; border-radius: 4px; font-size: 12px; }
+.wls-no-data { text-align: center; padding: 40px 20px; color: #9a958c; }
+.wls-no-data i { font-size: 48px; color: #c4c0b8; margin-bottom: 12px; }
+.wls-no-data p { margin: 8px 0; }
+.wls-doc-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.wls-doc-link { padding: 8px 16px; background: #8b9a8b; color: #f5f4f0; border-radius: 6px; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s ease; }
+.wls-doc-link:hover { background: #7a8b7a; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(122, 139, 122, 0.35); }
+.wls-request-history { max-height: 200px; overflow-y: auto; }
+.wls-request-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #faf9f6; border-radius: 4px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #8b9a8b; }
+.wls-request-item .worker-info { color: #5a6b5a; font-weight: 500; }
+.wls-request-item .time-info { color: #9a958c; font-size: 11px; }
+/* Worker 小方块 - 莫兰迪 */
+.wls-worker-blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.wls-worker-block {
+    background: #faf9f6 !important;
+    border: 1px solid #d4d0c8 !important;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.wls-worker-block:hover { border-color: #8b9a8b !important; box-shadow: 0 2px 8px rgba(139, 154, 139, 0.2); }
+.wls-worker-block.current { border-color: #6b7b6b !important; background: #dce4dc !important; }
+.wls-worker-block .wls-block-id,
+.wls-worker-block .wls-block-count,
+.wls-worker-block .wls-block-label { color: #5c574f !important; }
+.wls-worker-block.current .wls-block-id,
+.wls-worker-block.current .wls-block-count,
+.wls-worker-block.current .wls-block-label { color: #4a524a !important; }
+.wls-worker-block .wls-block-id { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.wls-worker-block .wls-block-count { font-size: 20px; font-weight: 800; line-height: 1.2; }
+.wls-worker-block .wls-block-label { font-size: 11px; margin-top: 2px; font-weight: 600; }
+</style>
+<script>
+(function() {
+    var wlsRequestHistory = [];
+    function formatUptime(seconds) {
+        if (seconds < 60) return seconds + ' 秒';
+        if (seconds < 3600) { var m = Math.floor(seconds / 60), s = seconds % 60; return m + ' 分 ' + s + ' 秒'; }
+        var h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
+        return h + ' 小时 ' + m + ' 分';
+    }
+    function loadWlsContent() {
+        var content = document.getElementById('dev-tool-content');
+        if (!content) return;
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>检测 WLS 服务...</div></div>';
+        
+        // 使用 WLS 健康检查接口获取服务状态，而不是请求当前页面
+        // /_wls/health?detail=1 返回完整的 JSON 信息
+        fetch('/_wls/health?detail=1', { method: 'GET', cache: 'no-cache' }).then(function(response) {
+            if (!response.ok) {
+                // 非 WLS 模式（返回 404）或非本地请求（返回 403）
+                return { isWls: false };
+            }
+            return response.json().then(function(data) {
+                // 健康检查接口返回的 JSON 格式（参考 worker.php /_wls/health?detail=1）
+                // 字段：status, instance, worker_id, port, connections, active_requests, 
+                //       total_requests, memory_usage, memory_peak, uptime, php_version, ssl, timestamp
+                var memoryMb = data.memory_usage ? (data.memory_usage / 1024 / 1024).toFixed(2) : null;
+                return {
+                    workerId: data.worker_id !== undefined ? String(data.worker_id) : null,
+                    workerPort: data.port ? String(data.port) : null,
+                    workerPid: '-', // 健康检查接口不返回 PID，但可从 X-WLS-Worker-PID 响应头获取（待扩展）
+                    instance: data.instance || 'default',
+                    requestCount: data.total_requests !== undefined ? String(data.total_requests) : '0',
+                    memory: memoryMb,
+                    uptime: data.uptime !== undefined ? String(data.uptime) : '0',
+                    connections: data.connections || 0,
+                    activeRequests: data.active_requests || 0,
+                    isWls: data.status === 'healthy'
+                };
+            });
+        }).catch(function() {
+            // 请求失败（可能是非 WLS 模式，健康检查接口不存在）
+            return { isWls: false };
+        }).then(function(info) {
+            // 兼容旧逻辑
+            var isWls = info.isWls;
+            if (isWls) {
+                wlsRequestHistory.push({ workerId: info.workerId, workerPort: info.workerPort, timestamp: Date.now() });
+                if (wlsRequestHistory.length > 20) wlsRequestHistory.shift();
+            }
+            var html = '<div class="wls-stats">';
+            if (!info.isWls) {
+                html += '<div class="wls-no-data"><i class="fa fa-server"></i><p><strong>未检测到 WLS 服务</strong></p>';
+                html += '<p style="font-size: 12px; color: #999;">当前页面可能由 Apache/Nginx 或 PHP 内置服务器提供</p>';
+                html += '<div class="wls-doc-links" style="justify-content: center;">';
+                html += '<a href="/dev/tool/docs?search=WLS" target="_blank" class="wls-doc-link"><i class="fa fa-book"></i> WLS 使用指南</a>';
+                html += '<a href="/dev/tool/docs?module=Weline_Server" target="_blank" class="wls-doc-link"><i class="fa fa-folder-open"></i> Server 模块文档</a></div></div>';
+            } else {
+                html += '<div class="wls-section"><div class="wls-section-title"><i class="fa fa-cog"></i> 当前请求处理信息</div>';
+                html += '<div class="wls-worker-card current"><div class="wls-worker-header"><div class="wls-worker-id">Worker #' + info.workerId + '</div><span style="font-size: 11px; color: #5a6b5a;">● 运行中</span></div>';
+                html += '<div class="wls-worker-stats">';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">端口</span><span class="wls-stat-value highlight">' + (info.workerPort || '-') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">PID</span><span class="wls-stat-value">' + (info.workerPid || '-') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">实例</span><span class="wls-stat-value">' + (info.instance || 'default') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">已处理请求</span><span class="wls-stat-value">' + (info.requestCount || '0') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">当前连接</span><span class="wls-stat-value">' + (info.connections || '0') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">活跃请求</span><span class="wls-stat-value">' + (info.activeRequests || '0') + '</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">内存使用</span><span class="wls-stat-value">' + (info.memory || '-') + ' MB</span></div>';
+                html += '<div class="wls-stat-item"><span class="wls-stat-label">运行时间</span><span class="wls-stat-value">' + formatUptime(parseInt(info.uptime || '0', 10)) + '</span></div></div></div></div>';
+                html += '<div class="wls-section"><div class="wls-section-title"><i class="fa fa-balance-scale"></i> 各 Worker 分配次数</div>';
+                if (wlsRequestHistory.length > 0) {
+                    var workerStats = {};
+                    wlsRequestHistory.forEach(function(r) {
+                        var k = r.workerId;
+                        workerStats[k] = (workerStats[k] || 0) + 1;
+                    });
+                    var workerIds = Object.keys(workerStats).sort(function(a, b) { return Number(a) - Number(b); });
+                    var workerCount = workerIds.length;
+                    html += '<div class="wls-worker-blocks">';
+                    workerIds.forEach(function(wid) {
+                        var count = workerStats[wid];
+                        var isCurrent = String(wid) === String(info.workerId);
+                        html += '<div class="wls-worker-block' + (isCurrent ? ' current' : '') + '" title="Worker #' + wid + ' 被分配 ' + count + ' 次">';
+                        html += '<div class="wls-worker-block-id">#' + wid + '</div>';
+                        html += '<div class="wls-worker-block-count">' + count + '</div>';
+                        html += '<div class="wls-block-label">次</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                    html += '<div class="wls-summary-bar">请求已分发到 ' + workerCount + ' 个 Worker，共 ' + wlsRequestHistory.length + ' 次</div>';
+                    html += '<div class="wls-section-title" style="margin-top: 12px;"><i class="fa fa-history"></i> 最近请求</div>';
+                    html += '<div class="wls-request-history">';
+                    wlsRequestHistory.slice(-5).reverse().forEach(function(r) {
+                        html += '<div class="wls-request-item"><span class="worker-info">Worker #' + r.workerId + ' (端口: ' + r.workerPort + ')</span><span class="time-info">' + new Date(r.timestamp).toLocaleTimeString() + '</span></div>';
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<p style="font-size: 12px; color: #999;">刷新页面或点击「刷新」多次，即可看到各 Worker 被分配的次数。</p>';
+                }
+                // 攻击监控区域
+                html += '<div class="wls-section"><div class="wls-section-title"><i class="fa fa-shield"></i> 安全监控</div>';
+                html += '<div id="wls-attack-stats" class="wls-attack-stats">';
+                html += '<p style="font-size: 12px; color: #999;">点击刷新查看攻击统计...</p>';
+                html += '</div>';
+                html += '<button type="button" onclick="loadWlsAttackStats()" class="wls-doc-link" style="margin-top: 8px; border: none; cursor: pointer;"><i class="fa fa-refresh"></i> 加载攻击统计</button>';
+                html += '</div>';
+                
+                html += '<div class="wls-section"><div class="wls-section-title"><i class="fa fa-link"></i> 快速链接</div><div class="wls-doc-links">';
+                html += '<a href="/dev/tool/docs?search=WLS" target="_blank" class="wls-doc-link"><i class="fa fa-book"></i> WLS 使用指南</a>';
+                html += '<a href="/dev/tool/docs?module=Weline_Server" target="_blank" class="wls-doc-link"><i class="fa fa-folder-open"></i> Server 模块文档</a>';
+                html += '<a href="/_wls/health" target="_blank" class="wls-doc-link" style="background: #6b7b6b;"><i class="fa fa-heartbeat"></i> 健康检查</a>';
+                html += '<a href="/backend/server/server-monitor" target="_blank" class="wls-doc-link" style="background: #5a6b5a;"><i class="fa fa-dashboard"></i> 监控面板</a>';
+                html += '<a href="/backend/server/server-monitor/attack-log" target="_blank" class="wls-doc-link" style="background: #8b5a5a;"><i class="fa fa-shield"></i> 攻击日志</a></div></div>';
+            }
+            html += '</div>';
+            content.innerHTML = html;
+        }).catch(function() {
+            content.innerHTML = '<div class="dev-tool-empty">检测 WLS 服务时发生错误</div>';
+        });
+    }
+    function register() {
+        if (typeof window.DevToolPanelRegisterExtensionTab === 'function') {
+            window.DevToolPanelRegisterExtensionTab('wls', loadWlsContent);
+            var btn = document.getElementById('dev-tool-wls-refresh-btn');
+            if (btn) btn.onclick = loadWlsContent;
+        } else if (window.DevToolPanel && typeof window.DevToolPanel.registerExtensionTab === 'function') {
+            window.DevToolPanel.registerExtensionTab('wls', loadWlsContent);
+            var btn = document.getElementById('dev-tool-wls-refresh-btn');
+            if (btn) btn.onclick = loadWlsContent;
+        } else {
+            setTimeout(register, 50);
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', register);
+    } else {
+        register();
+    }
+    
+    // 攻击统计加载函数
+    window.loadWlsAttackStats = function() {
+        var container = document.getElementById('wls-attack-stats');
+        if (!container) return;
+        
+        container.innerHTML = '<p style="font-size: 12px; color: #999;"><i class="fa fa-spinner spinning"></i> 加载中...</p>';
+        
+        fetch('<?= $this->getBackendUrl('weline_server/backend/server-monitor/attack-stats', ['days' => 7]) ?>', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function(response) {
+            return response.json();
+        }).then(function(result) {
+            if (!result.success) {
+                container.innerHTML = '<p style="font-size: 12px; color: #c66;">加载失败</p>';
+                return;
+            }
+            var data = result.data;
+            var html = '<div class="wls-attack-summary">';
+            html += '<div class="wls-stat-item"><span class="wls-stat-label">总攻击</span><span class="wls-stat-value" style="color: #a85a5a;">' + (data.total_attacks || 0) + '</span></div>';
+            html += '<div class="wls-stat-item"><span class="wls-stat-label">已拦截</span><span class="wls-stat-value" style="color: #5a8b5a;">' + (data.blocked_attacks || 0) + '</span></div>';
+            html += '<div class="wls-stat-item"><span class="wls-stat-label">CDN通知</span><span class="wls-stat-value">' + (data.cdn_notifications || 0) + '</span></div>';
+            html += '</div>';
+            if (data.by_type && Object.keys(data.by_type).length > 0) {
+                html += '<div style="margin-top: 8px; font-size: 11px; color: #7d7870;">按类型: ';
+                var types = [];
+                for (var t in data.by_type) {
+                    types.push(t + '(' + data.by_type[t] + ')');
+                }
+                html += types.join(', ');
+                html += '</div>';
+            }
+            if (data.top_ips && Object.keys(data.top_ips).length > 0) {
+                html += '<div style="margin-top: 4px; font-size: 11px; color: #7d7870;">Top IP: ';
+                var ips = [];
+                var c = 0;
+                for (var ip in data.top_ips) {
+                    if (++c > 3) break;
+                    ips.push(ip + '(' + data.top_ips[ip] + ')');
+                }
+                html += ips.join(', ');
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }).catch(function(err) {
+            container.innerHTML = '<p style="font-size: 12px; color: #c66;">加载失败: ' + err.message + '</p>';
+        });
+    };
+})();
+</script>

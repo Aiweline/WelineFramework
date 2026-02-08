@@ -105,12 +105,12 @@ class MetaTranslation
      * 设置meta值的翻译（支持scope）
      * 
      * @param string $metaKey meta键
+     * @param string $value 翻译值
      * @param string $scope scope值，如 'default'
      * @param string|null $locale 语言代码
-     * @param string $value 翻译值
      * @return bool 是否保存成功
      */
-    public static function setTranslatedValueWithScope(string $metaKey, string $scope = 'default', ?string $locale = null, string $value): bool
+    public static function setTranslatedValueWithScope(string $metaKey, string $value, string $scope = 'default', ?string $locale = null): bool
     {
         // 构建带scope的翻译键
         $translationKey = '@meta::' . $metaKey;

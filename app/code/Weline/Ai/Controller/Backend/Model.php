@@ -1354,7 +1354,8 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_bulk_activate', '批量激活模型', 'mdi-check-all', '批量激活模型')]
     public function bulkActivate(): string
     {
-        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $bodyParams = $this->request->getBodyParams();
+        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         $ids = $jsonData['ids'] ?? [];
         
         if (empty($ids)) {
@@ -1396,7 +1397,8 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_bulk_deactivate', '批量禁用模型', 'mdi-cancel', '批量禁用模型')]
     public function bulkDeactivate(): string
     {
-        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $bodyParams = $this->request->getBodyParams();
+        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         $ids = $jsonData['ids'] ?? [];
         
         if (empty($ids)) {
@@ -1438,7 +1440,8 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'mdi-delete-sweep', '批量删除模型')]
     public function bulkDelete(): string
     {
-        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $bodyParams = $this->request->getBodyParams();
+        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         $ids = $jsonData['ids'] ?? [];
         
         if (empty($ids)) {

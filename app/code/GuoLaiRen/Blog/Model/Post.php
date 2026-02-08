@@ -32,9 +32,10 @@ class Post extends Model
     public const fields_VIEW_COUNT   = 'view_count';
     public const fields_STATUS       = 'status';
     public const fields_IS_FEATURED  = 'is_featured';
-    public const fields_PUBLISHED_AT = 'published_at';
-    public const fields_CREATED_AT   = 'created_at';
-    public const fields_UPDATED_AT   = 'updated_at';
+    public const fields_PUBLISHED_AT   = 'published_at';
+    public const fields_CREATED_AT     = 'created_at';
+    public const fields_UPDATED_AT     = 'updated_at';
+    public const fields_TREND_PROFILE_ID = 'trend_profile_id';
 
     // 状态常量
     public const STATUS_DRAFT     = 0;
@@ -237,6 +238,13 @@ class Post extends Model
                 'not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP',
                 '更新时间'
             )
+            ->addColumn(
+                self::fields_TREND_PROFILE_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '趋势画像ID（自动发文时填充）'
+            )
             ->addIndex(
                 TableInterface::index_type_KEY,
                 'idx_site_id',
@@ -266,6 +274,12 @@ class Post extends Model
                 'idx_is_featured',
                 [self::fields_IS_FEATURED],
                 '精选索引'
+            )
+            ->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_trend_profile_id',
+                [self::fields_TREND_PROFILE_ID],
+                '趋势画像索引'
             )
             ->create();
     }
@@ -363,6 +377,23 @@ class Post extends Model
                 'idx_is_featured',
                 [self::fields_IS_FEATURED],
                 '精选索引'
+            )->alter();
+        }
+
+        // 趋势自动发文来源画像 ID（用于按站点+画像统计当日已发篇数）
+        if (!$setup->hasField(self::fields_TREND_PROFILE_ID)) {
+            $setup->alterTable()->addColumn(
+                self::fields_TREND_PROFILE_ID,
+                self::fields_CATEGORY_ID,
+                TableInterface::column_type_INTEGER,
+                0,
+                'not null default 0',
+                '趋势画像ID（自动发文时填充）'
+            )->addIndex(
+                TableInterface::index_type_KEY,
+                'idx_trend_profile_id',
+                [self::fields_TREND_PROFILE_ID],
+                '趋势画像索引'
             )->alter();
         }
     }

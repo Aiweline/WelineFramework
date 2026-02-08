@@ -52,8 +52,20 @@ abstract class RequestAbstract extends RequestFilter
      */
     public ?\Weline\Framework\Http\Response $_response = null;
 
+    /**
+     * ServerBag - 服务器变量管理器
+     * @var ServerBag|null
+     */
+    protected ?ServerBag $serverBag = null;
+
     public function __init()
     {
+        // 初始化 ServerBag
+        if ($this->serverBag === null) {
+            $this->serverBag = new ServerBag();
+            $this->serverBag->initFromGlobals();
+        }
+        
         # FIXME 兼容$_GET将"."替换成"_"的情况，暂不清楚$_POST情况，可能第一层键名也会有此情况
         $query_str = $this->getServer('QUERY_STRING');
         if (str_contains($query_str ?? '', '.')) {
@@ -166,16 +178,25 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getRequestArea(): string
     {
+        // WLS 模式：先清除旧的区域标志，避免跨请求状态污染
+        // 这是关键修复：确保每次调用都重新计算区域，不受上一个请求的影响
+        $this->unsetData('backend');
+        $this->unsetData('api_frontend');
+        $this->unsetData('api_backend');
+        
         switch ($this->getServer('WELINE_AREA')) {
-            case 'admin':
+            case 'backend':
+            case 'admin':  // 兼容旧值
                 $area = DataInterface::type_pc_BACKEND;
                 $this->setBackend();
                 break;
-            case 'api':
+            case 'rest_frontend':
+            case 'api':  // 兼容旧值
                 $area = DataInterface::type_api_REST_FRONTEND;
                 $this->setApiFrontend();
                 break;
-            case 'api_admin':
+            case 'rest_backend':
+            case 'api_admin':  // 兼容旧值
                 $area = DataInterface::type_api_BACKEND;
                 $this->setApiBackend();
                 break;
@@ -199,7 +220,8 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getAreaRouter(): mixed
     {
-        return $this->area_router;
+        $areaRoute = $this->getServer('WELINE_AREA_ROUTE');
+        return ($areaRoute !== '' && $areaRoute !== null) ? $areaRoute : $this->area_router;
     }
 
     /**
@@ -252,7 +274,7 @@ abstract class RequestAbstract extends RequestFilter
     }
 
     /**
-     * @DESC         |方法描述
+     * @DESC         |获取服务器变量
      *
      * @Author       秋枫雁飞
      * @Email        aiweline@qq.com
@@ -269,29 +291,46 @@ abstract class RequestAbstract extends RequestFilter
     {
         $filter = RequestFilter::getInstance();
         $filter->init();
+        
+        // 确保 ServerBag 已初始化
+        if ($this->serverBag === null) {
+            $this->serverBag = new ServerBag();
+        }
+        
+        // WLS 模式下，每次调用都需要检查是否需要重新初始化
+        // initFromGlobals() 内部会检查请求 ID 是否变化
+        $this->serverBag->initFromGlobals();
+        
         if ($key) {
             switch ($key) {
                 case self::HEADER:
-                    $params = [];
-                    foreach ($_SERVER as $name => $value) {
-                        if (str_starts_with($name, 'HTTP_')) {
-                            $params[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
-                        }
-                    }
-
-                    break;
+                    // 获取所有 HTTP Headers
+                    return $this->serverBag->getHeaders();
                 default:
-                    $params = $_SERVER[$key] ?? '';
+                    return $this->serverBag->get($key, '');
             }
-        } else {
-            $params = $_SERVER;
         }
-
-        return $params;
+        
+        return $this->serverBag->all();
+    }
+    
+    /**
+     * 获取 ServerBag 实例
+     * 
+     * @return ServerBag
+     */
+    public function getServerBag(): ServerBag
+    {
+        if ($this->serverBag === null) {
+            $this->serverBag = new ServerBag();
+        }
+        // WLS 模式下，每次调用都需要检查是否需要重新初始化
+        $this->serverBag->initFromGlobals();
+        return $this->serverBag;
     }
 
     /**
-     * @DESC         |设置头
+     * @DESC         |设置服务器变量
      *
      * @Author       秋枫雁飞
      * @Email        aiweline@qq.com
@@ -307,7 +346,13 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function setServer(string $key, string $value, bool $reload = false): static
     {
-        $_SERVER[$key] = $value;
+        // 确保 ServerBag 已初始化
+        if ($this->serverBag === null) {
+            $this->serverBag = new ServerBag();
+            $this->serverBag->initFromGlobals();
+        }
+        
+        $this->serverBag->set($key, $value);
         return $this;
     }
 
@@ -320,7 +365,7 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getMethod(): string
     {
-        return $_SERVER['REQUEST_METHOD'] ?? '';
+        return $this->getServerBag()->getMethod();
     }
 
     /**
@@ -345,34 +390,39 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function isMobile(): bool
     {
+        $serverBag = $this->getServerBag();
+        
         //如果有HTTP_X_WAP_PROFILE则一定是移动设备
-        if (isset($_SERVER['HTTP_X_WAP_PROFILE'])) {
+        if ($serverBag->has('HTTP_X_WAP_PROFILE')) {
             return true;
         }
         //如via信息有wap一定是移动设备，但是部分服务商会屏蔽该信息
-        if (isset($_SERVER['HTTP_VIA'])) {
+        $via = $serverBag->get('HTTP_VIA', '');
+        if ($via) {
             //找不到为flase,否则为true
-            return stristr($_SERVER['HTTP_VIA'], 'wap') ? true : false;
+            return stristr($via, 'wap') ? true : false;
         }
         //判断手机发送的客户端标志,兼容性有待提高
-        if (isset($_SERVER['HTTP_USER_AGENT'])) {
+        $userAgent = $serverBag->getUserAgent();
+        if ($userAgent) {
             //从HTTP_USER_AGENT中查找手机浏览器的关键字
             if (preg_match(
                 '/(' . implode('|', self::MOBILE_DEVICE_HEADERS) . ')/i',
-                strtolower($_SERVER['HTTP_USER_AGENT'])
+                strtolower($userAgent)
             )) {
                 return true;
             }
         }
         //协议法，因为有可能不准确，放到最后判断
-        if (isset($_SERVER['HTTP_ACCEPT'])) {
+        $accept = $serverBag->get('HTTP_ACCEPT', '');
+        if ($accept) {
             //如果只支持wml并且不支持html那一定是app
             //如果支持wml和html但是wml在html之前则是app
-            if ((strpos($_SERVER['HTTP_ACCEPT'], 'vnd.wap.wml') !== false)
+            if ((strpos($accept, 'vnd.wap.wml') !== false)
                 && (
-                    strpos($_SERVER['HTTP_ACCEPT'], 'text/html') === false ||
-                    (strpos($_SERVER['HTTP_ACCEPT'], 'vnd.wap.wml')
-                        < strpos($_SERVER['HTTP_ACCEPT'], 'text/html'))
+                    strpos($accept, 'text/html') === false ||
+                    (strpos($accept, 'vnd.wap.wml')
+                        < strpos($accept, 'text/html'))
                 )) {
                 return true;
             }
@@ -381,6 +431,22 @@ abstract class RequestAbstract extends RequestFilter
         return false;
     }
 
+    /**
+     * 失效 URI 缓存
+     * 
+     * WLS 模式下，Url::parser() 会修改 $_SERVER['REQUEST_URI']（去除区域、货币、语言前缀）。
+     * 如果在 parser 之前 getUri() 已被调用并缓存了原始 URI，需要清除缓存。
+     * 
+     * @return static
+     */
+    public function invalidateUriCache(): static
+    {
+        $this->uri = '';
+        $this->origin_uri = '';
+        $this->uri_cache_key = '';
+        return $this;
+    }
+    
     public function getUri(): string
     {
         if ($this->uri !== '') {
@@ -478,30 +544,102 @@ abstract class RequestAbstract extends RequestFilter
         return trim(array_shift($url_exp), '/');
     }
 
+    /**
+     * 获取当前请求的协议（http 或 https）
+     * 
+     * @return string 'http' 或 'https'
+     */
     public function getSsl(): string
     {
-        $ssl = false;
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
-            $ssl = true;
+        return self::detectScheme();
+    }
+    
+    /**
+     * 静态方法：检测当前请求的协议
+     * 可在任何地方调用，无需实例化 Request 对象
+     * 
+     * @return string 'http' 或 'https'
+     */
+    public static function detectScheme(): string
+    {
+        // REQUEST_SCHEME
+        if (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https') {
+            return 'https';
         }
-        if (isset($_SERVER['SERVER_PROTOCOL'])) {
-            if ($_SERVER['SERVER_PROTOCOL'] == 'HTTP/1.1') {
-                $ssl = false;
-            } else {
-                $ssl = true;
-            }
+        
+        // HTTPS 头
+        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === '1')) {
+            return 'https';
         }
-        return $ssl ? 'https' : 'http';
+        
+        // 代理头 X-Forwarded-Proto
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+            return 'https';
+        }
+        
+        // Weline 自定义代理头
+        if (isset($_SERVER['HTTP_WELINE_ORIGINAL_SCHEME']) && $_SERVER['HTTP_WELINE_ORIGINAL_SCHEME'] === 'https') {
+            return 'https';
+        }
+        
+        // 端口 443
+        if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443') {
+            return 'https';
+        }
+        
+        return 'http';
+    }
+    
+    /**
+     * 判断当前请求是否为 HTTPS
+     * 
+     * @return bool
+     */
+    public function isSecure(): bool
+    {
+        return self::detectScheme() === 'https';
     }
 
     public function getBaseHost(): string
     {
-        if ((isset($_SERVER['WELINE_WEBSITE_URL']))) {
-            return $_SERVER['WELINE_WEBSITE_URL'];
+        $serverBag = $this->getServerBag();
+        
+        // 获取当前请求的协议
+        $currentScheme = $this->getSsl();
+        
+        // 获取当前请求的端口（用于后续判断是否需要添加端口）
+        $currentPort = $serverBag->getPort();
+        $isNonStandardPort = ($currentPort != 80 && $currentPort != 443);
+        
+        // 如果有 WELINE_WEBSITE_URL，需要替换协议为当前请求的协议
+        // 并且：如果网站配置中没有端口，但当前请求使用非标准端口，需要添加端口
+        $websiteUrl = $serverBag->get('WELINE_WEBSITE_URL', '');
+        if ($websiteUrl) {
+            // 解析网站 URL
+            $parsed = \parse_url($websiteUrl);
+            $hostPart = $parsed['host'] ?? 'localhost';
+            $urlHasPort = isset($parsed['port']) && $parsed['port'];
+            
+            // 如果网站配置的 URL 有端口，使用配置的端口
+            // 如果没有端口，但当前请求是非标准端口，使用当前请求的端口
+            if ($urlHasPort) {
+                $portSuffix = ':' . $parsed['port'];
+            } elseif ($isNonStandardPort) {
+                // 网站配置没有端口，但当前请求使用非标准端口，添加当前端口
+                $portSuffix = ':' . $currentPort;
+            } else {
+                $portSuffix = '';
+            }
+            
+            return $currentScheme . '://' . $hostPart . $portSuffix;
         }
-        $port = $this->getServer('SERVER_PORT');
-        $host =  $this->getServer('SERVER_NAME')?: $this->getServer('HTTP_HOST');
-        return $this->getSsl() . '://' . $host . ($port == '80' || $port == '443' ? '' : ':' . $port);
+        
+        $host = $serverBag->get('SERVER_NAME', '') ?: $serverBag->getHost();
+        // 如果 host 已经包含端口（如 HTTP_HOST），不重复添加
+        if (\str_contains($host, ':')) {
+            return $currentScheme . '://' . $host;
+        }
+        return $currentScheme . '://' . $host . ($isNonStandardPort ? ':' . $currentPort : '');
     }
 
     public function getPrePath(): string
@@ -526,7 +664,9 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isAjax(): bool
     {
-        if (strtolower($this->getServer('HTTP_X_REQUESTED_WITH')) == strtolower('XMLHttpRequest')) {
+        $serverBag = $this->getServerBag();
+        
+        if ($serverBag->isAjax()) {
             return true;
         }
         return isset($_GET['isAjax']) || isset($_POST['isAjax']);
@@ -534,10 +674,12 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isIframe(): bool
     {
-        if ($this->getServer('HTTP_SEC_FETCH_DEST') == 'iframe') {
+        $serverBag = $this->getServerBag();
+        
+        if ($serverBag->get('HTTP_SEC_FETCH_DEST') == 'iframe') {
             return true;
         }
-        if ($this->getServer('Sec-Fetch-Dest') == 'iframe') {
+        if ($serverBag->get('Sec-Fetch-Dest') == 'iframe') {
             return true;
         }
         return isset($_GET['isIframe']) || isset($_POST['isIframe']);

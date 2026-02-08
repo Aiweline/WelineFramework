@@ -339,6 +339,9 @@ HTML;
             deleteStatus.style.color = '#0c5460';
             deleteStatus.textContent = '正在删除...';
             
+            // 防止重复点击
+            btnConfirmYes.disabled = true;
+            
             // 发起删除请求（使用正确的后台URL）
             fetch('{$removeOrphanWidgetsUrl}', {
                 method: 'POST',
@@ -355,14 +358,20 @@ HTML;
                 if (data.success) {
                     deleteStatus.style.background = '#d4edda';
                     deleteStatus.style.color = '#155724';
-                    deleteStatus.textContent = '✓ 删除成功，页面即将刷新...';
+                    deleteStatus.textContent = '✓ ' + (data.message || '删除成功') + '，即将刷新...';
+                    // 立即隐藏整个警告面板
+                    const panel = document.getElementById('orphan-widgets-warning');
+                    if (panel) {
+                        setTimeout(() => panel.remove(), 800);
+                    }
                     setTimeout(() => {
                         window.location.reload();
                     }, 1000);
                 } else {
                     deleteStatus.style.background = '#f8d7da';
                     deleteStatus.style.color = '#721c24';
-                    deleteStatus.textContent = '✗ 删除失败: ' + (data.message || '未知错误');
+                    deleteStatus.textContent = '✗ ' + (data.message || '删除失败');
+                    btnConfirmYes.disabled = false;
                 }
             })
             .catch(error => {
@@ -370,6 +379,7 @@ HTML;
                 deleteStatus.style.background = '#f8d7da';
                 deleteStatus.style.color = '#721c24';
                 deleteStatus.textContent = '✗ 删除失败，请查看控制台';
+                btnConfirmYes.disabled = false;
             });
         });
     }

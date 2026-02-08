@@ -18,6 +18,7 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrateg
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\IdentifierFormatterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterface;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Debug;
@@ -605,6 +606,23 @@ abstract class QueryAst implements QueryInterface
     }
 
     /**
+     * 原生 SQL 条件
+     *
+     * 用于无法通过结构化 where() 表达的复杂条件（如 OR 分组、SQL 函数、字段对比等）。
+     * 条件会被括号包裹后直接嵌入 WHERE 子句，不做字段名引用处理。
+     *
+     * @param string $sql 原生 SQL 条件表达式
+     * @param string $where_logic 与下一个 where 条件的连接符，默认 AND
+     * @return QueryInterface
+     */
+    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface
+    {
+        // 单元素数组在 buildWheres 中被作为原生 SQL 处理（case 1），默认 AND 连接
+        $this->wheres[] = [$sql];
+        return $this;
+    }
+
+    /**
      * 添加子查询到 WHERE 条件
      * 
      * @param string $field 字段名
@@ -777,7 +795,12 @@ abstract class QueryAst implements QueryInterface
 
     public function total(string $field = '*', string $alias = 'total_count'): int
     {
-        if ($this->fetch_type == 'query') {
+        // 防御性检查：fetch_type 可能因 WLS 常驻内存未正确重置而残留为 'query'
+        // 当 fetch_type == 'query' 但 sql 已被 clear()/reset() 清空时，
+        // 直接构建子查询会产生 "FROM () as total_records" 语法错误
+        $useRawQueryPath = ($this->fetch_type == 'query' && !empty(trim($this->sql)));
+        
+        if ($useRawQueryPath) {
             $this->sql = Tool::rm_sql_limit($this->sql);// 去除限制
             $this->sql = "SELECT COUNT({$field}) AS $alias FROM (" . $this->sql . ") as total_records";
             $this->query($this->sql);
@@ -786,9 +809,25 @@ abstract class QueryAst implements QueryInterface
             if ($this->group_by) {
                 $this->prepareSql('select');
                 $preSql = $this->getSql();
-                $sql = "select count({$field}) as `{$alias}` from ({$preSql}) as total_records";
-                $this->sql = $sql;
-                $this->query($this->sql);
+                // 防御性检查：子查询 SQL 不能为空
+                if (!empty(trim($preSql))) {
+                    $sql = "select count({$field}) as `{$alias}` from ({$preSql}) as total_records";
+                    $this->sql = $sql;
+                    $this->query($this->sql);
+                } else {
+                    // group_by 存在但 SQL 编译为空，降级为简单 COUNT
+                    $savedGroupBy = $this->group_by;
+                    $this->group_by = '';
+                    $savedOrder = $this->order;
+                    $this->order = [];
+                    
+                    $this->fields = "count({$field}) as `{$alias}`";
+                    $this->limit(1, 0);
+                    $this->prepareSql('find');
+                    
+                    $this->order = $savedOrder;
+                    $this->group_by = $savedGroupBy;
+                }
             } else {
                 // 临时保存 ORDER BY，因为 COUNT 查询不需要 ORDER BY
                 // PostgreSQL 要求：使用聚合函数时，ORDER BY 中的列必须出现在 GROUP BY 中
@@ -835,7 +874,7 @@ abstract class QueryAst implements QueryInterface
         $this->reset();
         $this->sql = $sql;
         $this->fetch_type = __FUNCTION__;
-        $this->PDOStatement = $this->getLink()->prepare($sql);
+        $this->PDOStatement = $this->getConnectionInterface()->prepare($sql);
         return $this;
     }
 
@@ -884,7 +923,7 @@ abstract class QueryAst implements QueryInterface
             
                 if ($hasReturning) {
                 // 如果使用 RETURNING，需要使用 prepare/execute 来获取结果
-                $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
                 $this->PDOStatement->execute($this->bound_values);
                 $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
                 // 批量插入时，返回最后一个插入的 ID
@@ -892,23 +931,19 @@ abstract class QueryAst implements QueryInterface
                     $lastRow = end($origin_data);
                     $result = $lastRow[$this->identity_field] ?? reset($lastRow);
                 } else {
-                    $result = $this->getLink()->lastInsertId();
+                    $result = $this->getConnectionInterface()->lastInsertId();
                 }
             } else {
                 // 没有 RETURNING，使用 exec
-                $origin_data = $this->getLink()->exec($this->getSql());
-                if ($origin_data === false) {
-                    $result = false;
-                } else {
-                    $result = $this->getLink()->lastInsertId();
-                }
+                $affected = $this->getConnectionInterface()->execute($this->getSql());
+                $result = $affected >= 0 ? $this->getConnectionInterface()->lastInsertId() : false;
             }
             $origin_data = $result;
             $this->reset();
         } else {
             // 单条语句，使用 prepare/execute
             try {
-                $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                $this->PDOStatement = $this->getConnectionInterface()->prepare($this->sql);
                 $this->PDOStatement->execute($this->bound_values);
             } catch (\PDOException $e) {
                 // 其他错误继续抛出
@@ -989,12 +1024,12 @@ abstract class QueryAst implements QueryInterface
                         }
                     } else {
                         // 尝试使用 lastInsertId
-                        $lastId = $this->getLink()->lastInsertId();
+                        $lastId = $this->getConnectionInterface()->lastInsertId();
                         $result = $lastId !== false ? $lastId : (reset($data) ?? null);
                     }
                 } else {
                     // 没有 RETURNING 结果，使用 lastInsertId
-                    $lastId = $this->getLink()->lastInsertId();
+                    $lastId = $this->getConnectionInterface()->lastInsertId();
                     $result = $lastId !== false ? $lastId : null;
                 }
                 break;
@@ -1090,19 +1125,19 @@ abstract class QueryAst implements QueryInterface
 
     public function beginTransaction(): void
     {
-        $this->getLink()->beginTransaction();
+        $this->getConnectionInterface()->beginTransaction();
     }
 
     public function rollBack(): void
     {
-        if($this->getLink()->inTransaction()) {
-            $this->getLink()->rollBack();
+        if($this->getConnectionInterface()->inTransaction()) {
+            $this->getConnectionInterface()->rollBack();
         }
     }
 
     public function commit(): void
     {
-        $this->getLink()->commit();
+        $this->getConnectionInterface()->commit();
     }
 
     /**
@@ -1209,6 +1244,9 @@ abstract class QueryAst implements QueryInterface
      * 
      * @return PDO 数据库连接对象
      */
+    /**
+     * @deprecated 请使用 getConnectionInterface() 获取连接并调用其方法，后续版本可能移除
+     */
     abstract public function getLink(): PDO;
 
     /**
@@ -1269,13 +1307,16 @@ abstract class QueryAst implements QueryInterface
             if (!isset($this->ast['insert']) || $this->ast['insert'] !== $this->insert) {
                 $this->ast['insert'] = $this->insert;
             }
-            if (!isset($this->ast['update']) || 
-                $this->ast['update']['single'] !== $this->single_updates || 
+            if (!isset($this->ast['update']) ||
+                $this->ast['update']['single'] !== $this->single_updates ||
                 $this->ast['update']['batch'] !== $this->updates) {
                 $this->ast['update'] = [
                     'single' => $this->single_updates,
                     'batch'  => $this->updates,
                 ];
+            }
+            if (!isset($this->ast['dec_inc_updates']) || $this->ast['dec_inc_updates'] !== $this->dec_inc_updates) {
+                $this->ast['dec_inc_updates'] = $this->dec_inc_updates;
             }
             // 添加索引排序信息到 AST
             if (!isset($this->ast['index_sort_keys']) || $this->ast['index_sort_keys'] !== $this->_index_sort_keys) {
@@ -1309,6 +1350,7 @@ abstract class QueryAst implements QueryInterface
                     'single' => $this->single_updates,
                     'batch'  => $this->updates,
                 ],
+                'dec_inc_updates' => $this->dec_inc_updates,
                 'index_sort_keys' => $this->_index_sort_keys,
                 'unit_primary_keys' => $this->_unit_primary_keys,
             ];
@@ -1392,32 +1434,18 @@ abstract class QueryAst implements QueryInterface
             return false;
         }
         
-        # 遍历所有数据项，查找是否有其他项具有相同的依赖字段值
-        $duplicate_count = 0;
+        # O(n)：先构建除当前项外所有项的签名集合，再判断当前签名是否在其中
+        $other_signatures = [];
         foreach ($all_items as $other_item) {
-            if (!is_array($other_item)) {
+            if (!is_array($other_item) || $other_item === $current_item) {
                 continue;
             }
-            
-            # 跳过自身（通过比较数组引用或内容）
-            if ($other_item === $current_item) {
-                continue;
-            }
-            
-            # 构建其他项的依赖字段值签名
             $other_signature = $this->buildDependencySignature($other_item, $update_dependency_fields);
-            if ($other_signature === null) {
-                continue;
-            }
-            
-            # 如果签名相同，说明存在重复
-            if ($current_signature === $other_signature) {
-                $duplicate_count++;
+            if ($other_signature !== null) {
+                $other_signatures[$other_signature] = true;
             }
         }
-        
-        # 如果找到重复项，返回 true
-        return $duplicate_count > 0;
+        return isset($other_signatures[$current_signature]);
     }
 
     /**
@@ -1465,7 +1493,17 @@ abstract class QueryAst implements QueryInterface
         $real_sql = $this->sql;
         foreach ($this->bound_values as $where_key => $wheres_value) {
             if (is_string($wheres_value)) {
-                $wheres_value = $this->getLink()->quote($wheres_value);
+                // 连接可能在异常路径下不可用（如 catch 块拼接错误消息），
+                // 此时用简单引号包裹代替 PDO::quote()，仅用于日志/调试
+                if ($this->connection !== null) {
+                    try {
+                        $wheres_value = $this->getConnectionInterface()->quote($wheres_value);
+                    } catch (\Throwable) {
+                        $wheres_value = "'" . addslashes($wheres_value) . "'";
+                    }
+                } else {
+                    $wheres_value = "'" . addslashes($wheres_value) . "'";
+                }
             }
             $real_sql = str_replace($where_key, (string)$wheres_value, $real_sql);
         }
@@ -1514,7 +1552,7 @@ abstract class QueryAst implements QueryInterface
         }
         $this->backup($backup_file, $table);
         # 清理表
-        $PDOStatement = $this->getLink()->prepare("TRUNCATE TABLE $table");
+        $PDOStatement = $this->getConnectionInterface()->prepare("TRUNCATE TABLE $table");
         $PDOStatement->execute();
         return $this;
     }
@@ -1528,7 +1566,7 @@ abstract class QueryAst implements QueryInterface
             throw new Exception(__('请先指定要操作的表，表名不能为空!'));
         }
         // 获取表的创建语句
-        $PDOStatement = $this->getLink()->prepare("SHOW CREATE TABLE $table");
+        $PDOStatement = $this->getConnectionInterface()->prepare("SHOW CREATE TABLE $table");
         $PDOStatement->execute();
         $createTableResult = $PDOStatement->fetchAll(PDO::FETCH_ASSOC);
         $createTableSql = $createTableResult[0]['Create Table'];
@@ -1559,7 +1597,7 @@ abstract class QueryAst implements QueryInterface
         fwrite($file, "-- $table 建表语句" . PHP_EOL);
         fwrite($file, $createTableSql . ';' . PHP_EOL);
         // 获取表的数据并写入备份文件
-        $PDOStatement = $this->getLink()->prepare("SELECT * FROM $table");
+        $PDOStatement = $this->getConnectionInterface()->prepare("SELECT * FROM $table");
         $PDOStatement->execute();
         $results = $PDOStatement->fetchAll(PDO::FETCH_ASSOC);
         fwrite($file, PHP_EOL);

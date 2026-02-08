@@ -74,5 +74,46 @@ class CustomerServiceConfig extends Model
     {
         return $this->setData(self::fields_value, $value);
     }
+
+    /**
+     * 按键名获取配置值
+     * @param string $key 配置键
+     * @param string $default 默认值
+     * @return string
+     */
+    public function getConfigValue(string $key, string $default = ''): string
+    {
+        $this->reset()
+            ->where(self::fields_key, $key)
+            ->find()
+            ->fetch();
+
+        return $this->getId() ? $this->getValue() : $default;
+    }
+
+    /**
+     * 设置配置项（存在则更新，不存在则新增）
+     * @param string $key 配置键
+     * @param string $value 配置值
+     */
+    public function setConfigValue(string $key, string $value): void
+    {
+        $this->reset()
+            ->where(self::fields_key, $key)
+            ->find()
+            ->fetch();
+
+        if ($this->getId()) {
+            $this->setValue($value)
+                ->setData(self::fields_updated_at, date('Y-m-d H:i:s'))
+                ->save();
+        } else {
+            $this->reset()
+                ->setKey($key)
+                ->setValue($value)
+                ->setData(self::fields_created_at, date('Y-m-d H:i:s'))
+                ->save();
+        }
+    }
 }
 

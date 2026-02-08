@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="<?= $this->getLang() ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= __('系统安装') ?> - Weline Framework</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --terminal-bg: #0c0c0c;
+            --terminal-text: #22c55e;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-color) 0%, #1e1b4b 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            flex: 1;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .header p {
+            color: var(--text-muted);
+        }
+        
+        /* 步骤指示器 */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            color: var(--text-muted);
+            transition: all 0.3s;
+        }
+        
+        .step.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        
+        .step.completed {
+            background: var(--success-color);
+            border-color: var(--success-color);
+            color: white;
+        }
+        
+        .step-icon {
+            width: 24px;
+            height: 24px;
+        }
+        
+        /* 卡片 */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* 终端样式 */
+        .terminal {
+            background: var(--terminal-bg);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            height: 300px;
+            overflow-y: auto;
+            color: var(--terminal-text);
+        }
+        
+        .terminal-line {
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .terminal-line.error {
+            color: var(--error-color);
+        }
+        
+        .terminal-line.warning {
+            color: var(--warning-color);
+        }
+        
+        .terminal-line.success {
+            color: var(--success-color);
+        }
+        
+        .terminal-line.info {
+            color: #60a5fa;
+        }
+        
+        /* 表单 */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-color);
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        /* 按钮 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+        
+        .btn-primary:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        /* 状态指示 */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-badge.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success-color);
+        }
+        
+        .status-badge.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error-color);
+        }
+        
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning-color);
+        }
+        
+        /* 检测结果列表 */
+        .check-list {
+            list-style: none;
+        }
+        
+        .check-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .check-item:last-child {
+            border-bottom: none;
+        }
+        
+        .check-item-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* 隐藏的步骤面板 */
+        .step-panel {
+            display: none;
+        }
+        
+        .step-panel.active {
+            display: block;
+        }
+        
+        /* 完成页面 */
+        .complete-info {
+            background: var(--bg-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .complete-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .complete-info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .complete-info-value {
+            font-family: monospace;
+            color: var(--primary-color);
+        }
+        
+        /* 加载动画 */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 响应式 */
+        @media (max-width: 640px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .steps {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><?= __('Weline Framework') ?></h1>
+            <p><?= __('系统安装向导') ?></p>
+        </div>
+        
+        <!-- 步骤指示器 -->
+        <div class="steps" id="steps">
+            <?php foreach ($steps as $index => $step): ?>
+            <div class="step <?= $index === 0 ? 'active' : '' ?>" data-step="<?= $step['id'] ?>">
+                <span class="step-name"><?= $step['name'] ?></span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <!-- 步骤 1: 环境检测 -->
+        <div class="step-panel active" id="panel-env">
+            <div class="card">
+                <div class="card-title">
+                    <span><?= __('环境检测') ?></span>
+                    <span id="env-status"></span>
+                </div>
+                
+                <div class="terminal" id="terminal">
+                    <div class="terminal-line info"><?= __('点击下方按钮开始检测环境...') ?></div>
+                </div>
+                
+                <div id="env-result" style="display: none; margin-top: 1rem;">
+                    <h4 style="margin-bottom: 0.5rem;"><?= __('检测结果') ?></h4>
+                    <ul class="check-list" id="check-list"></ul>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-check-env"><?= __('开始检测') ?></button>
+                    <button class="btn btn-primary" id="btn-fix-env" style="display: none;"><?= __('尝试修复') ?></button>
+                    <button class="btn btn-success" id="btn-next-db" style="display: none;"><?= __('下一步') ?></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤 2: 数据库配置 -->
+        <div class="step-panel" id="panel-db">
+            <div class="card">
+                <div class="card-title"><?= __('数据库配置') ?></div>
+                
+                <form id="form-db">
+                    <input type="hidden" name="form_key" value="<?= $form_key ?>">
+                    
+                    <div class="form-group">
+                        <label class="form-label"><?= __('数据库类型') ?></label>
+                        <select class="form-input" name="type" id="db-type">
+                            <option value="mysql">MySQL</option>
+                            <option value="pgsql">PostgreSQL</option>
+                            <option value="sqlite">SQLite</option>
+                        </select>
+                    </div>
+                    
+                    <div id="db-connection-fields">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label"><?= __('主机地址') ?></label>
+                                <input type="text" class="form-input" name="hostname" value="localhost">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label"><?= __('端口') ?></label>
+                                <input type="text" class="form-input" name="hostport" value="3306">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label"><?= __('数据库名') ?></label>
+                            <input type="text" class="form-input" name="database" value="weline">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label"><?= __('用户名') ?></label>
+                                <input type="text" class="form-input" name="username" value="root">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label"><?= __('密码') ?></label>
+                                <input type="password" class="form-input" name="password">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="db-sqlite-fields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label"><?= __('数据库文件路径') ?></label>
+                            <input type="text" class="form-input" name="sqlite_path" value="<?= APP_PATH ?>etc/db.sqlite">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label"><?= __('表前缀') ?></label>
+                        <input type="text" class="form-input" name="prefix" value="w_">
+                    </div>
+                </form>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-test-db"><?= __('测试连接') ?></button>
+                    <button class="btn btn-success" id="btn-next-admin" disabled><?= __('下一步') ?></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤 3: 管理员设置 -->
+        <div class="step-panel" id="panel-admin">
+            <div class="card">
+                <div class="card-title"><?= __('管理员设置') ?></div>
+                
+                <form id="form-admin">
+                    <input type="hidden" name="form_key" value="<?= $form_key ?>">
+                    
+                    <div class="form-group">
+                        <label class="form-label"><?= __('后台入口密钥（留空自动生成）') ?></label>
+                        <input type="text" class="form-input" name="admin_key" placeholder="<?= __('例如：admin_secret_key') ?>">
+                        <small style="color: var(--text-muted);"><?= __('访问后台的 URL 路径，如：/your_key/login') ?></small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label"><?= __('API 后台入口密钥（留空自动生成）') ?></label>
+                        <input type="text" class="form-input" name="api_admin_key" placeholder="<?= __('例如：api_secret_key') ?>">
+                    </div>
+                </form>
+                
+                <div class="btn-group">
+                    <button class="btn btn-success" id="btn-complete"><?= __('完成安装') ?></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 步骤 4: 安装完成 -->
+        <div class="step-panel" id="panel-complete">
+            <div class="card">
+                <div class="card-title" style="color: var(--success-color);">
+                    ✓ <?= __('安装完成') ?>
+                </div>
+                
+                <p><?= __('恭喜！系统已成功安装。请妥善保存以下信息：') ?></p>
+                
+                <div class="complete-info" id="complete-info"></div>
+                
+                <div class="btn-group">
+                    <a class="btn btn-primary" id="btn-goto-admin" href="#"><?= __('进入后台') ?></a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    (function() {
+        const formKey = '<?= $form_key ?>';
+        const baseUrl = '<?= $this->getUrl('install') ?>';
+        let currentStep = 'env';
+        let envPassed = false;
+        
+        // DOM 元素
+        const terminal = document.getElementById('terminal');
+        const btnCheckEnv = document.getElementById('btn-check-env');
+        const btnFixEnv = document.getElementById('btn-fix-env');
+        const btnNextDb = document.getElementById('btn-next-db');
+        const btnTestDb = document.getElementById('btn-test-db');
+        const btnNextAdmin = document.getElementById('btn-next-admin');
+        const btnComplete = document.getElementById('btn-complete');
+        const dbType = document.getElementById('db-type');
+        
+        // 终端输出
+        function terminalLog(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.className = 'terminal-line ' + type;
+            line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // 切换步骤
+        function goToStep(step) {
+            currentStep = step;
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('panel-' + step).classList.add('active');
+            
+            document.querySelectorAll('.step').forEach((s, i) => {
+                const stepId = s.dataset.step;
+                s.classList.remove('active', 'completed');
+                if (stepId === step) {
+                    s.classList.add('active');
+                } else if (['env', 'db', 'admin', 'complete'].indexOf(stepId) < ['env', 'db', 'admin', 'complete'].indexOf(step)) {
+                    s.classList.add('completed');
+                }
+            });
+        }
+        
+        // 环境检测
+        btnCheckEnv.addEventListener('click', async function() {
+            this.disabled = true;
+            terminal.innerHTML = '';
+            terminalLog('<?= __('开始环境检测...') ?>');
+            
+            try {
+                const res = await fetch(baseUrl + '/envCheck');
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    const result = data.data.result;
+                    const requirements = data.data.requirements;
+                    
+                    // 显示 PHP 版本
+                    terminalLog('PHP ' + result.php_version, 'success');
+                    
+                    // 显示检测详情
+                    for (const [key, detail] of Object.entries(result.details)) {
+                        terminalLog(key + ': ' + detail.status, detail.passed ? 'success' : 'error');
+                    }
+                    
+                    if (data.data.passed) {
+                        terminalLog('<?= __('环境检测通过 ✓') ?>', 'success');
+                        document.getElementById('env-status').innerHTML = '<span class="status-badge success">✓ <?= __('通过') ?></span>';
+                        envPassed = true;
+                        btnNextDb.style.display = 'inline-flex';
+                        btnFixEnv.style.display = 'none';
+                    } else {
+                        terminalLog('<?= __('环境检测未通过') ?>', 'error');
+                        document.getElementById('env-status').innerHTML = '<span class="status-badge error">✗ <?= __('未通过') ?></span>';
+                        
+                        // 显示问题
+                        if (result.missing_extensions.length > 0) {
+                            terminalLog('<?= __('缺失扩展') ?>: ' + result.missing_extensions.join(', '), 'error');
+                        }
+                        if (result.disabled_functions.length > 0) {
+                            terminalLog('<?= __('被禁用函数') ?>: ' + result.disabled_functions.join(', '), 'error');
+                        }
+                        
+                        btnFixEnv.style.display = 'inline-flex';
+                    }
+                } else {
+                    terminalLog(data.msg || '<?= __('检测失败') ?>', 'error');
+                }
+            } catch (e) {
+                terminalLog('<?= __('请求失败') ?>: ' + e.message, 'error');
+            }
+            
+            this.disabled = false;
+        });
+        
+        // 环境修复（SSE）
+        btnFixEnv.addEventListener('click', function() {
+            this.disabled = true;
+            terminalLog('<?= __('开始环境修复...') ?>');
+            
+            const evtSource = new EventSource(baseUrl + '/envInstallStream');
+            
+            evtSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const type = data.type;
+                const msg = data.msg || '';
+                
+                switch (type) {
+                    case 'start':
+                    case 'step':
+                        terminalLog(msg, 'info');
+                        break;
+                    case 'success':
+                        terminalLog(msg, 'success');
+                        break;
+                    case 'warning':
+                        terminalLog(msg, 'warning');
+                        if (data.guide) {
+                            terminalLog('  <?= __('位置') ?>: ' + (data.guide.location || ''), 'warning');
+                            terminalLog('  <?= __('操作') ?>: ' + (data.guide.action || ''), 'warning');
+                        }
+                        break;
+                    case 'error':
+                        terminalLog(msg, 'error');
+                        break;
+                    case 'complete':
+                        evtSource.close();
+                        btnFixEnv.disabled = false;
+                        if (data.success) {
+                            terminalLog('<?= __('修复完成') ?>', 'success');
+                            document.getElementById('env-status').innerHTML = '<span class="status-badge success">✓ <?= __('通过') ?></span>';
+                            envPassed = true;
+                            btnNextDb.style.display = 'inline-flex';
+                            btnFixEnv.style.display = 'none';
+                        } else {
+                            terminalLog('<?= __('部分问题仍需手动处理') ?>', 'warning');
+                        }
+                        break;
+                }
+            };
+            
+            evtSource.onerror = function() {
+                evtSource.close();
+                terminalLog('<?= __('连接中断') ?>', 'error');
+                btnFixEnv.disabled = false;
+            };
+        });
+        
+        // 下一步 -> 数据库
+        btnNextDb.addEventListener('click', () => goToStep('db'));
+        
+        // 数据库类型切换
+        dbType.addEventListener('change', function() {
+            const isSqlite = this.value === 'sqlite';
+            document.getElementById('db-connection-fields').style.display = isSqlite ? 'none' : 'block';
+            document.getElementById('db-sqlite-fields').style.display = isSqlite ? 'block' : 'none';
+        });
+        
+        // 测试数据库连接
+        btnTestDb.addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = '<?= __('测试中...') ?>';
+            
+            const formData = new FormData(document.getElementById('form-db'));
+            
+            try {
+                const res = await fetch(baseUrl + '/dbConfig', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    alert('<?= __('连接成功！') ?>');
+                    btnNextAdmin.disabled = false;
+                } else {
+                    alert(data.msg || '<?= __('连接失败') ?>');
+                }
+            } catch (e) {
+                alert('<?= __('请求失败') ?>: ' + e.message);
+            }
+            
+            this.disabled = false;
+            this.textContent = '<?= __('测试连接') ?>';
+        });
+        
+        // 下一步 -> 管理员
+        btnNextAdmin.addEventListener('click', () => goToStep('admin'));
+        
+        // 完成安装
+        btnComplete.addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = '<?= __('安装中...') ?>';
+            
+            const formData = new FormData(document.getElementById('form-admin'));
+            
+            try {
+                const res = await fetch(baseUrl + '/complete', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    // 显示完成信息
+                    const info = data.data;
+                    document.getElementById('complete-info').innerHTML = `
+                        <div class="complete-info-item">
+                            <span><?= __('后台入口密钥') ?></span>
+                            <span class="complete-info-value">${info.admin_key}</span>
+                        </div>
+                        <div class="complete-info-item">
+                            <span><?= __('API 后台密钥') ?></span>
+                            <span class="complete-info-value">${info.api_admin_key}</span>
+                        </div>
+                        <div class="complete-info-item">
+                            <span><?= __('后台地址') ?></span>
+                            <span class="complete-info-value">${info.admin_url}</span>
+                        </div>
+                    `;
+                    document.getElementById('btn-goto-admin').href = info.admin_url;
+                    goToStep('complete');
+                } else {
+                    alert(data.msg || '<?= __('安装失败') ?>');
+                    this.disabled = false;
+                    this.textContent = '<?= __('完成安装') ?>';
+                }
+            } catch (e) {
+                alert('<?= __('请求失败') ?>: ' + e.message);
+                this.disabled = false;
+                this.textContent = '<?= __('完成安装') ?>';
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -250,6 +250,127 @@ class Category extends BackendController
         }
     }
 
+    // ─── Offcanvas 新建/编辑（iframe 内加载） ───
+
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::category_create', '新建分类(Offcanvas)', '', '', 'GuoLaiRen_Blog::category')]
+    public function getOffcanvasCreate(): string
+    {
+        $this->assign('category', null);
+        $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/category/offcanvas-create'));
+        $websiteId = WebsiteData::getWebsiteId();
+        $this->assign('parent_options', CategoryModel::getFlatCategoryList(0, $websiteId));
+        $this->assign('sites', $this->getSiteOptions());
+        return $this->fetch('offcanvas_form');
+    }
+
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::category_create_post', '新建分类提交(Offcanvas)', '', '', 'GuoLaiRen_Blog::category')]
+    public function postOffcanvasCreate(): void
+    {
+        try {
+            $this->saveCategory();
+            MessageManager::success(__('分类已创建'));
+        } catch (\Throwable $e) {
+            MessageManager::error($e->getMessage());
+        }
+        $this->redirect('blog/backend/category/offcanvas-create');
+    }
+
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::category_edit', '编辑分类(Offcanvas)', '', '', 'GuoLaiRen_Blog::category')]
+    public function getOffcanvasEdit(): string
+    {
+        $id       = (int)$this->request->getGet('id', 0);
+        $category = clone $this->categoryModel;
+        $category->clear()->load($id);
+
+        if (!$category->getId()) {
+            MessageManager::error(__('分类不存在'));
+            return $this->fetch('offcanvas_form');
+        }
+
+        $this->assign('category', $category);
+        $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('blog/backend/category/offcanvas-edit', ['id' => $id]));
+        $websiteId = WebsiteData::getWebsiteId();
+        $this->assign('parent_options', CategoryModel::getFlatCategoryList($id, $websiteId));
+        $this->assign('sites', $this->getSiteOptions());
+        return $this->fetch('offcanvas_form');
+    }
+
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::category_edit_post', '编辑分类提交(Offcanvas)', '', '', 'GuoLaiRen_Blog::category')]
+    public function postOffcanvasEdit(): void
+    {
+        $id = (int)$this->request->getGet('id', 0);
+        try {
+            $category = clone $this->categoryModel;
+            $category->clear()->load($id);
+            if (!$category->getId()) {
+                throw new \Exception(__('分类不存在'));
+            }
+            $this->saveCategory($category);
+            MessageManager::success(__('分类已保存'));
+        } catch (\Throwable $e) {
+            MessageManager::error($e->getMessage());
+        }
+        $this->redirect('blog/backend/category/offcanvas-edit', ['id' => $id]);
+    }
+
+    /**
+     * 提取公共保存逻辑
+     */
+    private function saveCategory(?CategoryModel $category = null): void
+    {
+        $data = $this->request->getPost();
+
+        $name = trim((string)($data['name'] ?? ''));
+        $slug = trim((string)($data['slug'] ?? ''));
+        if ($name === '' || $slug === '') {
+            throw new \Exception(__('名称和URL别名不能为空'));
+        }
+
+        $websiteId = (int)($data['site_id'] ?? 0);
+        if (!$websiteId && $category) {
+            $websiteId = (int)($category->getData(CategoryModel::fields_SITE_ID) ?? 0);
+        }
+        if (!$websiteId) {
+            $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+        }
+
+        // 别名唯一性校验（同一网站内唯一）
+        $exists = clone $this->categoryModel;
+        $exists->clear()->where(CategoryModel::fields_SLUG, $slug);
+        if ($category && $category->getId()) {
+            $exists->where(CategoryModel::fields_ID, $category->getId(), '!=', 'AND');
+        }
+        if ($websiteId) {
+            $exists->where(CategoryModel::fields_SITE_ID, $websiteId);
+        }
+        $exists->find()->fetch();
+        if ($exists->getId()) {
+            throw new \Exception(__('URL别名已存在，请更换一个'));
+        }
+
+        $parentId = (int)($data['parent_id'] ?? 0);
+        if ($category && $parentId === (int)$category->getId()) {
+            throw new \Exception(__('不能将自己设为父级分类'));
+        }
+
+        if ($category === null) {
+            $category = clone $this->categoryModel;
+        }
+
+        $category->setData(CategoryModel::fields_NAME, $name)
+            ->setData(CategoryModel::fields_SLUG, $slug)
+            ->setData(CategoryModel::fields_SITE_ID, $websiteId)
+            ->setData(CategoryModel::fields_DESCRIPTION, (string)($data['description'] ?? ''))
+            ->setData(CategoryModel::fields_COVER_IMAGE, (string)($data['cover_image'] ?? ''))
+            ->setData(CategoryModel::fields_PARENT_ID, $parentId)
+            ->setData(CategoryModel::fields_SORT_ORDER, (int)($data['sort_order'] ?? 0))
+            ->setData(CategoryModel::fields_STATUS, (int)($data['status'] ?? CategoryModel::STATUS_ENABLED))
+            ->setData(CategoryModel::fields_META_TITLE, (string)($data['meta_title'] ?? ''))
+            ->setData(CategoryModel::fields_META_DESCRIPTION, (string)($data['meta_description'] ?? ''))
+            ->setData(CategoryModel::fields_META_KEYWORDS, (string)($data['meta_keywords'] ?? ''))
+            ->save();
+    }
+
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::category_delete', '删除分类', 'mdi mdi-delete', '删除博客分类', 'GuoLaiRen_Blog::category')]
     public function delete()
     {
@@ -281,7 +402,7 @@ class Category extends BackendController
                 throw new \Exception(__('该分类下还有文章，无法删除'));
             }
 
-            $category->delete();
+            $category->delete()->fetch();
             MessageManager::success(__('分类已删除'));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());

@@ -1823,6 +1823,7 @@ function saveGeneratedComponentToLocal(componentData) {
     try {
         const data = {
             ...componentData,
+            params: _aiWorkshop?.params || null,
             savedAt: new Date().toISOString(),
             styleCode: currentStyleCode
         };
@@ -1862,161 +1863,1113 @@ function clearGeneratedComponentFromLocal() {
     }
 }
 
-// 检查是否有未保存的AI组件，提示用户恢复
+// 检查是否有未保存的AI组件，直接打开工坊并恢复到微调阶段
 function checkUnsavedAiComponent() {
     const savedComponent = loadGeneratedComponentFromLocal();
     if (savedComponent && savedComponent.component) {
-        // 显示恢复提示
-        Swal.fire({
-            title: '<i class="mdi mdi-restore"></i> <?= __('发现未保存的AI组件') ?>',
-            html: `
-                <div style="text-align: left;">
-                    <p><?= __('您上次生成的AI组件尚未保存：') ?></p>
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <strong>${savedComponent.component.name || '<?= __('未命名组件') ?>'}</strong>
-                            <br><small class="text-muted">${savedComponent.component.description || ''}</small>
-                            <br><small class="text-muted"><?= __('保存时间') ?>: ${new Date(savedComponent.savedAt).toLocaleString()}</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small"><?= __('您可以恢复继续编辑，或者丢弃重新开始。') ?></p>
-                </div>
-            `,
-            width: '500px',
-            showCancelButton: true,
-            showDenyButton: true,
-            confirmButtonText: '<i class="mdi mdi-restore"></i> <?= __('恢复') ?>',
-            denyButtonText: '<i class="mdi mdi-delete"></i> <?= __('丢弃') ?>',
-            cancelButtonText: '<?= __('稍后') ?>',
-            confirmButtonColor: '#667eea',
-            denyButtonColor: '#dc3545',
-            customClass: { container: 'swal2-dark-theme' }
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // 恢复组件（包括最终提示词）
-                window.currentGeneratedComponent = {
-                    component: savedComponent.component,
-                    templateContent: savedComponent.templateContent,
-                    validation: savedComponent.validation || { valid: true },
-                    preview: savedComponent.preview || '',
-                    finalPrompt: savedComponent.finalPrompt || ''
-                };
-                showGeneratedComponent({
-                    component: savedComponent.component,
-                    validation: savedComponent.validation || { valid: true },
-                    preview: savedComponent.preview || '',
-                    result: savedComponent.result,
-                    final_prompt: savedComponent.finalPrompt || ''
-                });
-            } else if (result.isDenied) {
-                // 丢弃
-                clearGeneratedComponentFromLocal();
-            }
-            // 取消则什么都不做
-        });
+        // 直接打开 AI 工坊，恢复逻辑在 openAiGenerateComponent 的 didOpen 中处理
+        openAiGenerateComponent();
     }
 }
 
-// 打开AI生成组件弹窗
+// ============================================================
+// AI 组件工坊 — 一体化面板（描述→生成→预览→保存）
+// ============================================================
+
+// 当前面板状态
+let _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
+
+// 打开AI组件工坊
 function openAiGenerateComponent() {
-    if (typeof Swal === 'undefined') {
-        alert('<?= __('SweetAlert2 未加载') ?>');
-        return;
-    }
+    if (typeof Swal === 'undefined') { alert('SweetAlert2 未加载'); return; }
     
-    // 加载上次保存的参数
-    const savedParams = loadAiGenerationParams();
-    const lastRegion = savedParams?.region || 'content';
-    const lastName = savedParams?.name || '';
-    const lastDesc = savedParams?.description || '';
-    const lastStyle = savedParams?.style || 'modern';
-    const lastFields = savedParams?.fields || '';
-    const lastRefComponent = savedParams?.referenceComponent || '';
+    _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
+    const saved = loadAiGenerationParams();
+    const s = saved || {};
+    
+    // 检查是否有本地保存的未提交组件（可直接恢复到微调阶段）
+    const recoverable = loadGeneratedComponentFromLocal();
     
     Swal.fire({
-        title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 生成组件') ?>',
-        html: `
-            <div style="text-align: left;">
-                ${savedParams ? `<div class="alert alert-info mb-3 py-2 small"><i class="mdi mdi-history"></i> <?= __('已加载上次的生成参数') ?> <a href="javascript:void(0)" onclick="clearAiParams()" class="float-end"><?= __('清除') ?></a></div>` : ''}
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('组件类型') ?></label>
-                    <select id="aiComponentRegion" class="form-select" onchange="loadReferenceComponents(this.value)">
-                        <option value="header" ${lastRegion === 'header' ? 'selected' : ''}><?= __('头部组件 (Header)') ?></option>
-                        <option value="content" ${lastRegion === 'content' ? 'selected' : ''}><?= __('内容组件 (Content)') ?></option>
-                        <option value="footer" ${lastRegion === 'footer' ? 'selected' : ''}><?= __('底部组件 (Footer)') ?></option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('参考组件') ?> <small class="text-muted">(<?= __('推荐选择，生成更稳定') ?>)</small></label>
-                    <select id="aiReferenceComponent" class="form-select">
-                        <option value=""><?= __('加载中...') ?></option>
-                    </select>
-                    <small class="text-muted"><?= __('选择一个现有组件作为参考，AI会基于其结构生成新组件') ?></small>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('组件名称') ?></label>
-                    <input type="text" id="aiComponentName" class="form-control" placeholder="<?= __('例如：产品展示卡片') ?>" value="${lastName.replace(/"/g, '&quot;')}">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('组件描述') ?></label>
-                    <textarea id="aiComponentDesc" class="form-control" rows="3" placeholder="<?= __('详细描述组件的功能、样式和内容要求...') ?>">${lastDesc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('参考样式') ?></label>
-                    <select id="aiComponentStyle" class="form-select">
-                        <option value="modern" ${lastStyle === 'modern' ? 'selected' : ''}><?= __('现代简约') ?></option>
-                        <option value="card" ${lastStyle === 'card' ? 'selected' : ''}><?= __('卡片式') ?></option>
-                        <option value="gradient" ${lastStyle === 'gradient' ? 'selected' : ''}><?= __('渐变背景') ?></option>
-                        <option value="dark" ${lastStyle === 'dark' ? 'selected' : ''}><?= __('深色主题') ?></option>
-                        <option value="minimal" ${lastStyle === 'minimal' ? 'selected' : ''}><?= __('极简风格') ?></option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold"><?= __('配置字段') ?> <small class="text-muted">(<?= __('可选，每行一个') ?>)</small></label>
-                    <textarea id="aiComponentFields" class="form-control" rows="3" placeholder="<?= __('标题:text:默认标题\\n描述:textarea:默认描述\\n按钮文字:text:立即下载') ?>">${lastFields.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                    <small class="text-muted"><?= __('格式：字段名:类型:默认值，类型可选：text, textarea, select, color, image') ?></small>
-                </div>
-            </div>
-        `,
-        width: '600px',
-        showCancelButton: true,
-        confirmButtonText: '<i class="mdi mdi-robot"></i> <?= __('生成组件') ?>',
-        cancelButtonText: '<?= __('取消') ?>',
-        confirmButtonColor: '#667eea',
-        customClass: { container: 'swal2-dark-theme' },
+        title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 组件工坊') ?>',
+        html: _buildWorkshopHtml(s),
+        width: '820px',
+        showConfirmButton: false,
+        showCancelButton: false,
+        allowOutsideClick: false,
+        customClass: { container: 'swal2-dark-theme', popup: 'ai-workshop-popup' },
         didOpen: () => {
-            // 弹窗打开后加载参考组件列表
-            loadReferenceComponents(lastRegion, lastRefComponent);
-        },
-        preConfirm: () => {
-            const name = document.getElementById('aiComponentName').value.trim();
-            const desc = document.getElementById('aiComponentDesc').value.trim();
-            
-            if (!name) {
-                Swal.showValidationMessage('<?= __('请输入组件名称') ?>');
-                return false;
+            _workshopGoToStep(1);
+            loadReferenceComponents(s.region || 'content', s.referenceComponent || '');
+            _loadAiServiceInfo();
+            _loadAgentList();
+            // 如果有可恢复的组件，显示恢复提示横幅
+            if (recoverable && recoverable.component) {
+                _showRecoveryBanner(recoverable);
             }
-            if (!desc) {
-                Swal.showValidationMessage('<?= __('请输入组件描述') ?>');
-                return false;
-            }
-            
-            return {
-                region: document.getElementById('aiComponentRegion').value,
-                referenceComponent: document.getElementById('aiReferenceComponent').value,
-                name: name,
-                description: desc,
-                style: document.getElementById('aiComponentStyle').value,
-                fields: document.getElementById('aiComponentFields').value
-            };
-        }
-    }).then((result) => {
-        if (result.isConfirmed && result.value) {
-            // 保存参数到localStorage
-            saveAiGenerationParams(result.value);
-            generateComponentWithAi(result.value);
         }
     });
+}
+
+// 在工坊内显示恢复横幅（步骤1顶部）
+function _showRecoveryBanner(recoverable) {
+    const bar = document.getElementById('ai-ws-recovery-bar');
+    if (!bar) return;
+    const comp = recoverable.component || {};
+    const timeStr = recoverable.savedAt ? new Date(recoverable.savedAt).toLocaleString() : '';
+    bar.style.display = '';
+    bar.querySelector('.ai-recovery-name').textContent = comp.name || comp.component_code || '<?= __('未命名组件') ?>';
+    bar.querySelector('.ai-recovery-desc').textContent = comp.description || '';
+    bar.querySelector('.ai-recovery-time').textContent = timeStr;
+    bar.querySelector('.ai-recovery-btn').onclick = function() {
+        _recoverToWorkshop(recoverable);
+    };
+    bar.querySelector('.ai-recovery-dismiss').onclick = function() {
+        bar.style.display = 'none';
+        clearGeneratedComponentFromLocal();
+    };
+}
+
+// 恢复组件数据到工坊，直接跳转到步骤3（微调/预览）
+function _recoverToWorkshop(recoverable) {
+    const comp = recoverable.component || {};
+    const validation = recoverable.validation || { valid: true };
+    const preview = recoverable.preview || '';
+    const code = comp.phtml_code || recoverable.templateContent || '';
+    
+    // 构建 workshop result 对象（与 _workshopShowResult 期望的格式一致）
+    const wsResult = {
+        component: comp,
+        validation: validation,
+        preview: { html: preview },
+    };
+    _aiWorkshop.result = wsResult;
+    
+    // 同步到全局变量供微调/保存使用
+    window.currentGeneratedComponent = {
+        component: comp,
+        templateContent: code,
+        validation: validation,
+        preview: preview,
+        finalPrompt: recoverable.finalPrompt || ''
+    };
+    
+    // 恢复参数（如果有）
+    if (recoverable.params) {
+        _aiWorkshop.params = recoverable.params;
+    }
+    
+    // 隐藏恢复横幅
+    const bar = document.getElementById('ai-ws-recovery-bar');
+    if (bar) bar.style.display = 'none';
+    
+    // 调用 _workshopShowResult 填充步骤3的UI
+    _workshopShowResult(wsResult);
+    // 然后跳转到微调步骤（步骤4）
+    setTimeout(() => {
+        _syncRefinePreview();
+        _workshopGoToStep(4);
+    }, 100);
+}
+
+// 构建工坊完整 HTML
+function _buildWorkshopHtml(s) {
+    return `
+<style>
+.ai-ws-steps{display:flex;gap:0;border-bottom:2px solid #333;margin:-5px -24px 16px;padding:0 24px;}
+.ai-ws-step{padding:10px 18px;font-size:13px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:6px;transition:all .2s;user-select:none;}
+.ai-ws-step:hover{color:#aaa;}
+.ai-ws-step.active{color:#667eea;border-bottom-color:#667eea;font-weight:600;}
+.ai-ws-step.active:hover{color:#667eea;}
+.ai-ws-step.done{color:#10b981;}
+.ai-ws-step.done:hover{color:#0ea370;}
+.ai-ws-step .step-num{width:22px;height:22px;border-radius:50%;background:#333;color:#888;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+.ai-ws-step.active .step-num{background:#667eea;color:#fff;}
+.ai-ws-step.done .step-num{background:#10b981;color:#fff;}
+.ai-ws-panel{display:none;text-align:left;min-height:300px;}
+.ai-ws-panel.active{display:block;}
+.ai-ws-footer{display:flex;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:1px solid #333;}
+.ai-ws-footer button{padding:8px 20px;border-radius:6px;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.ai-ws-btn-primary{background:#667eea;color:#fff;}.ai-ws-btn-primary:hover{background:#5a6fd6;}
+.ai-ws-btn-secondary{background:#444;color:#ccc;}.ai-ws-btn-secondary:hover{background:#555;}
+.ai-ws-btn-success{background:#10b981;color:#fff;}.ai-ws-btn-success:hover{background:#0ea370;}
+.ai-ws-btn-danger{background:#dc3545;color:#fff;}.ai-ws-btn-danger:hover{background:#c82333;}
+.ai-ws-console{background:#1e1e1e;border-radius:8px;max-height:280px;overflow:auto;margin-top:8px;}
+.ai-ws-console-header{background:#2d2d2d;padding:4px 12px;font-size:11px;color:#888;display:flex;gap:0;position:sticky;top:0;z-index:2;}
+.ai-ws-console-tab{background:transparent;border:none;padding:5px 12px;font-size:11px;color:#888;cursor:pointer;border-bottom:2px solid transparent;}
+.ai-ws-console-tab.active{background:#1e1e1e;color:#d4d4d4;border-bottom-color:#667eea;}
+.ai-ws-console-body{padding:10px;font-family:'Consolas','Monaco',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;color:#d4d4d4;min-height:120px;max-height:420px;overflow-y:auto;}
+.ai-ws-preview-frame{width:100%;min-height:300px;border:1px solid #444;border-radius:8px;background:#fff;}
+.ai-ws-color-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+.ai-ws-color-item{display:flex;align-items:center;gap:6px;font-size:12px;}
+.ai-ws-color-item input[type=color]{width:32px;height:24px;border:1px solid #555;border-radius:4px;cursor:pointer;padding:0;}
+.ai-ws-info-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:14px;background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08));border:1px solid rgba(102,126,234,.2);border-radius:8px;font-size:12px;color:#aab;flex-wrap:wrap;}
+.ai-ws-info-bar .ai-info-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(102,126,234,.12);border-radius:4px;color:#99b;font-size:11px;white-space:nowrap;}
+.ai-ws-info-bar .ai-info-tag i{font-size:13px;opacity:.7;}
+.ai-ws-info-bar .ai-info-tag .ai-info-val{color:#c9d1ff;font-weight:600;}
+.ai-ws-info-bar .ai-info-status{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:2px;flex-shrink:0;}
+.ai-ws-info-bar .ai-info-status.ok{background:#10b981;box-shadow:0 0 4px rgba(16,185,129,.5);}
+.ai-ws-info-bar .ai-info-status.warn{background:#f59e0b;box-shadow:0 0 4px rgba(245,158,11,.5);}
+.ai-ws-info-bar .ai-info-status.err{background:#ef4444;box-shadow:0 0 4px rgba(239,68,68,.5);}
+.ai-ws-info-bar .ai-info-status.loading{background:#888;animation:aiInfoPulse 1.2s ease-in-out infinite;}
+@keyframes aiInfoPulse{0%,100%{opacity:.4;}50%{opacity:1;}}
+.ai-ws-info-bar.ai-info-error{border-color:rgba(239,68,68,.25);background:linear-gradient(135deg,rgba(239,68,68,.06),rgba(239,68,68,.02));}
+.ai-ws-info-bar.ai-info-loading{opacity:.7;}
+.ai-ws-recovery{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.04));border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:12px;color:#ddd;}
+.ai-ws-recovery .ai-recovery-icon{font-size:20px;color:#f59e0b;flex-shrink:0;}
+.ai-ws-recovery .ai-recovery-body{flex:1;min-width:0;}
+.ai-ws-recovery .ai-recovery-title{font-weight:600;color:#fbbf24;font-size:12px;margin-bottom:2px;}
+.ai-ws-recovery .ai-recovery-meta{font-size:11px;color:#999;display:flex;gap:8px;flex-wrap:wrap;}
+.ai-ws-recovery .ai-recovery-meta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+.ai-ws-recovery .ai-recovery-actions{display:flex;gap:6px;flex-shrink:0;}
+.ai-ws-recovery .ai-recovery-btn{padding:4px 12px;border-radius:5px;border:none;font-size:11px;cursor:pointer;background:#f59e0b;color:#1a1a2e;font-weight:600;display:flex;align-items:center;gap:4px;}
+.ai-ws-recovery .ai-recovery-btn:hover{background:#fbbf24;}
+.ai-ws-recovery .ai-recovery-dismiss{padding:4px 10px;border-radius:5px;border:1px solid #555;background:transparent;color:#999;font-size:11px;cursor:pointer;}
+.ai-ws-recovery .ai-recovery-dismiss:hover{background:#333;color:#ccc;}
+.ai-mode-switch{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid #444;background:#1e1e2e;width:fit-content;}
+.ai-mode-btn{padding:6px 16px;border:none;background:transparent;color:#888;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .2s;white-space:nowrap;}
+.ai-mode-btn:hover{color:#bbb;background:rgba(102,126,234,.08);}
+.ai-mode-btn.active{background:rgba(102,126,234,.18);color:#c9d1ff;font-weight:600;}
+.ai-mode-btn.active i{color:#667eea;}
+.ai-mode-desc{font-size:11px;color:#777;margin-top:5px;line-height:1.4;}
+.ai-agent-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;border:1px solid #444;background:#2a2a3e;color:#bbb;font-size:12px;cursor:pointer;transition:all .2s;user-select:none;}
+.ai-agent-chip:hover{border-color:#667eea;color:#ddd;background:#2d2d4a;}
+.ai-agent-chip.selected{border-color:#667eea;background:rgba(102,126,234,.15);color:#c9d1ff;}
+.ai-agent-chip .agent-icon{font-size:16px;color:#667eea;}
+.ai-agent-chip .agent-tools{font-size:10px;color:#888;padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;}
+.ai-tool-entry{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.ai-tool-entry .tool-name{color:#569cd6;font-weight:600;}
+.ai-tool-entry .tool-status{margin-left:6px;}
+.ai-tool-entry .tool-status.pending{color:#f59e0b;}
+.ai-tool-entry .tool-status.done{color:#10b981;}
+.ai-tool-entry .tool-result{color:#9cdcfe;font-size:10px;margin-top:2px;max-height:60px;overflow:auto;}
+</style>
+
+<!-- 步骤指示器（可点击切换） -->
+<div class="ai-ws-steps">
+    <div class="ai-ws-step active" data-step="1" onclick="_wsStepClick(1)"><span class="step-num">1</span> <?= __('描述') ?></div>
+    <div class="ai-ws-step" data-step="2" onclick="_wsStepClick(2)"><span class="step-num">2</span> <?= __('生成') ?></div>
+    <div class="ai-ws-step" data-step="3" onclick="_wsStepClick(3)"><span class="step-num">3</span> <?= __('预览') ?></div>
+    <div class="ai-ws-step" data-step="4" onclick="_wsStepClick(4)"><span class="step-num">4</span> <?= __('微调') ?></div>
+</div>
+
+<!-- AI 模型信息条 -->
+<div class="ai-ws-info-bar ai-info-loading" id="ai-ws-info-bar">
+    <span class="ai-info-status loading"></span>
+    <span style="color:#888;font-size:11px;"><?= __('正在获取 AI 服务信息...') ?></span>
+</div>
+
+<!-- 组件恢复横幅（有未保存组件时显示） -->
+<div class="ai-ws-recovery" id="ai-ws-recovery-bar" style="display:none;">
+    <i class="mdi mdi-restore ai-recovery-icon"></i>
+    <div class="ai-recovery-body">
+        <div class="ai-recovery-title"><?= __('发现未保存的 AI 组件') ?></div>
+        <div class="ai-recovery-meta">
+            <span><i class="mdi mdi-label-outline"></i> <span class="ai-recovery-name"></span></span>
+            <span><i class="mdi mdi-text-short"></i> <span class="ai-recovery-desc"></span></span>
+            <span><i class="mdi mdi-clock-outline"></i> <span class="ai-recovery-time"></span></span>
+        </div>
+    </div>
+    <div class="ai-recovery-actions">
+        <button class="ai-recovery-btn"><i class="mdi mdi-restore"></i> <?= __('恢复到微调') ?></button>
+        <button class="ai-recovery-dismiss"><?= __('丢弃') ?></button>
+    </div>
+</div>
+
+<!-- 步骤 1: 描述输入 -->
+<div class="ai-ws-panel active" id="ai-ws-step1">
+    <div class="row g-3">
+        <div class="col-6">
+            <label class="form-label fw-bold small"><?= __('组件名称') ?> <span class="text-danger">*</span></label>
+            <input type="text" id="aiComponentName" class="form-control form-control-sm" placeholder="<?= __('例如：产品展示卡片') ?>" value="${(s.name||'').replace(/"/g,'&quot;')}">
+        </div>
+        <div class="col-3">
+            <label class="form-label fw-bold small"><?= __('区域') ?></label>
+            <select id="aiComponentRegion" class="form-select form-select-sm" onchange="loadReferenceComponents(this.value)">
+                <option value="header" ${s.region==='header'?'selected':''}><?= __('头部') ?></option>
+                <option value="content" ${s.region!=='header'&&s.region!=='footer'?'selected':''}><?= __('内容') ?></option>
+                <option value="footer" ${s.region==='footer'?'selected':''}><?= __('底部') ?></option>
+            </select>
+        </div>
+        <div class="col-3">
+            <label class="form-label fw-bold small"><?= __('风格') ?></label>
+            <select id="aiComponentStyle" class="form-select form-select-sm">
+                <option value="modern" ${s.style==='modern'||!s.style?'selected':''}><?= __('现代简约') ?></option>
+                <option value="card" ${s.style==='card'?'selected':''}><?= __('卡片式') ?></option>
+                <option value="gradient" ${s.style==='gradient'?'selected':''}><?= __('渐变') ?></option>
+                <option value="dark" ${s.style==='dark'?'selected':''}><?= __('深色') ?></option>
+                <option value="minimal" ${s.style==='minimal'?'selected':''}><?= __('极简') ?></option>
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label fw-bold small"><?= __('功能描述') ?> <span class="text-danger">*</span></label>
+            <textarea id="aiComponentDesc" class="form-control form-control-sm" rows="3" placeholder="<?= __('详细描述组件的功能、样式和内容要求...') ?>">${(s.description||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        </div>
+        <div class="col-6">
+            <label class="form-label fw-bold small"><?= __('参考组件') ?> <small class="text-muted">(<?= __('推荐') ?>)</small></label>
+            <select id="aiReferenceComponent" class="form-select form-select-sm">
+                <option value=""><?= __('加载中...') ?></option>
+            </select>
+        </div>
+        <div class="col-6">
+            <label class="form-label fw-bold small"><?= __('配置字段') ?> <small class="text-muted">(<?= __('可选') ?>)</small></label>
+            <textarea id="aiComponentFields" class="form-control form-control-sm" rows="1" placeholder="<?= __('字段名:类型:默认值') ?>">${(s.fields||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        </div>
+        <!-- 生成模式切换 -->
+        <div class="col-12" id="ai-mode-section">
+            <label class="form-label fw-bold small"><?= __('生成模式') ?></label>
+            <div class="ai-mode-switch" id="ai-mode-switch">
+                <button type="button" class="ai-mode-btn" data-mode="normal" onclick="_switchAiMode('normal')">
+                    <i class="mdi mdi-flash-outline"></i> <?= __('普通模式') ?>
+                </button>
+                <button type="button" class="ai-mode-btn active" data-mode="agent" onclick="_switchAiMode('agent')">
+                    <i class="mdi mdi-robot-outline"></i> <?= __('智能体模式') ?>
+                </button>
+            </div>
+            <div id="ai-mode-desc" class="ai-mode-desc"><?= __('智能体会自动调用工具查询参考组件、校验代码规范，生成质量更高') ?></div>
+            <!-- 智能体选择列表（智能体模式下显示） -->
+            <div id="ai-agent-selection" style="margin-top:8px;">
+                <div id="ai-agent-list" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="text-muted small"><?= __('加载中...') ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="ai-ws-footer">
+        <button class="ai-ws-btn-secondary" onclick="Swal.close()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
+        <button class="ai-ws-btn-primary" onclick="_workshopStartGenerate()"><i class="mdi mdi-robot"></i> <?= __('开始生成') ?></button>
+    </div>
+</div>
+
+<!-- 步骤 2: 实时生成 -->
+<div class="ai-ws-panel" id="ai-ws-step2">
+    <div class="d-flex align-items-center mb-2">
+        <div class="spinner-grow spinner-grow-sm text-primary me-2" id="ai-gen-spinner"></div>
+        <span id="ai-gen-status" style="font-size:13px;"><?= __('准备中...') ?></span>
+        <span class="ms-auto small text-muted" id="ai-gen-chars">0 <?= __('字符') ?></span>
+    </div>
+    <div class="progress mb-2" style="height:3px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" id="ai-gen-progress" style="width:5%"></div>
+    </div>
+    <div class="ai-ws-console">
+        <div class="ai-ws-console-header">
+            <button class="ai-ws-console-tab active" onclick="_wsConsoleTab('log',this)"><?= __('日志') ?></button>
+            <button class="ai-ws-console-tab" onclick="_wsConsoleTab('tools',this)"><i class="mdi mdi-wrench" style="font-size:12px;"></i> <?= __('工具') ?> <span id="ai-gen-tools-count" style="opacity:.6"></span></button>
+            <button class="ai-ws-console-tab" onclick="_wsConsoleTab('prompt',this)"><?= __('提示词') ?> <span id="ai-gen-prompt-len" style="opacity:.6"></span></button>
+        </div>
+        <div class="ai-ws-console-body" id="ai-gen-tab-log">
+            <div id="ai-gen-output" style="margin:0;color:#d4d4d4;font-family:inherit;font-size:inherit;word-break:break-word;"></div>
+        </div>
+        <div class="ai-ws-console-body" id="ai-gen-tab-tools" style="display:none;">
+            <pre id="ai-gen-tools-output" style="margin:0;color:#d4d4d4;font-family:inherit;font-size:inherit;white-space:pre-wrap;word-break:break-word;opacity:.5;"><?= __('等待工具调用...') ?></pre>
+        </div>
+        <div class="ai-ws-console-body" id="ai-gen-tab-prompt" style="display:none;">
+            <pre id="ai-gen-prompt-content" style="margin:0;color:#9cdcfe;font-family:inherit;font-size:inherit;white-space:pre-wrap;word-break:break-word;opacity:.5;"><?= __('等待提示词...') ?></pre>
+        </div>
+    </div>
+    <div class="ai-ws-footer">
+        <button class="ai-ws-btn-secondary" onclick="_workshopAbort()"><?= __('取消生成') ?></button>
+        <div></div>
+    </div>
+</div>
+
+<!-- 步骤 3: 预览 + 微调 + 保存 -->
+<div class="ai-ws-panel" id="ai-ws-step3">
+    <div id="ai-ws-validation" class="mb-2"></div>
+    <div style="border-radius:8px;overflow:hidden;border:1px solid #444;">
+        <div style="display:flex;background:#2d2d2d;">
+            <button class="ai-ws-console-tab active" onclick="_wsPreviewTab('preview',this)"><?= __('预览') ?></button>
+            <button class="ai-ws-console-tab" onclick="_wsPreviewTab('code',this)"><?= __('代码') ?></button>
+            <button class="ai-ws-console-tab" onclick="_wsPreviewTab('colors',this)"><i class="mdi mdi-palette"></i> <?= __('颜色') ?></button>
+        </div>
+        <div id="ai-ws-tab-preview" style="background:#fff;min-height:280px;max-height:400px;overflow:auto;">
+            <iframe id="ai-ws-preview-iframe" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:280px;" srcdoc=""></iframe>
+        </div>
+        <div id="ai-ws-tab-code" style="display:none;background:#1e1e1e;max-height:350px;overflow:auto;padding:12px;">
+            <pre id="ai-ws-code-content" style="margin:0;color:#d4d4d4;font-family:'Consolas',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;"></pre>
+        </div>
+        <div id="ai-ws-tab-colors" style="display:none;padding:16px;background:#1a1a2e;">
+            <p class="small text-muted mb-2"><i class="mdi mdi-information-outline"></i> <?= __('颜色继承自主题色变量，修改后仅影响此组件') ?></p>
+            <div class="ai-ws-color-row" id="ai-ws-color-fields"></div>
+        </div>
+    </div>
+    <div class="ai-ws-footer">
+        <div style="display:flex;gap:8px;">
+            <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('重新描述') ?></button>
+            <button class="ai-ws-btn-danger" onclick="_workshopRegenerate()"><i class="mdi mdi-refresh"></i> <?= __('重新生成') ?></button>
+        </div>
+        <button class="ai-ws-btn-primary" onclick="_workshopGoToStep(4)"><i class="mdi mdi-tune"></i> <?= __('下一步（微调）') ?></button>
+    </div>
+</div>
+
+<!-- 步骤 4: 微调 -->
+<div class="ai-ws-panel" id="ai-ws-step4">
+    <div style="display:flex;gap:12px;height:100%;">
+        <!-- 左侧：实时预览 -->
+        <div style="flex:1;min-width:0;">
+            <div style="border-radius:8px;overflow:hidden;border:1px solid #444;background:#fff;min-height:260px;max-height:350px;">
+                <iframe id="ai-ws-refine-preview" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:260px;" srcdoc=""></iframe>
+            </div>
+        </div>
+        <!-- 右侧：微调面板 -->
+        <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;">
+            <label class="form-label fw-bold small mb-0"><i class="mdi mdi-tune-vertical"></i> <?= __('微调描述') ?></label>
+            <textarea id="ai-refine-input" class="form-control form-control-sm" rows="4" placeholder="<?= __('描述需要调整的部分，例如：按钮颜色改为蓝色、标题字号加大...') ?>" style="resize:vertical;"></textarea>
+            <button class="ai-ws-btn-primary w-100" onclick="_workshopRefine()" id="ai-refine-btn">
+                <i class="mdi mdi-auto-fix"></i> <?= __('微调') ?>
+            </button>
+            <div id="ai-refine-status" style="font-size:11px;color:#888;min-height:16px;"></div>
+            <!-- 微调历史 -->
+            <div style="flex:1;overflow:auto;max-height:120px;">
+                <label class="form-label small text-muted mb-1"><?= __('微调历史') ?></label>
+                <div id="ai-refine-history" style="font-size:11px;color:#999;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="ai-ws-footer">
+        <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(3)"><i class="mdi mdi-arrow-left"></i> <?= __('返回预览') ?></button>
+        <button class="ai-ws-btn-success" onclick="_workshopSave()"><i class="mdi mdi-content-save"></i> <?= __('保存组件') ?></button>
+    </div>
+</div>
+`;
+}
+
+// 加载 AI 服务信息并渲染到信息条
+async function _loadAiServiceInfo() {
+    const bar = document.getElementById('ai-ws-info-bar');
+    if (!bar) return;
+    try {
+        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/ai_info') ?>', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'include'
+        });
+        const json = await resp.json();
+        if (!json.success) {
+            bar.classList.remove('ai-info-loading');
+            bar.classList.add('ai-info-error');
+            bar.innerHTML = '<span class="ai-info-status err"></span>'
+                + '<span style="color:#f87171;font-size:11px;">' + (json.message || '<?= __('AI 服务不可用') ?>') + '</span>';
+            return;
+        }
+        const d = json.data;
+        // 连接状态图标
+        const statusMap = { 'success': 'ok', 'connected': 'ok', 'passed': 'ok', 'ok': 'ok', 'failed': 'err', 'error': 'err', 'unknown': 'warn' };
+        const statusCls = statusMap[d.connection_status] || 'warn';
+        const statusLabel = { 'ok': '<?= __('已连接') ?>', 'warn': '<?= __('未知') ?>', 'err': '<?= __('连接失败') ?>' };
+        // 供应商图标映射
+        const vendorIcons = {
+            'openai': 'mdi-creation', 'anthropic': 'mdi-robot-outline', 'deepseek': 'mdi-magnify-scan',
+            'google': 'mdi-google', 'baidu': 'mdi-cloud', 'alibaba': 'mdi-cloud-outline'
+        };
+        const vIcon = vendorIcons[d.vendor] || 'mdi-chip';
+        bar.classList.remove('ai-info-loading');
+        bar.innerHTML = ''
+            + '<span class="ai-info-status ' + statusCls + '" title="' + (statusLabel[statusCls] || '') + '"></span>'
+            + '<span class="ai-info-tag"><i class="mdi ' + vIcon + '"></i> <?= __('供应商') ?>: <span class="ai-info-val">' + _escHtml(d.vendor_label) + '</span></span>'
+            + '<span class="ai-info-tag"><i class="mdi mdi-brain"></i> <?= __('模型') ?>: <span class="ai-info-val">' + _escHtml(d.actual_model || d.model_code) + '</span></span>'
+            + '<span class="ai-info-tag"><i class="mdi mdi-cog-outline"></i> <?= __('适配器') ?>: <span class="ai-info-val">' + _escHtml(d.provider) + '</span></span>'
+            + (d.max_tokens > 0 ? '<span class="ai-info-tag"><i class="mdi mdi-counter"></i> Max: <span class="ai-info-val">' + d.max_tokens.toLocaleString() + '</span></span>' : '')
+            + (d.model_source === 'local' ? '<span class="ai-info-tag" style="background:rgba(16,185,129,.12);color:#6ee7b7;"><i class="mdi mdi-server"></i> <?= __('本地') ?></span>' : '');
+    } catch (e) {
+        bar.classList.remove('ai-info-loading');
+        bar.classList.add('ai-info-error');
+        bar.innerHTML = '<span class="ai-info-status err"></span>'
+            + '<span style="color:#f87171;font-size:11px;"><?= __('获取 AI 信息失败') ?>: ' + _escHtml(e.message || String(e)) + '</span>';
+    }
+}
+function _escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// 步骤切换
+function _workshopGoToStep(step) {
+    _aiWorkshop.step = step;
+    document.querySelectorAll('.ai-ws-step').forEach(el => {
+        const s = parseInt(el.dataset.step);
+        el.classList.toggle('active', s === step);
+        el.classList.toggle('done', s < step);
+    });
+    document.querySelectorAll('.ai-ws-panel').forEach((el, i) => {
+        el.classList.toggle('active', i + 1 === step);
+    });
+}
+
+// 用户点击步骤指示器
+function _wsStepClick(step) {
+    // 正在生成中时，点击其他步骤会中断生成
+    if (_aiWorkshop.eventSource && step !== 2) {
+        if (!confirm('<?= __('正在生成中，切换步骤将中断生成，确定吗？') ?>')) return;
+        _workshopAbort();
+    }
+    // 预览和微调步骤需要有数据才能看
+    if ((step === 3 || step === 4) && !_aiWorkshop.result) {
+        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('请先生成组件') ?>');
+        return;
+    }
+    // 切换到微调时同步预览
+    if (step === 4 && _aiWorkshop.result) {
+        _syncRefinePreview();
+    }
+    _workshopGoToStep(step);
+}
+
+// 控制台 Tab 切换
+/**
+ * 滚动日志面板到底部（滚动正确的可滚动容器）
+ */
+function _scrollLogToBottom() {
+    const scrollable = document.getElementById('ai-gen-tab-log');
+    if (scrollable) scrollable.scrollTop = scrollable.scrollHeight;
+}
+
+/**
+ * 追加一行日志到日志面板
+ * @param {string} text 文本内容
+ * @param {string} color 颜色（可选）
+ */
+function _logLine(text, color) {
+    const el = document.getElementById('ai-gen-output');
+    if (!el) return;
+    const line = document.createElement('div');
+    line.style.cssText = 'margin:1px 0;white-space:pre-wrap;' + (color ? 'color:' + color + ';' : '');
+    line.textContent = text;
+    el.appendChild(line);
+    _scrollLogToBottom();
+}
+
+function _logHtml(html) {
+    const el = document.getElementById('ai-gen-output');
+    if (!el) return;
+    const line = document.createElement('div');
+    line.style.cssText = 'margin:1px 0;white-space:pre-wrap;';
+    line.innerHTML = html;
+    el.appendChild(line);
+    _scrollLogToBottom();
+}
+
+function _wsConsoleTab(tab, btn) {
+    btn.parentElement.querySelectorAll('.ai-ws-console-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    ['log', 'tools', 'prompt'].forEach(t => {
+        const el = document.getElementById('ai-gen-tab-' + t);
+        if (el) el.style.display = t === tab ? '' : 'none';
+    });
+}
+
+/**
+ * 追加 AI 思考/回复内容到日志
+ * @param {string} content  内容文本
+ * @param {number} iteration 迭代轮次
+ * @param {string} type 'thinking' | 'response'
+ * @param {boolean} streaming 是否为流式追加
+ */
+function _appendAiContent(content, iteration, type, streaming) {
+    const container = document.getElementById('ai-gen-output');
+    if (!container) return;
+
+    const blockId = 'ai-log-' + type + '-' + (iteration || 0);
+    const color = type === 'thinking' ? '#a78bfa' : '#67e8f9';
+
+    // 流式模式：追加到同一迭代 + 同类型的 span
+    if (streaming) {
+        const existing = document.getElementById(blockId);
+        if (existing) {
+            existing.textContent += content;
+            _scrollLogToBottom();
+            return;
+        }
+    }
+
+    // 创建新块：标签头 + 内容 span
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin:2px 0;';
+
+    const label = type === 'thinking' ? '💭 <?= __('思考') ?>' : '🤖 <?= __('AI') ?>';
+    const tag = document.createElement('span');
+    tag.style.cssText = 'color:' + color + ';font-weight:600;font-size:10px;letter-spacing:.3px;';
+    tag.textContent = label + (iteration ? ' #' + iteration : '') + '\n';
+    wrapper.appendChild(tag);
+
+    const span = document.createElement('span');
+    span.id = blockId;
+    span.style.cssText = 'color:#d4d4d4;white-space:pre-wrap;';
+    span.textContent = content;
+    wrapper.appendChild(span);
+
+    container.appendChild(wrapper);
+    _scrollLogToBottom();
+}
+
+// 预览 Tab 切换
+function _wsPreviewTab(tab, btn) {
+    btn.parentElement.querySelectorAll('.ai-ws-console-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    ['preview','code','colors'].forEach(t => {
+        const el = document.getElementById('ai-ws-tab-' + t);
+        if (el) el.style.display = t === tab ? '' : 'none';
+    });
+}
+
+// 开始生成
+function _workshopStartGenerate() {
+    const name = document.getElementById('aiComponentName')?.value.trim();
+    const desc = document.getElementById('aiComponentDesc')?.value.trim();
+    if (!name) { (typeof AdminToast !== 'undefined') ? AdminToast.warning('<?= __('请输入组件名称') ?>') : alert('<?= __('请输入组件名称') ?>'); return; }
+    if (!desc) { (typeof AdminToast !== 'undefined') ? AdminToast.warning('<?= __('请输入组件描述') ?>') : alert('<?= __('请输入组件描述') ?>'); return; }
+    
+    // 根据模式确定智能体代码
+    let agentCode = '';
+    if (_aiGenerateMode === 'agent') {
+        const selectedAgent = document.querySelector('.ai-agent-chip.selected');
+        agentCode = selectedAgent ? selectedAgent.dataset.agentCode : 'pagebuilder_component';
+    }
+    
+    _aiWorkshop.params = {
+        region: document.getElementById('aiComponentRegion').value,
+        referenceComponent: document.getElementById('aiReferenceComponent').value,
+        name: name,
+        description: desc,
+        style: document.getElementById('aiComponentStyle').value,
+        fields: document.getElementById('aiComponentFields').value,
+        agent_code: agentCode
+    };
+    saveAiGenerationParams(_aiWorkshop.params);
+    
+    // 切换到生成步骤
+    _workshopGoToStep(2);
+    // 重置生成 UI
+    const outputEl = document.getElementById('ai-gen-output');
+    if (outputEl) outputEl.innerHTML = '';
+    const toolsOutputEl = document.getElementById('ai-gen-tools-output');
+    if (toolsOutputEl) { toolsOutputEl.textContent = ''; toolsOutputEl.style.opacity = '1'; }
+    const toolsCountEl = document.getElementById('ai-gen-tools-count');
+    if (toolsCountEl) toolsCountEl.textContent = '';
+    // 重置思考过程 tab
+    _aiWorkshop._toolCallCount = 0;
+    updateStreamStatus('<?= __('准备中...') ?>', 5);
+    const spinnerEl = document.getElementById('ai-gen-spinner');
+    if (spinnerEl) { spinnerEl.className = 'spinner-grow spinner-grow-sm text-primary me-2'; spinnerEl.innerHTML = ''; }
+    const progressEl = document.getElementById('ai-gen-progress');
+    if (progressEl) { progressEl.className = 'progress-bar progress-bar-striped progress-bar-animated'; progressEl.style.backgroundColor = ''; }
+    
+    // 根据模式选择流式接口
+    if (_aiGenerateMode === 'agent' && agentCode) {
+        generateComponentWithAgent(_aiWorkshop.params);
+    } else {
+        generateComponentWithAi(_aiWorkshop.params);
+    }
+}
+
+// 取消生成
+function _workshopAbort() {
+    if (_aiWorkshop.eventSource) {
+        try { _aiWorkshop.eventSource.close(); } catch(e) {}
+        _aiWorkshop.eventSource = null;
+    }
+    _workshopGoToStep(1);
+}
+
+// 重新生成
+function _workshopRegenerate() {
+    if (_aiWorkshop.params) {
+        _workshopGoToStep(2);
+        const outputEl = document.getElementById('ai-gen-output');
+        if (outputEl) outputEl.innerHTML = '';
+        updateStreamStatus('<?= __('重新生成中...') ?>', 5);
+        generateComponentWithAi(_aiWorkshop.params);
+    } else {
+        _workshopGoToStep(1);
+    }
+}
+
+// 保存组件
+function _workshopSave() {
+    if (_aiWorkshop.result && _aiWorkshop.result.component) {
+        saveGeneratedComponent(_aiWorkshop.result.component);
+    }
+}
+
+// 生成完成后切换到预览步骤
+function _workshopShowResult(result) {
+    _aiWorkshop.result = result;
+    const component = result.component || {};
+    const validation = result.validation || {};
+    const preview = result.preview?.html || result.preview || '';
+    const code = component.phtml_code || '';
+    
+    // 验证信息
+    const valEl = document.getElementById('ai-ws-validation');
+    if (valEl) {
+        if (validation.valid !== false) {
+            valEl.innerHTML = '<div class="alert alert-success py-1 px-2 small mb-2"><i class="mdi mdi-check-circle"></i> <?= __('校验通过') ?>' +
+                (validation.warnings?.length ? ' <span class="text-warning">(' + validation.warnings.length + ' <?= __('警告') ?>)</span>' : '') + '</div>';
+        } else {
+            valEl.innerHTML = '<div class="alert alert-danger py-1 px-2 small mb-2"><i class="mdi mdi-alert"></i> <?= __('校验发现问题') ?>: ' +
+                (validation.errors || []).map(e => '<div>• ' + e + '</div>').join('') + '</div>';
+        }
+    }
+    
+    // 预览
+    const iframe = document.getElementById('ai-ws-preview-iframe');
+    if (iframe && preview) {
+        iframe.srcdoc = preview;
+    }
+    
+    // 代码
+    const codeEl = document.getElementById('ai-ws-code-content');
+    if (codeEl) {
+        codeEl.textContent = code.substring(0, 5000) + (code.length > 5000 ? '\n\n... <?= __('代码过长已截断') ?> ...' : '');
+    }
+    
+    // 颜色字段
+    _buildColorFields(component);
+    
+    // 切换到预览步骤
+    _workshopGoToStep(3);
+}
+
+// 构建颜色微调字段
+function _buildColorFields(component) {
+    const container = document.getElementById('ai-ws-color-fields');
+    if (!container) return;
+    
+    // 主题色变量映射（配置 key → CSS 变量名）
+    const colorMap = [
+        { key: 'style.bg_color',     cssVar: '--pb-bg',      label: '<?= __('背景色') ?>',  value: '#ffffff' },
+        { key: 'style.text_color',   cssVar: '--pb-text',    label: '<?= __('文字色') ?>',  value: '#333333' },
+        { key: 'style.title_color',  cssVar: '--pb-heading', label: '<?= __('标题色') ?>',  value: '#1a1a1a' },
+        { key: 'style.accent_color', cssVar: '--pb-accent',  label: '<?= __('强调色') ?>',  value: '#7c3aed' },
+    ];
+    
+    // 从组件 ai_data 或 config_schema 提取实际颜色值
+    const aiData = component.ai_data || {};
+    colorMap.forEach(c => {
+        const val = aiData[c.key] || component[c.key];
+        if (val && /^#[0-9a-fA-F]{3,8}$/.test(val)) c.value = val;
+    });
+    
+    container.innerHTML = colorMap.map(c => `
+        <div class="ai-ws-color-item">
+            <input type="color" value="${c.value}" data-key="${c.key}" data-css-var="${c.cssVar}" onchange="_wsColorChange(this)" oninput="_wsColorChange(this)">
+            <span style="color:#ccc;">${c.label}</span>
+        </div>
+    `).join('') + `
+        <div class="ai-ws-color-item mt-2" style="flex-basis:100%;">
+            <button class="ai-ws-btn-secondary" onclick="_wsColorReset()" style="padding:4px 12px;font-size:11px;">
+                <i class="mdi mdi-restore"></i> <?= __('重置为主题默认') ?>
+            </button>
+        </div>
+    `;
+}
+
+// 颜色变更时实时更新预览
+function _wsColorChange(input) {
+    const cssVar = input.dataset.cssVar;
+    const value = input.value;
+    const iframe = document.getElementById('ai-ws-preview-iframe');
+    if (!iframe || !iframe.contentDocument) return;
+    
+    // 在 iframe 的 :root 和所有 ai-component 元素上设置变量
+    try {
+        const doc = iframe.contentDocument;
+        doc.documentElement.style.setProperty(cssVar, value);
+        // 同时更新所有 ai-component 容器
+        doc.querySelectorAll('[id^="ai-"]').forEach(el => {
+            el.style.setProperty(cssVar, value);
+        });
+    } catch(e) { console.warn('无法更新预览颜色:', e); }
+}
+
+// 重置所有颜色
+function _wsColorReset() {
+    const container = document.getElementById('ai-ws-color-fields');
+    if (!container) return;
+    container.querySelectorAll('input[type=color]').forEach(input => {
+        const iframe = document.getElementById('ai-ws-preview-iframe');
+        if (iframe && iframe.contentDocument) {
+            try {
+                iframe.contentDocument.documentElement.style.removeProperty(input.dataset.cssVar);
+                iframe.contentDocument.querySelectorAll('[id^="ai-"]').forEach(el => {
+                    el.style.removeProperty(input.dataset.cssVar);
+                });
+            } catch(e) {}
+        }
+    });
+}
+
+// ============================================================
+// 智能体（Agent）相关前端逻辑
+// ============================================================
+
+// 当前生成模式（'normal' | 'agent'）
+let _aiGenerateMode = 'agent';
+
+// 切换生成模式
+function _switchAiMode(mode) {
+    _aiGenerateMode = mode;
+    document.querySelectorAll('.ai-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    const agentSel = document.getElementById('ai-agent-selection');
+    const modeDesc = document.getElementById('ai-mode-desc');
+    if (mode === 'agent') {
+        if (agentSel) agentSel.style.display = '';
+        if (modeDesc) modeDesc.textContent = '<?= __('智能体会自动调用工具查询参考组件、校验代码规范，生成质量更高') ?>';
+    } else {
+        if (agentSel) agentSel.style.display = 'none';
+        if (modeDesc) modeDesc.textContent = '<?= __('直接调用 AI 模型生成代码，速度更快') ?>';
+    }
+}
+
+// 加载可用智能体列表
+async function _loadAgentList() {
+    const container = document.getElementById('ai-agent-list');
+    const agentSel = document.getElementById('ai-agent-selection');
+    if (!container) return;
+
+    try {
+        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agents') ?>', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'include'
+        });
+        const json = await resp.json();
+        if (!json.success || !json.data?.agents?.length) {
+            // 没有智能体可用时，自动切换到普通模式
+            _switchAiMode('normal');
+            // 禁用智能体模式按钮
+            const agentBtn = document.querySelector('.ai-mode-btn[data-mode="agent"]');
+            if (agentBtn) { agentBtn.disabled = true; agentBtn.style.opacity = '0.4'; agentBtn.style.cursor = 'not-allowed'; agentBtn.title = '<?= __('暂无可用智能体') ?>'; }
+            return;
+        }
+
+        const agents = json.data.agents;
+        container.innerHTML = agents.map(a => `
+            <div class="ai-agent-chip${a.code === 'pagebuilder_component' ? ' selected' : ''}"
+                 data-agent-code="${_escHtml(a.code)}"
+                 onclick="_toggleAgent(this)"
+                 title="${_escHtml(a.description)}">
+                <i class="mdi mdi-robot-outline agent-icon"></i>
+                <span>${_escHtml(a.name)}</span>
+                <span class="agent-tools">${a.tools_count || 0} <?= __('工具') ?></span>
+            </div>
+        `).join('');
+        // 默认智能体模式
+        _switchAiMode('agent');
+    } catch (e) {
+        _switchAiMode('normal');
+        const agentBtn = document.querySelector('.ai-mode-btn[data-mode="agent"]');
+        if (agentBtn) { agentBtn.disabled = true; agentBtn.style.opacity = '0.4'; agentBtn.style.cursor = 'not-allowed'; }
+    }
+}
+
+// 切换智能体选中状态（单选）
+function _toggleAgent(el) {
+    const wasSelected = el.classList.contains('selected');
+    document.querySelectorAll('.ai-agent-chip').forEach(c => c.classList.remove('selected'));
+    if (!wasSelected) el.classList.add('selected');
+}
+
+// 智能体模式的流式生成
+async function generateComponentWithAgent(params) {
+    try {
+        updateStreamStatus('<?= __('智能体模式：连接 AI 服务...') ?>', 15);
+
+        // 构建参数
+        const streamParams = {
+            agent_code: params.agent_code || 'pagebuilder_component',
+            style_code: currentStyleCode,
+            region: params.region,
+            name: params.name,
+            description: params.description,
+            style: params.style,
+            fields: params.fields,
+            reference_component: params.referenceComponent,
+            reference_code: ''
+        };
+        const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
+
+        const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agent-component-stream') ?>?params=' + encodeURIComponent(paramsBase64);
+
+        let result = null;
+
+        await new Promise((resolve, reject) => {
+            const eventSource = new EventSource(streamUrl);
+            _aiWorkshop.eventSource = eventSource;
+            let isFinished = false;
+
+            function safeParseJson(str) {
+                if (!str) return null;
+                try { return JSON.parse(str); } catch(e) { return null; }
+            }
+            function finish(ok, err) {
+                if (isFinished) return;
+                isFinished = true;
+                _aiWorkshop.eventSource = null;
+                try { eventSource.close(); } catch(e) {}
+                ok ? resolve() : reject(err);
+            }
+
+            eventSource.onopen = () => updateStreamStatus('<?= __('智能体正在工作...') ?>', 20);
+
+            eventSource.addEventListener('start', e => {
+                const d = safeParseJson(e.data);
+                if (d) _logLine('▶ ' + (d.message || ''), '#4ade80');
+            });
+
+            eventSource.addEventListener('prompt', e => {
+                const d = safeParseJson(e.data);
+                if (d?.prompt_length) {
+                    const lenEl = document.getElementById('ai-gen-prompt-len');
+                    if (lenEl) lenEl.textContent = '(' + d.prompt_length + ' <?= __('字符') ?>)';
+                    _logLine('▶ <?= __('提示词已构建') ?> (' + d.prompt_length + ' <?= __('字符') ?>)', '#94a3b8');
+                }
+            });
+
+            eventSource.addEventListener('generating', e => {
+                updateStreamStatus('<?= __('智能体正在工作...') ?>', 25);
+            });
+
+            // 智能体迭代事件
+            eventSource.addEventListener('iteration', e => {
+                const d = safeParseJson(e.data);
+                if (d) {
+                    const pct = 25 + Math.min((d.iteration / d.max) * 60, 60);
+                    updateStreamStatus('<?= __('第') ?> ' + d.iteration + ' <?= __('轮') ?>', pct);
+                    _logLine('━━━ <?= __('第') ?> ' + d.iteration + ' <?= __('轮') ?> ━━━', '#667eea');
+                }
+            });
+
+            eventSource.addEventListener('tool_call', e => {
+                const d = safeParseJson(e.data);
+                if (d) {
+                    _aiWorkshop._toolCallCount = (_aiWorkshop._toolCallCount || 0) + 1;
+                    const countEl = document.getElementById('ai-gen-tools-count');
+                    if (countEl) countEl.textContent = '(' + _aiWorkshop._toolCallCount + ')';
+                    const toolsEl = document.getElementById('ai-gen-tools-output');
+                    if (toolsEl) {
+                        toolsEl.innerHTML += '<div class="ai-tool-entry">'
+                            + '<span class="tool-name">[Tool] ' + _escHtml(d.name) + '</span>'
+                            + '<span class="tool-status pending"> ⏳ <?= __('执行中') ?>...</span>'
+                            + '</div>';
+                        const toolsTab = document.getElementById('ai-gen-tab-tools');
+                        if (toolsTab) toolsTab.scrollTop = toolsTab.scrollHeight;
+                    }
+                    _logLine('🔧 ' + d.name + '(' + JSON.stringify(d.arguments || {}).substring(0, 80) + ')', '#fbbf24');
+                }
+            });
+
+            eventSource.addEventListener('tool_result', e => {
+                const d = safeParseJson(e.data);
+                if (d) {
+                    const toolsEl = document.getElementById('ai-gen-tools-output');
+                    if (toolsEl) {
+                        const pending = toolsEl.querySelector('.tool-status.pending:last-of-type');
+                        if (pending) {
+                            pending.className = 'tool-status done';
+                            pending.textContent = ' ✓ ' + (d.result_size ? (d.result_size + 'B') : '<?= __('完成') ?>');
+                        }
+                        if (d.result) {
+                            toolsEl.innerHTML += '<div class="ai-tool-entry tool-result">' + _escHtml(d.result.substring(0, 300)) + '</div>';
+                        }
+                        const toolsTab2 = document.getElementById('ai-gen-tab-tools');
+                        if (toolsTab2) toolsTab2.scrollTop = toolsTab2.scrollHeight;
+                    }
+                    _logLine('  ✓ ' + d.name + ' (' + (d.result_size || 0) + 'B)', '#4ade80');
+                }
+            });
+
+            // AI 思考/推理过程事件（流式小块，如 DeepSeek reasoning_content）
+            eventSource.addEventListener('thinking', e => {
+                const d = safeParseJson(e.data);
+                if (d?.content) {
+                    updateStreamStatus('<?= __('AI 思考中...') ?>', 35);
+                    // streaming=true: 追加到同一迭代的 thinking 块
+                    _appendAiContent(d.content, d.iteration, 'thinking', !!d.streaming);
+                }
+            });
+
+            // AI 回复内容事件（流式小块，每轮迭代的 content）
+            eventSource.addEventListener('ai_response', e => {
+                const d = safeParseJson(e.data);
+                if (d?.content) {
+                    updateStreamStatus('<?= __('AI 回复中...') ?>', 50);
+                    _appendAiContent(d.content, d.iteration, 'response', !!d.streaming);
+                }
+            });
+
+            // 心跳事件（保持 SSE 连接活跃，无需处理）
+            eventSource.addEventListener('heartbeat', e => {});
+
+            eventSource.addEventListener('chunk', e => {
+                const d = safeParseJson(e.data);
+                if (d?.content) {
+                    updateStreamStatus('<?= __('生成中...') ?>', 70);
+                }
+            });
+
+            eventSource.addEventListener('complete', e => {
+                const d = safeParseJson(e.data);
+                if (d) result = d;
+                finish(true);
+            });
+
+            eventSource.addEventListener('error', e => {
+                const d = safeParseJson(e.data);
+                if (d?.message) {
+                    updateStreamStatus('<?= __('错误') ?>: ' + d.message, 0);
+                    _logLine('[ERROR] ' + d.message, '#ff6b6b');
+                    finish(false, new Error(d.message));
+                }
+            });
+
+            eventSource.addEventListener('done', () => finish(true));
+
+            eventSource.onerror = e => {
+                if (result && result.success) { finish(true); return; }
+                finish(false, new Error('<?= __('连接中断或服务器错误') ?>'));
+            };
+        });
+
+        // 生成完成
+        if (result && result.success && result.component) {
+            updateStreamStatus('<?= __('生成完成！') ?>', 100);
+            const spinnerEl = document.getElementById('ai-gen-spinner');
+            if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-check-circle text-success"></i>'; }
+
+            // 构建 workshopResult 格式
+            const wsResult = {
+                success: true,
+                component: {
+                    code: result.component_code || '',
+                    name: result.component.name || params.name,
+                    region: params.region,
+                    phtml_code: '',
+                    ai_data: result.component,
+                    ...result.component
+                },
+                validation: { valid: true },
+                preview: _buildComponentPreviewHtml(result.component),
+            };
+            // 保存当前生成的组件供前端使用
+            window.currentGeneratedComponent = wsResult.component;
+            setTimeout(() => { _workshopShowResult(wsResult); }, 500);
+        } else if (result) {
+            throw new Error(result.message || '<?= __('生成失败') ?>');
+        }
+
+    } catch (error) {
+        console.error('智能体生成失败:', error);
+        updateStreamStatus('<?= __('生成失败') ?>: ' + error.message, 0);
+        const spinnerEl = document.getElementById('ai-gen-spinner');
+        if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-alert-circle text-danger"></i>'; }
+        _logLine('[FAILED] ' + error.message, '#ff6b6b');
+    }
+}
+
+// 从 AI 生成的组件数据构建预览 HTML
+function _buildComponentPreviewHtml(comp) {
+    const css = (comp.css_content || '') + '\n' + (comp.css_responsive || '');
+    const html = comp.html_content || '';
+    const js = comp.js_content || '';
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+:root{--pb-primary:#667eea;--pb-accent:#7c3aed;--pb-bg:#fff;--pb-text:#333;--pb-heading:#1a1a1a;--pb-link:#667eea;--pb-link-hover:#5a6fd6;--pb-text-muted:#888;--pb-border:#e5e7eb;}
+body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
+${css}
+</style></head><body>
+<div id="componentId">${html}</div>
+${js ? '<script>var component=document.getElementById("componentId");' + js + '<\/script>' : ''}
+</body></html>`;
+}
+
+// 同步预览到微调 iframe
+function _syncRefinePreview() {
+    const srcIframe = document.getElementById('ai-ws-preview-iframe');
+    const dstIframe = document.getElementById('ai-ws-refine-preview');
+    if (srcIframe && dstIframe) {
+        dstIframe.srcdoc = srcIframe.srcdoc || '';
+    }
+}
+
+// 微调功能
+async function _workshopRefine() {
+    const input = document.getElementById('ai-refine-input')?.value.trim();
+    if (!input) {
+        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('请输入微调描述') ?>');
+        return;
+    }
+
+    const btn = document.getElementById('ai-refine-btn');
+    const status = document.getElementById('ai-refine-status');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('微调中...') ?>'; }
+    if (status) status.textContent = '<?= __('正在调用 AI 微调...') ?>';
+
+    try {
+        // 获取当前组件数据
+        const component = _aiWorkshop.result?.component;
+        if (!component) throw new Error('<?= __('无组件数据') ?>');
+
+        const existingCode = component.phtml_code || '';
+        const region = component.region || _aiWorkshop.params?.region || 'content';
+
+        // 调用 refine API（使用 JSON body）
+        const refineBody = {
+            template_content: existingCode,
+            adjustment_prompt: input,
+            category: region,
+            code: component.code || ''
+        };
+
+        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(refineBody)
+        });
+        const json = await resp.json();
+
+        if (!json.success) throw new Error(json.message || '<?= __('微调失败') ?>');
+
+        // 更新结果
+        if (json.result) {
+            const r = json.result;
+            if (r.template_content) {
+                _aiWorkshop.result.component.phtml_code = r.template_content;
+            }
+            if (r.component) {
+                _aiWorkshop.result.component = { ..._aiWorkshop.result.component, ...r.component };
+            }
+            window.currentGeneratedComponent = _aiWorkshop.result.component;
+        }
+        if (json.preview?.html) {
+            const previewHtml = json.preview.html;
+            const dstIframe = document.getElementById('ai-ws-refine-preview');
+            if (dstIframe) dstIframe.srcdoc = previewHtml;
+            // 也更新步骤3的预览
+            const srcIframe = document.getElementById('ai-ws-preview-iframe');
+            if (srcIframe) srcIframe.srcdoc = previewHtml;
+            // 更新 result 中的预览
+            _aiWorkshop.result.preview = { html: previewHtml };
+        }
+
+        // 添加到微调历史
+        const historyEl = document.getElementById('ai-refine-history');
+        if (historyEl) {
+            historyEl.innerHTML = '<div style="padding:3px 0;border-bottom:1px solid #333;">'
+                + '<span style="color:#667eea;">• </span>' + _escHtml(input)
+                + '<span style="color:#10b981;margin-left:6px;">✓</span></div>'
+                + historyEl.innerHTML;
+        }
+
+        // 保存本地
+        saveGeneratedComponentToLocal();
+
+        if (status) status.innerHTML = '<span style="color:#10b981;">✓ <?= __('微调完成') ?></span>';
+        document.getElementById('ai-refine-input').value = '';
+
+    } catch (e) {
+        if (status) status.innerHTML = '<span style="color:#ef4444;"><?= __('微调失败') ?>: ' + e.message + '</span>';
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="mdi mdi-auto-fix"></i> <?= __('微调') ?>'; }
+    }
 }
 
 // 打开导入 JSON 预览弹窗
@@ -2320,40 +3273,8 @@ function clearAiParams() {
     }
 }
 
-// 使用AI流式生成组件
+// 使用AI流式生成组件（在工坊面板步骤2中运行）
 async function generateComponentWithAi(params) {
-    // 显示流式生成界面
-    Swal.fire({
-        title: '<i class="mdi mdi-robot"></i> <?= __('AI 正在生成组件...') ?>',
-        html: `
-            <div style="text-align: left;">
-                <div class="mb-3">
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="spinner-grow spinner-grow-sm text-primary me-2" id="ai-gen-spinner"></div>
-                        <span id="ai-gen-status"><?= __('准备中...') ?></span>
-                    </div>
-                    <div class="progress" style="height: 4px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="ai-gen-progress" style="width: 5%"></div>
-                    </div>
-                </div>
-                <div class="card" style="background: #1e1e1e; max-height: 300px; overflow: auto;">
-                    <div class="card-header py-2 small" style="background: #2d2d2d; color: #888;">
-                        <i class="mdi mdi-console"></i> <?= __('生成日志') ?>
-                        <span class="float-end" id="ai-gen-chars">0 <?= __('字符') ?></span>
-                    </div>
-                    <div class="card-body p-2">
-                        <pre id="ai-gen-output" style="margin: 0; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word; min-height: 100px;"></pre>
-                    </div>
-                </div>
-                ${params.referenceComponent ? `<p class="text-info small mt-2 mb-0"><i class="mdi mdi-information"></i> <?= __('使用参考组件') ?>: ${params.referenceComponent}</p>` : ''}
-            </div>
-        `,
-        width: '700px',
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        customClass: { container: 'swal2-dark-theme' }
-    });
-    
     try {
         // 如果选择了参考组件，先获取其代码
         let referenceCode = '';
@@ -2397,103 +3318,163 @@ async function generateComponentWithAi(params) {
         
         await new Promise((resolve, reject) => {
             const eventSource = new EventSource(streamUrl);
+            _aiWorkshop.eventSource = eventSource;
+            let isFinished = false;
+            let lastErrorMessage = '';
             
-            eventSource.onopen = function() {
-                updateStreamStatus('<?= __('AI 正在生成...') ?>', 20);
-            };
+            function safeParseJson(str) {
+                if (!str) return null;
+                try { return JSON.parse(str); } catch (e) { console.warn('SSE JSON 解析失败:', e); return null; }
+            }
+            
+            function finish(isSuccess, error) {
+                if (isFinished) return;
+                isFinished = true;
+                _aiWorkshop.eventSource = null;
+                try { eventSource.close(); } catch(e) {}
+                if (isSuccess) resolve(); else reject(error);
+            }
+            
+            eventSource.onopen = function() { updateStreamStatus('<?= __('AI 正在生成...') ?>', 20); };
             
             eventSource.addEventListener('start', function(e) {
-                const data = JSON.parse(e.data);
-                result = handleStreamEvent(data, result, totalChars);
+                const data = safeParseJson(e.data);
+                if (data) result = handleStreamEvent(data, result, totalChars);
             });
             
             eventSource.addEventListener('prompt', function(e) {
-                const data = JSON.parse(e.data);
-                result = handleStreamEvent(data, result, totalChars);
+                const data = safeParseJson(e.data);
+                if (data) {
+                    result = handleStreamEvent(data, result, totalChars);
+                    if (data.prompt_content) {
+                        const promptEl = document.getElementById('ai-gen-prompt-content');
+                        if (promptEl) { promptEl.textContent = data.prompt_content; promptEl.style.opacity = '1'; }
+                    }
+                    if (data.prompt_length) {
+                        const lenEl = document.getElementById('ai-gen-prompt-len');
+                        if (lenEl) lenEl.textContent = '(' + data.prompt_length + ' <?= __('字符') ?>)';
+                    }
+                }
             });
             
             eventSource.addEventListener('generating', function(e) {
-                const data = JSON.parse(e.data);
-                result = handleStreamEvent(data, result, totalChars);
+                const data = safeParseJson(e.data);
+                if (data) result = handleStreamEvent(data, result, totalChars);
+            });
+
+            // AI 思考/推理过程事件（普通模式，流式 reasoning_content 小块追加）
+            eventSource.addEventListener('thinking', function(e) {
+                const data = safeParseJson(e.data);
+                if (data?.content) {
+                    updateStreamStatus('<?= __('AI 思考中...') ?>', 25);
+                    _appendAiContent(data.content, 0, 'thinking', true);
+                }
             });
             
             eventSource.addEventListener('chunk', function(e) {
-                const data = JSON.parse(e.data);
-                if (data.total_length) {
-                    totalChars = data.total_length;
+                const data = safeParseJson(e.data);
+                if (data) {
+                    if (data.total_length) totalChars = data.total_length;
+                    result = handleStreamEvent(data, result, totalChars);
                 }
-                result = handleStreamEvent(data, result, totalChars);
             });
             
             eventSource.addEventListener('parsing', function(e) {
-                const data = JSON.parse(e.data);
-                result = handleStreamEvent(data, result, totalChars);
+                const data = safeParseJson(e.data);
+                if (data) result = handleStreamEvent(data, result, totalChars);
+            });
+            
+            eventSource.addEventListener('stream_error', function(e) {
+                const data = safeParseJson(e.data);
+                if (data) {
+                    const outputEl = document.getElementById('ai-gen-output');
+                    if (outputEl) outputEl.innerHTML += `\n<span style="color:#ffa500">[WARN] ${data.message}</span>`;
+                    updateStreamStatus('<?= __('生成出错') ?>', 50);
+                }
             });
             
             eventSource.addEventListener('complete', function(e) {
-                const data = JSON.parse(e.data);
-                result = data;
-                eventSource.close();
-                resolve();
+                const data = safeParseJson(e.data);
+                if (data) result = data;
+                finish(true);
             });
             
             eventSource.addEventListener('error', function(e) {
-                if (e.data) {
-                    const data = JSON.parse(e.data);
-                    eventSource.close();
-                    reject(new Error(data.message || '<?= __('生成失败') ?>'));
+                const data = safeParseJson(e.data);
+                if (data && data.message) {
+                    lastErrorMessage = data.message;
+                    updateStreamStatus('<?= __('错误') ?>: ' + data.message, 0);
+                    const outputEl = document.getElementById('ai-gen-output');
+                    if (outputEl) outputEl.innerHTML += '\n<span style="color:#ff6b6b">[ERROR] ' + data.message + '</span>';
+                    finish(false, new Error(data.message));
                 }
             });
             
-            eventSource.addEventListener('done', function(e) {
-                eventSource.close();
-                resolve();
-            });
+            eventSource.addEventListener('done', function(e) { finish(true); });
             
             eventSource.onerror = function(e) {
-                eventSource.close();
-                // 如果已经有结果，不算错误
-                if (result && result.success) {
-                    resolve();
-                } else {
-                    reject(new Error('<?= __('连接中断') ?>'));
-                }
+                if (result && result.success) { finish(true); return; }
+                if (lastErrorMessage) { finish(false, new Error(lastErrorMessage)); return; }
+                console.error('SSE 连接错误:', e);
+                finish(false, new Error('<?= __('连接中断或服务器错误') ?>'));
             };
         });
         
-        // 检查最终结果
+        // 生成完成 — 切换到预览步骤
         if (result && result.success) {
             updateStreamStatus('<?= __('生成完成！') ?>', 100);
-            
-            // 短暂延迟后显示结果
-            setTimeout(() => {
-                showGeneratedComponent(result);
-            }, 500);
+            const spinnerEl = document.getElementById('ai-gen-spinner');
+            if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-check-circle text-success"></i>'; }
+            setTimeout(() => { _workshopShowResult(result); }, 500);
         } else if (result && result.message) {
             throw new Error(result.message);
         }
         
     } catch (error) {
         console.error('流式生成失败:', error);
-        Swal.fire({
-            icon: 'error',
-            title: '<?= __('生成失败') ?>',
-            html: `
-                <div style="text-align: left;">
-                    <p class="text-danger mb-3">${error.message || '<?= __('未知错误') ?>'}</p>
-                    <p class="text-muted small"><?= __('您可以重新尝试生成组件。') ?></p>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: '<i class="mdi mdi-refresh"></i> <?= __('重新生成') ?>',
-            cancelButtonText: '<?= __('取消') ?>',
-            confirmButtonColor: '#667eea',
-            customClass: { container: 'swal2-dark-theme' }
-        }).then((result) => {
-            if (result.isConfirmed) {
-                openAiGenerateComponent();
-            }
-        });
+        let errorMessage = error.message || '<?= __('未知错误') ?>';
+        let errorTip = '<?= __('您可以重新尝试生成组件。') ?>';
+        
+        if (errorMessage.includes('JSON') || errorMessage.includes('格式不正确')) {
+            errorTip = '<?= __('AI 返回的内容解析失败，可能是网络不稳定导致数据截断。') ?>';
+        } else if (errorMessage.includes('连接') || errorMessage.includes('中断')) {
+            errorTip = '<?= __('网络连接不稳定，请检查网络后重试。') ?>';
+        } else if (errorMessage.includes('超时') || errorMessage.includes('timeout')) {
+            errorTip = '<?= __('AI 响应超时，请稍后重试。') ?>';
+        } else if (errorMessage.includes('未返回任何内容')) {
+            errorTip = '<?= __('AI 服务可能暂时不可用，请稍后重试。') ?>';
+        }
+        
+        showStreamError(errorMessage, errorTip, params);
+    }
+}
+
+// 在工坊步骤2中显示错误并提供重试按钮
+function showStreamError(errorMessage, errorTip, params) {
+    const statusEl = document.getElementById('ai-gen-status');
+    const progressEl = document.getElementById('ai-gen-progress');
+    const spinnerEl = document.getElementById('ai-gen-spinner');
+    const outputEl = document.getElementById('ai-gen-output');
+    
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ff6b6b"><i class="mdi mdi-alert-circle"></i> <?= __('生成失败') ?></span>';
+    if (progressEl) { progressEl.classList.remove('progress-bar-animated', 'progress-bar-striped'); progressEl.style.backgroundColor = '#dc3545'; }
+    if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-alert-circle text-danger"></i>'; }
+    if (outputEl) {
+        outputEl.innerHTML += `\n<span style="color:#ff6b6b">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>`;
+        outputEl.innerHTML += `\n<span style="color:#ff6b6b">[ERROR] ${errorMessage}</span>`;
+        outputEl.innerHTML += `\n<span style="color:#888">${errorTip}</span>`;
+    }
+    
+    // 更新步骤2底部按钮为重试/返回
+    const step2 = document.getElementById('ai-ws-step2');
+    if (step2) {
+        const footer = step2.querySelector('.ai-ws-footer');
+        if (footer) {
+            footer.innerHTML = `
+                <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('返回修改') ?></button>
+                <button class="ai-ws-btn-primary" onclick="_workshopRegenerate()"><i class="mdi mdi-refresh"></i> <?= __('重新生成') ?></button>
+            `;
+        }
     }
 }
 
@@ -2516,7 +3497,7 @@ function handleStreamEvent(data, currentResult, totalChars) {
         updateStreamStatus(data.message, Math.min(90, 20 + (totalChars / 100)));
         if (outputEl) {
             outputEl.textContent += '▶ ' + data.message + '\n';
-            outputEl.scrollTop = outputEl.scrollHeight;
+            _scrollLogToBottom();
         }
     }
     
@@ -2526,7 +3507,7 @@ function handleStreamEvent(data, currentResult, totalChars) {
             // 显示内容摘要（避免显示太长的代码）
             const preview = data.content.length > 100 ? data.content.substring(0, 100) + '...' : data.content;
             outputEl.textContent += preview;
-            outputEl.scrollTop = outputEl.scrollHeight;
+            _scrollLogToBottom();
         }
         if (charsEl && data.total_length) {
             charsEl.textContent = data.total_length + ' <?= __('字符') ?>';
@@ -3198,6 +4179,14 @@ async function executeInlineRefine() {
 
 // 保存生成的组件
 async function saveGeneratedComponent(component) {
+    // 标记 AI 生成标识
+    component.ai_generated = true;
+    component.ai_generated_at = new Date().toISOString();
+    
+    // 确保 CSS 类名有唯一前缀（避免跨模块冲突）
+    const uniquePrefix = 'ai-' + (component.code || '').replace(/[^a-zA-Z0-9-]/g, '-');
+    component.css_prefix = uniquePrefix;
+    
     Swal.fire({
         title: '<?= __('保存中...') ?>',
         allowOutsideClick: false,
@@ -3206,7 +4195,7 @@ async function saveGeneratedComponent(component) {
     });
     
     try {
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/saveComponent') ?>', {
+        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/save-component') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -3230,12 +4219,11 @@ async function saveGeneratedComponent(component) {
         Swal.fire({
             icon: 'success',
             title: '<?= __('保存成功') ?>',
-            text: '<?= __('组件已保存，正在刷新组件库...') ?>',
+            html: '<div><i class="mdi mdi-robot"></i> <?= __('AI 组件已保存到组件库') ?></div>',
             timer: 1500,
             showConfirmButton: false,
             customClass: { container: 'swal2-dark-theme' }
         }).then(() => {
-            // 刷新组件面板
             initComponentPanel();
         });
         

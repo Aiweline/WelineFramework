@@ -89,6 +89,9 @@ $bgStyle = match($bgType) {
 // 容器宽度
 $maxWidth = $containerWidth === 'full' ? '100%' : $containerWidth . 'px';
 
+// CSS 唯一前缀（防止跨模块冲突）
+$cssPrefix = 'ai-' . preg_replace('/[^a-zA-Z0-9-]/', '-', $componentId);
+
 // ===== AI生成的额外PHP变量 =====
 // 使用try-catch包装AI生成的代码，防止错误中断渲染
 try {
@@ -101,10 +104,19 @@ try {
 
 <!-- AI生成的CSS样式 -->
 <style>
-/* 基础样式 */
+/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
 #<?= $componentId ?> {
+    /* 主题色继承链: 组件配置 > 页面主题 > 全局主题 > 默认值 */
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($titleColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-text-muted: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 70%, transparent);
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+
     background: <?= $bgStyle ?>;
-    color: <?= htmlspecialchars($textColor) ?>;
+    color: var(--pb-text);
     padding: <?= $paddingTop ?>px 20px <?= $paddingBottom ?>px;
 }
 
@@ -121,7 +133,7 @@ try {
 #<?= $componentId ?> .ai-content-subtitle {
     font-size: 0.9rem;
     font-weight: 600;
-    color: <?= htmlspecialchars($accentColor) ?>;
+    color: var(--pb-accent);
     text-transform: uppercase;
     letter-spacing: 2px;
     margin-bottom: 12px;
@@ -130,7 +142,7 @@ try {
 #<?= $componentId ?> .ai-content-title {
     font-size: clamp(1.75rem, 4vw, 2.5rem);
     font-weight: 700;
-    color: <?= htmlspecialchars($titleColor) ?>;
+    color: var(--pb-heading);
     margin: 0 0 16px 0;
     line-height: 1.2;
 }

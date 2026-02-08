@@ -2,7 +2,10 @@
 
 ## 概述
 
-Weline_Cdn 模块提供了CDN缓存预热URL提供者扩展点，允许其他模块通过 WarmupProvider 扩展点来提供需要预热的URL列表。本文档详细说明如何使用 WarmupProvider 扩展点。
+Weline_Cdn 模块提供了两个扩展点，允许其他模块扩展 CDN 功能：
+
+1. **WarmupProvider** - CDN 缓存预热 URL 提供者，用于收集需要预热的 URL 列表
+2. **Adapter** - CDN 适配器，用于扩展缓存清理和规则管理功能（如本地内存缓存、Redis 缓存等）
 
 ## 快速开始
 
@@ -11,6 +14,12 @@ Weline_Cdn 模块提供了CDN缓存预热URL提供者扩展点，允许其他模
 1. 在您的模块中创建扩展目录：`extends/module/Weline_Cdn/`
 2. 创建PHP文件（文件名可自定义，如 `ProductUrls.php`）
 3. 实现 `execute()` 静态方法，返回URL数组
+
+### 创建 Adapter（CDN 适配器）
+
+1. 在您的模块中创建扩展目录：`extends/module/Weline_Cdn/Adapter/`
+2. 创建 PHP 文件（如 `WlsMemory.php`）
+3. 实现 `AdapterInterface` 接口的所有方法
 
 ## 详细说明
 
@@ -314,6 +323,191 @@ return [
 - [Weline_Cdn 完整文档](doc/README.md)
 - [CDN预热URL投递事件](doc/event/CDN预热URL投递.md)
 - [CDN模块计划文档](计划.md)
+
+---
+
+## Adapter 扩展点（CDN 适配器）
+
+### 概述
+
+Adapter 扩展点允许其他模块注册 CDN 适配器，以响应 CDN 模块的缓存清理和规则管理操作。例如，WLS（Weline Server）可以注册内存缓存适配器，当 CDN 模块调用 `purgeUrls()` 时，WLS 适配器会清理内存中的对应缓存。
+
+### 路径
+
+`extends/module/Weline_Cdn/Adapter/`
+
+### 接口
+
+必须实现 `Weline\Cdn\Api\AdapterInterface` 接口。
+
+### 接口方法
+
+| 方法 | 说明 |
+|------|------|
+| `getAdapterCode(): string` | 返回适配器唯一标识（如 `wls_memory`） |
+| `getAdapterName(): string` | 返回适配器显示名称 |
+| `getDescription(): string` | 返回适配器描述 |
+| `getVersion(): string` | 返回适配器版本 |
+| `purgeEverything(string $zoneId, array $credentials): array` | 清理所有缓存 |
+| `purgeUrls(string $zoneId, array $urls, array $credentials): array` | 按 URL 清理缓存 |
+| `purgeHosts(string $zoneId, array $hosts, array $credentials): array` | 按 Host 清理缓存 |
+| `purgeTags(string $zoneId, array $tags, array $credentials): array` | 按 Tag 清理缓存 |
+| `purgeCacheKeys(string $zoneId, array $keys, array $credentials): array` | 按 Cache Key 清理缓存 |
+| `getRules(string $zoneId, array $credentials): array` | 获取缓存规则 |
+| `putRules(string $zoneId, array $rules, array $credentials): array` | 推送缓存规则 |
+| `ensureZone(string $domain, array $credentials): array` | 确保 Zone 存在 |
+
+### 目录结构
+
+```
+app/code/YourVendor/YourModule/
+└── extends/
+    └── module/
+        └── Weline_Cdn/
+            └── Adapter/
+                └── YourAdapter.php
+```
+
+### 命名空间规范
+
+- 基础命名空间：`YourVendor\YourModule\Extends\Module\Weline_Cdn\Adapter`
+- 类名：与文件名相同（不含扩展名）
+- 示例：文件 `WlsMemory.php` → 类名 `WlsMemory` → 完整命名空间 `Weline\Server\Extends\Module\Weline_Cdn\Adapter\WlsMemory`
+
+### 完整示例
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Server\Extends\Module\Weline_Cdn\Adapter;
+
+use Weline\Cdn\Api\AdapterInterface;
+use Weline\Server\Service\MemoryCacheService;
+
+/**
+ * WLS 内存缓存 CDN 适配器
+ * 
+ * 通过 extends 规约注册到 Weline_Cdn 模块
+ */
+class WlsMemory implements AdapterInterface
+{
+    public function getAdapterCode(): string
+    {
+        return 'wls_memory';
+    }
+    
+    public function getAdapterName(): string
+    {
+        return __('WLS 内存缓存');
+    }
+    
+    public function getDescription(): string
+    {
+        return __('Weline Server 本地内存全页缓存');
+    }
+    
+    public function getVersion(): string
+    {
+        return '1.0.0';
+    }
+    
+    public function purgeEverything(string $zoneId, array $credentials): array
+    {
+        MemoryCacheService::purgeAll();
+        return ['success' => true, 'message' => __('WLS 内存缓存已清理')];
+    }
+    
+    public function purgeUrls(string $zoneId, array $urls, array $credentials): array
+    {
+        $count = 0;
+        foreach ($urls as $url) {
+            if (MemoryCacheService::purgeByUrl($url)) {
+                $count++;
+            }
+        }
+        return ['success' => true, 'message' => __('已清理 %{count} 个 URL', ['count' => $count])];
+    }
+    
+    public function purgeHosts(string $zoneId, array $hosts, array $credentials): array
+    {
+        $count = 0;
+        foreach ($hosts as $host) {
+            $count += MemoryCacheService::purgeByHost($host);
+        }
+        return ['success' => true, 'message' => __('已清理 %{count} 个 Host', ['count' => $count])];
+    }
+    
+    public function purgeTags(string $zoneId, array $tags, array $credentials): array
+    {
+        $count = 0;
+        foreach ($tags as $tag) {
+            $count += MemoryCacheService::purgeByTag($tag);
+        }
+        return ['success' => true, 'message' => __('已清理 %{count} 个 Tag', ['count' => $count])];
+    }
+    
+    public function purgeCacheKeys(string $zoneId, array $keys, array $credentials): array
+    {
+        $count = 0;
+        foreach ($keys as $key) {
+            if (MemoryCacheService::purgeByKey($key)) {
+                $count++;
+            }
+        }
+        return ['success' => true, 'message' => __('已清理 %{count} 个 Cache Key', ['count' => $count])];
+    }
+    
+    public function getRules(string $zoneId, array $credentials): array
+    {
+        return MemoryCacheRuleManager::getInstance()->loadRules();
+    }
+    
+    public function putRules(string $zoneId, array $rules, array $credentials): array
+    {
+        MemoryCacheRuleManager::getInstance()->updateRules($rules);
+        return ['success' => true, 'message' => __('规则已更新')];
+    }
+    
+    public function ensureZone(string $domain, array $credentials): array
+    {
+        // 本地内存缓存不需要 Zone 概念，直接返回虚拟 Zone
+        return [
+            'zone_id' => 'wls_local',
+            'zone_name' => $domain
+        ];
+    }
+}
+```
+
+### 适用场景
+
+- **本地内存缓存**：WLS 内存缓存适配器，响应 CDN 模块的缓存清理请求
+- **Redis 缓存**：Redis 缓存适配器，用于分布式缓存清理
+- **其他 CDN 服务商**：接入其他 CDN 服务商（如阿里云 CDN、腾讯云 CDN 等）
+
+### 工作流程
+
+1. **注册阶段**：`setup:upgrade` 或框架启动时，`ExtendsScanner` 扫描模块的 `extends.php`，发现并注册适配器
+2. **加载阶段**：`AdapterResolver` 通过 `ExtendsData::getExtendedBy('Weline_Cdn')` 获取所有已注册的适配器
+3. **调用阶段**：当 CDN 模块需要清理缓存或更新规则时，调用所有适配器的对应方法
+
+### 常见问题
+
+#### Q: 如何知道我的适配器是否被正确注册？
+
+A: 运行 `php bin/w s:up` 后，系统会扫描并注册适配器。您可以查看 `generated/extends.php` 文件确认注册信息。
+
+#### Q: 适配器的 purge 方法失败会怎样？
+
+A: 每个适配器的 purge 方法应返回包含 `success` 和 `message` 字段的数组。如果失败，CDN 模块会记录错误日志，但不会影响其他适配器的执行。
+
+#### Q: 如何处理不支持的功能？
+
+A: 对于不支持的功能（如本地缓存不支持 Zone 概念），可以返回一个表示成功的结果或抛出异常。建议返回成功结果以避免阻断其他适配器的执行。
+
+---
 
 ## 支持和贡献
 

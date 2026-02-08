@@ -1,0 +1,313 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Weline Server - 服务器监控控制器
+ * 
+ * 提供服务器监控首页、状态查看、攻击日志等功能
+ * 
+ * @author Aiweline
+ * @email aiweline@qq.com
+ */
+
+namespace Weline\Server\Controller\Backend;
+
+use Weline\Framework\App\Controller\BackendController;
+use Weline\Server\Model\AttackLog;
+use Weline\Server\Model\ServerStatusLog;
+use Weline\Server\Service\OptimizationGuideService;
+
+/**
+ * ServerMonitor - 服务器监控
+ * 
+ * 监控 Weline Server 运行状态、攻击日志等
+ */
+class ServerMonitor extends BackendController
+{
+    /**
+     * 服务器状态日志模型
+     */
+    private ServerStatusLog $statusLog;
+    
+    /**
+     * 攻击日志模型
+     */
+    private AttackLog $attackLog;
+    
+    /**
+     * 优化指南服务
+     */
+    private OptimizationGuideService $guideService;
+    
+    /**
+     * 构造函数
+     */
+    public function __construct(
+        ServerStatusLog $statusLog,
+        AttackLog $attackLog,
+        OptimizationGuideService $guideService
+    ) {
+        $this->statusLog = $statusLog;
+        $this->attackLog = $attackLog;
+        $this->guideService = $guideService;
+    }
+    
+    /**
+     * 监控首页
+     */
+    public function getIndex(): string
+    {
+        $instance = $this->request->getGet('instance', 'default');
+        
+        // 获取服务器实时状态
+        $serverStatus = $this->guideService->getServerStatus();
+        
+        // 获取攻击统计
+        $attackStats = $this->attackLog->getStatistics($instance, 7);
+        
+        // 获取最新状态日志
+        $statusLogs = $this->statusLog->getLatestStatus($instance);
+        
+        // 获取服务器统计
+        $serverStats = $this->statusLog->getStatistics($instance);
+        
+        $this->assign('instance', $instance);
+        $this->assign('serverStatus', $serverStatus);
+        $this->assign('attackStats', $attackStats);
+        $this->assign('statusLogs', $statusLogs);
+        $this->assign('serverStats', $serverStats);
+        
+        // Master API 文档
+        $this->assign('masterApiDocs', $this->getMasterApiDocs());
+        
+        return $this->fetch();
+    }
+    
+    /**
+     * API: 获取实时状态
+     */
+    public function getStatus(): array
+    {
+        $instance = $this->request->getGet('instance', 'default');
+        
+        return [
+            'success' => true,
+            'data' => [
+                'server_status' => $this->guideService->getServerStatus(),
+                'status_logs' => $this->statusLog->getLatestStatus($instance),
+                'server_stats' => $this->statusLog->getStatistics($instance),
+                'timestamp' => \time(),
+            ],
+        ];
+    }
+    
+    /**
+     * API: 获取攻击日志
+     */
+    public function getAttacks(): array
+    {
+        $instance = $this->request->getGet('instance', '');
+        $limit = (int) $this->request->getGet('limit', 50);
+        $page = (int) $this->request->getGet('page', 1);
+        
+        $attacks = $this->attackLog->getRecentAttacks($limit, $instance);
+        $stats = $this->attackLog->getStatistics($instance, 7);
+        
+        return [
+            'success' => true,
+            'data' => [
+                'attacks' => $attacks,
+                'statistics' => $stats,
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $stats['total_attacks'],
+            ],
+        ];
+    }
+    
+    /**
+     * API: 获取攻击统计
+     */
+    public function getAttackStats(): array
+    {
+        $instance = $this->request->getGet('instance', '');
+        $days = (int) $this->request->getGet('days', 7);
+        
+        return [
+            'success' => true,
+            'data' => $this->attackLog->getStatistics($instance, $days),
+        ];
+    }
+    
+    /**
+     * API: 获取 Worker 状态历史
+     */
+    public function getWorkerHistory(): array
+    {
+        $instance = $this->request->getGet('instance', 'default');
+        $limit = (int) $this->request->getGet('limit', 100);
+        
+        return [
+            'success' => true,
+            'data' => $this->statusLog->getStatusHistory(
+                $instance,
+                ServerStatusLog::PROCESS_TYPE_WORKER,
+                $limit
+            ),
+        ];
+    }
+    
+    /**
+     * 攻击日志页面
+     */
+    public function getAttackLog(): string
+    {
+        $instance = $this->request->getGet('instance', '');
+        $page = (int) $this->request->getGet('page', 1);
+        $limit = (int) $this->request->getGet('limit', 50);
+        
+        $attacks = $this->attackLog->clearQuery();
+        
+        if ($instance) {
+            $attacks->where(AttackLog::fields_INSTANCE, $instance);
+        }
+        
+        $total = $attacks->count();
+        
+        $attacks = $attacks->clearQuery();
+        if ($instance) {
+            $attacks->where(AttackLog::fields_INSTANCE, $instance);
+        }
+        
+        $list = $attacks
+            ->order(AttackLog::fields_CREATED_AT, 'DESC')
+            ->pagination($page, $limit)
+            ->select()
+            ->fetchArray();
+        
+        $this->assign('attacks', $list);
+        $this->assign('instance', $instance);
+        $this->assign('page', $page);
+        $this->assign('limit', $limit);
+        $this->assign('total', $total);
+        $this->assign('totalPages', \ceil($total / $limit));
+        $this->assign('attackStats', $this->attackLog->getStatistics($instance, 7));
+        
+        return $this->fetch('attack-log');
+    }
+    
+    /**
+     * API 文档页面
+     */
+    public function getApiDoc(): string
+    {
+        $this->assign('apiDocs', $this->getMasterApiDocs());
+        return $this->fetch('api-doc');
+    }
+    
+    /**
+     * 获取 Master API 文档
+     */
+    private function getMasterApiDocs(): array
+    {
+        return [
+            [
+                'category' => __('健康检查'),
+                'apis' => [
+                    [
+                        'name' => __('基础健康检查'),
+                        'method' => 'GET',
+                        'path' => '/_wls/health',
+                        'description' => __('返回 Worker 基础健康状态'),
+                        'response' => '{"status":"healthy","worker_id":0}',
+                    ],
+                    [
+                        'name' => __('详细健康检查'),
+                        'method' => 'GET',
+                        'path' => '/_wls/health?detail=1',
+                        'description' => __('返回 Worker 详细状态信息，包括内存、请求数、连接数等'),
+                        'response' => '{"status":"healthy","instance":"default","worker_id":0,"port":9981,"connections":5,"active_requests":1,"total_requests":1234,"memory_usage":12345678,"memory_peak":23456789,"uptime":3600,"php_version":"8.4.0","ssl":false,"timestamp":1234567890}',
+                    ],
+                ],
+            ],
+            [
+                'category' => __('进程管理'),
+                'apis' => [
+                    [
+                        'name' => __('优雅停止'),
+                        'method' => 'POST',
+                        'path' => '/_wls/shutdown',
+                        'description' => __('优雅停止当前 Worker 进程（仅本地访问）'),
+                        'response' => '{"status":"shutdown"}',
+                    ],
+                    [
+                        'name' => __('热重载'),
+                        'method' => 'POST',
+                        'path' => '/_wls/reload',
+                        'description' => __('触发代码热重载（仅本地访问）'),
+                        'response' => '{"status":"reloading"}',
+                    ],
+                ],
+            ],
+            [
+                'category' => __('状态查询'),
+                'apis' => [
+                    [
+                        'name' => __('Dispatcher 状态'),
+                        'method' => 'GET',
+                        'path' => '/_wls/dispatcher/status',
+                        'description' => __('获取 Dispatcher 分流器状态（仅 Windows 模式）'),
+                        'response' => '{"status":"running","workers":[...],"connections":10}',
+                    ],
+                    [
+                        'name' => __('Workers 列表'),
+                        'method' => 'GET',
+                        'path' => '/_wls/workers',
+                        'description' => __('获取所有 Worker 进程列表'),
+                        'response' => '{"workers":[{"id":0,"port":9981,"pid":1234,"status":"running"},...]}',
+                    ],
+                ],
+            ],
+            [
+                'category' => __('调试工具'),
+                'apis' => [
+                    [
+                        'name' => __('请求回显'),
+                        'method' => 'GET/POST',
+                        'path' => '/_wls/echo',
+                        'description' => __('回显请求信息，用于调试'),
+                        'response' => '{"method":"GET","uri":"/","headers":{...},"body":"..."}',
+                    ],
+                    [
+                        'name' => __('内存缓存状态'),
+                        'method' => 'GET',
+                        'path' => '/_wls/cache/status',
+                        'description' => __('获取 WLS 内存缓存状态'),
+                        'response' => '{"enabled":true,"entries":100,"memory":"10MB"}',
+                    ],
+                ],
+            ],
+        ];
+    }
+    
+    /**
+     * API: 清理过期日志
+     */
+    public function postCleanupLogs(): array
+    {
+        $statusDays = (int) $this->request->getPost('status_days', 7);
+        $attackDays = (int) $this->request->getPost('attack_days', 30);
+        
+        $statusCleaned = $this->statusLog->cleanupOldLogs($statusDays);
+        $attackCleaned = $this->attackLog->cleanupOldLogs($attackDays);
+        
+        return [
+            'success' => true,
+            'message' => __('日志清理完成'),
+            'data' => [
+                'status_logs_cleaned' => $statusCleaned,
+                'attack_logs_cleaned' => $attackCleaned,
+            ],
+        ];
+    }
+}

@@ -51,7 +51,7 @@ const CustomerServiceStatistics = (function() {
      */
     async function loadStatistics(period) {
         try {
-            const response = await fetch(config.consoleUrl + '/getStatistics?period=' + period);
+            const response = await fetch(config.consoleUrl + '/statistics?period=' + period);
             const data = await response.json();
             
             if (data.success) {

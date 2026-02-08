@@ -1,0 +1,86 @@
+{
+    "page_type": "home_page",
+    "name": "首页默认布局",
+    "description": "PokerArena 主题首页布局，包含英雄区、游戏展示、优势、下载、评价、FAQ、CTA",
+    "version": "1.0.0",
+    "layout_config": {
+        "header": [
+            {
+                "code": "header-nav",
+                "enabled": true,
+                "instance_id": "header-nav-default",
+                "config": {
+                    "logo.display": "yes",
+                    "logo.text": "PokerArena",
+                    "logo.width": 40,
+                    "navigation.items": "Home=>#hero\nGames=>#games\nAdvantages=>#advantages\nDownload=>#download\nFAQ=>#faq",
+                    "navigation.show_cta": "yes",
+                    "navigation.cta_text": "Join Table",
+                    "navigation.cta_url": "#register"
+                }
+            }
+        ],
+        "content": [
+            {
+                "code": "hero-slider",
+                "enabled": true,
+                "instance_id": "hero-default",
+                "config": {
+                    "content.badge": "♠ Premium Poker Platform",
+                    "content.title": "Where Champions Play",
+                    "content.description": "Experience the thrill of Texas Hold'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.",
+                    "cta.primary_text": "Join Free",
+                    "cta.primary_url": "#register",
+                    "cta.secondary_text": "Download App",
+                    "cta.secondary_url": "#download",
+                    "stats.items": "$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action"
+                }
+            },
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-default",
+                "config": {}
+            },
+            {
+                "code": "advantages",
+                "enabled": true,
+                "instance_id": "advantages-default",
+                "config": {}
+            },
+            {
+                "code": "app-download",
+                "enabled": true,
+                "instance_id": "download-default",
+                "config": {}
+            },
+            {
+                "code": "testimonials",
+                "enabled": true,
+                "instance_id": "testimonials-default",
+                "config": {}
+            },
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-default",
+                "config": {}
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "cta-default",
+                "config": {}
+            }
+        ],
+        "footer": [
+            {
+                "code": "footer-links",
+                "enabled": true,
+                "instance_id": "footer-links-default",
+                "config": {}
+            }
+        ]
+    },
+    "notes": "PokerArena 首页完整布局配置"
+}

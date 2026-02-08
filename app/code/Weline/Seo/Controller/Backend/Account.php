@@ -327,26 +327,22 @@ class Account extends BackendController
         }
         
         try {
-            // 读取 JSON 数据 - 尝试多种方式
-            $body = $this->request->getBody();
-            if (empty($body)) {
-                // 如果 getBody() 返回空，直接读取 php://input
-                $body = file_get_contents('php://input');
+            // 使用框架推荐的 getBodyParams() 获取请求体
+            $bodyParams = $this->request->getBodyParams();
+            
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
             }
             
-            if (empty($body)) {
+            if (empty($data) || !is_array($data)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('未接收到请求数据'),
-                ]);
-            }
-            
-            $data = json_decode($body, true);
-            
-            if (!is_array($data)) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('无效的请求数据格式'),
                 ]);
             }
             
@@ -438,24 +434,22 @@ class Account extends BackendController
         }
         
         try {
-            $body = $this->request->getBody();
-            if (empty($body)) {
-                $body = file_get_contents('php://input');
+            // 使用框架推荐的 getBodyParams() 获取请求体
+            $bodyParams = $this->request->getBodyParams();
+            
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
             }
             
-            if (empty($body)) {
+            if (empty($data) || !is_array($data)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('未接收到请求数据'),
-                ]);
-            }
-            
-            $data = json_decode($body, true);
-            
-            if (!is_array($data)) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('无效的请求数据格式'),
                 ]);
             }
             
@@ -521,24 +515,22 @@ class Account extends BackendController
         }
         
         try {
-            $body = $this->request->getBody();
-            if (empty($body)) {
-                $body = file_get_contents('php://input');
+            // 使用框架推荐的 getBodyParams() 获取请求体
+            $bodyParams = $this->request->getBodyParams();
+            
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
             }
             
-            if (empty($body)) {
+            if (empty($data) || !is_array($data)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('未接收到请求数据'),
-                ]);
-            }
-            
-            $data = json_decode($body, true);
-            
-            if (!is_array($data)) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('无效的请求数据格式'),
                 ]);
             }
             
@@ -571,8 +563,8 @@ class Account extends BackendController
                 ]);
             }
             
-            // 执行删除
-            $websiteAccountModel->delete();
+            // 执行删除（ORM 规范：delete() 构建 SQL，fetch() 执行）
+            $websiteAccountModel->delete()->fetch();
             
             return $this->jsonResponse([
                 'success' => true,

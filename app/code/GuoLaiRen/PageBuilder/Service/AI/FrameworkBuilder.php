@@ -575,65 +575,57 @@ RULES;
 
         $guides = [
             'header' => <<<'GUIDE'
-你只需要返回以下JSON格式的代码，框架已经包含了导航、Logo、CTA按钮等固定结构：
+## Header 组件框架 — 返回 JSON 格式
+
+框架已包含：Logo 区域、导航链接循环、CTA 按钮、汉堡菜单、Flex 布局、基础颜色。
+你负责用 css_extra 增强视觉（渐变背景、hover 动画、阴影、滚动效果），用 js_content 实现交互（滚动固定、菜单展开动画）。
 
 ```json
 {
-    "extra_fields": "可选：额外的字段定义，每行一个",
-    "php_variables": "可选：额外的PHP变量准备代码",
-    "css_extra": "可选：额外的CSS样式",
-    "html_extra": "可选：额外的HTML内容（放在header容器内）",
-    "js_content": "可选：JavaScript代码"
+    "extra_fields": "额外配置字段（可选）",
+    "php_variables": "额外 PHP 变量（可选）",
+    "css_extra": "增强样式（必填！— 让 header 看起来专业美观）",
+    "html_extra": "额外装饰 HTML（可选 — 禁止输出导航或 Logo）",
+    "js_content": "交互逻辑（可选 — 滚动固定、移动端菜单等）"
 }
 ```
-
-注意：
-- 导航菜单、Logo、CTA按钮等已经在框架中实现
-- 你只需要添加额外的样式或装饰元素
-- CSS中使用 #$componentId 作为选择器前缀
-- Header 导航必须使用真实子页面（PHP渲染），AI 不能生成或修改导航项数据
 GUIDE,
             
             'content' => <<<'GUIDE'
-你只需要返回以下JSON格式的代码，框架已经包含了标题、副标题、描述等固定结构：
+## Content 组件框架 — 返回 JSON 格式
+
+框架已包含：标题/副标题/描述头部、背景色、容器布局。
+你负责用 html_content 实现核心内容（卡片、FAQ、画廊等），用 css_extra 写样式。
 
 ```json
 {
-    "extra_fields": "可选：额外的字段定义，每行一个，格式：group:分组名 => 分组标题 或 分组名.字段名 => 标签:类型:默认值",
-    "php_variables": "可选：额外的PHP变量准备代码，使用 $getConfig('字段名', '默认值') 获取配置",
-    "css_extra": "额外的CSS样式",
-    "css_responsive": "可选：响应式CSS（放在 @media 块内）",
-    "html_content": "必填：主体HTML内容",
-    "js_content": "可选：JavaScript代码"
+    "extra_fields": "额外配置字段（可选）",
+    "php_variables": "额外 PHP 变量（可选）",
+    "css_extra": "CSS 样式（必填）",
+    "css_responsive": "移动端样式（可选）",
+    "html_content": "核心内容 HTML（必填！— 放在 .ai-content-body 内）",
+    "js_content": "交互逻辑（可选）"
 }
 ```
-
-注意：
-- 标题、副标题、描述已经在框架中处理
-- html_content 是你需要实现的核心内容区域
-- CSS中使用 #$componentId 作为选择器前缀
-- 所有输出使用 htmlspecialchars() 转义
 GUIDE,
             
             'footer' => <<<'GUIDE'
-你只需要返回以下JSON格式的代码，框架已经包含了品牌信息、链接列、社交媒体、版权等固定结构：
+## Footer 组件框架 — 返回 JSON 格式
+
+框架已包含：品牌 Logo/描述、两列链接、社交图标、版权信息、Grid 布局。
+你负责用 css_extra 增强视觉，用 html_extra_column 添加第三列链接，用 html_extra 添加附加内容（如订阅表单）。
 
 ```json
 {
-    "extra_fields": "可选：额外的字段定义，每行一个",
-    "php_variables": "可选：额外的PHP变量准备代码",
-    "css_extra": "可选：额外的CSS样式",
-    "html_extra_column": "可选：额外的链接列HTML",
-    "html_extra": "可选：额外的主体内容",
-    "footer_extra_text": "可选：底部额外文字",
-    "js_content": "可选：JavaScript代码"
+    "extra_fields": "额外配置字段（可选）",
+    "php_variables": "额外 PHP 变量（可选）",
+    "css_extra": "增强样式（必填！）",
+    "html_extra_column": "额外链接列 HTML（可选）",
+    "html_extra": "附加内容（可选 — 如订阅表单）",
+    "footer_extra_text": "底部额外文字（可选）",
+    "js_content": "交互逻辑（可选）"
 }
 ```
-
-注意：
-- 品牌区域、链接列、社交媒体图标、版权信息已经在框架中实现
-- 你只需要添加额外的内容或样式
-- CSS中使用 #$componentId 作为选择器前缀
 GUIDE,
         ];
         

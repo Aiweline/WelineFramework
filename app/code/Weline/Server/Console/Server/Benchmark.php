@@ -35,11 +35,18 @@ class Benchmark extends CommandAbstract
         $port = $serverConfig['port'];
         $instanceName = $serverConfig['instance'];
         $workerCount = $serverConfig['worker_count'];
+        $ssl = (bool)($serverConfig['ssl'] ?? false);
         
         // 压测参数（仅核心参数需要用户指定）
         $concurrency = (int) ($args['concurrency'] ?? $args['c'] ?? 100);
         $totalRequests = (int) ($args['requests'] ?? $args['n'] ?? 10000);
         $path = $args['path'] ?? '/';
+        
+        // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
+        $path = $this->fixGitBashPath($path);
+        
+        $scheme = $ssl ? 'https' : 'http';
+        $targetUrl = "{$scheme}://{$host}:{$port}{$path}";
         
         $this->printer->note(__('Weline Server 压力测试'));
         echo "\n";
@@ -49,7 +56,7 @@ class Benchmark extends CommandAbstract
         $this->printer->note('║                     压测目标                                   ║');
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
         $this->printer->note(\sprintf('║  实例名称：%-50s║', $instanceName));
-        $this->printer->note(\sprintf('║  目标地址：%-50s║', "http://{$host}:{$port}{$path}"));
+        $this->printer->note(\sprintf('║  目标地址：%-50s║', $targetUrl));
         $this->printer->note(\sprintf('║  Worker 数：%-49s║', $workerCount));
         $this->printer->note(\sprintf('║  并发数：%-52s║', $concurrency));
         $this->printer->note(\sprintf('║  总请求数：%-50s║', $totalRequests));
@@ -68,8 +75,50 @@ class Benchmark extends CommandAbstract
         $this->printer->success(__('服务器连接成功，开始压测...'));
         echo "\n";
         
-        // 直接运行压测
-        $this->runBenchmark($host, $port, $concurrency, $totalRequests, $path);
+        // 直接运行压测（传入是否 HTTPS）
+        $this->runBenchmark($targetUrl, $concurrency, $totalRequests, $ssl);
+    }
+    
+    /**
+     * 修复 Git Bash 路径转换问题
+     * 
+     * Git Bash 会自动将 /path 转换为 C:/Program Files/Git/path
+     * 此方法检测并还原为正确的 URL 路径
+     */
+    protected function fixGitBashPath(string $path): string
+    {
+        // 检测常见的 Git Bash 路径前缀
+        $gitBashPrefixes = [
+            'C:/Program Files/Git/',
+            'C:\\Program Files\\Git\\',
+            '/c/Program Files/Git/',
+            'D:/Program Files/Git/',
+            'D:\\Program Files\\Git\\',
+            '/d/Program Files/Git/',
+        ];
+        
+        foreach ($gitBashPrefixes as $prefix) {
+            if (\stripos($path, $prefix) === 0) {
+                // 提取原始路径并还原
+                $originalPath = \substr($path, \strlen($prefix) - 1);
+                // 确保以 / 开头
+                if ($originalPath[0] !== '/') {
+                    $originalPath = '/' . $originalPath;
+                }
+                // 将反斜杠转换为正斜杠
+                $originalPath = \str_replace('\\', '/', $originalPath);
+                
+                $this->printer->warning(__('检测到 Git Bash 路径转换，已自动修复：%{1} → %{2}', [$path, $originalPath]));
+                return $originalPath;
+            }
+        }
+        
+        // 确保路径以 / 开头
+        if (!empty($path) && $path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        
+        return $path;
     }
     
     /**
@@ -77,15 +126,17 @@ class Benchmark extends CommandAbstract
      */
     protected function detectRunningServer(array $args): ?array
     {
-        // 1. 如果用户指定了端口，直接使用
+        // 1. 如果用户指定了端口，直接使用（可加 --ssl 表示 HTTPS）
         if (isset($args['port']) || isset($args['p'])) {
             $port = (int) ($args['port'] ?? $args['p']);
             $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
+            $ssl = isset($args['ssl']) || isset($args['s']);
             return [
                 'host' => $host,
                 'port' => $port,
                 'instance' => __('手动指定'),
                 'worker_count' => 1,
+                'ssl' => $ssl,
             ];
         }
         
@@ -103,8 +154,9 @@ class Benchmark extends CommandAbstract
                     $socket = @\fsockopen($data['host'], $data['port'], $errno, $errstr, 1);
                     if ($socket) {
                         \fclose($socket);
-                        // 兼容 count 和 worker_count 字段
+                        // 兼容 count 和 worker_count 字段；记录是否 HTTPS（压测需用 https://）
                         $data['worker_count'] = $data['worker_count'] ?? $data['count'] ?? 1;
+                        $data['ssl'] = (bool)($data['ssl_enabled'] ?? false);
                         $instances[$name] = $data;
                     }
                 }
@@ -124,6 +176,7 @@ class Benchmark extends CommandAbstract
                         'host' => $host,
                         'port' => $port,
                         'worker_count' => $envConfig['server']['worker_count'] ?? 1,
+                        'ssl' => (bool)($envConfig['server']['ssl_enabled'] ?? false),
                     ];
                 }
             }
@@ -140,6 +193,7 @@ class Benchmark extends CommandAbstract
                     'host' => $defaultHost,
                     'port' => $defaultPort,
                     'worker_count' => 1,
+                    'ssl' => false,
                 ];
             }
         }
@@ -153,49 +207,44 @@ class Benchmark extends CommandAbstract
             return null;
         }
         
-        // 6. 只有一个实例，直接使用
-        if (\count($instances) === 1) {
-            $name = \array_key_first($instances);
-            $data = $instances[$name];
+        $pick = function (array $data, string $name) {
             return [
                 'host' => $data['host'],
                 'port' => $data['port'],
                 'instance' => $name,
                 'worker_count' => $data['worker_count'] ?? 1,
+                'ssl' => (bool)($data['ssl'] ?? false),
             ];
+        };
+        
+        // 6. 只有一个实例，直接使用
+        if (\count($instances) === 1) {
+            $name = \array_key_first($instances);
+            return $pick($instances[$name], $name);
         }
         
         // 7. 多个实例，显示列表让用户选择或使用 default
         if (isset($instances['default'])) {
-            $data = $instances['default'];
             $this->printer->note(__('检测到多个服务器实例，使用默认实例 [default]'));
-            return [
-                'host' => $data['host'],
-                'port' => $data['port'],
-                'instance' => 'default',
-                'worker_count' => $data['worker_count'] ?? 1,
-            ];
+            return $pick($instances['default'], 'default');
         }
         
         // 使用第一个实例
         $name = \array_key_first($instances);
-        $data = $instances[$name];
         $this->printer->note(__('检测到多个服务器实例，使用实例 [%{1}]', [$name]));
-        return [
-            'host' => $data['host'],
-            'port' => $data['port'],
-            'instance' => $name,
-            'worker_count' => $data['worker_count'] ?? 1,
-        ];
+        return $pick($instances[$name], $name);
     }
     
     /**
      * 运行压测
+     *
+     * @param string $url 完整目标 URL（含 http/https）
+     * @param int $concurrency 并发数
+     * @param int $totalRequests 总请求数
+     * @param bool $ssl 是否 HTTPS（用于设置 SSL 验证选项，本地自签证书可跳过验证）
      */
-    protected function runBenchmark(string $host, int $port, int $concurrency, int $totalRequests, string $path): void
+    protected function runBenchmark(string $url, int $concurrency, int $totalRequests, bool $ssl = false): void
     {
-        $url = "http://{$host}:{$port}{$path}";
-        
         $results = [];
         $errors = 0;
         $startTime = \microtime(true);
@@ -206,28 +255,80 @@ class Benchmark extends CommandAbstract
             return;
         }
         
+        // 基础选项 - 启用连接复用（Keep-Alive）
+        $baseOpts = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            // 连接复用配置
+            CURLOPT_FORBID_REUSE => false,      // 允许连接复用
+            CURLOPT_FRESH_CONNECT => false,     // 不强制新连接
+            CURLOPT_TCP_KEEPALIVE => 1,         // 启用 TCP Keep-Alive
+            CURLOPT_TCP_KEEPIDLE => 60,         // Keep-Alive 空闲时间
+            CURLOPT_TCP_KEEPINTVL => 30,        // Keep-Alive 间隔
+            CURLOPT_HTTPHEADER => [
+                'Connection: keep-alive',
+                'Keep-Alive: timeout=60, max=1000',
+            ],
+        ];
+        if ($ssl) {
+            $baseOpts[CURLOPT_SSL_VERIFYPEER] = false;
+            $baseOpts[CURLOPT_SSL_VERIFYHOST] = 0;
+        }
+        
         $mh = \curl_multi_init();
-        $handles = [];
+        
+        // 创建共享句柄，用于连接池复用
+        $sh = \curl_share_init();
+        \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+        \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
+        if (\defined('CURL_LOCK_DATA_SSL_SESSION')) {
+            \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
+        }
+        
+        // 设置 curl_multi 管道化/复用（HTTP/1.1 管道化，HTTP/2 多路复用）
+        if (\defined('CURLPIPE_MULTIPLEX')) {
+            \curl_multi_setopt($mh, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
+        }
+        // 限制每个主机的最大连接数，促进连接复用
+        if (\defined('CURLMOPT_MAX_HOST_CONNECTIONS')) {
+            \curl_multi_setopt($mh, CURLMOPT_MAX_HOST_CONNECTIONS, $concurrency);
+        }
+        
+        // 创建固定数量的 curl handle 用于复用
+        $handlePool = [];
+        $activeHandles = [];  // key => ['handle' => $ch, 'start' => time, 'poolIndex' => index]
         $completed = 0;
         $requestsSent = 0;
         
-        // 初始化并发请求
         $batchSize = \min($concurrency, $totalRequests);
+        
+        // 初始化 handle 池（绑定共享句柄）
         for ($i = 0; $i < $batchSize; $i++) {
-            $ch = \curl_init($url);
-            \curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]);
+            $ch = \curl_init();
+            \curl_setopt_array($ch, $baseOpts);
+            \curl_setopt($ch, CURLOPT_URL, $url);
+            \curl_setopt($ch, CURLOPT_SHARE, $sh);  // 共享连接池
+            $handlePool[$i] = $ch;
+        }
+        
+        // 添加初始批次请求
+        for ($i = 0; $i < $batchSize; $i++) {
+            $ch = $handlePool[$i];
             \curl_multi_add_handle($mh, $ch);
-            $handles[(int)$ch] = ['handle' => $ch, 'start' => \microtime(true)];
+            $activeHandles[(int)$ch] = [
+                'handle' => $ch,
+                'start' => \microtime(true),
+                'poolIndex' => $i,
+            ];
             $requestsSent++;
         }
         
         $running = null;
         $lastProgress = 0;
+        
+        $this->printer->note(__('使用 %{1} 个持久连接进行压测...', [$batchSize]));
         
         do {
             // 执行请求
@@ -240,8 +341,9 @@ class Benchmark extends CommandAbstract
                 $ch = $info['handle'];
                 $key = (int)$ch;
                 
-                if (isset($handles[$key])) {
-                    $elapsed = (\microtime(true) - $handles[$key]['start']) * 1000; // ms
+                if (isset($activeHandles[$key])) {
+                    $elapsed = (\microtime(true) - $activeHandles[$key]['start']) * 1000; // ms
+                    $poolIndex = $activeHandles[$key]['poolIndex'];
                     
                     if ($info['result'] === CURLE_OK) {
                         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -263,21 +365,19 @@ class Benchmark extends CommandAbstract
                         $lastProgress = $progress;
                     }
                     
+                    // 从 multi handle 移除
                     \curl_multi_remove_handle($mh, $ch);
-                    \curl_close($ch);
-                    unset($handles[$key]);
+                    unset($activeHandles[$key]);
                     
-                    // 添加新请求
+                    // 如果还有请求要发送，复用同一个 handle（共享连接池会自动复用连接）
                     if ($requestsSent < $totalRequests) {
-                        $newCh = \curl_init($url);
-                        \curl_setopt_array($newCh, [
-                            CURLOPT_RETURNTRANSFER => true,
-                            CURLOPT_TIMEOUT => 30,
-                            CURLOPT_CONNECTTIMEOUT => 5,
-                            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                        ]);
-                        \curl_multi_add_handle($mh, $newCh);
-                        $handles[(int)$newCh] = ['handle' => $newCh, 'start' => \microtime(true)];
+                        // 重新添加到 multi handle（共享句柄会复用连接）
+                        \curl_multi_add_handle($mh, $ch);
+                        $activeHandles[(int)$ch] = [
+                            'handle' => $ch,
+                            'start' => \microtime(true),
+                            'poolIndex' => $poolIndex,
+                        ];
                         $requestsSent++;
                     }
                 }
@@ -288,9 +388,14 @@ class Benchmark extends CommandAbstract
                 \curl_multi_select($mh, 0.01);
             }
             
-        } while ($running > 0 || \count($handles) > 0);
+        } while ($running > 0 || \count($activeHandles) > 0);
         
+        // 清理 handle 池和共享句柄
+        foreach ($handlePool as $ch) {
+            \curl_close($ch);
+        }
         \curl_multi_close($mh);
+        \curl_share_close($sh);
         
         $endTime = \microtime(true);
         $totalTime = $endTime - $startTime;
@@ -403,6 +508,7 @@ class Benchmark extends CommandAbstract
                 '--path <path>' => __('请求路径（默认：/）'),
                 '-p, --port <port>' => __('指定端口（可选，默认自动探测）'),
                 '-h, --host <ip>' => __('指定主机（可选，默认 127.0.0.1）'),
+                '-s, --ssl' => __('指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
@@ -410,6 +516,7 @@ class Benchmark extends CommandAbstract
                 __('基本压测（自动探测）') => 'php bin/w server:benchmark',
                 __('高并发') => 'php bin/w server:benchmark -c 500 -n 50000',
                 __('指定端口') => 'php bin/w server:benchmark -p 9000',
+                __('指定 HTTPS 端口') => 'php bin/w server:benchmark -p 9443 --ssl',
             ]
         );
     }

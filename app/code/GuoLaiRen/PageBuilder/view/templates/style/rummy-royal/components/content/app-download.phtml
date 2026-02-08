@@ -1,0 +1,366 @@
+<?php
+/**
+ * RummyRoyal - App Download Section Component
+ * 
+ * 应用下载区域，含手机模型装饰、特性列表和下载按钮
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Download App
+ * content.title => 标题:text:Play Rummy Anytime, Anywhere
+ * content.description => 描述:textarea:Download the RummyRoyal app for the best mobile rummy experience. Lightweight, secure, and blazing fast tables.
+ * 
+ * group:download => 下载设置
+ * download.primary_text => 主下载按钮:text:Google Play
+ * download.primary_url => 主下载链接:text:#
+ * download.secondary_text => 次下载按钮:text:Direct APK
+ * download.secondary_url => 次下载链接:text:#
+ * 
+ * group:features => 特性列表
+ * features.items => 特性列表:textarea:Lightweight|Under 25MB, installs in seconds\r\nSecure Login|OTP + biometric authentication\r\nFast Tables|Join a game in under 10 seconds|一行一个：标题|描述
+ * 
+ * group:checklist => 安装清单
+ * checklist.title => 清单标题:text:Quick Install Guide
+ * checklist.items => 清单项目:textarea:Download the APK|Tap the download button and save the official APK file.\r\nAllow Installation|Enable "Install from unknown sources" in your Android settings.\r\nOpen & Register|Launch the app, create your account, and claim your welcome bonus.|格式：标题|描述，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['download_bg'] ?? 'linear-gradient(135deg, #1a0a2e 0%, #0d0718 100%)';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$textMuted = $colors['text_muted'] ?? '#8b6f47';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#facc15';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+
+$badge = $config['content.badge'] ?? 'Download App';
+$title = $config['content.title'] ?? 'Play Rummy Anytime, Anywhere';
+$description = $config['content.description'] ?? 'Download the RummyRoyal app for the best mobile rummy experience. Lightweight, secure, and blazing fast tables.';
+
+$primaryBtnText = $config['download.primary_text'] ?? 'Google Play';
+$primaryBtnUrl = $config['download.primary_url'] ?? '#';
+$secondaryBtnText = $config['download.secondary_text'] ?? 'Direct APK';
+$secondaryBtnUrl = $config['download.secondary_url'] ?? '#';
+
+$featuresRaw = $config['features.items'] ?? "Lightweight|Under 25MB, installs in seconds\nSecure Login|OTP + biometric authentication\nFast Tables|Join a game in under 10 seconds";
+$features = [];
+$fLines = preg_split('/[\r\n]+/', $featuresRaw);
+foreach ($fLines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $fTitle = trim($parts[0] ?? '');
+    $fDesc = trim($parts[1] ?? '');
+    if (!empty($fTitle)) {
+        $features[] = ['title' => $fTitle, 'description' => $fDesc];
+    }
+}
+
+$checklistTitle = $config['checklist.title'] ?? 'Quick Install Guide';
+$checklistRaw = $config['checklist.items'] ?? "Download the APK|Tap the download button and save the official APK file.\nAllow Installation|Enable \"Install from unknown sources\" in your Android settings.\nOpen & Register|Launch the app, create your account, and claim your welcome bonus.";
+$checklist = [];
+$cLines = preg_split('/[\r\n]+/', $checklistRaw);
+foreach ($cLines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $cTitle = trim($parts[0] ?? '');
+    $cDesc = trim($parts[1] ?? '');
+    if (!empty($cTitle)) {
+        $checklist[] = ['title' => $cTitle, 'description' => $cDesc];
+    }
+}
+
+$instanceId = 'rr-download-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            padding: 40px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-card-icon {
+            width: 60px;
+            height: 60px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-card-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: <?= $buttonPrimaryText ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btns {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btn-primary {
+            padding: 14px 28px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-size: 0.95rem;
+            font-weight: 700;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(234, 179, 8, 0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btn-primary svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(234, 179, 8, 0.45);
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btn-secondary {
+            padding: 14px 28px;
+            background: transparent;
+            color: <?= $textSecondary ?>;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-btn-secondary:hover {
+            border-color: <?= $accentPrimary ?>;
+            color: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-feature {
+            padding: 10px 16px;
+            background: rgba(234, 179, 8, 0.08);
+            border: 1px solid rgba(234, 179, 8, 0.15);
+            border-radius: 10px;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-feature-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-dl-feature-desc {
+            font-size: 0.78rem;
+            color: <?= $textMuted ?>;
+            margin-top: 2px;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-item {
+            display: flex;
+            gap: 16px;
+            padding: 20px 0;
+            border-bottom: 1px solid <?= $borderLight ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-item:last-child {
+            border-bottom: none;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-num {
+            width: 32px;
+            height: 32px;
+            background: rgba(234, 179, 8, 0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: <?= $accentPrimary ?>;
+            flex-shrink: 0;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-content h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 4px;
+        }
+        
+        #<?= $instanceId ?> .rr-checklist-content p {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.5;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .rr-dl-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-dl-title {
+                font-size: 1.85rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .rr-dl-card {
+                padding: 24px;
+            }
+            
+            #<?= $instanceId ?> .rr-dl-btns {
+                flex-direction: column;
+            }
+        }
+    </style>
+    
+    <div class="rr-dl-container">
+        <div class="rr-dl-header">
+            <div class="rr-dl-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="rr-dl-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="rr-dl-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="rr-dl-grid">
+            <!-- Download Card -->
+            <div class="rr-dl-card">
+                <div class="rr-dl-card-icon">
+                    <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                </div>
+                
+                <div class="rr-dl-btns">
+                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="rr-dl-btn-primary">
+                        <svg viewBox="0 0 24 24"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+                        <?= htmlspecialchars($primaryBtnText) ?>
+                    </a>
+                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="rr-dl-btn-secondary">
+                        <?= htmlspecialchars($secondaryBtnText) ?>
+                    </a>
+                </div>
+                
+                <?php if (!empty($features)): ?>
+                <div class="rr-dl-features">
+                    <?php foreach ($features as $feature): ?>
+                    <div class="rr-dl-feature">
+                        <div class="rr-dl-feature-title"><?= htmlspecialchars($feature['title']) ?></div>
+                        <?php if ($feature['description']): ?>
+                        <div class="rr-dl-feature-desc"><?= htmlspecialchars($feature['description']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Checklist -->
+            <div class="rr-dl-card">
+                <h3 class="rr-checklist-title"><?= htmlspecialchars($checklistTitle) ?></h3>
+                <?php foreach ($checklist as $index => $item): ?>
+                <div class="rr-checklist-item">
+                    <div class="rr-checklist-num"><?= $index + 1 ?></div>
+                    <div class="rr-checklist-content">
+                        <h4><?= htmlspecialchars($item['title']) ?></h4>
+                        <p><?= htmlspecialchars($item['description']) ?></p>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>

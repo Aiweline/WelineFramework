@@ -12,6 +12,30 @@ namespace Weline\Framework\System\RunType\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Helper\Data;
 
+/**
+ * @deprecated 此类已废弃，请使用 \Weline\Framework\Env\Service\EnvChecker 代替
+ * 
+ * 迁移指南：
+ * 1. 使用 EnvRequirementsCollector 收集环境需求
+ * 2. 使用 EnvChecker::setRequirements() 设置需求
+ * 3. 调用 EnvChecker::check() 获取 EnvCheckResult 结果
+ * 
+ * 示例：
+ * ```php
+ * $collector = ObjectManager::getInstance(\Weline\Framework\Env\Service\EnvRequirementsCollector::class);
+ * $checker = ObjectManager::getInstance(\Weline\Framework\Env\Service\EnvChecker::class);
+ * $requirements = $collector->collect();
+ * $checker->setRequirements($requirements);
+ * $result = $checker->check();
+ * if ($result->hasError()) {
+ *     // 处理错误
+ * }
+ * ```
+ * 
+ * @see \Weline\Framework\Env\Api\EnvCheckerInterface
+ * @see \Weline\Framework\Env\Service\EnvChecker
+ * @see \Weline\Framework\Env\Service\EnvRequirementsCollector
+ */
 class Checker
 {
     public const type_MODULES = 'modules';

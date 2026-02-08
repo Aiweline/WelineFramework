@@ -1674,7 +1674,7 @@ if (typeof window.openVisualConfig === 'undefined') {
         
         // 如果只有 handle 没有 pageId，需要通过 API 获取
         if (handle && !pageId) {
-            fetch('<?= $this->getBackendUrl('pagebuilder/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
+            fetch('<?= $this->getBackendUrl('*/backend/page/getPageByHandle') ?>?handle=' + encodeURIComponent(handle))
                 .then(response => response.json())
                 .then(result => {
                     if (result.success && result.data) {
@@ -3444,7 +3444,7 @@ window.exportPageConfig = async function() {
                 '?style_code=' + encodeURIComponent(styleCode) + 
                 '&page_id=' + encodeURIComponent(pageId);
         } else {
-            url = '<?= $this->getBackendUrl("pagebuilder/backend/page/exportConfig") ?>' + 
+            url = '<?= $this->getBackendUrl("*/backend/page/exportConfig") ?>' + 
                 '?page_id=' + encodeURIComponent(pageId) + 
                 '&style_code=' + encodeURIComponent(styleCode);
         }
@@ -3549,7 +3549,7 @@ async function handleConfigImport(event) {
             pageId = window.visualPageId || pageId;
             const styleSelect = document.getElementById('style');
             styleCode = styleSelect ? styleSelect.value : '';
-            url = '<?= $this->getBackendUrl("pagebuilder/backend/page/importConfig") ?>';
+            url = '<?= $this->getBackendUrl("*/backend/page/importConfig") ?>';
             formData.append('page_id', pageId);
             formData.append('style_code', styleCode);
         }
@@ -3831,7 +3831,7 @@ window.resetAllVisualConfig = function() {
                     };
                 } else {
                     // 正常页面配置模式
-                    url = '<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>';
+                    url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
                     requestData = {
@@ -3938,7 +3938,7 @@ window.resetVisualConfigGroup = function(section) {
                     };
                 } else {
                     // 正常页面配置模式
-                    url = '<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>';
+                    url = '<?= $this->getBackendUrl('*/backend/preview/resetFieldsToDefault') ?>';
                     const styleSelect = document.getElementById('style');
                     let styleCode = styleSelect ? styleSelect.value : '';
                     requestData = {
@@ -5084,7 +5084,7 @@ async function saveComponentOrder() {
         } catch (e) {}
         
         // 调用 API 保存新顺序
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/reorder') ?>', {
+        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/reorder') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -5173,7 +5173,7 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
             requestData.position = position;
         }
         
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/add') ?>', {
+        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/add') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -5267,7 +5267,7 @@ window.editComponentInPreview = async function(wrapper) {
         const styleCode = componentStyleCode || pageStyleCode;
         
         // 获取组件元数据
-        const metadataUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/metadata') ?>' + 
+        const metadataUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' + 
             '?component_code=' + encodeURIComponent(componentCode) + 
             '&style_code=' + encodeURIComponent(styleCode);
         
@@ -5279,7 +5279,7 @@ window.editComponentInPreview = async function(wrapper) {
         }
         
         // 获取当前布局配置中的组件配置
-        const layoutUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/layoutFields') ?>' + 
+        const layoutUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/layoutFields') ?>' + 
             '?page_id=' + pageId;
         
         const layoutResponse = await fetch(layoutUrl);
@@ -5435,7 +5435,7 @@ window.editComponentInPreview = async function(wrapper) {
                             formData.append('region', region);
                             formData.append('index', index);
                             
-                            const response = await fetch('<?= $this->getBackendUrl("pagebuilder/backend/ai-generate/component-config") ?>', {
+                            const response = await fetch('<?= $this->getBackendUrl("*/backend/ai-generate/component-config") ?>', {
                                 method: 'POST',
                                 body: formData,
                                 headers: {
@@ -5510,7 +5510,7 @@ window.editComponentInPreview = async function(wrapper) {
             });
             
             // 调用API保存配置
-            const saveResponse = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/updateConfig') ?>', {
+            const saveResponse = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5621,7 +5621,7 @@ window.removeComponentInPreview = async function(wrapper) {
         }
         
         
-        const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/remove') ?>', {
+        const response = await fetch('<?= $this->getBackendUrl('*/backend/visual/api/component/remove') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

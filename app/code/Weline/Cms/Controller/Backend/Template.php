@@ -514,8 +514,8 @@ class Template extends BackendController
     public function autoSave()
     {
         try {
-            $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody ?? '', true);
+            $bodyParams = $this->request->getBodyParams();
+            $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
             
             if (!$data) {
                 $data = [

@@ -1,0 +1,143 @@
+<?php
+/**
+ * LudoEmpire 模板 - 默认色系配置（紫色+品红渐变系）
+ * 活力四射的 Ludo 游戏风格，深色背景配合鲜艳的紫色和品红色
+ * 
+ * SCHEME_NAME: default
+ * SCHEME_DISPLAY_NAME: Purple Magenta Theme (Default)
+ * SCHEME_DESCRIPTION: Vibrant purple and magenta color scheme for Ludo gaming websites
+ */
+
+$colors = [
+    // ========== 主背景色 ==========
+    'body_bg' => '#090012',                    // Body背景色（极深紫黑）
+    'hero_bg' => 'linear-gradient(135deg, #1a0a2e 0%, #0d0020 50%, #090012 100%)', // Hero渐变背景
+    'hero_bg_start' => '#1a0a2e',              // Hero渐变开始色
+    'hero_bg_end' => '#090012',                // Hero渐变结束色
+    'nav_bg' => 'rgba(9, 0, 18, 0.95)',        // 导航栏背景色（半透明深紫黑）
+    'nav_bg_scrolled' => 'rgba(9, 0, 18, 0.98)', // 滚动时导航栏背景
+    'section_bg_1' => '#0d0020',               // 区块背景1（深紫黑）
+    'section_bg_2' => '#110028',               // 区块背景2（稍浅紫黑）
+    'section_bg_3' => '#160030',               // 区块背景3（紫调）
+    'section_bg_4' => '#0b001a',               // 区块背景4（最深）
+    'card_bg' => 'rgba(255, 255, 255, 0.04)',  // 卡片背景
+    'card_bg_hover' => 'rgba(255, 255, 255, 0.08)', // 卡片悬停背景
+    'card_bg_gradient' => 'linear-gradient(145deg, rgba(139, 92, 246, 0.08) 0%, rgba(236, 72, 153, 0.05) 100%)', // 卡片渐变
+    'footer_bg' => '#06000e',                  // Footer背景色
+
+    // ========== 文字颜色 ==========
+    'text_primary' => '#f5f3ff',               // 主文字颜色（淡紫白）
+    'text_secondary' => '#c4b5fd',             // 次要文字颜色（淡紫色）
+    'text_muted' => '#7c6fad',                 // 弱化文字颜色（灰紫色）
+    'text_dark' => '#1a0a2e',                  // 深色文字（用于浅色背景）
+
+    // ========== 强调色（紫色+品红系） ==========
+    'accent_primary' => '#8b5cf6',             // 主强调色（紫色）
+    'accent_primary_light' => '#a78bfa',       // 浅紫色
+    'accent_primary_dark' => '#6d28d9',        // 深紫色
+    'accent_secondary' => '#ec4899',           // 次强调色（品红色）
+    'accent_secondary_light' => '#f472b6',     // 浅品红色
+    'accent_secondary_dark' => '#be185d',      // 深品红色
+    'accent_tertiary' => '#06b6d4',            // 第三强调色（青色）
+    'accent_tertiary_light' => '#22d3ee',      // 浅青色
+    'accent_gradient' => 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)', // 紫品红渐变
+    'accent_gradient_hover' => 'linear-gradient(135deg, #a78bfa 0%, #f472b6 100%)', // 悬停渐变
+    'accent_gradient_alt' => 'linear-gradient(135deg, #ec4899 0%, #06b6d4 100%)', // 品红青渐变
+    'accent_gradient_triple' => 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #06b6d4 100%)', // 三色渐变
+
+    // ========== 导航栏颜色 ==========
+    'nav_text' => '#f5f3ff',                   // 导航文字颜色
+    'nav_link' => '#c4b5fd',                   // 导航链接颜色
+    'nav_link_hover' => '#ec4899',             // 导航链接悬停颜色
+    'nav_link_active' => '#8b5cf6',            // 导航链接激活颜色
+
+    // ========== 按钮颜色 ==========
+    'button_primary_bg' => 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)', // 主按钮背景
+    'button_primary_bg_hover' => 'linear-gradient(135deg, #a78bfa 0%, #f472b6 100%)', // 主按钮悬停
+    'button_primary_text' => '#ffffff',        // 主按钮文字颜色
+    'button_primary_shadow' => 'rgba(139, 92, 246, 0.4)', // 主按钮阴影
+    'button_primary_shadow_hover' => 'rgba(139, 92, 246, 0.6)', // 主按钮悬停阴影
+    'button_secondary_bg' => 'transparent',    // 次按钮背景
+    'button_secondary_border' => '#8b5cf6',    // 次按钮边框
+    'button_secondary_text' => '#a78bfa',      // 次按钮文字
+    'button_secondary_border_hover' => '#ec4899', // 次按钮悬停边框
+
+    // ========== 标题和强调文字 ==========
+    'heading_color' => '#f5f3ff',              // 标题颜色
+    'heading_color_accent' => '#a78bfa',       // 强调标题颜色
+    'heading_gradient' => 'linear-gradient(135deg, #f5f3ff 0%, #a78bfa 100%)', // 标题渐变
+    'link_color' => '#a78bfa',                 // 链接颜色
+    'link_hover_color' => '#ec4899',           // 链接悬停颜色
+
+    // ========== 边框和分割线 ==========
+    'border_light' => 'rgba(139, 92, 246, 0.12)', // 浅边框
+    'border_default' => 'rgba(139, 92, 246, 0.2)', // 默认边框
+    'border_accent' => 'rgba(139, 92, 246, 0.4)', // 强调边框
+    'divider_color' => 'rgba(139, 92, 246, 0.1)', // 分割线颜色
+
+    // ========== 卡片和区块 ==========
+    'card_border' => 'rgba(139, 92, 246, 0.12)', // 卡片边框
+    'card_border_hover' => 'rgba(236, 72, 153, 0.4)', // 卡片悬停边框
+    'card_shadow' => '0 4px 24px rgba(0, 0, 0, 0.3)', // 卡片阴影
+    'card_shadow_hover' => '0 8px 32px rgba(139, 92, 246, 0.25)', // 卡片悬停阴影
+    'section_title_color' => '#f5f3ff',        // 区块标题颜色
+
+    // ========== 特殊区域背景 ==========
+    'hero_overlay' => 'linear-gradient(180deg, rgba(9, 0, 18, 0) 0%, rgba(9, 0, 18, 0.8) 100%)', // Hero遮罩
+    'games_bg' => '#0d0020',                   // 游戏区域背景
+    'advantages_bg' => '#110028',              // 优势区域背景
+    'testimonials_bg' => '#0d0020',            // 评价区域背景
+    'faq_bg' => '#0b001a',                     // FAQ区域背景
+    'download_bg' => 'linear-gradient(135deg, #1a0a2e 0%, #0d0020 100%)', // 下载区域背景
+    'cta_bg' => 'linear-gradient(135deg, #1a0a2e 0%, #200040 50%, #1a0a2e 100%)', // CTA区域背景
+
+    // ========== 图标和装饰 ==========
+    'icon_bg' => 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%)', // 图标背景
+    'icon_color' => '#a78bfa',                 // 图标颜色
+    'badge_bg' => 'rgba(139, 92, 246, 0.15)',  // 徽章背景
+    'badge_border' => 'rgba(139, 92, 246, 0.3)', // 徽章边框
+    'badge_text' => '#a78bfa',                 // 徽章文字
+
+    // ========== 表单颜色 ==========
+    'input_bg' => 'rgba(139, 92, 246, 0.08)',  // 输入框背景
+    'input_border' => 'rgba(139, 92, 246, 0.2)', // 输入框边框
+    'input_border_focus' => '#8b5cf6',         // 输入框聚焦边框
+    'input_text' => '#f5f3ff',                 // 输入框文字
+    'input_placeholder' => '#7c6fad',          // 输入框占位符
+
+    // ========== Footer颜色 ==========
+    'footer_text' => '#7c6fad',                // Footer文字颜色
+    'footer_link' => '#c4b5fd',                // Footer链接颜色
+    'footer_link_hover' => '#ec4899',          // Footer链接悬停颜色
+    'footer_border' => 'rgba(139, 92, 246, 0.1)', // Footer边框
+
+    // ========== 阴影和效果 ==========
+    'shadow_sm' => '0 2px 8px rgba(0, 0, 0, 0.3)',
+    'shadow_md' => '0 4px 16px rgba(0, 0, 0, 0.4)',
+    'shadow_lg' => '0 8px 32px rgba(0, 0, 0, 0.5)',
+    'shadow_glow_purple' => '0 0 40px rgba(139, 92, 246, 0.3)', // 紫色发光
+    'shadow_glow_magenta' => '0 0 40px rgba(236, 72, 153, 0.3)', // 品红发光
+    'shadow_glow_cyan' => '0 0 40px rgba(6, 182, 212, 0.3)', // 青色发光
+
+    // ========== 游戏特色颜色 ==========
+    'dice_color_1' => '#8b5cf6',               // 骰子颜色1（紫色）
+    'dice_color_2' => '#ec4899',               // 骰子颜色2（品红）
+    'dice_color_3' => '#06b6d4',               // 骰子颜色3（青色）
+    'dice_color_4' => '#f59e0b',               // 骰子颜色4（金色）
+    'player_red' => '#ef4444',                 // 玩家红色
+    'player_blue' => '#3b82f6',                // 玩家蓝色
+    'player_green' => '#22c55e',               // 玩家绿色
+    'player_yellow' => '#eab308',              // 玩家黄色
+    'star_color' => '#fbbf24',                 // 星星评分颜色
+    'win_color' => '#22c55e',                  // 胜利/奖金颜色
+
+    // ========== 动画相关 ==========
+    'transition_fast' => '0.15s ease',
+    'transition_normal' => '0.3s ease',
+    'transition_slow' => '0.5s ease',
+
+    // ========== CSS变量 ==========
+    'base_main_color' => '#8b5cf6',            // 主色调
+    'base_secondary_color' => '#ec4899',       // 次色调
+    'base_tertiary_color' => '#06b6d4',        // 第三色调
+];

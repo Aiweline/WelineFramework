@@ -1,0 +1,323 @@
+<?php
+/**
+ * 环境管理后台页面
+ *
+ * @var array $system_info
+ * @var array $check_result
+ * @var array $recommended_exts
+ * @var array $recommended_funcs
+ * @var array $recommended_items
+ * @var array $all_statuses
+ * @var string $platform
+ */
+$statusLabels = [
+    'installed' => ['label' => __('已安装'), 'class' => 'success'],
+    'failed'    => ['label' => __('安装失败'), 'class' => 'danger'],
+    'skipped'   => ['label' => __('已跳过'), 'class' => 'secondary'],
+    'pending'   => ['label' => __('未尝试'), 'class' => 'warning'],
+];
+?>
+
+<style>
+.env-card { margin-bottom: 1.5rem; }
+.env-card .card-header { font-weight: 600; }
+.status-badge { font-size: 0.85em; }
+.guide-section { display: none; }
+.guide-section.active { display: block; }
+.guide-tab.active { background: var(--bs-primary); color: #fff !important; }
+.platform-tag { font-size: 0.75em; padding: 2px 6px; border-radius: 3px; background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis); }
+.ext-table td, .ext-table th { vertical-align: middle; }
+</style>
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-cpu"></i> <?= __('环境管理') ?></h4>
+    <div>
+        <button class="btn btn-outline-warning btn-sm" onclick="resetAllStatuses()">
+            <i class="bi bi-arrow-counterclockwise"></i> <?= __('重置所有记录') ?>
+        </button>
+    </div>
+</div>
+
+<!-- 系统信息卡片 -->
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-info-circle"></i> <?= __('系统信息') ?>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:140px"><?= __('操作系统') ?></th><td><?= htmlspecialchars($system_info['os_family'] . ' (' . $system_info['os'] . ')') ?></td></tr>
+                    <tr><th>PHP <?= __('版本') ?></th><td><?= htmlspecialchars($system_info['php_version']) ?></td></tr>
+                    <tr><th>PHP SAPI</th><td><?= htmlspecialchars($system_info['sapi']) ?></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tr><th style="width:140px">php.ini</th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['php_ini']) ?></code></td></tr>
+                    <tr><th><?= __('扩展目录') ?></th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['ext_dir']) ?></code></td></tr>
+                    <tr><th><?= __('已加载扩展') ?></th><td><?= count($system_info['loaded_exts']) ?> <?= __('个') ?></td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 环境检测结果 -->
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-check-circle"></i> <?= __('环境检测') ?>
+        <?php if ($check_result['has_error']): ?>
+            <span class="badge bg-danger ms-2"><?= __('存在问题') ?></span>
+        <?php else: ?>
+            <span class="badge bg-success ms-2"><?= __('全部通过') ?></span>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <?php if (!empty($check_result['missing_extensions'])): ?>
+            <div class="alert alert-danger">
+                <strong><?= __('缺失的必需扩展') ?>:</strong> <?= htmlspecialchars(implode(', ', $check_result['missing_extensions'])) ?>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($check_result['disabled_functions'])): ?>
+            <div class="alert alert-danger">
+                <strong><?= __('被禁用的必需函数') ?>:</strong> <?= htmlspecialchars(implode(', ', $check_result['disabled_functions'])) ?>
+            </div>
+        <?php endif; ?>
+        <?php if (!$check_result['has_error'] && !$check_result['has_recommendation']): ?>
+            <div class="alert alert-success mb-0">
+                <i class="bi bi-check-circle-fill"></i> <?= __('所有必需依赖和推荐项均已满足') ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- 推荐扩展 -->
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-puzzle"></i> <?= __('推荐扩展') ?>
+        <small class="text-muted ms-2"><?= __('（可选，安装后提升性能）') ?></small>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover ext-table mb-0">
+            <thead>
+                <tr>
+                    <th><?= __('扩展名') ?></th>
+                    <th><?= __('平台') ?></th>
+                    <th><?= __('用途') ?></th>
+                    <th><?= __('当前状态') ?></th>
+                    <th><?= __('安装记录') ?></th>
+                    <th><?= __('操作') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($recommended_exts as $ext): ?>
+                <tr>
+                    <td><strong><?= htmlspecialchars($ext['name']) ?></strong></td>
+                    <td>
+                        <span class="platform-tag"><?= htmlspecialchars($ext['platform']) ?></span>
+                        <?php if (!$ext['matches']): ?>
+                            <span class="badge bg-secondary"><?= __('不适用当前系统') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= htmlspecialchars($ext['reason']) ?></td>
+                    <td>
+                        <?php if ($ext['loaded']): ?>
+                            <span class="badge bg-success"><?= __('已加载') ?> ✔</span>
+                        <?php elseif (!$ext['matches']): ?>
+                            <span class="badge bg-secondary"><?= __('不适用') ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark"><?= __('未加载') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php
+                        $st = $statusLabels[$ext['status']] ?? $statusLabels['pending'];
+                        ?>
+                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                    </td>
+                    <td>
+                        <?php if (!$ext['loaded'] && $ext['matches']): ?>
+                            <button class="btn btn-sm btn-outline-primary" onclick="retryInstall('extension','<?= htmlspecialchars($ext['name']) ?>', this)">
+                                <i class="bi bi-download"></i> <?= __('尝试安装') ?>
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="toggleGuide('guide-<?= htmlspecialchars($ext['name']) ?>')">
+                                <i class="bi bi-book"></i> <?= __('安装教程') ?>
+                            </button>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php if (!$ext['loaded'] && $ext['matches'] && !empty($ext['guide'])): ?>
+                <tr id="guide-<?= htmlspecialchars($ext['name']) ?>" class="guide-section">
+                    <td colspan="6" class="bg-light p-3">
+                        <h6><?= __('安装教程 - %{name}', ['name' => $ext['name']]) ?></h6>
+                        <div class="d-flex gap-2 mb-2">
+                            <?php foreach ($ext['guide'] as $os => $steps): ?>
+                                <button class="btn btn-sm btn-outline-dark guide-tab <?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? 'active' : '' ?>"
+                                    onclick="showGuideTab(this, 'guide-<?= htmlspecialchars($ext['name']) ?>-<?= \md5($os) ?>')">
+                                    <?= htmlspecialchars($os) ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php foreach ($ext['guide'] as $os => $steps): ?>
+                            <div id="guide-<?= htmlspecialchars($ext['name']) ?>-<?= \md5($os) ?>" class="guide-content"
+                                style="<?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? '' : 'display:none' ?>">
+                                <ol class="mb-0">
+                                    <?php foreach ($steps as $step): ?>
+                                        <li><code><?= htmlspecialchars($step) ?></code></li>
+                                    <?php endforeach; ?>
+                                </ol>
+                            </div>
+                        <?php endforeach; ?>
+                    </td>
+                </tr>
+                <?php endif; ?>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 推荐函数 -->
+<?php if (!empty($recommended_funcs)): ?>
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-braces"></i> <?= __('推荐函数') ?>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover ext-table mb-0">
+            <thead>
+                <tr>
+                    <th><?= __('函数名') ?></th>
+                    <th><?= __('当前状态') ?></th>
+                    <th><?= __('安装记录') ?></th>
+                    <th><?= __('说明') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($recommended_funcs as $func): ?>
+                <tr>
+                    <td><code><?= htmlspecialchars($func['name']) ?></code></td>
+                    <td>
+                        <?php if ($func['exists']): ?>
+                            <span class="badge bg-success"><?= __('可用') ?> ✔</span>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark"><?= __('不可用') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php $st = $statusLabels[$func['status']] ?? $statusLabels['pending']; ?>
+                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                    </td>
+                    <td><?= __('依赖对应扩展，安装扩展后自动可用') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- 推荐依赖项 -->
+<?php if (!empty($recommended_items)): ?>
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-box-seam"></i> <?= __('推荐依赖项') ?>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover ext-table mb-0">
+            <thead>
+                <tr>
+                    <th><?= __('依赖名称') ?></th>
+                    <th><?= __('说明') ?></th>
+                    <th><?= __('安装记录') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($recommended_items as $item): ?>
+                <tr>
+                    <td><strong><?= htmlspecialchars($item['name']) ?></strong></td>
+                    <td><?= htmlspecialchars($item['description']) ?></td>
+                    <td>
+                        <?php $st = $statusLabels[$item['status']] ?? $statusLabels['pending']; ?>
+                        <span class="badge bg-<?= $st['class'] ?> status-badge"><?= $st['label'] ?></span>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- CLI 快捷命令 -->
+<div class="card env-card">
+    <div class="card-header">
+        <i class="bi bi-terminal"></i> <?= __('CLI 快捷命令') ?>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tr><td><code>php bin/w env:check</code></td><td><?= __('检测环境依赖') ?></td></tr>
+            <tr><td><code>php bin/w env:install -y</code></td><td><?= __('自动安装依赖（跳过已尝试的推荐项）') ?></td></tr>
+            <tr><td><code>php bin/w env:install --force</code></td><td><?= __('强制重试所有推荐项') ?></td></tr>
+        </table>
+    </div>
+</div>
+
+<script>
+function retryInstall(type, name, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('安装中...') ?>';
+
+    fetch('<?= $this->getUrl('backend/framework/env-manager/retry-install') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+        body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 200) {
+            AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
+        } else {
+            AdminToast ? AdminToast.warning(data.msg) : alert(data.msg);
+        }
+        setTimeout(() => location.reload(), 1500);
+    })
+    .catch(err => {
+        AdminToast ? AdminToast.error('<?= __('请求失败') ?>: ' + err.message) : alert(err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> <?= __('尝试安装') ?>';
+    });
+}
+
+function resetAllStatuses() {
+    if (!confirm('<?= __('确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。') ?>')) return;
+
+    fetch('<?= $this->getUrl('backend/framework/env-manager/reset-all') ?>', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
+        setTimeout(() => location.reload(), 1000);
+    });
+}
+
+function toggleGuide(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active');
+}
+
+function showGuideTab(btn, contentId) {
+    const parent = btn.closest('td');
+    parent.querySelectorAll('.guide-tab').forEach(t => t.classList.remove('active'));
+    parent.querySelectorAll('.guide-content').forEach(c => c.style.display = 'none');
+    btn.classList.add('active');
+    const content = document.getElementById(contentId);
+    if (content) content.style.display = '';
+}
+</script>

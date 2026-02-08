@@ -119,6 +119,14 @@ class Auto extends CommandAbstract
             return;
         }
         
+        // no-SSL 环境下申请证书前提示：Windows 需先安装 event 扩展才能启动 HTTPS
+        $readinessWarning = $this->sslService->getHttpsReadinessWarning();
+        if ($readinessWarning !== null) {
+            $this->printer->error($readinessWarning);
+            $this->printer->note(__('请先安装 event 扩展后再执行申请证书。'));
+            return;
+        }
+        
         $this->printer->note(__('正在为 %{1} 申请 SSL 证书...', [$domain]));
         $this->printer->note(__('联系邮箱：%{1}', [$email]));
         $this->printer->note(__('Webroot：%{1}', [$webroot]));
@@ -154,6 +162,13 @@ class Auto extends CommandAbstract
      */
     protected function renewCertificates(?string $domain, string $webroot, string $email, int $renewDays): void
     {
+        // 续签后可能启用 HTTPS，Windows 下同样需 event 扩展
+        $readinessWarning = $this->sslService->getHttpsReadinessWarning();
+        if ($readinessWarning !== null) {
+            $this->printer->warning($readinessWarning);
+            $this->printer->note(__('续签将继续执行，但启用 HTTPS 前请先安装 event 扩展。'));
+        }
+        
         if ($domain) {
             // 续签指定域名
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);

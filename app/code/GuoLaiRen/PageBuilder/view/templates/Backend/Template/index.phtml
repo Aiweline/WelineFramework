@@ -292,7 +292,7 @@ $pages = $this->getData('pages') ?: [];
     </div>
 </div>
 <!-- 复用form.phtml中的样式卡片CSS -->
-<link rel="stylesheet" href="<?= $this->getBackendUrl('pagebuilder/backend/page/index') ?>" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="stylesheet" href="<?= $this->getBackendUrl('*/backend/page/index') ?>" onload="this.onload=null;this.rel='stylesheet'">
 <style>
 /* 复用form.phtml中的样式卡片样式 */
 .style-card {
@@ -462,18 +462,16 @@ async function togglePublish(styleId, isPublished, skipPreviewCheck = false) {
         return;
     }
     
-    const formData = new FormData();
-    formData.append('style_id', styleId);
-    formData.append('is_published', isPublished);
-    if (skipPreviewCheck) {
-        formData.append('skip_preview_check', '1');
-    }
-    
     try {
         const response = await fetch(API_URLS.togglePublish, {
             method: 'POST',
-            body: formData,
+            body: JSON.stringify({
+                style_id: styleId,
+                is_published: isPublished,
+                skip_preview_check: skipPreviewCheck ? '1' : '0'
+            }),
             headers: {
+                'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             }
         });
@@ -582,15 +580,15 @@ async function generatePreviewForPublish(styleCode) {
         
         console.log('📤 正在上传预览图...');
         
-        // 上传到服务器
-        const formData = new FormData();
-        formData.append('style_code', styleCode);
-        formData.append('image_data', imageData);
-        
+        // 上传到服务器（使用 JSON 格式，WLS 模式不支持 multipart/form-data 解析）
         const response = await fetch(API_URLS.uploadPreview, {
             method: 'POST',
-            body: formData,
+            body: JSON.stringify({
+                style_code: styleCode,
+                image_data: imageData
+            }),
             headers: {
+                'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             }
         });
@@ -769,15 +767,15 @@ async function refreshSinglePreview(styleCode) {
         
         console.log('📤 正在上传预览图...');
         
-        // 上传到服务器
-        const formData = new FormData();
-        formData.append('style_code', styleCode);
-        formData.append('image_data', imageData);
-        
+        // 上传到服务器（使用 JSON 格式，WLS 模式不支持 multipart/form-data 解析）
         const response = await fetch(API_URLS.uploadPreview, {
             method: 'POST',
-            body: formData,
+            body: JSON.stringify({
+                style_code: styleCode,
+                image_data: imageData
+            }),
             headers: {
+                'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             }
         });
@@ -864,13 +862,11 @@ async function generateAllPreviews(force = false) {
     
     try {
         // 获取需要生成预览的模板列表
-        const formData = new FormData();
-        formData.append('force', force ? '1' : '0');
-        
         const response = await fetch(API_URLS.generateAllPreviews, {
             method: 'POST',
-            body: formData,
+            body: JSON.stringify({ force: force ? '1' : '0' }),
             headers: {
+                'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             }
         });
@@ -1022,7 +1018,7 @@ window.openConfigPreview = function(styleCode) {
     const pageId = document.getElementById('previewPageSelect').value || <?= $testPageId ?: '0' ?>;
     
     // 构建配置界面的 URL（使用独立的配置页面）
-    const configUrl = '<?= $this->getBackendUrl('pagebuilder/backend/template/configPreview') ?>' +
+    const configUrl = '<?= $this->getBackendUrl('*/backend/template/configPreview') ?>' +
         '?style_code=' + encodeURIComponent(styleCode) +
         '&page_id=' + pageId;
     

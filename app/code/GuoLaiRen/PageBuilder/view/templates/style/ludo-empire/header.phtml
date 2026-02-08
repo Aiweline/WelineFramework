@@ -1,0 +1,306 @@
+<?php
+/**
+ * LudoEmpire 模板 - Header
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:LudoEmpire
+ * logo.url => Logo图片URL:text:
+ * logo.width => Logo宽度:number:42|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 背景颜色:color:rgba(9, 0, 18, 0.95)
+ * navigation.text_color => 文字颜色:color:#f5f3ff
+ * navigation.link_hover_color => 链接悬停颜色:color:#ec4899
+ * navigation.links => 导航链接:textarea:Home=>/\r\nGames=>/games\r\nDownload=>/download\r\nFAQ=>/faq|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Play Now
+ * navigation.cta_url => CTA按钮链接:text:#games
+ * 
+ * group:pixel => 像素统计:📊访客像素统计配置:配置访客像素统计功能，用于记录页面访问数据。像素统计会自动使用页面绑定的网站（website_id）进行数据关联。
+ * pixel.enabled => 启用像素统计:select:yes|yes,no
+ * pixel.name => 像素名称:text:{handle}:用于区分不同页面的统计来源，默认使用页面的 handle 作为像素名称。留空将自动使用页面的 handle。
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'ludo-empire';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'ludo-empire';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 辅助函数
+if (!function_exists('le_color')) {
+    function le_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('le_getConfig')) {
+    function le_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+// Logo配置
+$logoDisplay = le_getConfig($styleSettings, 'logo.display', 'yes');
+$logoText = le_getConfig($styleSettings, 'logo.text', 'LudoEmpire');
+$logoUrl = le_getConfig($styleSettings, 'logo.url', '');
+$logoWidth = le_getConfig($styleSettings, 'logo.width', '42');
+
+// 导航配置
+$navDisplay = le_getConfig($styleSettings, 'navigation.display', 'yes');
+$navBgColor = le_getConfig($styleSettings, 'navigation.bg_color', 'rgba(9, 0, 18, 0.95)');
+$navTextColor = le_getConfig($styleSettings, 'navigation.text_color', '#f5f3ff');
+$navLinkHoverColor = le_getConfig($styleSettings, 'navigation.link_hover_color', '#ec4899');
+$navLinksRaw = le_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");
+$showCta = le_getConfig($styleSettings, 'navigation.show_cta', 'yes');
+$ctaText = le_getConfig($styleSettings, 'navigation.cta_text', 'Play Now');
+$ctaUrl = le_getConfig($styleSettings, 'navigation.cta_url', '#games');
+
+// 颜色配置
+$accentPrimary = le_color($colors, 'accent_primary', '#8b5cf6');
+$buttonPrimaryBg = le_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)');
+
+// 解析导航链接
+$navLinks = [];
+$lines = preg_split('/[\r\n]+/', $navLinksRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+?>
+
+<?php if ($navDisplay === 'yes'): ?>
+<style>
+    .le-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: <?= htmlspecialchars($navBgColor) ?>;
+        backdrop-filter: blur(12px);
+        padding: 15px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .le-header-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .le-logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: <?= htmlspecialchars($navTextColor) ?>;
+    }
+    
+    .le-logo-icon {
+        width: <?= intval($logoWidth) ?>px;
+        height: <?= intval($logoWidth) ?>px;
+        background: <?= $buttonPrimaryBg ?>;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .le-logo-icon svg {
+        width: 22px;
+        height: 22px;
+        fill: #ffffff;
+    }
+    
+    .le-logo-text {
+        font-size: 1.3rem;
+        font-weight: 800;
+    }
+    
+    .le-nav {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+    }
+    
+    .le-nav-links {
+        display: flex;
+        gap: 32px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .le-nav-link {
+        color: <?= htmlspecialchars($navTextColor) ?>;
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 600;
+        transition: color 0.3s ease;
+    }
+    
+    .le-nav-link:hover {
+        color: <?= htmlspecialchars($navLinkHoverColor) ?>;
+    }
+    
+    .le-cta-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 24px;
+        background: <?= $buttonPrimaryBg ?>;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        transition: all 0.3s ease;
+    }
+    
+    .le-cta-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
+    }
+    
+    .le-cta-btn svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+    }
+    
+    @media (max-width: 768px) {
+        .le-nav-links {
+            display: none;
+        }
+        
+        .le-cta-btn span {
+            display: none;
+        }
+        
+        .le-cta-btn {
+            padding: 10px;
+        }
+    }
+</style>
+
+<header class="le-header">
+    <div class="le-header-container">
+        <?php if ($logoDisplay === 'yes'): ?>
+        <a href="/" class="le-logo">
+            <span class="le-logo-icon">
+                <?php if ($logoUrl): ?>
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain;">
+                <?php else: ?>
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><circle cx="6.5" cy="6.5" r="1"/><circle cx="17.5" cy="6.5" r="1"/><circle cx="6.5" cy="17.5" r="1"/><circle cx="17.5" cy="17.5" r="1"/></svg>
+                <?php endif; ?>
+            </span>
+            <span class="le-logo-text"><?= htmlspecialchars($logoText) ?></span>
+        </a>
+        <?php endif; ?>
+        
+        <nav class="le-nav">
+            <ul class="le-nav-links">
+                <?php foreach ($navLinks as $link): ?>
+                <li><a href="<?= htmlspecialchars($link['url']) ?>" class="le-nav-link"><?= htmlspecialchars($link['name']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($showCta === 'yes'): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="le-cta-btn">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <span><?= htmlspecialchars($ctaText) ?></span>
+            </a>
+            <?php endif; ?>
+        </nav>
+    </div>
+</header>
+<?php endif; ?>
+
+<?php
+// === 像素统计代码 ===
+$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
+if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
+    $isPreviewMode = true;
+}
+
+$pixelEnabled = le_getConfig($styleSettings, 'pixel.enabled', 'yes');
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+$pixelName = le_getConfig($styleSettings, 'pixel.name', '');
+
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+
+if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+    
+    $websiteUrl = '';
+    $websiteCode = '';
+    try {
+        if (class_exists('\Weline\Websites\Model\Website')) {
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()->load($websiteId);
+            if ($website->getId()) {
+                $websiteUrl = $website->getData('url') ?? '';
+                $websiteCode = $website->getData('code') ?? '';
+            }
+        }
+    } catch (\Exception $e) {
+        // 如果获取网站信息失败，不影响像素功能
+    }
+    
+    if (!empty($websiteUrl)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+    }
+    
+    if (!empty($websiteCode)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+    }
+    
+    $this->assign('pixel_name', htmlspecialchars($pixelName));
+    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+?>
+    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
+<?php endif; ?>

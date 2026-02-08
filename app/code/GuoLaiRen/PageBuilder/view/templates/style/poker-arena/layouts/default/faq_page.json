@@ -1,0 +1,40 @@
+{
+    "page_type": "faq_page",
+    "name": "FAQ页面布局",
+    "description": "PokerArena 主题常见问题页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "faq",
+                "enabled": true,
+                "instance_id": "faq-full",
+                "config": {
+                    "content.badge": "Help Center",
+                    "content.title": "Frequently Asked Questions",
+                    "content.description": "Find answers to the most common questions about PokerArena."
+                }
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "faq-cta",
+                "config": {
+                    "content.title": "Still Have Questions?",
+                    "content.description": "Our 24/7 support team is here to help.",
+                    "buttons.primary_text": "Contact Support",
+                    "buttons.primary_url": "/contact",
+                    "buttons.secondary_text": "Live Chat",
+                    "buttons.secondary_url": "#chat"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "FAQ页面布局，继承首页头尾"
+}
