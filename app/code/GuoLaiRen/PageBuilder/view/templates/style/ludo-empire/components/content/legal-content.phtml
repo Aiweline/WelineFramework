@@ -1,0 +1,156 @@
+<?php
+/**
+ * LudoEmpire - Legal Content Component
+ * 
+ * 法律文档展示组件（隐私政策、服务条款等）
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Legal
+ * content.show_toc => 显示目录:select:yes|yes,no
+ * content.show_last_updated => 显示更新日期:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['section_bg_1'] ?? '#0d0020';
+$textPrimary = $colors['text_primary'] ?? '#f5f3ff';
+$textSecondary = $colors['text_secondary'] ?? '#c4b5fd';
+$textMuted = $colors['text_muted'] ?? '#7c6fad';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a78bfa';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(139, 92, 246, 0.12)';
+
+$badge = $config['content.badge'] ?? 'Legal';
+$showToc = ($config['content.show_toc'] ?? 'yes') !== 'no';
+
+$page = $this->getData('page') ?? null;
+$pageTitle = $page ? ($page->getData('title') ?? 'Legal Document') : 'Legal Document';
+$pageContent = $page ? ($page->getData('content') ?? '') : '';
+
+$instanceId = 'le-legal-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .le-legal-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-header {
+            margin-bottom: 48px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-updated {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content {
+            font-size: 1.05rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.8;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin: 40px 0 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid <?= $borderLight ?>;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin: 32px 0 12px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content p {
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content ul, #<?= $instanceId ?> .le-legal-content ol {
+            padding-left: 24px;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content li {
+            margin-bottom: 8px;
+            list-style: disc;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content a {
+            color: <?= $accentPrimaryLight ?>;
+            text-decoration: underline;
+        }
+        
+        #<?= $instanceId ?> .le-legal-content a:hover {
+            color: <?= $accentSecondary ?>;
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .le-legal-title {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+    
+    <div class="le-legal-container">
+        <div class="le-legal-header">
+            <div class="le-legal-badge"><?= htmlspecialchars($badge) ?></div>
+            <h1 class="le-legal-title"><?= htmlspecialchars($pageTitle) ?></h1>
+            <p class="le-legal-updated">Last updated: <?= date('F j, Y') ?></p>
+        </div>
+        
+        <div class="le-legal-content">
+            <?php if ($pageContent): ?>
+                <?= $pageContent ?>
+            <?php else: ?>
+                <p>Legal document content will be rendered here from the page content.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>

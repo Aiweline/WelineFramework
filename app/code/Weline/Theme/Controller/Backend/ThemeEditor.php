@@ -59,6 +59,25 @@ class ThemeEditor extends BackendController
     }
 
     /**
+     * 清除全页面缓存（FPC）
+     * 发布主题后必须调用，否则前端仍然显示旧的缓存 HTML。
+     * 
+     * flush() 会自动触发 Weline_Framework_Cache::integration::cache_flushed 事件，
+     * Server 模块监听该事件并通知 WLS Worker 重载内存缓存，无需手动处理 WLS 通知。
+     */
+    private function flushFullPageCache(): void
+    {
+        try {
+            $routerCache = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Router\Cache\RouterCache::class . 'Factory'
+            );
+            $routerCache->flush();
+        } catch (\Throwable $e) {
+            // FPC 清理失败不阻塞发布流程
+        }
+    }
+
+    /**
      * 编辑器主页
      */
     public function index()
@@ -262,7 +281,7 @@ class ThemeEditor extends BackendController
      */
     public function postSaveWidget()
     {
-        // 优先从请求体获取 JSON 数据（JSON 请求体可能已被 Request __init 合并到 getData，getBodyParams 二次读取 php://input 可能为空）
+        // 优先从请求体获取 JSON 数据
         $bodyParams = $this->request->getBodyParams();
         
         if (is_string($bodyParams)) {
@@ -274,7 +293,7 @@ class ThemeEditor extends BackendController
             $data = $this->request->getParams();
         }
 
-        // 缺失时从 getParam 补全（Request __init 可能已将 JSON 合并到 setData，getBodyParams 二次读 php://input 可能为空）
+        // 缺失时从 getParam 补全
         $keys = ['theme_id', 'area', 'widget_code', 'widget_module', 'widget_type', 'page_type', 'slot_id', 'config'];
         foreach ($keys as $key) {
             $empty = !isset($data[$key]) || $data[$key] === '' || $data[$key] === null;
@@ -321,10 +340,17 @@ class ThemeEditor extends BackendController
         $data['slot_id'] = $data['slot_id'] ?? null;
         
         // 后端兜底：如果 exclusive 未传或为 null，根据 slot_id 自动判断是否独占
+        // 与模板 exclusive="true" / data-wslot-exclusive="true" 保持一致
+        // 注意：user-area（多个图标）和 footer-links（多个链接组）是 multiple，不是 exclusive
         $exclusiveSlots = [
-            'logo', 'search', 'main-nav', 'user-area', 'cart', 'language', 'currency',
-            'header-container', 'footer-container', 'copyright', 'top-bar',
-            'footer-links', 'footer-social', 'footer-newsletter',
+            // Header 区域
+            'header', 'logo', 'search', 'navigation',
+            // Footer 区域
+            'footer', 'footer-social', 'footer-copyright',
+            // Content 容器
+            'widget-hero',
+            // 产品列表页
+            'list-grid', 'list-pagination',
         ];
         $slotId = $data['slot_id'];
         $passedExclusive = $data['exclusive'] ?? null;
@@ -445,7 +471,7 @@ class ThemeEditor extends BackendController
 
         try {
             // 获取要删除的部件信息（在删除前）
-            $widget = $this->themeLayout->reset()->load($layoutId);
+            $widget = $this->themeLayout->clearQuery()->load($layoutId);
             $slotId = $widget->getData('slot_id');
             $pageType = $widget->getData('page_type');
             $area = $widget->getData('area');
@@ -508,21 +534,45 @@ class ThemeEditor extends BackendController
             
             // 批量删除指定插槽的所有部件（包括 draft 和 published）
             foreach ($slotIds as $slotId) {
-                // ✅ 正确方式：delete()->fetch() 才能真正执行删除
-                $this->themeLayout->reset()
+
+                // 先验证目标数据存在
+                $existsBefore = $this->themeLayout->clearQuery()
+                    ->where('theme_id', $themeId)
+                    ->where('slot_id', $slotId)
+                    ->select()
+                    ->fetchArray();
+
+
+                $this->themeLayout->clearQuery()
                     ->where('theme_id', $themeId)
                     ->where('slot_id', $slotId)
                     ->delete()
-                    ->fetch();  // ✅ 必须调用 fetch() 执行删除
+                    ->fetch();
+
+                // 验证删除后是否还存在
+                $existsAfter = $this->themeLayout->clearQuery()
+                    ->where('theme_id', $themeId)
+                    ->where('slot_id', $slotId)
+                    ->select()
+                    ->fetchArray();
+
                     
-                $deletedCount++;
+                $deletedCount += \count($existsBefore);
             }
             
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('已删除 %{count} 个孤儿部件', ['count' => $deletedCount]),
-                'deleted_count' => $deletedCount,
-            ]);
+            if ($deletedCount > 0) {
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('已删除 %{count} 个孤儿部件', ['count' => $deletedCount]),
+                    'deleted_count' => $deletedCount,
+                ]);
+            } else {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('未找到需要删除的孤儿部件（可能已被删除）'),
+                    'deleted_count' => 0,
+                ]);
+            }
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -568,7 +618,8 @@ class ThemeEditor extends BackendController
     public function postUpdateSort()
     {
         // 尝试从 JSON body 获取参数
-        $body = json_decode(file_get_contents('php://input'), true);
+        $bodyParams = $this->request->getBodyParams();
+        $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         $sortData = $body['sort_data'] ?? $this->request->getParam('sort_data', []);
 
         if (empty($sortData)) {
@@ -599,7 +650,8 @@ class ThemeEditor extends BackendController
     public function postSwapWidgetOrder()
     {
         // 尝试从 JSON body 获取参数
-        $body = json_decode(file_get_contents('php://input'), true);
+        $bodyParams = $this->request->getBodyParams();
+        $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         $themeId = (int)($body['theme_id'] ?? $this->request->getParam('theme_id'));
         $layoutId1 = (int)($body['layout_id_1'] ?? $this->request->getParam('layout_id_1'));
         $layoutId2 = (int)($body['layout_id_2'] ?? $this->request->getParam('layout_id_2'));
@@ -704,7 +756,10 @@ class ThemeEditor extends BackendController
         }
 
         try {
-            // 1. 将草稿发布为正式版（复制 draft -> published）
+            // 1. 发布前清理：删除草稿中的孤儿部件（slot_id 指向不存在的插槽）
+            $orphansCleaned = $this->layoutService->cleanOrphanWidgets($themeId, $pageType);
+            
+            // 2. 将草稿发布为正式版（复制 draft -> published，含去重）
             $publishResult = $this->layoutService->publishLayout($themeId, $pageType);
             if (!$publishResult) {
                 return $this->fetchJson([
@@ -713,15 +768,23 @@ class ThemeEditor extends BackendController
                 ]);
             }
 
-            // 2. 清除旧缓存
+            // 3. 清除旧缓存（主题生成缓存）
             $this->cacheGenerator->clearCache($themeId);
 
-            // 3. 生成新缓存
+            // 4. 清除全页面缓存（FPC）— 布局变更后旧的缓存 HTML 必须失效
+            $this->flushFullPageCache();
+
+            // 5. 生成新缓存
             $cacheResult = $this->cacheGenerator->generate($themeId);
+
+            $message = $cacheResult ? __('主题已发布') : __('生成缓存失败，但布局已发布');
+            if ($orphansCleaned > 0) {
+                $message .= ' ' . __('（已清理 %{count} 个无效部件）', ['count' => $orphansCleaned]);
+            }
 
             return $this->fetchJson([
                 'success' => $cacheResult,
-                'message' => $cacheResult ? __('主题已发布') : __('生成缓存失败，但布局已发布'),
+                'message' => $message,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -1580,11 +1643,6 @@ class ThemeEditor extends BackendController
         $cssUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
         $jsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
         
-        // #region agent log
-        $logData = json_encode(['location'=>'ThemeEditor.php:injectEditorModeAssets','message'=>'Injecting assets (fixed v2)','data'=>['cssUrl'=>$cssUrl,'jsUrl'=>$jsUrl,'htmlLen'=>strlen($html),'hasHead'=>stripos($html,'</head>')!==false,'hasBody'=>stripos($html,'</body>')!==false],'timestamp'=>time()*1000,'sessionId'=>'debug-session','hypothesisId'=>'C']);
-        @file_put_contents('e:\\WelineFramework\\DEV-workspace\\.cursor\\debug.log', $logData."\n", FILE_APPEND);
-        // #endregion
-        
         // 编辑模式 CSS
         $editorCss = <<<HTML
 <!-- Theme Editor Mode CSS -->
@@ -2032,6 +2090,8 @@ HTML;
                 // 清除并重建缓存
                 $this->cacheGenerator->clearCache($themeId);
                 $this->cacheGenerator->generate($themeId);
+                
+                $this->flushFullPageCache();
 
                 return $this->fetchJson([
                     'success' => true,
@@ -2340,6 +2400,8 @@ HTML;
             // 2. 清除并重建缓存
             $this->cacheGenerator->clearCache($themeId);
             $this->cacheGenerator->generate($themeId);
+            
+            $this->flushFullPageCache();
 
             // 3. 删除预览 token
             $this->previewTokenService->deleteToken($token);

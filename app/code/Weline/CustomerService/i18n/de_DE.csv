@@ -1,0 +1,235 @@
+客服人员管理,Service-Agenten-Verwaltung
+加载客服人员失败：%{1},"Fehler beim Laden der Service-Agenten: %{1}"
+客服名称不能为空,"Agentenname darf nicht leer sein"
+邮箱格式不正确,"Ungültiges E-Mail-Format"
+请选择后台用户,"Bitte wählen Sie einen Backend-Benutzer aus"
+客服人员不存在,"Service-Agent existiert nicht"
+保存成功,"Erfolgreich gespeichert"
+保存失败：%{1},"Fehler beim Speichern: %{1}"
+无效的客服ID,"Ungültige Agenten-ID"
+删除成功,"Erfolgreich gelöscht"
+删除失败：%{1},"Fehler beim Löschen: %{1}"
+获取成功,"Erfolgreich abgerufen"
+获取统计数据失败：%{1},"Fehler beim Abrufen der Statistiken: %{1}"
+客服配置,Service-Konfiguration
+加载配置失败：%{1},"Fehler beim Laden der Konfiguration: %{1}"
+您不是客服人员，无法使用工作台,"Sie sind kein Service-Agent"
+客服工作台,Kundenservice-Konsole
+加载工作台失败：%{1},"Fehler beim Laden der Konsole: %{1}"
+您不是客服人员,您不是客服人员
+获取会话列表失败：%{1},"Fehler beim Abrufen der Sitzungsliste: %{1}"
+无效的会话ID,"Ungültige Sitzungs-ID"
+会话不存在,"Sitzung existiert nicht"
+无权访问此会话,"Keine Berechtigung für diese Sitzung"
+获取消息失败：%{1},"Fehler beim Abrufen der Nachrichten: %{1}"
+消息内容不能为空,"Nachrichteninhalt darf nicht leer sein"
+发送成功,"Erfolgreich gesendet"
+发送消息失败：%{1},"Fehler beim Senden der Nachricht: %{1}"
+会话已被分配,"Sitzung bereits zugewiesen"
+已达到最大会话数限制,"Maximale Sitzungsanzahl erreicht"
+分配成功,"Erfolgreich zugewiesen"
+分配会话失败：%{1},"Fehler bei der Sitzungszuweisung: %{1}"
+无权关闭此会话,"Keine Berechtigung zum Schließen dieser Sitzung"
+会话已关闭,"Sitzung geschlossen"
+关闭会话失败：%{1},"Fehler beim Schließen der Sitzung: %{1}"
+获取客服状态失败：%{1},"Fehler beim Abrufen des Status: %{1}"
+会话管理,Sitzungsverwaltung
+加载会话失败：%{1},"Fehler beim Laden der Sitzungen: %{1}"
+会话详情,Sitzungsdetails
+加载会话详情失败：%{1},"Fehler beim Laden der Sitzungsdetails: %{1}"
+邮箱地址不能为空,"E-Mail-Adresse darf nicht leer sein"
+会话令牌不能为空,"Sitzungs-Token darf nicht leer sein"
+验证邮件已发送，请查收,"Bestätigungs-E-Mail gesendet"
+发送验证邮件失败，请稍后重试,"Fehler beim Senden der Bestätigungs-E-Mail"
+发送验证邮件失败：%{1},"Fehler beim Senden der Bestätigungs-E-Mail: %{1}"
+验证令牌不能为空,"Bestätigungs-Token darf nicht leer sein"
+验证令牌无效或已过期,"Bestätigungs-Token ungültig oder abgelaufen"
+邮箱绑定成功,"E-Mail erfolgreich verknüpft"
+邮箱绑定失败，请稍后重试,"E-Mail-Verknüpfung fehlgeschlagen"
+验证失败：%{1},"Bestätigung fehlgeschlagen: %{1}"
+客服聊天,Kundenservice-Chat
+获取会话失败：%{1},"Fehler beim Abrufen der Sitzung: %{1}"
+语言代码不能为空,"Sprachcode darf nicht leer sein"
+语言设置成功,"Sprache erfolgreich festgelegt"
+设置语言失败：%{1},"Fehler beim Festlegen der Sprache: %{1}"
+客服消息翻译,Kundenservice-Nachrichtenübersetzung
+客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Das Kundenservice-Modul fordert Übersetzung über dieses Ereignis an."
+"客服服务 - 邮箱绑定验证","Kundenservice - E-Mail-Bestätigung"
+客服系统,Kundenservice-System
+客服服务,Kundenservice
+检测中...,Prüfung...
+设置,Einstellungen
+收起,Minimieren
+我的语言,"Meine Sprache"
+简体中文,"Vereinfachtes Chinesisch"
+繁體中文,"Traditionelles Chinesisch"
+显示模式,Anzeigemodus
+仅显示译文,"Nur Übersetzung"
+原文+译文,"Original + Übersetzung"
+仅显示原文,"Nur Original"
+欢迎使用客服服务！,"Willkommen beim Kundenservice!"
+请输入您的问题，我们的客服将尽快为您解答。,"Bitte geben Sie Ihre Frage ein"
+输入消息...,"Nachricht eingeben..."
+绑定邮箱,"E-Mail verknüpfen"
+绑定邮箱后，您可以收到客服回复的邮件通知。,"E-Mail verknüpfen für Benachrichtigungen"
+邮箱地址,E-Mail-Adresse
+请输入您的邮箱,"Bitte geben Sie Ihre E-Mail ein"
+取消,Abbrechen
+发送验证邮件,"Bestätigungs-E-Mail senden"
+等待中,Warten
+暂无消息,"Keine Nachrichten"
+接单,Annehmen
+暂无会话,"Keine Sitzungen"
+会话,Sitzung
+关闭会话,"Sitzung schließen"
+发送,Senden
+发送失败,"Senden fehlgeschlagen"
+发送失败，请稍后重试,发送失败，请稍后重试
+确定要接单此会话吗？,"Diese Sitzung annehmen?"
+分配失败,"Zuweisung fehlgeschlagen"
+分配失败，请稍后重试,分配失败，请稍后重试
+确定要关闭此会话吗？,"Diese Sitzung schließen?"
+请选择一个会话开始聊天,"Wählen Sie eine Sitzung zum Chatten aus"
+关闭失败,"Schließen fehlgeschlagen"
+关闭失败，请稍后重试,关闭失败，请稍后重试
+刚刚,"Gerade eben"
+分钟前,"vor Minuten"
+小时前,"vor Stunden"
+已关闭,Geschlossen
+进行中,Aktiv
+最快,Schnellste
+最慢,Langsamste
+最短,Kürzeste
+分钟,Minuten
+最长,Längste
+秒,Sekunden
+客服在线,Online
+"AI 智能客服",KI-Service
+客服离线,Offline
+请输入有效的邮箱地址,"Bitte geben Sie eine gültige E-Mail-Adresse ein"
+会话未初始化，请刷新页面重试,"Sitzung nicht initialisiert"
+验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
+添加客服,"Agent hinzufügen"
+ID,ID
+客服名称,Agentenname
+关联用户,"Zugeordneter Benutzer"
+邮箱,E-Mail
+语言,Sprache
+状态,Status
+最大会话数,"Max. Sitzungen"
+总会话数,"Gesamt Sitzungen"
+总消息数,"Gesamt Nachrichten"
+平均响应时间,"Durchschnittliche Antwortzeit"
+操作,Aktionen
+暂无客服人员,"Keine Agenten"
+支持的语言,"Unterstützte Sprachen"
+激活,Aktivieren
+禁用,Deaktivieren
+查看统计,"Statistiken anzeigen"
+编辑,Bearbeiten
+删除,Löschen
+关联后台用户,"Benutzer zuordnen"
+请选择用户,"Bitte wählen Sie einen Benutzer aus"
+请输入客服名称,"Bitte geben Sie den Agentennamen ein"
+请输入邮箱地址,"Bitte geben Sie die E-Mail-Adresse ein"
+主要语言,Hauptsprache
+客服的首选沟通语言,"Bevorzugte Kommunikationssprache"
+客服可以接待的所有语言（勾选多个可接待全球客户）,"Alle unterstützten Sprachen"
+最大并发会话数,"Max. gleichzeitige Sitzungen"
+激活状态,"Aktiver Status"
+保存,Speichern
+编辑客服,"Agent bearbeiten"
+保存失败,"Speichern fehlgeschlagen"
+确定要删除此客服吗？,"Diesen Agenten löschen?"
+删除失败,"Löschen fehlgeschlagen"
+获取统计数据失败,"Statistiken fehlgeschlagen"
+客服统计详情,Agent-Statistikdetails
+会话统计,Sitzungsstatistiken
+消息统计,Nachrichtenstatistiken
+响应时间,Antwortzeit
+平均,Durchschnitt
+会话时长,Sitzungsdauer
+启用客服服务,"Service aktivieren"
+启用,启用
+默认客服语言,Standard-Agentensprache
+English,English
+默认客户语言,Standard-Kundensprache
+"当没有客服人员在线时，可启用 AI 自动回复客户消息。","KI-Autoantwort aktivieren"
+"启用 AI 自动回复","KI-Antwort aktivieren"
+"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Zeigt blauen KI-Status statt grauem Offline"
+"AI 模型",KI-Modell
+"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商",KI-Modellkennung
+保存配置,"Konfiguration speichern"
+客服,Agent
+工作量统计,Arbeitslast-Statistiken
+今日,Heute
+本周,"Diese Woche"
+本月,"Dieser Monat"
+全部,Alle
+会话数,Sitzungen
+消息数,Nachrichten
+客户,Kunde
+响应率,Antwortrate
+已响应,Beantwortet
+完结率,Schlussrate
+平均会话时长（分钟）,"Durchschnittliche Dauer (Min.)"
+平均消息,"Durchschnittliche Nachrichten"
+会话列表,Sitzungsliste
+刷新,Aktualisieren
+等待分配,等待分配
+我的会话,"Meine Sitzungen"
+全部状态,"Alle Status"
+会话ID,Sitzungs-ID
+客户ID,Kunden-ID
+客户语言,Kundensprache
+客服语言,Agentensprache
+创建时间,"Erstellt am"
+查看,Anzeigen
+关闭,Schließen
+返回列表,Zurück
+会话信息,Sitzungsinformationen
+客服ID,Agenten-ID
+聊天记录,Chat-Verlauf
+翻译：,Übersetzung:
+邮箱绑定验证,E-Mail-Bestätigung
+验证成功,Bestätigt
+您的邮箱,"Ihre E-Mail"
+已成功绑定到客服会话。,"An Sitzung gebunden"
+返回首页,Startseite
+验证失败,Fehlgeschlagen
+已绑定邮箱,"Verknüpfte E-Mail"
+绑定成功后，您将收到客服回复的邮件通知,"Erhalten Sie Benachrichtigungen nach der Verknüpfung"
+返回上一页,返回上一页
+如有问题，请,"Bei Fragen"
+联系客服,"Kundenservice kontaktieren"
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Verwenden Sie die schwebende Schaltfläche für den Chat"
+无效的请求方法,"Ungültige Methode"
+添加客服功能待实现,"Zu implementieren"
+源文本,Quelltext
+客服服务模块，提供多语言实时聊天、客户语言配置、客服语言配置、邮件绑定客户等功能,"Mehrsprachiges Kundenservice-Modul"
+客服人员,Service-Agenten
+查看客服配置,"Konfiguration anzeigen"
+查看客服人员,"Agenten anzeigen"
+保存客服人员,"Agent speichern"
+删除客服人员,"Agent löschen"
+查看会话,"Sitzungen anzeigen"
+您好，,Hallo
+"您正在绑定邮箱 %{1} 到客服会话。","Sie verknüpfen die E-Mail %{1} mit der Sitzung."
+请点击以下链接完成绑定：,"Klicken Sie auf den Link:"
+验证邮箱,"E-Mail bestätigen"
+如果按钮无法点击，请复制以下链接到浏览器中打开：,"Kopieren Sie diesen Link:"
+此链接将在24小时后失效。,"Läuft in 24 Stunden ab"
+如果您没有进行此操作，请忽略此邮件。,"Ignorieren Sie dies"
+此邮件由系统自动发送，请勿回复。,"Automatisch gesendet"
+查看工作台,"Konsole anzeigen"
+服务语言,Service-Sprache
+日本語,Japanisch
+한국어,Koreanisch
+Français,Französisch
+Deutsch,Deutsch
+Español,Spanisch
+Português,Portugiesisch
+Русский,Russisch
+العربية,Arabisch
+ไทย,Thailändisch
+"Tiếng Việt",Vietnamesisch

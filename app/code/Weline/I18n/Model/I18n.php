@@ -601,13 +601,14 @@ class I18n
         
         foreach ($directories as $module => $directory) {
             $full_module_name = $this->getFullModuleName($module);
-            $collectedStrings = $collector->collect($directory, $module);
             
+            // 使用 collectLazy() 惰性生成器，逐条消费翻译字符串，避免内存中累积完整数组
             $module_words = [];
-            foreach ($collectedStrings as $original => $info) {
+            foreach ($collector->collectLazy($directory, $module) as $original => $info) {
                 $translations[$original] = $original;
                 $module_words[$original] = $original;
             }
+            
             $i18n_dir = $directory . '/i18n';
             if (is_dir($i18n_dir)) {
                 $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($i18n_dir));
@@ -625,6 +626,7 @@ class I18n
                         }
 
                         $file_translations = array_merge($module_words, $file_words);
+                        unset($file_words); // 释放中间变量
                         $file_translations = array_unique($file_translations);
                         $csv_file = @fopen($file->getPathname(), 'w+');
                         if ($csv_file !== false) {
@@ -633,10 +635,16 @@ class I18n
                             }
                             fclose($csv_file);
                         }
+                        unset($file_translations);
                     }
                 }
             }
+            unset($module_words); // 每个模块处理完后释放
         }
+        // 翻译数据量大，后续多处 var_export 需要较多内存；在此统一提升，方法结束时恢复
+        $_prevMemLimit = ini_get('memory_limit');
+        ini_set('memory_limit', '512M');
+        
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
             $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
@@ -653,11 +661,14 @@ class I18n
                 $text = '<?php return ' . var_export($default_local_words, true) . ';';
                 fwrite($file, $text);
                 fclose($file);
+                unset($text);
             }
+            unset($default_local_words);
         }
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
+        unset($translations); // 释放 $translations，后面不再需要
         
         $translate_mode = Env::get('translation.mode', 'default');
         if ($translate_mode === 'online') {
@@ -696,10 +707,12 @@ class I18n
             ];
             $all_words_global = [];
             
+            // 在循环外创建一次 collector 实例，避免每个 word 都重新创建
+            $collector = ObjectManager::getInstance(TranslationCollector::class);
+            
             foreach ($locals_words as $locale => $words) {
                 $words_by_module[$locale] = [];
                 foreach ($words as $word => $translate) {
-                    $collector = ObjectManager::getInstance(TranslationCollector::class);
                     if (!$collector->isValidTranslationString($word)) {
                         continue;
                     }
@@ -728,8 +741,12 @@ class I18n
             }
             
             $words_by_module['all_words'] = $all_words_global;
-            $text = '<?php return ' . w_var_export($words_by_module, true) . ';';
+            unset($all_words_global); // 释放中间变量
+            
+            // 使用 var_export 替代 w_var_export，避免正则处理导致的额外内存开销
+            $text = '<?php return ' . var_export($words_by_module, true) . ';';
             $result = @file_put_contents($words_file, $text);
+            unset($text); // 及时释放导出字符串
             if ($result === false) {
                 error_log(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]));
             }
@@ -754,6 +771,7 @@ class I18n
                     error_log(__("警告：无法写入语言文件 %{file}", ['file' => $words_filename]));
                 }
                 $file->close();
+                unset($text);
             }
             
             foreach ($words_by_module as $locale => $module_words_data) {
@@ -779,6 +797,8 @@ class I18n
             }
         }
         self::$local_words = $locals_words;
+        // 恢复原始内存限制
+        ini_set('memory_limit', $_prevMemLimit ?: '128M');
         return $locals_words;
     }
 

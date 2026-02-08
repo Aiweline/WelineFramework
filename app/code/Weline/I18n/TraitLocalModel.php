@@ -23,7 +23,7 @@ trait TraitLocalModel
     {
         parent::__init();
         if (!CLI) {
-            $this->where(self::fields_local_code, Cookie::getLang(), '=', 'or')->where(self::fields_local_code . ' is null');
+            $this->where(self::fields_local_code, Cookie::getLang(), '=', 'or')->where(self::fields_local_code, null, 'IS NULL');
         }
     }
 

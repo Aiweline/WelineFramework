@@ -300,6 +300,39 @@ class SitemapUrl extends Model
     }
 
     /**
+     * 获取站点的 URL 按 scope 统计
+     *
+     * @param int $websiteId
+     * @return array [['scope' => string, 'module' => string, 'count' => int], ...]
+     */
+    public function getScopeStats(int $websiteId): array
+    {
+        $urls = $this->reset()
+            ->where(self::fields_WEBSITE_ID, $websiteId)
+            ->where(self::fields_STATUS, 1)
+            ->select()
+            ->fetchArray();
+
+        $stats = [];
+        foreach ($urls as $url) {
+            $scope = $url[self::fields_SCOPE] ?? '';
+            $module = $url[self::fields_MODULE] ?? '';
+            $key = $scope . '|' . $module;
+
+            if (!isset($stats[$key])) {
+                $stats[$key] = [
+                    'scope' => $scope,
+                    'module' => $module,
+                    'count' => 0,
+                ];
+            }
+            $stats[$key]['count']++;
+        }
+
+        return array_values($stats);
+    }
+
+    /**
      * 删除站点的所有 URL
      *
      * @param int $websiteId

@@ -33,7 +33,8 @@ abstract class AbstractTable implements TableInterface
 
     protected string $constraints = '';
 
-    public string $additional = 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;';
+    /** 建表附加片段，空时由各方言 SchemaCompiler 提供默认值 */
+    public string $additional = '';
 
     protected ?ConnectorInterface $connector = null;
 
@@ -48,7 +49,7 @@ abstract class AbstractTable implements TableInterface
         $this->indexes = [];
         $this->foreign_keys = [];
         $this->constraints = '';
-        $this->additional = ';';
+        $this->additional = '';
         $this->primary_key = '';
         $this->comment = '';
         $this->new_table_name = '';

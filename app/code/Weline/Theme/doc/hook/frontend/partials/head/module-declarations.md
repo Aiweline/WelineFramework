@@ -30,8 +30,9 @@
  */
 ?>
 <!-- 在模块的 view/hooks/Weline_Theme/frontend/partials/head/module-declarations.phtml 文件中 -->
-<script data-no-extract="true">
-    // 声明搜索模块，立即加载
+<!-- 使用 data-load-order="last" 延迟立即加载，避免与其它模块并行导致的栈溢出 -->
+<script data-no-extract="true" data-load-order="last">
+    // 声明搜索模块，延迟立即加载（DOMContentLoaded 后执行）
     if (window.Weline && window.Weline.declare) {
         Weline.declare('search', true, 'WeShop_Search::js/search.js');
     }
@@ -48,7 +49,7 @@
 `Weline.declare()` 方法用于声明 JS 模块，语法如下：
 
 ```javascript
-Weline.declare(moduleName, autoLoad, modulePath)
+Weline.declare(moduleName, autoLoad, modulePath, callback, options)
 ```
 
 ### 参数说明
@@ -56,6 +57,8 @@ Weline.declare(moduleName, autoLoad, modulePath)
 - `moduleName` (string): 模块名称，用于后续通过 `Weline.load()` 加载
 - `autoLoad` (boolean): 是否立即加载，`true` 表示立即加载，`false` 表示按需加载
 - `modulePath` (string, 可选): 模块路径，格式为 `ModuleName::path/to/file.js`。如果不提供，将使用默认路径规则
+- `callback` (Function, 可选): 加载完成后的回调函数
+- `options` (Object, 可选): 配置选项，如 `{ loadOrder: 'last' }` 表示延迟到 DOMContentLoaded 后加载
 
 ### 模块路径格式
 
@@ -67,6 +70,34 @@ Weline.declare(moduleName, autoLoad, modulePath)
 
 2. **绝对路径**：`/absolute/path/to/file.js`
    - 直接使用提供的路径
+
+## 延迟立即加载
+
+当声明并立即加载的模块出现 `Maximum call stack size exceeded` 等错误时，可使用「延迟立即加载」功能，将模块脚本的加载推迟到 DOMContentLoaded 之后执行。
+
+### 方式一：script 标签属性
+
+在声明该模块的 script 标签上添加 `data-load-order="last"`（或 `"defer"`）：
+
+```html
+<script data-no-extract="true" data-load-order="last">
+    if (window.Weline && window.Weline.declare) {
+        Weline.declare('search', true, 'WeShop_Search::js/search.js');
+    }
+</script>
+```
+
+### 方式二：显式参数
+
+传入 `options.loadOrder: 'last'`，适用于在异步/回调场景中调用：
+
+```javascript
+Weline.declare('search', true, 'WeShop_Search::js/search.js', null, { loadOrder: 'last' });
+```
+
+### 优先级
+
+显式参数 `options.loadOrder` 优先于 script 标签的 `data-load-order` 属性。
 
 ## 执行顺序
 
@@ -82,3 +113,4 @@ Weline.declare(moduleName, autoLoad, modulePath)
 - 使用 `data-no-extract="true"` 标记，确保脚本不会被提取到外部文件
 - 建议在声明模块前检查 `window.Weline && window.Weline.declare` 是否存在
 - 模块声明应该在 head 中完成，以便在页面加载时就能使用
+- **延迟加载**：若立即加载的模块出现栈溢出等问题，可在 script 标签上添加 `data-load-order="last"`，或在异步/回调中调用时传 `options.loadOrder: 'last'`

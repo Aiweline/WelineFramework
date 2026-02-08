@@ -24,13 +24,14 @@ $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
 ?>
 <!-- 客服服务组件 -->
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
-<div id="customer-service-widget" class="customer-service-widget">
+<div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
     <!-- 悬浮聊天按钮 -->
     <div id="cs-chat-button" class="cs-chat-button" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleChat(); else console.warn('[CustomerService] Widget not loaded yet')">
         <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
         </svg>
+        <span id="cs-status-dot" class="cs-status-dot cs-status-offline"></span>
         <span class="cs-badge" id="cs-unread-badge" style="display: none;">0</span>
     </div>
     
@@ -42,6 +43,7 @@ $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
                     <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
                 </svg>
                 <span><?= __('客服服务') ?></span>
+                <span id="cs-status-label" class="cs-status-label"><?= __('检测中...') ?></span>
             </div>
             <div class="cs-chat-actions">
                 <!-- 设置按钮 -->
@@ -124,7 +126,7 @@ $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
 </div>
 
 <!-- 邮件绑定弹窗 -->
-<div id="cs-bind-modal" class="cs-modal" style="display: none;">
+<div id="cs-bind-modal" class="cs-modal" style="display: none;" data-editor-interactive>
     <div class="cs-modal-content">
         <div class="cs-modal-header">
             <h3><?= __('绑定邮箱') ?></h3>

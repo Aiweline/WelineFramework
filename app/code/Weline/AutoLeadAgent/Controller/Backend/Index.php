@@ -734,8 +734,8 @@ class Index extends BackendController
         }
 
         // 尝试从JSON body获取数据
-        $body = file_get_contents('php://input');
-        $data = json_decode($body, true);
+        $bodyParams = $this->request->getBodyParams();
+        $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
         
         $taskId = (int)($data['task_id'] ?? 0);
         $candidates = $data['candidates'] ?? [];
@@ -1099,7 +1099,9 @@ class Index extends BackendController
     /**
      * 下载浏览器扩展包
      * 
-     * @return void
+     * 使用 DownloadException 机制，兼容 FPM 和 WLS 模式
+     * 
+     * @return never
      */
     #[Acl(
         'Weline_AutoLeadAgent::extension_download',
@@ -1107,52 +1109,30 @@ class Index extends BackendController
         'mdi-download',
         '下载自动寻客浏览器扩展包'
     )]
-    public function getDownloadExtension(): void
+    public function getDownloadExtension(): never
     {
         $extensionDir = BP . '/app/code/Weline/AutoLeadAgent/browser-extension';
         $zipFileName = 'AutoLeadAgent-Extension.zip';
-        $tempZipPath = sys_get_temp_dir() . '/' . $zipFileName;
+        $tempZipPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $zipFileName;
 
-        try {
-            // 检查扩展目录是否存在
-            if (!is_dir($extensionDir)) {
-                header('HTTP/1.1 404 Not Found');
-                echo __('扩展目录不存在');
-                return;
-            }
-
-            // 创建 ZIP 文件
-            $zip = new \ZipArchive();
-            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-                header('HTTP/1.1 500 Internal Server Error');
-                echo __('无法创建ZIP文件');
-                return;
-            }
-
-            // 递归添加文件到 ZIP
-            $this->addFilesToZip($zip, $extensionDir, 'AutoLeadAgent-Extension');
-
-            $zip->close();
-
-            // 设置下载头
-            header('Content-Type: application/zip');
-            header('Content-Disposition: attachment; filename="' . $zipFileName . '"');
-            header('Content-Length: ' . filesize($tempZipPath));
-            header('Cache-Control: no-cache, must-revalidate');
-            header('Pragma: no-cache');
-
-            // 输出文件内容
-            readfile($tempZipPath);
-
-            // 删除临时文件
-            @unlink($tempZipPath);
-
-        } catch (\Throwable $e) {
-            header('HTTP/1.1 500 Internal Server Error');
-            echo __('打包扩展失败：%1', [$e->getMessage()]);
+        // 检查扩展目录是否存在
+        if (!is_dir($extensionDir)) {
+            throw new \Weline\Framework\Http\NoRouterException(404, __('扩展目录不存在'));
         }
 
-        exit;
+        // 创建 ZIP 文件
+        $zip = new \ZipArchive();
+        if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new \RuntimeException(__('无法创建ZIP文件'));
+        }
+
+        // 递归添加文件到 ZIP
+        $this->addFilesToZip($zip, $extensionDir, 'AutoLeadAgent-Extension');
+        $zip->close();
+
+        // 通过 Response::download() 触发 DownloadException，兼容 FPM 和 WLS 模式
+        // 第三个参数 true 表示下载完成后删除临时文件
+        $this->request->getResponse()->download($tempZipPath, $zipFileName, true);
     }
 
     /**

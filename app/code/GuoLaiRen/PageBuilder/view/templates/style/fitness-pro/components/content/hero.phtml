@@ -1,0 +1,151 @@
+<?php
+/**
+ * Fitness Pro - Hero Section Component
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors
+ * @var array $component_config
+ * 
+ * @fields_start
+ * group:content => 内容设置
+ * content.badge => 顶部徽章文字:text:Transform Your Body
+ * content.title => 主标题:textarea:Unleash Your Full Potential
+ * content.description => 描述文字:textarea:Join the ultimate fitness experience with world-class trainers, cutting-edge equipment, and a community that pushes you to be your best.
+ * group:cta => 按钮设置
+ * cta.primary_text => 主按钮文字:text:Start Training
+ * cta.primary_url => 主按钮链接:text:#cta
+ * cta.secondary_text => 次按钮文字:text:View Programs
+ * cta.secondary_url => 次按钮链接:text:#programs
+ * group:stats => 数据统计
+ * stats.items => 统计数据:textarea:500+|Happy Members\r\n50+|Daily Classes\r\n15+|Expert Trainers|格式：数字|描述，一行一个
+ * group:style => 样式设置
+ * style.padding_top => 顶部内边距:number:120|px
+ * style.padding_bottom => 底部内边距:number:80|px
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$heroBg = $colors['hero_bg'] ?? 'linear-gradient(135deg, #1a0f08 0%, #0f0a07 50%, #120c06 100%)';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d6b87a';
+$accentPrimary = $colors['accent_primary'] ?? '#f97316';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#fb923c';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(249, 115, 22, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(249, 115, 22, 0.3)';
+
+$badge = $config['content.badge'] ?? 'Transform Your Body';
+$title = $config['content.title'] ?? 'Unleash Your Full Potential';
+$description = $config['content.description'] ?? 'Join the ultimate fitness experience with world-class trainers, cutting-edge equipment, and a community that pushes you to be your best.';
+$primaryBtnText = $config['cta.primary_text'] ?? 'Start Training';
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#cta';
+$secondaryBtnText = $config['cta.secondary_text'] ?? 'View Programs';
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#programs';
+
+$statsRaw = $config['stats.items'] ?? "500+|Happy Members\n50+|Daily Classes\n15+|Expert Trainers";
+$stats = [];
+foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    if (!empty(trim($parts[0] ?? ''))) {
+        $stats[] = ['value' => trim($parts[0]), 'label' => trim($parts[1] ?? '')];
+    }
+}
+
+$paddingTop = $config['style.padding_top'] ?? '120';
+$paddingBottom = $config['style.padding_bottom'] ?? '80';
+$instanceId = 'fp-hero-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $heroBg ?>; padding: <?= intval($paddingTop) ?>px 0 <?= intval($paddingBottom) ?>px; position: relative; overflow: hidden; }
+        #<?= $instanceId ?>::before { content: ''; position: absolute; top: -30%; right: -10%; width: 600px; height: 600px; background: radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%); pointer-events: none; }
+        #<?= $instanceId ?>::after { content: ''; position: absolute; bottom: -20%; left: -10%; width: 500px; height: 500px; background: radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%); pointer-events: none; }
+        #<?= $instanceId ?> .fp-hero-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+        #<?= $instanceId ?> .fp-hero-content { }
+        #<?= $instanceId ?> .fp-hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: <?= $badgeBg ?>; border: 1px solid <?= $badgeBorder ?>; border-radius: 50px; font-size: 0.85rem; font-weight: 500; color: <?= $accentPrimaryLight ?>; margin-bottom: 28px; }
+        #<?= $instanceId ?> .fp-hero-badge-dot { width: 8px; height: 8px; background: <?= $accentPrimary ?>; border-radius: 50%; animation: fpPulse 2s infinite; }
+        @keyframes fpPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } }
+        #<?= $instanceId ?> .fp-hero-title { font-size: 3.75rem; font-weight: 900; line-height: 1.08; color: <?= $textPrimary ?>; margin-bottom: 24px; letter-spacing: -0.03em; text-transform: uppercase; }
+        #<?= $instanceId ?> .fp-hero-title span { background: <?= $buttonPrimaryBg ?>; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        #<?= $instanceId ?> .fp-hero-desc { font-size: 1.15rem; line-height: 1.7; color: <?= $textSecondary ?>; margin-bottom: 40px; max-width: 520px; }
+        #<?= $instanceId ?> .fp-hero-cta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 48px; }
+        #<?= $instanceId ?> .fp-hero-btn-primary { display: inline-flex; align-items: center; gap: 10px; padding: 16px 36px; background: <?= $buttonPrimaryBg ?>; color: #fff; font-size: 1.05rem; font-weight: 600; border-radius: 12px; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(249,115,22,0.4); text-decoration: none; }
+        #<?= $instanceId ?> .fp-hero-btn-primary:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(249,115,22,0.5); }
+        #<?= $instanceId ?> .fp-hero-btn-secondary { display: inline-flex; align-items: center; gap: 10px; padding: 16px 36px; background: transparent; color: <?= $accentPrimaryLight ?>; font-size: 1.05rem; font-weight: 600; border: 2px solid rgba(249,115,22,0.4); border-radius: 12px; transition: all 0.3s ease; text-decoration: none; }
+        #<?= $instanceId ?> .fp-hero-btn-secondary:hover { background: rgba(249,115,22,0.1); border-color: <?= $accentPrimaryLight ?>; }
+        #<?= $instanceId ?> .fp-hero-stats { display: flex; gap: 40px; flex-wrap: wrap; }
+        #<?= $instanceId ?> .fp-hero-stat { text-align: left; }
+        #<?= $instanceId ?> .fp-hero-stat-value { font-size: 2rem; font-weight: 800; color: <?= $accentPrimaryLight ?>; }
+        #<?= $instanceId ?> .fp-hero-stat-label { font-size: 0.9rem; color: <?= $textSecondary ?>; margin-top: 4px; }
+        #<?= $instanceId ?> .fp-hero-visual { position: relative; display: flex; align-items: center; justify-content: center; }
+        #<?= $instanceId ?> .fp-hero-deco { width: 100%; aspect-ratio: 1; background: radial-gradient(circle at 30% 40%, rgba(249,115,22,0.2) 0%, rgba(236,72,153,0.1) 40%, transparent 70%); border-radius: 50%; position: relative; }
+        #<?= $instanceId ?> .fp-hero-deco::before { content: ''; position: absolute; inset: 20px; border: 2px dashed rgba(249,115,22,0.2); border-radius: 50%; animation: fpSpin 30s linear infinite; }
+        @keyframes fpSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #<?= $instanceId ?> .fp-hero-deco-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 6rem; opacity: 0.3; }
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .fp-hero-container { grid-template-columns: 1fr; text-align: center; }
+            #<?= $instanceId ?> .fp-hero-desc { margin-left: auto; margin-right: auto; }
+            #<?= $instanceId ?> .fp-hero-cta { justify-content: center; }
+            #<?= $instanceId ?> .fp-hero-stats { justify-content: center; }
+            #<?= $instanceId ?> .fp-hero-stat { text-align: center; }
+            #<?= $instanceId ?> .fp-hero-visual { max-width: 400px; margin: 0 auto; }
+        }
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .fp-hero-title { font-size: 2.5rem; }
+            #<?= $instanceId ?> .fp-hero-desc { font-size: 1rem; }
+            #<?= $instanceId ?> .fp-hero-cta { flex-direction: column; align-items: center; }
+            #<?= $instanceId ?> .fp-hero-btn-primary, #<?= $instanceId ?> .fp-hero-btn-secondary { width: 100%; max-width: 320px; justify-content: center; }
+            #<?= $instanceId ?> .fp-hero-stats { gap: 24px; }
+            #<?= $instanceId ?> .fp-hero-visual { display: none; }
+        }
+    </style>
+    
+    <div class="fp-hero-container">
+        <div class="fp-hero-content">
+            <?php if ($badge): ?>
+            <div class="fp-hero-badge">
+                <span class="fp-hero-badge-dot"></span>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <?php endif; ?>
+            
+            <h1 class="fp-hero-title"><?= nl2br(htmlspecialchars($title)) ?></h1>
+            <p class="fp-hero-desc"><?= htmlspecialchars($description) ?></p>
+            
+            <div class="fp-hero-cta">
+                <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="fp-hero-btn-primary">
+                    <?= htmlspecialchars($primaryBtnText) ?>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </a>
+                <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="fp-hero-btn-secondary">
+                    <?= htmlspecialchars($secondaryBtnText) ?>
+                </a>
+            </div>
+            
+            <?php if (!empty($stats)): ?>
+            <div class="fp-hero-stats">
+                <?php foreach ($stats as $stat): ?>
+                <div class="fp-hero-stat">
+                    <div class="fp-hero-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                    <div class="fp-hero-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <div class="fp-hero-visual">
+            <div class="fp-hero-deco">
+                <div class="fp-hero-deco-icon">🏋️</div>
+            </div>
+        </div>
+    </div>
+</section>

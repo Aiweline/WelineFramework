@@ -1,0 +1,60 @@
+<?php
+/**
+ * 关键词画像 Offcanvas 表单（iframe 内加载）
+ *
+ * @var \GuoLaiRen\Blog\Model\TrendProfile|null $profile
+ */
+$profile = $this->getData('profile');
+$action  = $this->getData('action');
+$isEdit  = $profile && $profile->getId();
+$title   = $isEdit ? __('编辑关键词画像') : __('新建关键词画像');
+$keywordsStr = $profile ? implode(', ', $profile->getKeywordsArray()) : '';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?></title>
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
+    <style>
+        body { padding: 1rem; background: #fff; }
+        .offcanvas-form-card { border: none; box-shadow: none; }
+    </style>
+</head>
+<body>
+
+<template>Weline_Component::message.phtml</template>
+
+<form id="offcanvasForm" action="<?= htmlspecialchars($action) ?>" method="post">
+    <div class="mb-3">
+        <label for="name" class="form-label"><?= __('画像名称') ?> <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="name" name="name" required
+               value="<?= $profile ? htmlspecialchars((string)$profile->getData('name')) : '' ?>"
+               placeholder="<?= __('例如：棋牌') ?>">
+    </div>
+    <div class="mb-3">
+        <label for="keywords" class="form-label"><?= __('关键词') ?></label>
+        <textarea class="form-control" id="keywords" name="keywords" rows="3"
+                  placeholder="<?= __('多个关键词用英文逗号分隔，如：棋牌, 赌博, 博彩') ?>"><?= htmlspecialchars($keywordsStr) ?></textarea>
+    </div>
+    <div class="mb-3">
+        <label for="sort" class="form-label"><?= __('排序') ?></label>
+        <input type="number" class="form-control" id="sort" name="sort"
+               value="<?= $profile ? (int)$profile->getData('sort') : 0 ?>">
+    </div>
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1"
+                   <?= (!$profile || (int)$profile->getData('is_active') === 1) ? 'checked' : '' ?>>
+            <label class="form-check-label" for="is_active"><?= __('启用') ?></label>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">
+        <i class="mdi mdi-content-save me-1"></i><?= $isEdit ? __('保存') : __('创建') ?>
+    </button>
+</form>
+
+</body>
+</html>

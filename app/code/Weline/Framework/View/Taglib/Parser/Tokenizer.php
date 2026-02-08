@@ -84,6 +84,16 @@ final class Tokenizer
     private ?string $frameworkTagPattern = null;
 
     /**
+     * 重置内部状态，允许实例复用（避免每次编译创建新实例）
+     * 注意：inlineAssetTagsMap 是 static，不需要重置
+     */
+    public function reset(): void
+    {
+        $this->frameworkTags = [];
+        $this->frameworkTagPattern = null;
+    }
+
+    /**
      * 内联资源标签映射（用于快速查找）
      * @var array<string, bool>
      */

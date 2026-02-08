@@ -117,6 +117,9 @@ class RegistryUpdateService
             $ok = $eventRegistry->refresh();
             if ($ok) {
                 $eventRegistry->getRegistry(true); // 强制重新加载
+                /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                $eventsManager->clearObserverCache(); // 事件注册表已刷新，清空观察者缓存以便从新注册表读取
                 if (!$silent) {
                     Env::log_info('registry_update.log', __('✓ 事件注册表已更新完成。'));
                 }

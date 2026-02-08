@@ -47,7 +47,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
         <!-- Hero 区域（全宽顶部） -->
         <w:slot id="widget-hero" 
                 name="Hero轮播区域"
-                accept="hero-slider,promo-banner"
+                accept="hero-slider,promo-banner,deals-of-day,featured-products,image-text,video-player,countdown"
                 exclusive="true"
                 position="content"
                 wrapper="section"
@@ -70,7 +70,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
         <!-- 推荐区域（全宽） -->
         <w:slot id="widget-featured"
                 name="推荐区域"
-                accept="featured-products,category-grid,deals-of-day"
+                accept="featured-products,category-grid,deals-of-day,bestsellers,new-arrivals,product-carousel,you-may-like"
                 multiple="true"
                 position="content"
                 wrapper="section"
@@ -97,7 +97,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
             <!-- 左侧栏 -->
             <w:slot id="widget-sidebar-left"
                     name="左侧栏"
-                    accept="category-filters,category-list,sidebar-menu,sidebar-ads"
+                    accept="category-filters,category-list,sidebar-menu,sidebar-ads,mini-cart,tags-cloud,sidebar-social,sidebar-newsletter"
                     multiple="true"
                     position="sidebar"
                     wrapper="aside"
@@ -147,7 +147,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
             <!-- 右侧栏 -->
             <w:slot id="widget-sidebar-right"
                     name="右侧栏"
-                    accept="mini-cart,recently-viewed,sidebar-newsletter,sidebar-social,tags-cloud"
+                    accept="mini-cart,recently-viewed,sidebar-newsletter,sidebar-social,tags-cloud,sidebar-ads,sidebar-menu"
                     multiple="true"
                     position="sidebar"
                     wrapper="aside"
@@ -174,7 +174,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
         <!-- 底部区域（全宽） -->
         <w:slot id="widget-bottom"
                 name="底部区域"
-                accept="testimonials,brand-logos,faq-accordion,trust-badges"
+                accept="testimonials,brand-logos,faq-accordion,trust-badges,deals-of-day,newsletter-popup,social-share"
                 multiple="true"
                 position="content"
                 wrapper="section"

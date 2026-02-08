@@ -21,6 +21,7 @@
 - 自动解析模块配置
 - 支持自定义模块路径
 - 模块代理机制，自动处理未加载模块的调用
+- **延迟立即加载**：需要「最后再加载」的立即模块，可在 script 标签上加 `data-load-order="last"` 或传 `options.loadOrder: 'last'`（详见 [延迟立即加载](#延迟立即加载data-load-order--optionsloadorder)）
 
 ### 3. 配置管理
 - 从 PHP 模板中注入配置（`window.__WelineThemeConfig`）
@@ -113,7 +114,7 @@ Weline.applyConfig({
 
 ### 模块管理
 
-#### `Weline.declare(moduleNames, loadImmediately, customPath, callback)`
+#### `Weline.declare(moduleNames, loadImmediately, customPath, callback, options)`
 声明模块（必须使用，方便 PHP 解析翻译词）。
 
 **参数**:
@@ -121,6 +122,7 @@ Weline.applyConfig({
 - `loadImmediately` (boolean, 可选): 是否立即加载，默认 `false`
 - `customPath` (string|string[], 可选): 自定义模块路径
 - `callback` (Function, 可选): 加载完成后的回调函数
+- `options` (Object, 可选): 配置选项，如 `{ loadOrder: 'last' }` 表示延迟到 DOMContentLoaded 后加载（显式参数优先于 script 标签属性）
 
 **示例**:
 ```javascript
@@ -140,7 +142,39 @@ Weline.declare('customModule', false, '/custom/path/module.js');
 Weline.declare('api', true, null, function() {
     console.log('API 模块加载完成');
 });
+
+// 延迟立即加载（使用显式参数）
+Weline.declare('search', true, 'WeShop_Search::js/search.js', null, { loadOrder: 'last' });
 ```
+
+#### 延迟立即加载（data-load-order / options.loadOrder）
+
+当 `loadImmediately === true` 时，可通过以下方式将**实际拉取脚本**推迟到 DOMContentLoaded 之后执行，避免与其它 head 脚本并行导致的栈溢出（如 `Maximum call stack size exceeded`）：
+
+**方式一：script 标签属性**
+
+在包含 `Weline.declare(..., true, ...)` 的 `<script>` 标签上添加 `data-load-order="last"`（或 `"defer"`）：
+
+```html
+<script data-load-order="last">
+    Weline.declare('search', true, 'WeShop_Search::js/search.js');
+</script>
+```
+
+**方式二：显式参数（推荐用于异步/回调场景）**
+
+传入 `options.loadOrder: 'last'`，适用于在 setTimeout、事件回调等异步上下文中调用：
+
+```javascript
+// 异步场景中使用显式参数指定延迟加载
+setTimeout(() => {
+    Weline.declare('myModule', true, 'My_Module::js/module.js', null, { loadOrder: 'last' });
+}, 1000);
+```
+
+**优先级**：显式参数 `options.loadOrder` 优先于 script 标签的 `data-load-order` 属性。
+
+**注意**：`document.currentScript` 仅在同步内联 script 执行时有效；在异步场景（setTimeout/事件回调）中调用 declare 时，需使用显式参数 `options.loadOrder` 指定延迟加载。
 
 #### `Weline.load(moduleNames, customPath, callback)`
 立即加载模块。

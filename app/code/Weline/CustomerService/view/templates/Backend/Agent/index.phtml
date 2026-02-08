@@ -8,8 +8,8 @@ use Weline\Framework\Manager\ObjectManager;
 $agents = $this->getData('agents') ?? [];
 $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
 $saveUrl = $this->getBackendUrl("customerservice/backend/agent/save");
-$deleteUrl = $this->getBackendUrl("customerservice/backend/agent/delete");
-$statisticsUrl = $this->getBackendUrl("customerservice/backend/agent/getAgentStatistics");
+$deleteUrl = $this->getBackendUrl("customerservice/backend/agent/remove");
+$statisticsUrl = $this->getBackendUrl("customerservice/backend/agent/agent-statistics");
 
 // 获取后台用户列表（用于选择关联用户）
 /** @var BackendUser $backendUser */

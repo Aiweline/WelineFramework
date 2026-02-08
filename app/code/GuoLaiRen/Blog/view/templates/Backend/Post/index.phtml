@@ -28,11 +28,16 @@
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0"><?= __('博客文章列表') ?></h4>
-            <a href="<?= $this->getBackendUrl('blog/backend/post/create') ?>"
-               class="btn btn-primary">
-                <i class="mdi mdi-plus"></i> <?= __('新建博客') ?>
-            </a>
+            <h4 class="mb-0"><lang>博客文章列表</lang></h4>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-success" id="btnTriggerAi" title="<?= __('从趋势增长词中取词，调用 AI 生成文章（草稿）') ?>">
+                    <i class="mdi mdi-robot"></i> <lang>生成SEO文章</lang>
+                </button>
+                <a href="<?= $this->getBackendUrl('blog/backend/post/create') ?>"
+                   class="btn btn-primary">
+                    <i class="mdi mdi-plus"></i> <lang>新建博客</lang>
+                </a>
+            </div>
         </div>
 
         <form class="mb-3" method="get">
@@ -61,12 +66,12 @@
                             <thead>
                             <tr>
                                 <th style="width: 60px;">ID</th>
-                                <th><?= __('标题') ?></th>
-                                <th style="width: 220px;"><?= __('URL别名') ?></th>
-                                <th style="width: 120px;"><?= __('状态') ?></th>
-                                <th style="width: 180px;"><?= __('发布时间') ?></th>
-                                <th style="width: 180px;"><?= __('创建时间') ?></th>
-                                <th style="width: 180px;"><?= __('操作') ?></th>
+                                <th><lang>标题</lang></th>
+                                <th style="width: 220px;"><lang>URL别名</lang></th>
+                                <th style="width: 120px;"><lang>状态</lang></th>
+                                <th style="width: 180px;"><lang>发布时间</lang></th>
+                                <th style="width: 180px;"><lang>创建时间</lang></th>
+                                <th style="width: 180px;"><lang>操作</lang></th>
                             </tr>
                             </thead>
                             <tbody>
@@ -82,11 +87,11 @@
                                     <td>
                                         <?php if ((int)$post->getData('status') === \GuoLaiRen\Blog\Model\Post::STATUS_PUBLISHED): ?>
                                             <span class="badge bg-success">
-                                                <i class="mdi mdi-check"></i> <?= __('已发布') ?>
+                                                <i class="mdi mdi-check"></i> <lang>已发布</lang>
                                             </span>
                                         <?php else: ?>
                                             <span class="badge bg-secondary">
-                                                <i class="mdi mdi-clock-outline"></i> <?= __('草稿') ?>
+                                                <i class="mdi mdi-clock-outline"></i> <lang>草稿</lang>
                                             </span>
                                         <?php endif; ?>
                                     </td>
@@ -94,14 +99,22 @@
                                     <td><?= htmlspecialchars($post->getData('created_at') ?? '') ?></td>
                                     <td>
                                         <div class="btn-group" role="group">
+                                            <?php if ((int)$post->getData('status') === \GuoLaiRen\Blog\Model\Post::STATUS_DRAFT): ?>
+                                                <a href="<?= $this->getBackendUrl('blog/backend/post/publish') ?>?id=<?= (int)$post->getData('post_id') ?>"
+                                                   class="btn btn-sm btn-success blog-publish-confirm"
+                                                   data-msg="<?= htmlspecialchars(__('确定要审批并发布该文章吗？')) ?>"
+                                                   title="<?= __('审批发布') ?>">
+                                                    <i class="mdi mdi-check-decagram"></i> <lang>发布</lang>
+                                                </a>
+                                            <?php endif; ?>
                                             <a href="<?= $this->getBackendUrl('blog/backend/post/edit') ?>?id=<?= (int)$post->getData('post_id') ?>"
                                                class="btn btn-sm btn-info">
                                                 <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
                                             </a>
                                             <a href="<?= $this->getBackendUrl('blog/backend/post/delete') ?>?id=<?= (int)$post->getData('post_id') ?>"
-                                               class="btn btn-sm btn-danger"
-                                               onclick="return confirm('<?= __('确定要删除该博客文章吗？') ?>');">
-                                                <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                               class="btn btn-sm btn-danger blog-delete-confirm"
+                                               data-msg="<?= htmlspecialchars(__('确定要删除该博客文章吗？')) ?>">
+                                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
                                             </a>
                                         </div>
                                     </td>
@@ -196,5 +209,82 @@
         </div>
     </div>
 </div>
+
+<!-- 删除确认弹窗（替代原生 confirm，符合友好通知规范；使用主题变量以适配暗色/亮色；role/aria 便于无障碍） -->
+<div id="blogDeleteConfirmModal" role="dialog" aria-modal="true" aria-labelledby="blogDeleteConfirmMsg" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--backend-color-bg-overlay, rgba(0,0,0,0.5)); align-items:center; justify-content:center;">
+    <div style="background:var(--backend-color-bg-surface, #fff); padding:var(--backend-padding-modal, 1.5rem); border-radius:8px; max-width:400px; box-shadow:var(--backend-modal-shadow, 0 4px 12px rgba(0,0,0,0.15)); color:var(--backend-color-text-primary, #212529);">
+        <p id="blogDeleteConfirmMsg" style="margin-bottom:1rem;"></p>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="blogDeleteCancelBtn"><lang>取消</lang></button>
+            <button type="button" class="btn btn-danger" id="blogDeleteConfirmBtn"><lang>确定</lang></button>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+    var modal = document.getElementById('blogDeleteConfirmModal');
+    var msgEl = document.getElementById('blogDeleteConfirmMsg');
+    var confirmBtn = document.getElementById('blogDeleteConfirmBtn');
+    var cancelBtn = document.getElementById('blogDeleteCancelBtn');
+    var deleteHref = '';
+    if (!modal || !msgEl) return;
+    modal.style.display = 'flex';
+    modal.style.display = 'none';
+    document.querySelectorAll('.blog-delete-confirm').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault(); deleteHref = this.getAttribute('href'); msgEl.textContent = this.getAttribute('data-msg') || ''; modal.style.display = 'flex'; });
+    });
+    confirmBtn.addEventListener('click', function(){ if(deleteHref) window.location = deleteHref; });
+    cancelBtn.addEventListener('click', function(){ modal.style.display = 'none'; deleteHref = ''; });
+
+    /* 审批发布确认 */
+    document.querySelectorAll('.blog-publish-confirm').forEach(function(a){
+        a.addEventListener('click', function(e){
+            e.preventDefault();
+            deleteHref = this.getAttribute('href');
+            msgEl.textContent = this.getAttribute('data-msg') || '';
+            confirmBtn.className = 'btn btn-success';
+            confirmBtn.textContent = '<?= __('确定发布') ?>';
+            modal.style.display = 'flex';
+        });
+    });
+})();
+</script>
+
+<!-- 手动触发 AI 生成 SEO 文章 -->
+<script>
+(function(){
+    var btn = document.getElementById('btnTriggerAi');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+        var origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('生成中...') ?>';
+
+        fetch('<?= $this->getBackendUrl('blog/backend/post/trigger-ai-publish') ?>', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+            if (typeof AdminToast !== 'undefined') {
+                res.success ? AdminToast.success(res.message) : AdminToast.error(res.message);
+            } else {
+                alert(res.message);
+            }
+            if (res.success) {
+                setTimeout(function(){ window.location.reload(); }, 1500);
+            }
+        })
+        .catch(function(){
+            if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('请求失败，请重试') ?>');
+            else alert('<?= __('请求失败，请重试') ?>');
+        })
+        .finally(function(){
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        });
+    });
+})();
+</script>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

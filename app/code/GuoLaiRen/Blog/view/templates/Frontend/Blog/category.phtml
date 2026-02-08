@@ -1,0 +1,172 @@
+<?php
+/**
+ * 博客分类文章列表模板
+ *
+ * 变量：
+ * - $category           \GuoLaiRen\Blog\Model\Category 当前分类对象
+ * - $current_category   array 当前分类数据
+ * - $posts              array 该分类下的文章列表
+ * - $blog_categories    array 所有分类列表
+ * - $recent_posts       array 最近文章
+ * - $current_page       int   当前页码
+ * - $has_more           bool  是否可能还有下一页
+ */
+$category = $this->getData('category');
+$currentCategory = $this->getData('current_category') ?? [];
+$posts = $this->getData('posts') ?? [];
+$blogCategories = $this->getData('blog_categories') ?? [];
+$recentPosts = $this->getData('recent_posts') ?? [];
+$currentPage = (int)($this->getData('current_page') ?? 1);
+$hasMore = (bool)($this->getData('has_more') ?? false);
+$categoryName = $currentCategory['name'] ?? ($category ? $category->getData('name') : '');
+$categoryDescription = $currentCategory['description'] ?? ($category ? $category->getData('description') : '');
+?>
+
+<div class="container my-5">
+    <div class="row">
+        <!-- 主内容区 -->
+        <div class="col-lg-8">
+            <!-- 分类标题 -->
+            <div class="mb-4">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item">
+                            <a href="<?= $this->request->getUrlBuilder()->getFrontendUrl('blog/frontend/index/index') ?>">
+                                <lang>博客</lang>
+                            </a>
+                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">
+                            <?= htmlspecialchars($categoryName) ?>
+                        </li>
+                    </ol>
+                </nav>
+                <h1 class="mb-2"><?= htmlspecialchars($categoryName) ?></h1>
+                <?php if (!empty($categoryDescription)): ?>
+                    <p class="text-muted"><?= htmlspecialchars($categoryDescription) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <if condition="empty($posts)">
+                <div class="alert alert-info">
+                    <i class="mdi mdi-information-outline"></i>
+                    <lang>该分类下还没有文章，请稍后再来查看。</lang>
+                </div>
+                <else/>
+                <div class="row">
+                    <?php foreach ($posts as $post): ?>
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <img src="<?= htmlspecialchars($post['cover_image']) ?>" 
+                                         class="card-img-top" 
+                                         alt="<?= htmlspecialchars($post['title']) ?>"
+                                         style="height: 180px; object-fit: cover;">
+                                <?php endif; ?>
+                                <div class="card-body d-flex flex-column">
+                                    <h5 class="card-title">
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" 
+                                           class="text-decoration-none">
+                                            <?= htmlspecialchars($post['title']) ?>
+                                        </a>
+                                    </h5>
+                                    <?php if (!empty($post['summary'])): ?>
+                                        <p class="card-text text-muted flex-grow-1 small">
+                                            <?= htmlspecialchars(mb_substr($post['summary'], 0, 80)) ?><?= mb_strlen($post['summary']) > 80 ? '...' : '' ?>
+                                        </p>
+                                    <?php endif; ?>
+                                    <div class="mt-auto">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <?php if (!empty($post['published_at'])): ?>
+                                                <small class="text-muted">
+                                                    <i class="mdi mdi-clock-outline"></i>
+                                                    <?= htmlspecialchars(substr($post['published_at'], 0, 10)) ?>
+                                                </small>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars($post['url']) ?>" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <lang>阅读</lang>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- 分页 -->
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <div>
+                        <?php if ($currentPage > 1): ?>
+                            <a href="?slug=<?= htmlspecialchars($currentCategory['slug'] ?? '') ?>&page=<?= $currentPage - 1 ?>" class="btn btn-outline-secondary">
+                                <lang>上一页</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <span class="text-muted">
+                            <lang args="['page' => $currentPage]">当前第 %{page} 页</lang>
+                        </span>
+                    </div>
+                    <div class="text-end">
+                        <?php if ($hasMore): ?>
+                            <a href="?slug=<?= htmlspecialchars($currentCategory['slug'] ?? '') ?>&page=<?= $currentPage + 1 ?>" class="btn btn-outline-primary">
+                                <lang>下一页</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </if>
+        </div>
+
+        <!-- 侧边栏 -->
+        <div class="col-lg-4">
+            <!-- 分类列表 -->
+            <?php if (!empty($blogCategories)): ?>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><lang>博客分类</lang></h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <?php foreach ($blogCategories as $cat): ?>
+                                <li class="mb-2">
+                                    <a href="<?= htmlspecialchars($cat['url']) ?>" 
+                                       class="text-decoration-none <?= ($cat['slug'] ?? '') === ($currentCategory['slug'] ?? '') ? 'fw-bold text-primary' : '' ?>">
+                                        <?= htmlspecialchars($cat['name']) ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- 最近文章 -->
+            <?php if (!empty($recentPosts)): ?>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><lang>最近文章</lang></h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <?php foreach (array_slice($recentPosts, 0, 5) as $recentPost): ?>
+                                <li class="mb-3 pb-2 border-bottom">
+                                    <a href="<?= htmlspecialchars($recentPost['url']) ?>" class="text-decoration-none">
+                                        <?= htmlspecialchars($recentPost['title']) ?>
+                                    </a>
+                                    <?php if (!empty($recentPost['published_at'])): ?>
+                                        <br>
+                                        <small class="text-muted">
+                                            <?= htmlspecialchars(substr($recentPost['published_at'], 0, 10)) ?>
+                                        </small>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

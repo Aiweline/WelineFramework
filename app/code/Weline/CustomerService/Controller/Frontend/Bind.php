@@ -33,16 +33,10 @@ class Bind extends FrontendController
 
     /**
      * 发送绑定验证邮件（AJAX）
+     * POST /customerservice/frontend/bind/send-verification
      */
-    public function sendVerification(): string
+    public function postSendVerification(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('无效的请求方法')
-            ]);
-        }
-
         try {
             $email = trim($this->request->getPost('email', ''));
             $sessionToken = trim($this->request->getPost('session_token', ''));
@@ -91,6 +85,7 @@ class Bind extends FrontendController
 
     /**
      * 验证绑定令牌
+     * GET /customerservice/frontend/bind/verify
      */
     public function verify(): string
     {

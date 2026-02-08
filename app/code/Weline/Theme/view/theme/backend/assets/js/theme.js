@@ -10,8 +10,14 @@
  * 使用方式：
  *   Weline.declare('api'); // 声明模块，按需加载
  *   Weline.declare('account', true); // 声明并立即加载
+ *   Weline.declare('search', true, 'path', null, { loadOrder: 'last' }); // 声明并延迟立即加载（DOMContentLoaded后）
  *   Weline.load('api'); // 立即加载模块
  *   Weline.Api.request(url, options); // 使用模块（自动按需加载）
+ * 
+ * 延迟立即加载：
+ *   需要「最后再加载」的立即模块，可通过以下方式延迟到 DOMContentLoaded 后执行：
+ *   1. 在 script 标签上加 data-load-order="last"（或 "defer"）
+ *   2. 传入 options.loadOrder: 'last'（显式参数优先于 script 属性）
  */
 (function (window, document) {
     'use strict';
@@ -654,6 +660,52 @@
     const moduleDeclarer = new ModuleDeclarer();
 
     /**
+     * 延迟立即加载队列
+     * 用于存储需要在 DOMContentLoaded 后才执行的「立即加载」声明
+     * 每项格式：{ moduleNames, actualCustomPath, callback }
+     */
+    const immediateLoadDeferredQueue = [];
+
+    /**
+     * 执行延迟立即加载队列
+     * 并行启动所有队列项的加载（不顺序 await）
+     */
+    function flushImmediateLoadDeferredQueue() {
+        // 取出当前队列快照并清空队列
+        const snapshot = immediateLoadDeferredQueue.splice(0, immediateLoadDeferredQueue.length);
+        if (snapshot.length === 0) {
+            return;
+        }
+
+        // 并行启动所有队列项的加载
+        snapshot.forEach(item => {
+            const { moduleNames, actualCustomPath, callback } = item;
+            const moduleList = Array.isArray(moduleNames) ? moduleNames : [moduleNames];
+            
+            Promise.all(moduleList.map(moduleName => {
+                return moduleLoader.loadModule(moduleName, actualCustomPath).catch(error => {
+                    if (isDev) {
+                        console.warn(`[Weline] 延迟立即加载模块 ${moduleName} 失败:`, error.message);
+                    }
+                    throw error;
+                });
+            })).then(() => {
+                if (callback) {
+                    try {
+                        callback();
+                    } catch (error) {
+                        if (isDev) {
+                            console.error('[Weline] 延迟加载模块回调执行失败:', error);
+                        }
+                    }
+                }
+            }).catch(() => {
+                // 静默失败，继续处理其他队列项
+            });
+        });
+    }
+
+    /**
      * Weline 主对象（轻量级，只包含基础功能）
      */
     const Weline = {
@@ -724,9 +776,10 @@
          * @param {boolean|string|string[]|Function} loadImmediatelyOrCustomPathOrCallback 是否立即加载、自定义路径或回调函数
          * @param {string|string[]|Function|boolean} customPathOrCallbackOrLoadImmediately 自定义路径、回调函数或是否立即加载
          * @param {Function|boolean|string|string[]} callbackOrLoadImmediatelyOrCustomPath 回调函数、是否立即加载或自定义路径
+         * @param {Object} options 可选配置，如 { loadOrder: 'last' } 表示延迟到 DOMContentLoaded 后加载
          * @returns {Promise<void>}
          */
-        declare: async (moduleNames, loadImmediatelyOrCustomPathOrCallback = false, customPathOrCallbackOrLoadImmediately = null, callbackOrLoadImmediatelyOrCustomPath = null) => {
+        declare: async (moduleNames, loadImmediatelyOrCustomPathOrCallback = false, customPathOrCallbackOrLoadImmediately = null, callbackOrLoadImmediatelyOrCustomPath = null, options = null) => {
             if (!moduleNames) {
                 return;
             }
@@ -767,6 +820,36 @@
 
             // 如果设置了立即加载，则异步加载（不阻塞）
             if (loadImmediately) {
+                // 判断是否需要延迟加载：显式参数优先于 script 标签属性
+                let shouldDefer = false;
+                
+                // 1. 先检查显式参数 options.loadOrder
+                if (options && typeof options === 'object') {
+                    const loadOrder = options.loadOrder;
+                    if (loadOrder === 'last' || loadOrder === 'defer') {
+                        shouldDefer = true;
+                    }
+                }
+                
+                // 2. 若未通过显式参数指定，再检查当前 script 标签的 data-load-order 属性
+                if (!shouldDefer && document.currentScript) {
+                    const scriptLoadOrder = document.currentScript.getAttribute('data-load-order');
+                    if (scriptLoadOrder === 'last' || scriptLoadOrder === 'defer') {
+                        shouldDefer = true;
+                    }
+                }
+
+                if (shouldDefer) {
+                    // 延迟加载：入队，等待 DOMContentLoaded 后执行
+                    immediateLoadDeferredQueue.push({
+                        moduleNames: moduleNames,
+                        actualCustomPath: actualCustomPath,
+                        callback: callback
+                    });
+                    return;
+                }
+
+                // 立即加载（不延迟）
                 const moduleList = Array.isArray(moduleNames) ? moduleNames : [moduleNames];
                 Promise.all(moduleList.map(moduleName => {
                     return moduleLoader.loadModule(moduleName, actualCustomPath).catch(error => {
@@ -994,6 +1077,20 @@
     // 挂载到全局
     window.Weline = Weline;
     setupDeprecatedConfigAlias();
+
+    /**
+     * 注册延迟立即加载队列的 flush 时机
+     * - 若 DOM 尚未加载完成，在 DOMContentLoaded 后执行
+     * - 若 DOM 已加载完成，使用 setTimeout(flush, 0) 推迟到下一个事件循环执行
+     */
+    (function registerDeferredLoadFlush() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', flushImmediateLoadDeferredQueue, { once: true });
+        } else {
+            // DOM 已加载完成，使用 setTimeout 避免在初始化栈上加重负担
+            setTimeout(flushImmediateLoadDeferredQueue, 0);
+        }
+    })();
 
     /**
      * 自动处理 data-weline-load 属性（异步，不阻塞）

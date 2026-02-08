@@ -100,30 +100,34 @@ class GoogleIndexingApiAdapter implements SearchEngineAdapterInterface
      */
     private function notifyUrl(string $url, array $options): array
     {
+        // 兼容嵌套和平铺两种 config 格式
         $config = $options['config'] ?? [];
         if (is_string($config)) {
             $decoded = json_decode($config, true);
-            if (is_array($decoded)) {
-                $config = $decoded;
-            } else {
-                $config = [];
-            }
+            $config = is_array($decoded) ? $decoded : [];
+        }
+        if (empty($config)) {
+            $config = $options;
         }
 
+        // 支持两种 service_account 配置方式：
+        // 方式1: config['service_account'] = {...} （嵌套在 service_account 键下）
+        // 方式2: config['client_email'] + config['private_key'] （平铺格式，与 GoogleSitemapAdapter 一致）
         $serviceAccount = $config['service_account'] ?? null;
         if (is_string($serviceAccount)) {
             $decodedService = json_decode($serviceAccount, true);
-            if (is_array($decodedService)) {
-                $serviceAccount = $decodedService;
-            } else {
-                $serviceAccount = null;
-            }
+            $serviceAccount = is_array($decodedService) ? $decodedService : null;
         }
 
-        if (!is_array($serviceAccount)) {
+        // 如果没有 service_account 键，检查平铺格式
+        if (!is_array($serviceAccount) && !empty($config['client_email']) && !empty($config['private_key'])) {
+            $serviceAccount = $config;
+        }
+
+        if (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key'])) {
             return [
                 'success' => false,
-                'message' => __('Google Service Account 配置缺失或格式错误'),
+                'message' => __('Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）'),
             ];
         }
 

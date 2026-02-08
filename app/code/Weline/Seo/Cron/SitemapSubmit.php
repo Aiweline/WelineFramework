@@ -16,7 +16,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Model\SeoWebsiteAccount;
-use Weline\Seo\Service\SearchEngineAdapterRegistry;
+use Weline\Seo\Service\SitemapAdapterRegistry;
 use Weline\Seo\Service\SitemapRegistryService;
 use Weline\Seo\Service\WebSitemapData;
 use Weline\Websites\Model\Website;
@@ -65,8 +65,8 @@ class SitemapSubmit implements CronTaskInterface
             $seoWebsiteAccountModel = ObjectManager::getInstance(SeoWebsiteAccount::class);
             /** @var SeoAccount $accountModel */
             $accountModel = ObjectManager::getInstance(SeoAccount::class);
-            /** @var SearchEngineAdapterRegistry $adapterRegistry */
-            $adapterRegistry = ObjectManager::getInstance(SearchEngineAdapterRegistry::class);
+            /** @var SitemapAdapterRegistry $sitemapAdapterRegistry */
+            $sitemapAdapterRegistry = ObjectManager::getInstance(SitemapAdapterRegistry::class);
             /** @var Website $websiteModel */
             $websiteModel = ObjectManager::getInstance(Website::class);
             /** @var EventsManager $eventsManager */
@@ -116,11 +116,20 @@ class SitemapSubmit implements CronTaskInterface
 
                 try {
                     $result = $webSitemapData->generateSitemapFiles($websiteId);
-                    $stats['generated_files'] += count($result['files']);
+                    $stats['generated_files'] += ($result['total_files'] ?? 0);
 
-                    // 检查是否绑定 SEO 账户
-                    $binding = $seoWebsiteAccountModel->getByWebsiteId($websiteId);
-                    if (!$binding || !$binding->isAutoSubmitEnabled()) {
+                    // 检查是否绑定 SEO 账户（getByWebsiteId 返回数组）
+                    $bindings = $seoWebsiteAccountModel->getByWebsiteId($websiteId);
+                    $hasAutoSubmit = false;
+                    if (!empty($bindings)) {
+                        foreach ($bindings as $bindingRow) {
+                            if ((int)($bindingRow[SeoWebsiteAccount::fields_IS_AUTO_SUBMIT] ?? 0) === 1) {
+                                $hasAutoSubmit = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!$hasAutoSubmit) {
                         $stats['unbound_websites'][] = $website['name'] ?? "站点ID: {$websiteId}";
                     }
                 } catch (\Exception $e) {
@@ -134,73 +143,88 @@ class SitemapSubmit implements CronTaskInterface
             }
 
             // ========== 步骤3：提交 sitemap URL 到搜索引擎（只提交已绑定的）==========
-            $bindings = $seoWebsiteAccountModel->getAutoSubmitBindings();
-
-            foreach ($bindings as $binding) {
-                $websiteId = (int)($binding[SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
-                $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
-
-                if ($websiteId <= 0 || $accountId <= 0) {
-                    continue;
+            $autoBindings = $seoWebsiteAccountModel->getAutoSubmitBindings();
+            
+            // 按 website_id 分组，避免同一站点重复提交
+            $websiteBindingsMap = [];
+            foreach ($autoBindings as $binding) {
+                $wId = (int)($binding[SeoWebsiteAccount::fields_WEBSITE_ID] ?? 0);
+                $aId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
+                if ($wId > 0 && $aId > 0) {
+                    $websiteBindingsMap[$wId][] = $binding;
                 }
+            }
 
-                try {
-                    // 获取账户信息
-                    $account = $accountModel->reset()->load($accountId);
-                    if (!$account->getId() || !$account->isActive()) {
-                        continue;
-                    }
+            foreach ($websiteBindingsMap as $websiteId => $websiteBindings) {
+                foreach ($websiteBindings as $binding) {
+                    $accountId = (int)($binding[SeoWebsiteAccount::fields_ACCOUNT_ID] ?? 0);
 
-                    $providerCode = $account->getData(SeoAccount::fields_PROVIDER);
-                    $adapter = $adapterRegistry->getAdapter($providerCode);
-                    if ($adapter === null) {
+                    try {
+                        // 获取账户信息
+                        $account = $accountModel->reset()->load($accountId);
+                        if (!$account->getId() || !$account->isActive()) {
+                            continue;
+                        }
+
+                        // 通过账户的 platform 字段获取平台适配器
+                        $platformCode = $account->getPlatform();
+                        
+                        // 如果 platform 字段为空，从 provider 推断（向后兼容）
+                        if (empty($platformCode)) {
+                            $providerCode = $account->getData(SeoAccount::fields_PROVIDER);
+                            $platformCode = $sitemapAdapterRegistry->extractPlatformFromProvider($providerCode);
+                        }
+                        
+                        if (empty($platformCode)) {
+                            $stats['errors']++;
+                            continue;
+                        }
+
+                        $adapter = $sitemapAdapterRegistry->getAdapter($platformCode);
+                        if ($adapter === null || !$adapter->supportsAutoSubmit()) {
+                            $stats['errors']++;
+                            continue;
+                        }
+
+                        // 获取该平台的 sitemap 索引 URL
+                        $sitemapUrl = $webSitemapData->getPlatformSitemapUrl($websiteId, $platformCode);
+                        if (empty($sitemapUrl)) {
+                            continue;
+                        }
+
+                        // 提交到搜索引擎（直接传递账户配置数组，适配器内部解析所需字段）
+                        $accountConfig = $account->getConfigArray();
+                        $result = $adapter->submitSitemap($sitemapUrl, $accountConfig);
+
+                        if ($result['success'] ?? false) {
+                            $stats['submitted']++;
+                        } else {
+                            $stats['errors']++;
+                        }
+                    } catch (\Exception $e) {
+                        error_log(sprintf(
+                            '[Weline_Seo] SitemapSubmit submit error: website_id=%d, account_id=%d - %s',
+                            $websiteId,
+                            $accountId,
+                            $e->getMessage()
+                        ));
                         $stats['errors']++;
-                        continue;
                     }
-
-                    // 获取 sitemap URL
-                    $sitemapUrl = $webSitemapData->getMainSitemapUrl($websiteId);
-                    if (empty($sitemapUrl)) {
-                        continue;
-                    }
-
-                    // 提交到搜索引擎
-                    $config = $account->getConfigArray();
-                    $result = $adapter->submitSitemap($sitemapUrl, [
-                        'account' => [
-                            'id' => $accountId,
-                            'provider' => $providerCode,
-                        ],
-                        'config' => $config,
-                    ]);
-
-                    if ($result['success'] ?? false) {
-                        $stats['submitted']++;
-                    } else {
-                        $stats['errors']++;
-                    }
-                } catch (\Exception $e) {
-                    error_log(sprintf(
-                        '[Weline_Seo] SitemapSubmit submit error: website_id=%d, account_id=%d - %s',
-                        $websiteId,
-                        $accountId,
-                        $e->getMessage()
-                    ));
-                    $stats['errors']++;
                 }
             }
 
             // ========== 步骤4：发送消息通知未绑定的站点 ==========
             if (!empty($stats['unbound_websites'])) {
                 try {
-                    $eventsManager->dispatch('Weline_Admin::msg', [
+                    $msgData = [
                         'title' => __('Sitemap 提交提示'),
                         'content' => __('以下站点未绑定 SEO 账户，无法自动提交 sitemap：') . "\n\n" 
                             . implode("\n", $stats['unbound_websites']) . "\n\n" 
                             . __('请前往"SEO管理 > Sitemap管理"或"站点管理"绑定 SEO 账户。'),
                         'type' => 'warning',
                         'level' => 'warning',
-                    ]);
+                    ];
+                    $eventsManager->dispatch('Weline_Admin::msg', $msgData);
                 } catch (\Exception $e) {
                     // 消息发送失败不影响主流程
                     error_log('[Weline_Seo] SitemapSubmit message error: ' . $e->getMessage());

@@ -1,0 +1,178 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $items
+ * @var array $status_options
+ * @var string $current_status
+ */
+$title = $title ?? __('我的订阅');
+$items = $items ?? [];
+$status_options = $status_options ?? [];
+$current_status = $current_status ?? '';
+
+$statusColorMap = [
+    'trialing'  => '#3b82f6',
+    'active'    => '#22c55e',
+    'paused'    => '#f59e0b',
+    'past_due'  => '#ef4444',
+    'cancelled' => '#6b7280',
+    'expired'   => '#374151',
+];
+?>
+
+<div class="weshop-subscription-list">
+    <div class="weshop-subscription-header">
+        <h2><?= $title ?></h2>
+        <div class="weshop-subscription-filter">
+            <select onchange="location.href=this.value" class="weshop-select">
+                <option value="<?= $this->getUrl('*/subscription/subscriptionList') ?>" <?= !$current_status ? 'selected' : '' ?>><?= __('全部') ?></option>
+                <?php foreach ($status_options as $key => $label): ?>
+                    <option value="<?= $this->getUrl('*/subscription/subscriptionList', ['status' => $key]) ?>" <?= $current_status === $key ? 'selected' : '' ?>><?= $label ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </div>
+
+    <?php if (empty($items)): ?>
+        <div class="weshop-empty-state">
+            <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--weshop-text-secondary);">auto_mode</span>
+            <p><?= __('暂无订阅') ?></p>
+        </div>
+    <?php else: ?>
+        <div class="weshop-subscription-items">
+            <?php foreach ($items as $item): ?>
+                <?php
+                $status = $item['status'] ?? '';
+                $statusLabel = $status_options[$status] ?? $status;
+                $statusColor = $statusColorMap[$status] ?? '#6b7280';
+                $billingCycles = \WeShop\Subscription\Model\SubscriptionPlan::getBillingCycleOptions();
+                $cycleLabel = $billingCycles[$item['billing_cycle']] ?? $item['billing_cycle'];
+                $interval = (int)($item['billing_interval'] ?? 1);
+                ?>
+                <div class="weshop-subscription-card">
+                    <div class="weshop-sub-card-header">
+                        <div class="weshop-sub-card-title">
+                            <span class="weshop-sub-id">#<?= $item['subscription_id'] ?></span>
+                            <span class="weshop-sub-badge" style="background-color: <?= $statusColor ?>20; color: <?= $statusColor ?>;">
+                                <?= $statusLabel ?>
+                            </span>
+                        </div>
+                        <div class="weshop-sub-price">
+                            <?= $item['currency'] ?? 'USD' ?> <?= number_format((float)($item['price'] ?? 0), 2) ?>
+                            <small>/ <?= $interval > 1 ? $interval . ' ' : '' ?><?= $cycleLabel ?></small>
+                        </div>
+                    </div>
+
+                    <div class="weshop-sub-card-body">
+                        <div class="weshop-sub-info-row">
+                            <span class="weshop-sub-label"><?= __('当前周期') ?></span>
+                            <span><?= $item['current_period_start'] ?? '-' ?> ~ <?= $item['current_period_end'] ?? '-' ?></span>
+                        </div>
+                        <div class="weshop-sub-info-row">
+                            <span class="weshop-sub-label"><?= __('下次计费') ?></span>
+                            <span><?= $item['next_billing_at'] ?? '-' ?></span>
+                        </div>
+                        <div class="weshop-sub-info-row">
+                            <span class="weshop-sub-label"><?= __('续费次数') ?></span>
+                            <span><?= $item['renewal_count'] ?? 0 ?></span>
+                        </div>
+                    </div>
+
+                    <div class="weshop-sub-card-actions">
+                        <a href="<?= $this->getUrl('*/subscription/view', ['id' => $item['subscription_id']]) ?>" class="weshop-sub-action-link">
+                            <?= __('查看') ?>
+                        </a>
+                        <?php if (in_array($status, ['active', 'trialing'])): ?>
+                            <button class="weshop-sub-action-btn weshop-sub-pause-btn" onclick="pauseSubscription(<?= $item['subscription_id'] ?>)">
+                                <?= __('暂停') ?>
+                            </button>
+                        <?php endif; ?>
+                        <?php if ($status === 'paused'): ?>
+                            <button class="weshop-sub-action-btn weshop-sub-resume-btn" onclick="resumeSubscription(<?= $item['subscription_id'] ?>)">
+                                <?= __('恢复') ?>
+                            </button>
+                        <?php endif; ?>
+                        <?php if (in_array($status, ['active', 'trialing', 'paused', 'past_due'])): ?>
+                            <button class="weshop-sub-action-btn weshop-sub-cancel-btn" onclick="cancelSubscription(<?= $item['subscription_id'] ?>)">
+                                <?= __('取消') ?>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if (!empty($pagination)): ?>
+            <div class="weshop-pagination">
+                <template>Weline_Component::pagination.phtml</template>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<style>
+    .weshop-subscription-list { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
+    .weshop-subscription-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .weshop-subscription-header h2 { font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--weshop-text-primary); }
+    .weshop-select { padding: 0.5rem 1rem; border: 1px solid var(--weshop-border); border-radius: var(--weshop-border-radius-lg); background: var(--weshop-surface); color: var(--weshop-text-primary); font-size: 0.875rem; }
+    .weshop-empty-state { text-align: center; padding: 3rem; color: var(--weshop-text-secondary); }
+    .weshop-subscription-items { display: flex; flex-direction: column; gap: 1rem; }
+    .weshop-subscription-card { background: var(--weshop-surface); border: 1px solid var(--weshop-border); border-radius: var(--weshop-border-radius-lg); padding: 1.5rem; transition: box-shadow 0.2s; }
+    .weshop-subscription-card:hover { box-shadow: var(--weshop-shadow-md); }
+    .weshop-sub-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--weshop-border); }
+    .weshop-sub-card-title { display: flex; align-items: center; gap: 0.75rem; }
+    .weshop-sub-id { font-weight: 600; color: var(--weshop-text-primary); }
+    .weshop-sub-badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .weshop-sub-price { font-size: 1.25rem; font-weight: 700; color: var(--weshop-text-primary); }
+    .weshop-sub-price small { font-size: 0.75rem; font-weight: 400; color: var(--weshop-text-secondary); }
+    .weshop-sub-card-body { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .weshop-sub-info-row { display: flex; justify-content: space-between; font-size: 0.875rem; }
+    .weshop-sub-label { color: var(--weshop-text-secondary); }
+    .weshop-sub-card-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .weshop-sub-action-link { color: var(--weshop-primary); text-decoration: none; font-size: 0.875rem; font-weight: 500; }
+    .weshop-sub-action-link:hover { text-decoration: underline; }
+    .weshop-sub-action-btn { padding: 0.375rem 0.75rem; border-radius: var(--weshop-border-radius-lg); font-size: 0.8125rem; font-weight: 500; border: 1px solid var(--weshop-border); background: transparent; cursor: pointer; transition: all 0.2s; color: var(--weshop-text-secondary); }
+    .weshop-sub-action-btn:hover { background: var(--weshop-background); }
+    .weshop-sub-pause-btn:hover { border-color: #f59e0b; color: #f59e0b; }
+    .weshop-sub-resume-btn:hover { border-color: #22c55e; color: #22c55e; }
+    .weshop-sub-cancel-btn:hover { border-color: #ef4444; color: #ef4444; }
+</style>
+
+<script>
+    function pauseSubscription(id) {
+        if (!confirm('<?= __('暂停') ?>?')) return;
+        fetch('<?= $this->getUrl('*/subscription/pause') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+            body: 'id=' + id
+        }).then(r => r.json()).then(data => {
+            if (data.code === 200) location.reload();
+            else alert(data.msg);
+        });
+    }
+
+    function resumeSubscription(id) {
+        if (!confirm('<?= __('恢复') ?>?')) return;
+        fetch('<?= $this->getUrl('*/subscription/pause/resume') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+            body: 'id=' + id
+        }).then(r => r.json()).then(data => {
+            if (data.code === 200) location.reload();
+            else alert(data.msg);
+        });
+    }
+
+    function cancelSubscription(id) {
+        const reason = prompt('<?= __('取消原因') ?>');
+        if (reason === null) return;
+        fetch('<?= $this->getUrl('*/subscription/cancel') ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+            body: 'id=' + id + '&reason=' + encodeURIComponent(reason)
+        }).then(r => r.json()).then(data => {
+            if (data.code === 200) location.reload();
+            else alert(data.msg);
+        });
+    }
+</script>

@@ -1,0 +1,335 @@
+{
+    "template": "rummy-royal",
+    "name": "RummyRoyal",
+    "description": "Luxury gold + deep red dark theme for Indian Rummy gaming platforms",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "description": "页面顶部导航区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["header"],
+            "default_component": "header-nav"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "description": "页面主要内容区域",
+            "multiple": true,
+            "required": false,
+            "accepts": ["content", "widget"],
+            "default_components": ["hero-slider", "games", "advantages", "app-download", "testimonials", "faq", "cta-banner"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "description": "页面底部链接和版权区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["footer"],
+            "default_component": "footer-links"
+        }
+    },
+    "components": {
+        "header-nav": {
+            "name": "导航栏",
+            "name_en": "Navigation Header",
+            "description": "页面顶部导航，支持Logo、导航链接和CTA按钮",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-menu-button-wide",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "navigation", "cta_button", "color_scheme"],
+            "file": "header/nav.phtml",
+            "default_config": {
+                "logo.display": "yes",
+                "logo.text": "RummyRoyal",
+                "logo.width": 44,
+                "navigation.show_cta": "yes",
+                "navigation.cta_text": "Play Now",
+                "navigation.cta_url": "#hero"
+            }
+        },
+        "hero-slider": {
+            "name": "首屏英雄区",
+            "name_en": "Hero Slider",
+            "description": "全宽首屏区域，包含大标题、统计数据和CTA按钮",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-badge-hd",
+            "sort_order": 10,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "cta", "stats", "style"],
+            "file": "content/hero-slider.phtml",
+            "default_config": {
+                "content.badge": "🏆 #1 Rated",
+                "content.title": "India's Most Trusted Rummy Platform",
+                "cta.primary_text": "Play Rummy Now",
+                "cta.secondary_text": "Download App"
+            }
+        },
+        "games": {
+            "name": "游戏展示",
+            "name_en": "Games Showcase",
+            "description": "展示各类Rummy游戏模式，4列卡片布局",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-controller",
+            "sort_order": 20,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "games", "style"],
+            "file": "content/games.phtml",
+            "default_config": {
+                "content.badge": "Game Variants",
+                "content.title": "Choose Your Rummy Style"
+            }
+        },
+        "advantages": {
+            "name": "平台优势",
+            "name_en": "Advantages Section",
+            "description": "展示平台核心优势，6卡片网格布局",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-stars",
+            "sort_order": 30,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "content/advantages.phtml",
+            "default_config": {
+                "content.badge": "Why Choose Us",
+                "content.title": "The RummyRoyal Advantage"
+            }
+        },
+        "app-download": {
+            "name": "应用下载",
+            "name_en": "App Download Section",
+            "description": "应用下载区域，包含下载按钮和安装指南",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-download",
+            "sort_order": 40,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "download", "features", "style"],
+            "file": "content/app-download.phtml",
+            "default_config": {
+                "content.badge": "Download App",
+                "content.title": "Play Rummy Anytime, Anywhere",
+                "download.primary_text": "Google Play",
+                "download.secondary_text": "Direct APK"
+            }
+        },
+        "testimonials": {
+            "name": "用户评价",
+            "name_en": "Testimonials",
+            "description": "会员评价展示区域，3列布局含星级评分",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-chat-quote",
+            "sort_order": 50,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "testimonials", "style"],
+            "file": "content/testimonials.phtml",
+            "default_config": {
+                "content.badge": "Player Reviews",
+                "content.title": "What Our Players Say"
+            }
+        },
+        "faq": {
+            "name": "常见问题",
+            "name_en": "FAQ Section",
+            "description": "FAQ手风琴展示，支持展开收起效果",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-question-circle",
+            "sort_order": 60,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["faq", "style"],
+            "file": "content/faq.phtml",
+            "default_config": {
+                "content.badge": "FAQ",
+                "content.title": "Frequently Asked Questions"
+            }
+        },
+        "cta-banner": {
+            "name": "CTA横幅",
+            "name_en": "CTA Banner",
+            "description": "行动号召横幅区域，引导用户注册或下载",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-megaphone",
+            "sort_order": 70,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "buttons", "style"],
+            "file": "content/cta-banner.phtml",
+            "default_config": {
+                "content.title": "Ready to Win Big?",
+                "buttons.primary_text": "Register Now",
+                "buttons.secondary_text": "Download App"
+            }
+        },
+        "blog-list": {
+            "name": "博客列表",
+            "name_en": "Blog List",
+            "description": "博客文章列表，卡片布局带分类过滤",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-journal-text",
+            "sort_order": 80,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "content/blog-list.phtml",
+            "default_config": {
+                "content.badge": "Blog",
+                "content.title": "Rummy Tips & News"
+            }
+        },
+        "blog-detail": {
+            "name": "博客详情",
+            "name_en": "Blog Detail",
+            "description": "单篇博客文章展示，含侧边栏和分享按钮",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-file-text",
+            "sort_order": 81,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "sidebar", "style"],
+            "file": "content/blog-detail.phtml",
+            "default_config": {
+                "sidebar.show_related": "yes",
+                "sidebar.show_share": "yes"
+            }
+        },
+        "blog-category": {
+            "name": "博客分类",
+            "name_en": "Blog Category",
+            "description": "博客分类列表展示",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-tags",
+            "sort_order": 82,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "content/blog-category.phtml",
+            "default_config": {
+                "content.badge": "Categories",
+                "content.title": "Browse by Category"
+            }
+        },
+        "legal-content": {
+            "name": "法律文档",
+            "name_en": "Legal Content",
+            "description": "法律文档展示，含目录和最后更新时间",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-file-earmark-text",
+            "sort_order": 90,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "layout", "style"],
+            "file": "content/legal-content.phtml",
+            "default_config": {
+                "content.badge": "Legal",
+                "content.title": "Legal Document",
+                "layout.width": "medium"
+            }
+        },
+        "about-content": {
+            "name": "关于我们",
+            "name_en": "About Content",
+            "description": "关于页面，含英雄横幅、统计数据、故事、价值观和团队",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-info-circle",
+            "sort_order": 91,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "stats", "story", "values", "style"],
+            "file": "content/about-content.phtml",
+            "default_config": {
+                "content.badge": "About Us",
+                "content.title": "About RummyRoyal"
+            }
+        },
+        "contact-content": {
+            "name": "联系我们",
+            "name_en": "Contact Content",
+            "description": "联系页面，含表单和联系信息",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-envelope",
+            "sort_order": 92,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "contact", "form", "style"],
+            "file": "content/contact-content.phtml",
+            "default_config": {
+                "content.badge": "Contact Us",
+                "content.title": "Get in Touch"
+            }
+        },
+        "footer-links": {
+            "name": "页脚链接",
+            "name_en": "Footer with Links",
+            "description": "页脚区域，包含品牌信息、多栏链接和版权",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "icon": "bi-layout-text-window-reverse",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["brand", "links", "copyright", "style"],
+            "file": "footer/links.phtml",
+            "default_config": {
+                "brand.name": "RummyRoyal",
+                "brand.description": "India's most trusted online rummy platform. Play skill-based card games, win real cash prizes, and enjoy a premium gaming experience.",
+                "links.items": "Games=>#games\nDownload=>#download\nFAQ=>#faq\nContact=>/contact",
+                "copyright.text": "Play responsibly. 18+ only."
+            }
+        }
+    },
+    "nav_config": {
+        "description": "导航可使用子页面配置",
+        "use_subpages": true,
+        "subpage_types": ["link", "anchor", "page"],
+        "default_items": [
+            {"text": "Home", "href": "#home", "type": "anchor"},
+            {"text": "Games", "href": "#games", "type": "anchor"},
+            {"text": "Download", "href": "#download", "type": "anchor"},
+            {"text": "FAQ", "href": "#faq", "type": "anchor"}
+        ]
+    },
+    "config_inheritance": {
+        "description": "组件可以继承模板的配置项",
+        "shared_configs": ["styles", "texts", "color_scheme"]
+    }
+}

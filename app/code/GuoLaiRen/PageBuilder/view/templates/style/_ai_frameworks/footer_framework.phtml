@@ -133,10 +133,19 @@ try {
 
 <!-- AI生成的CSS样式 -->
 <style>
-/* 基础样式 */
+/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
 #<?= $componentId ?> {
-    background: <?= htmlspecialchars($bgColor) ?>;
-    color: <?= htmlspecialchars($textColor) ?>;
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($titleColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-link: <?= htmlspecialchars($linkColor) ?>;
+    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+
+    background: var(--pb-bg);
+    color: var(--pb-text);
     padding: 60px 20px 30px;
 }
 
@@ -162,7 +171,7 @@ try {
     gap: 12px;
     font-size: 1.25rem;
     font-weight: 700;
-    color: <?= htmlspecialchars($titleColor) ?>;
+    color: var(--pb-heading);
     text-decoration: none;
     margin-bottom: 16px;
 }
@@ -180,7 +189,7 @@ try {
 }
 
 #<?= $componentId ?> .ai-footer-column h4 {
-    color: <?= htmlspecialchars($titleColor) ?>;
+    color: var(--pb-heading);
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 20px 0;
@@ -197,14 +206,14 @@ try {
 }
 
 #<?= $componentId ?> .ai-footer-links a {
-    color: <?= htmlspecialchars($linkColor) ?>;
+    color: var(--pb-link);
     text-decoration: none;
     font-size: 0.9rem;
     transition: color 0.3s ease;
 }
 
 #<?= $componentId ?> .ai-footer-links a:hover {
-    color: <?= htmlspecialchars($linkHoverColor) ?>;
+    color: var(--pb-link-hover);
 }
 
 #<?= $componentId ?> .ai-footer-social {
@@ -217,22 +226,22 @@ try {
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
+    background: color-mix(in srgb, var(--pb-text) 10%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: <?= htmlspecialchars($linkColor) ?>;
+    color: var(--pb-link);
     text-decoration: none;
     transition: all 0.3s ease;
 }
 
 #<?= $componentId ?> .ai-footer-social a:hover {
-    background: <?= htmlspecialchars($accentColor) ?>;
+    background: var(--pb-accent);
     color: #ffffff;
 }
 
 #<?= $componentId ?> .ai-footer-bottom {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid color-mix(in srgb, var(--pb-text) 10%, transparent);
     padding-top: 24px;
     display: flex;
     justify-content: space-between;

@@ -12,6 +12,7 @@ namespace Weline\Framework\App;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 
 class State extends DataObject
 {
@@ -24,11 +25,6 @@ class State extends DataObject
     public static bool $is_backend = false;
 
     /**
-     * @var Request
-     */
-    private Request $request;
-
-    /**
      * State 初始函数...
      *
      * @param Request $request
@@ -38,13 +34,20 @@ class State extends DataObject
     )
     {
         parent::__construct();
-        $this->request = $request;
-        self::$is_backend = $this->request->isBackend();
+        self::$is_backend = $request->isBackend();
+    }
+
+    /**
+     * 获取当前请求对象（始终从 ObjectManager 获取最新实例，兼容 WLS 单例场景）
+     */
+    protected function getRequest(): Request
+    {
+        return ObjectManager::getInstance(Request::class);
     }
 
     public function getStateCode()
     {
-        return $this->request->getAreaRouter();
+        return $this->getRequest()->getAreaRouter();
     }
 
     static function isBackend(): bool

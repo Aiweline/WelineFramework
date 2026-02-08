@@ -1,0 +1,194 @@
+<?php
+/**
+ * 服务器监控 - 攻击日志
+ * 
+ * @var \Weline\Framework\View\Template $block
+ * @var array $attacks
+ * @var string $instance
+ * @var int $page
+ * @var int $limit
+ * @var int $total
+ * @var int $totalPages
+ * @var array $attackStats
+ */
+$block->setTitle(__('攻击日志'));
+
+use Weline\Server\Model\AttackLog;
+
+$currentUrl = $block->getUrl('backend/server/server-monitor/attack-log');
+$monitorUrl = $block->getUrl('backend/server/server-monitor');
+?>
+
+<div class="attack-log-page">
+    <!-- 面包屑 -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
+            <li class="breadcrumb-item active"><?= __('攻击日志') ?></li>
+        </ol>
+    </nav>
+    
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-1"><?= $attackStats['total_attacks'] ?? 0 ?></h3>
+                    <small class="text-muted"><?= __('总攻击次数') ?></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h3 class="text-success mb-1"><?= $attackStats['blocked_attacks'] ?? 0 ?></h3>
+                    <small class="text-muted"><?= __('已拦截') ?></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h3 class="mb-1"><?= count($attackStats['top_ips'] ?? []) ?></h3>
+                    <small class="text-muted"><?= __('攻击IP数') ?></small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h3 class="mb-1"><?= $attackStats['cdn_notifications'] ?? 0 ?></h3>
+                    <small class="text-muted"><?= __('CDN通知') ?></small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 日志列表 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-shield-exclamation me-2"></i><?= __('攻击日志列表') ?>
+                <small class="text-muted">(<?= __('共 %{1} 条', $total) ?>)</small>
+            </h5>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" style="width: auto;" onchange="filterByInstance(this.value)">
+                    <option value=""><?= __('全部实例') ?></option>
+                    <option value="default" <?= $instance === 'default' ? 'selected' : '' ?>>default</option>
+                </select>
+                <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <?php if (empty($attacks)): ?>
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-shield-check display-1 text-success"></i>
+                    <p class="mt-3"><?= __('暂无攻击记录') ?></p>
+                </div>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th width="5%">ID</th>
+                                <th width="10%"><?= __('时间') ?></th>
+                                <th width="10%"><?= __('类型') ?></th>
+                                <th width="12%"><?= __('IP') ?></th>
+                                <th width="15%"><?= __('域名') ?></th>
+                                <th><?= __('URI') ?></th>
+                                <th width="8%"><?= __('严重程度') ?></th>
+                                <th width="8%"><?= __('状态') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($attacks as $attack): ?>
+                                <tr>
+                                    <td><?= $attack[AttackLog::fields_ID] ?></td>
+                                    <td>
+                                        <small><?= date('m-d H:i:s', strtotime($attack[AttackLog::fields_CREATED_AT])) ?></small>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor(AttackLog::getSeverityByType($attack[AttackLog::fields_ATTACK_TYPE])) ?>">
+                                            <?= AttackLog::getTypeLabel($attack[AttackLog::fields_ATTACK_TYPE]) ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <code class="small"><?= htmlspecialchars($attack[AttackLog::fields_IP] ?: '-') ?></code>
+                                    </td>
+                                    <td>
+                                        <small class="text-truncate d-inline-block" style="max-width: 120px;" title="<?= htmlspecialchars($attack[AttackLog::fields_DOMAIN]) ?>">
+                                            <?= htmlspecialchars($attack[AttackLog::fields_DOMAIN] ?: '-') ?>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <code class="small text-truncate d-inline-block" style="max-width: 200px;" title="<?= htmlspecialchars($attack[AttackLog::fields_URI]) ?>">
+                                            <?= htmlspecialchars(substr($attack[AttackLog::fields_URI] ?: '-', 0, 50)) ?>
+                                        </code>
+                                        <?php if (!empty($attack[AttackLog::fields_REASON])): ?>
+                                            <br><small class="text-muted"><?= htmlspecialchars(substr($attack[AttackLog::fields_REASON], 0, 60)) ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background-color: <?= AttackLog::getSeverityColor($attack[AttackLog::fields_SEVERITY]) ?>">
+                                            <?= AttackLog::getSeverityLabel($attack[AttackLog::fields_SEVERITY]) ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($attack[AttackLog::fields_BLOCKED]): ?>
+                                            <span class="badge bg-success"><i class="bi bi-shield-check"></i> <?= __('已拦截') ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> <?= __('未拦截') ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 分页 -->
+                <?php if ($totalPages > 1): ?>
+                    <nav aria-label="Page navigation" class="mt-3">
+                        <ul class="pagination justify-content-center mb-0">
+                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= $currentUrl ?>?page=<?= $page - 1 ?>&instance=<?= $instance ?>">&laquo;</a>
+                            </li>
+                            <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= $currentUrl ?>?page=<?= $i ?>&instance=<?= $instance ?>"><?= $i ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="page-link" href="<?= $currentUrl ?>?page=<?= $page + 1 ?>&instance=<?= $instance ?>">&raquo;</a>
+                            </li>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-card {
+    transition: transform 0.2s ease;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+</style>
+
+<script>
+function filterByInstance(instance) {
+    const url = new URL(window.location.href);
+    if (instance) {
+        url.searchParams.set('instance', instance);
+    } else {
+        url.searchParams.delete('instance');
+    }
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+}
+</script>

@@ -946,8 +946,8 @@ class Page extends BackendController
     {
         try {
             // 获取 JSON 请求体
-            $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody ?? '', true);
+            $bodyParams = $this->request->getBodyParams();
+            $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
 
             if (!is_array($data) || !$data) {
                 $data = [
@@ -1215,6 +1215,7 @@ class Page extends BackendController
             
             // 🔧 使用条件更新（where()->update()）来保存记录，避免 PostgreSQL CASE 表达式类型不匹配问题
             // 准备更新数据（基础字段，肯定存在）
+            // 准备更新数据（基础字段，肯定存在）
             $updateData = [
                 PageModel::fields_HANDLE => $pageHandle,
                 PageModel::fields_TYPE => $pageType,
@@ -1440,8 +1441,8 @@ class Page extends BackendController
     {
         try {
             // 获取JSON请求数据
-            $input = file_get_contents('php://input');
-            $data = json_decode($input, true);
+            $bodyParams = $this->request->getBodyParams();
+            $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
             $pageId = $data['id'] ?? null;
             
             if (empty($pageId)) {
@@ -2390,9 +2391,7 @@ class Page extends BackendController
         $styleCode = $this->request->getGet('code');
         
         if (!$styleCode) {
-            header('HTTP/1.1 400 Bad Request');
-            echo 'Missing style code parameter';
-            exit;
+            throw new \Weline\Framework\Http\ResponseTerminateException(400, 'Missing style code parameter');
         }
         
         try {
@@ -2401,9 +2400,7 @@ class Page extends BackendController
             $style->clear()->where('code', $styleCode)->find()->fetch();
             
             if (!$style->getId()) {
-                header('HTTP/1.1 404 Not Found');
-                echo 'Style not found';
-                exit;
+                throw new \Weline\Framework\Http\ResponseTerminateException(404, 'Style not found');
             }
             
             // 获取预览图路径（与 getStyles 方法保持一致的查找逻辑）
@@ -2441,9 +2438,7 @@ class Page extends BackendController
             }
             
             if (!$filePath) {
-                header('HTTP/1.1 404 Not Found');
-                echo 'Preview image file does not exist for style: ' . $styleCode;
-                exit;
+                throw new \Weline\Framework\Http\ResponseTerminateException(404, 'Preview image file does not exist for style: ' . $styleCode);
             }
             
             // 检测文件MIME类型
@@ -2462,30 +2457,31 @@ class Page extends BackendController
             $lastModified = filemtime($filePath);
             $etag = md5_file($filePath);
             
-            header('Content-Type: ' . $contentType);
-            header('Content-Length: ' . filesize($filePath));
-            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
-            header('ETag: "' . $etag . '"');
-            header('Cache-Control: public, max-age=604800'); // 7天
-            
             // 检查客户端缓存
             $ifModifiedSince = $this->request->getHeader('If-Modified-Since');
             $ifNoneMatch = $this->request->getHeader('If-None-Match');
             
             if (($ifModifiedSince && strtotime($ifModifiedSince) >= $lastModified) ||
                 ($ifNoneMatch && trim($ifNoneMatch, '"') === $etag)) {
-                header('HTTP/1.1 304 Not Modified');
-                exit;
+                throw new \Weline\Framework\Http\StaticFileException($filePath, $contentType, [
+                    'Last-Modified' => gmdate('D, d M Y H:i:s', $lastModified) . ' GMT',
+                    'ETag' => '"' . $etag . '"',
+                    'Cache-Control' => 'public, max-age=604800',
+                ], true);
             }
             
-            // 输出图片内容
-            readfile($filePath);
-            exit;
+            // 使用 StaticFileException 返回图片（不使用 exit）
+            throw new \Weline\Framework\Http\StaticFileException($filePath, $contentType, [
+                'Last-Modified' => gmdate('D, d M Y H:i:s', $lastModified) . ' GMT',
+                'ETag' => '"' . $etag . '"',
+                'Cache-Control' => 'public, max-age=604800',
+            ]);
             
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            // 让框架处理这些异常
+            throw $e;
         } catch (\Exception $e) {
-            header('HTTP/1.1 500 Internal Server Error');
-            echo 'Error: ' . $e->getMessage();
-            exit;
+            throw new \Weline\Framework\Http\ResponseTerminateException(500, 'Error: ' . $e->getMessage());
         }
     }
     

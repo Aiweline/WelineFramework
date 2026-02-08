@@ -1,0 +1,203 @@
+<?php
+/**
+ * PokerArena - Footer Links Component
+ * 
+ * Footer with brand, 4 columns: Games, About, Support, Legal
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:brand => 品牌设置
+ * brand.name => 品牌名称:text:PokerArena
+ * brand.description => 品牌描述:textarea:The ultimate online poker platform. Fair games, fast cashouts, and world-class tournaments. Play responsibly.
+ * brand.show_logo => 显示Logo:select:yes|yes,no
+ * 
+ * group:links => 链接设置
+ * links.column1_title => 栏目1标题:text:Games
+ * links.column1_items => 栏目1链接:textarea:Texas Hold'em=>#holdem\r\nOmaha Poker=>#omaha\r\nSit & Go=>#sitandgo\r\nTournaments=>#tournaments|格式：名称=>链接
+ * links.column2_title => 栏目2标题:text:About
+ * links.column2_items => 栏目2链接:textarea:About Us=>/about\r\nResponsible Gaming=>/responsible\r\nFair Play=>/fairplay\r\nCareers=>/careers|格式：名称=>链接
+ * links.column3_title => 栏目3标题:text:Support
+ * links.column3_items => 栏目3链接:textarea:Help Center=>/help\r\nContact Us=>/contact\r\nFAQ=>/faq\r\nLive Chat=>/chat|格式：名称=>链接
+ * links.column4_title => 栏目4标题:text:Legal
+ * links.column4_items => 栏目4链接:textarea:Privacy Policy=>/privacy\r\nTerms of Service=>/terms\r\nCookie Policy=>/cookies\r\nRefund Policy=>/refund|格式：名称=>链接
+ * 
+ * group:copyright => 版权设置
+ * copyright.text => 版权文字:text:All rights reserved. 18+ Only. Play responsibly.
+ * copyright.show_year => 显示年份:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$footerBg = $colors['footer_bg'] ?? '#040a06';
+$footerText = $colors['footer_text'] ?? '#6b8f7a';
+$footerLink = $colors['footer_link'] ?? '#86efac';
+$footerLinkHover = $colors['footer_link_hover'] ?? '#fbbf24';
+$footerBorder = $colors['footer_border'] ?? 'rgba(134, 239, 172, 0.06)';
+$textPrimary = $colors['text_primary'] ?? '#ecfdf5';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #047857 0%, #d97706 100%)';
+
+$brandName = $config['brand.name'] ?? 'PokerArena';
+$brandDesc = $config['brand.description'] ?? 'The ultimate online poker platform. Fair games, fast cashouts, and world-class tournaments. Play responsibly.';
+$showLogo = ($config['brand.show_logo'] ?? 'yes') !== 'no';
+
+$parseLinks = function($raw) {
+    $links = [];
+    foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) { $links[] = ['name' => $name, 'url' => $url]; }
+    }
+    return $links;
+};
+
+$columns = [];
+for ($i = 1; $i <= 4; $i++) {
+    $title = $config["links.column{$i}_title"] ?? '';
+    $raw = $config["links.column{$i}_items"] ?? '';
+    $links = $raw ? $parseLinks($raw) : [];
+    if ($title || !empty($links)) {
+        $columns[] = ['title' => $title, 'links' => $links];
+    }
+}
+
+if (empty($columns)) {
+    $columns = [
+        ['title' => 'Games', 'links' => [['name' => 'Texas Hold\'em', 'url' => '#'], ['name' => 'Omaha', 'url' => '#'], ['name' => 'Sit & Go', 'url' => '#'], ['name' => 'Tournaments', 'url' => '#']]],
+        ['title' => 'About', 'links' => [['name' => 'About Us', 'url' => '/about'], ['name' => 'Responsible Gaming', 'url' => '#'], ['name' => 'Fair Play', 'url' => '#']]],
+        ['title' => 'Support', 'links' => [['name' => 'Help Center', 'url' => '#'], ['name' => 'Contact', 'url' => '/contact'], ['name' => 'FAQ', 'url' => '/faq']]],
+        ['title' => 'Legal', 'links' => [['name' => 'Privacy Policy', 'url' => '/privacy'], ['name' => 'Terms of Service', 'url' => '/terms'], ['name' => 'Cookie Policy', 'url' => '#']]],
+    ];
+}
+
+$copyrightText = $config['copyright.text'] ?? 'All rights reserved. 18+ Only. Play responsibly.';
+$showYear = ($config['copyright.show_year'] ?? 'yes') !== 'no';
+$currentYear = date('Y');
+
+$instanceId = 'pa-footer-' . uniqid();
+?>
+
+<footer class="pa-footer-links" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $footerBg ?>;
+            padding: 80px 0 0;
+            border-top: 1px solid <?= $footerBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        #<?= $instanceId ?> .pa-footer-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(<?= count($columns) ?>, 1fr);
+            gap: 40px;
+            padding-bottom: 60px;
+            border-bottom: 1px solid <?= $footerBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-logo {
+            display: flex; align-items: center; gap: 12px;
+            font-size: 1.25rem; font-weight: 800; color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-logo-icon {
+            width: 40px; height: 40px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #<?= $instanceId ?> .pa-footer-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
+        
+        #<?= $instanceId ?> .pa-footer-brand-desc {
+            font-size: 0.9rem; color: <?= $footerText ?>; line-height: 1.7; max-width: 300px;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-col h4 {
+            font-size: 1rem; font-weight: 600; color: <?= $textPrimary ?>; margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-col-links { display: flex; flex-direction: column; gap: 12px; }
+        
+        #<?= $instanceId ?> .pa-footer-col-link {
+            font-size: 0.9rem; color: <?= $footerLink ?>;
+            text-decoration: none; transition: color 0.3s ease;
+        }
+        #<?= $instanceId ?> .pa-footer-col-link:hover { color: <?= $footerLinkHover ?>; }
+        
+        #<?= $instanceId ?> .pa-footer-bottom {
+            padding: 24px 0; display: flex; justify-content: space-between;
+            align-items: center; flex-wrap: wrap; gap: 16px;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-copyright { font-size: 0.85rem; color: <?= $footerText ?>; }
+        
+        #<?= $instanceId ?> .pa-footer-18plus {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 0.85rem; color: <?= $footerText ?>;
+        }
+        
+        #<?= $instanceId ?> .pa-footer-18badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border: 2px solid #ef4444;
+            border-radius: 50%; font-size: 0.7rem; font-weight: 700; color: #ef4444;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .pa-footer-grid { grid-template-columns: 1fr 1fr; }
+            #<?= $instanceId ?> .pa-footer-brand { grid-column: 1 / -1; }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .pa-footer-grid { grid-template-columns: 1fr; gap: 32px; }
+            #<?= $instanceId ?> .pa-footer-bottom { flex-direction: column; text-align: center; }
+        }
+    </style>
+    
+    <div class="pa-footer-container">
+        <div class="pa-footer-grid">
+            <div class="pa-footer-brand">
+                <?php if ($showLogo): ?>
+                <div class="pa-footer-logo">
+                    <span class="pa-footer-logo-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C9.24 2 7 4.24 7 7c0 1.77.94 3.41 2.47 4.3L12 24l2.53-12.7C16.06 10.41 17 8.77 17 7c0-2.76-2.24-5-5-5z"/></svg>
+                    </span>
+                    <span><?= htmlspecialchars($brandName) ?></span>
+                </div>
+                <?php endif; ?>
+                <p class="pa-footer-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+            </div>
+            
+            <?php foreach ($columns as $col): ?>
+            <div class="pa-footer-col">
+                <h4><?= htmlspecialchars($col['title']) ?></h4>
+                <div class="pa-footer-col-links">
+                    <?php foreach ($col['links'] as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="pa-footer-col-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <div class="pa-footer-bottom">
+            <div class="pa-footer-copyright">
+                <?php if ($showYear): ?>&copy; <?= $currentYear ?> <?= htmlspecialchars($brandName) ?>. <?php endif; ?>
+                <?= htmlspecialchars($copyrightText) ?>
+            </div>
+            <div class="pa-footer-18plus">
+                <span class="pa-footer-18badge">18+</span>
+                Gambling can be addictive. Play responsibly.
+            </div>
+        </div>
+    </div>
+</footer>

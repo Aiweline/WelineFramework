@@ -1,0 +1,27 @@
+{
+    "page_type": "about_page",
+    "name": "About Page Layout",
+    "description": "LudoEmpire about us page with brand story and stats",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "about-content",
+                "enabled": true,
+                "instance_id": "about-content-default",
+                "config": {
+                    "content.badge": "About Us",
+                    "content.title": "The Story Behind LudoEmpire",
+                    "content.description": "We're on a mission to bring the classic board game experience to millions of players worldwide."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "About page with brand story, stats, and core values"
+}

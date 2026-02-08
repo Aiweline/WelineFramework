@@ -1,0 +1,294 @@
+<?php
+/**
+ * LudoEmpire - Header Navigation Component
+ * 
+ * 导航组件，带骰子Logo和Play Now CTA
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.image => Logo图片URL:textarea:|留空使用默认骰子Logo
+ * logo.text => Logo文字:text:LudoEmpire
+ * logo.width => Logo宽度:number:42|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.items => 导航项配置:textarea:Home=>#hero\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Play Now
+ * navigation.cta_url => CTA按钮链接:text:#games
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$navBg = $colors['nav_bg'] ?? 'rgba(9, 0, 18, 0.95)';
+$navText = $colors['nav_text'] ?? '#f5f3ff';
+$navLink = $colors['nav_link'] ?? '#c4b5fd';
+$navLinkHover = $colors['nav_link_hover'] ?? '#ec4899';
+$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
+
+$showLogo = ($config['logo.display'] ?? 'yes') !== 'no';
+$logoImage = $config['logo.image'] ?? '';
+$logoText = $config['logo.text'] ?? 'LudoEmpire';
+$logoWidth = $config['logo.width'] ?? 42;
+
+$navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nDownload=>#download\nFAQ=>#faq\nContact=>/contact";
+$showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
+$ctaText = $config['navigation.cta_text'] ?? 'Play Now';
+$ctaUrl = $config['navigation.cta_url'] ?? '#games';
+
+$navItems = [];
+$lines = preg_split('/[\r\n]+/', $navItemsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
+    }
+}
+
+$instanceId = 'le-nav-' . uniqid();
+?>
+
+<nav id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            padding: 0 20px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        #<?= $instanceId ?> .le-nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: <?= $navText ?>;
+            text-decoration: none;
+        }
+        
+        #<?= $instanceId ?> .le-nav-logo img {
+            height: <?= intval($logoWidth) ?>px;
+            width: auto;
+        }
+        
+        #<?= $instanceId ?> .le-nav-logo-icon {
+            width: <?= intval($logoWidth) ?>px;
+            height: <?= intval($logoWidth) ?>px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .le-nav-logo-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: #ffffff;
+        }
+        
+        #<?= $instanceId ?> .le-nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+        
+        #<?= $instanceId ?> .le-nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+        
+        #<?= $instanceId ?> .le-nav-link {
+            color: <?= $navLink ?>;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: color 0.3s ease;
+            position: relative;
+            text-decoration: none;
+        }
+        
+        #<?= $instanceId ?> .le-nav-link:hover {
+            color: <?= $navLinkHover ?>;
+        }
+        
+        #<?= $instanceId ?> .le-nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: <?= $accentSecondary ?>;
+            transition: width 0.3s ease;
+            border-radius: 1px;
+        }
+        
+        #<?= $instanceId ?> .le-nav-link:hover::after {
+            width: 100%;
+        }
+        
+        #<?= $instanceId ?> .le-nav-cta {
+            padding: 10px 24px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 700;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        
+        #<?= $instanceId ?> .le-nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+        }
+        
+        #<?= $instanceId ?> .le-nav-cta svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .le-nav-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            padding: 8px;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        #<?= $instanceId ?> .le-nav-toggle span {
+            width: 24px;
+            height: 2px;
+            background: <?= $navText ?>;
+            transition: all 0.3s ease;
+            border-radius: 1px;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .le-nav-menu {
+                position: fixed;
+                top: 80px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: <?= $navBg ?>;
+                flex-direction: column;
+                justify-content: flex-start;
+                padding: 40px 20px;
+                gap: 0;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+                backdrop-filter: blur(16px);
+            }
+            
+            #<?= $instanceId ?> .le-nav-menu.active {
+                transform: translateX(0);
+            }
+            
+            #<?= $instanceId ?> .le-nav-links {
+                flex-direction: column;
+                width: 100%;
+                gap: 0;
+            }
+            
+            #<?= $instanceId ?> .le-nav-link {
+                display: block;
+                padding: 16px 0;
+                font-size: 1.1rem;
+                border-bottom: 1px solid rgba(139, 92, 246, 0.12);
+                width: 100%;
+            }
+            
+            #<?= $instanceId ?> .le-nav-link::after {
+                display: none;
+            }
+            
+            #<?= $instanceId ?> .le-nav-cta {
+                margin-top: 24px;
+                width: 100%;
+                text-align: center;
+                justify-content: center;
+                padding: 16px;
+            }
+            
+            #<?= $instanceId ?> .le-nav-toggle {
+                display: flex;
+            }
+            
+            #<?= $instanceId ?> .le-nav-toggle.active span:nth-child(1) {
+                transform: rotate(45deg) translate(5px, 5px);
+            }
+            
+            #<?= $instanceId ?> .le-nav-toggle.active span:nth-child(2) {
+                opacity: 0;
+            }
+            
+            #<?= $instanceId ?> .le-nav-toggle.active span:nth-child(3) {
+                transform: rotate(-45deg) translate(5px, -5px);
+            }
+        }
+    </style>
+    
+    <?php if ($showLogo): ?>
+    <a href="/" class="le-nav-logo">
+        <?php if ($logoImage): ?>
+            <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+        <?php else: ?>
+            <span class="le-nav-logo-icon">
+                <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/><circle cx="12" cy="12" r="1.5"/></svg>
+            </span>
+        <?php endif; ?>
+        <span><?= htmlspecialchars($logoText) ?></span>
+    </a>
+    <?php endif; ?>
+    
+    <button class="le-nav-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .le-nav-menu').classList.toggle('active');">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    
+    <div class="le-nav-menu">
+        <div class="le-nav-links">
+            <?php foreach ($navItems as $item): ?>
+            <a href="<?= htmlspecialchars($item['url']) ?>" class="le-nav-link"><?= htmlspecialchars($item['name']) ?></a>
+            <?php endforeach; ?>
+        </div>
+        
+        <?php if ($showCta): ?>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="le-nav-cta">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <?= htmlspecialchars($ctaText) ?>
+        </a>
+        <?php endif; ?>
+    </div>
+</nav>

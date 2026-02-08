@@ -1,0 +1,236 @@
+客服人员管理,"Gestión de agentes de servicio"
+加载客服人员失败：%{1},"Error al cargar agentes de servicio: %{1}"
+客服名称不能为空,"El nombre del agente no puede estar vacío"
+邮箱格式不正确,"Formato de email inválido"
+请选择后台用户,"Por favor seleccione un usuario backend"
+客服人员不存在,"El agente de servicio no existe"
+保存成功,"Guardado exitosamente"
+保存失败：%{1},"Error al guardar: %{1}"
+无效的客服ID,"ID de agente inválido"
+删除成功,"Eliminado exitosamente"
+删除失败：%{1},"Error al eliminar: %{1}"
+获取成功,"Obtenido exitosamente"
+获取统计数据失败：%{1},"Error al obtener estadísticas: %{1}"
+客服配置,"Configuración del servicio"
+加载配置失败：%{1},"Error al cargar configuración: %{1}"
+您不是客服人员，无法使用工作台,"Usted no es un agente de servicio"
+客服工作台,"Consola de servicio al cliente"
+加载工作台失败：%{1},"Error al cargar consola: %{1}"
+您不是客服人员,您不是客服人员
+获取会话列表失败：%{1},"Error al obtener lista de sesiones: %{1}"
+无效的会话ID,"ID de sesión inválido"
+会话不存在,"La sesión no existe"
+无权访问此会话,"Sin permiso para acceder a esta sesión"
+获取消息失败：%{1},"Error al obtener mensajes: %{1}"
+消息内容不能为空,"El contenido del mensaje no puede estar vacío"
+发送成功,"Enviado exitosamente"
+发送消息失败：%{1},"Error al enviar mensaje: %{1}"
+会话已被分配,"La sesión ya está asignada"
+已达到最大会话数限制,"Límite máximo de sesiones alcanzado"
+分配成功,"Asignado exitosamente"
+分配会话失败：%{1},"Error al asignar sesión: %{1}"
+无权关闭此会话,"Sin permiso para cerrar esta sesión"
+会话已关闭,"Sesión cerrada"
+关闭会话失败：%{1},"Error al cerrar sesión: %{1}"
+获取客服状态失败：%{1},"Error al obtener estado: %{1}"
+会话管理,"Gestión de sesiones"
+加载会话失败：%{1},"Error al cargar sesiones: %{1}"
+会话详情,"Detalles de la sesión"
+加载会话详情失败：%{1},"Error al cargar detalles de sesión: %{1}"
+邮箱地址不能为空,"La dirección de email no puede estar vacía"
+会话令牌不能为空,"El token de sesión no puede estar vacío"
+验证邮件已发送，请查收,"Email de verificación enviado"
+发送验证邮件失败，请稍后重试,"Error al enviar email de verificación"
+发送验证邮件失败：%{1},"Error al enviar email de verificación: %{1}"
+验证令牌不能为空,"El token de verificación no puede estar vacío"
+验证令牌无效或已过期,"El token de verificación es inválido o ha expirado"
+邮箱绑定成功,"Email vinculado exitosamente"
+邮箱绑定失败，请稍后重试,"Vinculación de email fallida"
+验证失败：%{1},"Error de verificación: %{1}"
+客服聊天,"Chat de servicio al cliente"
+获取会话失败：%{1},"Error al obtener sesión: %{1}"
+语言代码不能为空,"El código de idioma no puede estar vacío"
+语言设置成功,"Idioma configurado exitosamente"
+设置语言失败：%{1},"Error al configurar idioma: %{1}"
+客服消息翻译,"Traducción de mensajes de servicio"
+客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"El módulo de servicio solicita traducción a través de este evento."
+"客服服务 - 邮箱绑定验证","Servicio al cliente - Verificación de email"
+客服系统,"Sistema de servicio al cliente"
+客服服务,"Servicio al cliente"
+检测中...,Verificando...
+设置,Configuración
+收起,Minimizar
+我的语言,"Mi idioma"
+简体中文,"Chino simplificado"
+繁體中文,"Chino tradicional"
+显示模式,"Modo de visualización"
+仅显示译文,"Solo traducción"
+原文+译文,"Original + Traducción"
+仅显示原文,"Solo original"
+欢迎使用客服服务！,"¡Bienvenido al servicio al cliente!"
+请输入您的问题，我们的客服将尽快为您解答。,"Por favor ingrese su pregunta"
+输入消息...,"Escriba un mensaje..."
+绑定邮箱,"Vincular email"
+绑定邮箱后，您可以收到客服回复的邮件通知。,"Vincule su email para recibir notificaciones"
+邮箱地址,"Dirección de email"
+请输入您的邮箱,"Por favor ingrese su email"
+取消,Cancelar
+发送验证邮件,"Enviar email de verificación"
+等待中,Esperando
+暂无消息,"Sin mensajes"
+接单,Aceptar
+暂无会话,"Sin sesiones"
+会话,Sesión
+关闭会话,"Cerrar sesión"
+发送,Enviar
+发送失败,"Error al enviar"
+发送失败，请稍后重试,发送失败，请稍后重试
+确定要接单此会话吗？,"¿Aceptar esta sesión?"
+分配失败,"Error en asignación"
+分配失败，请稍后重试,分配失败，请稍后重试
+确定要关闭此会话吗？,"¿Cerrar esta sesión?"
+请选择一个会话开始聊天,"Seleccione una sesión para chatear"
+关闭失败,"Error al cerrar"
+关闭失败，请稍后重试,关闭失败，请稍后重试
+刚刚,"Ahora mismo"
+分钟前,"hace minutos"
+小时前,"hace horas"
+已关闭,Cerrado
+进行中,Activo
+最快,"El más rápido"
+最慢,"El más lento"
+最短,"El más corto"
+分钟,minutos
+最长,"El más largo"
+秒,segundos
+客服在线,"En línea"
+"AI 智能客服","Servicio IA"
+客服离线,"Fuera de línea"
+请输入有效的邮箱地址,"Por favor ingrese una dirección de email válida"
+会话未初始化，请刷新页面重试,"Sesión no inicializada"
+验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
+添加客服,"Agregar agente"
+ID,ID
+客服名称,"Nombre del agente"
+关联用户,"Usuario asociado"
+邮箱,Email
+语言,Idioma
+状态,Estado
+最大会话数,"Sesiones máx."
+总会话数,"Sesiones totales"
+总消息数,"Mensajes totales"
+平均响应时间,"Tiempo de respuesta promedio"
+操作,Acciones
+暂无客服人员,"Sin agentes"
+支持的语言,"Idiomas soportados"
+激活,Activar
+禁用,Desactivar
+查看统计,"Ver estadísticas"
+编辑,Editar
+删除,Eliminar
+关联后台用户,"Asociar usuario"
+请选择用户,"Por favor seleccione un usuario"
+请输入客服名称,"Por favor ingrese el nombre del agente"
+请输入邮箱地址,"Por favor ingrese la dirección de email"
+主要语言,"Idioma principal"
+客服的首选沟通语言,"Idioma de comunicación preferido"
+客服可以接待的所有语言（勾选多个可接待全球客户）,"Todos los idiomas soportados"
+最大并发会话数,"Sesiones simultáneas máx."
+激活状态,"Estado activo"
+保存,Guardar
+编辑客服,"Editar agente"
+保存失败,"Error al guardar"
+确定要删除此客服吗？,"¿Eliminar este agente?"
+删除失败,"Error al eliminar"
+获取统计数据失败,"Error en estadísticas"
+客服统计详情,"Detalles de estadísticas del agente"
+会话统计,"Estadísticas de sesiones"
+消息统计,"Estadísticas de mensajes"
+响应时间,"Tiempo de respuesta"
+平均,Promedio
+会话时长,"Duración de sesión"
+启用客服服务,"Habilitar servicio"
+启用,Habilitar
+默认客服语言,"Idioma por defecto del agente"
+English,English
+默认客户语言,"Idioma por defecto del cliente"
+"当没有客服人员在线时，可启用 AI 自动回复客户消息。","Habilite respuesta automática IA cuando no hay agentes en línea"
+"启用 AI 自动回复","Habilitar respuesta IA"
+"启用后，客户端将显示蓝色""AI 智能客服""状态而非灰色""离线""","Muestra estado IA azul en lugar de Fuera de línea gris"
+"AI 模型","Modelo IA"
+"使用的 AI 模型标识，需在 Weline_Ai 模块中配置对应供应商","Identificador del modelo IA"
+保存配置,"Guardar configuración"
+客服,Agente
+工作量统计,"Estadísticas de carga de trabajo"
+今日,Hoy
+本周,"Esta semana"
+本月,"Este mes"
+全部,Todo
+会话数,Sesiones
+消息数,Mensajes
+客户,Cliente
+响应率,"Tasa de respuesta"
+已响应,Respondido
+完结率,"Tasa de cierre"
+平均会话时长（分钟）,"Duración promedio (min)"
+平均消息,"Mensajes promedio"
+会话列表,"Lista de sesiones"
+刷新,Actualizar
+等待分配,等待分配
+我的会话,"Mis sesiones"
+全部状态,"Todos los estados"
+会话ID,"ID de sesión"
+客户ID,"ID del cliente"
+客户语言,"Idioma del cliente"
+客服语言,"Idioma del agente"
+创建时间,"Creado en"
+查看,Ver
+关闭,Cerrar
+返回列表,Volver
+会话信息,"Información de sesión"
+客服ID,"ID del agente"
+聊天记录,"Historial de chat"
+翻译：,Traducción:
+邮箱绑定验证,"Verificación de email"
+验证成功,Verificado
+您的邮箱,"Su email"
+已成功绑定到客服会话。,"Vinculado a sesión"
+返回首页,Inicio
+验证失败,Fallido
+已绑定邮箱,"Email vinculado"
+绑定成功后，您将收到客服回复的邮件通知,"Reciba notificaciones después de vincular"
+返回上一页,返回上一页
+如有问题，请,"Si tiene preguntas"
+联系客服,"Contactar servicio"
+此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Use el botón flotante para chatear"
+无效的请求方法,"Método inválido"
+添加客服功能待实现,"Por implementar"
+源文本,"Texto fuente"
+客服服务模块，提供多语言实时聊天、客户语言配置、客服语言配置、邮件绑定客户等功能,"Módulo de servicio multilingüe"
+客服人员,"Agentes de servicio"
+查看客服配置,"Ver configuración"
+查看客服人员,"Ver agentes"
+保存客服人员,"Guardar agente"
+删除客服人员,"Eliminar agente"
+查看会话,"Ver sesiones"
+查看会话详情,"Detalles de sesión"
+您好，,Hola
+"您正在绑定邮箱 %{1} 到客服会话。","Está vinculando el email %{1} a la sesión."
+请点击以下链接完成绑定：,"Haga clic en el enlace:"
+验证邮箱,"Verificar email"
+如果按钮无法点击，请复制以下链接到浏览器中打开：,"Copie este enlace:"
+此链接将在24小时后失效。,"Expira en 24 horas"
+如果您没有进行此操作，请忽略此邮件。,"Ignore si no fue usted"
+此邮件由系统自动发送，请勿回复。,"Enviado automáticamente"
+查看工作台,"Ver consola"
+服务语言,"Idioma del servicio"
+日本語,Japonés
+한국어,Coreano
+Français,Francés
+Deutsch,Alemán
+Español,Español
+Português,Portugués
+Русский,Ruso
+العربية,Árabe
+ไทย,Tailandés
+"Tiếng Việt",Vietnamita

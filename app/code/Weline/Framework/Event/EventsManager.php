@@ -77,6 +77,15 @@ class EventsManager
         $this->eventRegistry = $eventRegistry;
     }
 
+    /**
+     * 清空观察者缓存（事件注册表刷新后调用，确保后续从新注册表读取）
+     */
+    public function clearObserverCache(): void
+    {
+        $this->observerCache = [];
+        $this->eventsObservers = [];
+    }
+
     public function scanEvents()
     {
         if (empty($this->eventsObservers)) {
@@ -134,16 +143,10 @@ class EventsManager
                 }
             }
             
-            // 如果还没有找到，检查是否启用事件扫描回退机制
+            // 如果还没有找到，回退到扫描所有模块的 event.xml（确保新增/未写入缓存的观察者也能生效）
             if (empty($observers)) {
-                static $scanEnabled = null;
-                if ($scanEnabled === null) {
-                    $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
-                }
-                if ($scanEnabled) {
-                    $evenObserverLists = $this->scanEvents();
-                    $observers = $evenObserverLists[$eventName] ?? [];
-                }
+                $evenObserverLists = $this->scanEvents();
+                $observers = $evenObserverLists[$eventName] ?? [];
             }
         }
         

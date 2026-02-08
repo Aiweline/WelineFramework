@@ -1,0 +1,105 @@
+<?php
+/**
+ * PokerArena - Blog Category Component
+ * 
+ * Blog category listing page
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Category
+ * content.title => 标题:text:Browse by Category
+ * content.description => 描述:textarea:Explore articles organized by topic to find the strategy content most relevant to your game.
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['section_bg_1'] ?? '#071209';
+$textPrimary = $colors['text_primary'] ?? '#ecfdf5';
+$textSecondary = $colors['text_secondary'] ?? '#86efac';
+$textMuted = $colors['text_muted'] ?? '#6b8f7a';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#10b981';
+$accentSecondaryLight = $colors['accent_secondary_light'] ?? '#fbbf24';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
+
+$badge = $config['content.badge'] ?? 'Category';
+$title = $config['content.title'] ?? 'Browse by Category';
+$description = $config['content.description'] ?? 'Explore articles organized by topic to find the strategy content most relevant to your game.';
+
+$page = $this->getData('page');
+$categoryName = $page ? ($page->getData('category_name') ?? $title) : $title;
+$blogPosts = $page ? ($page->getData('blog_posts') ?? []) : [];
+
+if (empty($blogPosts)) {
+    $blogPosts = [
+        ['title' => 'Advanced Bluffing Techniques', 'excerpt' => 'When and how to bluff effectively at different stakes.', 'date' => 'Jan 2026', 'url' => '#'],
+        ['title' => 'Bankroll Management 101', 'excerpt' => 'Protect your bankroll with proven management strategies.', 'date' => 'Jan 2026', 'url' => '#'],
+        ['title' => 'Reading Board Textures', 'excerpt' => 'How to analyze flop, turn, and river for optimal play.', 'date' => 'Jan 2026', 'url' => '#'],
+    ];
+}
+
+$instanceId = 'pa-blog-cat-' . uniqid();
+?>
+
+<section class="pa-blog-cat" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 80px 0 100px; }
+        #<?= $instanceId ?> .pa-blog-cat-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        #<?= $instanceId ?> .pa-blog-cat-header { text-align: center; margin-bottom: 60px; }
+        
+        #<?= $instanceId ?> .pa-blog-cat-badge {
+            display: inline-flex; padding: 8px 18px;
+            background: rgba(4, 120, 87, 0.15); border: 1px solid rgba(4, 120, 87, 0.3);
+            border-radius: 50px; font-size: 0.85rem; font-weight: 600;
+            color: <?= $accentPrimaryLight ?>; margin-bottom: 20px; text-transform: uppercase;
+        }
+        
+        #<?= $instanceId ?> .pa-blog-cat-title { font-size: 2.75rem; font-weight: 800; color: <?= $textPrimary ?>; margin-bottom: 16px; }
+        #<?= $instanceId ?> .pa-blog-cat-subtitle { font-size: 1.125rem; color: <?= $textSecondary ?>; max-width: 600px; margin: 0 auto; }
+        
+        #<?= $instanceId ?> .pa-blog-cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        
+        #<?= $instanceId ?> .pa-blog-cat-card {
+            background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px; padding: 28px; transition: all 0.3s ease;
+        }
+        #<?= $instanceId ?> .pa-blog-cat-card:hover { border-color: rgba(4, 120, 87, 0.3); transform: translateY(-4px); }
+        #<?= $instanceId ?> .pa-blog-cat-card-title { font-size: 1.15rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 10px; }
+        #<?= $instanceId ?> .pa-blog-cat-card-excerpt { font-size: 0.9rem; color: <?= $textMuted ?>; line-height: 1.6; margin-bottom: 16px; }
+        #<?= $instanceId ?> .pa-blog-cat-card-meta { display: flex; justify-content: space-between; align-items: center; }
+        #<?= $instanceId ?> .pa-blog-cat-card-date { font-size: 0.8rem; color: <?= $textMuted ?>; }
+        #<?= $instanceId ?> .pa-blog-cat-card-link { font-size: 0.85rem; font-weight: 600; color: <?= $accentSecondaryLight ?>; }
+        
+        @media (max-width: 992px) { #<?= $instanceId ?> .pa-blog-cat-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .pa-blog-cat-grid { grid-template-columns: 1fr; } #<?= $instanceId ?> .pa-blog-cat-title { font-size: 2rem; } }
+    </style>
+    
+    <div class="pa-blog-cat-container">
+        <div class="pa-blog-cat-header">
+            <div class="pa-blog-cat-badge"><?= htmlspecialchars($badge) ?></div>
+            <h1 class="pa-blog-cat-title"><?= htmlspecialchars($categoryName) ?></h1>
+            <p class="pa-blog-cat-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="pa-blog-cat-grid">
+            <?php foreach ($blogPosts as $post): ?>
+            <article class="pa-blog-cat-card">
+                <h3 class="pa-blog-cat-card-title"><?= htmlspecialchars($post['title'] ?? '') ?></h3>
+                <p class="pa-blog-cat-card-excerpt"><?= htmlspecialchars($post['excerpt'] ?? '') ?></p>
+                <div class="pa-blog-cat-card-meta">
+                    <span class="pa-blog-cat-card-date"><?= htmlspecialchars($post['date'] ?? '') ?></span>
+                    <a href="<?= htmlspecialchars($post['url'] ?? '#') ?>" class="pa-blog-cat-card-link">Read &rarr;</a>
+                </div>
+            </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

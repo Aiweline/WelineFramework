@@ -32,7 +32,7 @@ class CheckUserLogin implements ObserverInterface
     /**
      * 执行登录检查
      */
-    public function execute(array &$data = []): void
+    public function execute(\Weline\Framework\Event\Event &$event): void
     {
         // 获取当前路由路径
         $path = $this->request->getPathInfo();

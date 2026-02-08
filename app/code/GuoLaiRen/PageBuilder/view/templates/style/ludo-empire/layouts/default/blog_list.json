@@ -1,0 +1,27 @@
+{
+    "page_type": "blog_list",
+    "name": "Blog List Page Layout",
+    "description": "LudoEmpire blog listing page with category filters",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-list",
+                "enabled": true,
+                "instance_id": "blog-list-default",
+                "config": {
+                    "content.badge": "Blog",
+                    "content.title": "Latest from LudoEmpire",
+                    "content.description": "Tips, strategies, and news from the world of Ludo gaming."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Blog listing page with articles and category filters"
+}

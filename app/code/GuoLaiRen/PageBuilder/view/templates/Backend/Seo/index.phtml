@@ -1833,9 +1833,8 @@ function generateSitemap() {
                 icon: 'success',
                 title: '<?= __("生成成功") ?>',
                 html: data.message || '<?= __("Sitemap 生成成功") ?>',
-                timer: 2500,
-                timerProgressBar: true,
-                showConfirmButton: false
+                width: '36em',
+                confirmButtonText: '<?= __("确定") ?>',
             }).then(() => {
                 location.reload();
             });
@@ -1843,7 +1842,7 @@ function generateSitemap() {
             SafeSwal.fire({
                 icon: 'error',
                 title: '<?= __("生成失败") ?>',
-                text: data.message || '<?= __("Sitemap 生成失败") ?>',
+                html: data.message || '<?= __("Sitemap 生成失败") ?>',
                 confirmButtonText: '<?= __("确定") ?>'
             });
         }
@@ -2110,9 +2109,9 @@ async function loadAccountWebsitesConfig(accountId, container) {
                                     <span>${i18n.autoSubmit}</span>
                                 </label>
                                 <div class="form-check form-switch" style="padding-top: 8px;">
-                                    <input class="form-check-input" type="checkbox" name="is_auto_submit" 
+                                    <input class="form-check-input" type="checkbox" role="switch" name="is_auto_submit" 
                                            value="1" ${isAutoSubmit === 1 ? 'checked' : ''} 
-                                           style="width: 48px; height: 24px; cursor: pointer;">
+                                           style="cursor: pointer;">
                                     <label class="form-check-label ms-2" style="color: #64748b; font-size: 0.85rem;">
                                         ${isAutoSubmit === 1 ? i18n.enabled : i18n.disabled}
                                     </label>

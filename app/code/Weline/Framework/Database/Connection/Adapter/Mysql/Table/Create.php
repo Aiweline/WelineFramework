@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /*
  * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
  * 邮箱：aiweline@qq.com
@@ -13,6 +15,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
+use Weline\Framework\Database\Schema\MysqlSchemaCompiler;
 
 class Create extends AbstractTable implements CreateInterface
 {
@@ -191,7 +194,9 @@ class Create extends AbstractTable implements CreateInterface
             $foreign_key_str .= ',';
         }
         $comment = $this->comment ? "COMMENT '{$this->comment}'" : '';
-        # 没有additional时默认配置default charset utf8mb4 collate utf8mb4_general_ci
+        if (trim($this->additional) === '' || $this->additional === ';') {
+            $this->additional = (new MysqlSchemaCompiler())->getDefaultTableAdditional();
+        }
         if (!empty($this->additional)) {
             $this->additional = str_replace(';', '', $this->additional);
             if (!str_contains($this->additional, strtolower('default')) and !str_contains($this->additional, strtoupper('default'))) {

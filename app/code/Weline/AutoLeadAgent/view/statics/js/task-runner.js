@@ -218,33 +218,48 @@ var AutoLeadAgentTaskRunner = (function () {
     }
 
     /**
+     * 标记扩展已就绪（防止重复触发）
+     */
+    function markExtensionDetected(data) {
+        if (config.useExtension) return; // 已检测到，防止重复
+        config.useExtension = true;
+        config.extensionVersion = data.version;
+        if (data.extensionId) config.extensionId = data.extensionId;
+        console.log('[TaskRunner] Browser extension detected, version:', data.version, 'extensionId:', data.extensionId);
+        emitLog('inference', '✓ 浏览器扩展已连接 (v' + (data.version || '?') + ')');
+
+        // 触发扩展就绪事件（Index 页面监听此事件更新 UI）
+        var readyEvent = new CustomEvent('taskRunnerExtensionReady', {
+            detail: { version: data.version, extensionId: data.extensionId }
+        });
+        window.dispatchEvent(readyEvent);
+    }
+
+    /**
      * 检测浏览器扩展是否已安装
      */
     function detectExtension() {
-        // 监听扩展的就绪消息
+        // 监听扩展消息（兼容所有消息类型）
         window.addEventListener('message', function (event) {
             if (event.source !== window) return;
+            if (!event.data || typeof event.data !== 'object') return;
+            var type = event.data.type;
 
-            if (event.data && event.data.type === 'AUTOLEADAGENT_READY') {
-                config.useExtension = true;
-                config.extensionVersion = event.data.version;
-                console.log('[TaskRunner] Browser extension detected, version:', event.data.version);
-                emitLog('inference', '✓ 浏览器扩展已连接 (v' + event.data.version + ')');
-
-                // 触发扩展就绪事件
-                var readyEvent = new CustomEvent('taskRunnerExtensionReady', {
-                    detail: { version: event.data.version }
-                });
-                window.dispatchEvent(readyEvent);
+            // 兼容 content script 主动广播和被动发现响应的多种消息类型
+            if (type === 'AUTOLEADAGENT_READY' ||
+                type === 'AUTOLEADAGENT_DISCOVERED' ||
+                type === 'EXTENSION_DISCOVERED' ||
+                type === 'AUTOLEADAGENT_EXTENSION_FOUND') {
+                markExtensionDetected(event.data);
             }
 
             // 处理扩展响应
-            if (event.data && event.data.type === 'AUTOLEADAGENT_RESPONSE') {
+            if (type === 'AUTOLEADAGENT_RESPONSE') {
                 handleExtensionResponse(event.data);
             }
 
             // 处理扩展日志
-            if (event.data && event.data.type === 'AUTOLEADAGENT_LOG') {
+            if (type === 'AUTOLEADAGENT_LOG') {
                 var logType = event.data.logType || 'crawl';
                 var logMessage = event.data.message || '';
                 if (logMessage) {
@@ -253,13 +268,23 @@ var AutoLeadAgentTaskRunner = (function () {
             }
         });
 
-        // 尝试通过 Chrome runtime API 检测（如果扩展提供了 externally_connectable）
+        // 主动发送发现请求（通过 content script 中继，不依赖 chrome.runtime）
+        window.postMessage({ type: 'DISCOVER_AUTOLEADAGENT_EXTENSION' }, '*');
+        window.postMessage({ type: 'DISCOVER_EXTENSION' }, '*');
+
+        // 延迟再发一次，确保 content script 已注入
+        setTimeout(function () {
+            if (!config.useExtension) {
+                window.postMessage({ type: 'DISCOVER_AUTOLEADAGENT_EXTENSION' }, '*');
+            }
+        }, 1000);
+
+        // 回退：尝试通过 Chrome runtime API 检测
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-            // 尝试已知的扩展ID列表
             tryConnectExtension();
         }
 
-        console.log('[TaskRunner] Waiting for extension detection...');
+        console.log('[TaskRunner] Detecting extension via postMessage + content script relay...');
     }
 
     /**
@@ -983,6 +1008,19 @@ var AutoLeadAgentTaskRunner = (function () {
             }
         });
         window.dispatchEvent(event);
+
+        // 外发到扩展浮动面板（通过 content script 中继到 background）
+        try {
+            window.postMessage({
+                type: 'TASK_PROGRESS',
+                log: {
+                    time: timestamp,
+                    message: '[' + type + '] ' + message,
+                    level: type === 'error' ? 'error' : type === 'crawl' ? 'info' : 'info',
+                    taskId: state.currentTaskId
+                }
+            }, '*');
+        } catch (e) { /* ignore */ }
 
         // 控制台输出
         console.log('[TaskRunner][' + type + '][' + timestamp + ']', message, data || '');
@@ -2183,7 +2221,56 @@ var AutoLeadAgentTaskRunner = (function () {
         updateModelStatus('running', null, getMemoryUsage());
 
         try {
-            // 执行任务流程
+            // 优先使用自主寻客管道（AutonomousPipeline + PlatformStrategies）
+            if (typeof AutonomousPipeline !== 'undefined' && AutonomousPipeline &&
+                typeof PlatformStrategies !== 'undefined' && PlatformStrategies) {
+                
+                emitLog('inference', '使用自主寻客管道（AutonomousPipeline）执行任务...');
+                
+                var pipeProfile = sourceTypeProfile || {};
+                var pipeSelectedWebsites = (pipeProfile.selected_target_websites || []).map(function (w) {
+                    return typeof w === 'string' ? w : (w.domain || w);
+                });
+                var pipeSearchEngine = 'google';
+                if (pipeProfile.selected_search_engines && pipeProfile.selected_search_engines.length > 0) {
+                    var first = pipeProfile.selected_search_engines[0];
+                    if (typeof first === 'string' && first.toLowerCase().indexOf('baidu') >= 0) pipeSearchEngine = 'baidu';
+                }
+
+                await new Promise(function (resolve, reject) {
+                    AutonomousPipeline.start({
+                        taskId: taskId,
+                        profile: pipeProfile,
+                        selectedWebsites: pipeSelectedWebsites,
+                        preferredSearchEngine: pipeSearchEngine,
+                        apiBaseUrl: config.apiBaseUrl,
+                        onLog: function (entry) {
+                            emitLog(entry.level === 'error' ? 'inference' : 'crawl', entry.message);
+                        },
+                        onCandidateFound: function (candidate) {
+                            state.foundCount++;
+                            state.candidates.push(candidate);
+                            updateFoundCount(state.foundCount);
+                        },
+                        onComplete: function (result) {
+                            if (result.success) {
+                                state.status = TASK_STATUS.COMPLETED;
+                                state.foundCount = result.totalFound;
+                                updateUIStatus(TASK_STATUS.COMPLETED);
+                                updateModelStatus('idle', null, getMemoryUsage());
+                                emitLog('inference', '任务完成，共发现 ' + result.totalFound + ' 个候选人，已保存 ' + result.totalSaved + ' 个');
+                                resolve();
+                            } else {
+                                reject(new Error(result.error || '管道执行失败'));
+                            }
+                        }
+                    });
+                });
+                return true;
+            }
+
+            // 回退：使用旧版执行管道
+            emitLog('inference', '使用传统执行管道...');
             await executeTaskPipeline(taskId, sourceTypeProfile || storeProfile);
             return true;
 
@@ -3546,6 +3633,11 @@ var AutoLeadAgentTaskRunner = (function () {
     async function stopTask() {
         if (state.status !== TASK_STATUS.IDLE && state.status !== TASK_STATUS.COMPLETED) {
             emitLog('inference', '正在停止任务...');
+
+            // 取消自主管道
+            if (typeof AutonomousPipeline !== 'undefined' && AutonomousPipeline && AutonomousPipeline.isRunning()) {
+                AutonomousPipeline.cancel();
+            }
 
             if (state.abortController) {
                 state.abortController.abort();

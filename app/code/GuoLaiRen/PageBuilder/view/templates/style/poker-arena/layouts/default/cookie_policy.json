@@ -1,0 +1,27 @@
+{
+    "page_type": "cookie_policy",
+    "name": "Cookie政策页面布局",
+    "description": "PokerArena 主题Cookie政策页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "cookie-policy-default",
+                "config": {
+                    "layout.show_toc": "yes",
+                    "layout.show_last_updated": "yes",
+                    "layout.content_width": "narrow"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Cookie政策页面布局，继承首页头尾"
+}

@@ -1,0 +1,47 @@
+{
+    "page_type": "games_page",
+    "name": "游戏页面布局",
+    "description": "PokerArena 主题游戏展示页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "hero-slider",
+                "enabled": true,
+                "instance_id": "games-hero",
+                "config": {
+                    "content.badge": "♠ Poker Games",
+                    "content.title": "Choose Your Game",
+                    "content.description": "From micro-stakes cash games to million-dollar tournaments. Find the perfect table for your skill level and bankroll.",
+                    "cta.primary_text": "Play Now",
+                    "cta.primary_url": "#games",
+                    "cta.secondary_text": "",
+                    "cta.secondary_url": "",
+                    "stats.items": ""
+                }
+            },
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-list",
+                "config": {}
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "games-cta",
+                "config": {
+                    "content.title": "Ready to Play?",
+                    "content.description": "Create your free account and join the action at any table."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "游戏页面布局，继承首页头尾"
+}

@@ -45,6 +45,17 @@ final class CodeGenerator
     private ?\Weline\Framework\View\Taglib\Debug\SourceMap $sourceMap = null;
 
     /**
+     * 重置内部状态，允许实例复用（避免每次编译创建新实例）
+     */
+    public function reset(): void
+    {
+        $this->tagCallbacks = [];
+        $this->phpExtractor = null;
+        $this->sourceMap = null;
+        $this->currentLine = 1;
+    }
+
+    /**
      * 设置 PHP 提取器
      */
     public function setPhpExtractor(PhpExtractor $extractor): void

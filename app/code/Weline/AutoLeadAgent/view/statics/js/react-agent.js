@@ -160,9 +160,9 @@ var ReActAgent = (function () {
                 newState.currentUrl = result.url;
             }
 
-            // 更新页面内容（如果是快照操作）
-            if (result.html || result.text) {
-                newState.pageContent = result.text || result.html;
+            // 更新页面内容（如果是快照操作；browser_snapshot 返回 textContent）
+            if (result.html || result.text || result.textContent) {
+                newState.pageContent = result.textContent || result.text || result.html;
             }
 
             // 更新提取的数据（如果是提取操作）
@@ -260,6 +260,21 @@ var ReActAgent = (function () {
                 });
 
                 currentState = observe(toolResult, currentState);
+
+                // 导航工具成功但无页面内容时，自动快照以填充上下文
+                var isNavTool = (decision.tool === 'go_to_url' || decision.tool === 'browser_navigate' || decision.tool === 'search_google' || decision.tool === 'go_back');
+                if (isNavTool && toolResult.success && !currentState.pageContent && mcpClient) {
+                    await new Promise(function (r) { setTimeout(r, 2000); });
+                    try {
+                        var snap = await mcpClient.callTool('browser_snapshot', {});
+                        if (snap) {
+                            var snapResult = (snap.result !== undefined) ? snap.result : snap;
+                            currentState = observe({ success: true, tool: 'browser_snapshot', result: snapResult }, currentState);
+                        }
+                    } catch (e) {
+                        console.warn('[ReActAgent] Auto snapshot after navigation failed:', e.message);
+                    }
+                }
 
                 // 检查是否找到客户
                 if (currentState.extractedData && 

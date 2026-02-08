@@ -30,4 +30,49 @@
          icon="mdi mdi-folder-outline"
          order="20"/>
 
+    <!-- Trends 配置 -->
+    <add source="GuoLaiRen_Blog::trends_config"
+         name="guolairen_blog_trends_config"
+         title="Trends 配置"
+         action="blog/backend/trends-config/index"
+         parent="GuoLaiRen_Blog::blog_menu"
+         icon="mdi mdi-chart-timeline-variant"
+         order="30"/>
+
+    <!-- 关键词画像 -->
+    <add source="GuoLaiRen_Blog::trend_profile"
+         name="guolairen_blog_trend_profile"
+         title="关键词画像"
+         action="blog/backend/trend-profile/index"
+         parent="GuoLaiRen_Blog::blog_menu"
+         icon="mdi mdi-tag-multiple-outline"
+         order="40"/>
+
+    <!-- 站点发文配额 -->
+    <add source="GuoLaiRen_Blog::trend_site_quota"
+         name="guolairen_blog_trend_site_quota"
+         title="站点发文配额"
+         action="blog/backend/trend-site-quota/index"
+         parent="GuoLaiRen_Blog::blog_menu"
+         icon="mdi mdi-counter"
+         order="45"/>
+
+    <!-- 趋势词分析 -->
+    <add source="GuoLaiRen_Blog::trend_keywords"
+         name="guolairen_blog_trend_keywords"
+         title="趋势词分析"
+         action="blog/backend/trend-keywords/index"
+         parent="GuoLaiRen_Blog::blog_menu"
+         icon="mdi mdi-chart-bar"
+         order="50"/>
+
+    <!-- 增长词日志 -->
+    <add source="GuoLaiRen_Blog::trending_keyword_log"
+         name="guolairen_blog_trending_keyword_log"
+         title="增长词日志"
+         action="blog/backend/trending-keyword-log/index"
+         parent="GuoLaiRen_Blog::blog_menu"
+         icon="mdi mdi-format-list-bulleted"
+         order="55"/>
+
 </menus>

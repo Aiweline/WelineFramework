@@ -10,6 +10,8 @@
 namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Exception;
+use Weline\Framework\Http\Request\FileBag;
+use Weline\Framework\Http\Request\ParameterBag;
 use Weline\Framework\Http\Request\RequestFilter;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -29,12 +31,65 @@ class Request extends Request\RequestAbstract implements RequestInterface
      */
     private array $modules = [];
 
+    /**
+     * ParameterBag - 请求参数管理器
+     * @var ParameterBag|null
+     */
+    protected ?ParameterBag $parameterBag = null;
+
+    /**
+     * FileBag - 上传文件管理器
+     * @var FileBag|null
+     */
+    protected ?FileBag $fileBag = null;
+
     public function __init()
     {
         parent::__init();
+        
+        // 初始化 ParameterBag
+        if ($this->parameterBag === null) {
+            $this->parameterBag = new ParameterBag();
+            $this->parameterBag->initFromGlobals();
+        }
+        
+        // 初始化 FileBag
+        if ($this->fileBag === null) {
+            $this->fileBag = new FileBag();
+            $this->fileBag->initFromGlobals();
+        }
+        
         if (is_array($this->getBodyParams())) {
             $this->setData(array_merge($this->getParams(), $this->getBodyParams()));
         }
+    }
+    
+    /**
+     * 获取 ParameterBag 实例
+     * 
+     * @return ParameterBag
+     */
+    public function getParameterBag(): ParameterBag
+    {
+        if ($this->parameterBag === null) {
+            $this->parameterBag = new ParameterBag();
+            $this->parameterBag->initFromGlobals();
+        }
+        return $this->parameterBag;
+    }
+    
+    /**
+     * 获取 FileBag 实例
+     * 
+     * @return FileBag
+     */
+    public function getFileBag(): FileBag
+    {
+        if ($this->fileBag === null) {
+            $this->fileBag = new FileBag();
+            $this->fileBag->initFromGlobals();
+        }
+        return $this->fileBag;
     }
 
     function getId()
@@ -114,11 +169,10 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if ($result = $this->getData($key)) {
             return $result;
         }
-        parse_str($this->getServer('QUERY_STRING'), $params);
-        array_shift($params);
-        $params = array_merge($params, $_POST);
-        $params = array_merge($params, $_GET);
-        $data = $params[$key] ?? $default;
+        
+        // 使用 ParameterBag 获取参数
+        $data = $this->getParameterBag()->get($key, $default);
+        
         # 如果设置了过滤器，则进行过滤，否则直接使用默认值的类型进行过滤
         if ($filter) {
             $data = RequestFilter::filter($filter, $data);
@@ -133,16 +187,9 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if ($params = $this->getData('params')) {
             return $params;
         }
-        parse_str($this->getServer('QUERY_STRING'), $params);
-        array_shift($params);
-        $params = array_merge($params, $_POST);
-        $params = array_merge($params, $_GET);
         
-        // 合并 body 参数（JSON 或表单数据）
-        $bodyParams = $this->getBodyParams(true);
-        if (is_array($bodyParams)) {
-            $params = array_merge($params, $bodyParams);
-        }
+        // 使用 ParameterBag 获取所有参数
+        $params = $this->getParameterBag()->all();
         
         $this->setData('params', $params);
         return $params;
@@ -150,22 +197,21 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function setGet(string $key, mixed $value): static
     {
-        $_GET[$key] = $value;
+        $this->getParameterBag()->setQuery($key, $value);
         $this->setData($key, $value);
         return $this;
     }
 
     public function setPost(string $key, mixed $value): static
     {
-        $_POST[$key] = $value;
+        $this->getParameterBag()->setRequest($key, $value);
         $this->setData($key, $value);
         return $this;
     }
 
     public function getBodyParam($key, mixed $default = null)
     {
-        $params = $this->getBodyParams(true);
-        $result = $params[$key] ?? $default;
+        $result = $this->getParameterBag()->getBody($key, $default);
         return $this->checkResult($key, $result);
     }
 
@@ -175,25 +221,16 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if ($params = $this->getData($body_params_key)) {
             return $params;
         }
-        $params = file_get_contents('php://input');
-        if (is_int(strpos($this->getContentType(), self::CONTENT_TYPE['json']))) {
-            $params = json_decode($params, true);
+        
+        // 使用 ParameterBag 获取 Body 参数
+        $params = $this->getParameterBag()->getBody();
+        
+        // 如果不需要数组格式且解析后的参数为空，返回原始请求体字符串
+        // 使用 ParameterBag::getRawBody() 统一获取（FPM 从 php://input，WLS 从注入的 rawBody）
+        if (!$array && empty($params)) {
+            $params = $this->getParameterBag()->getRawBody();
         }
-        if ($array && is_string($params)) {
-            $params_ = [];
-            foreach (explode('&', $params) as $key => $value) {
-                $value = explode('=', $value);
-                if (count($value) === 2) {
-                    if (str_ends_with($value[0], '%{5}B%{5}D')) {
-                        $paramName = rtrim($value[0], '%{5}B%{5}D');
-                        $params_[$paramName][] = $value[1] ?? '';
-                    } else {
-                        $params_[$value[0]] = $value[1] ?? '';
-                    }
-                }
-            }
-            $params = $params_;
-        }
+        
         $this->setData($body_params_key, $params);
         return $params;
     }
@@ -201,9 +238,9 @@ class Request extends Request\RequestAbstract implements RequestInterface
     public function getPost(string $key = '', mixed $default = null)
     {
         if ('' === $key) {
-            return $_POST;
+            return $this->getParameterBag()->getRequest();
         }
-        $result = $_POST[$key] ?? $default;
+        $result = $this->getParameterBag()->getRequest($key, $default);
         if ($default) {
             $result = $this->getDefaultTypeData($result, $default);
         }
@@ -219,9 +256,9 @@ class Request extends Request\RequestAbstract implements RequestInterface
     public function getGet(string $key = '', mixed $default = null)
     {
         if ('' === $key) {
-            return $_GET;
+            return $this->getParameterBag()->getQuery();
         }
-        $result = $_GET[$key] ?? $default;
+        $result = $this->getParameterBag()->getQuery($key, $default);
         if ($default) {
             $result = $this->getDefaultTypeData($result, $default);
         }
@@ -230,45 +267,25 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getGetByPre(string $pre_key, bool $filter_value = false): array
     {
-        $data = [];
-        foreach ($_GET as $key_ => $item) {
-            if ($filter_value and empty($item)) {
-                continue;
-            }
-            if (str_starts_with($key_, $pre_key)) {
-                $key_ = str_replace($pre_key, '', $key_);
-                $data[$key_] = $item;
-            }
-        }
-        return $data;
+        return $this->getParameterBag()->getQueryByPrefix($pre_key, $filter_value);
     }
 
     public function setGetByPre(string $pre_key, array $data = []): self
     {
-        foreach ($_GET as $g_key => $item) {
-            if (str_starts_with($g_key, $pre_key)) {
-                unset($_GET[$g_key]);
-            }
-        }
-        foreach ($data as $key => $value) {
-            $_GET[$pre_key . $key] = $value;
-        }
+        $this->getParameterBag()->removeQueryByPrefix($pre_key);
+        $this->getParameterBag()->setQueryByPrefix($pre_key, $data);
         return $this;
     }
 
     public function unsetGetByPrekey(string $pre_key): self
     {
-        foreach ($_GET as $g_key => $item) {
-            if (str_starts_with($g_key, $pre_key)) {
-                unset($_GET[$g_key]);
-            }
-        }
+        $this->getParameterBag()->removeQueryByPrefix($pre_key);
         return $this;
     }
 
     public function hasGet(string $key): bool
     {
-        return isset($_GET[$key]);
+        return $this->getParameterBag()->hasQuery($key);
     }
 
     private function checkResult(string $key, mixed &$result): mixed
@@ -276,7 +293,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if ($this->check_param) {
             if ($result === null) {
                 if (PROD) {
-                    $this->_response->redirect(404);
+                    $this->getResponse()->redirect(404);
                 }
                 throw new Exception(__('未提供参数：%{1}', $key));
             }
@@ -291,10 +308,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getFile(string $key = '')
     {
-        if ($key) {
-            return $_FILES[$key] ?? null;
-        }
-        return $_FILES;
+        return $this->getFileBag()->get($key);
     }
 
     public function isGet(bool $set_get = false): bool
@@ -327,11 +341,14 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getAuth(string $auth_type = 'bearer')
     {
+        $serverBag = $this->getServerBag();
+        
         switch ($auth_type) {
             case self::auth_TYPE_BEARER:
-                return str_replace('Bearer ', '', $this->getHeader('Authorization'));
+                return $serverBag->getBearerToken() ?? '';
             case self::auth_TYPE_BASIC_AUTH:
-                return ['USER' => $this->getServer('PHP_AUTH_USER'), 'PW' => $this->getServer('PHP_AUTH_PW')];
+                $basicAuth = $serverBag->getBasicAuth();
+                return $basicAuth ? ['USER' => $basicAuth['user'], 'PW' => $basicAuth['password']] : ['USER' => '', 'PW' => ''];
             default:
                 return null;
         }
@@ -339,7 +356,8 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getApiKey(string $key): string
     {
-        return $this->getHeader($key);
+        $header = $this->getHeader($key);
+        return \is_string($header) ? $header : '';
     }
 
     public function getModuleName(): string
@@ -452,24 +470,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function clientIP()
     {
-        if (isset($_SERVER)) {
-            if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-                $realip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-            } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
-                $realip = $_SERVER['HTTP_CLIENT_IP'];
-            } else {
-                $realip = $_SERVER['REMOTE_ADDR'];
-            }
-        } else {
-            if (getenv('HTTP_X_FORWARDED_FOR')) {
-                $realip = getenv('HTTP_X_FORWARDED_FOR');
-            } elseif (getenv('HTTP_CLIENT_IP')) {
-                $realip = getenv('HTTP_CLIENT_IP');
-            } else {
-                $realip = getenv('REMOTE_ADDR');
-            }
-        }
-        return $realip;
+        return $this->getServerBag()->getClientIp();
     }
 
     /**
@@ -565,16 +566,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     public function getUserIpAddress()
     {
-        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-            //来自共享网络的IP
-            $ip = $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            // 来自代理网络的IP
-            $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-        } else {
-            $ip = $_SERVER['REMOTE_ADDR'];
-        }
-        return $ip;
+        return $this->getServerBag()->getClientIp();
     }
 
     public function getPathSplit(): array

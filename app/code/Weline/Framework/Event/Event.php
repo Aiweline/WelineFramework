@@ -158,8 +158,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
             $observers = [];
         }
         
-        // 获取配置中的 event.debug 设置
-        $eventDebugConfig = Env::getInstance()->getConfig('event.debug');
+        // 获取配置中的 event.debug 设置（使用静态缓存，避免每次 dispatch 都读取配置）
+        static $eventDebugConfig = null;
+        if ($eventDebugConfig === null) {
+            $eventDebugConfig = Env::getInstance()->getConfig('event.debug');
+        }
         
         // 判断是否需要调试
         if ($eventDebugConfig === true) {
@@ -195,29 +198,13 @@ class Event extends \Weline\Framework\DataObject\DataObject
         }
         
         // 遍历观察者配置，按需实例化并执行
-        $env = \Weline\Framework\App\Env::getInstance();
+        // 注意：模块激活状态已在 EventsManager::filterActiveObservers() 中过滤，此处不再重复检查
         
         foreach ($observers as $index => $observerConfig) {
             try {
-                // 检查是否被禁用
+                // 检查是否被禁用（保留 disabled 检查作为最后防线）
                 if (isset($observerConfig['disabled']) && $observerConfig['disabled'] === 'true') {
                     continue;
-                }
-                
-                // 检查观察者所在模块的激活状态（运行时二次检查，确保安全）
-                $moduleName = $observerConfig['module'] ?? '';
-                if (!empty($moduleName)) {
-                    // 如果注册表中已有module_status字段，直接使用
-                    if (isset($observerConfig['module_status'])) {
-                        if (!$observerConfig['module_status']) {
-                            continue; // 模块被禁用，跳过
-                        }
-                    } else {
-                        // 兼容旧版本：运行时检查模块状态
-                        if (!$env->getModuleStatus($moduleName)) {
-                            continue; // 模块被禁用，跳过
-                        }
-                    }
                 }
                 
                 // 按需实例化观察者

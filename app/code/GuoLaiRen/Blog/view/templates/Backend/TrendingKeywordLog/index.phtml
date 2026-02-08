@@ -1,0 +1,189 @@
+<?php
+/**
+ * 增长词日志列表
+ *
+ * @var array $logs
+ * @var array $profileNames
+ * @var int $selected_profile_id
+ * @var string $used_filter
+ * @var string $search
+ * @var mixed $pagination
+ */
+$logs = $this->getData('logs') ?? [];
+$profileNames = $this->getData('profileNames') ?? [];
+$selectedProfileId = (int)($this->getData('selected_profile_id') ?? 0);
+$usedFilter = (string)($this->getData('used_filter') ?? '');
+$search = (string)($this->getData('search') ?? '');
+$pagination = $this->getData('pagination');
+?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= $this->getData('page_title') ?: __('增长词日志') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('blog/backend/post/index') ?>"><?= __('博客管理') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('增长词日志') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h4 class="card-title mb-0"><lang>日志列表</lang></h4>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <!-- 筛选表单 -->
+                        <form class="d-flex gap-2 flex-wrap" method="get">
+                            <select name="profile_id" class="form-select form-select-sm" style="width:auto;">
+                                <option value="0"><?= __('全部画像') ?></option>
+                                <?php foreach ($profileNames as $pid => $pname): ?>
+                                    <option value="<?= (int)$pid ?>" <?= $selectedProfileId === (int)$pid ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($pname) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <select name="used" class="form-select form-select-sm" style="width:auto;">
+                                <option value="" <?= $usedFilter === '' ? 'selected' : '' ?>><?= __('全部状态') ?></option>
+                                <option value="no" <?= $usedFilter === 'no' ? 'selected' : '' ?>><?= __('未使用') ?></option>
+                                <option value="yes" <?= $usedFilter === 'yes' ? 'selected' : '' ?>><?= __('已使用') ?></option>
+                            </select>
+                            <input type="text" name="search" class="form-control form-control-sm" style="width:150px;"
+                                   placeholder="<?= __('搜索关键词...') ?>" value="<?= htmlspecialchars($search) ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="mdi mdi-magnify"></i></button>
+                        </form>
+                        <!-- 清理旧日志 -->
+                        <a href="<?= $this->getUrl('blog/backend/trending-keyword-log/clear-old', ['days' => 30]) ?>"
+                           class="btn btn-sm btn-outline-warning blog-confirm-action"
+                           data-msg="<?= htmlspecialchars(__('确定要清理30天前的已使用日志吗？')) ?>">
+                            <i class="mdi mdi-delete-sweep"></i> <lang>清理旧日志</lang>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if (empty($logs)): ?>
+                    <div class="alert alert-info mb-0"><lang>暂无增长词日志</lang></div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-centered mb-0">
+                            <thead>
+                                <tr>
+                                    <th width="60">ID</th>
+                                    <th><lang>画像</lang></th>
+                                    <th><lang>关键词</lang></th>
+                                    <th><lang>趋势值</lang></th>
+                                    <th><lang>对比值</lang></th>
+                                    <th><lang>增长率</lang></th>
+                                    <th><lang>类型</lang></th>
+                                    <th><lang>趋势日期</lang></th>
+                                    <th><lang>状态</lang></th>
+                                    <th width="150"><lang>操作</lang></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($logs as $log): ?>
+                                    <?php
+                                    $profileId = (int)$log->getData('profile_id');
+                                    $usedAt = $log->getData('used_at');
+                                    $changeRate = (float)$log->getData('change_rate');
+                                    $comparisonType = $log->getData('comparison_type');
+                                    ?>
+                                    <tr>
+                                        <td><?= (int)$log->getData('log_id') ?></td>
+                                        <td><?= htmlspecialchars($profileNames[$profileId] ?? (string)$profileId) ?></td>
+                                        <td><strong><?= htmlspecialchars($log->getData('keyword')) ?></strong></td>
+                                        <td><?= (int)$log->getData('trend_value') ?></td>
+                                        <td><?= (int)$log->getData('previous_value') ?></td>
+                                        <td>
+                                            <span class="<?= $changeRate >= 0 ? 'text-success' : 'text-danger' ?>">
+                                                <?= $changeRate >= 0 ? '+' : '' ?><?= number_format($changeRate, 2) ?>%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($comparisonType === 'day'): ?>
+                                                <span class="badge bg-info"><lang>日环比</lang></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><lang>周环比</lang></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($log->getData('trend_date')) ?></td>
+                                        <td>
+                                            <?php if ($usedAt): ?>
+                                                <span class="badge bg-success"><lang>已使用</lang></span>
+                                                <br><small class="text-muted"><?= htmlspecialchars(substr($usedAt, 0, 16)) ?></small>
+                                            <?php else: ?>
+                                                <span class="badge bg-warning text-dark"><lang>未使用</lang></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($usedAt): ?>
+                                                <a href="<?= $this->getUrl('blog/backend/trending-keyword-log/mark-unused', ['id' => $log->getData('log_id')]) ?>"
+                                                   class="btn btn-sm btn-outline-warning" title="<?= __('标记为未使用') ?>">
+                                                    <i class="mdi mdi-undo"></i>
+                                                </a>
+                                            <?php else: ?>
+                                                <a href="<?= $this->getUrl('blog/backend/trending-keyword-log/mark-used', ['id' => $log->getData('log_id')]) ?>"
+                                                   class="btn btn-sm btn-outline-success" title="<?= __('标记为已使用') ?>">
+                                                    <i class="mdi mdi-check"></i>
+                                                </a>
+                                            <?php endif; ?>
+                                            <a href="<?= $this->getUrl('blog/backend/trending-keyword-log/delete', ['id' => $log->getData('log_id')]) ?>"
+                                               class="btn btn-sm btn-outline-danger blog-confirm-action"
+                                               data-msg="<?= htmlspecialchars(__('确定要删除该日志吗？')) ?>" title="<?= __('删除') ?>">
+                                                <i class="mdi mdi-delete"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php if ($pagination): ?>
+                        <div class="mt-3"><?= $pagination ?></div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div id="blogConfirmModal" role="dialog" aria-modal="true" aria-labelledby="blogConfirmMsg" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--backend-color-bg-overlay, rgba(0,0,0,0.5)); align-items:center; justify-content:center;">
+    <div style="background:var(--backend-color-bg-surface, #fff); padding:var(--backend-padding-modal, 1.5rem); border-radius:8px; max-width:400px; box-shadow:var(--backend-modal-shadow, 0 4px 12px rgba(0,0,0,0.15)); color:var(--backend-color-text-primary, #212529);">
+        <p id="blogConfirmMsg" style="margin-bottom:1rem;"></p>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="blogConfirmCancelBtn"><lang>取消</lang></button>
+            <button type="button" class="btn btn-danger" id="blogConfirmOkBtn"><lang>确定</lang></button>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+    var modal = document.getElementById('blogConfirmModal');
+    var msgEl = document.getElementById('blogConfirmMsg');
+    var okBtn = document.getElementById('blogConfirmOkBtn');
+    var cancelBtn = document.getElementById('blogConfirmCancelBtn');
+    var actionHref = '';
+    if (!modal || !msgEl) return;
+    modal.style.display = 'flex';
+    modal.style.display = 'none';
+    document.querySelectorAll('.blog-confirm-action').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault(); actionHref = this.getAttribute('href'); msgEl.textContent = this.getAttribute('data-msg') || ''; modal.style.display = 'flex'; });
+    });
+    okBtn.addEventListener('click', function(){ if(actionHref) window.location = actionHref; });
+    cancelBtn.addEventListener('click', function(){ modal.style.display = 'none'; actionHref = ''; });
+})();
+</script>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

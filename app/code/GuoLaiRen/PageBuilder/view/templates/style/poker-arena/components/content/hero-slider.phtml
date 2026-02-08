@@ -1,0 +1,318 @@
+<?php
+/**
+ * PokerArena - Hero Slider Component
+ * 
+ * Premium hero section with floating card suit decorations,
+ * "Where Champions Play" headline, stats bar
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 顶部徽章文字:text:♠ Premium Poker Platform
+ * content.title => 主标题:textarea:Where Champions Play
+ * content.description => 描述文字:textarea:Experience the thrill of Texas Hold'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.
+ * 
+ * group:cta => 按钮设置
+ * cta.primary_text => 主按钮文字:text:Join Free
+ * cta.primary_url => 主按钮链接:text:#register
+ * cta.secondary_text => 次按钮文字:text:Download App
+ * cta.secondary_url => 次按钮链接:text:#download
+ * 
+ * group:stats => 统计数据
+ * stats.items => 统计列表:textarea:$10M+|Prize Pools\r\n500K+|Players\r\n1000+|Daily Tournaments\r\n24/7|Action|格式：数值|标签，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $colors['hero_section_bg'] ?? 'linear-gradient(135deg, #060d08 0%, #0a1f10 40%, #0d2914 100%)';
+$textPrimary = $colors['text_primary'] ?? '#ecfdf5';
+$textSecondary = $colors['text_secondary'] ?? '#86efac';
+$accentPrimary = $colors['accent_primary'] ?? '#047857';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#10b981';
+$accentSecondary = $colors['accent_secondary'] ?? '#d97706';
+$accentSecondaryLight = $colors['accent_secondary_light'] ?? '#fbbf24';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #047857 0%, #d97706 100%)';
+$buttonGoldBg = $colors['button_gold_bg'] ?? 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
+
+$badge = $config['content.badge'] ?? '♠ Premium Poker Platform';
+$title = $config['content.title'] ?? 'Where Champions Play';
+$description = $config['content.description'] ?? 'Experience the thrill of Texas Hold\'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.';
+
+$primaryBtnText = $config['cta.primary_text'] ?? 'Join Free';
+$primaryBtnUrl = $config['cta.primary_url'] ?? '#register';
+$secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
+$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
+
+$statsRaw = $config['stats.items'] ?? "\$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
+$stats = [];
+foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    if (!empty(trim($parts[0] ?? ''))) {
+        $stats[] = ['value' => trim($parts[0]), 'label' => trim($parts[1] ?? '')];
+    }
+}
+
+$instanceId = 'pa-hero-' . uniqid();
+?>
+
+<section class="pa-hero" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $heroBg ?>;
+            padding: 120px 0 60px;
+            position: relative;
+            overflow: hidden;
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        #<?= $instanceId ?>::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at 20% 50%, rgba(4, 120, 87, 0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 30%, rgba(217, 119, 6, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        /* Floating card suit decorations */
+        #<?= $instanceId ?> .pa-hero-suit {
+            position: absolute;
+            font-size: 4rem;
+            opacity: 0.04;
+            animation: pa-float 6s ease-in-out infinite;
+            pointer-events: none;
+            color: <?= $accentPrimaryLight ?>;
+        }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(1) { top: 10%; left: 5%; animation-delay: 0s; font-size: 5rem; }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(2) { top: 20%; right: 8%; animation-delay: 1.5s; font-size: 3.5rem; color: <?= $accentSecondaryLight ?>; }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(3) { bottom: 25%; left: 10%; animation-delay: 3s; font-size: 4.5rem; }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(4) { bottom: 15%; right: 12%; animation-delay: 4.5s; font-size: 3rem; color: <?= $accentSecondaryLight ?>; }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(5) { top: 50%; left: 50%; animation-delay: 2s; font-size: 6rem; opacity: 0.02; }
+        #<?= $instanceId ?> .pa-hero-suit:nth-child(6) { top: 35%; right: 25%; animation-delay: 3.5s; font-size: 3rem; }
+        
+        @keyframes pa-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        
+        #<?= $instanceId ?> .pa-hero-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(4, 120, 87, 0.15);
+            border: 1px solid rgba(4, 120, 87, 0.3);
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: <?= $accentSecondaryLight ?>;
+            margin-bottom: 32px;
+            letter-spacing: 0.05em;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-title {
+            font-size: 4.5rem;
+            font-weight: 900;
+            line-height: 1.05;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 24px;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, <?= $textPrimary ?> 0%, <?= $accentSecondaryLight ?> 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-description {
+            font-size: 1.25rem;
+            line-height: 1.7;
+            color: <?= $textSecondary ?>;
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-cta {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 80px;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 40px;
+            background: <?= $buttonGoldBg ?>;
+            color: #422006;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 30px rgba(217, 119, 6, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 40px rgba(217, 119, 6, 0.5);
+        }
+        
+        #<?= $instanceId ?> .pa-hero-btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 40px;
+            background: transparent;
+            color: <?= $accentPrimaryLight ?>;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border: 2px solid <?= $accentPrimary ?>;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-btn-secondary:hover {
+            background: rgba(4, 120, 87, 0.15);
+            border-color: <?= $accentPrimaryLight ?>;
+        }
+        
+        /* Stats bar */
+        #<?= $instanceId ?> .pa-hero-stats {
+            display: grid;
+            grid-template-columns: repeat(<?= count($stats) ?>, 1fr);
+            gap: 24px;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 32px;
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        #<?= $instanceId ?> .pa-hero-stat {
+            text-align: center;
+            position: relative;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-stat:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -12px;
+            top: 10%;
+            height: 80%;
+            width: 1px;
+            background: <?= $borderLight ?>;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: <?= $accentSecondaryLight ?>;
+            line-height: 1.2;
+        }
+        
+        #<?= $instanceId ?> .pa-hero-stat-label {
+            font-size: 0.85rem;
+            color: <?= $textSecondary ?>;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .pa-hero-title { font-size: 3rem; }
+            #<?= $instanceId ?> { min-height: auto; padding: 100px 0 60px; }
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .pa-hero-title { font-size: 2.5rem; }
+            #<?= $instanceId ?> .pa-hero-description { font-size: 1.05rem; }
+            #<?= $instanceId ?> .pa-hero-stats { grid-template-columns: repeat(2, 1fr); }
+            #<?= $instanceId ?> .pa-hero-stat:nth-child(2)::after { display: none; }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .pa-hero-title { font-size: 2rem; }
+            #<?= $instanceId ?> .pa-hero-cta { flex-direction: column; align-items: center; }
+            #<?= $instanceId ?> .pa-hero-btn-primary,
+            #<?= $instanceId ?> .pa-hero-btn-secondary { width: 100%; justify-content: center; }
+            #<?= $instanceId ?> .pa-hero-stats { grid-template-columns: 1fr 1fr; padding: 24px 16px; }
+            #<?= $instanceId ?> .pa-hero-stat::after { display: none; }
+        }
+    </style>
+    
+    <!-- Floating card suit decorations -->
+    <span class="pa-hero-suit">♠</span>
+    <span class="pa-hero-suit">♥</span>
+    <span class="pa-hero-suit">♦</span>
+    <span class="pa-hero-suit">♣</span>
+    <span class="pa-hero-suit">♠</span>
+    <span class="pa-hero-suit">♣</span>
+    
+    <div class="pa-hero-container">
+        <?php if ($badge): ?>
+        <div class="pa-hero-badge"><?= htmlspecialchars($badge) ?></div>
+        <?php endif; ?>
+        
+        <h1 class="pa-hero-title"><?= nl2br(htmlspecialchars($title)) ?></h1>
+        <p class="pa-hero-description"><?= htmlspecialchars($description) ?></p>
+        
+        <div class="pa-hero-cta">
+            <?php if ($primaryBtnText): ?>
+            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="pa-hero-btn-primary">
+                <?= htmlspecialchars($primaryBtnText) ?>
+            </a>
+            <?php endif; ?>
+            
+            <?php if ($secondaryBtnText): ?>
+            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="pa-hero-btn-secondary">
+                <?= htmlspecialchars($secondaryBtnText) ?>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (!empty($stats)): ?>
+        <div class="pa-hero-stats">
+            <?php foreach ($stats as $stat): ?>
+            <div class="pa-hero-stat">
+                <div class="pa-hero-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                <div class="pa-hero-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</section>

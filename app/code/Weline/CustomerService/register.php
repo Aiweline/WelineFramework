@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_CustomerService',
     __DIR__,
-    '1.1.0',
+    '1.2.0',
     '客服服务模块，提供多语言实时聊天、客户语言配置、客服语言配置、邮件绑定客户等功能',
     ['Weline_Framework', 'Weline_Backend', 'Weline_Customer', 'Weline_Theme', 'Weline_Smtp']
 );

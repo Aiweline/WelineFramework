@@ -1,0 +1,25 @@
+{
+    "page_type": "terms_of_service",
+    "name": "Terms of Service Page Layout",
+    "description": "LudoEmpire terms of service page",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "terms-of-service-default",
+                "config": {
+                    "content.badge": "Terms of Service"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Terms of service legal document page"
+}

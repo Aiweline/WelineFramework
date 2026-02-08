@@ -21,6 +21,9 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\Dialect\PgsqlTableNameStr
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Create;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Compiler\Dialect\PgsqlDialect;
+use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
+use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
@@ -49,6 +52,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     protected ?PDO $link = null;
+    protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
     protected bool $fromPool = false; // 标记连接是否来自连接池
     protected ?PDO $_original_pdo = null; // 原始 PDO 引用，用于克隆后的对象访问
@@ -100,11 +104,24 @@ final class Connector extends Query implements ConnectorInterface
                 }
             }
         );
-        // 🔧 修复：设置原始 PDO 引用，确保克隆后的对象也能访问
-        // 注意：$_original_pdo 属性已在类中声明，避免动态属性警告
         $this->_original_pdo = $this->link;
         $this->fromPool = true;
+        try {
+            (new PgsqlDialect())->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
+        } catch (\Throwable $e) {
+            \Weline\Framework\App\Env::log_warning('database_version.log', __('PostgreSQL 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]));
+        }
+        $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
         return $this;
+    }
+
+    public function getWrappedConnection(): DbConnectionInterface
+    {
+        $this->create();
+        if ($this->wrappedConnection === null) {
+            $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
+        }
+        return $this->wrappedConnection;
     }
 
     public function close(): void
@@ -115,6 +132,7 @@ final class Connector extends Query implements ConnectorInterface
                 ConnectionPool::releaseConnection($this->link, $this->configProvider);
             }
             $this->link = null;
+            $this->wrappedConnection = null;
             $this->fromPool = false;
         }
     }
@@ -127,6 +145,9 @@ final class Connector extends Query implements ConnectorInterface
         $this->close();
     }
 
+    /**
+     * @deprecated 请使用 getWrappedConnection() 获取连接并调用其方法，后续版本可能移除
+     */
     public function getLink(): PDO
     {
         if ($this->link === null) {

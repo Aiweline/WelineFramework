@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Observer;
 
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Ai\Service\AgentScanner;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Output\Cli\Printing;
@@ -35,6 +36,11 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
     private AdapterScanner $adapterScanner;
     
     /**
+     * @var AgentScanner
+     */
+    private AgentScanner $agentScanner;
+    
+    /**
      * @var Printing
      */
     private Printing $printing;
@@ -43,13 +49,16 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
      * 构造函数
      * 
      * @param AdapterScanner $adapterScanner
+     * @param AgentScanner $agentScanner
      * @param Printing $printing
      */
     public function __construct(
         AdapterScanner $adapterScanner,
+        AgentScanner $agentScanner,
         Printing $printing
     ) {
         $this->adapterScanner = $adapterScanner;
+        $this->agentScanner = $agentScanner;
         $this->printing = $printing;
     }
     
@@ -75,10 +84,14 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
             // 静默扫描，不输出信息，避免干扰升级流程
             // 扫描所有适配器
             $scannedAdapters = $this->adapterScanner->scanAllAdapters();
-            
-            // 只在有结果时输出
             if (!empty($scannedAdapters)) {
                 $this->printing->note(__('扫描到 %{count} 个场景适配器', ['count' => count($scannedAdapters)]));
+            }
+            
+            // 扫描所有智能体
+            $scannedAgents = $this->agentScanner->scanAllAgents();
+            if (!empty($scannedAgents)) {
+                $this->printing->note(__('扫描到 %{count} 个智能体', ['count' => count($scannedAgents)]));
             }
             
         } catch (\Throwable $e) {

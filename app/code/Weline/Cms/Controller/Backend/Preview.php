@@ -449,8 +449,8 @@ class Preview extends BackendController
     {
         try {
             // 获取 JSON 请求体
-            $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody ?? '', true);
+            $bodyParams = $this->request->getBodyParams();
+            $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
             
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data) {

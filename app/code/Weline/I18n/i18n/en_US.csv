@@ -285,9 +285,6 @@ CSV词典导入失败,CSV词典导入失败
 翻译窗口,"Translation Window"
 刷新,Refresh
 提交,Submit
-Weline_I18n:语言包读取,"Weline_I18n: Language Pack Read"
-Weline_I18n:语言包Locals读取,"Weline_I18n: Language Pack Locals Read"
-Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals Translation Dictionary Read"
 成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
 推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
 切换货币,切换货币
@@ -454,6 +451,9 @@ I18n翻译,"I18n Translation"
 是否禁用,"Is Disabled"
 国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
 国旗,"National Flag"
+Weline_I18n:语言包读取,"Weline_I18n: Language Pack Read"
+Weline_I18n:语言包Locals读取,"Weline_I18n: Language Pack Locals Read"
+Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals Translation Dictionary Read"
 搜索菜单,"Search Menu"
 搜索菜单...,"Search Menu..."
 常用菜单,"Frequently Used Menu"

@@ -39,6 +39,8 @@ class Request extends CommandAbstract
             $this->printer->note(__('使用 -h 或 --help 查看帮助信息'));
             return;
         }
+        // Git Bash/MSYS2 下单独输入 / 会被转换为 C:/Program Files/Git/，规范为根路径 /
+        $path = $this->normalizeRequestPath($path);
 
         // 获取其他参数
         $isBackend = isset($args['b']) || isset($args['backend']);
@@ -158,6 +160,23 @@ class Request extends CommandAbstract
             'method' => $method
         ];
         $this->processResponse($response['body'], $filter, $lines, $performanceInfo);
+    }
+
+    /**
+     * 规范化请求路径：Git Bash/MSYS2 下单独输入 / 会被转换为 C:/Program Files/Git/，需还原为 /
+     */
+    private function normalizeRequestPath(string $path): string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        // Windows 盘符路径且为 Git for Windows 的 MSYS 根目录时，视为用户本想输入 /
+        if (preg_match('#^[A-Za-z]:/#', $normalized) && str_contains($normalized, 'Program Files/Git')) {
+            return '/';
+        }
+        // 仅盘符根（如 C:/ 或 D:/）无其它路径时也视为 /
+        if (preg_match('#^[A-Za-z]:/?$#', $normalized)) {
+            return '/';
+        }
+        return $path;
     }
 
     /**
@@ -457,6 +476,9 @@ class Request extends CommandAbstract
 
     /**
      * 构建完整的URL
+     * 
+     * WLS 模式下 server:start 默认启用 HTTPS，故请求默认使用 https；
+     * 可通过 env server.https = false 改为 http。
      */
     private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false): string
     {
@@ -465,7 +487,12 @@ class Request extends CommandAbstract
         
         // 获取服务器配置
         $host = $serverConfig['host'] ?? '127.0.0.1';
-        $port = $serverConfig['port'] ?? '9981';
+        $port = (int) ($serverConfig['port'] ?? 9981);
+        // 若未显式配置 https，则根据端口推断：80 用 http，443 用 https，避免 https://host:80 导致 TLS 错误
+        $useHttps = \array_key_exists('https', $serverConfig)
+            ? (bool) $serverConfig['https']
+            : ($port === 443);
+        $scheme = $useHttps ? 'https' : 'http';
         
         // 处理路径
         $path = ltrim($path, '/');
@@ -485,30 +512,30 @@ class Request extends CommandAbstract
         }
         
         if ($isApiBackend) {
-            // API后端路径 - 需要加上api_admin_key
-            $apiAdminKey = $env->get('api_admin') ?? '';
-            if (empty($apiAdminKey)) {
-                $this->printer->warning(__('警告：未找到api_admin密钥配置，可能无法访问API后端路径！'));
-                $this->printer->note(__('请检查 app/etc/env.php 中的 api_admin 配置'));
+            // REST 后端路径 - 需要加上 rest_backend 前缀
+            $restBackendPrefix = $env::getAreaRoutePrefix('rest_backend') ?? '';
+            if (empty($restBackendPrefix)) {
+                $this->printer->warning(__('警告：未找到 rest_backend 前缀配置，可能无法访问 REST 后端路径！'));
+                $this->printer->note(__('请检查 app/etc/env.php 中的 area_routes.rest_backend.prefix 配置'));
             }
-            $fullPath = "{$apiAdminKey}/{$path}";
+            $fullPath = "{$restBackendPrefix}/{$path}";
         } elseif ($isBackend) {
-            // 后端路径 - 需要加上admin_key
-            $adminKey = $env->get('admin') ?? '';
-            if (empty($adminKey)) {
-                $this->printer->warning(__('警告：未找到admin密钥配置，可能无法访问后端路径！'));
-                $this->printer->note(__('请检查 app/etc/env.php 中的 admin 配置'));
+            // 后端路径 - 需要加上 backend 前缀
+            $backendPrefix = $env::getAreaRoutePrefix('backend') ?? '';
+            if (empty($backendPrefix)) {
+                $this->printer->warning(__('警告：未找到 backend 前缀配置，可能无法访问后端路径！'));
+                $this->printer->note(__('请检查 app/etc/env.php 中的 area_routes.backend.prefix 配置'));
                 $fullPath = $path;
             } else {
-                $fullPath = "{$adminKey}/{$path}";
+                $fullPath = "{$backendPrefix}/{$path}";
             }
         } else {
             // 前端路径
             $fullPath = $path;
         }
         
-        // 构建URL
-        return "http://{$host}:{$port}/{$fullPath}";
+        // 构建URL（WLS 默认 HTTPS）
+        return "{$scheme}://{$host}:{$port}/{$fullPath}";
     }
 
     /**

@@ -69,8 +69,27 @@ var ConfigUIRenderer = (function () {
             tdName.style.overflow = 'hidden';
             tdName.style.textOverflow = 'ellipsis';
             tdName.style.whiteSpace = 'nowrap';
-            tdName.textContent = modelId;
-            tdName.title = modelId; // 添加 tooltip 显示完整名称
+            tdName.title = modelId;
+            if (m._recommended) {
+                var badge = document.createElement('span');
+                // 根据模型大小设置不同颜色
+                var sizeMB = m._sizeMB || 0;
+                if (sizeMB >= 600) {
+                    badge.className = 'badge bg-danger me-1';
+                } else if (sizeMB >= 400) {
+                    badge.className = 'badge bg-warning text-dark me-1';
+                } else {
+                    badge.className = 'badge bg-success me-1';
+                }
+                badge.style.cssText = 'font-size:0.65rem;vertical-align:middle;';
+                badge.textContent = m._recLabel || '推荐';
+                tdName.appendChild(badge);
+                var nameSpan = document.createElement('span');
+                nameSpan.textContent = modelId;
+                tdName.appendChild(nameSpan);
+            } else {
+                tdName.textContent = modelId;
+            }
 
             var tdSize = document.createElement('td');
             tdSize.className = 'text-end small text-muted';
@@ -98,12 +117,50 @@ var ConfigUIRenderer = (function () {
             tr.appendChild(tdAction);
 
             tr.addEventListener('click', function () {
-                if (!isSupported) return; // 不支持的模型不允许选择
+                if (!isSupported) return;
 
-                if (onModelSelect) onModelSelect(modelId, m);
+                // 高亮选中行
                 var rows = listBody.querySelectorAll('.hf-model-row');
                 rows.forEach(function (r) { r.classList.remove('table-active'); });
                 tr.classList.add('table-active');
+
+                // 按钮变为 loading 状态
+                var btn = tdAction.querySelector('.select-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>加载中...';
+                    btn.classList.remove('btn-outline-primary');
+                    btn.classList.add('btn-primary');
+                }
+
+                // 详情区域显示 loading
+                var detailName = document.getElementById('hf-model-detail-name');
+                var detailStatus = document.getElementById('hf-model-detail-status');
+                if (detailName) detailName.textContent = modelId;
+                if (detailStatus) {
+                    detailStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>正在获取模型信息...';
+                    detailStatus.className = 'badge bg-info';
+                }
+
+                // 回调（加载详情等）
+                if (onModelSelect) onModelSelect(modelId, m);
+
+                // 详情加载完成后恢复按钮（延时检测 detailStatus 变化）
+                var checkCount = 0;
+                var checkTimer = setInterval(function () {
+                    checkCount++;
+                    var st = document.getElementById('hf-model-detail-status');
+                    // 如果详情已加载完成（状态文字变了）或超时 10s
+                    if ((st && st.textContent.indexOf('加载中') === -1 && st.textContent.indexOf('获取') === -1) || checkCount > 20) {
+                        clearInterval(checkTimer);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="mdi mdi-check me-1"></i>已选择';
+                            btn.classList.remove('btn-primary');
+                            btn.classList.add('btn-success');
+                        }
+                    }
+                }, 500);
             });
 
             listBody.appendChild(tr);

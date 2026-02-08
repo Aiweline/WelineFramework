@@ -1,0 +1,140 @@
+<?php
+/**
+ * SaaS Starter 模板 - Footer
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * group:brand => 品牌设置
+ * brand.name => 品牌名称:text:SaaSFlow
+ * brand.description => 品牌描述:textarea:The modern platform for teams who ship fast. Streamline your workflow with powerful automation.
+ * group:links => 链接设置
+ * links.column1_title => 栏目1标题:text:Product
+ * links.column1_items => 栏目1链接:textarea:Features=>#features\r\nPricing=>#pricing\r\nIntegrations=>/integrations\r\nChangelog=>/changelog|格式：名称=>链接，一行一个
+ * links.column2_title => 栏目2标题:text:Company
+ * links.column2_items => 栏目2链接:textarea:About=>/about\r\nBlog=>/blog\r\nCareers=>/careers\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * links.column3_title => 栏目3标题:text:Legal
+ * links.column3_items => 栏目3链接:textarea:Privacy=>/privacy\r\nTerms=>/terms\r\nCookies=>/cookies|格式：名称=>链接，一行一个
+ * group:copyright => 版权设置
+ * copyright.text => 版权文字:text:All rights reserved.
+ * group:style => 样式设置
+ * style.background_color => 背景颜色:color:#080c14
+ * style.text_color => 文字颜色:color:#64748b
+ * style.link_color => 链接颜色:color:#94a3b8
+ * style.link_hover_color => 链接悬停颜色:color:#34d399
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'saas-starter';
+if (empty($templateCode)) { $templateCode = 'saas-starter'; }
+$this->assign('template_code', $templateCode);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+if (!function_exists('ss_footer_color')) {
+    function ss_footer_color($c, $k, $d = '') { return $c[$k] ?? $d; }
+}
+if (!function_exists('ss_footer_getConfig')) {
+    function ss_footer_getConfig($s, $k, $d = '') { return $s[$k] ?? $d; }
+}
+
+$brandName = ss_footer_getConfig($styleSettings, 'brand.name', 'SaaSFlow');
+$brandDesc = ss_footer_getConfig($styleSettings, 'brand.description', 'The modern platform for teams who ship fast.');
+$col1Title = ss_footer_getConfig($styleSettings, 'links.column1_title', 'Product');
+$col1Raw = ss_footer_getConfig($styleSettings, 'links.column1_items', "Features=>#features\nPricing=>#pricing\nIntegrations=>/integrations\nChangelog=>/changelog");
+$col2Title = ss_footer_getConfig($styleSettings, 'links.column2_title', 'Company');
+$col2Raw = ss_footer_getConfig($styleSettings, 'links.column2_items', "About=>/about\nBlog=>/blog\nCareers=>/careers\nContact=>/contact");
+$col3Title = ss_footer_getConfig($styleSettings, 'links.column3_title', 'Legal');
+$col3Raw = ss_footer_getConfig($styleSettings, 'links.column3_items', "Privacy=>/privacy\nTerms=>/terms\nCookies=>/cookies");
+
+$parseLinks = function($raw) {
+    $links = [];
+    foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) $links[] = ['name' => $name, 'url' => $url];
+    }
+    return $links;
+};
+
+$col1Links = $parseLinks($col1Raw);
+$col2Links = $parseLinks($col2Raw);
+$col3Links = $parseLinks($col3Raw);
+
+$copyrightText = ss_footer_getConfig($styleSettings, 'copyright.text', 'All rights reserved.');
+$bgColor = ss_footer_getConfig($styleSettings, 'style.background_color', ss_footer_color($colors, 'footer_bg', '#080c14'));
+$textColor = ss_footer_getConfig($styleSettings, 'style.text_color', ss_footer_color($colors, 'footer_text', '#64748b'));
+$linkColor = ss_footer_getConfig($styleSettings, 'style.link_color', ss_footer_color($colors, 'footer_link', '#94a3b8'));
+$linkHoverColor = ss_footer_getConfig($styleSettings, 'style.link_hover_color', ss_footer_color($colors, 'footer_link_hover', '#34d399'));
+$textPrimary = ss_footer_color($colors, 'text_primary', '#f1f5f9');
+$buttonPrimaryBg = ss_footer_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)');
+$footerBorder = ss_footer_color($colors, 'footer_border', 'rgba(255, 255, 255, 0.06)');
+$currentYear = date('Y');
+?>
+
+<style>
+    .ss-footer { background: <?= htmlspecialchars($bgColor) ?>; padding: 80px 0 0; }
+    .ss-footer-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    .ss-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; padding-bottom: 60px; border-bottom: 1px solid <?= htmlspecialchars($footerBorder) ?>; }
+    .ss-footer-logo { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; color: <?= htmlspecialchars($textPrimary) ?>; margin-bottom: 16px; }
+    .ss-footer-logo-icon { width: 36px; height: 36px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .ss-footer-logo-icon svg { width: 18px; height: 18px; fill: #ffffff; }
+    .ss-footer-brand-desc { font-size: 0.9rem; color: <?= htmlspecialchars($textColor) ?>; line-height: 1.7; max-width: 280px; }
+    .ss-footer-column h4 { font-size: 0.9rem; font-weight: 600; color: <?= htmlspecialchars($textPrimary) ?>; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ss-footer-links { display: flex; flex-direction: column; gap: 12px; }
+    .ss-footer-link { font-size: 0.9rem; color: <?= htmlspecialchars($linkColor) ?>; text-decoration: none; transition: color 0.3s ease; }
+    .ss-footer-link:hover { color: <?= htmlspecialchars($linkHoverColor) ?>; }
+    .ss-footer-bottom { padding: 24px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .ss-footer-copyright { font-size: 0.85rem; color: <?= htmlspecialchars($textColor) ?>; }
+    @media (max-width: 992px) { .ss-footer-grid { grid-template-columns: 1fr 1fr; } .ss-footer-brand { grid-column: 1 / -1; } }
+    @media (max-width: 576px) { .ss-footer-grid { grid-template-columns: 1fr; gap: 32px; } .ss-footer-bottom { flex-direction: column; text-align: center; } }
+</style>
+
+<footer class="ss-footer">
+    <div class="ss-footer-container">
+        <div class="ss-footer-grid">
+            <div class="ss-footer-brand">
+                <div class="ss-footer-logo">
+                    <span class="ss-footer-logo-icon"><svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span>
+                    <span><?= htmlspecialchars($brandName) ?></span>
+                </div>
+                <p class="ss-footer-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+            </div>
+            <div class="ss-footer-column">
+                <h4><?= htmlspecialchars($col1Title) ?></h4>
+                <div class="ss-footer-links">
+                    <?php foreach ($col1Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="ss-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="ss-footer-column">
+                <h4><?= htmlspecialchars($col2Title) ?></h4>
+                <div class="ss-footer-links">
+                    <?php foreach ($col2Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="ss-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="ss-footer-column">
+                <h4><?= htmlspecialchars($col3Title) ?></h4>
+                <div class="ss-footer-links">
+                    <?php foreach ($col3Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="ss-footer-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <div class="ss-footer-bottom">
+            <div class="ss-footer-copyright">&copy; <?= $currentYear ?> <?= htmlspecialchars($brandName) ?>. <?= htmlspecialchars($copyrightText) ?></div>
+        </div>
+    </div>
+</footer>

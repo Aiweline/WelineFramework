@@ -246,32 +246,74 @@ ${examples}
         language = language || 'zh';
         
         const prompt = language === 'zh' ? `
-分析以下客户画像，提取关键特征：
+你是一个专业的客户画像分析专家。请深度分析以下商家/店铺信息，提取出用于在互联网上寻找潜在客户的多维特征。
 
-客户画像：
+商家信息：
 ${profileText}
 
-请返回 JSON 格式的分析结果，包含以下字段：
+分析维度要求：
+1. industry（行业）：该商家所属行业及细分领域
+2. region（地区）：商家所在地区、服务范围
+3. targetCustomerType（目标客户类型）：什么样的人会是该商家的客户
+4. demandKeywords（需求关键词）：潜在客户可能表达的需求词
+5. crowdKeywords（人群关键词）：潜在客户的身份标签
+6. productKeywords（产品关键词）：与商家产品/服务相关的搜索词
+7. sceneKeywords（场景关键词）：客户可能出现的在线场景/话题
+8. searchQueries（推荐搜索词组合）：直接可用于搜索引擎的查询词（至少10个）
+9. platformHints（平台建议）：哪些平台最可能找到客户，及在该平台的搜索策略
+
+请返回 JSON 格式：
 {
-  "features": ["特征1", "特征2", ...],
-  "keywords": ["关键词1", "关键词2", ...],
-  "industry": "行业",
+  "industry": "行业名称",
+  "subIndustry": "细分领域",
   "region": "地区",
-  "description": "描述"
+  "targetCustomerType": "目标客户描述",
+  "features": ["特征1", "特征2"],
+  "demandKeywords": ["需求词1", "需求词2"],
+  "crowdKeywords": ["人群词1", "人群词2"],
+  "productKeywords": ["产品词1", "产品词2"],
+  "sceneKeywords": ["场景词1", "场景词2"],
+  "searchQueries": ["搜索词组合1", "搜索词组合2"],
+  "platformHints": [
+    {"platform": "知乎", "strategy": "搜索策略"},
+    {"platform": "小红书", "strategy": "搜索策略"}
+  ],
+  "description": "总结描述"
 }
 ` : `
-Analyze the following customer profile and extract key features:
+You are a professional customer profile analyst. Deeply analyze the following business/store information and extract multi-dimensional features for finding potential customers online.
 
-Customer Profile:
+Business Information:
 ${profileText}
 
-Please return JSON format analysis result with the following fields:
+Analysis dimensions required:
+1. industry: Business industry and sub-sectors
+2. region: Business location and service coverage
+3. targetCustomerType: What kind of people would be customers
+4. demandKeywords: Need-expression keywords potential customers might use
+5. crowdKeywords: Identity labels of potential customers
+6. productKeywords: Search terms related to products/services
+7. sceneKeywords: Online scenarios/topics where customers might appear
+8. searchQueries: Ready-to-use search engine query combinations (at least 10)
+9. platformHints: Which platforms are most likely to have customers and search strategies
+
+Please return JSON format:
 {
-  "features": ["feature1", "feature2", ...],
-  "keywords": ["keyword1", "keyword2", ...],
-  "industry": "industry",
+  "industry": "industry name",
+  "subIndustry": "sub-sector",
   "region": "region",
-  "description": "description"
+  "targetCustomerType": "target customer description",
+  "features": ["feature1", "feature2"],
+  "demandKeywords": ["demand1", "demand2"],
+  "crowdKeywords": ["crowd1", "crowd2"],
+  "productKeywords": ["product1", "product2"],
+  "sceneKeywords": ["scene1", "scene2"],
+  "searchQueries": ["query1", "query2"],
+  "platformHints": [
+    {"platform": "LinkedIn", "strategy": "search strategy"},
+    {"platform": "Twitter", "strategy": "search strategy"}
+  ],
+  "description": "summary"
 }
 `;
 
@@ -335,24 +377,131 @@ Please return JSON format matching result:
         language = language || 'zh';
         
         const prompt = language === 'zh' ? `
-根据以下客户画像生成搜索关键词：
+你是搜索引擎关键词生成专家。根据以下商家画像，生成多维度搜索关键词矩阵，用于在各大社交平台和搜索引擎上找到潜在客户。
 
-客户画像：
+商家画像：
 ${JSON.stringify(profile, null, 2)}
 
-请返回 JSON 格式的关键词列表：
+请生成以下维度的关键词（每类至少5个）：
+
+1. industryKeywords - 行业核心词（该行业的通用搜索词）
+2. demandKeywords - 需求词（潜在客户表达需求时用的词，如"哪里买""推荐""怎么选"）
+3. crowdKeywords - 人群词（目标客户的身份标签，如"店主""买手""宝妈"）
+4. productKeywords - 产品词（具体产品名称和品类）
+5. regionKeywords - 地域词（地区相关搜索词）
+6. sceneKeywords - 场景词（客户出现的话题/场景，如"穿搭""测评""开箱"）
+7. combinedQueries - 组合搜索词（直接可以丢进搜索引擎的完整查询词，至少15个）
+8. siteSearchQueries - 站内搜索词（格式如 "site:zhihu.com 关键词"，至少8个）
+
+请返回 JSON：
 {
-  "keywords": ["关键词1", "关键词2", ...]
+  "industryKeywords": [],
+  "demandKeywords": [],
+  "crowdKeywords": [],
+  "productKeywords": [],
+  "regionKeywords": [],
+  "sceneKeywords": [],
+  "combinedQueries": [],
+  "siteSearchQueries": []
 }
 ` : `
-Generate search keywords based on the following customer profile:
+You are a search keyword generation expert. Based on the business profile below, generate a multi-dimensional keyword matrix for finding potential customers across social platforms and search engines.
 
-Customer Profile:
+Business Profile:
 ${JSON.stringify(profile, null, 2)}
 
-Please return JSON format keyword list:
+Generate keywords in these dimensions (at least 5 each):
+
+1. industryKeywords - Core industry terms
+2. demandKeywords - Demand expression terms (words potential customers use when expressing needs)
+3. crowdKeywords - Crowd identity terms (target customer identity labels)
+4. productKeywords - Product/service terms
+5. regionKeywords - Region-related terms
+6. sceneKeywords - Scene terms (topics/scenarios where customers appear)
+7. combinedQueries - Combined search queries (complete query strings ready for search engines, at least 15)
+8. siteSearchQueries - Site-specific queries (format like "site:linkedin.com keyword", at least 8)
+
+Return JSON:
 {
-  "keywords": ["keyword1", "keyword2", ...]
+  "industryKeywords": [],
+  "demandKeywords": [],
+  "crowdKeywords": [],
+  "productKeywords": [],
+  "regionKeywords": [],
+  "sceneKeywords": [],
+  "combinedQueries": [],
+  "siteSearchQueries": []
+}
+`;
+
+        return prompt;
+    }
+
+    /**
+     * 生成用户主页评估提示词（判断是否为潜在客户）
+     * @param {string} pageContent 页面文本内容（截断）
+     * @param {Object} profile 商家画像
+     * @param {string} language 语言代码
+     * @returns {string} 提示词
+     */
+    function generateUserEvaluationPrompt(pageContent, profile, language) {
+        language = language || 'zh';
+
+        const truncated = pageContent.length > 1500 ? pageContent.substring(0, 1500) + '...' : pageContent;
+
+        const prompt = language === 'zh' ? `
+你是客户识别专家。根据以下商家画像，分析这个用户主页的内容，判断该用户是否为潜在客户。
+
+商家画像：
+- 行业：${profile.industry || '未知'}
+- 产品：${(profile.keywords || []).join('、') || '未知'}
+- 地区：${profile.region || '未知'}
+- 描述：${(profile.description || '').substring(0, 200)}
+
+用户主页内容：
+${truncated}
+
+请分析并返回 JSON：
+{
+  "isPotentialCustomer": true/false,
+  "confidence": 0-100,
+  "reason": "判断理由",
+  "extractedInfo": {
+    "name": "用户名",
+    "bio": "个人简介",
+    "location": "位置",
+    "interests": ["兴趣1", "兴趣2"],
+    "contactHints": ["联系方式线索"],
+    "needSignals": ["需求信号"]
+  },
+  "matchedKeywords": ["匹配的关键词"]
+}
+` : `
+You are a customer identification expert. Based on the business profile, analyze this user's page content and determine if they are a potential customer.
+
+Business Profile:
+- Industry: ${profile.industry || 'unknown'}
+- Products: ${(profile.keywords || []).join(', ') || 'unknown'}
+- Region: ${profile.region || 'unknown'}
+- Description: ${(profile.description || '').substring(0, 200)}
+
+User Page Content:
+${truncated}
+
+Analyze and return JSON:
+{
+  "isPotentialCustomer": true/false,
+  "confidence": 0-100,
+  "reason": "reasoning",
+  "extractedInfo": {
+    "name": "username",
+    "bio": "bio",
+    "location": "location",
+    "interests": ["interest1"],
+    "contactHints": ["contact hints"],
+    "needSignals": ["need signals"]
+  },
+  "matchedKeywords": ["matched keywords"]
 }
 `;
 
@@ -368,6 +517,7 @@ Please return JSON format keyword list:
         generateProfileAnalysisPrompt: generateProfileAnalysisPrompt,
         generateContentMatchingPrompt: generateContentMatchingPrompt,
         generateKeywordGenerationPrompt: generateKeywordGenerationPrompt,
+        generateUserEvaluationPrompt: generateUserEvaluationPrompt,
     };
 
 })();

@@ -34,8 +34,22 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
      */
     public function execute(Event &$event): void
     {
-        if ($this->request->isBackend()) {
-            $this->request->_response->redirect($this->request->getUrlBuilder()->getBackendUrl('admin/login'));
+        $isBackend = false;
+        try {
+            $isBackend = $this->request->isBackend();
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+        
+        if ($isBackend) {
+            try {
+                $urlBuilder = $this->request->getUrlBuilder();
+                $loginUrl = $urlBuilder->getBackendUrl('admin/login');
+                $response = $this->request->getResponse();
+                $response->redirect($loginUrl);
+            } catch (\Throwable $e) {
+                throw $e;
+            }
         }
     }
 }

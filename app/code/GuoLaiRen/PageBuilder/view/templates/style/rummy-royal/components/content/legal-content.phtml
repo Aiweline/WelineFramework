@@ -1,0 +1,213 @@
+<?php
+/**
+ * RummyRoyal - Legal Content Component
+ * 
+ * 法律文档展示，含目录导航、最后更新时间、宽度选项
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Legal
+ * content.title => 标题:text:Legal Document
+ * content.last_updated => 最后更新:text:February 1, 2026
+ * content.body => 文档内容:textarea:This document outlines the legal terms and conditions governing the use of the RummyRoyal platform.
+ * 
+ * group:toc => 目录
+ * toc.items => 目录项:textarea:Introduction|Overview of this legal document and its applicability.\r\nUser Obligations|Your responsibilities when using the RummyRoyal platform.\r\nPrivacy & Data|How we collect, store, and use your personal information.\r\nPayments & Withdrawals|Terms governing deposits, winnings, and withdrawal processes.\r\nFair Play Policy|Our commitment to fair, RNG-certified gameplay.\r\nDispute Resolution|Process for resolving any disputes or complaints.\r\nModifications|How and when we may update this document.|格式：标题|内容，一行一个
+ * 
+ * group:layout => 布局设置
+ * layout.width => 内容宽度:select:medium|narrow,medium,wide
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['section_bg_1'] ?? '#0d0718';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$textMuted = $colors['text_muted'] ?? '#8b6f47';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+
+$badge = $config['content.badge'] ?? 'Legal';
+$title = $config['content.title'] ?? 'Legal Document';
+$lastUpdated = $config['content.last_updated'] ?? 'February 1, 2026';
+$body = $config['content.body'] ?? 'This document outlines the legal terms and conditions governing the use of the RummyRoyal platform.';
+
+$tocRaw = $config['toc.items'] ?? "Introduction|Overview of this legal document and its applicability.\nUser Obligations|Your responsibilities when using the RummyRoyal platform.\nPrivacy & Data|How we collect, store, and use your personal information.\nPayments & Withdrawals|Terms governing deposits, winnings, and withdrawal processes.\nFair Play Policy|Our commitment to fair, RNG-certified gameplay.\nDispute Resolution|Process for resolving any disputes or complaints.\nModifications|How and when we may update this document.";
+$sections = [];
+$lines = preg_split('/[\r\n]+/', $tocRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $sTitle = trim($parts[0] ?? '');
+    $sContent = trim($parts[1] ?? '');
+    if (!empty($sTitle)) {
+        $sections[] = ['title' => $sTitle, 'content' => $sContent];
+    }
+}
+
+$widthMap = ['narrow' => '700', 'medium' => '850', 'wide' => '1000'];
+$width = $widthMap[$config['layout.width'] ?? 'medium'] ?? '850';
+
+$instanceId = 'rr-legal-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-container {
+            max-width: <?= $width ?>px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-updated {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-intro {
+            font-size: 1.05rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.8;
+            margin-bottom: 48px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid <?= $borderLight ?>;
+        }
+        
+        /* TOC */
+        #<?= $instanceId ?> .rr-legal-toc {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 14px;
+            padding: 24px;
+            margin-bottom: 48px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-toc-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-toc-link {
+            display: block;
+            padding: 8px 0;
+            font-size: 0.9rem;
+            color: <?= $textSecondary ?>;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            border-bottom: 1px solid rgba(234, 179, 8, 0.05);
+        }
+        
+        #<?= $instanceId ?> .rr-legal-toc-link:last-child {
+            border-bottom: none;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-toc-link:hover {
+            color: <?= $accentPrimary ?>;
+        }
+        
+        /* Sections */
+        #<?= $instanceId ?> .rr-legal-section {
+            margin-bottom: 40px;
+            padding-bottom: 40px;
+            border-bottom: 1px solid <?= $borderLight ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-section:last-child {
+            border-bottom: none;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-section h3 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-legal-section p {
+            font-size: 0.95rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.8;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-legal-title {
+                font-size: 1.85rem;
+            }
+        }
+    </style>
+    
+    <div class="rr-legal-container">
+        <div class="rr-legal-header">
+            <div class="rr-legal-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h1 class="rr-legal-title"><?= htmlspecialchars($title) ?></h1>
+            <p class="rr-legal-updated">Last updated: <?= htmlspecialchars($lastUpdated) ?></p>
+        </div>
+        
+        <div class="rr-legal-intro"><?= nl2br(htmlspecialchars($body)) ?></div>
+        
+        <?php if (!empty($sections)): ?>
+        <nav class="rr-legal-toc">
+            <h3 class="rr-legal-toc-title">Table of Contents</h3>
+            <?php foreach ($sections as $i => $s): ?>
+            <a href="#<?= $instanceId ?>-s-<?= $i ?>" class="rr-legal-toc-link"><?= ($i + 1) ?>. <?= htmlspecialchars($s['title']) ?></a>
+            <?php endforeach; ?>
+        </nav>
+        
+        <?php foreach ($sections as $i => $s): ?>
+        <div class="rr-legal-section" id="<?= $instanceId ?>-s-<?= $i ?>">
+            <h3><?= ($i + 1) ?>. <?= htmlspecialchars($s['title']) ?></h3>
+            <p><?= nl2br(htmlspecialchars($s['content'])) ?></p>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</section>

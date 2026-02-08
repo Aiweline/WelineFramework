@@ -57,5 +57,14 @@
          icon="mdi mdi-fire" 
          order="40"/>
     
+    <!-- 攻击日志子菜单 -->
+    <add source="Weline_Cdn::cdn_attack_log_manager" 
+         name="cdn_attack_log_manager" 
+         title="攻击日志" 
+         action="*/backend/attackLog/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-shield-alert" 
+         order="50"/>
+    
 </menus>
 

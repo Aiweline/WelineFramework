@@ -1,0 +1,27 @@
+{
+    "page_type": "blog_list",
+    "name": "博客列表页面布局",
+    "description": "PokerArena 主题博客文章列表页布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-list",
+                "enabled": true,
+                "instance_id": "blog-list-default",
+                "config": {
+                    "content.badge": "Blog & Strategy",
+                    "content.title": "Poker Strategy & News",
+                    "content.description": "Stay ahead of the game with expert strategy articles, tournament recaps, and the latest poker news."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "博客列表页面布局，继承首页头尾"
+}

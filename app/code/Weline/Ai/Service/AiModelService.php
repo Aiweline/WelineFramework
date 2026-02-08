@@ -140,7 +140,7 @@ class AiModelService
         $connection = $this->getConnection();
         $select = $connection->select()
             ->from('ai_model')
-            ->where('status = ?', AiModel::STATUS_ACTIVE)
+            ->where('status', AiModel::STATUS_ACTIVE)
             ->order('supplier ASC')
             ->order('name ASC');
 
@@ -167,8 +167,8 @@ class AiModelService
         $connection = $this->getConnection();
         $select = $connection->select()
             ->from('ai_model')
-            ->where('origin_model_id = ?', $originModelId)
-            ->where('is_copy = ?', 1)
+            ->where('origin_model_id', $originModelId)
+            ->where('is_copy', 1)
             ->order('created_at DESC');
 
         $results = $connection->fetch($select);

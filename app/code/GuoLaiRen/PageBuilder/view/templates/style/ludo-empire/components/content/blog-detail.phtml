@@ -1,0 +1,234 @@
+<?php
+/**
+ * LudoEmpire - Blog Detail Component
+ * 
+ * 博客文章详情页，包含正文和侧边栏
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.show_sidebar => 显示侧边栏:select:yes|yes,no
+ * content.show_author => 显示作者信息:select:yes|yes,no
+ * content.show_related => 显示相关文章:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['section_bg_1'] ?? '#0d0020';
+$textPrimary = $colors['text_primary'] ?? '#f5f3ff';
+$textSecondary = $colors['text_secondary'] ?? '#c4b5fd';
+$textMuted = $colors['text_muted'] ?? '#7c6fad';
+$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a78bfa';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(139, 92, 246, 0.12)';
+
+$showSidebar = ($config['content.show_sidebar'] ?? 'yes') !== 'no';
+
+$page = $this->getData('page') ?? null;
+$postTitle = $page ? ($page->getData('title') ?? 'Blog Post Title') : 'Blog Post Title';
+$postContent = $page ? ($page->getData('content') ?? '') : '';
+
+$instanceId = 'le-blog-detail-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .le-bd-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-layout {
+            display: grid;
+            grid-template-columns: <?= $showSidebar ? '1fr 320px' : '1fr' ?>;
+            gap: 40px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-article {
+            min-width: 0;
+        }
+        
+        #<?= $instanceId ?> .le-bd-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+        
+        #<?= $instanceId ?> .le-bd-meta {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content {
+            font-size: 1.05rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.8;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin: 40px 0 16px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content h3 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin: 32px 0 12px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content p {
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content a {
+            color: <?= $accentPrimaryLight ?>;
+            text-decoration: underline;
+        }
+        
+        #<?= $instanceId ?> .le-bd-content a:hover {
+            color: <?= $accentSecondary ?>;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar {
+            position: sticky;
+            top: 100px;
+            align-self: start;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar-link {
+            display: block;
+            padding: 10px 0;
+            font-size: 0.9rem;
+            color: <?= $textSecondary ?>;
+            border-bottom: 1px solid <?= $borderLight ?>;
+            transition: color 0.3s ease;
+            text-decoration: none;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar-link:last-child {
+            border-bottom: none;
+        }
+        
+        #<?= $instanceId ?> .le-bd-sidebar-link:hover {
+            color: <?= $accentSecondary ?>;
+        }
+        
+        #<?= $instanceId ?> .le-bd-cta {
+            display: block;
+            text-align: center;
+            padding: 14px 24px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            margin-top: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-bd-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .le-bd-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            #<?= $instanceId ?> .le-bd-sidebar {
+                position: static;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .le-bd-title {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+    
+    <div class="le-bd-container">
+        <div class="le-bd-layout">
+            <article class="le-bd-article">
+                <h1 class="le-bd-title"><?= htmlspecialchars($postTitle) ?></h1>
+                <div class="le-bd-meta">
+                    <span>📅 Feb 1, 2026</span>
+                    <span>⏱ 5 min read</span>
+                    <span>🏷️ Strategies</span>
+                </div>
+                <div class="le-bd-content">
+                    <?php if ($postContent): ?>
+                        <?= $postContent ?>
+                    <?php else: ?>
+                        <p>Blog post content will be rendered here dynamically from the page content.</p>
+                    <?php endif; ?>
+                </div>
+            </article>
+            
+            <?php if ($showSidebar): ?>
+            <aside class="le-bd-sidebar">
+                <div class="le-bd-sidebar-card">
+                    <h3 class="le-bd-sidebar-title">Popular Posts</h3>
+                    <a href="#" class="le-bd-sidebar-link">10 Winning Strategies for Ludo</a>
+                    <a href="#" class="le-bd-sidebar-link">How to Master Quick Ludo Mode</a>
+                    <a href="#" class="le-bd-sidebar-link">Tournament Tips from Top Players</a>
+                    <a href="#" class="le-bd-sidebar-link">Understanding Dice Probability</a>
+                </div>
+                
+                <div class="le-bd-sidebar-card">
+                    <h3 class="le-bd-sidebar-title">Categories</h3>
+                    <a href="#" class="le-bd-sidebar-link">Strategies</a>
+                    <a href="#" class="le-bd-sidebar-link">Tournaments</a>
+                    <a href="#" class="le-bd-sidebar-link">Updates</a>
+                    <a href="#" class="le-bd-sidebar-link">Tips & Tricks</a>
+                </div>
+                
+                <a href="#games" class="le-bd-cta">🎲 Play Now</a>
+            </aside>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>

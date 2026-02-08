@@ -1,0 +1,302 @@
+<?php
+/**
+ * LudoEmpire - Footer Links Component
+ * 
+ * 页脚区域，包含品牌信息、3列链接和版权声明
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:brand => 品牌设置
+ * brand.name => 品牌名称:text:LudoEmpire
+ * brand.description => 品牌描述:textarea:The ultimate online Ludo gaming platform. Play with friends, win prizes, and enjoy the classic board game experience.
+ * 
+ * group:links => 链接设置
+ * links.column1_title => 栏目1标题:text:Games
+ * links.column1_items => 栏目1链接:textarea:Classic Ludo=>/games/classic\r\nQuick Ludo=>/games/quick\r\nTournaments=>/games/tournaments\r\nTeam Battle=>/games/team|格式：名称=>链接，一行一个
+ * links.column2_title => 栏目2标题:text:Company
+ * links.column2_items => 栏目2链接:textarea:About Us=>/about\r\nBlog=>/blog\r\nCareers=>/careers\r\nPress Kit=>/press|格式：名称=>链接，一行一个
+ * links.column3_title => 栏目3标题:text:Support
+ * links.column3_items => 栏目3链接:textarea:Help Center=>/help\r\nContact Us=>/contact\r\nFAQ=>/faq\r\nCommunity=>/community|格式：名称=>链接，一行一个
+ * 
+ * group:legal => 法律链接
+ * legal.items => 法律链接:textarea:Privacy Policy=>/privacy\r\nTerms of Service=>/terms\r\nCookie Policy=>/cookies\r\nRefund Policy=>/refund|格式：名称=>链接，一行一个
+ * 
+ * group:copyright => 版权设置
+ * copyright.text => 版权文字:text:All rights reserved. Play responsibly.
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$footerBg = $colors['footer_bg'] ?? '#06000e';
+$textPrimary = $colors['text_primary'] ?? '#f5f3ff';
+$textMuted = $colors['text_muted'] ?? '#7c6fad';
+$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
+$footerLink = $colors['footer_link'] ?? '#c4b5fd';
+$footerLinkHover = $colors['footer_link_hover'] ?? '#ec4899';
+$footerBorder = $colors['footer_border'] ?? 'rgba(139, 92, 246, 0.1)';
+
+$brandName = $config['brand.name'] ?? 'LudoEmpire';
+$brandDesc = $config['brand.description'] ?? 'The ultimate online Ludo gaming platform. Play with friends, win prizes, and enjoy the classic board game experience.';
+
+$parseLinks = function($raw) {
+    $links = [];
+    $lines = preg_split('/[\r\n]+/', $raw);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) {
+            $links[] = ['name' => $name, 'url' => $url];
+        }
+    }
+    return $links;
+};
+
+$col1Title = $config['links.column1_title'] ?? 'Games';
+$col1Links = $parseLinks($config['links.column1_items'] ?? "Classic Ludo=>/games/classic\nQuick Ludo=>/games/quick\nTournaments=>/games/tournaments\nTeam Battle=>/games/team");
+$col2Title = $config['links.column2_title'] ?? 'Company';
+$col2Links = $parseLinks($config['links.column2_items'] ?? "About Us=>/about\nBlog=>/blog\nCareers=>/careers\nPress Kit=>/press");
+$col3Title = $config['links.column3_title'] ?? 'Support';
+$col3Links = $parseLinks($config['links.column3_items'] ?? "Help Center=>/help\nContact Us=>/contact\nFAQ=>/faq\nCommunity=>/community");
+$legalLinks = $parseLinks($config['legal.items'] ?? "Privacy Policy=>/privacy\nTerms of Service=>/terms\nCookie Policy=>/cookies\nRefund Policy=>/refund");
+
+$copyrightText = $config['copyright.text'] ?? 'All rights reserved. Play responsibly.';
+$currentYear = date('Y');
+
+$instanceId = 'le-footer-' . uniqid();
+?>
+
+<footer id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $footerBg ?>;
+            padding: 80px 0 0;
+        }
+        
+        #<?= $instanceId ?> .le-ft-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 48px;
+            padding-bottom: 60px;
+            border-bottom: 1px solid <?= $footerBorder ?>;
+        }
+        
+        #<?= $instanceId ?> .le-ft-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-logo-icon {
+            width: 42px;
+            height: 42px;
+            background: <?= $buttonPrimaryBg ?>;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #<?= $instanceId ?> .le-ft-logo-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: #ffffff;
+        }
+        
+        #<?= $instanceId ?> .le-ft-brand-desc {
+            font-size: 0.9rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+            max-width: 300px;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-social {
+            display: flex;
+            gap: 12px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-social-link {
+            width: 36px;
+            height: 36px;
+            background: rgba(139, 92, 246, 0.12);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            font-size: 1rem;
+        }
+        
+        #<?= $instanceId ?> .le-ft-social-link:hover {
+            background: <?= $buttonPrimaryBg ?>;
+            transform: translateY(-2px);
+        }
+        
+        #<?= $instanceId ?> .le-ft-column h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-links {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-link {
+            font-size: 0.9rem;
+            color: <?= $footerLink ?>;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .le-ft-link:hover {
+            color: <?= $footerLinkHover ?>;
+        }
+        
+        #<?= $instanceId ?> .le-ft-bottom {
+            padding: 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-ft-copyright {
+            font-size: 0.85rem;
+            color: <?= $textMuted ?>;
+        }
+        
+        #<?= $instanceId ?> .le-ft-legal {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        #<?= $instanceId ?> .le-ft-legal a {
+            font-size: 0.8rem;
+            color: <?= $textMuted ?>;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .le-ft-legal a:hover {
+            color: <?= $footerLinkHover ?>;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .le-ft-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            #<?= $instanceId ?> .le-ft-brand {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .le-ft-grid {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+            
+            #<?= $instanceId ?> .le-ft-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            #<?= $instanceId ?> .le-ft-legal {
+                justify-content: center;
+            }
+        }
+    </style>
+    
+    <div class="le-ft-container">
+        <div class="le-ft-grid">
+            <div class="le-ft-brand">
+                <div class="le-ft-logo">
+                    <span class="le-ft-logo-icon">
+                        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/><circle cx="12" cy="12" r="1.5"/></svg>
+                    </span>
+                    <span><?= htmlspecialchars($brandName) ?></span>
+                </div>
+                <p class="le-ft-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+                <div class="le-ft-social">
+                    <a href="#" class="le-ft-social-link">📘</a>
+                    <a href="#" class="le-ft-social-link">🐦</a>
+                    <a href="#" class="le-ft-social-link">📸</a>
+                    <a href="#" class="le-ft-social-link">📺</a>
+                </div>
+            </div>
+            
+            <div class="le-ft-column">
+                <h4><?= htmlspecialchars($col1Title) ?></h4>
+                <div class="le-ft-links">
+                    <?php foreach ($col1Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="le-ft-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <div class="le-ft-column">
+                <h4><?= htmlspecialchars($col2Title) ?></h4>
+                <div class="le-ft-links">
+                    <?php foreach ($col2Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="le-ft-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <div class="le-ft-column">
+                <h4><?= htmlspecialchars($col3Title) ?></h4>
+                <div class="le-ft-links">
+                    <?php foreach ($col3Links as $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>" class="le-ft-link"><?= htmlspecialchars($link['name']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="le-ft-bottom">
+            <div class="le-ft-copyright">
+                &copy; <?= $currentYear ?> <?= htmlspecialchars($brandName) ?>. <?= htmlspecialchars($copyrightText) ?>
+            </div>
+            <?php if (!empty($legalLinks)): ?>
+            <div class="le-ft-legal">
+                <?php foreach ($legalLinks as $link): ?>
+                <a href="<?= htmlspecialchars($link['url']) ?>"><?= htmlspecialchars($link['name']) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</footer>

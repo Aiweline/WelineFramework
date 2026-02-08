@@ -279,7 +279,7 @@ class LayoutSchedule extends Model
         return $this->reset()
             ->where(self::fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::fields_END_TIME, $now, '<=')
-            ->where(self::fields_END_TIME . ' IS NOT NULL')
+            ->where(self::fields_END_TIME, null, 'IS NOT NULL')
             ->order(self::fields_END_TIME, 'ASC')
             ->select()
             ->fetchArray();

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**@var \Weline\Framework\View\Template $this */
 // 注意：此模板可能被嵌入到其他模板的 if 块中，因此不能使用 use 语句
 // use 语句在 PHP 中必须在文件顶层，不能在控制结构内部
@@ -1073,2326 +1073,745 @@ if ($dataLayout !== 'horizontal'):
     </style>
 
     <script>
-        (function($) {
-            'use strict';
-            
-            // 菜单搜索和悬浮功能控制器 - 使用闭包封装，避免全局污染
-            var MenuController = (function() {
-                // 私有变量
-                var $searchTabContainer = null;
-                var $searchInput = null;
-                var $menuItems = null;
-                var $frequentMenusSection = null;
-                var $searchResultsContainer = null;
-                var $stickySection = null;
-                var $tabsContent = null;
-                var $simplebarContainer = null;
-                var $sidebarMenu = null;
-                
-                // 滚动控制变量
-                var isSticky = false;
-                var lastScrollTop = 0;
-                var scrollTimer = null;
-                var isScrolling = false;
-                
-                // 搜索相关变量
-                var matchedMenuItems = [];
-                var currentSelectedIndex = -1;
-                
-                // 初始化DOM元素引用
-                function initElements() {
-                    $searchTabContainer = $('#search-tab-container');
-                    $searchInput = $('#menu-search-input');
-                    $menuItems = $('#sidebar-menu li');
-                    $frequentMenusSection = $('#frequent-menus-section');
-                    $searchResultsContainer = $('#search-results-container');
-                    $stickySection = $('#sticky-menu-section');
-                    $tabsContent = $('.menu-tabs-content');
-                    $simplebarContainer = $('.vertical-menu [data-simplebar]');
-                    $sidebarMenu = $('#sidebar-menu');
-                }
-                
-                // 展开搜索Tab
-                function expandSearch() {
-                    if (!$searchTabContainer || !$searchTabContainer.length) {
-                        return;
-                    }
-                    
-                    var $body = $('body');
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    
-                    if (isCollapsed) {
-                        // 折叠状态下，向右展开搜索面板
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            // 计算top位置
-                            var $stickySection = $('#sticky-menu-section');
-                            var expandedTop = '0px';
-                            if ($stickySection && $stickySection.length) {
-                                var offset = $stickySection.offset();
-                                var scrollTop = $(window).scrollTop();
-                                expandedTop = (offset ? offset.top - scrollTop : 0) + 'px';
-                            }
-                            
-                            $tabsContent
-                                .addClass('expanded-right')
-                                .show()
-                                .css({
-                                    'display': 'block',
-                                    'position': 'fixed',
-                                    'left': '70px',
-                                    'top': expandedTop,
-                                    'min-width': '280px',
-                                    'max-width': '320px',
-                                    'z-index': '1050',
-                                    'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff'
-                                });
-                        }
-                        
-                        // 激活搜索Tab
-                        $('#frequent-tab-pane').hide();
-                        $('#frequent-menu-tab').removeClass('active');
-                        $('#search-menu-tab').addClass('active');
-                        
-                        // 展开搜索框
-                        $searchTabContainer.addClass('expanded');
-                        
-                        setTimeout(function() {
-                            if ($searchInput && $searchInput.length) {
-                                $searchInput.focus();
-                            }
-                        }, 250);
-                    } else {
-                        // 正常状态下，在原位展开
-                        if (!$searchTabContainer.hasClass('expanded')) {
-                            $searchTabContainer.addClass('expanded');
-                            $('#frequent-tab-pane').hide();
-                            $('#frequent-menu-tab').removeClass('active');
-                            
-                            setTimeout(function() {
-                                if ($searchInput && $searchInput.length) {
-                                    $searchInput.focus();
-                                }
-                            }, 250);
-                        } else {
-                            if ($searchInput && $searchInput.length) {
-                                $searchInput.focus();
-                            }
-                        }
-                    }
-                }
-                
-                // 收起搜索Tab
-                function collapseSearch() {
-                    if (!$searchTabContainer || !$searchTabContainer.length) {
-                        return;
-                    }
-                    
-                    if ($searchTabContainer.hasClass('expanded')) {
-                        $searchTabContainer.removeClass('expanded');
-                        if ($searchInput && $searchInput.length) {
-                            $searchInput.val('').blur();
-                        }
-                        if ($searchResultsContainer && $searchResultsContainer.length) {
-                            $searchResultsContainer.hide();
-                        }
-                        resetMenuDisplay();
-                    }
-                }
-                
-                // 重置菜单显示（修复null检查）
-                function resetMenuDisplay() {
-                    if (!$menuItems || !$menuItems.length) {
-                        $menuItems = $('#sidebar-menu li');
-                    }
-                    if (!$frequentMenusSection || !$frequentMenusSection.length) {
-                        $frequentMenusSection = $('#frequent-menus-section');
-                    }
-                    if (!$menuItems || !$menuItems.length) {
-                        return;
-                    }
-                    
-                    $menuItems.removeClass('menu-item-hidden menu-item-matched');
-                    if ($frequentMenusSection && $frequentMenusSection.length) {
-                        $frequentMenusSection.show();
-                    }
-                    if ($searchResultsContainer && $searchResultsContainer.length) {
-                        $searchResultsContainer.hide();
-                    }
-                }
-                
-                // 检查并更新悬浮状态
-                function checkSticky() {
-                    if (!$stickySection || !$stickySection.length || !$tabsContent || !$tabsContent.length) {
-                        return;
-                    }
-                    
-                    // 获取滚动位置
-                    var scrollTop = 0;
-                    if ($simplebarContainer && $simplebarContainer.length && $simplebarContainer[0].simpleBar) {
-                        scrollTop = $simplebarContainer[0].simpleBar.getScrollElement().scrollTop;
-                    } else if ($sidebarMenu && $sidebarMenu.length) {
-                        scrollTop = $sidebarMenu.scrollTop() || 0;
-                    } else {
-                        scrollTop = $(window).scrollTop() || 0;
-                    }
-                    
-                    // 标记正在滚动
-                    isScrolling = true;
-                    
-                    // 清除之前的定时器
-                    if (scrollTimer) {
-                        clearTimeout(scrollTimer);
-                    }
-                    
-                    // 当滚动超过初始位置时，激活悬浮
-                    if (scrollTop > 10) {
-                        if (!isSticky) {
-                            isSticky = true;
-                            $stickySection.addClass('sticky-active');
-                        }
-                        
-                        // 检测滚动方向：向下滚动时收起，向上滚动时判断
-                        if (scrollTop > lastScrollTop + 2) {
-                            // 向下滚动 - 收起内容
-                            $tabsContent.addClass('collapsed');
-                        } else if (scrollTop < lastScrollTop - 2) {
-                            // 向上滚动
-                            if (scrollTop < 50) {
-                                // 接近顶部时展开内容
-                                $tabsContent.removeClass('collapsed');
-                            }
-                        }
-                    } else {
-                        // 回到顶部时取消悬浮状态
-                        if (isSticky) {
-                            isSticky = false;
-                            $stickySection.removeClass('sticky-active');
-                            $tabsContent.removeClass('collapsed');
-                        }
-                    }
-                    
-                    lastScrollTop = scrollTop;
-                    
-                    // 滚动停止后延迟展开内容（仅在接近顶部时）
-                    scrollTimer = setTimeout(function() {
-                        isScrolling = false;
-                        // 重新获取当前滚动位置
-                        var currentScrollTop = 0;
-                        if ($simplebarContainer && $simplebarContainer.length && $simplebarContainer[0].simpleBar) {
-                            currentScrollTop = $simplebarContainer[0].simpleBar.getScrollElement().scrollTop;
-                        } else if ($sidebarMenu && $sidebarMenu.length) {
-                            currentScrollTop = $sidebarMenu.scrollTop() || 0;
-                        } else {
-                            currentScrollTop = $(window).scrollTop() || 0;
-                        }
-                        
-                        if (isSticky && currentScrollTop < 100 && !isScrolling && $tabsContent && $tabsContent.length) {
-                            $tabsContent.removeClass('collapsed');
-                        }
-                    }, 500);
-                }
-                
-                // 返回公共接口
-                return {
-                    init: function() {
-                        initElements();
-                    },
-                    expandSearch: expandSearch,
-                    collapseSearch: collapseSearch,
-                    resetMenuDisplay: resetMenuDisplay,
-                    checkSticky: checkSticky,
-                    getMatchedMenuItems: function() {
-                        return matchedMenuItems;
-                    },
-                    setMatchedMenuItems: function(items) {
-                        matchedMenuItems = items;
-                        currentSelectedIndex = -1;
-                    },
-                    getCurrentSelectedIndex: function() {
-                        return currentSelectedIndex;
-                    },
-                    setCurrentSelectedIndex: function(index) {
-                        currentSelectedIndex = index;
-                    },
-                    getSearchInput: function() {
-                        return $searchInput;
-                    },
-                    getMenuItems: function() {
-                        return $menuItems;
-                    },
-                    getFrequentMenusSection: function() {
-                        return $frequentMenusSection;
-                    },
-                    getSearchResultsContainer: function() {
-                        return $searchResultsContainer;
-                    },
-                    clearScrollTimer: function() {
-                        if (scrollTimer) {
-                            clearTimeout(scrollTimer);
-                            scrollTimer = null;
-                        }
-                    }
-                };
-            })();
-            
-            // 初始化控制器
-            MenuController.init();
-            
-            // 菜单搜索功能
-            function initMenuSearch() {
-                var $searchTabBtn = $('#search-menu-tab');
-                var $searchTabContainer = $('#search-tab-container');
-                var $searchInput = MenuController.getSearchInput(); // sticky区域的搜索输入框
-                var $searchInputMenu = $('#menu-search-input-menu'); // 菜单形式的搜索输入框
-                var $searchCloseIcon = $('#search-tab-close-icon');
-                var $menuItems = MenuController.getMenuItems();
-                var $frequentMenusSection = MenuController.getFrequentMenusSection();
-                var $searchResultsContainer = MenuController.getSearchResultsContainer(); // sticky区域的搜索结果容器
-                var $searchResultsContainerMenu = $('#search-results-container-menu'); // 菜单形式的搜索结果容器
-                var $searchResultsText = $('#search-results-text');
-                var $searchResultsTextMenu = $('#search-results-text-menu');
-                
-                // 统一的搜索处理函数
-                function handleSearchInput($input, searchText) {
-                    MenuController.setCurrentSelectedIndex(-1);
-                    MenuController.setMatchedMenuItems([]);
-                    
-                    // 同步两个输入框的值
-                    if ($input.attr('id') === 'menu-search-input' && $searchInputMenu.length) {
-                        $searchInputMenu.val(searchText);
-                    } else if ($input.attr('id') === 'menu-search-input-menu' && $searchInput.length) {
-                        $searchInput.val(searchText);
-                    }
-                    
-                    if (searchText === '') {
-                        // 清空搜索，隐藏搜索结果，显示所有菜单
-                        if ($searchResultsContainer && $searchResultsContainer.length) {
-                            $searchResultsContainer.hide();
-                        }
-                        if ($searchResultsContainerMenu && $searchResultsContainerMenu.length) {
-                            $searchResultsContainerMenu.hide();
-                        }
-                        MenuController.resetMenuDisplay();
-                    } else {
-                        // 显示搜索结果容器
-                        if ($searchResultsContainer && $searchResultsContainer.length) {
-                            $searchResultsContainer.show();
-                        }
-                        if ($searchResultsContainerMenu && $searchResultsContainerMenu.length) {
-                            $searchResultsContainerMenu.show();
-                        }
-                        
-                        // 确保menu-search-content和搜索输入框区域始终可见
-                        var $searchContent = $('#menu-search-content');
-                        var $searchInputWrapper = $('.search-menu-input-wrapper');
-                        if ($searchContent && $searchContent.length) {
-                            $searchContent.show().css({
-                                'display': 'block',
-                                'visibility': 'visible',
-                                'opacity': '1'
-                            });
-                        }
-                        if ($searchInputWrapper && $searchInputWrapper.length) {
-                            $searchInputWrapper.show().css({
-                                'display': 'block',
-                                'visibility': 'visible',
-                                'opacity': '1'
-                            });
-                        }
-                        
-                        // 执行搜索 - 根据当前使用的输入框，更新对应的容器
-                        if ($input.attr('id') === 'menu-search-input') {
-                            // sticky区域的搜索框
-                            searchMenus(searchText, $menuItems, $frequentMenusSection, $searchResultsContainer, $searchResultsText);
-                        } else if ($input.attr('id') === 'menu-search-input-menu') {
-                            // 菜单形式的搜索框 - menu-search-submenu的显示由CSS的:hover和:focus控制
-                            // menu-search-content不需要任何控制
-                            searchMenus(searchText, $menuItems, $frequentMenusSection, $searchResultsContainerMenu, $searchResultsTextMenu);
-                        }
-                    }
-                }
-                
-                // 为sticky区域的搜索输入框绑定事件
-                if ($searchInput && $searchInput.length) {
-                    // 点击搜索Tab按钮展开（仅在没有hover展开时才需要点击）
-                    // 注意：hover事件在initMenuTabs中处理，这里保留点击作为备选
-                    $searchTabBtn.on('click.menuSearch', function(e) {
-                        e.stopPropagation();
-                        var isCollapsed = $('body').hasClass('vertical-collpsed');
-                        // 正常状态下，如果已经通过hover展开，点击时不做重复操作
-                        if (!isCollapsed) {
-                            var $searchTabContainer = $('#search-tab-container');
-                            if ($searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                                // 已经展开，点击时聚焦输入框即可
-                                var $searchInput = $('#menu-search-input');
-                                if ($searchInput && $searchInput.length) {
-                                    $searchInput.focus();
-                                }
-                                return;
-                            }
-                        }
-                        MenuController.expandSearch();
-                    });
-                    
-                    // 点击关闭图标收起
-                    $searchCloseIcon.on('click.menuSearch', function(e) {
-                        e.stopPropagation();
-                        MenuController.collapseSearch();
-                    });
-                    
-                    // 搜索输入事件
-                    $searchInput.on('input', function() {
-                        var searchText = $(this).val().toLowerCase().trim();
-                        handleSearchInput($(this), searchText);
-                    });
-                }
-                
-                // 为菜单形式的搜索输入框绑定事件
-                if ($searchInputMenu && $searchInputMenu.length) {
-                    // 确保搜索菜单项展开
-                    var $searchMenuItem = $('#menu-search-item');
-                    var $searchSubmenu = $('#menu-search-submenu');
-                    var $searchContent = $('#menu-search-content');
-                    
-                    // 阻止搜索内容区域的点击事件冒泡，防止关闭菜单
-                    if ($searchContent && $searchContent.length) {
-                        $searchContent.on('click', function(e) {
-                            e.stopPropagation();
-                        });
-                        $searchContent.on('mousedown', function(e) {
-                            e.stopPropagation();
-                        });
-                    }
-                    
-                    // 当搜索输入框获得焦点时（CSS会通过:focus自动显示子菜单）
-                    $searchInputMenu.on('focus', function() {
-                        // 标记鼠标在搜索区域内
-                        isMouseInSearchArea = true;
-                        var isCollapsed = $body.hasClass('vertical-collpsed');
-                        if (isCollapsed && $searchMenuItem && $searchMenuItem.length && $searchSubmenu && $searchSubmenu.length) {
-                            $searchMenuItem.addClass('mm-active');
-                            $searchSubmenu.attr('aria-expanded', 'true');
-                        }
-                    });
-                    
-                    // 当搜索输入框失去焦点时
-                    $searchInputMenu.on('blur', function() {
-                        var isCollapsed = $body.hasClass('vertical-collpsed');
-                        if (isCollapsed && $searchMenuItem && $searchMenuItem.length && $searchSubmenu && $searchSubmenu.length) {
-                            // 检查鼠标是否还在搜索相关区域
-                            setTimeout(function() {
-                                var $activeElement = $(document.activeElement);
-                                if (!$activeElement.closest('.menu-search-item, .menu-search-submenu, .menu-search-content').length) {
-                                    $searchMenuItem.removeClass('mm-active');
-                                    $searchSubmenu.attr('aria-expanded', 'false');
-                                }
-                            }, 100);
-                        }
-                    });
-                    
-                    $searchInputMenu.on('input', function(e) {
-                        e.stopPropagation();
-                        var searchText = $(this).val().toLowerCase().trim();
-                        // 标记鼠标在搜索区域内
-                        isMouseInSearchArea = true;
-                        // menu-search-submenu的显示由CSS的:hover和:focus控制，不需要JS设置CSS
-                        handleSearchInput($(this), searchText);
-                    });
-                    
-                    // 点击搜索输入框时，阻止事件冒泡，避免触发菜单项点击
-                    $searchInputMenu.on('click', function(e) {
-                        e.stopPropagation();
-                    });
-                    
-                    $searchInputMenu.on('mousedown', function(e) {
-                        e.stopPropagation();
-                    });
-                    
-                    // 阻止菜单项链接的点击关闭菜单
-                    var $searchLink = $('#menu-search-link');
-                    var $searchMenuItem = $('#menu-search-item');
-                    var $searchSubmenu = $('#menu-search-submenu');
-                    
-                    if ($searchLink && $searchLink.length) {
-                        $searchLink.off('click.menuSearchLink').on('click.menuSearchLink', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            // 聚焦输入框（CSS会通过:focus自动显示子菜单）
-                            setTimeout(function() {
-                                $searchInputMenu.focus();
-                            }, 50);
-                            return false;
-                        });
-                    }
-                    
-                    // hover事件：更新aria-expanded属性（折叠状态下）
-                    if ($searchMenuItem && $searchMenuItem.length && $searchSubmenu && $searchSubmenu.length) {
-                        // 鼠标进入搜索菜单项或链接时
-                        $searchMenuItem.add($searchLink).on('mouseenter.menuSearchHover', function() {
-                            var isCollapsed = $body.hasClass('vertical-collpsed');
-                            if (isCollapsed) {
-                                $searchMenuItem.addClass('mm-active');
-                                $searchSubmenu.attr('aria-expanded', 'true');
-                            }
-                        });
-                        
-                        // 鼠标离开搜索菜单项、链接或子菜单时
-                        $searchMenuItem.add($searchLink).add($searchSubmenu).on('mouseleave.menuSearchHover', function(e) {
-                            var isCollapsed = $body.hasClass('vertical-collpsed');
-                            if (!isCollapsed) return;
-                            
-                            var relatedTarget = e.relatedTarget || e.toElement;
-                            // 检查鼠标是否移到了搜索相关区域
-                            if ($(relatedTarget).closest('.menu-search-item, .menu-search-submenu, .menu-search-content').length) {
-                                return; // 如果移到了相关区域，不隐藏
-                            }
-                            
-                            // 检查是否有输入框焦点（如果有焦点，保持展开）
-                            var $input = $('#menu-search-input-menu');
-                            if ($input && $input.length && $input.is(':focus')) {
-                                return; // 输入框有焦点，保持展开
-                            }
-                            
-                            // 延迟隐藏，给用户时间移回相关区域
-                            setTimeout(function() {
-                                var currentTarget = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
-                                if (!currentTarget) {
-                                    $searchMenuItem.removeClass('mm-active');
-                                    $searchSubmenu.attr('aria-expanded', 'false');
-                                    return;
-                                }
-                                // 再次检查是否还在相关区域
-                                if (!$(currentTarget).closest('.menu-search-item, .menu-search-submenu, .menu-search-content').length) {
-                                    var $input = $('#menu-search-input-menu');
-                                    if (!$input || !$input.length || !$input.is(':focus')) {
-                                        $searchMenuItem.removeClass('mm-active');
-                                        $searchSubmenu.attr('aria-expanded', 'false');
-                                    }
-                                }
-                            }, 100);
-                        });
-                    }
-                    
-                    // 监听菜单状态变化，如果搜索菜单被意外关闭，立即重新打开（仅在搜索输入框有内容时）
-                    var searchMenuCheckInterval = null;
-                    var isMouseInSearchArea = false;
-                    
-                    function startSearchMenuProtection() {
-                        if (searchMenuCheckInterval) return;
-                        searchMenuCheckInterval = setInterval(function() {
-                            var searchText = $searchInputMenu.val().trim();
-                            // menu-search-submenu的显示/隐藏由CSS的hover控制，不需要JS强制显示
-                            // 这里只保留基本的类操作，CSS会通过hover自动显示
-                            if (!searchText && searchMenuCheckInterval) {
-                                // 搜索输入框为空，停止保护
-                                clearInterval(searchMenuCheckInterval);
-                                searchMenuCheckInterval = null;
-                            }
-                        }, 100);
-                    }
-                    
-                    function stopSearchMenuProtection() {
-                        if (searchMenuCheckInterval) {
-                            clearInterval(searchMenuCheckInterval);
-                            searchMenuCheckInterval = null;
-                        }
-                    }
-                    
-                    // 监听鼠标进入搜索区域（仅用于保护机制，显示/隐藏由CSS hover控制）
-                    $(document).on('mouseenter.menuSearchArea', '.menu-search-item, .menu-search-submenu, .menu-search-content', function() {
-                        isMouseInSearchArea = true;
-                        // menu-search-submenu的显示/隐藏由CSS的hover控制，不需要JS设置
-                        // menu-search-content不需要任何隐藏控制
-                    });
-                    
-                    // 监听鼠标离开搜索区域
-                    $(document).on('mouseleave.menuSearchArea', '.menu-search-item, .menu-search-submenu, .menu-search-content', function() {
-                        isMouseInSearchArea = false;
-                    });
-                    
-                    // 当输入框有内容时启动保护
-                    $searchInputMenu.on('input', function() {
-                        var searchText = $(this).val().trim();
-                        if (searchText) {
-                            startSearchMenuProtection();
-                        } else {
-                            stopSearchMenuProtection();
-                        }
-                    });
-                    
-                    // 当输入框失去焦点且无内容时停止保护
-                    $searchInputMenu.on('blur', function() {
-                        var searchText = $(this).val().trim();
-                        if (!searchText) {
-                            stopSearchMenuProtection();
-                        }
-                    });
-                }
-                
-                // 全局键盘快捷键：Ctrl+K 或 / 打开搜索
-                $(document).on('keydown.menuSearch', function(e) {
-                    // 如果当前焦点在输入框、文本域或内容可编辑元素上，不触发快捷键
-                    var $target = $(e.target);
-                    if ($target.is('input:not([type="text"]), textarea, [contenteditable="true"]')) {
-                        return;
-                    }
-                    
-                    // Ctrl+K 或 / 键打开搜索
-                    if ((e.ctrlKey && e.key === 'k') || (e.key === '/' && !$target.is('input, textarea'))) {
-                        e.preventDefault();
-                        var $body = $('body');
-                        if ($body.hasClass('vertical-collpsed')) {
-                            // 折叠状态下，聚焦菜单形式的搜索框
-                            if ($searchInputMenu && $searchInputMenu.length) {
-                                // 展开搜索菜单项
-                                var $searchItem = $('#menu-search-item');
-                                if ($searchItem.length) {
-                                    $searchItem.find('> a').trigger('click');
-                                    setTimeout(function() {
-                                        $searchInputMenu.focus();
-                                    }, 100);
-                                }
-                            }
-                        } else {
-                            // 正常状态下，使用sticky区域
-                            if ($searchInput && $searchInput.length) {
-                                MenuController.expandSearch();
-                            }
-                        }
-                    }
-                });
-                
-                // 点击搜索容器外部时，如果输入框为空则收起（仅针对sticky区域）
-                $(document).on('click.menuSearch', function(e) {
-                    if ($searchTabContainer && !$searchTabContainer.is(e.target) && $searchTabContainer.has(e.target).length === 0) {
-                        if ($searchInput && $searchInput.length && $searchInput.val().trim() === '' && $searchTabContainer.hasClass('expanded')) {
-                            MenuController.collapseSearch();
-                        }
-                    }
-                });
-                
-                // 键盘事件处理（统一处理两个输入框）
-                function handleSearchKeydown(e) {
-                    var matchedItems = MenuController.getMatchedMenuItems();
-                    var selectedIndex = MenuController.getCurrentSelectedIndex();
-                    var $input = $(this);
-                    
-                    if (e.key === 'Escape') {
-                        MenuController.setCurrentSelectedIndex(-1);
-                        MenuController.setMatchedMenuItems([]);
-                        var $body = $('body');
-                        if ($body.hasClass('vertical-collpsed')) {
-                            // 折叠状态下，清空输入框
-                            $input.val('');
-                            handleSearchInput($input, '');
-                        } else {
-                            // 正常状态下，收起搜索
-                            MenuController.collapseSearch();
-                        }
-                    } else if (e.key === 'ArrowDown') {
-                        // 向下箭头：选择下一个结果
-                        e.preventDefault();
-                        if (matchedItems.length > 0) {
-                            var newIndex = (selectedIndex + 1) % matchedItems.length;
-                            MenuController.setCurrentSelectedIndex(newIndex);
-                            highlightSelectedItem();
-                        }
-                    } else if (e.key === 'ArrowUp') {
-                        // 向上箭头：选择上一个结果
-                        e.preventDefault();
-                        if (matchedItems.length > 0) {
-                            var newIndex = selectedIndex <= 0 ? matchedItems.length - 1 : selectedIndex - 1;
-                            MenuController.setCurrentSelectedIndex(newIndex);
-                            highlightSelectedItem();
-                        }
-                    } else if (e.key === 'Enter') {
-                        // Enter键：打开选中的菜单项
-                        if (selectedIndex >= 0 && selectedIndex < matchedItems.length) {
-                            e.preventDefault();
-                            var itemData = matchedItems[selectedIndex];
-                            var $selectedItem = itemData.$item ? itemData.$item : itemData; // 兼容新旧数据结构
-                            var $link = $selectedItem.find('a').first();
-                            if ($link.length && $link.attr('href') && $link.attr('href') !== 'javascript: void(0);') {
-                                window.location.href = $link.attr('href');
-                            } else {
-                                // 如果是可展开的菜单，展开它
-                                $link.trigger('click');
-                            }
-                        }
-                    }
-                }
-                
-                if ($searchInput && $searchInput.length) {
-                    $searchInput.on('keydown', handleSearchKeydown);
-                }
-                
-                if ($searchInputMenu && $searchInputMenu.length) {
-                    $searchInputMenu.on('keydown', handleSearchKeydown);
-                }
-                
-                // 高亮选中的菜单项并滚动到可视区域
-                function highlightSelectedItem() {
-                    var $menuItems = MenuController.getMenuItems();
-                    var matchedItems = MenuController.getMatchedMenuItems();
-                    var selectedIndex = MenuController.getCurrentSelectedIndex();
-                    
-                    if (!$menuItems || !$menuItems.length) {
-                        return;
-                    }
-                    
-                    // 移除所有高亮
-                    $menuItems.removeClass('menu-item-keyboard-selected');
-                    
-                    if (selectedIndex >= 0 && selectedIndex < matchedItems.length) {
-                        var itemData = matchedItems[selectedIndex];
-                        var $selected = itemData.$item ? itemData.$item : itemData; // 兼容新旧数据结构
-                        $selected.addClass('menu-item-keyboard-selected');
-                        
-                        // 平滑滚动到选中项
-                        var offsetTop = $selected.offset().top;
-                        var sidebarTop = $('#sidebar-menu').offset().top;
-                        var sidebarHeight = $('#sidebar-menu').height();
-                        
-                        if (offsetTop < sidebarTop || offsetTop > sidebarTop + sidebarHeight) {
-                            $('html, body').animate({
-                                scrollTop: $selected.offset().top - 200
-                            }, 200);
-                        }
-                    }
-                }
+    (function($) {
+        'use strict';
+
+        // ==================== Constants ====================
+        var COLLAPSED_CLS = 'vertical-collpsed';
+        var HOVER_DELAY = 200;
+        var RELATED_AREAS = '#sticky-menu-section, .menu-tabs-content.expanded-right, .menu-tab-btn, .menu-tabs-nav, .menu-search-content, .menu-search-submenu, .menu-search-item, #search-tab-container, #frequent-tab-pane';
+
+        // ==================== Cached DOM ====================
+        var $el = {};
+
+        function cacheDOM() {
+            $el = {
+                body: $('body'),
+                sideMenu: $('#side-menu'),
+                sidebarMenu: $('#sidebar-menu'),
+                stickySection: $('#sticky-menu-section'),
+                tabsContent: $('.menu-tabs-content'),
+                searchTabContainer: $('#search-tab-container'),
+                searchInput: $('#menu-search-input'),
+                searchInputMenu: $('#menu-search-input-menu'),
+                searchTab: $('#search-menu-tab'),
+                frequentTab: $('#frequent-menu-tab'),
+                frequentPane: $('#frequent-tab-pane'),
+                searchResults: $('#search-results-container'),
+                searchResultsList: $('#search-results-list'),
+                searchResultsText: $('#search-results-text'),
+                searchResultsMenu: $('#search-results-container-menu'),
+                searchResultsListMenu: $('#search-results-list-menu'),
+                searchResultsTextMenu: $('#search-results-text-menu'),
+                frequentSection: $('#frequent-menus-section'),
+                simplebar: $('.vertical-menu [data-simplebar]'),
+                menuItems: $('#sidebar-menu li'),
+                searchMenuItem: $('#menu-search-item'),
+                searchSubmenu: $('#menu-search-submenu')
+            };
+        }
+
+        // ==================== Utility ====================
+        function isCollapsed() { return $el.body.hasClass(COLLAPSED_CLS); }
+        function isDarkSidebar() { return $el.body.attr('data-sidebar') === 'dark'; }
+        function panelBg() { return isDarkSidebar() ? '#1b2c3f' : '#ffffff'; }
+
+        function calculateTop($target) {
+            var $s = $target || $el.stickySection;
+            if ($s.length) {
+                var offset = $s.offset();
+                return offset ? (offset.top - $(window).scrollTop()) + 'px' : '0px';
             }
-            
-            // 搜索菜单函数
-            function searchMenus(searchText, $menuItems, $frequentMenusSection, $searchResultsContainer, $searchResultsText) {
-                var matchCount = 0;
-                var matchedItems = [];
-                var firstMatchedItem = null;
-                var $body = $('body');
-                var isCollapsed = $body.hasClass('vertical-collpsed');
-                
-                // 在折叠状态下，先确保右侧弹出层保持显示，避免鼠标丢失焦点
-                if (isCollapsed) {
-                    var $tabsContent = $('.menu-tabs-content');
-                    var $searchInputMenu = $('#menu-search-input-menu');
-                    // 只要是在搜索（有搜索文本），就确保右侧弹出层显示
-                    if ($tabsContent && $tabsContent.length && searchText && searchText.trim() !== '') {
-                        // 保持右侧弹出层显示
-                        var expandedTop = calculateExpandedTop();
-                        $tabsContent.addClass('expanded-right').show().css({
-                            'display': 'block',
-                            'position': 'fixed',
-                            'left': '70px',
-                            'top': expandedTop,
-                            'min-width': '280px',
-                            'max-width': '320px',
-                            'z-index': '1050',
-                            'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff',
-                            'opacity': '1',
-                            'visibility': 'visible'
-                        });
-                        // 显示搜索Tab内容
-                        $('#search-tab-pane').show();
-                        $('#search-menu-tab').addClass('active');
-                        $('#frequent-menu-tab').removeClass('active');
-                        // 展开搜索输入框
-                        var $searchTabContainer = $('#search-tab-container');
-                        if ($searchTabContainer && $searchTabContainer.length && !$searchTabContainer.hasClass('expanded')) {
-                            $searchTabContainer.addClass('expanded');
-                        }
-                    }
-                }
-                
-                // 隐藏常用菜单区域
-                if ($frequentMenusSection && $frequentMenusSection.length) {
-                    $frequentMenusSection.hide();
-                }
-                
-                // 确保搜索结果容器显示（仅正常状态下，折叠状态下使用菜单形式的容器）
-                if (!isCollapsed && $searchResultsContainer && $searchResultsContainer.length) {
-                    $searchResultsContainer.show();
-                }
-                
-                // 移除所有高亮
-                if ($menuItems && $menuItems.length) {
-                    $menuItems.removeClass('menu-item-keyboard-selected');
-                }
-                
-                // 只搜索主菜单，不搜索常用菜单和搜索菜单项
-                // 在折叠状态下，不隐藏菜单项（因为菜单本身是隐藏的），只在正常状态下过滤显示
-                if ($menuItems && $menuItems.length) {
-                    $menuItems.each(function() {
-                        var $item = $(this);
-                        // 跳过搜索菜单项和常用菜单项
-                        if ($item.hasClass('menu-search-item') || $item.hasClass('menu-frequent-item')) {
-                            return true; // continue
-                        }
-                        var menuText = '';
-                        var isMenuTitle = $item.hasClass('menu-title');
-                        
-                        // 跳过menu-title，只搜索实际菜单项
-                        if (isMenuTitle) {
-                            // menu-title需要检查其后面的子菜单是否有匹配
-                            var $nextSiblings = $item.nextUntil('.menu-title');
-                            var hasSiblingMatch = false;
-                            
-                            $nextSiblings.each(function() {
-                                var siblingText = $(this).find('a span').text().toLowerCase();
-                                if (siblingText.indexOf(searchText) !== -1) {
-                                    hasSiblingMatch = true;
-                                    return false; // break
-                                }
-                                
-                                // 检查子菜单
-                                $(this).find('li a span').each(function() {
-                                    if ($(this).text().toLowerCase().indexOf(searchText) !== -1) {
-                                        hasSiblingMatch = true;
-                                        return false; // break
-                                    }
-                                });
-                            });
-                            
-                            // 只在正常状态下隐藏不匹配的菜单项
-                            if (!isCollapsed) {
-                                if (hasSiblingMatch) {
-                                    $item.removeClass('menu-item-hidden');
-                                } else {
-                                    $item.addClass('menu-item-hidden');
-                                }
-                            } else {
-                                // 折叠状态下，移除隐藏类，让所有菜单项可见（用于搜索高亮）
-                                $item.removeClass('menu-item-hidden');
-                            }
-                            return; // 继续下一个
-                        }
-                        
-                        // 获取菜单文本
-                        menuText = $item.find('a span').text().toLowerCase();
-                        
-                        // 检查是否匹配
-                        if (menuText && menuText.indexOf(searchText) !== -1) {
-                            $item.removeClass('menu-item-hidden').addClass('menu-item-matched');
-                            // 延迟展开父级菜单，避免DOM重排导致鼠标焦点丢失
-                            setTimeout(function() {
-                                expandParentMenu($item);
-                            }, 0);
-                            matchCount++;
-                            // 检查是否有子菜单
-                            var $subMenu = $item.find('> ul.sub-menu');
-                            var hasChildren = $subMenu.length > 0;
-                            // 存储菜单项信息，包括是否有子菜单
-                            matchedItems.push({
-                                $item: $item,
-                                hasChildren: hasChildren,
-                                sourceId: $item.attr('data-source') || ''
-                            });
-                            if (!firstMatchedItem) {
-                                firstMatchedItem = $item;
-                            }
-                        } else {
-                            // 检查子菜单 - 注意：现在使用 sub-menu 类名
-                            var $children = $item.find('> ul.sub-menu > li');
-                            var hasChildMatch = false;
-                            
-                            $children.each(function() {
-                                var $child = $(this);
-                                var childText = $child.find('a span').text().toLowerCase();
-                                
-                                if (childText && childText.indexOf(searchText) !== -1) {
-                                    hasChildMatch = true;
-                                    matchCount++;
-                                    $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
-                                    // 延迟展开父级菜单
-                                    setTimeout(function() {
-                                        expandParentMenu($child);
-                                    }, 0);
-                                    // 检查子菜单项是否有子菜单
-                                    var $childSubMenu = $child.find('> ul.sub-menu');
-                                    var childHasChildren = $childSubMenu.length > 0;
-                                    matchedItems.push({
-                                        $item: $child,
-                                        hasChildren: childHasChildren,
-                                        sourceId: $child.attr('data-source') || ''
-                                    });
-                                    if (!firstMatchedItem) {
-                                        firstMatchedItem = $child;
-                                    }
-                                    // 展开子菜单的父级
-                                    $item.removeClass('menu-item-hidden');
-                                    var $subMenu = $item.find('> ul.sub-menu');
-                                    if ($subMenu.length) {
-                                        $subMenu.attr('aria-expanded', 'true').addClass('mm-show');
-                                        $item.find('> a').parent('li').addClass('mm-active');
-                                    }
-                                } else {
-                                    $child.removeClass('menu-item-matched');
-                                    // 递归检查更深层的子菜单
-                                    $child.find('li a span').each(function() {
-                                        if ($(this).text().toLowerCase().indexOf(searchText) !== -1) {
-                                            hasChildMatch = true;
-                                            matchCount++;
-                                            $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
-                                            // 延迟展开父级菜单
-                                            setTimeout(function() {
-                                                expandParentMenu($child);
-                                            }, 0);
-                                            // 检查子菜单项是否有子菜单
-                                            var $childSubMenu = $child.find('> ul.sub-menu');
-                                            var childHasChildren = $childSubMenu.length > 0;
-                                            matchedItems.push({
-                                                $item: $child,
-                                                hasChildren: childHasChildren,
-                                                sourceId: $child.attr('data-source') || ''
-                                            });
-                                            if (!firstMatchedItem) {
-                                                firstMatchedItem = $child;
-                                            }
-                                            var $parentSubMenu = $item.find('> ul.sub-menu');
-                                            if ($parentSubMenu.length) {
-                                                $parentSubMenu.attr('aria-expanded', 'true').addClass('mm-show');
-                                                $item.find('> a').parent('li').addClass('mm-active');
-                                            }
-                                            return false; // break
-                                        }
-                                    });
-                                }
-                            });
-                            
-                            // 只在正常状态下隐藏不匹配的菜单项
-                            if (!isCollapsed) {
-                                if (hasChildMatch) {
-                                    $item.removeClass('menu-item-hidden');
-                                } else {
-                                    $item.removeClass('menu-item-matched').addClass('menu-item-hidden');
-                                }
-                            } else {
-                                // 折叠状态下，移除隐藏类和高亮类，让菜单项保持原样
-                                $item.removeClass('menu-item-hidden menu-item-matched');
-                            }
-                        }
-                    });
-                }
-                
-                // 搜索完成后，补充有子菜单的匹配项的子菜单项
-                // 创建一个新的数组来存储补充后的结果
-                var finalMatchedItems = matchedItems.slice(); // 复制原数组
-                var addedChildrenCount = 0;
-                
-                // 遍历所有匹配的菜单项
-                matchedItems.forEach(function(itemData) {
-                    var $item = itemData.$item ? itemData.$item : itemData;
-                    var hasChildren = itemData.hasChildren || false;
-                    
-                    // 如果这个菜单项有子菜单，补充其子菜单项
-                    if (hasChildren) {
-                        // 展开子菜单
-                        var $subMenu = $item.find('> ul.sub-menu');
-                        if ($subMenu.length === 0) {
-                            $subMenu = $item.find('ul.sub-menu').first();
-                        }
-                        
-                        if ($subMenu.length > 0) {
-                            $subMenu.attr('aria-expanded', 'true').addClass('mm-show').css({
-                                'display': 'block',
-                                'visibility': 'visible'
-                            });
-                            $item.find('> a').parent('li').addClass('mm-active');
-                            
-                            // 递归函数：添加所有子菜单项
-                            function addChildrenToResults($parentItem) {
-                                var $parentSubMenu = $parentItem.find('> ul.sub-menu');
-                                if ($parentSubMenu.length === 0) {
-                                    $parentSubMenu = $parentItem.find('ul.sub-menu').first();
-                                }
-                                
-                                if ($parentSubMenu.length > 0) {
-                                    var $children = $parentSubMenu.find('> li');
-                                    
-                                    $children.each(function() {
-                                        var $child = $(this);
-                                        
-                                        // 跳过menu-title类型的项
-                                        if ($child.hasClass('menu-title')) {
-                                            return true; // continue
-                                        }
-                                        
-                                        // 检查是否已经添加过，避免重复
-                                        var isAlreadyAdded = false;
-                                        for (var i = 0; i < finalMatchedItems.length; i++) {
-                                            var existingItem = finalMatchedItems[i];
-                                            var existing$item = existingItem.$item ? existingItem.$item : existingItem;
-                                            if (existing$item[0] === $child[0]) {
-                                                isAlreadyAdded = true;
-                                                break;
-                                            }
-                                        }
-                                        
-                                        if (!isAlreadyAdded) {
-                                            matchCount++;
-                                            addedChildrenCount++;
-                                            $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
-                                            
-                                            // 检查子菜单项是否还有子菜单
-                                            var $childSubMenu = $child.find('> ul.sub-menu');
-                                            var childHasChildren = $childSubMenu.length > 0;
-                                            
-                                            finalMatchedItems.push({
-                                                $item: $child,
-                                                hasChildren: childHasChildren,
-                                                sourceId: $child.attr('data-source') || ''
-                                            });
-                                            
-                                            // 如果子菜单项还有子菜单，递归添加
-                                            if (childHasChildren) {
-                                                $childSubMenu.attr('aria-expanded', 'true').addClass('mm-show').css({
-                                                    'display': 'block',
-                                                    'visibility': 'visible'
-                                                });
-                                                $child.find('> a').parent('li').addClass('mm-active');
-                                                addChildrenToResults($child);
-                                            }
-                                        }
-                                    });
-                                }
-                            }
-                            
-                            // 添加子菜单项
-                            addChildrenToResults($item);
-                        }
-                    }
-                });
-                
-                // 使用补充后的数组
-                matchedItems = finalMatchedItems;
-                
-                // 更新匹配的菜单项列表（供键盘导航使用）
-                MenuController.setMatchedMenuItems(matchedItems);
-                
-                // 填充搜索结果到容器中的函数
-                function fillSearchResults($resultsContainer, $resultsList, matchCount, matchedItems, isMenuForm) {
-                    if (!$resultsContainer || !$resultsContainer.length) {
-                        return;
-                    }
-                    
-                    // 确保menu-search-content和搜索输入框区域始终可见（仅菜单形式）
-                    if (isMenuForm) {
-                        var $searchContent = $('#menu-search-content');
-                        var $searchInputWrapper = $('.search-menu-input-wrapper');
-                        if ($searchContent && $searchContent.length) {
-                            $searchContent.show().css({
-                                'display': 'block',
-                                'visibility': 'visible',
-                                'opacity': '1',
-                                'height': 'auto',
-                                'min-height': 'auto'
-                            });
-                        }
-                        if ($searchInputWrapper && $searchInputWrapper.length) {
-                            $searchInputWrapper.show().css({
-                                'display': 'block',
-                                'visibility': 'visible',
-                                'opacity': '1'
-                            });
-                        }
-                    }
-                    
-                    // 清空之前的搜索结果
-                    if ($resultsList && $resultsList.length) {
-                        $resultsList.empty();
-                    } else {
-                        // 如果没有结果列表容器，创建一个
-                        var listClass = isMenuForm ? 'search-results-list-menu' : 'search-results-list';
-                        $resultsList = $('<div class="' + listClass + '"></div>');
-                        $resultsContainer.append($resultsList);
-                    }
-                    
-                    if (matchCount > 0) {
-                        // 首先构建一个包含层级信息的数组
-                        var itemsWithLevel = [];
-                        matchedItems.forEach(function(itemData) {
-                            // 兼容旧的数据结构（直接是jQuery对象）
-                            var $item, hasChildren = false, sourceId = '';
-                            if (itemData.$item) {
-                                $item = itemData.$item;
-                                hasChildren = itemData.hasChildren || false;
-                                sourceId = itemData.sourceId || '';
-                            } else {
-                                $item = itemData;
-                                hasChildren = $item.find('> ul.sub-menu').length > 0;
-                                sourceId = $item.attr('data-source') || '';
-                            }
-                            
-                            // 计算菜单项的层级深度
-                            var level = 0;
-                            var $parent = $item.parent('ul.sub-menu');
-                            while ($parent.length > 0) {
-                                level++;
-                                $parent = $parent.parent('li').parent('ul.sub-menu');
-                            }
-                            
-                            itemsWithLevel.push({
-                                $item: $item,
-                                hasChildren: hasChildren,
-                                sourceId: sourceId,
-                                level: level
-                            });
-                        });
-                        
-                        // 按层级和父子关系排序，确保父菜单项在子菜单项之前
-                        itemsWithLevel.sort(function(a, b) {
-                            var $aItem = a.$item;
-                            var $bItem = b.$item;
-                            
-                            // 检查是否有父子关系
-                            // 如果a是b的父菜单（b的父ul是a的子菜单）
-                            var $bParent = $bItem.parent('ul.sub-menu');
-                            if ($bParent.length > 0) {
-                                var $bParentLi = $bParent.parent('li');
-                                if ($bParentLi.length > 0 && $bParentLi[0] === $aItem[0]) {
-                                    return -1; // a在b前面
-                                }
-                            }
-                            
-                            // 如果b是a的父菜单（a的父ul是b的子菜单）
-                            var $aParent = $aItem.parent('ul.sub-menu');
-                            if ($aParent.length > 0) {
-                                var $aParentLi = $aParent.parent('li');
-                                if ($aParentLi.length > 0 && $aParentLi[0] === $bItem[0]) {
-                                    return 1; // b在a前面
-                                }
-                            }
-                            
-                            // 如果没有直接父子关系，按层级排序
-                            if (a.level !== b.level) {
-                                return a.level - b.level;
-                            }
-                            
-                            // 如果层级相同，按DOM中的位置排序
-                            var aIndex = matchedItems.findIndex(function(item) {
-                                var item$item = item.$item ? item.$item : item;
-                                return item$item[0] === a.$item[0];
-                            });
-                            var bIndex = matchedItems.findIndex(function(item) {
-                                var item$item = item.$item ? item.$item : item;
-                                return item$item[0] === b.$item[0];
-                            });
-                            return aIndex - bIndex;
-                        });
-                        
-                        // 填充搜索结果
-                        itemsWithLevel.forEach(function(itemData) {
-                            var $item = itemData.$item;
-                            var hasChildren = itemData.hasChildren;
-                            var sourceId = itemData.sourceId;
-                            var level = itemData.level;
-                            
-                            // 尝试多种方式获取链接和文本
-                            var $link = $item.find('> a').first();
-                            if (!$link.length) {
-                                $link = $item.find('a').first();
-                            }
-                            
-                            if ($link.length) {
-                                var menuText = $link.find('span').text();
-                                if (!menuText) {
-                                    menuText = $link.text().trim();
-                                }
-                                var menuIcon = $link.find('i').first().attr('class') || 'mdi mdi-circle';
-                                var menuHref = $link.attr('href') || '#';
-                                
-                                // 根据层级添加缩进
-                                var indentStyle = '';
-                                if (level > 0) {
-                                    indentStyle = 'padding-left: ' + (20 + level * 20) + 'px;';
-                                }
-                                
-                                var $resultItem = $('<div class="search-result-item px-3 py-2" data-source="' + sourceId + '" style="' + indentStyle + '"></div>');
-                                var $resultLink = $('<a href="' + menuHref + '" class="d-flex align-items-center waves-effect search-result-link"></a>');
-                                $resultLink.append('<i class="' + menuIcon + ' me-2"></i>');
-                                $resultLink.append('<span>' + menuText + '</span>');
-                                
-                                $resultItem.append($resultLink);
-                                $resultsList.append($resultItem);
-                                
-                                // 阻止搜索结果链接点击导致弹出层隐藏（仅在折叠状态下）
-                                var $body = $('body');
-                                if ($body.hasClass('vertical-collpsed') && isMenuForm) {
-                                    $resultLink.on('click', function(e) {
-                                        // 阻止事件冒泡，防止触发collapseContent
-                                        e.stopPropagation();
-                                        // 确保右侧弹出层保持显示
-                                        var $tabsContent = $('.menu-tabs-content');
-                                        if ($tabsContent && $tabsContent.length) {
-                                            $tabsContent.addClass('expanded-right').show().css({
-                                                'opacity': '1',
-                                                'visibility': 'visible'
-                                            });
-                                        }
-                                    });
-                                }
-                            } else {
-                                // 如果找不到链接，尝试直接获取文本（可能是menu-title类型）
-                                var menuText = $item.find('span').text();
-                                if (!menuText) {
-                                    menuText = $item.text().trim();
-                                }
-                                if (menuText) {
-                                    var menuIcon = $item.find('i').first().attr('class') || 'mdi mdi-circle';
-                                    var indentStyle = '';
-                                    if (level > 0) {
-                                        indentStyle = 'padding-left: ' + (20 + level * 20) + 'px;';
-                                    }
-                                    
-                                    var $resultItem = $('<div class="search-result-item px-3 py-2" data-source="' + sourceId + '" style="' + indentStyle + '"></div>');
-                                    var $resultText = $('<div class="d-flex align-items-center">');
-                                    $resultText.append('<i class="' + menuIcon + ' me-2"></i>');
-                                    $resultText.append('<span>' + menuText + '</span>');
-                                    
-                                    $resultItem.append($resultText);
-                                    $resultsList.append($resultItem);
-                                }
-                            }
-                        });
-                    }
-                }
-                
-                // 更新搜索结果文本和填充结果列表
-                var $searchResultsText = $('#search-results-text');
-                var $searchResultsList = $('#search-results-list');
-                var $searchResultsTextMenu = $('#search-results-text-menu');
-                var $searchResultsListMenu = $('#search-results-list-menu');
-                
-                if (matchCount > 0) {
-                    // 更新文本
-                    if ($searchResultsText && $searchResultsText.length && !isCollapsed) {
-                        $searchResultsText.text('搜索结果 (' + matchCount + ')');
-                    }
-                    if ($searchResultsTextMenu && $searchResultsTextMenu.length) {
-                        $searchResultsTextMenu.text('搜索结果 (' + matchCount + ')');
-                    }
-                    
-                    // 根据折叠状态填充不同的容器
-                    if (isCollapsed) {
-                        // 折叠状态下，先确保右侧弹出层显示搜索内容
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length && searchText && searchText.trim() !== '') {
-                            var expandedTop = calculateExpandedTop();
-                            $tabsContent.addClass('expanded-right').show().css({
-                                'display': 'block',
-                                'position': 'fixed',
-                                'left': '70px',
-                                'top': expandedTop,
-                                'min-width': '280px',
-                                'max-width': '320px',
-                                'z-index': '1050',
-                                'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff',
-                                'opacity': '1',
-                                'visibility': 'visible'
-                            });
-                            // 显示搜索Tab内容
-                            $('#search-tab-pane').show();
-                            $('#search-menu-tab').addClass('active');
-                            $('#frequent-menu-tab').removeClass('active');
-                            // 展开搜索输入框
-                            var $searchTabContainer = $('#search-tab-container');
-                            if ($searchTabContainer && $searchTabContainer.length && !$searchTabContainer.hasClass('expanded')) {
-                                $searchTabContainer.addClass('expanded');
-                            }
-                            // 填充sticky区域的搜索结果容器（显示在右侧弹出层中）
-                            if ($searchResultsContainer && $searchResultsContainer.length) {
-                                $searchResultsContainer.show();
-                                fillSearchResults($searchResultsContainer, $searchResultsList, matchCount, matchedItems, false);
-                            }
-                        }
-                        // 同时填充菜单形式的容器（显示在菜单项的子菜单中）
-                        var $searchResultsContainerMenu = $('#search-results-container-menu');
-                        if ($searchResultsContainerMenu && $searchResultsContainerMenu.length) {
-                            fillSearchResults($searchResultsContainerMenu, $searchResultsListMenu, matchCount, matchedItems, true);
-                        }
-                    } else {
-                        // 正常状态下，填充sticky区域的容器
-                        if ($searchResultsContainer && $searchResultsContainer.length) {
-                            fillSearchResults($searchResultsContainer, $searchResultsList, matchCount, matchedItems, false);
-                        }
-                    }
-                    
-                    // 平滑滚动到第一个匹配项（仅在正常状态下）
-                    if (firstMatchedItem && firstMatchedItem.length && !$('body').hasClass('vertical-collpsed')) {
-                        setTimeout(function() {
-                            var $sidebar = $('.vertical-menu [data-simplebar]');
-                            if ($sidebar.length && $sidebar[0].simpleBar) {
-                                // 使用simplebar的滚动方法
-                                var scrollTop = firstMatchedItem.offset().top - $sidebar.offset().top + $sidebar[0].simpleBar.getScrollElement().scrollTop - 150;
-                                $sidebar[0].simpleBar.getScrollElement().scrollTo({
-                                    top: scrollTop,
-                                    behavior: 'smooth'
-                                });
-                            } else {
-                                // 降级方案：使用jQuery动画
-                                var scrollTop = firstMatchedItem.offset().top - $('#sidebar-menu').offset().top + $('#sidebar-menu').scrollTop() - 100;
-                                $('.vertical-menu').animate({
-                                    scrollTop: scrollTop
-                                }, 300);
-                            }
-                        }, 150);
-                    }
-                } else {
-                    // 无结果
-                    if ($searchResultsText && $searchResultsText.length) {
-                        $searchResultsText.text('未找到匹配的菜单');
-                    }
-                    if ($searchResultsTextMenu && $searchResultsTextMenu.length) {
-                        $searchResultsTextMenu.text('未找到匹配的菜单');
-                    }
-                    if ($searchResultsList && $searchResultsList.length) {
-                        $searchResultsList.empty();
-                    }
-                    if ($searchResultsListMenu && $searchResultsListMenu.length) {
-                        $searchResultsListMenu.empty();
-                    }
-                }
+            return '0px';
+        }
+
+        function getScrollElement() {
+            if ($el.simplebar.length && $el.simplebar[0].simpleBar) {
+                return $el.simplebar[0].simpleBar.getScrollElement();
             }
-            
-            // 展开父级菜单 - 注意：现在使用 sub-menu 类名
-            function expandParentMenu($item) {
-                var $parent = $item.parent('ul');
-                if ($parent.length > 0 && $parent.hasClass('sub-menu')) {
-                    $parent.attr('aria-expanded', 'true').addClass('mm-show');
-                    var $parentLi = $parent.prev('a').parent('li');
-                    $parentLi.addClass('mm-active');
-                    expandParentMenu($parentLi);
-                    
-                    // 确保右侧弹出层保持显示（折叠状态下，搜索时有内容时）
-                    var $body = $('body');
-                    if ($body.hasClass('vertical-collpsed')) {
-                        var $searchInputMenu = $('#menu-search-input-menu');
-                        if ($searchInputMenu && $searchInputMenu.length && $searchInputMenu.val().trim() !== '') {
-                            var $tabsContent = $('.menu-tabs-content');
-                            if ($tabsContent && $tabsContent.length) {
-                                $tabsContent.addClass('expanded-right').show().css({
-                                    'opacity': '1',
-                                    'visibility': 'visible',
-                                    'display': 'block'
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // 初始化侧边栏折叠适配
-            function initSidebarCollapse() {
-                var $body = $('body');
-                var $stickySection = $('#sticky-menu-section');
-                
-                // 监听折叠按钮点击（通过监听body类变化）
-                var observer = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                            handleSidebarCollapse();
-                        }
-                    });
-                });
-                
-                // 观察body元素的class变化
-                if ($body.length) {
-                    observer.observe($body[0], {
-                        attributes: true,
-                        attributeFilter: ['class']
-                    });
-                }
-                
-                // 初始检查
-                handleSidebarCollapse();
-                
-                // 处理折叠状态
-                function handleSidebarCollapse() {
-                    if ($body.hasClass('vertical-collpsed')) {
-                        // 折叠状态：收起搜索框和常用菜单，只显示图标
-                        var $searchTabContainer = $('#search-tab-container');
-                        if ($searchTabContainer && $searchTabContainer.length) {
-                            $searchTabContainer.removeClass('expanded');
-                        }
-                        var $searchInput = MenuController.getSearchInput();
-                        if ($searchInput && $searchInput.length) {
-                            $searchInput.val('').blur();
-                        }
-                        MenuController.resetMenuDisplay();
-                        var $searchResultsContainer = MenuController.getSearchResultsContainer();
-                        if ($searchResultsContainer && $searchResultsContainer.length) {
-                            $searchResultsContainer.hide();
-                        }
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            $tabsContent.hide();
-                        }
-                    } else {
-                        // 展开状态：恢复正常的搜索功能
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            $tabsContent.show();
-                        }
-                    }
-                }
-                
-                // 监听折叠按钮的直接点击（作为备用）
-                $(document).on('click', '#vertical-menu-btn', function() {
-                    setTimeout(function() {
-                        handleSidebarCollapse();
-                    }, 100);
-                });
-            }
-            
-            // 公共工具函数 - 计算展开区域的top位置
-            function calculateExpandedTop($targetElement) {
-                var $stickySection = $targetElement || $('#sticky-menu-section');
-                if ($stickySection && $stickySection.length) {
-                    var offset = $stickySection.offset();
-                    var scrollTop = $(window).scrollTop();
-                    return (offset ? offset.top - scrollTop : 0) + 'px';
-                }
-                return '0px';
-            }
-            
-            // 公共工具函数 - 设置内容区域CSS样式
-            function setTabsContentStyle($tabsContent, expandedTop) {
-                var $body = $('body');
-                $tabsContent.addClass('expanded-right').show().css({
-                    'display': 'block',
-                    'position': 'fixed',
-                    'left': '70px',
-                    'top': expandedTop || calculateExpandedTop(),
-                    'min-width': '280px',
-                    'max-width': '320px',
-                    'z-index': '1050',
-                    'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff',
-                    'opacity': '1',
-                    'visibility': 'visible'
-                });
-            }
-            
-            // 公共工具函数 - 切换Tab状态
-            function switchTab(tabType, $searchTab, $frequentTab, $frequentPane, $searchTabContainer) {
-                if (tabType === 'search') {
-                    $frequentPane.hide();
-                    $searchTab.addClass('active');
-                    $frequentTab.removeClass('active');
-                    if (!$searchTabContainer.hasClass('expanded')) {
-                        $searchTabContainer.addClass('expanded');
-                    }
-                } else if (tabType === 'frequent') {
-                    $frequentPane.show();
-                    $frequentTab.addClass('active');
-                    $searchTab.removeClass('active');
-                    if ($searchTabContainer.hasClass('expanded')) {
-                        $searchTabContainer.removeClass('expanded');
-                    }
-                }
-            }
-            
-            // 初始化
-            $(document).ready(function() {
-                initMenuTabs();
-                initMenuSearch();
-                initStickyMenu();
-                initSidebarCollapse();
+            var $wrapper = $el.simplebar.find('.simplebar-content-wrapper');
+            return $wrapper.length ? $wrapper[0] : null;
+        }
+
+        function showPanel(top) {
+            $el.tabsContent.addClass('expanded-right').show().css({
+                display: 'block', position: 'fixed', left: '70px',
+                top: top || calculateTop(),
+                'min-width': '280px', 'max-width': '320px', 'z-index': '1050',
+                'background-color': panelBg(), opacity: '1', visibility: 'visible'
             });
-            
-            // Tab切换功能
-            function initMenuTabs() {
-                var $frequentTab = $('#frequent-menu-tab');
-                var $searchTab = $('#search-menu-tab');
-                var $frequentPane = $('#frequent-tab-pane');
-                var $body = $('body');
-                
-                // 默认显示搜索Tab（已通过HTML设置active类）
-                // 默认展开搜索框（仅在非折叠状态下）
-                setTimeout(function() {
-                    if (!$body.hasClass('vertical-collpsed')) {
-                        MenuController.expandSearch();
-                    }
-                }, 300);
-                
-                var $searchTabContainer = $('#search-tab-container');
-                var $searchInput = $('#menu-search-input');
-                
-                // 搜索Tab展开处理函数（公共函数，供点击和hover使用）
-                function handleSearchTabExpand() {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    
-                    // 切换Tab
-                    $searchTab.addClass('active');
-                    $frequentTab.removeClass('active');
-                    
-                    // 展开搜索Tab（折叠状态下会向右展开）
-                    MenuController.expandSearch();
-                    
-                    // 隐藏常用菜单
-                    if ($frequentPane && $frequentPane.length) {
-                        $frequentPane.hide();
-                    }
-                    
-                    // 折叠状态下，确保内容区域向右展开
-                    if (isCollapsed) {
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            setTabsContentStyle($tabsContent);
-                        }
-                    } else {
-                        // 正常状态下，展开搜索输入框
-                        if ($searchTabContainer && $searchTabContainer.length && !$searchTabContainer.hasClass('expanded')) {
-                            $searchTabContainer.addClass('expanded');
-                            setTimeout(function() {
-                                if ($searchInput && $searchInput.length) {
-                                    $searchInput.focus();
-                                }
-                            }, 100);
-                        }
-                    }
+        }
+
+        function hidePanel() {
+            $el.tabsContent.css({ opacity: '0', visibility: 'hidden' });
+            setTimeout(function() { $el.tabsContent.removeClass('expanded-right').hide(); }, 200);
+        }
+
+        function activateTab(type) {
+            if (type === 'search') {
+                $el.frequentPane.hide();
+                $el.searchTab.addClass('active');
+                $el.frequentTab.removeClass('active');
+                if (!$el.searchTabContainer.hasClass('expanded')) {
+                    $el.searchTabContainer.addClass('expanded');
                 }
-                
-                // 搜索Tab hover事件
-                $searchTab.on('mouseenter.menuTabsHover', function(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (isCollapsed) {
-                        // 折叠状态下，hover触发和点击相同的逻辑
-                        handleSearchTabExpand();
-                    } else {
-                        // 正常状态下，只选中搜索tab，不展开输入框
-                        // 只有当鼠标真的在搜索tab按钮上时才选中，不是整个容器
-                        var target = e.target || e.currentTarget;
-                        // 确保鼠标是在搜索tab按钮上，而不是在输入框或其他元素上
-                        if ($(target).is('#search-menu-tab') || $(target).closest('#search-menu-tab').length) {
-                            // 检查鼠标是否从sticky-section外部进入
-                            var relatedTarget = e.relatedTarget || e.fromElement;
-                            var $relatedTarget = relatedTarget ? $(relatedTarget) : null;
-                            // 如果鼠标是从sticky-section外部进入的，并且常用tab已经被选中，不改变选中状态
-                            if ($relatedTarget && $relatedTarget.length && 
-                                !$relatedTarget.closest('#sticky-menu-section').length &&
-                                $frequentTab.hasClass('active')) {
-                                // 从外部进入，且常用tab已选中，保持状态不变
-                                return;
-                            }
-                            $searchTab.addClass('active');
-                            $frequentTab.removeClass('active');
-                        }
-                    }
-                });
-                
-                // 搜索Tab点击
-                $searchTab.on('click.menuTabs', function(e) {
-                    e.stopPropagation();
-                    // 直接调用公共函数
-                    handleSearchTabExpand();
-                });
-                
-                // 搜索Tab和搜索容器mouseleave事件 - 正常状态下收起搜索框（如果为空）
-                var searchHoverTimer = null;
-                function handleSearchMouseLeave(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    // 只在正常状态下处理
-                    if (!isCollapsed) {
-                        var relatedTarget = e.relatedTarget || e.toElement;
-                        // 检查鼠标是否移到了搜索相关区域（输入框、搜索结果等）
-                        if (!$(relatedTarget).closest('#search-tab-container, .menu-tabs-content, #search-results-container').length) {
-                            // 延迟执行，避免鼠标快速移动时误触发
-                            if (searchHoverTimer) {
-                                clearTimeout(searchHoverTimer);
-                            }
-                            searchHoverTimer = setTimeout(function() {
-                                var $searchInput = $('#menu-search-input');
-                                var $searchTabContainer = $('#search-tab-container');
-                                // 如果输入框为空，则收起搜索框
-                                if ($searchInput && $searchInput.length && $searchInput.val().trim() === '' && 
-                                    $searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                                    $searchTabContainer.removeClass('expanded');
-                                    $searchInput.blur();
-                                }
-                            }, 200);
-                        }
-                    }
-                }
-                
-                $searchTab.on('mouseleave.menuTabsHover', handleSearchMouseLeave);
-                // 为搜索容器也添加mouseleave事件
-                if ($searchTabContainer && $searchTabContainer.length) {
-                    $searchTabContainer.on('mouseleave.menuTabsHover', handleSearchMouseLeave)
-                        .on('mouseenter.menuTabsHover', function() {
-                            if (searchHoverTimer) {
-                                clearTimeout(searchHoverTimer);
-                                searchHoverTimer = null;
-                            }
-                        });
-                }
-                
-                // 正常状态下，鼠标进入搜索输入框或常用内容区域时，保持内容展开
-                $(document).on('mouseenter.menuTabsHover', '#menu-search-input, #search-tab-container, #frequent-tab-pane', function() {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (!isCollapsed && searchHoverTimer) {
-                        clearTimeout(searchHoverTimer);
-                        searchHoverTimer = null;
-                    }
-                });
-                
-                // 常用菜单Tab hover事件
-                $frequentTab.on('mouseenter.menuTabsHover', function(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (isCollapsed) {
-                        // 折叠状态下，展开常用菜单
-                        if ($frequentPane && $frequentPane.length) {
-                            $frequentPane.show();
-                        }
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            setTabsContentStyle($tabsContent);
-                        }
-                        switchTab('frequent', $searchTab, $frequentTab, $frequentPane, $searchTabContainer);
-                    } else {
-                        // 正常状态下，只选中常用tab，不展开内容
-                        $frequentTab.addClass('active');
-                        $searchTab.removeClass('active');
-                    }
-                });
-                
-                // 常用菜单Tab点击
-                $frequentTab.on('click.menuTabs', function() {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    
-                    if (!$(this).hasClass('active')) {
-                        // 切换Tab
-                        $frequentTab.addClass('active');
-                        $searchTab.removeClass('active');
-                    }
-                    
-                    if ($frequentPane && $frequentPane.length) {
-                        $frequentPane.show();
-                    }
-                    
-                    // 收起搜索Tab
-                    MenuController.collapseSearch();
-                    // 隐藏搜索结果
-                    var $searchResultsContainer = MenuController.getSearchResultsContainer();
-                    if ($searchResultsContainer && $searchResultsContainer.length) {
-                        $searchResultsContainer.hide();
-                    }
-                    
-                    // 折叠状态下，确保内容区域向右展开
-                    if (isCollapsed) {
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            setTabsContentStyle($tabsContent);
-                        }
-                    }
-                    
-                    // 清除hover定时器，避免冲突（注意：hoverTimer在initStickyMenu中定义，这里无法直接访问）
-                });
+            } else {
+                $el.frequentPane.show();
+                $el.frequentTab.addClass('active');
+                $el.searchTab.removeClass('active');
+                $el.searchTabContainer.removeClass('expanded');
             }
-            
-            // 悬浮菜单功能
-            function initStickyMenu() {
-                var $simplebarContainer = $('.vertical-menu [data-simplebar]');
-                var $sidebarMenu = $('#sidebar-menu');
-                var $stickySection = $('#sticky-menu-section');
-                var $body = $('body');
-                var hoverTimer = null;
-                var isHovering = false;
-                
-                // 缓存DOM元素引用
-                var $searchTab = $('#search-menu-tab');
-                var $frequentTab = $('#frequent-menu-tab');
-                var $frequentPane = $('#frequent-tab-pane');
-                var $searchTabContainer = $('#search-tab-container');
-                
-                // 在折叠状态下向右展开内容的辅助函数
-                function expandContentRight($tabsContent, activeTab) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (!isCollapsed) {
-                        if ($tabsContent.hasClass('collapsed')) {
-                            $tabsContent.removeClass('collapsed');
-                        }
-                        return;
-                    }
-                    setTabsContentStyle($tabsContent);
-                    switchTab(activeTab, $searchTab, $frequentTab, $frequentPane, $searchTabContainer);
-                    
-                    // 如果有搜索内容，确保搜索结果容器显示
-                    if (activeTab === 'search') {
-                        var $searchInputMenu = $('#menu-search-input-menu');
-                        if ($searchInputMenu && $searchInputMenu.length && $searchInputMenu.val().trim() !== '') {
-                            var $searchResultsContainer = $('#search-results-container');
-                            if ($searchResultsContainer && $searchResultsContainer.length) {
-                                $searchResultsContainer.show();
-                            }
-                        }
-                    }
-                }
-                
-                // Tab按钮hover事件处理函数
-                function handleTabHover(tabType, $hoveredElement) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (!isCollapsed) return;
-                    
-                    isHovering = true;
-                    
-                    // 清除可能存在的收起定时器
-                    if (hoverTimer) {
-                        clearTimeout(hoverTimer);
-                        hoverTimer = null;
-                    }
-                    
-                    // 向右展开内容
-                    var $tabsContent = $('.menu-tabs-content');
-                    if (!$tabsContent || !$tabsContent.length) {
-                        console.warn('MenuController: tabs content not found');
-                        return;
-                    }
-                    
-                    // 获取被hover的tab按钮元素，用于计算位置
-                    var $targetTab = null;
-                    if (tabType === 'search') {
-                        $targetTab = $hoveredElement ? $hoveredElement.closest('#search-menu-tab, #search-tab-container') : $('#search-menu-tab');
-                    } else if (tabType === 'frequent') {
-                        $targetTab = $hoveredElement ? $hoveredElement.closest('#frequent-menu-tab') : $('#frequent-menu-tab');
-                    }
-                    
-                    // 计算展开位置：基于tab按钮的位置
-                    var expandedTop = '0px';
-                    
-                    // 获取侧边栏滚动位置（如果有simplebar）
-                    var sidebarScrollTop = 0;
-                    var $simplebarContainer = $('.vertical-menu [data-simplebar]');
-                    if ($simplebarContainer.length && $simplebarContainer[0].simpleBar) {
-                        sidebarScrollTop = $simplebarContainer[0].simpleBar.getScrollElement().scrollTop;
-                    } else {
-                        sidebarScrollTop = $(window).scrollTop();
-                    }
-                    
-                    if ($targetTab && $targetTab.length) {
-                        var offset = $targetTab.offset();
-                        if (offset) {
-                            // 使用tab按钮的顶部位置，考虑窗口和侧边栏的滚动
-                            var windowScrollTop = $(window).scrollTop();
-                            expandedTop = (offset.top - windowScrollTop) + 'px';
-                        }
-                    } else {
-                        // 降级方案：使用sticky section的位置
-                        var $stickySection = $('#sticky-menu-section');
-                        if ($stickySection && $stickySection.length) {
-                            var offset = $stickySection.offset();
-                            var windowScrollTop = $(window).scrollTop();
-                            expandedTop = (offset ? offset.top - windowScrollTop : 0) + 'px';
-                        }
-                    }
-                    
-                    $tabsContent
-                        .addClass('expanded-right')
-                        .css({
-                            'display': 'block',
-                            'position': 'fixed',
-                            'left': '70px',
-                            'top': expandedTop,
-                            'min-width': '280px',
-                            'max-width': '320px',
-                            'z-index': '1050',
-                            'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff',
-                            'opacity': '1',
-                            'visibility': 'visible'
-                        });
-                    
-                    if (tabType === 'search') {
-                        // 显示搜索内容
-                        $('#frequent-tab-pane').hide();
-                        $('#search-menu-tab').addClass('active');
-                        $('#frequent-menu-tab').removeClass('active');
-                        // 折叠状态下，展开搜索框
-                        var $searchTabContainer = $('#search-tab-container');
-                        if ($searchTabContainer && !$searchTabContainer.hasClass('expanded')) {
-                            $searchTabContainer.addClass('expanded');
-                        }
-                    } else if (tabType === 'frequent') {
-                        // 显示常用菜单内容
-                        $('#frequent-tab-pane').show();
-                        $('#frequent-menu-tab').addClass('active');
-                        $('#search-menu-tab').removeClass('active');
-                        var $searchTabContainer = $('#search-tab-container');
-                        if ($searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                            $searchTabContainer.removeClass('expanded');
-                        }
-                    }
-                }
-                
-                // 折叠状态下使用菜单形式，不需要hover展开逻辑
-                
-                // 鼠标进入悬浮区域
-                $stickySection.on('mouseenter.menuSticky', function() {
-                    isHovering = true;
-                    // 清除可能存在的收起定时器
-                    if (hoverTimer) {
-                        clearTimeout(hoverTimer);
-                        hoverTimer = null;
-                    }
-                    
-                    // 检查是否在折叠状态
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    
-                    if (isCollapsed) {
-                        // 折叠状态下，默认显示搜索tab内容
-                        var $tabsContent = $('.menu-tabs-content');
-                        if ($tabsContent && $tabsContent.length) {
-                            setTabsContentStyle($tabsContent);
-                            switchTab('search', $searchTab, $frequentTab, $frequentPane, $searchTabContainer);
-                        }
-                    } else {
-                        // 正常状态下，根据active tab展开对应内容
-                        if ($searchTab.hasClass('active')) {
-                            if ($searchTabContainer && $searchTabContainer.length && !$searchTabContainer.hasClass('expanded')) {
-                                $searchTabContainer.addClass('expanded');
-                                setTimeout(function() {
-                                    var $searchInput = $('#menu-search-input');
-                                    if ($searchInput && $searchInput.length) {
-                                        $searchInput.focus();
-                                    }
-                                }, 100);
-                            }
-                        } else if ($frequentTab.hasClass('active')) {
-                            if ($frequentPane && $frequentPane.length) {
-                                $frequentPane.show();
-                            }
-                            if ($searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                                $searchTabContainer.removeClass('expanded');
-                            }
-                        }
-                    }
-                });
-                
-                // 鼠标进入展开的内容区域（折叠状态下）
-                $(document).on('mouseenter.menuSticky', '.menu-tabs-content.expanded-right', function() {
-                    isHovering = true;
-                    // 清除可能存在的收起定时器
-                    if (hoverTimer) {
-                        clearTimeout(hoverTimer);
-                        hoverTimer = null;
-                    }
-                    
-                    // 确保搜索面板保持显示
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (isCollapsed) {
-                        var $searchInputMenu = $('#menu-search-input-menu');
-                        if ($searchInputMenu && $searchInputMenu.length && $searchInputMenu.val().trim() !== '') {
-                            var $tabsContent = $('.menu-tabs-content');
-                            if ($tabsContent && $tabsContent.length) {
-                                var expandedTop = calculateExpandedTop();
-                                $tabsContent.addClass('expanded-right').show().css({
-                                    'display': 'block',
-                                    'position': 'fixed',
-                                    'left': '70px',
-                                    'top': expandedTop,
-                                    'min-width': '280px',
-                                    'max-width': '320px',
-                                    'z-index': '1050',
-                                    'background-color': ($body.attr('data-sidebar') === 'dark') ? '#1b2c3f' : '#ffffff',
-                                    'opacity': '1',
-                                    'visibility': 'visible'
-                                });
-                                // 显示搜索Tab内容
-                                $('#search-tab-pane').show();
-                                $('#search-menu-tab').addClass('active');
-                                $('#frequent-menu-tab').removeClass('active');
-                                // 展开搜索输入框
-                                var $searchTabContainer = $('#search-tab-container');
-                                if ($searchTabContainer && $searchTabContainer.length && !$searchTabContainer.hasClass('expanded')) {
-                                    $searchTabContainer.addClass('expanded');
-                                }
-                            }
-                        }
-                    }
-                    // 确保展开区域保持显示
-                    $(this).addClass('expanded-right').show();
-                });
-                
-                // 检查鼠标是否在相关区域内
-                function isMouseInRelatedArea(target) {
-                    if (!target) return false;
-                    
-                    var $stickySection = $('#sticky-menu-section');
-                    var $expandedContent = $('.menu-tabs-content.expanded-right');
-                    
-                    // 检查是否在sticky区域内
-                    if ($stickySection.length && $stickySection[0].contains(target)) {
-                        return true;
-                    }
-                    
-                    // 检查是否在展开的内容区域内
-                    if ($expandedContent.length && $expandedContent[0].contains(target)) {
-                        return true;
-                    }
-                    
-                    return false;
-                }
-                
-                // Tab按钮离开事件 - 统一处理（折叠状态下不再需要，因为使用菜单形式）
-                // 注释掉，因为折叠状态下使用的是菜单形式的搜索和常用菜单，不需要hover展开
-                
-                // 鼠标离开悬浮区域
-                $stickySection.on('mouseleave.menuSticky', function(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    var relatedTarget = e.relatedTarget || e.toElement;
-                    
-                    // 如果正在切换tab，不执行收起
-                    if (isHovering && $(relatedTarget).closest('.menu-tab-btn').length) {
-                        return;
-                    }
-                    
-                    // 检查鼠标是否移到了展开的内容区域、tab按钮或搜索菜单区域
-                    if (isMouseInRelatedArea(relatedTarget) || 
-                        $(relatedTarget).closest('.menu-tab-btn').length ||
-                        $(relatedTarget).closest('.menu-tabs-nav').length ||
-                        $(relatedTarget).closest('.menu-search-content').length ||
-                        $(relatedTarget).closest('.menu-search-submenu').length ||
-                        $(relatedTarget).closest('.menu-search-item').length) {
-                        return; // 如果还在相关区域内，不执行收起
-                    }
-                    
-                    // 正常状态下，收起内容
-                    if (!isCollapsed) {
-                        // 检查鼠标是否移到了搜索输入框或常用内容区域
-                        if ($(relatedTarget).closest('#search-tab-container, #frequent-tab-pane, .menu-tabs-content').length) {
-                            return; // 如果移到了这些区域，不收起
-                        }
-                        
-                        var $searchTabContainer = $('#search-tab-container');
-                        var $searchInput = $('#menu-search-input');
-                        var $frequentPane = $('#frequent-tab-pane');
-                        
-                        // 延迟收起，给用户时间移到相关内容区域
-                        setTimeout(function() {
-                            var currentTarget = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
-                            if (!currentTarget) {
-                                // 如果输入框为空，则收起搜索框
-                                if ($searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                                    if (!$searchInput || !$searchInput.length || $searchInput.val().trim() === '') {
-                                        $searchTabContainer.removeClass('expanded');
-                                        if ($searchInput && $searchInput.length) {
-                                            $searchInput.blur();
-                                        }
-                                    }
-                                }
-                                // 隐藏常用菜单
-                                if ($frequentPane && $frequentPane.length) {
-                                    $frequentPane.hide();
-                                }
-                                return;
-                            }
-                            // 再次检查是否在相关内容区域
-                            if (!$(currentTarget).closest('#search-tab-container, #frequent-tab-pane, .menu-tabs-content').length) {
-                                // 如果输入框为空，则收起搜索框
-                                if ($searchTabContainer && $searchTabContainer.hasClass('expanded')) {
-                                    if (!$searchInput || !$searchInput.length || $searchInput.val().trim() === '') {
-                                        $searchTabContainer.removeClass('expanded');
-                                        if ($searchInput && $searchInput.length) {
-                                            $searchInput.blur();
-                                        }
-                                    }
-                                }
-                                // 隐藏常用菜单
-                                if ($frequentPane && $frequentPane.length) {
-                                    $frequentPane.hide();
-                                }
-                            }
-                        }, 200);
-                    }
-                    
-                    // 延迟收起（折叠状态下）
-                    if (isCollapsed) {
-                        hoverTimer = setTimeout(function() {
-                            var currentTarget = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
-                            if (!currentTarget) {
-                                isHovering = false;
-                                // 停止搜索保护机制
-                                if (typeof stopSearchMenuProtection === 'function') {
-                                    stopSearchMenuProtection();
-                                }
-                                collapseContent(e);
-                                return;
-                            }
-                            // 检查鼠标是否还在相关区域内
-                            if (!isMouseInRelatedArea(currentTarget) && 
-                                !$(currentTarget).closest('.menu-tab-btn').length &&
-                                !$(currentTarget).closest('.menu-tabs-nav').length &&
-                                !$(currentTarget).closest('.menu-search-content').length &&
-                                !$(currentTarget).closest('.menu-search-submenu').length &&
-                                !$(currentTarget).closest('.menu-search-item').length) {
-                                isHovering = false;
-                                // 停止搜索保护机制
-                                if (typeof stopSearchMenuProtection === 'function') {
-                                    stopSearchMenuProtection();
-                                }
-                                collapseContent(e);
-                            }
-                        }, 100);
-                    }
-                });
-                
-                // 鼠标离开展开的内容区域
-                $(document).on('mouseleave.menuSticky', '.menu-tabs-content.expanded-right', function(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    var relatedTarget = e.relatedTarget || e.toElement;
-                    var $stickySection = $('#sticky-menu-section');
-                    
-                    // 如果正在切换tab，不执行收起
-                    if (isHovering && $(relatedTarget).closest('.menu-tab-btn').length) {
-                        return;
-                    }
-                    
-                    // 检查鼠标是否移到了sticky区域、搜索菜单区域或其他相关区域
-                    if (($stickySection.length && $stickySection[0].contains(relatedTarget)) ||
-                        $(relatedTarget).closest('.menu-search-content').length ||
-                        $(relatedTarget).closest('.menu-search-submenu').length ||
-                        $(relatedTarget).closest('.menu-search-item').length) {
-                        return; // 如果移到了相关区域，保持展开
-                    }
-                    
-                    // 延迟收起，给用户足够时间移回相关区域
-                    hoverTimer = setTimeout(function() {
-                        var currentTarget = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
-                        if (!currentTarget) {
-                            isHovering = false;
-                            // 停止搜索保护机制
-                            if (typeof stopSearchMenuProtection === 'function') {
-                                stopSearchMenuProtection();
-                            }
-                            collapseContent(e);
-                            return;
-                        }
-                        // 检查鼠标是否还在相关区域内
-                        if (!isMouseInRelatedArea(currentTarget) &&
-                            !$(currentTarget).closest('.menu-search-content').length &&
-                            !$(currentTarget).closest('.menu-search-submenu').length &&
-                            !$(currentTarget).closest('.menu-search-item').length) {
-                            isHovering = false;
-                            // 停止搜索保护机制
-                            if (typeof stopSearchMenuProtection === 'function') {
-                                stopSearchMenuProtection();
-                            }
-                            collapseContent(e);
-                        }
-                    }, 300);
-                });
-                
-                // 鼠标离开搜索菜单区域（折叠状态下）
-                $(document).on('mouseleave.menuSticky', '.menu-search-item, .menu-search-submenu, .menu-search-content', function(e) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    if (!isCollapsed) return; // 仅折叠状态下有效
-                    
-                    var relatedTarget = e.relatedTarget || e.toElement;
-                    var $stickySection = $('#sticky-menu-section');
-                    var $tabsContent = $('.menu-tabs-content.expanded-right');
-                    
-                    // 检查鼠标是否移到了sticky区域或弹出层
-                    if (($stickySection.length && $stickySection[0].contains(relatedTarget)) ||
-                        ($tabsContent.length && $tabsContent[0].contains(relatedTarget)) ||
-                        $(relatedTarget).closest('.menu-search-item, .menu-search-submenu, .menu-search-content').length) {
-                        return; // 如果移到了相关区域，保持展开
-                    }
-                    
-                    // 延迟收起
-                    hoverTimer = setTimeout(function() {
-                        var currentTarget = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
-                        if (!currentTarget) {
-                            isHovering = false;
-                            // 停止搜索保护机制
-                            if (typeof stopSearchMenuProtection === 'function') {
-                                stopSearchMenuProtection();
-                            }
-                            collapseContent(e);
-                            return;
-                        }
-                        // 检查鼠标是否还在相关区域内
-                        if (!($stickySection.length && $stickySection[0].contains(currentTarget)) &&
-                            !($tabsContent.length && $tabsContent[0].contains(currentTarget)) &&
-                            !$(currentTarget).closest('.menu-search-item, .menu-search-submenu, .menu-search-content').length) {
-                            isHovering = false;
-                            // 停止搜索保护机制
-                            if (typeof stopSearchMenuProtection === 'function') {
-                                stopSearchMenuProtection();
-                            }
-                            collapseContent(e);
-                        }
-                    }, 300);
-                });
-                
-                // 收起内容的统一函数
-                function collapseContent(mouseEvent) {
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    
-                    // 如果提供了鼠标事件，检查鼠标是否在相关区域内
-                    if (mouseEvent && mouseEvent.clientX !== undefined && mouseEvent.clientY !== undefined) {
-                        var mouseTarget = document.elementFromPoint(mouseEvent.clientX, mouseEvent.clientY);
-                        if (mouseTarget) {
-                            var $mouseTarget = $(mouseTarget);
-                            var isInSearchArea = $mouseTarget.closest('.menu-search-item, .menu-search-submenu, .menu-search-content, .menu-tabs-content.expanded-right, #sticky-menu-section').length > 0;
-                            if (isInSearchArea) {
-                                return; // 鼠标还在相关区域内，不执行收起
-                            }
-                        }
-                    }
-                    
-                    // 停止搜索保护机制
-                    if (typeof stopSearchMenuProtection === 'function') {
-                        stopSearchMenuProtection();
-                    }
-                    
-                    // 折叠状态下，menu-search-submenu由CSS的hover控制显示/隐藏，不需要JS控制
-                    // menu-search-content不需要任何隐藏控制
-                    
-                    // 收起搜索框（如果展开）
-                    var $searchInput = MenuController.getSearchInput();
-                    var $searchTabContainer = $('#search-tab-container');
-                    if ($searchTabContainer && $searchTabContainer.length && $searchTabContainer.hasClass('expanded')) {
-                        // 如果输入框为空，则收起
-                        if (!$searchInput || !$searchInput.length || $searchInput.val().trim() === '') {
-                            MenuController.collapseSearch();
-                        }
-                    }
-                    
-                    // 收起tab内容区域
-                    var $tabsContent = $('.menu-tabs-content');
-                    if ($tabsContent && $tabsContent.length) {
-                        if (isCollapsed) {
-                            // 折叠状态下，移除expanded-right类并隐藏（使用动画）
-                            $tabsContent.css({
-                                'opacity': '0',
-                                'visibility': 'hidden'
-                            });
-                            setTimeout(function() {
-                                $tabsContent.removeClass('expanded-right').hide();
-                            }, 200);
-                        } else {
-                            // 正常状态下，添加collapsed类
-                            if (!$tabsContent.hasClass('collapsed')) {
-                                $tabsContent.addClass('collapsed');
-                            }
-                        }
-                    }
-                    
-                    // 隐藏搜索结果容器
-                    var $searchResultsContainer = MenuController.getSearchResultsContainer();
-                    if ($searchResultsContainer && $searchResultsContainer.length && $searchResultsContainer.is(':visible')) {
-                        // 只有在输入框为空时才隐藏搜索结果
-                        if (!$searchInput || !$searchInput.length || $searchInput.val().trim() === '') {
-                            $searchResultsContainer.hide();
-                        }
-                    }
-                }
-                
-                // 点击Tab栏时展开内容（如果已收起）
-                $('.menu-tab-btn').on('click.menuSticky', function() {
-                    isHovering = true;
-                    var isCollapsed = $body.hasClass('vertical-collpsed');
-                    var $tabsContent = $('.menu-tabs-content');
-                    
-                    if ($tabsContent && $tabsContent.length) {
-                        if (isCollapsed) {
-                            // 折叠状态下，向右展开
-                            var expandedTop = calculateExpandedTop();
-                            $tabsContent
-                                .addClass('expanded-right')
-                                .show()
-                                .css({
-                                    'display': 'block',
-                                    'position': 'fixed',
-                                    'left': '70px',
-                                    'top': expandedTop,
-                                    'min-width': '280px',
-                                    'max-width': '320px',
-                                    'z-index': '1050',
-                                    'background-color': $body.hasClass('data-sidebar') && $body.attr('data-sidebar') === 'dark' ? '#1b2c3f' : '#ffffff'
-                                });
-                        } else {
-                            // 正常状态下，移除collapsed类
-                            if ($tabsContent.hasClass('collapsed')) {
-                                $tabsContent.removeClass('collapsed');
-                            }
-                        }
-                    }
-                    
-                    // 清除定时器，避免干扰手动展开
-                    MenuController.clearScrollTimer();
-                    if (hoverTimer) {
-                        clearTimeout(hoverTimer);
-                        hoverTimer = null;
-                    }
-                });
-                
-                // 监听simplebar滚动
-                if ($simplebarContainer.length && $simplebarContainer[0].simpleBar) {
-                    var scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
-                    $(scrollElement).on('scroll.menuSticky', function() {
-                        MenuController.checkSticky();
-                    });
-                } else if ($sidebarMenu.length) {
-                    // 降级方案：监听侧边栏滚动
-                    $sidebarMenu.on('scroll.menuSticky', function() {
-                        MenuController.checkSticky();
-                    });
+        }
+
+        function isInArea(target, selectors) {
+            return target ? $(target).closest(selectors).length > 0 : false;
+        }
+
+        // ==================== State ====================
+        var state = {
+            isSticky: false, lastScrollTop: 0,
+            matchedItems: [], selectedIndex: -1,
+            hoverTimer: null, scrollTimer: null, isHovering: false
+        };
+
+        function clearTimer(key) {
+            if (state[key]) { clearTimeout(state[key]); state[key] = null; }
+        }
+
+        // ==================== Search Core ====================
+        function expandSearch() {
+            if (!$el.searchTabContainer.length) return;
+            if (isCollapsed()) {
+                showPanel();
+                activateTab('search');
+                $el.searchTabContainer.addClass('expanded');
+                setTimeout(function() { $el.searchInput.focus(); }, 250);
+            } else {
+                if (!$el.searchTabContainer.hasClass('expanded')) {
+                    $el.searchTabContainer.addClass('expanded');
+                    $el.frequentPane.hide();
+                    $el.frequentTab.removeClass('active');
+                    setTimeout(function() { $el.searchInput.focus(); }, 250);
                 } else {
-                    // 监听窗口滚动（备用）
-                    $(window).on('scroll.menuSticky', function() {
-                        MenuController.checkSticky();
-                    });
+                    $el.searchInput.focus();
                 }
-                
-                // 初始化检查
-                setTimeout(function() {
-                    MenuController.checkSticky();
-                }, 100);
             }
-            
-            // 菜单定位：仅负责 #side-menu 内部激活项在侧栏滚动容器中的可见/居中，不处理 window 或其他区域
-            window.scrollToActiveMenu = function scrollToActiveMenu(retryCount) {
-                retryCount = retryCount || 0;
-                var $sideMenu = $('#side-menu');
-                if (!$sideMenu.length) return;
+        }
 
-                // 只在 #side-menu 内查找激活项
-                var $activeLink = $('#side-menu .mm-active .active, #side-menu .mm-active > a.active, #side-menu li.mm-active > a.active');
-                var $activeMenu = $activeLink.length > 0 ? $activeLink.closest('li') : $('#side-menu li.mm-active').first();
-                if (!$activeMenu || !$activeMenu.length) return;
+        function collapseSearch() {
+            if ($el.searchTabContainer.hasClass('expanded')) {
+                $el.searchTabContainer.removeClass('expanded');
+                $el.searchInput.val('').blur();
+                $el.searchResults.hide();
+                resetMenuDisplay();
+            }
+        }
 
-                // 滚动容器：仅使用包裹 #side-menu 的 simplebar（不降级到 window 或 #sidebar-menu）
-                var $simplebarContainer = $('#side-menu').closest('.vertical-menu').find('[data-simplebar]');
-                var scrollElement = null;
-                if ($simplebarContainer.length) {
-                    if ($simplebarContainer[0].simpleBar) {
-                        scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
-                    } else {
-                        var $wrapper = $simplebarContainer.find('.simplebar-content-wrapper');
-                        if ($wrapper.length) scrollElement = $wrapper[0];
-                    }
-                }
-                if (!scrollElement) {
-                    if (retryCount < 1) setTimeout(function() { window.scrollToActiveMenu(1); }, 400);
+        function resetMenuDisplay() {
+            if (!$el.menuItems.length) $el.menuItems = $('#sidebar-menu li');
+            $el.menuItems.removeClass('menu-item-hidden menu-item-matched menu-item-keyboard-selected');
+            $el.frequentSection.show();
+            $el.searchResults.hide();
+        }
+
+        function handleSearch($input) {
+            var text = $input.val().toLowerCase().trim();
+            state.selectedIndex = -1;
+            state.matchedItems = [];
+
+            // 同步两个搜索输入框
+            var $other = $input.attr('id') === 'menu-search-input' ? $el.searchInputMenu : $el.searchInput;
+            $other.val(text);
+
+            if (!text) {
+                $el.searchResults.hide();
+                $el.searchResultsMenu.hide();
+                resetMenuDisplay();
+                return;
+            }
+
+            $el.searchResults.show();
+            $el.searchResultsMenu.show();
+            if (isCollapsed()) { showPanel(); activateTab('search'); }
+
+            performSearch(text);
+        }
+
+        function performSearch(text) {
+            var matchCount = 0, matchedItems = [], firstMatch = null;
+            var collapsed = isCollapsed();
+
+            $el.frequentSection.hide();
+            $el.menuItems.removeClass('menu-item-keyboard-selected');
+
+            $el.menuItems.each(function() {
+                var $item = $(this);
+                if ($item.hasClass('menu-search-item') || $item.hasClass('menu-frequent-item')) return;
+
+                // 菜单分组标题
+                if ($item.hasClass('menu-title')) {
+                    var hasMatch = false;
+                    $item.nextUntil('.menu-title').each(function() {
+                        $(this).find('a span').each(function() {
+                            if ($(this).text().toLowerCase().indexOf(text) !== -1) { hasMatch = true; return false; }
+                        });
+                        if (hasMatch) return false;
+                    });
+                    if (!collapsed) $item.toggleClass('menu-item-hidden', !hasMatch);
                     return;
                 }
 
-                setTimeout(function() {
-                    try {
-                        $activeMenu.parents('li').each(function() {
-                            var $parent = $(this);
-                            var $sub = $parent.find('> .sub-menu').first();
-                            if ($sub.length && $sub.attr('aria-expanded') === 'false') {
-                                $parent.find('> a.has-arrow').first().trigger('click');
-                            }
-                        });
-                        setTimeout(function() {
-                            try {
-                                var el = $activeMenu[0];
-                                if (!el) return;
-                                var scrollTop = scrollElement.scrollTop;
-                                var containerHeight = scrollElement.clientHeight;
-                                var menuHeight = $activeMenu.outerHeight() || 40;
-                                var menuRect = el.getBoundingClientRect();
-                                var containerRect = scrollElement.getBoundingClientRect();
-                                var offsetFromVisibleTop = menuRect.top - containerRect.top;
-                                var targetScrollTop = scrollTop + offsetFromVisibleTop - (containerHeight / 2) + (menuHeight / 2);
-                                var maxScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight;
-                                targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
-                                $(scrollElement).animate({ scrollTop: targetScrollTop }, 400);
-                            } catch (e) {
-                                console.warn('菜单定位滚动计算出错:', e);
-                            }
-                        }, 300);
-                    } catch (e) {
-                        console.warn('菜单定位展开父级出错:', e);
-                    }
-                }, 200);
-            };
-            
-            // 页面加载完成后执行滚动
-            $(document).ready(function() {
-                // 确保函数已定义后再调用
-                if (typeof window.scrollToActiveMenu === 'function') {
-                    window.scrollToActiveMenu();
+                var menuText = $item.find('> a span').text().toLowerCase();
+                if (menuText && menuText.indexOf(text) !== -1) {
+                    // 直接匹配
+                    $item.removeClass('menu-item-hidden').addClass('menu-item-matched');
+                    expandParentMenu($item);
+                    matchCount++;
+                    matchedItems.push({ $item: $item, hasChildren: $item.find('> ul.sub-menu').length > 0 });
+                    if (!firstMatch) firstMatch = $item;
                 } else {
-                    // 如果函数还未定义，延迟执行
-                    setTimeout(function() {
-                        if (typeof window.scrollToActiveMenu === 'function') {
-                            window.scrollToActiveMenu();
-                        }
-                    }, 500);
-                }
-                
-                // 监听菜单激活状态变化，当菜单锁定功能激活菜单后自动滚动
-                if (typeof MutationObserver !== 'undefined') {
-                    var scrollTimer = null;
-                    var lastActiveMenuId = null;
-                    
-                    var menuObserver = new MutationObserver(function(mutations) {
-                        var shouldScroll = false;
-                        var currentActiveMenuId = null;
-                        
-                        mutations.forEach(function(mutation) {
-                            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                                var target = mutation.target;
-                                var oldValue = mutation.oldValue || '';
-                                var newValue = target.className || '';
-                                
-                                // 检查是否是菜单项添加了 mm-active 类（之前没有，现在有了）
-                                var hadMmActive = oldValue.indexOf('mm-active') !== -1;
-                                var hasMmActive = newValue.indexOf('mm-active') !== -1;
-                                
-                                if (!hadMmActive && hasMmActive && $(target).is('li')) {
-                                    var $menuItem = $(target);
-                                    if ($menuItem.closest('#side-menu').length > 0) {
-                                        var $link = $menuItem.find('> a.active, .active').first();
-                                        currentActiveMenuId = ($link.length ? $link.attr('href') : $menuItem.find('> a').first().attr('href')) || $menuItem.text();
-                                        if (currentActiveMenuId && currentActiveMenuId !== lastActiveMenuId) shouldScroll = true;
-                                    }
-                                }
+                    // 搜索子菜单
+                    var childMatch = false;
+                    $item.find('ul.sub-menu li').each(function() {
+                        var $child = $(this);
+                        if ($child.hasClass('menu-title')) return;
+                        var childText = $child.find('> a span').text().toLowerCase();
+                        if (childText && childText.indexOf(text) !== -1) {
+                            childMatch = true;
+                            matchCount++;
+                            $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
+                            expandParentMenu($child);
+                            matchedItems.push({ $item: $child, hasChildren: $child.find('> ul.sub-menu').length > 0 });
+                            if (!firstMatch) firstMatch = $child;
+                            // 确保父级可见且展开
+                            $item.removeClass('menu-item-hidden');
+                            var $sub = $item.find('> ul.sub-menu');
+                            if ($sub.length) {
+                                $sub.addClass('mm-show').attr('aria-expanded', 'true');
+                                $item.addClass('mm-active');
                             }
-                        });
-                        
-                        if (shouldScroll) {
-                            lastActiveMenuId = currentActiveMenuId;
-                            
-                            // 清除之前的定时器，实现防抖
-                            if (scrollTimer) {
-                                clearTimeout(scrollTimer);
-                            }
-                            
-                            // 延迟执行，确保菜单状态已完全更新
-                            scrollTimer = setTimeout(function() {
-                                if (typeof window.scrollToActiveMenu === 'function') {
-                                    window.scrollToActiveMenu();
-                                }
-                            }, 300);
                         }
                     });
-                    
-                    // 只观察 #side-menu 内 class 变化
-                    var $sideMenuEl = $('#side-menu')[0];
-                    if ($sideMenuEl) {
-                        menuObserver.observe($sideMenuEl, {
-                            attributes: true,
-                            attributeFilter: ['class'],
-                            subtree: true,
-                            attributeOldValue: true
-                        });
+                    if (!collapsed) {
+                        if (!childMatch) $item.removeClass('menu-item-matched').addClass('menu-item-hidden');
+                        else $item.removeClass('menu-item-hidden');
                     }
                 }
             });
-            
-            // 如果使用 jQuery 的 ready 事件，也监听 DOMContentLoaded
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', scrollToActiveMenu);
+
+            // 展开匹配的父菜单项的子菜单
+            var finalItems = matchedItems.slice();
+            matchedItems.forEach(function(data) {
+                if (data.hasChildren) expandMatchedChildren(data.$item, finalItems);
+            });
+            matchCount = finalItems.length;
+
+            state.matchedItems = finalItems;
+            updateSearchResults(matchCount, finalItems, firstMatch, text);
+        }
+
+        function expandMatchedChildren($item, items) {
+            var $sub = $item.find('> ul.sub-menu');
+            if (!$sub.length) return;
+            $sub.addClass('mm-show').attr('aria-expanded', 'true').css({ display: 'block', visibility: 'visible' });
+            $item.addClass('mm-active');
+
+            $sub.find('> li').each(function() {
+                var $child = $(this);
+                if ($child.hasClass('menu-title')) return;
+                var isDup = items.some(function(d) { return d.$item[0] === $child[0]; });
+                if (!isDup) {
+                    $child.removeClass('menu-item-hidden').addClass('menu-item-matched');
+                    var hasChildren = $child.find('> ul.sub-menu').length > 0;
+                    items.push({ $item: $child, hasChildren: hasChildren });
+                    if (hasChildren) expandMatchedChildren($child, items);
+                }
+            });
+        }
+
+        function updateSearchResults(count, items, firstMatch, searchText) {
+            var collapsed = isCollapsed();
+            if (count > 0) {
+                var resultText = '搜索结果 (' + count + ')';
+                if (!collapsed) $el.searchResultsText.text(resultText);
+                $el.searchResultsTextMenu.text(resultText);
+
+                if (collapsed) {
+                    showPanel();
+                    activateTab('search');
+                    $el.searchResults.show();
+                    fillResults($el.searchResultsList, items);
+                    fillResults($el.searchResultsListMenu, items);
+                } else {
+                    fillResults($el.searchResultsList, items);
+                }
+
+                // 滚动到第一个匹配项（正常模式下）
+                if (firstMatch && !collapsed) {
+                    setTimeout(function() {
+                        var scrollEl = getScrollElement();
+                        if (scrollEl) {
+                            var top = firstMatch.offset().top - $(scrollEl).offset().top + scrollEl.scrollTop - 150;
+                            $(scrollEl).animate({ scrollTop: top }, 300);
+                        }
+                    }, 150);
+                }
             } else {
-                // DOM 已经加载完成，直接执行
-                setTimeout(scrollToActiveMenu, 300);
+                var noResult = '未找到匹配的菜单';
+                $el.searchResultsText.text(noResult);
+                $el.searchResultsTextMenu.text(noResult);
+                $el.searchResultsList.empty();
+                $el.searchResultsListMenu.empty();
             }
-            
-            
-        })(jQuery);
+        }
+
+        function fillResults($list, items) {
+            if (!$list.length) return;
+            $list.empty();
+
+            // 计算层级并排序（父级在子级前面）
+            var sorted = items.map(function(d) {
+                var level = 0, $p = d.$item.parent('ul.sub-menu');
+                while ($p.length) { level++; $p = $p.parent('li').parent('ul.sub-menu'); }
+                return { $item: d.$item, level: level };
+            }).sort(function(a, b) {
+                // 父子关系：父在前
+                if (b.$item.closest(a.$item).length) return -1;
+                if (a.$item.closest(b.$item).length) return 1;
+                return a.level - b.level;
+            });
+
+            sorted.forEach(function(d) {
+                var $link = d.$item.find('> a').first();
+                if (!$link.length) return;
+                var text = $link.find('span').text() || $link.text().trim();
+                var icon = $link.find('i').first().attr('class') || 'mdi mdi-circle';
+                var href = $link.attr('href') || '#';
+                var pad = d.level > 0 ? 'padding-left:' + (20 + d.level * 20) + 'px;' : '';
+
+                $list.append(
+                    '<div class="search-result-item px-3 py-2" style="' + pad + '">' +
+                    '<a href="' + href + '" class="d-flex align-items-center waves-effect search-result-link">' +
+                    '<i class="' + icon + ' me-2"></i><span>' + text + '</span></a></div>'
+                );
+            });
+        }
+
+        function expandParentMenu($item) {
+            var $parent = $item.parent('ul.sub-menu');
+            if ($parent.length) {
+                $parent.addClass('mm-show').attr('aria-expanded', 'true');
+                var $parentLi = $parent.parent('li');
+                $parentLi.addClass('mm-active');
+                expandParentMenu($parentLi);
+            }
+        }
+
+        function highlightSelected() {
+            $el.menuItems.removeClass('menu-item-keyboard-selected');
+            if (state.selectedIndex >= 0 && state.selectedIndex < state.matchedItems.length) {
+                var $sel = state.matchedItems[state.selectedIndex].$item;
+                $sel.addClass('menu-item-keyboard-selected');
+                var top = $sel.offset().top, sTop = $el.sidebarMenu.offset().top, sH = $el.sidebarMenu.height();
+                if (top < sTop || top > sTop + sH) {
+                    $('html, body').animate({ scrollTop: $sel.offset().top - 200 }, 200);
+                }
+            }
+        }
+
+        function handleSearchKeydown(e) {
+            var items = state.matchedItems, idx = state.selectedIndex;
+            if (e.key === 'Escape') {
+                state.selectedIndex = -1;
+                state.matchedItems = [];
+                if (isCollapsed()) { $(this).val(''); handleSearch($(this)); }
+                else collapseSearch();
+            } else if (e.key === 'ArrowDown' && items.length) {
+                e.preventDefault();
+                state.selectedIndex = (idx + 1) % items.length;
+                highlightSelected();
+            } else if (e.key === 'ArrowUp' && items.length) {
+                e.preventDefault();
+                state.selectedIndex = idx <= 0 ? items.length - 1 : idx - 1;
+                highlightSelected();
+            } else if (e.key === 'Enter' && idx >= 0 && idx < items.length) {
+                e.preventDefault();
+                var $link = items[idx].$item.find('a').first();
+                var href = $link.attr('href');
+                if (href && href !== 'javascript: void(0);') window.location.href = href;
+                else $link.trigger('click');
+            }
+        }
+
+        // ==================== Init: Search ====================
+        function initSearch() {
+            // Sticky 区域搜索输入框
+            $el.searchInput.on('input', function() { handleSearch($(this)); });
+            $el.searchInput.on('keydown', handleSearchKeydown);
+
+            // 折叠模式下的菜单形式搜索输入框
+            $el.searchInputMenu.on('input', function(e) { e.stopPropagation(); handleSearch($(this)); });
+            $el.searchInputMenu.on('keydown', handleSearchKeydown);
+            $el.searchInputMenu.on('click mousedown', function(e) { e.stopPropagation(); });
+
+            // 搜索Tab按钮点击
+            $el.searchTab.on('click.menuSearch', function(e) { e.stopPropagation(); expandSearch(); });
+
+            // 关闭图标
+            $('#search-tab-close-icon').on('click.menuSearch', function(e) { e.stopPropagation(); collapseSearch(); });
+
+            // 折叠模式下搜索链接
+            $('#menu-search-link').on('click', function(e) {
+                e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                setTimeout(function() { $el.searchInputMenu.focus(); }, 50);
+                return false;
+            });
+
+            // 阻止搜索内容区域事件冒泡
+            $('#menu-search-content').on('click mousedown', function(e) { e.stopPropagation(); });
+
+            // 折叠模式下搜索菜单项hover
+            $el.searchMenuItem.on('mouseenter', function() {
+                if (isCollapsed()) {
+                    $el.searchMenuItem.addClass('mm-active');
+                    $el.searchSubmenu.attr('aria-expanded', 'true');
+                }
+            });
+
+            $el.searchMenuItem.add($el.searchSubmenu).on('mouseleave', function(e) {
+                if (!isCollapsed()) return;
+                if (isInArea(e.relatedTarget, '.menu-search-item, .menu-search-submenu, .menu-search-content')) return;
+                if ($el.searchInputMenu.is(':focus')) return;
+                setTimeout(function() {
+                    if (!$el.searchInputMenu.is(':focus')) {
+                        $el.searchMenuItem.removeClass('mm-active');
+                        $el.searchSubmenu.attr('aria-expanded', 'false');
+                    }
+                }, 100);
+            });
+
+            // 折叠模式下搜索输入框焦点管理
+            $el.searchInputMenu.on('focus', function() {
+                if (isCollapsed()) {
+                    $el.searchMenuItem.addClass('mm-active');
+                    $el.searchSubmenu.attr('aria-expanded', 'true');
+                }
+            }).on('blur', function() {
+                if (isCollapsed()) {
+                    setTimeout(function() {
+                        if (!$(document.activeElement).closest('.menu-search-item').length) {
+                            $el.searchMenuItem.removeClass('mm-active');
+                            $el.searchSubmenu.attr('aria-expanded', 'false');
+                        }
+                    }, 100);
+                }
+            });
+
+            // 全局快捷键: Ctrl+K 或 /
+            $(document).on('keydown.menuSearch', function(e) {
+                var $t = $(e.target);
+                if ($t.is('input, textarea, [contenteditable="true"]')) return;
+                if ((e.ctrlKey && e.key === 'k') || e.key === '/') {
+                    e.preventDefault();
+                    if (isCollapsed()) {
+                        $el.searchMenuItem.find('> a').trigger('click');
+                        setTimeout(function() { $el.searchInputMenu.focus(); }, 100);
+                    } else {
+                        expandSearch();
+                    }
+                }
+            });
+
+            // 点击外部收起搜索
+            $(document).on('click.menuSearch', function(e) {
+                if (!$el.searchTabContainer.is(e.target) && !$el.searchTabContainer.has(e.target).length) {
+                    if ($el.searchInput.val().trim() === '' && $el.searchTabContainer.hasClass('expanded')) {
+                        collapseSearch();
+                    }
+                }
+            });
+        }
+
+        // ==================== Init: Tabs ====================
+        function initTabs() {
+            var searchHoverTimer = null;
+
+            // 默认展开搜索（正常模式下）
+            setTimeout(function() { if (!isCollapsed()) expandSearch(); }, 300);
+
+            // 搜索Tab hover
+            $el.searchTab.on('mouseenter', function(e) {
+                if (isCollapsed()) {
+                    expandSearch();
+                } else {
+                    var rt = e.relatedTarget;
+                    if (rt && !$(rt).closest('#sticky-menu-section').length && $el.frequentTab.hasClass('active')) return;
+                    $el.searchTab.addClass('active');
+                    $el.frequentTab.removeClass('active');
+                }
+            });
+
+            // 搜索Tab/容器鼠标离开（正常模式下收起空搜索框）
+            function handleSearchLeave(e) {
+                if (isCollapsed()) return;
+                if (isInArea(e.relatedTarget, '#search-tab-container, .menu-tabs-content, #search-results-container')) return;
+                clearTimeout(searchHoverTimer);
+                searchHoverTimer = setTimeout(function() {
+                    if ($el.searchInput.val().trim() === '' && $el.searchTabContainer.hasClass('expanded')) {
+                        $el.searchTabContainer.removeClass('expanded');
+                        $el.searchInput.blur();
+                    }
+                }, HOVER_DELAY);
+            }
+            $el.searchTab.on('mouseleave', handleSearchLeave);
+            $el.searchTabContainer.on('mouseleave', handleSearchLeave)
+                .on('mouseenter', function() { clearTimeout(searchHoverTimer); });
+
+            // 保持内容展开
+            $(document).on('mouseenter', '#menu-search-input, #search-tab-container, #frequent-tab-pane', function() {
+                if (!isCollapsed()) clearTimeout(searchHoverTimer);
+            });
+
+            // 常用菜单Tab hover
+            $el.frequentTab.on('mouseenter', function() {
+                if (isCollapsed()) { showPanel(); activateTab('frequent'); }
+                else { $el.frequentTab.addClass('active'); $el.searchTab.removeClass('active'); }
+            });
+
+            // 常用菜单Tab点击
+            $el.frequentTab.on('click', function() {
+                activateTab('frequent');
+                collapseSearch();
+                $el.searchResults.hide();
+                if (isCollapsed()) showPanel();
+            });
+        }
+
+        // ==================== Init: Sticky ====================
+        function initSticky() {
+            // Sticky区域hover
+            $el.stickySection.on('mouseenter', function() {
+                state.isHovering = true;
+                clearTimer('hoverTimer');
+                if (isCollapsed()) {
+                    showPanel();
+                    activateTab('search');
+                } else {
+                    if ($el.searchTab.hasClass('active')) {
+                        if (!$el.searchTabContainer.hasClass('expanded')) {
+                            $el.searchTabContainer.addClass('expanded');
+                            setTimeout(function() { $el.searchInput.focus(); }, 100);
+                        }
+                    } else if ($el.frequentTab.hasClass('active')) {
+                        $el.frequentPane.show();
+                        $el.searchTabContainer.removeClass('expanded');
+                    }
+                }
+            });
+
+            // 展开面板hover
+            $(document).on('mouseenter', '.menu-tabs-content.expanded-right', function() {
+                state.isHovering = true;
+                clearTimer('hoverTimer');
+            });
+
+            // 统一的鼠标离开处理
+            function handleLeave(e) {
+                var rt = e.relatedTarget;
+                if (isInArea(rt, RELATED_AREAS)) return;
+                state.hoverTimer = setTimeout(function() {
+                    var ct = document.elementFromPoint(e.clientX || 0, e.clientY || 0);
+                    if (isInArea(ct, RELATED_AREAS)) return;
+                    state.isHovering = false;
+                    collapseContent();
+                }, isCollapsed() ? 100 : HOVER_DELAY);
+            }
+
+            $el.stickySection.on('mouseleave', handleLeave);
+            $(document).on('mouseleave', '.menu-tabs-content.expanded-right', handleLeave);
+            $(document).on('mouseleave', '.menu-search-item, .menu-search-submenu, .menu-search-content', function(e) {
+                if (isCollapsed()) handleLeave(e);
+            });
+
+            function collapseContent() {
+                if (isCollapsed()) {
+                    hidePanel();
+                } else {
+                    if ($el.searchTabContainer.hasClass('expanded') && $el.searchInput.val().trim() === '') {
+                        $el.searchTabContainer.removeClass('expanded');
+                        $el.searchInput.blur();
+                    }
+                    $el.frequentPane.hide();
+                }
+                if ($el.searchInput.val().trim() === '') $el.searchResults.hide();
+            }
+
+            // Tab按钮点击
+            $('.menu-tab-btn').on('click.menuSticky', function() {
+                state.isHovering = true;
+                if (isCollapsed()) showPanel();
+                else $el.tabsContent.removeClass('collapsed');
+                clearTimer('hoverTimer');
+                clearTimer('scrollTimer');
+            });
+
+            // 滚动监听
+            var scrollEl = getScrollElement();
+            if (scrollEl) $(scrollEl).on('scroll.menuSticky', checkSticky);
+            else $(window).on('scroll.menuSticky', checkSticky);
+            setTimeout(checkSticky, 100);
+        }
+
+        function checkSticky() {
+            var scrollEl = getScrollElement();
+            var scrollTop = scrollEl ? scrollEl.scrollTop : $(window).scrollTop();
+
+            if (scrollTop > 10) {
+                if (!state.isSticky) { state.isSticky = true; $el.stickySection.addClass('sticky-active'); }
+                if (scrollTop > state.lastScrollTop + 2) $el.tabsContent.addClass('collapsed');
+                else if (scrollTop < state.lastScrollTop - 2 && scrollTop < 50) $el.tabsContent.removeClass('collapsed');
+            } else if (state.isSticky) {
+                state.isSticky = false;
+                $el.stickySection.removeClass('sticky-active');
+                $el.tabsContent.removeClass('collapsed');
+            }
+
+            state.lastScrollTop = scrollTop;
+            clearTimer('scrollTimer');
+            state.scrollTimer = setTimeout(function() {
+                var cur = scrollEl ? scrollEl.scrollTop : $(window).scrollTop();
+                if (state.isSticky && cur < 100) $el.tabsContent.removeClass('collapsed');
+            }, 500);
+        }
+
+        // ==================== Init: Sidebar Collapse ====================
+        function initSidebarCollapse() {
+            function handleCollapse() {
+                if (isCollapsed()) {
+                    $el.searchTabContainer.removeClass('expanded');
+                    $el.searchInput.val('').blur();
+                    resetMenuDisplay();
+                    $el.searchResults.hide();
+                    $el.tabsContent.hide();
+                } else {
+                    $el.tabsContent.show();
+                }
+            }
+
+            if ($el.body.length) {
+                new MutationObserver(function(muts) {
+                    muts.forEach(function(m) { if (m.attributeName === 'class') handleCollapse(); });
+                }).observe($el.body[0], { attributes: true, attributeFilter: ['class'] });
+            }
+
+            handleCollapse();
+            $(document).on('click', '#vertical-menu-btn', function() { setTimeout(handleCollapse, 100); });
+        }
+
+        // ==================== Active Menu: Expansion & Scroll ====================
+        // 菜单定位：负责 #side-menu 内部激活项的展开和滚动居中
+        window.scrollToActiveMenu = function(retryCount) {
+            retryCount = retryCount || 0;
+            if (!$el.sideMenu || !$el.sideMenu.length) return;
+
+            // 找到最深层的激活叶子链接（a.active 且不带 has-arrow 标识为叶子节点）
+            var $activeLink = $el.sideMenu.find('a.active').not('.has-arrow').first();
+            var $activeMenu;
+
+            if ($activeLink.length) {
+                $activeMenu = $activeLink.closest('li');
+            } else {
+                // 后备方案：取最深层的 mm-active li（DOM 中最后一个 = 最深层级）
+                $activeMenu = $el.sideMenu.find('li.mm-active').last();
+            }
+
+            if (!$activeMenu || !$activeMenu.length) return;
+
+            var scrollElement = getScrollElement();
+            if (!scrollElement) {
+                if (retryCount < 1) setTimeout(function() { window.scrollToActiveMenu(1); }, 400);
+                return;
+            }
+
+            setTimeout(function() {
+                try {
+                    // 确保所有父级菜单都已展开（修复三级菜单展开问题）
+                    $activeMenu.parents('li').each(function() {
+                        var $li = $(this);
+                        if (!$li.closest('#side-menu').length) return false;
+                        $li.addClass('mm-active');
+                        var $sub = $li.find('> ul.sub-menu');
+                        if ($sub.length) $sub.addClass('mm-show').attr('aria-expanded', 'true');
+                        $li.find('> a.has-arrow').addClass('mm-active');
+                    });
+                    $activeMenu.addClass('mm-active');
+
+                    // 滚动到激活项居中
+                    setTimeout(function() {
+                        try {
+                            var el = $activeMenu[0];
+                            if (!el) return;
+                            var mRect = el.getBoundingClientRect();
+                            var cRect = scrollElement.getBoundingClientRect();
+                            var mH = $activeMenu.outerHeight() || 40;
+                            var target = scrollElement.scrollTop + (mRect.top - cRect.top) - (scrollElement.clientHeight / 2) + (mH / 2);
+                            target = Math.max(0, Math.min(target, scrollElement.scrollHeight - scrollElement.clientHeight));
+                            $(scrollElement).animate({ scrollTop: target }, 400);
+                        } catch (e) { console.warn('菜单定位滚动出错:', e); }
+                    }, 300);
+                } catch (e) { console.warn('菜单定位展开出错:', e); }
+            }, 200);
+        };
+
+        // ==================== Bootstrap ====================
+        $(document).ready(function() {
+            cacheDOM();
+            initTabs();
+            initSearch();
+            initSticky();
+            initSidebarCollapse();
+            scrollToActiveMenu();
+
+            // 监听 mm-active 变化，自动滚动到新激活的菜单
+            if (typeof MutationObserver !== 'undefined' && $el.sideMenu[0]) {
+                var scrollDebounce = null, lastActiveId = null;
+                new MutationObserver(function(muts) {
+                    var shouldScroll = false, activeId = null;
+                    muts.forEach(function(m) {
+                        if (m.attributeName !== 'class') return;
+                        var old = m.oldValue || '', cur = m.target.className || '';
+                        if (old.indexOf('mm-active') === -1 && cur.indexOf('mm-active') !== -1 && $(m.target).is('li')) {
+                            var $li = $(m.target);
+                            if ($li.closest('#side-menu').length) {
+                                var $a = $li.find('> a.active, .active').first();
+                                activeId = ($a.length ? $a.attr('href') : $li.find('> a').first().attr('href')) || $li.text();
+                                if (activeId && activeId !== lastActiveId) shouldScroll = true;
+                            }
+                        }
+                    });
+                    if (shouldScroll) {
+                        lastActiveId = activeId;
+                        clearTimeout(scrollDebounce);
+                        scrollDebounce = setTimeout(function() {
+                            if (typeof window.scrollToActiveMenu === 'function') window.scrollToActiveMenu();
+                        }, 300);
+                    }
+                }).observe($el.sideMenu[0], {
+                    attributes: true, attributeFilter: ['class'], subtree: true, attributeOldValue: true
+                });
+            }
+        });
+
+        // DOMContentLoaded 后备
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(function() { if (typeof window.scrollToActiveMenu === 'function') window.scrollToActiveMenu(); }, 300);
+            });
+        } else {
+            setTimeout(function() { if (typeof window.scrollToActiveMenu === 'function') window.scrollToActiveMenu(); }, 300);
+        }
+
+    })(jQuery);
     </script>
 <?php
 endif; ?>

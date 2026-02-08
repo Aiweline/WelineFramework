@@ -1,0 +1,114 @@
+订阅计划管理,"Subscription Plan Management"
+编辑订阅计划,"Edit Subscription Plan"
+新建订阅计划,"New Subscription Plan"
+计划不存在,"Plan not found"
+保存成功,"Saved successfully"
+保存失败：%{error},"Save failed: %{error}"
+删除成功,"Deleted successfully"
+删除失败：%{error},"Delete failed: %{error}"
+订阅管理,"Subscription Management"
+缺少订阅ID,"Missing subscription ID"
+订阅不存在,"Subscription not found"
+订阅详情,"Subscription Details"
+订阅已取消,"Subscription has been cancelled"
+取消失败：%{error},"Cancellation failed: %{error}"
+订阅已暂停,"Subscription has been paused"
+暂停失败：%{error},"Pause failed: %{error}"
+订阅已恢复,"Subscription has been resumed"
+恢复失败：%{error},"Resume failed: %{error}"
+请先登录,"Please login first"
+我的订阅,"My Subscriptions"
+无权查看此订阅,"No permission to view this subscription"
+试用中,Trialing
+生效中,Active
+已暂停,Paused
+逾期,"Past Due"
+已取消,Cancelled
+已过期,Expired
+创建订阅,"Subscription Created"
+续费,Renewed
+取消订阅,"Subscription Cancelled"
+暂停订阅,"Subscription Paused"
+恢复订阅,"Subscription Resumed"
+订阅过期,订阅过期
+升级计划,"Plan Upgraded"
+降级计划,"Plan Downgraded"
+支付失败,"Payment Failed"
+试用开始,"Trial Started"
+试用结束,"Trial Ended"
+天,Day
+周,Week
+月,Month
+年,Year
+每%{interval}%{cycle},"Every %{interval} %{cycle}"
+每%{cycle},"Every %{cycle}"
+订阅计划不存在,"Subscription plan not found"
+订阅计划已停用,"Subscription plan is disabled"
+创建订阅：%{plan},"Subscription created: %{plan}"
+订阅状态不允许续费,"Subscription status does not allow renewal"
+续费成功，第%{count}次续费,"Renewal successful, renewal #%{count}"
+无权操作此订阅,"No permission to manage this subscription"
+当前订阅状态不允许取消,"Current subscription status does not allow cancellation"
+取消订阅，原因：%{reason},"Subscription cancelled, reason: %{reason}"
+当前订阅状态不允许暂停,"Current subscription status does not allow pause"
+当前订阅状态不允许恢复,"Current subscription status does not allow resume"
+支付失败，订阅已逾期,"Payment failed, subscription is past due"
+订阅已过期,"Subscription has expired"
+查看全部,查看全部
+暂无订阅,"No subscriptions yet"
+订阅,订阅
+订阅价格,"Subscription Price"
+查看详情,查看详情
+返回,Back
+计划名称,"Plan Name"
+关联产品,"Associated Product"
+计划描述,"Plan Description"
+原价,"Original Price"
+计费周期,"Billing Cycle"
+计费间隔,"Billing Interval"
+试用天数,"Trial Days"
+排序,"Sort Order"
+状态,Status
+启用,Enabled
+停用,Disabled
+暂无订阅计划,"No subscription plans yet"
+操作,Actions
+确认删除此订阅计划？,"Are you sure to delete this subscription plan?"
+总计,Total
+活跃订阅,"Active Subscriptions"
+试用订阅,"Trial Subscriptions"
+逾期订阅,"Past Due Subscriptions"
+订阅列表,"Subscription List"
+全部,All
+客户ID,"Customer ID"
+订阅计划,"Subscription Plans"
+下次计费,"Next Billing"
+续费次数,"Renewal Count"
+创建时间,"Created At"
+查看,View
+暂停,Pause
+恢复,Resume
+取消,Cancel
+支付方式,"Payment Method"
+当前周期,"Current Period"
+试用结束时间,"Trial Ends At"
+取消时间,"Cancelled At"
+取消原因,"Cancel Reason"
+暂停时间,"Paused At"
+历史记录,History
+暂无历史记录,"No history records"
+金额,Amount
+订单ID,"Order ID"
+备注,Note
+操作者,Operator
+确认取消,"Confirm Cancel"
+确认取消此订阅？取消后将无法继续享受订阅服务。,"Are you sure to cancel this subscription? You will no longer enjoy the subscription service after cancellation."
+编辑,Edit
+删除,Delete
+产品ID,"Product ID"
+货币,Currency
+更新时间,"Updated At"
+筛选,Filter
+已取消订阅,"Cancelled Subscriptions"
+确认删除,"Confirm Delete"
+订阅统计,"Subscription Statistics"

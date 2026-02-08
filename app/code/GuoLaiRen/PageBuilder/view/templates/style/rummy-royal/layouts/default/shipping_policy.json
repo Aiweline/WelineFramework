@@ -1,0 +1,30 @@
+{
+    "page_type": "shipping_policy",
+    "name": "配送政策页面布局",
+    "description": "RummyRoyal 主题配送/交付政策页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "shipping-policy-default",
+                "config": {
+                    "content.badge": "Legal",
+                    "content.title": "Delivery Policy",
+                    "content.last_updated": "February 1, 2026",
+                    "content.body": "This Delivery Policy covers the delivery of digital services and prize winnings on the RummyRoyal platform.",
+                    "layout.width": "medium",
+                    "toc.items": "Digital Service Delivery|RummyRoyal is a digital platform. All games, features, and services are delivered electronically through our website and mobile app.\nAccount Credits|Deposits are credited to your RummyRoyal wallet instantly for most payment methods. Bank transfers may take 1-2 business days.\nWinnings Delivery|Cash winnings are delivered to your registered bank account or UPI ID. Standard processing time is within 60 seconds for instant withdrawals.\nBonus Delivery|Welcome bonuses, referral rewards, and promotional credits are delivered to your bonus wallet as per the terms of each promotion.\nPrize Delivery|Tournament prizes and special event rewards are credited within 24 hours of event completion. Physical prizes, if any, are shipped within 7-10 business days.\nService Availability|Our platform is available 24/7. Scheduled maintenance windows are communicated in advance via email and in-app notifications."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "配送/交付政策页面布局"
+}

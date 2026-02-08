@@ -11,14 +11,40 @@ namespace Weline\Framework\Http;
 
 class Cookie
 {
-    public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = [])
+    /**
+     * 设置 Cookie
+     * 
+     * 通过 HeaderCollector 收集 Cookie，由 Runtime 层统一发送。
+     * 同时更新 $_COOKIE 超全局变量以便当前请求中可以读取。
+     * 
+     * @param string $key Cookie 名称
+     * @param string $value Cookie 值
+     * @param int $expire 过期时间（秒数，相对于当前时间）
+     * @param array $options 可选参数：path, domain, secure, httponly, samesite
+     */
+    public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = []): void
     {
-        $_options['path'] = '/';
-        if ($options) {
-            $_options = array_merge($_options, $options);
-        }
+        // 更新 $_COOKIE 以便当前请求可以读取
         $_COOKIE[$key] = $value;
-        setcookie($key, $value, time() + $expire, ...$_options);
+        
+        // 提取选项，设置默认值
+        $path = $options['path'] ?? '/';
+        $domain = $options['domain'] ?? '';
+        $secure = $options['secure'] ?? false;
+        $httpOnly = $options['httponly'] ?? true;
+        $sameSite = $options['samesite'] ?? 'Lax';
+        
+        // 使用 HeaderCollector 收集 Cookie
+        HeaderCollector::getInstance()->setCookie(
+            $key,
+            $value,
+            $expire > 0 ? \time() + $expire : 0,
+            $path,
+            $domain,
+            $secure,
+            $httpOnly,
+            $sameSite
+        );
     }
 
     public static function get(string $key, $default = null)

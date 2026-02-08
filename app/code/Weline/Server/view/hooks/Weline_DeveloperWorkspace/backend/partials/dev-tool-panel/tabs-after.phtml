@@ -1,0 +1,14 @@
+<?php
+/**
+ * Weline_Server - 开发工具面板扩展标签：WLS
+ * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::tabs-after
+ * 仅由本模块注入 WLS 标签，是否加载内容由 search-areas-after 内脚本根据是否 WLS 模式决定。
+ *
+ * @hook-priority 200
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+?>
+<button class="dev-tool-tab" data-tab="wls" onclick="DevToolPanel.switchMainTab(this, 'wls')">
+    <i class="fa fa-server"></i> WLS
+</button>

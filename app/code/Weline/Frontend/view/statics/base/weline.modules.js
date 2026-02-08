@@ -7,16 +7,16 @@
     // 一次性合并所有模块配置
     Object.assign(window.WelineModulesConfig.modules, {
         cart: {
-            origin_paths: ["app/code/WeShop/Cart/view/statics/statics/js/cart.js"],
-            paths: ["/WeShop/Cart/view/statics/statics/js/cart.js"],
+            origin_paths: ["app/code/WeShop/Cart/view/statics/js/cart.js"],
+            paths: ["/WeShop/Cart/view/statics/js/cart.js"],
             globalVar: "WeShopCart",
             description: "WeShop 购物车模块 - 处理加入购物车、规格选择等"
         },
         miniCart: {
-            origin_paths: ["app/code/WeShop/Cart/view/statics/statics/js/mini-cart.js"],
-            paths: ["/WeShop/Cart/view/statics/statics/js/mini-cart.js"],
-            globalVar: null,
-            description: "WeShop 迷你购物车模块"
+            origin_paths: ["app/code/WeShop/Cart/view/statics/js/mini-cart.js"],
+            paths: ["/WeShop/Cart/view/statics/js/mini-cart.js"],
+            globalVar: "MiniCart",
+            description: "WeShop 迷你购物车模块 - Drawer 抽屉式购物车"
         },
         jquery: {
             origin_paths: ["app/code/Weline/Frontend/view/statics/libs/jquery/3.6.0/jquery.min.js"],
@@ -54,17 +54,17 @@
             globalVar: "WelineGeo",
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
-        i18n: {
-            origin_paths: ["app/code/Weline/I18n/view/statics/js/i18n.js"],
-            paths: ["/Weline/I18n/view/statics/js/i18n.js"],
-            globalVar: "WelineI18n",
-            description: "国际化（i18n）语言切换器模块"
-        },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
             paths: ["/Weline/Currency/view/statics/js/currency.js"],
             globalVar: "WelineCurrency",
             description: "货币切换器模块"
+        },
+        i18n: {
+            origin_paths: ["app/code/Weline/I18n/view/statics/js/i18n.js"],
+            paths: ["/Weline/I18n/view/statics/js/i18n.js"],
+            globalVar: "WelineI18n",
+            description: "国际化（i18n）语言切换器模块"
         }
     });
 
@@ -79,8 +79,8 @@
         worker: "weline-api-worker",
         switcher: "weline-switcher",
         geolocation: "geo",
+        money: "currency",
         language: "i18n",
-        lang: "i18n",
-        money: "currency"
+        lang: "i18n"
     });
 })();

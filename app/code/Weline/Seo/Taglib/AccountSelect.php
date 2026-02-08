@@ -79,6 +79,8 @@ class AccountSelect implements TaglibInterface
             /** @var Url $url */
             $url = w_obj(Url::class);
             $epUrl = $url->getBackendUrl($urlPath);
+            // 使用后台 URL 路径（getBackendUrlPath），相对当前页 origin 请求，避免 getBaseHost() 未带端口时请求到错误端口
+            $epPath = $url->getBackendUrlPath($urlPath);
 
             $attributes['url'] = $epUrl;
             $attributes['limit'] = $limit;
@@ -132,7 +134,7 @@ class AccountSelect implements TaglibInterface
             $t_no_account = __('暂无SEO账户，请先创建');
             
             $html[] = '<script>(function(){';
-            $html[] = 'const ep = ' . json_encode($epUrl) . ';';
+            $html[] = 'const ep = ' . json_encode($epPath) . ';';
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const limit = \'<?=$Taglib__limit?>\';';
             $html[] = 'const trigger = document.getElementById(id+"_trigger");';

@@ -20,18 +20,28 @@ use Weline\Framework\App\Env;
 class TranslationCollector
 {
     /**
-     * 从指定目录或模块收集翻译字符串
+     * 从指定目录或模块收集翻译字符串（数组版本，向后兼容）
+     * 需要完整数组时使用（如 array_keys、count 等操作）
      * @param string|null $modulePath 模块路径，如果为null则收集所有模块
      * @param string|null $moduleName 模块名称（用于显示），如果为null则从路径推断
      * @return array [原文 => ['file' => 文件路径, 'context' => 上下文]]
      */
     public function collect(?string $modulePath = null, ?string $moduleName = null): array
     {
-        $strings = [];
-        
+        return iterator_to_array($this->collectLazy($modulePath, $moduleName));
+    }
+
+    /**
+     * 从指定目录或模块收集翻译字符串（惰性 Generator 版本）
+     * 逐条产出翻译字符串，不在内存中累积完整数组，适合大规模扫描场景
+     * @param string|null $modulePath 模块路径，如果为null则收集所有模块
+     * @param string|null $moduleName 模块名称（用于显示），如果为null则从路径推断
+     * @return \Generator<string, array{file: string, context: string, module: string}>
+     */
+    public function collectLazy(?string $modulePath = null, ?string $moduleName = null): \Generator
+    {
         if ($modulePath === null) {
             // 收集所有模块
-            // 使用 path_CODE 收集 app/code 目录下的模块
             $appCodePath = Env::path_CODE;
             if (is_dir($appCodePath)) {
                 $dirIterator = new \RecursiveDirectoryIterator($appCodePath, \RecursiveDirectoryIterator::SKIP_DOTS);
@@ -41,29 +51,26 @@ class TranslationCollector
                     if ($file->isDir()) {
                         $depth = $iterator->getDepth();
                         if ($depth === 1) {
-                            // 这是模块目录（Vendor/ModuleName）
-                            $modulePath = $file->getPathname();
-                            $pathParts = explode(DS, str_replace($appCodePath, '', $modulePath));
+                            $modPath = $file->getPathname();
+                            $pathParts = explode(DS, str_replace($appCodePath, '', $modPath));
                             $pathParts = array_filter($pathParts);
                             $pathParts = array_values($pathParts);
                             
                             if (count($pathParts) === 2) {
-                                $moduleName = $pathParts[0] . '_' . $pathParts[1];
-                                $moduleStrings = $this->extractFromDirectory($modulePath, $moduleName);
-                                $strings = array_merge($strings, $moduleStrings);
+                                $modName = $pathParts[0] . '_' . $pathParts[1];
+                                // yield from 直接透传子生成器，无中间数组
+                                yield from $this->yieldFromDirectory($modPath, $modName);
                             }
                         }
                     }
                 }
             }
         } else {
-            // 收集指定模块
             if (!is_dir($modulePath)) {
-                return $strings;
+                return;
             }
             
             if ($moduleName === null) {
-                // 从路径推断模块名
                 $pathParts = explode(DS, trim($modulePath, DS));
                 if (count($pathParts) >= 2) {
                     $moduleName = $pathParts[count($pathParts) - 2] . '_' . $pathParts[count($pathParts) - 1];
@@ -72,164 +79,147 @@ class TranslationCollector
                 }
             }
             
-            $strings = $this->extractFromDirectory($modulePath, $moduleName);
+            yield from $this->yieldFromDirectory($modulePath, $moduleName);
         }
-        
-        return $strings;
     }
     
     /**
-     * 从指定目录提取翻译字符串
+     * 需要排除的目录名（这些目录不包含需要翻译的源码）
+     */
+    private const EXCLUDED_DIRS = [
+        'node_modules', 'vendor', 'dist', 'build', '.git', '.svn',
+        'cache', 'generated', 'var', 'pub', 'test', 'tests',
+        'bower_components', '.idea', '.vscode', '.cursor',
+    ];
+
+    /**
+     * 读取文件的最大大小（字节），超过此大小的文件跳过（512KB）
+     * 正常的翻译源文件不会超过这个大小，大文件通常是打包产物
+     */
+    private const MAX_FILE_SIZE = 524288;
+
+    /**
+     * 从指定目录提取翻译字符串（Generator 版本）
+     * 逐文件读取、逐条产出，内存中同时只持有一个文件的内容
      * @param string $directory 目录路径
      * @param string $moduleName 模块名称
-     * @return array [原文 => ['file' => 文件路径, 'context' => 上下文]]
+     * @return \Generator<string, array{file: string, context: string, module: string}>
      */
-    private function extractFromDirectory(string $directory, string $moduleName): array
+    private function yieldFromDirectory(string $directory, string $moduleName): \Generator
     {
-        $strings = [];
-        
         if (!is_dir($directory)) {
-            return $strings;
+            return;
         }
         
         try {
-            // 使用递归迭代器扫描所有文件
             $dirIterator = new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS);
             $filterIterator = new \RecursiveCallbackFilterIterator($dirIterator, function ($current, $key, $iterator) {
+                if ($current->isDir() && in_array($current->getFilename(), self::EXCLUDED_DIRS, true)) {
+                    return false;
+                }
                 return true;
             });
             $iterator = new \RecursiveIteratorIterator($filterIterator);
             
             foreach ($iterator as $file) {
-                if ($file->isFile() && in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
-                    $content = file_get_contents($file->getPathname());
-                    $relativePath = str_replace($directory, '', $file->getPathname());
-                    
-                    // 1. 匹配 <lang>...</lang> 标签
-                    if (preg_match_all('/<lang>(.*?)<\/lang>/s', $content, $matches)) {
-                        foreach ($matches[1] as $match) {
-                            $match = trim($match);
-                            if (!empty($match) && $this->isValidTranslationString($match)) {
-                                $strings[$match] = [
-                                    'file' => $relativePath,
-                                    'context' => 'Template',
-                                    'module' => $moduleName
-                                ];
-                            }
-                        }
-                    }
-                    
-                    // 2. 匹配 @lang(...) 格式（只匹配字符串字面量，不匹配复杂表达式）
-                    if (preg_match_all('/@lang\s*\(\s*(["\'])((?:[^\\\\\1\n\r]|\\\\.)*?)\1\s*\)/s', $content, $matches, PREG_OFFSET_CAPTURE)) {
-                        foreach ($matches[2] as $index => $matchData) {
-                            $match = $matchData[0];
-                            
-                            // 处理转义字符
-                            $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
-                            $match = trim($match);
-                            if (!empty($match) && $this->isValidTranslationString($match)) {
-                                $strings[$match] = [
-                                    'file' => $relativePath,
-                                    'context' => 'Template',
-                                    'module' => $moduleName
-                                ];
-                            }
-                        }
-                    }
-                    
-                    // 3. 匹配 @lang{...} 格式
-                    if (preg_match_all('/@lang\{(.*?)}/s', $content, $matches)) {
-                        foreach ($matches[1] as $match) {
-                            $match = trim($match);
-                            if (!empty($match) && $this->isValidTranslationString($match)) {
-                                $strings[$match] = [
-                                    'file' => $relativePath,
-                                    'context' => 'Template',
-                                    'module' => $moduleName
-                                ];
-                            }
-                        }
-                    }
-                    
-                    // 4. 匹配 __('...') 或 __("...") 格式（使用改进的正则）
-                    // 先匹配单行的简单情况，确保后面跟着逗号或右括号，且不包含换行
-                    if (preg_match_all('/__\s*\(\s*(["\'])((?:[^\\\\\1\n\r]|\\\\.)*?)\1\s*([,\\)])/', $content, $matches, PREG_OFFSET_CAPTURE)) {
-                        foreach ($matches[2] as $index => $matchData) {
-                            $match = $matchData[0];
-                            $quoteChar = $matches[1][$index][0];
-                            
-                            // 验证：确保匹配到的内容确实是完整的字符串（引号正确闭合）
-                            // 检查字符串中是否有未转义的引号
-                            $escapedQuote = '\\' . $quoteChar;
-                            $quoteCount = substr_count($match, $quoteChar);
-                            $escapedQuoteCount = substr_count($match, $escapedQuote);
-                            $realQuoteCount = $quoteCount - $escapedQuoteCount;
-                            
-                            // 如果字符串中有未转义的引号，说明匹配可能有问题，跳过
-                            if ($realQuoteCount > 0) {
-                                continue;
-                            }
-                            
-                            // 注意：即使后面跟着数组参数，我们也应该提取字符串内容
-                            // 因为这是正常的__('...', [...])调用，字符串本身是有效的翻译字符串
-                            
-                            // 处理转义字符
-                            $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
-                            $match = trim($match);
-                            if (!empty($match) && $this->isValidTranslationString($match)) {
-                                $strings[$match] = [
-                                    'file' => $relativePath,
-                                    'context' => $file->getExtension() === 'php' ? 'PHP' : 'Template',
-                                    'module' => $moduleName
-                                ];
-                            }
-                        }
-                    }
-                    // 再匹配多行情况（但限制长度和复杂度，且不包含代码特征）
-                    if (preg_match_all('/__\s*\(\s*(["\'])((?:(?<!\\\\)(?:\\\\\\\\)*\\\\\1|(?!\1).)*?)\1\s*([,\\)])/s', $content, $matches, PREG_OFFSET_CAPTURE)) {
-                        foreach ($matches[2] as $index => $matchData) {
-                            $match = $matchData[0];
-                            $quoteChar = $matches[1][$index][0];
-                            
-                            // 验证：确保匹配到的内容确实是完整的字符串（引号正确闭合）
-                            $escapedQuote = '\\' . $quoteChar;
-                            $quoteCount = substr_count($match, $quoteChar);
-                            $escapedQuoteCount = substr_count($match, $escapedQuote);
-                            $realQuoteCount = $quoteCount - $escapedQuoteCount;
-                            
-                            if ($realQuoteCount > 0) {
-                                continue;
-                            }
-                            
-                            // 处理转义字符
-                            $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
-                            $match = trim($match);
-                            
-                            // 多行字符串需要更严格的验证
-                            // 如果包含换行符，检查是否包含代码特征
-                            if (strpos($match, "\n") !== false) {
-                                // 检查是否包含代码特征（变量、方法调用等）
-                                if (preg_match('/\$[a-zA-Z_]|->|::|\[.*\$|\(.*\$/', $match)) {
-                                    continue;
-                                }
-                            }
-                            
-                            if (!empty($match) && strlen($match) <= 200 && $this->isValidTranslationString($match)) {
-                                $strings[$match] = [
-                                    'file' => $relativePath,
-                                    'context' => $file->getExtension() === 'php' ? 'PHP' : 'Template',
-                                    'module' => $moduleName
-                                ];
-                            }
+                if (!$file->isFile() || !in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
+                    continue;
+                }
+                // 跳过超大文件（打包产物、minified JS 等）
+                $fileSize = $file->getSize();
+                if ($fileSize > self::MAX_FILE_SIZE || $fileSize === 0) {
+                    continue;
+                }
+                
+                $content = file_get_contents($file->getPathname());
+                if ($content === false) {
+                    continue;
+                }
+                $relativePath = str_replace($directory, '', $file->getPathname());
+                $ext = $file->getExtension();
+                
+                // 1. 匹配 <lang>...</lang> 标签
+                if (preg_match_all('/<lang>(.*?)<\/lang>/s', $content, $matches)) {
+                    foreach ($matches[1] as $match) {
+                        $match = trim($match);
+                        if (!empty($match) && $this->isValidTranslationString($match)) {
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
                         }
                     }
                 }
+                
+                // 2. 匹配 @lang(...) 格式（只匹配字符串字面量）
+                if (preg_match_all('/@lang\s*\(\s*(["\'])((?:[^\\\\\1\n\r]|\\\\.)*?)\1\s*\)/s', $content, $matches, PREG_OFFSET_CAPTURE)) {
+                    foreach ($matches[2] as $index => $matchData) {
+                        $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $matchData[0]);
+                        $match = trim($match);
+                        if (!empty($match) && $this->isValidTranslationString($match)) {
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
+                        }
+                    }
+                }
+                
+                // 3. 匹配 @lang{...} 格式
+                if (preg_match_all('/@lang\{(.*?)}/s', $content, $matches)) {
+                    foreach ($matches[1] as $match) {
+                        $match = trim($match);
+                        if (!empty($match) && $this->isValidTranslationString($match)) {
+                            yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];
+                        }
+                    }
+                }
+                
+                // 4. 匹配 __('...') 或 __("...") 格式 - 单行
+                $context = ($ext === 'php') ? 'PHP' : 'Template';
+                if (preg_match_all('/__\s*\(\s*(["\'])((?:[^\\\\\1\n\r]|\\\\.)*?)\1\s*([,\\)])/', $content, $matches, PREG_OFFSET_CAPTURE)) {
+                    foreach ($matches[2] as $index => $matchData) {
+                        $match = $matchData[0];
+                        $quoteChar = $matches[1][$index][0];
+                        
+                        $escapedQuote = '\\' . $quoteChar;
+                        if ((substr_count($match, $quoteChar) - substr_count($match, $escapedQuote)) > 0) {
+                            continue;
+                        }
+                        
+                        $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
+                        $match = trim($match);
+                        if (!empty($match) && $this->isValidTranslationString($match)) {
+                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName];
+                        }
+                    }
+                }
+                
+                // 5. 匹配 __(...) 多行（限制长度和复杂度）
+                if (preg_match_all('/__\s*\(\s*(["\'])((?:(?<!\\\\)(?:\\\\\\\\)*\\\\\1|(?!\1).)*?)\1\s*([,\\)])/s', $content, $matches, PREG_OFFSET_CAPTURE)) {
+                    foreach ($matches[2] as $index => $matchData) {
+                        $match = $matchData[0];
+                        $quoteChar = $matches[1][$index][0];
+                        
+                        $escapedQuote = '\\' . $quoteChar;
+                        if ((substr_count($match, $quoteChar) - substr_count($match, $escapedQuote)) > 0) {
+                            continue;
+                        }
+                        
+                        $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $match);
+                        $match = trim($match);
+                        
+                        if (strpos($match, "\n") !== false && preg_match('/\$[a-zA-Z_]|->|::|\[.*\$|\(.*\$/', $match)) {
+                            continue;
+                        }
+                        
+                        if (!empty($match) && strlen($match) <= 200 && $this->isValidTranslationString($match)) {
+                            yield $match => ['file' => $relativePath, 'context' => $context, 'module' => $moduleName];
+                        }
+                    }
+                }
+                
+                // Generator 自然释放：$content 在下次循环迭代时被覆盖
+                // 显式 unset 确保大文件立即释放
+                unset($content);
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免中断收集过程
         }
-        
-        return $strings;
     }
     
     /**

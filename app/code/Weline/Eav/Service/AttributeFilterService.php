@@ -381,7 +381,8 @@ class AttributeFilterService
             ->fields(['value', 'COUNT(DISTINCT entity_id) as count'])
             ->where('attribute_id', $attribute->getId())
             ->where('entity_id', $entityIds, 'in')
-            ->where("value != '' AND value IS NOT NULL")
+            ->where('value', null, 'IS NOT NULL')
+            ->where('value', '', '!=')
             ->groupBy('value');
         
         $results = $valueModel->select()->fetchArray();

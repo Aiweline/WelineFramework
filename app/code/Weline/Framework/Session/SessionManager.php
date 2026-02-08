@@ -12,6 +12,7 @@ namespace Weline\Framework\Session;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Driver\SessionDriverHandlerInterface;
@@ -25,6 +26,9 @@ class SessionManager
     private array $config;
     private ?SessionDriverHandlerInterface $_session = null;
     private CacheInterface $cache;
+    
+    // 递归保护：防止事件触发时循环调用
+    private static bool $isCreating = false;
 
     /**
      * @param mixed $driver
@@ -129,6 +133,29 @@ class SessionManager
         if (empty($this->_session)) {
             $driver_class = $this->getSessionDriverClass($driver);
             $driver_config = $this->config['drivers'][$driver] ?? [];
+            
+            // 仅在常驻内存模式且非递归调用时触发事件，防止循环依赖
+            if (\Weline\Framework\Runtime\Runtime::isPersistent() && !self::$isCreating) {
+                self::$isCreating = true;
+                try {
+                    // 触发 driver_create_before 事件，允许其他模块接管驱动（如常驻内存模式下接管 File 驱动）
+                    $eventData = new DataObject([
+                        'driver' => $driver,
+                        'driver_class' => $driver_class,
+                        'config' => $driver_config,
+                    ]);
+                    /** @var EventsManager $eventManager */
+                    $eventManager = ObjectManager::getInstance(EventsManager::class);
+                    $eventManager->dispatch('Weline_Framework_Session::driver_create_before', $eventData);
+                    
+                    // 允许 Observer 替换驱动类
+                    $driver_class = $eventData->getData('driver_class');
+                    $driver_config = $eventData->getData('config');
+                } finally {
+                    self::$isCreating = false;
+                }
+            }
+            
             $this->_session = new $driver_class($driver_config);
         }
         return $this->_session;

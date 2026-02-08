@@ -348,7 +348,7 @@ class WebSitemapData
      */
     public function getActiveUrls(int $websiteId): array
     {
-        return $this->sitemapUrlModel->getActiveUrlsByWebsite($websiteId);
+        return $this->sitemapUrlModel->getActiveUrls($websiteId);
     }
 
     /**

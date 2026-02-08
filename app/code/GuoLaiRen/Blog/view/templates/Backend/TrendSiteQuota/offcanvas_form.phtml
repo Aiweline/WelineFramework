@@ -1,0 +1,113 @@
+<?php
+/**
+ * 站点发文配额 Offcanvas 表单（iframe 内加载）
+ *
+ * @var \GuoLaiRen\Blog\Model\TrendSiteQuota|null $quota
+ * @var array $sites
+ * @var array $profiles
+ * @var array $categoriesBySite
+ */
+$quota             = $this->getData('quota');
+$action            = $this->getData('action');
+$sites             = $this->getData('sites') ?? [];
+$profiles          = $this->getData('profiles') ?? [];
+$categoriesBySite  = $this->getData('categoriesBySite') ?? [];
+$isEdit            = $quota && $quota->getId();
+$title             = $isEdit ? __('编辑站点发文配额') : __('新建站点发文配额');
+$currentSiteId     = $quota ? (int)$quota->getData('site_id') : 0;
+$currentCategoryId = $quota ? (int)$quota->getData('default_category_id') : 0;
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?></title>
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
+    <style>
+        body { padding: 1rem; background: #fff; }
+    </style>
+</head>
+<body>
+
+<template>Weline_Component::message.phtml</template>
+
+<form id="offcanvasForm" action="<?= htmlspecialchars($action) ?>" method="post">
+    <div class="mb-3">
+        <label for="site_id" class="form-label"><?= __('站点') ?> <span class="text-danger">*</span></label>
+        <select class="form-select" id="site_id" name="site_id" required>
+            <option value=""><?= __('请选择') ?></option>
+            <?php foreach ($sites as $s): ?>
+                <option value="<?= (int)$s['site_id'] ?>" <?= $currentSiteId === (int)$s['site_id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($s['site_name']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="profile_id" class="form-label"><?= __('画像') ?> <span class="text-danger">*</span></label>
+        <select class="form-select" id="profile_id" name="profile_id" required>
+            <option value=""><?= __('请选择') ?></option>
+            <?php foreach ($profiles as $p): ?>
+                <option value="<?= (int)$p['profile_id'] ?>" <?= $quota && (int)$quota->getData('profile_id') === (int)$p['profile_id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($p['name']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="articles_per_day" class="form-label"><?= __('每日发文篇数') ?></label>
+        <input type="number" class="form-control" id="articles_per_day" name="articles_per_day" min="0"
+               value="<?= $quota ? (int)$quota->getData('articles_per_day') : 0 ?>">
+    </div>
+    <div class="mb-3">
+        <label for="default_category_id" class="form-label"><?= __('默认分类') ?></label>
+        <select class="form-select" id="default_category_id" name="default_category_id">
+            <option value="0"><?= __('未设置') ?></option>
+            <?php
+            $opts = $categoriesBySite[$currentSiteId] ?? [];
+            foreach ($opts as $cid => $cname):
+            ?>
+                <option value="<?= (int)$cid ?>" <?= $currentCategoryId === (int)$cid ? 'selected' : '' ?>><?= htmlspecialchars($cname) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <small class="text-muted"><?= __('该站点下的博客分类，用于自动发文归属；未设置则跳过该绑定。') ?></small>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">
+        <i class="mdi mdi-content-save me-1"></i><?= $isEdit ? __('保存') : __('创建') ?>
+    </button>
+</form>
+
+<script>
+(function() {
+    var categoriesBySite = <?= json_encode($categoriesBySite) ?>;
+    var siteSelect       = document.getElementById('site_id');
+    var categorySelect   = document.getElementById('default_category_id');
+
+    function updateCategoryOptions() {
+        var siteId = parseInt(siteSelect.value, 10) || 0;
+        var opts   = categoriesBySite[siteId] || {};
+        var oldVal = categorySelect.value;
+        categorySelect.innerHTML = '<option value="0"><?= __('未设置') ?></option>';
+        for (var id in opts) {
+            if (opts.hasOwnProperty(id)) {
+                var o = document.createElement('option');
+                o.value       = id;
+                o.textContent = opts[id];
+                categorySelect.appendChild(o);
+            }
+        }
+        if (categorySelect.querySelector('option[value="' + oldVal + '"]')) {
+            categorySelect.value = oldVal;
+        }
+    }
+
+    if (siteSelect) {
+        siteSelect.addEventListener('change', updateCategoryOptions);
+    }
+})();
+</script>
+
+</body>
+</html>

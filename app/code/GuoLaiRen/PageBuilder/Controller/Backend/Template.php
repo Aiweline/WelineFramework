@@ -145,9 +145,20 @@ class Template extends BackendController
     public function postTogglePublish()
     {
         try {
-            $styleId = (int)$this->request->getPost('style_id');
-            $isPublished = (int)$this->request->getPost('is_published', 0);
-            $skipPreviewCheck = (bool)$this->request->getPost('skip_preview_check', false);
+            // 使用 getBodyParams() 兼容 JSON 请求（WLS 模式不支持 multipart/form-data）
+            $bodyParams = $this->request->getBodyParams();
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
+            }
+            
+            $styleId = (int)($data['style_id'] ?? $this->request->getPost('style_id'));
+            $isPublished = (int)($data['is_published'] ?? $this->request->getPost('is_published', 0));
+            $skipPreviewCheck = (bool)($data['skip_preview_check'] ?? $this->request->getPost('skip_preview_check', false));
             
             if ($styleId <= 0) {
                 return $this->fetchJson([
@@ -555,8 +566,15 @@ class Template extends BackendController
     public function autoSave()
     {
         try {
-            $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody ?? '', true);
+            // 使用 getBodyParams() 兼容 WLS 和 FPM 模式（WLS 下 php://input 不可用）
+            $bodyParams = $this->request->getBodyParams();
+            if (is_string($bodyParams)) {
+                $data = json_decode($bodyParams, true);
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = null;
+            }
             
             if (!$data) {
                 $data = [
@@ -717,8 +735,19 @@ class Template extends BackendController
     public function postGeneratePreview()
     {
         try {
-            $styleCode = $this->request->getPost('style_code');
-            $force = (bool)$this->request->getPost('force', false);
+            // 使用 getBodyParams() 兼容 JSON 请求（WLS 模式不支持 multipart/form-data）
+            $bodyParams = $this->request->getBodyParams();
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
+            }
+            
+            $styleCode = $data['style_code'] ?? $this->request->getPost('style_code');
+            $force = (bool)($data['force'] ?? $this->request->getPost('force', false));
             
             if (empty($styleCode)) {
                 return $this->fetchJson([
@@ -801,8 +830,19 @@ class Template extends BackendController
     public function postUploadPreview()
     {
         try {
-            $styleCode = $this->request->getPost('style_code');
-            $imageData = $this->request->getPost('image_data');
+            // 使用 getBodyParams() 兼容 JSON 和 FormData（WLS 模式不支持 multipart/form-data）
+            $bodyParams = $this->request->getBodyParams();
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
+            }
+            
+            $styleCode = $data['style_code'] ?? $this->request->getPost('style_code');
+            $imageData = $data['image_data'] ?? $this->request->getPost('image_data');
             
             if (empty($styleCode)) {
                 return $this->fetchJson([
@@ -893,7 +933,18 @@ class Template extends BackendController
     public function postGenerateAllPreviews()
     {
         try {
-            $force = (bool)$this->request->getPost('force', false);
+            // 使用 getBodyParams() 兼容 JSON 请求（WLS 模式不支持 multipart/form-data）
+            $bodyParams = $this->request->getBodyParams();
+            if (is_string($bodyParams)) {
+                $decoded = json_decode($bodyParams, true);
+                $data = ($decoded !== null && is_array($decoded)) ? $decoded : $this->request->getParams();
+            } elseif (is_array($bodyParams) && !empty($bodyParams)) {
+                $data = $bodyParams;
+            } else {
+                $data = $this->request->getParams();
+            }
+            
+            $force = (bool)($data['force'] ?? $this->request->getPost('force', false));
             
             // 获取所有模板
             $styles = clone $this->styleModel;

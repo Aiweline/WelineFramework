@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_app_metadata_name__",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "__MSG_app_metadata_description__",
   "host_permissions": [
     "<all_urls>"
@@ -15,11 +15,12 @@
     "debugger",
     "unlimitedStorage",
     "webNavigation",
-    "sidePanel"
+    "sidePanel",
+    "offscreen"
   ],
   "options_page": "options/index.html",
   "background": {
-    "service_worker": "background.iife.js",
+    "service_worker": "background-bridge.js",
     "type": "module"
   },
   "action": {
@@ -51,7 +52,10 @@
         "icon-32.png",
         "permission/index.html",
         "permission/permission.js",
-        "inference-worker.js"
+        "inference-worker.js",
+        "lib/*",
+        "offscreen/offscreen.html",
+        "offscreen/offscreen.js"
       ],
       "matches": [
         "*://*/*"
@@ -59,7 +63,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self' blob:;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co blob:;"
   },
   "side_panel": {
     "default_path": "side-panel/index.html"

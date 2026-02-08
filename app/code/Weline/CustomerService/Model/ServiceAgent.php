@@ -27,8 +27,12 @@ class ServiceAgent extends Model
     public const fields_supported_locales = 'supported_locales';
     public const fields_is_active = 'is_active';
     public const fields_max_sessions = 'max_sessions';
+    public const fields_last_heartbeat = 'last_heartbeat';
     public const fields_created_at = 'created_at';
     public const fields_updated_at = 'updated_at';
+
+    /** 心跳超时秒数：超过此时间未收到心跳视为离线 */
+    public const HEARTBEAT_TIMEOUT = 60;
 
     public function _init(): void
     {
@@ -48,11 +52,24 @@ class ServiceAgent extends Model
             $setup->alterTable()
                 ->addColumn(
                     self::fields_supported_locales,
-                    self::fields_locale, // 在 locale 字段之后添加
+                    self::fields_locale,
                     TableInterface::column_type_TEXT,
                     0,
                     '',
                     '支持的语言列表(JSON)'
+                )
+                ->alter();
+        }
+        // 添加最后心跳时间字段（在线状态检测）
+        if (!$setup->hasField(self::fields_last_heartbeat)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_last_heartbeat,
+                    self::fields_max_sessions,
+                    TableInterface::column_type_DATETIME,
+                    0,
+                    '',
+                    '最后心跳时间'
                 )
                 ->alter();
         }
@@ -135,6 +152,26 @@ class ServiceAgent extends Model
     public function setMaxSessions(int $maxSessions): static
     {
         return $this->setData(self::fields_max_sessions, $maxSessions);
+    }
+
+    /**
+     * 更新心跳时间（标记为在线）
+     */
+    public function updateHeartbeat(): static
+    {
+        return $this->setData(self::fields_last_heartbeat, date('Y-m-d H:i:s'));
+    }
+
+    /**
+     * 判断客服是否在线（心跳在超时时间内）
+     */
+    public function isOnline(): bool
+    {
+        $lastHeartbeat = $this->getData(self::fields_last_heartbeat);
+        if (empty($lastHeartbeat)) {
+            return false;
+        }
+        return (time() - strtotime($lastHeartbeat)) < self::HEARTBEAT_TIMEOUT;
     }
 
     /**

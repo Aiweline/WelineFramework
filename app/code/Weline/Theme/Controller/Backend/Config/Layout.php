@@ -652,7 +652,7 @@ class Layout extends BackendController
         // 使用 OR 条件：category IS NULL OR category = '' OR category = path
         if (($type === 'colors' && $path === 'colors') || ($type === 'variable' && $path === 'variables')) {
             $categoryField = \Weline\Meta\Model\Meta::fields_CATEGORY;
-            $metasResult->where("({$categoryField} IS NULL OR {$categoryField} = '' OR {$categoryField} = '{$path}')");
+            $metasResult->whereRaw("{$categoryField} IS NULL OR {$categoryField} = '' OR {$categoryField} = '{$path}'");
         } else {
             $metasResult->where(\Weline\Meta\Model\Meta::fields_CATEGORY, $path);
         }

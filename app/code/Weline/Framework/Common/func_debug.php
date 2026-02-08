@@ -947,6 +947,99 @@ if (!function_exists('p_sql')) {
     }
 }
 
+/**
+ * Agent 调试日志函数（支持 Debug::env 标签过滤 + 值匹配）
+ * 
+ * 结合 Debug::env() 实现精确的日志过滤，特别适合在循环中只记录关键日志。
+ * 
+ * 使用方式：
+ * 1. 按模块过滤：Debug::env('router_debug') + agent_log(..., 'router_debug')
+ * 2. 精确过滤：Debug::env('url', false, '/admin') + agent_log(..., 'url', $url)
+ *    只有当 $url === '/admin' 时才记录
+ * 
+ * @param string $location 日志位置（格式：File.php:method:tag）
+ * @param string $message 日志消息
+ * @param array $data 日志数据
+ * @param string|null $target 目标标签（对应 Debug::env() 的 key，为空则始终记录）
+ * @param mixed $targetValue 目标值（对应 Debug::env() 的 value，用于精确匹配）
+ *                           - null: 只检查 target 是否存在（按模块过滤）
+ *                           - 非 null: 检查 target 存在且值匹配（精确过滤）
+ * @param string $hypothesisId 假设ID（用于调试追踪）
+ * @param string $sessionId 会话ID（默认 'debug-session'）
+ * @param string $runId 运行ID（默认 'run1'）
+ * @return void
+ */
+if (!function_exists('agent_log')) {
+    function agent_log(
+        string $location,
+        string $message,
+        array $data = [],
+        ?string $target = null,
+        mixed $targetValue = null,
+        string $hypothesisId = 'H_default',
+        string $sessionId = 'debug-session',
+        string $runId = 'run1'
+    ): void {
+        // 如果指定了 target，检查 Debug::env() 是否已设置此 key
+        if ($target !== null) {
+            // 检查 $_ENV['w-debug'][$target] 是否存在（由 Debug::env() 设置）
+            if (!isset($_ENV['w-debug'][$target])) {
+                return; // target 未设置，跳过
+            }
+            // 如果指定了 targetValue，进行精确值匹配（用于循环中过滤）
+            if ($targetValue !== null) {
+                $envValue = $_ENV['w-debug'][$target];
+                // 支持多种匹配方式
+                if (\is_array($envValue)) {
+                    // envValue 是数组：检查 targetValue 是否在数组中
+                    if (!\in_array($targetValue, $envValue, true)) {
+                        return; // 值不在数组中，跳过
+                    }
+                } elseif ($envValue !== $targetValue) {
+                    // envValue 是单值：严格相等匹配
+                    return; // 值不匹配，跳过
+                }
+            }
+        }
+        
+        // 构建日志内容（JSON 格式，兼容 NDJSON）
+        $logData = [
+            'sessionId' => $sessionId,
+            'runId' => $runId,
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => (int)(\microtime(true) * 1000),
+        ];
+        if ($target !== null) {
+            $logData['target'] = $target;
+        }
+        
+        $logContent = \json_encode($logData, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
+        
+        // 使用 Env::log() 写入日志到 .cursor/debug.log（使用绝对路径，Env::log 会直接使用）
+        try {
+            if (\defined('BP')) {
+                $logPath = BP . '.cursor' . \DIRECTORY_SEPARATOR . 'debug.log';
+                // 确保目录存在
+                $logDir = \dirname($logPath);
+                if (!\is_dir($logDir)) {
+                    @\mkdir($logDir, 0755, true);
+                }
+                // 使用绝对路径，Env::log 会直接使用而不转换
+                // 使用 @ 抑制可能的警告，避免影响主流程
+                @\Weline\Framework\App\Env::log($logPath, $logContent, 'DEBUG', true, true, 1);
+            }
+        } catch (\Throwable $e) {
+            // 日志写入失败，静默忽略（避免影响主流程）
+            // 不记录错误日志，避免循环
+        } catch (\Error $e) {
+            // PHP 7+ Error 异常
+        }
+    }
+}
+
 // 新增调试日志函数
 if (!function_exists('p_log')) {
     /**

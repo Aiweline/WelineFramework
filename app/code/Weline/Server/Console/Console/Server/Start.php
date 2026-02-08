@@ -126,8 +126,8 @@ class Start implements CommandInterface
                     $this->printTable('服务访问地址', [
                         ['前端首页', "http://{$host}:{$port}/"],
                         ['前端API', "http://{$host}:{$port}/api/rest"],
-                        ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
-                        ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+                        ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
+                        ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
                     ], true, 0, false); // false 表示不截断URL，完整显示地址
                     echo "\n";
                     
@@ -143,8 +143,8 @@ class Start implements CommandInterface
                     $this->printTable('服务访问地址', [
                         ['前端首页', "http://{$host}:{$port}/"],
                         ['前端API', "http://{$host}:{$port}/api/rest"],
-                        ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
-                        ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+                        ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
+                        ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
                     ], true, 0, false); // false 表示不截断URL，完整显示地址
                     echo "\n";
                     $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
@@ -162,8 +162,8 @@ class Start implements CommandInterface
         $this->printTable('本地访问地址', [
             ['前端首页', "http://{$host}:{$port}/"],
             ['前端API', "http://{$host}:{$port}/api/rest"],
-            ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
-            ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+            ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
+            ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
         ], true, 0, false); // false 表示不截断URL，完整显示地址
         
         echo "\n";
@@ -173,8 +173,8 @@ class Start implements CommandInterface
         $this->printTable('局域网访问地址', [
             ['前端首页', "http://{$localIp}:{$port}/"],
             ['前端API', "http://{$localIp}:{$port}/api/rest"],
-            ['后端管理', "http://{$localIp}:{$port}/" . Env::get('admin') . "/admin/login"],
-            ['后端API', "http://{$localIp}:{$port}/" . Env::get('api_admin') . "/rest"],
+            ['后端管理', "http://{$localIp}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
+            ['后端API', "http://{$localIp}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
         ], true, 0, false); // false 表示不截断URL，完整显示地址
         
         echo "\n";
@@ -387,36 +387,38 @@ class Start implements CommandInterface
     }
 
     /**
-     * 清理服务器配置
+     * 清理服务器配置（仅移除运行时字段，保留用户配置如 worker_count、port、mode 等）
      */
     private function clearServerConfig(): void
     {
         $env = Env::getInstance();
-        $config = $env->getConfig();
-        
-        if (isset($config['server'])) {
-            unset($config['server']);
-            // 重新设置整个配置，不传递null值
-            $env->setConfig('server', []);
-            $env->save();
+        $server = $env->get('server');
+        if (!\is_array($server)) {
+            return;
         }
+        $runtimeKeys = ['pid', 'start_time', 'status'];
+        $cleaned = $server;
+        foreach ($runtimeKeys as $key) {
+            unset($cleaned[$key]);
+        }
+        $env->setConfig('server', $cleaned);
+        $env->save();
     }
 
     /**
-     * 保存服务器进程ID到环境配置
+     * 保存服务器进程ID到环境配置（与现有 server 配置合并，不覆盖 worker_count 等用户配置）
      */
     private function saveServerPid(string $host, int $port, int $pid): void
     {
         $env = Env::getInstance();
-        
-        $serverConfig = [
-            'host' => $host,
-            'port' => $port,
-            'pid' => $pid,
-            'start_time' => time(),
-            'status' => 'running'
-        ];
-        
+        $existing = $env->get('server');
+        $serverConfig = \is_array($existing) ? $existing : [];
+        $serverConfig['host'] = $host;
+        $serverConfig['port'] = $port;
+        $serverConfig['pid'] = $pid;
+        $serverConfig['start_time'] = time();
+        $serverConfig['status'] = 'running';
+
         $env->setConfig('server', $serverConfig);
         $env->save();
     }

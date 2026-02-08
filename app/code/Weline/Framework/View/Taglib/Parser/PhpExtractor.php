@@ -41,6 +41,15 @@ final class PhpExtractor
     private array $placeholders = [];
 
     /**
+     * 重置内部状态，允许实例复用（避免每次编译创建新实例）
+     */
+    public function reset(): void
+    {
+        $this->counter = 0;
+        $this->placeholders = [];
+    }
+
+    /**
      * 提取 PHP 代码块，返回清洁内容
      * 
      * 使用 token_get_all() 精确解析，正确处理：
@@ -334,15 +343,6 @@ final class PhpExtractor
     public function getPlaceholders(): array
     {
         return $this->placeholders;
-    }
-
-    /**
-     * 重置状态
-     */
-    public function reset(): void
-    {
-        $this->counter = 0;
-        $this->placeholders = [];
     }
 
     /**

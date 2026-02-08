@@ -32,48 +32,44 @@ var MCPClient = (function () {
             return true;
         }
 
-        // 方法1: 尝试从 localStorage 获取保存的扩展 ID
-        try {
-            var savedId = localStorage.getItem(AUTOLEADAGENT_EXTENSION_ID_KEY);
-            if (savedId) {
-                var pingResult = await pingExtension(savedId);
-                if (pingResult) {
-                    extensionId = savedId;
-                    autoLeadAgentDetected = true;
-                    mcpType = 'autoleadagent';
-                    console.log('[MCPClient] AutoLeadAgent extension detected (from saved ID):', savedId);
-                    return true;
-                }
-            }
-        } catch (e) {
-            // 忽略 localStorage 错误
+        // 方法1（优先）: 通过 content script 发现扩展
+        // content script 注入到每个页面，通过 window.postMessage 通信
+        // 不依赖 chrome.runtime（普通网页上不可用）
+        var discovered = await discoverExtensionViaContentScript();
+        if (discovered) {
+            return true;
         }
 
-        // 方法2: 尝试已知的扩展 ID 列表
-        if (typeof window !== 'undefined' && window.AUTOLEADAGENT_EXTENSION_IDS) {
-            for (var i = 0; i < window.AUTOLEADAGENT_EXTENSION_IDS.length; i++) {
-                var testId = window.AUTOLEADAGENT_EXTENSION_IDS[i];
-                var pingResult = await pingExtension(testId);
-                if (pingResult) {
-                    extensionId = testId;
-                    autoLeadAgentDetected = true;
-                    mcpType = 'autoleadagent';
-                    // 保存到 localStorage
-                    try {
-                        localStorage.setItem(AUTOLEADAGENT_EXTENSION_ID_KEY, testId);
-                    } catch (e) {}
-                    console.log('[MCPClient] AutoLeadAgent extension detected:', testId);
-                    return true;
-                }
-            }
-        }
-
-        // 方法3: 检查 chrome.runtime 是否可用并尝试发现
+        // 方法2: 尝试从 localStorage 获取保存的扩展 ID（仅在 chrome.runtime 可用时有效）
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-            // 尝试通过 content script 与扩展通信
-            var discovered = await discoverExtensionViaContentScript();
-            if (discovered) {
-                return true;
+            try {
+                var savedId = localStorage.getItem(AUTOLEADAGENT_EXTENSION_ID_KEY);
+                if (savedId) {
+                    var pingResult = await pingExtension(savedId);
+                    if (pingResult) {
+                        extensionId = savedId;
+                        autoLeadAgentDetected = true;
+                        mcpType = 'autoleadagent';
+                        console.log('[MCPClient] AutoLeadAgent extension detected (from saved ID):', savedId);
+                        return true;
+                    }
+                }
+            } catch (e) {}
+
+            // 方法3: 尝试已知的扩展 ID 列表
+            if (typeof window !== 'undefined' && window.AUTOLEADAGENT_EXTENSION_IDS) {
+                for (var i = 0; i < window.AUTOLEADAGENT_EXTENSION_IDS.length; i++) {
+                    var testId = window.AUTOLEADAGENT_EXTENSION_IDS[i];
+                    var pingResult = await pingExtension(testId);
+                    if (pingResult) {
+                        extensionId = testId;
+                        autoLeadAgentDetected = true;
+                        mcpType = 'autoleadagent';
+                        try { localStorage.setItem(AUTOLEADAGENT_EXTENSION_ID_KEY, testId); } catch (e) {}
+                        console.log('[MCPClient] AutoLeadAgent extension detected:', testId);
+                        return true;
+                    }
+                }
             }
         }
 
@@ -631,42 +627,75 @@ var MCPClient = (function () {
     }
 
     /**
+     * 通过 content script 中继发送消息到扩展后台
+     * 兼容普通网页（chrome.runtime 不可用的场景）
+     */
+    function sendViaContentScript(payload, timeoutMs) {
+        timeoutMs = timeoutMs || 60000;
+        return new Promise(function(resolve, reject) {
+            var requestId = 'mcp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            var done = false;
+            var timer = setTimeout(function() {
+                if (done) return;
+                done = true;
+                window.removeEventListener('message', handler);
+                reject(new Error('Extension request timeout (' + Math.round(timeoutMs / 1000) + 's)'));
+            }, timeoutMs);
+
+            function handler(event) {
+                if (event.source !== window || !event.data) return;
+                if (event.data.type === 'AUTOLEADAGENT_RESPONSE' && event.data.requestId === requestId) {
+                    if (done) return;
+                    done = true;
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+                    var resp = event.data.response;
+                    var err = event.data.error;
+                    if (err) { reject(new Error(err)); }
+                    else if (resp && resp.error) { reject(new Error(resp.error)); }
+                    else { resolve(resp || { success: true }); }
+                }
+            }
+            window.addEventListener('message', handler);
+
+            // 通过 content script 中继
+            window.postMessage({
+                type: 'AUTOLEADAGENT_REQUEST',
+                payload: payload,
+                requestId: requestId
+            }, '*');
+        });
+    }
+
+    /**
      * 调用 AutoLeadAgent 扩展工具
-     * 通过 chrome.runtime.sendMessage 发送任务给扩展
-     * @param {string} toolName 工具名称
-     * @param {Object} args 工具参数
-     * @returns {Promise<Object>} 工具执行结果
+     * 使用 WASM_EXECUTE_TOOL 协议直接调用工具（比 EXECUTE_TASK 自然语言包装更可靠）
+     * 优先通过 content script 中继（兼容普通网页），回退到 chrome.runtime 直连
      */
     async function callAutoLeadAgentTool(toolName, args) {
-        return new Promise(function(resolve, reject) {
-            if (!extensionId) {
-                reject(new Error('AutoLeadAgent extension ID not available'));
-                return;
-            }
+        var toolCallId = 'tc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+        var payload = { type: 'WASM_EXECUTE_TOOL', id: toolCallId, name: toolName, arguments: args || {} };
 
-            try {
-                chrome.runtime.sendMessage(extensionId, {
-                    type: 'EXECUTE_TASK',
-                    command: 'newTask',
-                    task: formatTaskFromTool(toolName, args)
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else if (response && response.error) {
-                        reject(new Error(response.error));
-                    } else {
-                        resolve(response || { success: true });
-                    }
+        // 优先通过 content script 中继（普通网页上 chrome.runtime 不可用）
+        try {
+            return await sendViaContentScript(payload, 60000);
+        } catch (relayErr) {
+            console.warn('[MCPClient] Content script relay failed, trying direct:', relayErr.message);
+        }
+
+        // 回退：直连 chrome.runtime（仅在扩展页面中可用）
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage && extensionId) {
+            return new Promise(function(resolve, reject) {
+                chrome.runtime.sendMessage(extensionId, payload, function(response) {
+                    if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                    else if (response && response.error) reject(new Error(typeof response.error === 'object' ? response.error.message : response.error));
+                    else resolve(response || { success: true });
                 });
+                setTimeout(function() { reject(new Error('Direct call timeout (60s)')); }, 60000);
+            });
+        }
 
-                // 超时处理
-                setTimeout(function() {
-                    reject(new Error('AutoLeadAgent tool call timeout (60s)'));
-                }, 60000);
-            } catch (e) {
-                reject(e);
-            }
-        });
+        throw new Error('Cannot communicate with extension: no relay or chrome.runtime available');
     }
 
     /**
@@ -842,42 +871,43 @@ var MCPClient = (function () {
      * @returns {Promise<Object>} 工具执行结果
      */
     async function executeToolForWasm(toolName, args, meta) {
+        var payload = {
+            type: 'WASM_EXECUTE_TOOL',
+            id: meta && meta.id ? meta.id : ('tc_' + Date.now()),
+            name: toolName,
+            arguments: args || {},
+            meta: meta || {}
+        };
+
+        // 优先 content script 中继
         try {
-            if (typeof chrome === 'undefined' || !chrome.runtime) {
-                throw new Error('Chrome Extension API is not available');
-            }
-
-            const extId = await getExtensionId();
-            if (!extId || extId === 'content-script') {
-                throw new Error('Extension ID not available');
-            }
-
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage(extId, {
-                    type: 'WASM_EXECUTE_TOOL',
-                    id: meta && meta.id ? meta.id : ('tc_' + Date.now()),
-                    name: toolName,
-                    arguments: args || {},
-                    meta: meta || {}
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-
-            return response;
-
-        } catch (error) {
-            console.error('[MCPClient] WASM tool execution failed:', error);
-            return {
-                success: false,
-                name: toolName,
-                error: { code: 'EXECUTION_ERROR', message: error.message }
-            };
+            return await sendViaContentScript(payload, 60000);
+        } catch (relayErr) {
+            console.warn('[MCPClient] WASM tool relay failed, trying direct:', relayErr.message);
         }
+
+        // 回退：直连
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                var extId = await getExtensionId();
+                if (extId && extId !== 'content-script') {
+                    return await new Promise(function(resolve, reject) {
+                        chrome.runtime.sendMessage(extId, payload, function(response) {
+                            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                            else resolve(response);
+                        });
+                    });
+                }
+            }
+        } catch (directErr) {
+            console.warn('[MCPClient] WASM tool direct call failed:', directErr.message);
+        }
+
+        return {
+            success: false,
+            name: toolName,
+            error: { code: 'EXECUTION_ERROR', message: 'Cannot reach extension via relay or direct' }
+        };
     }
 
     /**
@@ -888,40 +918,41 @@ var MCPClient = (function () {
      * @returns {Promise<Object>} 批量执行结果
      */
     async function executeToolsBatchForWasm(calls, meta) {
+        var payload = {
+            type: 'WASM_EXECUTE_TOOLS_BATCH',
+            calls: calls,
+            meta: meta || {}
+        };
+
+        // 优先 content script 中继
         try {
-            if (typeof chrome === 'undefined' || !chrome.runtime) {
-                throw new Error('Chrome Extension API is not available');
-            }
-
-            const extId = await getExtensionId();
-            if (!extId || extId === 'content-script') {
-                throw new Error('Extension ID not available');
-            }
-
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage(extId, {
-                    type: 'WASM_EXECUTE_TOOLS_BATCH',
-                    calls: calls,
-                    meta: meta || {}
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-
-            return response;
-
-        } catch (error) {
-            console.error('[MCPClient] WASM batch tool execution failed:', error);
-            return {
-                success: false,
-                error: { code: 'BATCH_EXECUTION_ERROR', message: error.message },
-                results: []
-            };
+            return await sendViaContentScript(payload, 120000);
+        } catch (relayErr) {
+            console.warn('[MCPClient] WASM batch relay failed, trying direct:', relayErr.message);
         }
+
+        // 回退：直连
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                var extId = await getExtensionId();
+                if (extId && extId !== 'content-script') {
+                    return await new Promise(function(resolve, reject) {
+                        chrome.runtime.sendMessage(extId, payload, function(response) {
+                            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                            else resolve(response);
+                        });
+                    });
+                }
+            }
+        } catch (directErr) {
+            console.warn('[MCPClient] WASM batch direct call failed:', directErr.message);
+        }
+
+        return {
+            success: false,
+            error: { code: 'BATCH_EXECUTION_ERROR', message: 'Cannot reach extension via relay or direct' },
+            results: []
+        };
     }
 
     /**
@@ -968,25 +999,27 @@ var MCPClient = (function () {
             await detectAutoLeadAgentExtension();
         }
 
-        if (!extensionId) {
-            throw new Error('AutoLeadAgent extension not found. Please install and enable the extension.');
+        var payload = { type: 'EXECUTE_TASK', command: 'newTask', task: task };
+
+        // 优先通过 content script 中继
+        try {
+            return await sendViaContentScript(payload, 120000);
+        } catch (relayErr) {
+            console.warn('[MCPClient] sendTaskToExtension relay failed:', relayErr.message);
         }
 
-        return new Promise(function(resolve, reject) {
-            chrome.runtime.sendMessage(extensionId, {
-                type: 'EXECUTE_TASK',
-                command: 'newTask',
-                task: task
-            }, function(response) {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else if (response && response.error) {
-                    reject(new Error(response.error));
-                } else {
-                    resolve(response || { success: true });
-                }
+        // 回退：直连
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage && extensionId) {
+            return new Promise(function(resolve, reject) {
+                chrome.runtime.sendMessage(extensionId, payload, function(response) {
+                    if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                    else if (response && response.error) reject(new Error(response.error));
+                    else resolve(response || { success: true });
+                });
             });
-        });
+        }
+
+        throw new Error('AutoLeadAgent extension not found or not reachable.');
     }
 
     /**
@@ -998,21 +1031,20 @@ var MCPClient = (function () {
             await detectAutoLeadAgentExtension();
         }
 
-        if (!extensionId) {
+        try {
+            return await sendViaContentScript({ type: 'OPEN_SIDE_PANEL' }, 5000);
+        } catch (e) {
+            // 回退：直连
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage && extensionId) {
+                return new Promise(function(resolve, reject) {
+                    chrome.runtime.sendMessage(extensionId, { type: 'OPEN_SIDE_PANEL' }, function(response) {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else resolve(true);
+                    });
+                });
+            }
             throw new Error('AutoLeadAgent extension not found');
         }
-
-        return new Promise(function(resolve, reject) {
-            chrome.runtime.sendMessage(extensionId, {
-                type: 'OPEN_SIDE_PANEL'
-            }, function(response) {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else {
-                    resolve(true);
-                }
-            });
-        });
     }
 
     // 导出公共 API

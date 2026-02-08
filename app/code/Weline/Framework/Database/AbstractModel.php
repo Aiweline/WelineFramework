@@ -819,6 +819,48 @@ abstract class AbstractModel extends DataObject
         return ObjectManager::getInstance(EventsManager::class);
     }
 
+    /** 供 QueryDelegator 等内部组件使用 */
+    public function getProcessTableName(): string
+    {
+        return $this->processTable();
+    }
+
+    /** 供 QueryDelegator 等内部组件使用 */
+    public function getEventManager(): EventsManager
+    {
+        return $this->getEvenManager();
+    }
+
+    public function setInsertFlag(bool $v): void
+    {
+        $this->is_insert = $v;
+    }
+
+    public function setFindFieldsValue(string $v): void
+    {
+        $this->find_fields = $v;
+    }
+
+    public function setDeleteFlag(bool $v): void
+    {
+        $this->is_delete = $v;
+    }
+
+    public function getFindFieldsValue(): string
+    {
+        return $this->find_fields;
+    }
+
+    public function getIsInsert(): bool
+    {
+        return $this->is_insert;
+    }
+
+    public function getIsDelete(): bool
+    {
+        return $this->is_delete;
+    }
+
     public function delete_before()
     {
     }
@@ -885,172 +927,13 @@ abstract class AbstractModel extends DataObject
      */
     public function __call($method, $args)
     {
-        
-        // 模型查询
-        if (in_array($method, get_class_methods(QueryInterface::class))) {
-            # 某些函数是不需要保持查询的
-            if ($method == 'clearQuery') {
-                $query = $this->getQuery(false);
-            } else {
-                $query = $this->getQuery();
-            }
-            if ($method == 'insert') {
-                $this->is_insert = true;
-            }
-            if ($method == 'find') {
-                $this->find_fields = implode(',', $args);
-            }
-            if ($method == 'delete') {
-                $this->is_delete = true;
-                // load之前事件
-                if ($this->getId()) {
-                    $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
-                } elseif ($this->getQuery()->wheres) { # 存在条件，则按照条件所指删除
-                    $this->getQuery()->delete();
-                } elseif ($this->_unit_primary_keys) { # 处理联合化主键的情况
-                    foreach ($this->_unit_primary_keys as $unit_primary_key) {
-                        if (empty($this->getData($unit_primary_key))) {
-                            throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
-                        }
-                        $query->where($unit_primary_key, $this->getData($unit_primary_key));
-                    }
-                    $query->delete();
-                } else {
-                    throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
-                }
-            }
-            if ($method == 'total') {
-                return $query->$method(...$args);
-            }
-            # 注入选择的模型字段
-            if ($method == 'fields') {
-                // 旧代码
-                // $fields = explode(',', ...$args);
-                // foreach ($fields as &$field) {
-                //     if (is_int(strpos($field, '.'))) {
-                //         $fields_array = explode('.', $field);
-                //         $field = array_pop($fields_array);
-                //     }
-                //     # 别名
-                //     if (is_int(strpos($field, 'as'))) {
-                //         $fields_array = explode('as', $field);
-                //         $field = array_pop($fields_array);
-                //     }
-                // }
-                // $this->bindModelFields($fields);
-                // 处理数组参数（如 ['total' => 'SUM(...)']）
-                if (!empty($args) && is_array($args[0])) {
-                    $fieldsArray = $args[0];
-                    // 将关联数组转换为字符串格式（如 'SUM(...) AS total'）
-                    $fieldsStringParts = [];
-                    foreach ($fieldsArray as $alias => $expression) {
-                        if (is_string($alias) && is_string($expression)) {
-                            // 关联数组格式：['alias' => 'expression'] -> 'expression AS alias'
-                            $fieldsStringParts[] = $expression . ' AS ' . $alias;
-                        } else {
-                            // 普通数组格式：['field1', 'field2'] -> 'field1,field2'
-                            $fieldsStringParts[] = $expression;
-                        }
-                    }
-                    $fieldsString = implode(',', $fieldsStringParts);
-                    // 传递给查询对象
-                    $query->fields($fieldsString);
-                    // 绑定模型字段（用于字段映射）
-                    $this->bindModelFields(array_keys($fieldsArray));
-                } else {
-                    // 处理字符串参数（如 'field1,field2'）
-                    $fieldsString = is_array($args[0] ?? '') ? '' : ($args[0] ?? '');
-                    $fields = !empty($fieldsString) ? explode(',', $fieldsString) : [];
-                    foreach ($fields as &$field) {
-                        if (is_string($field) && is_int(strpos($field, '.'))) {
-                            $fields_array = explode('.', $field);
-                            $field = array_pop($fields_array);
-                        }
-                        # 别名
-                        if (is_string($field) && is_int(strpos($field, 'as'))) {
-                            $fields_array = explode('as', $field);
-                            $field = array_pop($fields_array);
-                        }
-                    }
-                    $this->bindModelFields($fields);
-                }
-            }
-            # 非链式操作的Fetch
-            $is_fetch = false;
-            # 拦截fetch操作 注入返回的模型
-            if ('fetch' === $method) {
-                if ($this->is_delete) {
-                    // 加载之前
-                    $this->delete_before();
-                    $eventData = new DataObject(['model' => &$this]);
-                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', $eventData);
-                }
-                # 如果是空数据更新
-                if (!trim($this->getQuery()->getPrepareSql(false))) {
-                    return $this;
-                }
-                $args[] = $this::class;
-                $is_fetch = true;
-            }
-            $query_data = $query->$method(...$args);
-            if ($query_data instanceof QueryInterface) {
-                $this->setQuery($query_data);
-            }
-            $this->setQueryData($query_data);
-            if ('fetchArray' === $method) {
-                return $query_data;
-            }
-            # 拦截fetch返回的数据注入模型
-            if ($is_fetch) {
-                if ($this->is_delete) {
-                    $this->clearData();
-                    // load之之后事件
-                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_after', $eventData);
-                    // 加载之后
-                    $this->delete_after();
-                }
-                $this->fetch_before();
-                if (is_object($query_data)) {
-                    /**@var AbstractModel $query_data */
-                    $this->setFetchData($query_data->getData());
-                    $this->setObjectData($query_data->getData());
-                } elseif (is_array($query_data)) {
-                    $this->setFetchData($query_data);
-                    $this->setObjectData($query_data);
-                } elseif ($this->is_insert and (is_numeric($query_data) or is_string($query_data))) {
-                    $this->setId($query_data);
-                }
-                $this->fetch_after();
-                $this->clearQuery();
-                $this->is_delete = false;
-                if ($this->find_fields) {
-                    $find_fields = explode(',', $this->find_fields);
-                    $this->find_fields = '';
-                    $this->clearData();
-                    foreach ($find_fields as $find_field) {
-                        $this->setData($find_field, $query_data[$find_field] ?? null);
-                    }
-                    return $query_data;
-                }
-                # 清除当前查询
-                return $this;
-            }
-            $query_methods = [
-                'getPrepareSql',
-                'getSql',
-            ];
-            if (in_array($method, $query_methods)) {
-                return $query_data;
-            }
-            return $this;
+        if (in_array($method, get_class_methods(QueryInterface::class), true)) {
+            return (new \Weline\Framework\Database\Query\QueryDelegator())->delegate($this, $method, $args);
         }
-        /**
-         * 重载方法
-         */
         return parent::__call($method, $args);
     }
 
-    protected function setQueryData($query_data)
+    public function setQueryData($query_data)
     {
         $this->_query_data = $query_data;
         return $this;
@@ -1773,7 +1656,8 @@ PAGINATION;
     private function checkUpdateOrInsert(): mixed
     {
         if ($this->unique_data) {
-            $check_result = $this->getQuery()->where($this->unique_data)->find()->fetchArray() ?? [];
+            // 必须 clearQuery() 清理 load()/find() 等操作残留的 WHERE 条件，否则条件叠加可能导致查不到记录
+            $check_result = $this->getQuery()->clearQuery()->where($this->unique_data)->find()->fetchArray() ?? [];
         } else {
             $check_result = $this->unique_data;
         }
@@ -1829,13 +1713,12 @@ PAGINATION;
                 return $check_result[$this->_primary_key];
             }
 
-            // 🔧 修复：确保 identity_field 被正确设置
-            $query = $this->getQuery();
+            // clearQuery() 清理查询条件后再 update，避免条件叠加
+            $query = $this->getQuery()->clearQuery();
             if ($this->_primary_key && $query->identity_field !== $this->_primary_key) {
                 $query->identity($this->_primary_key);
             }
             
-            // 🔧 修复：在调用 update() 时传入正确的主键字段名作为第二个参数
             $save_result = $query
                 ->where($this->unique_data)
                 ->update($data, $this->_primary_key)
@@ -1857,7 +1740,8 @@ PAGINATION;
                 $conflictFields[] = $this->_primary_key;
             }
             
-            $save_result = $this->getQuery()
+            // clearQuery() 清理查询条件后再 insert，避免条件叠加
+            $save_result = $this->getQuery()->clearQuery()
                 ->insert($this->getModelData(), $conflictFields)
                 ->fetch();
             $this->setId($save_result);

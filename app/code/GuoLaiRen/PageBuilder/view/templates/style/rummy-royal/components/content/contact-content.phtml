@@ -1,0 +1,391 @@
+<?php
+/**
+ * RummyRoyal - Contact Content Component
+ * 
+ * 联系页面：表单 + 联系信息（邮箱、电话、地址）+ 社交链接
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Contact Us
+ * content.title => 标题:text:Get in Touch
+ * content.description => 描述:textarea:Have questions or need assistance? Our support team is here to help you 24/7.
+ * 
+ * group:contact => 联系信息
+ * contact.email => 邮箱:text:support@rummyroyal.com
+ * contact.phone => 电话:text:+91 1800-XXX-XXXX
+ * contact.address => 地址:text:RummyRoyal HQ, Bangalore, India
+ * contact.hours => 工作时间:text:24/7 Customer Support
+ * 
+ * group:social => 社交链接
+ * social.items => 社交链接:textarea:Facebook|https://facebook.com\r\nTwitter|https://twitter.com\r\nInstagram|https://instagram.com\r\nYouTube|https://youtube.com|格式：名称|链接，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['section_bg_1'] ?? '#0d0718';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$textMuted = $colors['text_muted'] ?? '#8b6f47';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+$inputBg = $colors['input_bg'] ?? 'rgba(255, 255, 255, 0.05)';
+$inputBorder = $colors['input_border'] ?? 'rgba(234, 179, 8, 0.15)';
+$inputBorderFocus = $colors['input_border_focus'] ?? '#eab308';
+$inputText = $colors['input_text'] ?? '#fef3c7';
+$inputPlaceholder = $colors['input_placeholder'] ?? '#8b6f47';
+
+$badge = $config['content.badge'] ?? 'Contact Us';
+$title = $config['content.title'] ?? 'Get in Touch';
+$description = $config['content.description'] ?? 'Have questions or need assistance? Our support team is here to help you 24/7.';
+
+$email = $config['contact.email'] ?? 'support@rummyroyal.com';
+$phone = $config['contact.phone'] ?? '+91 1800-XXX-XXXX';
+$address = $config['contact.address'] ?? 'RummyRoyal HQ, Bangalore, India';
+$hours = $config['contact.hours'] ?? '24/7 Customer Support';
+
+$socialRaw = $config['social.items'] ?? "Facebook|https://facebook.com\nTwitter|https://twitter.com\nInstagram|https://instagram.com\nYouTube|https://youtube.com";
+$socials = [];
+$lines = preg_split('/[\r\n]+/', $socialRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $sName = trim($parts[0] ?? '');
+    $sUrl = trim($parts[1] ?? '#');
+    if (!empty($sName)) $socials[] = ['name' => $sName, 'url' => $sUrl];
+}
+
+$instanceId = 'rr-contact-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+        }
+        
+        /* Form */
+        #<?= $instanceId ?> .rr-ct-form-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            padding: 40px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-form-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 24px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field {
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: <?= $textSecondary ?>;
+            margin-bottom: 8px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field input,
+        #<?= $instanceId ?> .rr-ct-field textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: <?= $inputBg ?>;
+            border: 1px solid <?= $inputBorder ?>;
+            border-radius: 10px;
+            color: <?= $inputText ?>;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field input::placeholder,
+        #<?= $instanceId ?> .rr-ct-field textarea::placeholder {
+            color: <?= $inputPlaceholder ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field input:focus,
+        #<?= $instanceId ?> .rr-ct-field textarea:focus {
+            outline: none;
+            border-color: <?= $inputBorderFocus ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-field textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-submit {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 32px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(234, 179, 8, 0.35);
+        }
+        
+        #<?= $instanceId ?> .rr-ct-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(234, 179, 8, 0.5);
+        }
+        
+        /* Info */
+        #<?= $instanceId ?> .rr-ct-info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            margin-bottom: 40px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-item {
+            display: flex;
+            gap: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.15);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-label {
+            font-size: 0.82rem;
+            color: <?= $textMuted ?>;
+            margin-bottom: 4px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-value a {
+            color: <?= $textPrimary ?>;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-info-value a:hover {
+            color: <?= $accentPrimary ?>;
+        }
+        
+        /* Social */
+        #<?= $instanceId ?> .rr-ct-social-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-social-links {
+            display: flex;
+            gap: 12px;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-social-link {
+            width: 44px;
+            height: 44px;
+            background: rgba(234, 179, 8, 0.08);
+            border: 1px solid rgba(234, 179, 8, 0.12);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: <?= $accentPrimary ?>;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-ct-social-link:hover {
+            background: rgba(234, 179, 8, 0.15);
+            border-color: <?= $accentPrimary ?>;
+            transform: translateY(-2px);
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .rr-ct-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-ct-title {
+                font-size: 1.85rem;
+            }
+            
+            #<?= $instanceId ?> .rr-ct-form-card {
+                padding: 24px;
+            }
+        }
+    </style>
+    
+    <div class="rr-ct-container">
+        <div class="rr-ct-header">
+            <div class="rr-ct-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h1 class="rr-ct-title"><?= htmlspecialchars($title) ?></h1>
+            <p class="rr-ct-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="rr-ct-grid">
+            <!-- Form -->
+            <div class="rr-ct-form-card">
+                <h2 class="rr-ct-form-title">Send us a Message</h2>
+                <form>
+                    <div class="rr-ct-field">
+                        <label>Full Name</label>
+                        <input type="text" placeholder="Enter your name">
+                    </div>
+                    <div class="rr-ct-field">
+                        <label>Email Address</label>
+                        <input type="email" placeholder="Enter your email">
+                    </div>
+                    <div class="rr-ct-field">
+                        <label>Subject</label>
+                        <input type="text" placeholder="What is this about?">
+                    </div>
+                    <div class="rr-ct-field">
+                        <label>Message</label>
+                        <textarea placeholder="Tell us how we can help..."></textarea>
+                    </div>
+                    <button type="submit" class="rr-ct-submit">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                        Send Message
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Info -->
+            <div>
+                <div class="rr-ct-info-list">
+                    <div class="rr-ct-info-item">
+                        <div class="rr-ct-info-icon"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></div>
+                        <div>
+                            <div class="rr-ct-info-label">Email</div>
+                            <div class="rr-ct-info-value"><a href="mailto:<?= htmlspecialchars($email) ?>"><?= htmlspecialchars($email) ?></a></div>
+                        </div>
+                    </div>
+                    <div class="rr-ct-info-item">
+                        <div class="rr-ct-info-icon"><svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg></div>
+                        <div>
+                            <div class="rr-ct-info-label">Phone</div>
+                            <div class="rr-ct-info-value"><?= htmlspecialchars($phone) ?></div>
+                        </div>
+                    </div>
+                    <div class="rr-ct-info-item">
+                        <div class="rr-ct-info-icon"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>
+                        <div>
+                            <div class="rr-ct-info-label">Address</div>
+                            <div class="rr-ct-info-value"><?= htmlspecialchars($address) ?></div>
+                        </div>
+                    </div>
+                    <div class="rr-ct-info-item">
+                        <div class="rr-ct-info-icon"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg></div>
+                        <div>
+                            <div class="rr-ct-info-label">Support Hours</div>
+                            <div class="rr-ct-info-value"><?= htmlspecialchars($hours) ?></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <?php if (!empty($socials)): ?>
+                <div>
+                    <h3 class="rr-ct-social-title">Follow Us</h3>
+                    <div class="rr-ct-social-links">
+                        <?php foreach ($socials as $social): ?>
+                        <a href="<?= htmlspecialchars($social['url']) ?>" class="rr-ct-social-link" target="_blank" rel="noopener" title="<?= htmlspecialchars($social['name']) ?>"><?= htmlspecialchars(mb_substr($social['name'], 0, 2)) ?></a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</section>

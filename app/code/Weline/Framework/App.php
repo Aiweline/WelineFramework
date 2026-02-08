@@ -286,6 +286,14 @@ class App
             ini_set('display_startup_errors', '0');
             ini_set('log_errors', '1');
         }
+        
+        // 设置 PHP 错误日志路径到 var/log/php_error.log
+        $phpErrorLogFile = Env::VAR_DIR . 'log' . DS . 'php_error.log';
+        $phpErrorLogDir = dirname($phpErrorLogFile);
+        if (!is_dir($phpErrorLogDir)) {
+            @mkdir($phpErrorLogDir, 0755, true);
+        }
+        ini_set('error_log', $phpErrorLogFile);
 
         // 错误报告
         if (DEV || CLI) {
@@ -313,6 +321,28 @@ class App
     }
 
     /**
+     * 使用 FpmRuntime 运行框架（运行时抽象层入口）
+     * 
+     * 此方法使用 FpmRuntime 统一运行时接口，与 WLS 模式共享相同的抽象层
+     * 推荐在新项目中使用，或需要与 WLS 模式保持一致行为时使用
+     * 
+     * @return string 响应内容
+     * @throws Exception
+     */
+    public static function runWithRuntime(): string
+    {
+        $runtime = new \Weline\Framework\Runtime\FpmRuntime();
+        $runtime->bootstrap();
+        
+        try {
+            $result = $runtime->handle(null);
+            return $result;
+        } finally {
+            $runtime->terminate();
+        }
+    }
+    
+    /**
      * @DESC         |框架应用运行
      *
      * @Author       秋枫雁飞
@@ -322,6 +352,7 @@ class App
      *
      * 参数区：
      * @throws Exception
+     * @throws \Weline\Framework\Http\ResponseTerminateException 响应终止异常，由 Runtime 层捕获处理
      */
     public static function run(): string
     {
@@ -356,7 +387,9 @@ class App
                 
                 // 根据 WELINE_AREA 设置后端标识，方便后续判断
                 $welineArea = $_SERVER['WELINE_AREA'] ?? '';
-                $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'admin' || $welineArea === 'api_admin');
+                $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'backend' || $welineArea === 'rest_backend');
+                // 标记 URL 解析已完成（用于 CheckFullPageCache 判断）
+                $_SERVER['WELINE_URL_PARSED'] = true;
                 
                 $default_cookies = [
                     'WELINE_USER_LANG',
@@ -412,12 +445,10 @@ class App
         $result = $data->getData('result');
         if(is_array($result)) {
             $result = json_encode($result);
-            die($result);
+            // 使用 ResponseTerminateException 替代 die()，由 Runtime 层统一处理
+            throw new \Weline\Framework\Http\ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
         }
-        if (!CLI) {
-            echo($result);
-            exit(0);
-        }
+        // 返回结果，由调用方（index.php 或 Runtime）决定如何处理
         return $result;
     }
 

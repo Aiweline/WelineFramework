@@ -39,6 +39,7 @@ class ResponseRedirectBefore implements ObserverInterface
         $data = $event->getData('data');
         $url = $data->getUrl();
         $code = $data->getCode();
+        $originalUrl = $url;
         
         // 只处理后台请求
         if (!$this->request->isBackend()) {
@@ -124,9 +125,11 @@ class ResponseRedirectBefore implements ObserverInterface
             
             // 检查用户权限
             $currentPath = $this->request->getRouteUrlPath();
-            if (!$this->hasPermission($currentPath)) {
-                // 无权限用户重定向到首页或403页面
-                $homeUrl = $this->request->getUrlBuilder()->getBackendUrl('admin/dashboard');
+            $hasPermission = $this->hasPermission($currentPath);
+            
+            if (!$hasPermission) {
+                // 无权限用户重定向到后台首页（路由为 admin，不是 admin/dashboard）
+                $homeUrl = $this->request->getUrlBuilder()->getBackendUrl('admin');
                 $data->setData('url', $homeUrl);
                 $data->setData('code', 302);
             }
@@ -148,12 +151,14 @@ class ResponseRedirectBefore implements ObserverInterface
             // 防止开放重定向攻击
             if (isset($parsedUrl['host'])) {
                 $host = $parsedUrl['host'];
-                $currentHost = $_SERVER['HTTP_HOST'] ?? '';
+                // HTTP_HOST 可能包含端口（如 my.com:9981），parse_url()['host'] 不含端口
+                // 必须统一比较纯主机名，否则 "my.com" !== "my.com:9981" 会误判为攻击
+                $currentHost = strtok($_SERVER['HTTP_HOST'] ?? '', ':') ?: '';
                 
                 // 只允许重定向到当前域名或白名单域名
                 if ($host !== $currentHost && !$this->isAllowedHost($host)) {
                     // 重定向到后台首页
-                    $data->setData('url', $this->request->getUrlBuilder()->getBackendUrl('admin/dashboard'));
+                    $data->setData('url', $this->request->getUrlBuilder()->getBackendUrl('admin'));
                     $data->setData('code', 302);
                     return;
                 }
@@ -161,7 +166,7 @@ class ResponseRedirectBefore implements ObserverInterface
             
             // 检查URL中是否包含危险字符
             if (str_contains($url, '<script') || str_contains($url, 'javascript:') || str_contains($url, 'data:')) {
-                $data->setData('url', $this->request->getUrlBuilder()->getBackendUrl('admin/dashboard'));
+                $data->setData('url', $this->request->getUrlBuilder()->getBackendUrl('admin'));
                 $data->setData('code', 302);
             }
             
