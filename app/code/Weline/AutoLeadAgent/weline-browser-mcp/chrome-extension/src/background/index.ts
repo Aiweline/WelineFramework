@@ -66,11 +66,268 @@ analyticsSettingsStore.subscribe(() => {
   });
 });
 
-// Listen for simple messages (e.g., from options page)
-chrome.runtime.onMessage.addListener(() => {
-  // Handle other message types if needed in the future
-  // Return false if response is not sent asynchronously
-  // return false;
+// ====== Inference Worker management for local model hosting ======
+let inferenceWorker: Worker | null = null;
+const pendingWorkerRequests = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+let workerRequestCounter = 0;
+
+function getInferenceWorker(): Worker {
+  if (!inferenceWorker) {
+    const workerUrl = chrome.runtime.getURL('inference-worker.js');
+    inferenceWorker = new Worker(workerUrl);
+
+    inferenceWorker.onmessage = (event: MessageEvent) => {
+      const { type, id, payload, error } = event.data;
+      const pending = pendingWorkerRequests.get(id);
+      if (!pending) return;
+
+      clearTimeout(pending.timer);
+      pendingWorkerRequests.delete(id);
+
+      if (type === 'error') {
+        pending.reject(new Error(error || 'Worker error'));
+      } else if (type === 'result' || type === 'status') {
+        pending.resolve(payload);
+      }
+    };
+
+    inferenceWorker.onerror = (error: ErrorEvent) => {
+      logger.error('Inference worker error:', error);
+      for (const [, pending] of pendingWorkerRequests.entries()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('Worker crashed'));
+      }
+      pendingWorkerRequests.clear();
+      inferenceWorker = null;
+    };
+  }
+  return inferenceWorker;
+}
+
+function sendWorkerMessage(type: string, payload: unknown, timeoutMs = 120000): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const id = 'bg_' + ++workerRequestCounter;
+    const worker = getInferenceWorker();
+    const timer = setTimeout(() => {
+      pendingWorkerRequests.delete(id);
+      reject(new Error('Worker request timeout'));
+    }, timeoutMs);
+    pendingWorkerRequests.set(id, { resolve, reject, timer });
+    worker.postMessage({ type, id, payload });
+  });
+}
+
+// ====== 页面追踪：目标页面检测 + 模型自动生命周期 ======
+const TARGET_URL_PATTERNS = [
+  /\/auto-lead-agent\/backend\/config/i,
+  /\/auto-lead-agent\/backend\/index/i,
+];
+const targetTabs = new Map<number, { url: string; timestamp: number }>();
+let unloadTimer: ReturnType<typeof setTimeout> | null = null;
+const UNLOAD_DELAY_MS = 15000;
+let currentModelState = { modelId: null as string | null, isLoaded: false, isLoading: false };
+
+function isTargetUrl(url: string): boolean {
+  return TARGET_URL_PATTERNS.some((p) => p.test(url));
+}
+
+async function onTargetPageEnter(tabId: number, url: string): Promise<void> {
+  const wasEmpty = targetTabs.size === 0;
+  targetTabs.set(tabId, { url, timestamp: Date.now() });
+  saveTargetPageUrl(url);
+  if (unloadTimer) { clearTimeout(unloadTimer); unloadTimer = null; }
+  if (wasEmpty && !currentModelState.isLoaded && !currentModelState.isLoading) {
+    await autoLoadModel();
+  }
+  broadcastModelEvent('status', currentModelState, tabId);
+  if (progressLogCache.length > 0) {
+    chrome.tabs.sendMessage(tabId, { type: 'TASK_PROGRESS_BATCH', logs: progressLogCache }).catch(() => {});
+  }
+}
+
+function onTargetPageLeave(tabId: number): void {
+  targetTabs.delete(tabId);
+  if (targetTabs.size === 0 && currentModelState.isLoaded) {
+    unloadTimer = setTimeout(async () => {
+      unloadTimer = null;
+      if (targetTabs.size === 0 && currentModelState.isLoaded) {
+        try {
+          await sendWorkerMessage('unload', {}, 10000);
+          currentModelState = { modelId: null, isLoaded: false, isLoading: false };
+          broadcastModelEvent('unloaded', {});
+        } catch (e) { logger.error('Auto-unload failed:', e); }
+      }
+    }, UNLOAD_DELAY_MS);
+  }
+}
+
+async function autoLoadModel(): Promise<void> {
+  const data = await chrome.storage.local.get(['ala_model_id', 'ala_model_enabled']);
+  if (!data.ala_model_id || data.ala_model_enabled === false) return;
+  const modelId = data.ala_model_id as string;
+  currentModelState.isLoading = true;
+  broadcastModelEvent('loading', { modelId });
+  try {
+    await sendWorkerMessage('load', { modelId }, 300000);
+    currentModelState = { modelId, isLoaded: true, isLoading: false };
+    broadcastModelEvent('loaded', { modelId });
+  } catch (err: any) {
+    currentModelState.isLoading = false;
+    broadcastModelEvent('load_error', { error: err.message });
+  }
+}
+
+function saveTargetPageUrl(url: string): void {
+  try {
+    const u = new URL(url);
+    const base = u.origin + u.pathname.replace(/\/auto-lead-agent\/backend\/.*$/, '');
+    chrome.storage.local.set({ ala_config_url: base + '/auto-lead-agent/backend/config', ala_index_url: base + '/auto-lead-agent/backend/index' });
+  } catch { /* ignore */ }
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete' || !tab.url) return;
+  if (isTargetUrl(tab.url)) onTargetPageEnter(tabId, tab.url);
+  else if (targetTabs.has(tabId)) onTargetPageLeave(tabId);
+});
+chrome.tabs.onRemoved.addListener((tabId) => { if (targetTabs.has(tabId)) onTargetPageLeave(tabId); });
+chrome.tabs.query({}, (tabs) => { for (const tab of tabs) { if (tab.id && tab.url && isTargetUrl(tab.url)) onTargetPageEnter(tab.id, tab.url); } });
+
+// ====== 任务进度中继 ======
+const MAX_PROGRESS_CACHE = 200;
+let progressLogCache: any[] = [];
+
+function addProgressLog(log: any): void {
+  progressLogCache.push(log);
+  if (progressLogCache.length > MAX_PROGRESS_CACHE) progressLogCache = progressLogCache.slice(-MAX_PROGRESS_CACHE);
+}
+
+function broadcastProgress(log: any, excludeTabId?: number): void {
+  addProgressLog(log);
+  for (const [tabId] of targetTabs) {
+    if (tabId === excludeTabId) continue;
+    chrome.tabs.sendMessage(tabId, { type: 'TASK_PROGRESS', log }).catch(() => {});
+  }
+}
+
+// ====== 工具函数 ======
+function broadcastModelEvent(event: string, data: unknown, onlyTabId?: number): void {
+  const msg = { type: 'MODEL_EVENT', event, data };
+  if (onlyTabId) { chrome.tabs.sendMessage(onlyTabId, msg).catch(() => {}); return; }
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (tab.id) chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+    }
+  });
+}
+
+// ====== 消息处理 ======
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || typeof message.type !== 'string') return false;
+  const senderTabId = sender?.tab?.id;
+
+  switch (message.type) {
+    case 'PING':
+      sendResponse({ success: true, version: chrome.runtime.getManifest().version, features: ['model_inference', 'browser_automation', 'auto_lifecycle'] });
+      return false;
+
+    case 'PAGE_ENTER':
+      if (senderTabId && message.url) onTargetPageEnter(senderTabId, message.url);
+      sendResponse({ success: true, modelState: currentModelState });
+      return false;
+
+    case 'PAGE_LEAVE':
+      if (senderTabId) onTargetPageLeave(senderTabId);
+      sendResponse({ success: true });
+      return false;
+
+    case 'MODEL_SAVE_CONFIG': {
+      const cfg = message.payload || message;
+      chrome.storage.local.set({ ala_model_id: cfg.modelId || null, ala_model_enabled: cfg.enabled !== false }, () => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+
+    case 'GET_TARGET_URLS':
+      chrome.storage.local.get(['ala_config_url', 'ala_index_url'], (data) => {
+        sendResponse({ success: true, configUrl: data.ala_config_url || null, indexUrl: data.ala_index_url || null });
+      });
+      return true;
+
+    case 'GET_FULL_STATUS':
+      chrome.storage.local.get(['ala_model_id', 'ala_model_enabled'], (data) => {
+        sendResponse({ success: true, modelState: currentModelState, config: { modelId: data.ala_model_id || null, enabled: data.ala_model_enabled !== false }, targetPagesCount: targetTabs.size });
+      });
+      return true;
+
+    case 'TASK_PROGRESS':
+      broadcastProgress(message.log || message.payload, senderTabId ?? undefined);
+      sendResponse({ success: true });
+      return false;
+
+    case 'GET_PROGRESS_CACHE':
+      sendResponse({ success: true, logs: progressLogCache });
+      return false;
+
+    case 'CLEAR_PROGRESS':
+      progressLogCache = [];
+      sendResponse({ success: true });
+      return false;
+
+    case 'MODEL_STATUS':
+      sendWorkerMessage('status', {})
+        .then((status) => { currentModelState = status as any || currentModelState; sendResponse({ success: true, status: currentModelState }); })
+        .catch(() => sendResponse({ success: true, status: currentModelState }));
+      return true;
+
+    case 'MODEL_LOAD': {
+      const modelId = message.modelId || message.payload?.modelId;
+      if (!modelId) { sendResponse({ success: false, error: 'No modelId provided' }); return false; }
+      currentModelState.isLoading = true;
+      broadcastModelEvent('loading', { modelId });
+      chrome.storage.local.set({ ala_model_id: modelId, ala_model_enabled: true });
+      sendWorkerMessage('load', { modelId }, 300000)
+        .then((result) => {
+          currentModelState = { modelId, isLoaded: true, isLoading: false };
+          sendResponse({ success: true, result });
+          broadcastModelEvent('loaded', { modelId });
+        })
+        .catch((err: Error) => {
+          currentModelState.isLoading = false;
+          sendResponse({ success: false, error: err.message });
+          broadcastModelEvent('load_error', { error: err.message });
+        });
+      return true;
+    }
+
+    case 'MODEL_UNLOAD':
+      sendWorkerMessage('unload', {}, 10000)
+        .then((result) => {
+          currentModelState = { modelId: null, isLoaded: false, isLoading: false };
+          sendResponse({ success: true, result });
+          broadcastModelEvent('unloaded', {});
+        })
+        .catch((err: Error) => sendResponse({ success: false, error: err.message }));
+      return true;
+
+    case 'MODEL_INFERENCE': {
+      const prompt = message.prompt || message.payload?.prompt;
+      const options = message.options || message.payload?.options || {};
+      if (!prompt) { sendResponse({ success: false, error: 'No prompt provided' }); return false; }
+      const messages = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: prompt },
+      ];
+      sendWorkerMessage('generate', { messages, maxTokens: options.maxTokens || 512, temperature: options.temperature || 0.7 })
+        .then((result) => sendResponse({ success: true, result }))
+        .catch((err: Error) => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    default:
+      return false;
+  }
 });
 
 // Setup connection listener for long-lived connections (e.g., side panel)

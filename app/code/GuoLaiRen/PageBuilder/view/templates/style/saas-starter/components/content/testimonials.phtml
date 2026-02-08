@@ -1,0 +1,105 @@
+<?php
+/**
+ * SaaS Starter - Testimonials Section Component
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors
+ * @var array $component_config
+ * 
+ * @fields_start
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Testimonials
+ * content.title => 标题:text:Loved by thousands of teams
+ * content.description => 描述:textarea:See what our customers say about their experience with the platform.
+ * group:testimonials => 评价列表
+ * testimonials.items => 评价列表:textarea:Sarah Chen|CTO, TechFlow|This platform transformed how our team ships code. We cut deployment time by 60% in the first month.|⭐⭐⭐⭐⭐\r\nMarcus Johnson|Head of Product, Scale.io|The analytics dashboard alone is worth it. We finally have real visibility into our workflow bottlenecks.|⭐⭐⭐⭐⭐\r\nEmily Rodriguez|Engineering Lead, DataPulse|Enterprise-grade security without the enterprise complexity. Setup took less than 30 minutes.|⭐⭐⭐⭐⭐|格式：姓名|职位|评价内容|评分，一行一个
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['testimonials_bg'] ?? '#0d1321';
+$textPrimary = $colors['text_primary'] ?? '#f1f5f9';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$textMuted = $colors['text_muted'] ?? '#64748b';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#34d399';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(16, 185, 129, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(16, 185, 129, 0.3)';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)';
+
+$badge = $config['content.badge'] ?? 'Testimonials';
+$title = $config['content.title'] ?? 'Loved by thousands of teams';
+$description = $config['content.description'] ?? 'See what our customers say about their experience with the platform.';
+
+$testimonialsRaw = $config['testimonials.items'] ?? "Sarah Chen|CTO, TechFlow|This platform transformed how our team ships code. We cut deployment time by 60% in the first month.|⭐⭐⭐⭐⭐\nMarcus Johnson|Head of Product, Scale.io|The analytics dashboard alone is worth it. We finally have real visibility into our workflow bottlenecks.|⭐⭐⭐⭐⭐\nEmily Rodriguez|Engineering Lead, DataPulse|Enterprise-grade security without the enterprise complexity. Setup took less than 30 minutes.|⭐⭐⭐⭐⭐";
+
+$testimonials = [];
+foreach (preg_split('/[\r\n]+/', $testimonialsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line);
+    $name = trim($parts[0] ?? '');
+    if (!empty($name)) {
+        $testimonials[] = [
+            'name' => $name,
+            'role' => trim($parts[1] ?? ''),
+            'content' => trim($parts[2] ?? ''),
+            'rating' => trim($parts[3] ?? '⭐⭐⭐⭐⭐'),
+        ];
+    }
+}
+
+$instanceId = 'ss-testimonials-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 100px 0; }
+        #<?= $instanceId ?> .ss-testi-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        #<?= $instanceId ?> .ss-testi-header { text-align: center; margin-bottom: 64px; }
+        #<?= $instanceId ?> .ss-testi-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: <?= $badgeBg ?>; border: 1px solid <?= $badgeBorder ?>; border-radius: 50px; font-size: 0.875rem; font-weight: 500; color: <?= $accentPrimaryLight ?>; margin-bottom: 20px; }
+        #<?= $instanceId ?> .ss-testi-title { font-size: 2.5rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 16px; }
+        #<?= $instanceId ?> .ss-testi-subtitle { font-size: 1.125rem; color: <?= $textSecondary ?>; max-width: 600px; margin: 0 auto; }
+        #<?= $instanceId ?> .ss-testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        #<?= $instanceId ?> .ss-testi-card { background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>; border-radius: 16px; padding: 32px; transition: all 0.3s ease; display: flex; flex-direction: column; }
+        #<?= $instanceId ?> .ss-testi-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(16,185,129,0.3); transform: translateY(-4px); }
+        #<?= $instanceId ?> .ss-testi-rating { font-size: 1.25rem; margin-bottom: 16px; }
+        #<?= $instanceId ?> .ss-testi-content { font-size: 1rem; color: <?= $textSecondary ?>; line-height: 1.7; flex: 1; margin-bottom: 24px; font-style: italic; }
+        #<?= $instanceId ?> .ss-testi-author { display: flex; align-items: center; gap: 14px; }
+        #<?= $instanceId ?> .ss-testi-avatar { width: 44px; height: 44px; background: <?= $buttonPrimaryBg ?>; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #fff; }
+        #<?= $instanceId ?> .ss-testi-name { font-size: 0.95rem; font-weight: 600; color: <?= $textPrimary ?>; }
+        #<?= $instanceId ?> .ss-testi-role { font-size: 0.85rem; color: <?= $textMuted ?>; margin-top: 2px; }
+        @media (max-width: 992px) { #<?= $instanceId ?> .ss-testi-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .ss-testi-title { font-size: 1.75rem; } #<?= $instanceId ?> .ss-testi-grid { grid-template-columns: 1fr; } }
+    </style>
+    
+    <div class="ss-testi-container">
+        <div class="ss-testi-header">
+            <div class="ss-testi-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="ss-testi-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="ss-testi-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="ss-testi-grid">
+            <?php foreach ($testimonials as $t): ?>
+            <div class="ss-testi-card">
+                <div class="ss-testi-rating"><?= $t['rating'] ?></div>
+                <p class="ss-testi-content">"<?= htmlspecialchars($t['content']) ?>"</p>
+                <div class="ss-testi-author">
+                    <div class="ss-testi-avatar"><?= mb_substr($t['name'], 0, 1) ?></div>
+                    <div>
+                        <div class="ss-testi-name"><?= htmlspecialchars($t['name']) ?></div>
+                        <div class="ss-testi-role"><?= htmlspecialchars($t['role']) ?></div>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

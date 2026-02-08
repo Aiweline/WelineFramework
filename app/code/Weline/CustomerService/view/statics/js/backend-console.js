@@ -11,6 +11,7 @@ const CustomerServiceConsole = (function() {
         currentSessionId: null,
         isPolling: false,
         pollInterval: null,
+        heartbeatInterval: null,
         lastMessageId: 0
     };
     
@@ -25,6 +26,10 @@ const CustomerServiceConsole = (function() {
         
         // 开始轮询会话列表
         startSessionPolling();
+        
+        // 开始心跳（标记客服在线）
+        sendHeartbeat();
+        startHeartbeat();
     }
     
     /**
@@ -66,7 +71,7 @@ const CustomerServiceConsole = (function() {
      */
     async function refreshSessions() {
         try {
-            const response = await fetch(config.consoleUrl + '/getSessions');
+            const response = await fetch(config.consoleUrl + '/sessions');
             const data = await response.json();
             
             if (data.success) {
@@ -160,7 +165,7 @@ const CustomerServiceConsole = (function() {
      */
     async function loadMessages(sessionId) {
         try {
-            const response = await fetch(config.consoleUrl + '/getMessages?session_id=' + sessionId + '&limit=50&offset=0');
+            const response = await fetch(config.consoleUrl + '/messages?session_id=' + sessionId + '&limit=50&offset=0');
             const data = await response.json();
             
             if (data.success) {
@@ -253,7 +258,7 @@ const CustomerServiceConsole = (function() {
             formData.append('session_id', state.currentSessionId);
             formData.append('content', content);
             
-            const response = await fetch(config.consoleUrl + '/sendMessage', {
+            const response = await fetch(config.consoleUrl + '/send-message', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -329,7 +334,7 @@ const CustomerServiceConsole = (function() {
             const formData = new URLSearchParams();
             formData.append('session_id', sessionId);
             
-            const response = await fetch(config.consoleUrl + '/assignSession', {
+            const response = await fetch(config.consoleUrl + '/assign-session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -365,7 +370,7 @@ const CustomerServiceConsole = (function() {
             const formData = new URLSearchParams();
             formData.append('session_id', sessionId);
             
-            const response = await fetch(config.consoleUrl + '/closeSession', {
+            const response = await fetch(config.consoleUrl + '/close-session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -402,6 +407,37 @@ const CustomerServiceConsole = (function() {
     };
     
     /**
+     * 发送心跳（标记客服在线状态）
+     */
+    async function sendHeartbeat() {
+        if (!config.consoleUrl) return;
+        try {
+            await fetch(config.consoleUrl + '/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: ''
+            });
+        } catch (e) {
+            // 心跳失败不影响正常工作
+        }
+    }
+
+    /**
+     * 开始心跳定时器（每30秒）
+     */
+    function startHeartbeat() {
+        if (state.heartbeatInterval) return;
+        state.heartbeatInterval = setInterval(sendHeartbeat, 30000);
+        
+        // 页面关闭时发送最后一次心跳（尝试）
+        window.addEventListener('beforeunload', function() {
+            if (navigator.sendBeacon && config.consoleUrl) {
+                navigator.sendBeacon(config.consoleUrl + '/heartbeat', '');
+            }
+        });
+    }
+
+    /**
      * 开始轮询会话列表
      */
     function startSessionPolling() {
@@ -421,7 +457,7 @@ const CustomerServiceConsole = (function() {
         state.isPolling = true;
         state.pollInterval = setInterval(async () => {
             try {
-                const response = await fetch(config.consoleUrl + '/getMessages?session_id=' + state.currentSessionId + '&limit=10&offset=0');
+                const response = await fetch(config.consoleUrl + '/messages?session_id=' + state.currentSessionId + '&limit=10&offset=0');
                 const data = await response.json();
                 
                 if (data.success && data.data.length > 0) {

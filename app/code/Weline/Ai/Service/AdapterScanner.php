@@ -472,6 +472,9 @@ class AdapterScanner
     /**
      * 根据类名获取适配器文件路径
      * 
+     * 仅在 Weline_Ai 内置目录和 ExtendsData 中已登记的衍生模块中查找，
+     * 避免遍历所有模块带来的性能开销。
+     * 
      * @param string $className 完整的类名（包含命名空间）
      * @return string|null 文件路径，如果找不到则返回 null
      */
@@ -489,41 +492,43 @@ class AdapterScanner
             }
         }
         
-        // 2. 检查是否是其他模块的 extends 适配器
-        // 命名空间格式：GuoLaiRen\PageBuilder\Extends\Weline_Ai\Adapter\ContentGenerationAdapter
-        $env = Env::getInstance();
-        $moduleList = $env->getModuleList();
-        
-        if (!empty($moduleList)) {
-            foreach ($moduleList as $moduleName => $module) {
-                $moduleBasePath = $module['base_path'] ?? '';
+        // 2. 仅在 ExtendsData 中已登记的衍生模块中查找
+        $extendedBy = ExtendsData::getExtendedBy('Weline_Ai');
+        if (!empty($extendedBy)) {
+            $env = Env::getInstance();
+            $moduleList = $env->getModuleList();
+            $namespaceParts = explode('\\', $className);
+            $shortClassName = end($namespaceParts);
+            
+            foreach ($extendedBy as $sourceModule => $extensions) {
+                if (!isset($moduleList[$sourceModule])) {
+                    continue;
+                }
+                $moduleBasePath = $moduleList[$sourceModule]['base_path'] ?? '';
                 if (empty($moduleBasePath)) {
                     continue;
                 }
                 
-                // 尝试匹配命名空间模式：{ModuleNamespace}\Extends\Weline_Ai\Adapter\{ClassName}
-                // 例如：GuoLaiRen\PageBuilder\Extends\Weline_Ai\Adapter\ContentGenerationAdapter
-                $namespaceParts = explode('\\', $className);
                 $adapterDir = rtrim($moduleBasePath, '/\\') . DIRECTORY_SEPARATOR 
                     . 'extends' . DIRECTORY_SEPARATOR 
                     . 'module' . DIRECTORY_SEPARATOR 
                     . 'Weline_Ai' . DIRECTORY_SEPARATOR 
                     . 'Adapter';
                 
-                if (is_dir($adapterDir)) {
-                    // 获取类名（最后一部分）
-                    $shortClassName = end($namespaceParts);
-                    $adapterFile = $adapterDir . DIRECTORY_SEPARATOR . $shortClassName . '.php';
-                    
-                    if (file_exists($adapterFile)) {
-                        // 验证文件中的命名空间是否匹配
-                        $content = file_get_contents($adapterFile);
-                        if ($content && preg_match('/namespace\s+([^;]+);/', $content, $matches)) {
-                            $fileNamespace = trim($matches[1]);
-                            $expectedNamespace = substr($className, 0, strrpos($className, '\\'));
-                            if ($fileNamespace === $expectedNamespace) {
-                                return $adapterFile;
-                            }
+                if (!is_dir($adapterDir)) {
+                    continue;
+                }
+                
+                $adapterFile = $adapterDir . DIRECTORY_SEPARATOR . $shortClassName . '.php';
+                
+                if (file_exists($adapterFile)) {
+                    // 验证文件中的命名空间是否匹配
+                    $content = file_get_contents($adapterFile);
+                    if ($content && preg_match('/namespace\s+([^;]+);/', $content, $matches)) {
+                        $fileNamespace = trim($matches[1]);
+                        $expectedNamespace = substr($className, 0, strrpos($className, '\\'));
+                        if ($fileNamespace === $expectedNamespace) {
+                            return $adapterFile;
                         }
                     }
                 }
@@ -536,6 +541,9 @@ class AdapterScanner
     /**
      * 根据适配器代码直接从代码中加载适配器（备用方案）
      * 当数据库中没有找到适配器或类不存在时，尝试扫描并加载
+     * 
+     * 仅扫描 Weline_Ai 内置目录和 ExtendsData 中已登记的衍生模块，
+     * 避免遍历所有模块带来的性能开销。
      * 
      * @param string $code 适配器代码
      * @return ScenarioAdapterInterface|null
@@ -551,7 +559,6 @@ class AdapterScanner
                     try {
                         $adapter = $this->loadAdapter($adapterFile);
                         if ($adapter && $adapter->getCode() === $code) {
-                            // 找到匹配的适配器，注册到数据库并返回
                             $this->registerAdapter($adapter, $adapterFile);
                             $this->registeredAdapters[$code] = $adapter;
                             return $adapter;
@@ -562,13 +569,17 @@ class AdapterScanner
                 }
             }
             
-            // 2. 扫描其他模块的 extends/Weline_Ai/Adapter 目录
-            $env = Env::getInstance();
-            $moduleList = $env->getModuleList();
-            
-            if (!empty($moduleList)) {
-                foreach ($moduleList as $moduleName => $module) {
-                    $moduleBasePath = $module['base_path'] ?? '';
+            // 2. 仅扫描 ExtendsData 中已登记的衍生模块（避免遍历所有模块）
+            $extendedBy = ExtendsData::getExtendedBy('Weline_Ai');
+            if (!empty($extendedBy)) {
+                $env = Env::getInstance();
+                $moduleList = $env->getModuleList();
+                
+                foreach ($extendedBy as $sourceModule => $extensions) {
+                    if (!isset($moduleList[$sourceModule])) {
+                        continue;
+                    }
+                    $moduleBasePath = $moduleList[$sourceModule]['base_path'] ?? '';
                     if (empty($moduleBasePath)) {
                         continue;
                     }
@@ -587,9 +598,8 @@ class AdapterScanner
                     
                     foreach ($adapterFiles as $adapterFile) {
                         try {
-                            $adapter = $this->loadAdapter($adapterFile, $moduleName);
+                            $adapter = $this->loadAdapter($adapterFile, $sourceModule);
                             if ($adapter && $adapter->getCode() === $code) {
-                                // 找到匹配的适配器，注册到数据库并返回
                                 $this->registerAdapter($adapter, $adapterFile);
                                 $this->registeredAdapters[$code] = $adapter;
                                 return $adapter;

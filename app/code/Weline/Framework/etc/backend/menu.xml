@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Weline Framework - 后台菜单配置
+ *
+ * @author Aiweline
+ * @email aiweline@qq.com
+ */
+-->
+<config>
+    <menu>
+        <!-- 系统菜单下的环境管理 -->
+        <item name="system" title="系统管理" class="bi-gear" sort="100">
+            <item name="env-manager" title="环境管理" url="backend/framework/env-manager" class="bi-cpu" sort="90"/>
+        </item>
+    </menu>
+</config>

@@ -109,10 +109,19 @@ try {
 
 <!-- AI生成的CSS样式 -->
 <style>
-/* 基础样式 */
+/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
 #<?= $componentId ?> {
-    background: <?= htmlspecialchars($bgColor) ?>;
-    color: <?= htmlspecialchars($textColor) ?>;
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($textColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-link: <?= htmlspecialchars($linkColor) ?>;
+    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+
+    background: var(--pb-bg);
+    color: var(--pb-text);
 }
 
 #<?= $componentId ?> .ai-header-container {
@@ -131,7 +140,7 @@ try {
     gap: 12px;
     font-size: 1.25rem;
     font-weight: 700;
-    color: <?= htmlspecialchars($textColor) ?>;
+    color: var(--pb-text);
     text-decoration: none;
 }
 
@@ -155,7 +164,7 @@ try {
 }
 
 #<?= $componentId ?> .ai-header-nav-link {
-    color: <?= htmlspecialchars($linkColor) ?>;
+    color: var(--pb-link);
     font-size: 0.95rem;
     font-weight: 500;
     text-decoration: none;
@@ -164,12 +173,12 @@ try {
 
 #<?= $componentId ?> .ai-header-nav-link:hover,
 #<?= $componentId ?> .ai-header-nav-link.active {
-    color: <?= htmlspecialchars($linkHoverColor) ?>;
+    color: var(--pb-link-hover);
 }
 
 #<?= $componentId ?> .ai-header-cta {
     padding: 10px 20px;
-    background: <?= htmlspecialchars($accentColor) ?>;
+    background: var(--pb-accent);
     color: #ffffff;
     font-size: 0.9rem;
     font-weight: 600;
@@ -180,7 +189,7 @@ try {
 
 #<?= $componentId ?> .ai-header-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 20px <?= htmlspecialchars($accentColor) ?>66;
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--pb-accent) 40%, transparent);
 }
 
 #<?= $componentId ?> .ai-header-toggle {

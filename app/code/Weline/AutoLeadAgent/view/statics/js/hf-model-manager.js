@@ -432,45 +432,9 @@ var HFModelManager = (function () {
             var taskType = inferPipelineTask(config.modelId);
             console.log('[HFModelManager] 推断的任务类型:', taskType);
 
-            // 进度回调函数 - 用于更新 UI
-            var progressCallback = function (data) {
-                if (data.status === 'progress') {
-                    var percent = Math.round((data.progress || 0) * 100);
-                    var fileName = data.file || '';
-                    console.log('[HFModelManager] 加载进度:', percent + '%', fileName);
-                    
-                    // 派发自定义事件以更新 UI
-                    if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
-                            detail: {
-                                percent: percent,
-                                file: fileName,
-                                status: data.status,
-                                loaded: data.loaded,
-                                total: data.total
-                            }
-                        }));
-                    }
-                } else if (data.status === 'ready') {
-                    console.log('[HFModelManager] 模型准备就绪');
-                    if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
-                            detail: { percent: 100, status: 'ready', file: '' }
-                        }));
-                    }
-                } else if (data.status === 'initiate' || data.status === 'download') {
-                    console.log('[HFModelManager] 开始下载:', data.file || '');
-                    if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('hf-model-loading-progress', {
-                            detail: {
-                                percent: 0,
-                                file: data.file || '',
-                                status: data.status
-                            }
-                        }));
-                    }
-                }
-            };
+            // 注意：不传 progress_callback 以规避 transformers.js 的 getReader null bug
+            // (progress_callback 会触发内部对 response.body.getReader() 的调用，当 body 为 null 时崩溃)
+            // 模型加载前后会通过 hf-model-loading-progress 事件通知 UI
 
             // 尝试加载模型，如果失败则提供更友好的错误信息
             let model;
@@ -479,7 +443,7 @@ var HFModelManager = (function () {
                     device: 'webgpu', // 优先使用 WebGPU
                     dtype: 'q8', // 量化以节省内存
                     quantized: false, // 不使用量化版本，使用已下载的 safetensors 文件
-                    progress_callback: progressCallback
+                    // progress_callback 已移除，避免 getReader null 错误
                 });
             } catch (error) {
                 // 如果 WebGPU 失败，尝试使用 CPU
@@ -487,8 +451,7 @@ var HFModelManager = (function () {
                 try {
                     model = await pipeline(taskType, config.modelId, {
                         device: 'cpu',
-                        quantized: false, // 不使用量化版本
-                        progress_callback: progressCallback
+                        quantized: false // 不使用量化版本
                     });
                 } catch (cpuError) {
                     // 如果都失败，抛出更友好的错误
@@ -1216,6 +1179,189 @@ var HFModelManager = (function () {
         return stats;
     }
 
+    /**
+     * 通过浏览器扩展进行推理（当本地模型未加载时的 fallback）
+     * 扩展的 service worker / background 脚本可以常驻内存，模型不会因页面刷新而丢失
+     * 通信路径: 页面 → window.postMessage → content script → chrome.runtime.sendMessage → background
+     * @param {string} prompt 提示词
+     * @param {Object} options 选项
+     * @returns {Promise<string|null>} 生成的文本，或 null（如果扩展不可用）
+     */
+    async function generateViaExtension(prompt, options) {
+        options = options || {};
+
+        if (typeof window === 'undefined') {
+            return null;
+        }
+
+        try {
+            var inferenceId = 'inf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+            var response = await new Promise(function (resolve) {
+                var handler = function (event) {
+                    if (event.source !== window) return;
+                    var data = event.data;
+                    if (!data || data.type !== 'MODEL_INFERENCE_RESPONSE') return;
+                    if (data.inferenceId !== inferenceId) return;
+
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+
+                    if (data.error) {
+                        console.warn('[HFModelManager] 扩展推理错误:', data.error);
+                        resolve(null);
+                    } else {
+                        resolve(data.response);
+                    }
+                };
+
+                window.addEventListener('message', handler);
+
+                // 超时 60 秒（推理可能较慢）
+                var timer = setTimeout(function () {
+                    window.removeEventListener('message', handler);
+                    resolve(null);
+                }, 60000);
+
+                // 通过 content script 中继发送到扩展后台
+                window.postMessage({
+                    type: 'MODEL_INFERENCE_REQUEST',
+                    inferenceId: inferenceId,
+                    prompt: prompt,
+                    options: {
+                        maxTokens: options.maxTokens || 512,
+                        temperature: options.temperature || 0.7
+                    }
+                }, '*');
+            });
+
+            if (response && response.success && response.result) {
+                console.log('[HFModelManager] 通过扩展推理成功');
+                return response.result;
+            }
+
+            return null;
+        } catch (error) {
+            console.warn('[HFModelManager] 扩展推理失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取扩展端模型状态
+     * @returns {Promise<Object|null>} { modelId, isLoaded, isLoading } 或 null
+     */
+    async function getExtensionModelStatus() {
+        if (typeof window === 'undefined') {
+            return null;
+        }
+
+        try {
+            return await new Promise(function (resolve) {
+                var handler = function (event) {
+                    if (event.source !== window) return;
+                    var data = event.data;
+                    if (!data || data.type !== 'MODEL_STATUS_RESPONSE') return;
+
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+
+                    if (data.error || !data.response || !data.response.success) {
+                        resolve(null);
+                    } else {
+                        resolve(data.response.status || null);
+                    }
+                };
+
+                window.addEventListener('message', handler);
+
+                var timer = setTimeout(function () {
+                    window.removeEventListener('message', handler);
+                    resolve(null);
+                }, 5000);
+
+                window.postMessage({ type: 'MODEL_STATUS_REQUEST' }, '*');
+            });
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /**
+     * 请求扩展加载模型
+     * @param {string} modelId 模型 ID
+     * @returns {Promise<boolean>} 是否加载成功
+     */
+    async function loadModelInExtension(modelId) {
+        if (typeof window === 'undefined' || !modelId) {
+            return false;
+        }
+
+        try {
+            return await new Promise(function (resolve) {
+                var handler = function (event) {
+                    if (event.source !== window) return;
+                    var data = event.data;
+                    if (!data || data.type !== 'MODEL_LOAD_RESPONSE') return;
+
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+
+                    resolve(!!(data.response && data.response.success));
+                };
+
+                window.addEventListener('message', handler);
+
+                // 5 分钟超时（首次下载可能很久）
+                var timer = setTimeout(function () {
+                    window.removeEventListener('message', handler);
+                    resolve(false);
+                }, 300000);
+
+                window.postMessage({ type: 'MODEL_LOAD_REQUEST', modelId: modelId }, '*');
+            });
+        } catch (error) {
+            console.warn('[HFModelManager] 扩展加载模型失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 请求扩展卸载模型
+     * @returns {Promise<boolean>}
+     */
+    async function unloadModelInExtension() {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        try {
+            return await new Promise(function (resolve) {
+                var handler = function (event) {
+                    if (event.source !== window) return;
+                    var data = event.data;
+                    if (!data || data.type !== 'MODEL_UNLOAD_RESPONSE') return;
+
+                    window.removeEventListener('message', handler);
+                    clearTimeout(timer);
+
+                    resolve(!!(data.response && data.response.success));
+                };
+
+                window.addEventListener('message', handler);
+
+                var timer = setTimeout(function () {
+                    window.removeEventListener('message', handler);
+                    resolve(false);
+                }, 10000);
+
+                window.postMessage({ type: 'MODEL_UNLOAD_REQUEST' }, '*');
+            });
+        } catch (error) {
+            return false;
+        }
+    }
+
     // 导出公共 API
     return {
         init: init,
@@ -1223,6 +1369,10 @@ var HFModelManager = (function () {
         loadModel: loadModel,
         generate: generate,
         generateStream: generateStream,
+        generateViaExtension: generateViaExtension,
+        getExtensionModelStatus: getExtensionModelStatus,
+        loadModelInExtension: loadModelInExtension,
+        unloadModelInExtension: unloadModelInExtension,
         getEmbedding: getEmbedding,
         getState: getState,
         isLoaded: isLoaded,

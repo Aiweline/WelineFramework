@@ -1,0 +1,265 @@
+<?php
+/**
+ * RummyRoyal - Navigation Header Component
+ * 
+ * 顶部导航栏，含Logo（皇冠+扑克牌 SVG）、导航链接和金色渐变CTA按钮
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:RummyRoyal
+ * logo.url => Logo图片URL:text:
+ * logo.width => Logo宽度:number:44|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.links => 导航链接:textarea:Home=>/\r\nGames=>#games\r\nDownload=>#download\r\nFAQ=>#faq|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Play Now
+ * navigation.cta_url => CTA按钮链接:text:#hero
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$navBg = $colors['nav_bg'] ?? 'rgba(10, 5, 20, 0.95)';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$navLink = $colors['nav_link'] ?? '#d4a574';
+$navLinkHover = $colors['nav_link_hover'] ?? '#eab308';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+
+// 配置
+$logoDisplay = $config['logo.display'] ?? 'yes';
+$logoText = $config['logo.text'] ?? 'RummyRoyal';
+$logoUrl = $config['logo.url'] ?? '';
+$logoWidth = $config['logo.width'] ?? '44';
+
+$navDisplay = $config['navigation.display'] ?? 'yes';
+$navLinksRaw = $config['navigation.links'] ?? "Home=>/\nGames=>#games\nDownload=>#download\nFAQ=>#faq";
+$showCta = $config['navigation.show_cta'] ?? 'yes';
+$ctaText = $config['navigation.cta_text'] ?? 'Play Now';
+$ctaUrl = $config['navigation.cta_url'] ?? '#hero';
+
+// 解析导航链接
+$navLinks = [];
+$lines = preg_split('/[\r\n]+/', $navLinksRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+
+$instanceId = 'rr-nav-' . uniqid();
+?>
+
+<?php if ($navDisplay !== 'no'): ?>
+<style>
+    #<?= $instanceId ?> {
+        padding: 14px 0;
+        transition: all 0.3s ease;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    #<?= $instanceId ?> .rr-logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: <?= htmlspecialchars($textPrimary) ?>;
+    }
+    
+    #<?= $instanceId ?> .rr-logo-icon {
+        width: <?= intval($logoWidth) ?>px;
+        height: <?= intval($logoWidth) ?>px;
+        background: <?= $buttonPrimaryBg ?>;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 15px rgba(234, 179, 8, 0.3);
+    }
+    
+    #<?= $instanceId ?> .rr-logo-icon svg {
+        width: 24px;
+        height: 24px;
+        fill: <?= htmlspecialchars($buttonPrimaryText) ?>;
+    }
+    
+    #<?= $instanceId ?> .rr-logo-text {
+        font-size: 1.35rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #fef3c7 0%, #eab308 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.01em;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-right {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-links {
+        display: flex;
+        gap: 28px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-link {
+        color: <?= htmlspecialchars($navLink) ?>;
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: color 0.3s ease;
+        position: relative;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-link::after {
+        content: '';
+        position: absolute;
+        bottom: -4px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: <?= htmlspecialchars($accentPrimary) ?>;
+        transition: width 0.3s ease;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-link:hover {
+        color: <?= htmlspecialchars($navLinkHover) ?>;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-link:hover::after {
+        width: 100%;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 24px;
+        background: <?= $buttonPrimaryBg ?>;
+        color: <?= htmlspecialchars($buttonPrimaryText) ?>;
+        text-decoration: none;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(234, 179, 8, 0.35);
+    }
+    
+    #<?= $instanceId ?> .rr-nav-cta:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(234, 179, 8, 0.5);
+    }
+    
+    #<?= $instanceId ?> .rr-nav-cta svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+    }
+    
+    /* Mobile hamburger */
+    #<?= $instanceId ?> .rr-nav-toggle {
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        cursor: pointer;
+        padding: 4px;
+    }
+    
+    #<?= $instanceId ?> .rr-nav-toggle span {
+        width: 24px;
+        height: 2px;
+        background: <?= htmlspecialchars($accentPrimary) ?>;
+        transition: all 0.3s ease;
+    }
+    
+    @media (max-width: 768px) {
+        #<?= $instanceId ?> .rr-nav-links {
+            display: none;
+        }
+        
+        #<?= $instanceId ?> .rr-nav-toggle {
+            display: flex;
+        }
+        
+        #<?= $instanceId ?> .rr-nav-cta span {
+            display: none;
+        }
+        
+        #<?= $instanceId ?> .rr-nav-cta {
+            padding: 10px;
+            border-radius: 10px;
+        }
+    }
+</style>
+
+<nav id="<?= $instanceId ?>">
+    <div class="rr-nav-container">
+        <?php if ($logoDisplay === 'yes'): ?>
+        <a href="/" class="rr-logo">
+            <span class="rr-logo-icon">
+                <?php if ($logoUrl): ?>
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                <?php else: ?>
+                    <!-- Crown + Card icon -->
+                    <svg viewBox="0 0 24 24"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                <?php endif; ?>
+            </span>
+            <span class="rr-logo-text"><?= htmlspecialchars($logoText) ?></span>
+        </a>
+        <?php endif; ?>
+        
+        <div class="rr-nav-right">
+            <ul class="rr-nav-links">
+                <?php foreach ($navLinks as $link): ?>
+                <li><a href="<?= htmlspecialchars($link['url']) ?>" class="rr-nav-link"><?= htmlspecialchars($link['name']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <div class="rr-nav-toggle" onclick="this.closest('nav').querySelector('.rr-nav-links').style.display = this.closest('nav').querySelector('.rr-nav-links').style.display === 'flex' ? 'none' : 'flex'">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            
+            <?php if ($showCta === 'yes'): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="rr-nav-cta">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <span><?= htmlspecialchars($ctaText) ?></span>
+            </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</nav>
+<?php endif; ?>

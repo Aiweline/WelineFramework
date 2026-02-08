@@ -14,9 +14,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Exception;
 
-use Weline\Framework\Exception\Core;
-
-class LinkException extends Core
+class LinkException extends DatabaseException
 {
     public function __construct($message = null, ?\Exception $cause = null, $code = 0)
     {

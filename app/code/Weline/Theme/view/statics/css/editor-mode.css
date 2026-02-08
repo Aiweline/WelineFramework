@@ -14,16 +14,40 @@ body.editor-mode {
     user-select: none;
 }
 
-body.editor-mode a,
-body.editor-mode button {
-    /* 编辑模式下禁用链接和按钮的默认行为 */
+body.editor-mode a {
+    /* 编辑模式下仅禁用链接的导航（防止页面跳转） */
+    /* button 不需要禁用：不会导致导航，且 JS 层已在 [data-wslot] 内做了点击拦截 */
     pointer-events: none;
 }
 
-body.editor-mode [data-wslot] a,
-body.editor-mode [data-wslot] button {
-    /* slot 内的链接和按钮恢复 */
+body.editor-mode [data-wslot] a {
+    /* slot 内的链接恢复 —— JS 点击拦截器会处理 */
     pointer-events: auto;
+}
+
+/* ========================================
+   data-editor-interactive 交互穿透约定
+   ========================================
+   任何模块（Hook/Widget/组件）在编辑器 iframe 中
+   需要保持完整交互能力时（弹窗、表单、浮层等），
+   只需在根容器加上 data-editor-interactive 属性即可。
+   
+   用法：<div id="my-modal" data-editor-interactive> ... </div>
+   ======================================== */
+body.editor-mode [data-editor-interactive] {
+    pointer-events: auto;
+    user-select: auto;
+}
+
+body.editor-mode [data-editor-interactive] a,
+body.editor-mode [data-editor-interactive] button,
+body.editor-mode [data-editor-interactive] input,
+body.editor-mode [data-editor-interactive] textarea,
+body.editor-mode [data-editor-interactive] select,
+body.editor-mode [data-editor-interactive] label {
+    pointer-events: auto;
+    user-select: auto;
+    cursor: auto;
 }
 
 /* ========================================
@@ -77,11 +101,23 @@ body.editor-mode [data-wslot].slot-active {
 }
 
 /* ========================================
-   选择按钮样式
+   插槽工具栏（选择 + 信息按钮）
    ======================================== */
-.slot-select-btn {
+.slot-toolbar {
     position: absolute;
     display: none;
+    align-items: center;
+    gap: 4px;
+    z-index: 10000;
+    pointer-events: auto !important;
+}
+
+body.editor-mode [data-wslot]:hover > .slot-toolbar {
+    display: flex;
+}
+
+.slot-select-btn {
+    display: flex;
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
@@ -90,9 +126,8 @@ body.editor-mode [data-wslot].slot-active {
     font-size: 11px;
     font-weight: 600;
     border: none;
-    border-radius: 4px;
+    border-radius: 4px 0 0 4px;
     cursor: pointer;
-    z-index: 10000;
     white-space: nowrap;
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
     pointer-events: auto !important;
@@ -100,7 +135,6 @@ body.editor-mode [data-wslot].slot-active {
 }
 
 .slot-select-btn:hover {
-    transform: scale(1.05);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
 }
 
@@ -114,9 +148,155 @@ body.editor-mode [data-wslot].slot-active {
     fill: currentColor;
 }
 
-/* Hover 时显示按钮 */
-body.editor-mode [data-wslot]:hover > .slot-select-btn {
+/* 信息按钮 */
+.slot-info-btn {
     display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    color: #fff;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    pointer-events: auto !important;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.slot-info-btn:hover {
+    background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.5);
+}
+
+.slot-info-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ========================================
+   插槽信息卡片
+   ======================================== */
+.slot-info-card {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 220px;
+    max-width: 300px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 12px;
+    z-index: 10001;
+    pointer-events: auto !important;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #334155;
+    animation: sic-fadein 0.15s ease;
+}
+
+@keyframes sic-fadein {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 卡片头部 */
+.sic-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sic-header strong {
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.sic-header code {
+    font-size: 10px;
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+/* 行 */
+.sic-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.sic-row:last-child {
+    margin-bottom: 0;
+}
+
+.sic-label {
+    flex-shrink: 0;
+    color: #94a3b8;
+    font-size: 11px;
+    min-width: 32px;
+}
+
+.sic-value {
+    color: #475569;
+    font-size: 11px;
+}
+
+/* 徽章 */
+.sic-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.sic-badge-exclusive {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.sic-badge-multiple {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.sic-badge-single {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+/* 标签列表 */
+.sic-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sic-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: monospace;
+}
+
+.sic-tag-all {
+    background: #dbeafe;
+    color: #2563eb;
 }
 
 /* ========================================

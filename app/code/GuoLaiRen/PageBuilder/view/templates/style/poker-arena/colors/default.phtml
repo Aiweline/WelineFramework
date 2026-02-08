@@ -1,0 +1,142 @@
+<?php
+/**
+ * PokerArena 模板 - 默认色系配置（翡翠绿+金色）
+ * Premium emerald green + gold casino dark theme
+ * 
+ * SCHEME_NAME: default
+ * SCHEME_DISPLAY_NAME: Emerald Casino (Default)
+ * SCHEME_DESCRIPTION: Premium emerald green & gold dark theme, sophisticated casino elegance
+ */
+
+$colors = [
+    // ========== 主背景色 ==========
+    'body_bg' => '#060d08',                    // Body背景色（极深绿黑）
+    'hero_bg' => 'linear-gradient(135deg, #060d08 0%, #0a1f10 50%, #071209 100%)', // Hero渐变
+    'hero_bg_gradient_end' => '#0a1f10',       // Hero渐变结束色
+    'nav_bg' => 'rgba(6, 13, 8, 0.95)',        // 导航栏背景色
+    'nav_bg_scrolled' => 'rgba(6, 13, 8, 0.98)', // 滚动时导航栏背景
+    'section_bg_1' => '#071209',               // 区块背景1（深绿黑）
+    'section_bg_2' => '#0a1f10',               // 区块背景2（暗绿）
+    'section_bg_3' => '#0d2914',               // 区块背景3（深森林绿）
+    'section_bg_4' => '#103318',               // 区块背景4（中深绿）
+    'card_bg' => 'rgba(255,255,255,0.03)',     // 卡片背景（半透明白）
+    'card_bg_alt' => 'rgba(4, 120, 87, 0.08)', // 卡片替代背景（翡翠色调）
+    'blog_bg' => 'linear-gradient(180deg, #071209 0%, #0a1f10 100%)', // 博客区域背景
+    'disclaimer_bg' => 'linear-gradient(180deg, #0d2914 0%, #0a1f10 100%)', // 免责声明背景
+    'footer_bg' => '#040a06',                  // Footer背景色（最深绿黑）
+    
+    // ========== 文字颜色 ==========
+    'text_primary' => '#ecfdf5',               // 主文字颜色（薄荷白）
+    'text_secondary' => '#86efac',             // 次要文字颜色（浅绿）
+    'text_muted' => '#6b8f7a',                 // 弱化文字颜色（暗绿灰）
+    'text_dark' => '#022c22',                  // 深色文字（用于浅色背景）
+    'text_gold' => '#fbbf24',                  // 金色文字
+    
+    // ========== 强调色（翡翠绿+金色） ==========
+    'accent_primary' => '#047857',             // 主强调色（翡翠绿）
+    'accent_primary_light' => '#10b981',       // 浅翡翠绿
+    'accent_primary_dark' => '#065f46',        // 深翡翠绿
+    'accent_primary_vibrant' => '#34d399',     // 鲜艳翡翠绿
+    'accent_secondary' => '#d97706',           // 次强调色（金色）
+    'accent_secondary_light' => '#fbbf24',     // 浅金色
+    'accent_secondary_hover' => '#b45309',     // 次强调色悬停（琥珀）
+    
+    // ========== 导航栏颜色 ==========
+    'nav_text' => '#ecfdf5',                   // 导航文字颜色
+    'nav_link' => '#86efac',                   // 导航链接颜色
+    'nav_link_hover' => '#fbbf24',             // 导航链接悬停颜色（金色）
+    'nav_link_active' => '#fbbf24',            // 导航链接激活颜色（金色）
+    'mobile_nav_bg' => 'rgba(6, 13, 8, 0.98)', // 移动端导航背景
+    
+    // ========== 按钮颜色 ==========
+    'button_primary_bg' => 'linear-gradient(135deg, #047857 0%, #d97706 100%)', // 主按钮背景（翡翠到金色渐变）
+    'button_primary_bg_hover' => 'linear-gradient(135deg, #059669 0%, #f59e0b 100%)', // 主按钮悬停
+    'button_primary_text' => '#ffffff',        // 主按钮文字颜色
+    'button_primary_shadow' => 'rgba(4, 120, 87, 0.4)', // 主按钮阴影
+    'button_primary_shadow_hover' => 'rgba(4, 120, 87, 0.6)', // 主按钮悬停阴影
+    'button_secondary_text' => '#10b981',      // 次按钮文字
+    'button_secondary_border' => '#047857',    // 次按钮边框
+    'button_gold_bg' => 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)', // 金色按钮
+    'button_gold_text' => '#422006',           // 金色按钮文字
+    
+    // ========== 标题和强调文字 ==========
+    'heading_color' => '#ecfdf5',              // 标题颜色（薄荷白）
+    'heading_color_alt' => '#fbbf24',          // 标题颜色替代（金色）
+    'link_color' => '#10b981',                 // 链接颜色
+    'link_hover_color' => '#fbbf24',           // 链接悬停颜色（金色）
+    
+    // ========== 边框和分割线 ==========
+    'border_light' => 'rgba(134, 239, 172, 0.1)', // 浅边框（半透明绿）
+    'border_default' => 'rgba(134, 239, 172, 0.15)', // 默认边框
+    'border_dark' => 'rgba(0, 0, 0, 0.5)',     // 深边框
+    'border_gold' => 'rgba(251, 191, 36, 0.3)', // 金色边框
+    'divider_color' => 'rgba(134, 239, 172, 0.08)', // 分割线颜色
+    
+    // ========== 卡片和区块 ==========
+    'card_border' => 'rgba(134, 239, 172, 0.08)', // 卡片边框
+    'card_border_hover' => 'rgba(4, 120, 87, 0.4)', // 卡片悬停边框
+    'card_shadow' => 'rgba(4, 120, 87, 0.15)', // 卡片阴影
+    'card_shadow_hover' => '0 8px 32px rgba(4, 120, 87, 0.25)', // 卡片悬停阴影
+    'section_title_color' => '#ecfdf5',        // 区块标题颜色
+    
+    // ========== 特殊区域背景 ==========
+    'hero_section_bg' => 'linear-gradient(135deg, #060d08 0%, #0a1f10 40%, #0d2914 100%)',
+    'games_bg' => '#071209',                   // 游戏区域背景
+    'advantages_bg' => '#0a1f10',              // 优势区域背景
+    'download_bg' => 'linear-gradient(135deg, #0d2914 0%, #103318 100%)', // 下载区域背景
+    'testimonials_bg' => '#071209',            // 评价区域背景
+    'faq_bg' => '#0a1f10',                     // FAQ区域背景
+    'cta_bg' => 'linear-gradient(135deg, #047857 0%, #065f46 50%, #d97706 100%)', // CTA渐变背景
+    'about_bg' => '#071209',                   // 关于页面背景
+    'contact_bg' => '#0a1f10',                 // 联系页面背景
+    'blog_card_bg' => 'rgba(255, 255, 255, 0.03)', // 博客卡片背景
+    
+    // ========== 表单颜色 ==========
+    'form_bg' => 'rgba(255, 255, 255, 0.05)',  // 表单背景
+    'form_border' => 'rgba(134, 239, 172, 0.15)', // 表单边框
+    'form_border_focus' => '#047857',          // 表单聚焦边框
+    'form_text' => '#ecfdf5',                  // 表单文字
+    'form_placeholder' => '#6b8f7a',           // 表单占位符
+    
+    // ========== 图标颜色 ==========
+    'icon_primary' => '#10b981',               // 主图标颜色
+    'icon_secondary' => '#d97706',             // 次图标颜色（金色）
+    'icon_bg' => 'rgba(4, 120, 87, 0.15)',     // 图标背景
+    'icon_bg_gold' => 'rgba(217, 119, 6, 0.15)', // 金色图标背景
+    
+    // ========== 徽章颜色 ==========
+    'badge_bg' => 'rgba(4, 120, 87, 0.15)',    // 徽章背景
+    'badge_border' => 'rgba(4, 120, 87, 0.3)', // 徽章边框
+    'badge_text' => '#10b981',                 // 徽章文字
+    'badge_gold_bg' => 'rgba(217, 119, 6, 0.15)', // 金色徽章背景
+    'badge_gold_border' => 'rgba(217, 119, 6, 0.3)', // 金色徽章边框
+    'badge_gold_text' => '#fbbf24',            // 金色徽章文字
+    
+    // ========== 星级/评分 ==========
+    'star_filled' => '#fbbf24',                // 已填充星星
+    'star_empty' => 'rgba(251, 191, 36, 0.2)', // 空星星
+    
+    // ========== Footer颜色 ==========
+    'footer_text' => '#6b8f7a',                // Footer文字颜色
+    'footer_link' => '#86efac',                // Footer链接颜色
+    'footer_link_hover' => '#fbbf24',          // Footer链接悬停颜色
+    'footer_copyright' => '#4a6b57',           // Footer版权文字颜色
+    'footer_border' => 'rgba(134, 239, 172, 0.06)', // Footer边框
+    
+    // ========== 阴影和效果 ==========
+    'shadow_nav' => 'rgba(0, 0, 0, 0.5)',      // 导航栏阴影
+    'shadow_nav_scrolled' => 'rgba(0, 0, 0, 0.7)', // 滚动时导航栏阴影
+    'shadow_card' => 'rgba(4, 120, 87, 0.15)', // 卡片阴影
+    'shadow_button' => 'rgba(4, 120, 87, 0.3)', // 按钮阴影
+    'glow_emerald' => '0 0 60px rgba(4, 120, 87, 0.3)', // 翡翠发光
+    'glow_gold' => '0 0 60px rgba(217, 119, 6, 0.2)', // 金色发光
+    
+    // ========== 扑克主题特殊颜色 ==========
+    'suit_spade' => '#ecfdf5',                 // ♠ 黑桃
+    'suit_heart' => '#ef4444',                 // ♥ 红心
+    'suit_diamond' => '#f59e0b',               // ♦ 方块
+    'suit_club' => '#10b981',                  // ♣ 梅花
+    'chip_gold' => '#fbbf24',                  // 金色筹码
+    'chip_emerald' => '#047857',               // 翡翠筹码
+    'felt_green' => '#0d4a2e',                 // 毛毡桌面绿
+];

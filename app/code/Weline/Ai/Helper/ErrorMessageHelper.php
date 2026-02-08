@@ -69,8 +69,8 @@ class ErrorMessageHelper
             $baseUrl = $protocol . '://' . $_SERVER['HTTP_HOST'];
         }
         
-        // 获取admin路径
-        $adminPath = $env->getConfig('admin') ?? 'admin';
+        // 获取后台路径（使用新的 area_routes 配置）
+        $adminPath = $env::getAreaRoutePrefix('backend') ?? 'admin';
         
         switch ($configType) {
             case 'provider':

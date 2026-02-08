@@ -9,9 +9,10 @@
  * @hook-solo false        Hook独享：false（不独占）
  */
 ?>
-<script data-no-extract="true">
+<script data-no-extract="true" data-load-order="last">
     // ========== 声明搜索模块 ==========
-    // 在 head 中声明搜索模块，立即加载
+    // 在 head 中声明搜索模块，延迟立即加载（DOMContentLoaded 后执行）
+    // 使用 data-load-order="last" 避免与其它 head 脚本并行导致的栈溢出
     if (window.Weline && window.Weline.declare) {
         Weline.declare('search', true, 'WeShop_Search::js/search.js');
     }

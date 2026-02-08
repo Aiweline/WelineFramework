@@ -1,0 +1,205 @@
+{
+    "template": "fintech-hub",
+    "name": "FinTech Hub",
+    "description": "金融科技落地页模板，皇家蓝金主题，适合金融平台、投资服务、支付系统推广",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "description": "页面顶部导航区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["header"],
+            "default_component": "header-nav"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "description": "页面主要内容区域",
+            "multiple": true,
+            "required": false,
+            "accepts": ["content", "widget"],
+            "default_components": ["hero", "features", "stats", "services", "testimonials", "faq"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "description": "页面底部链接和版权区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["footer"],
+            "default_component": "footer-links"
+        }
+    },
+    "components": {
+        "header-nav": {
+            "name": "导航栏",
+            "name_en": "Navigation Header",
+            "description": "页面顶部导航，支持Logo、导航链接和CTA按钮",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-menu-button-wide",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "navigation", "cta"],
+            "file": "header/nav.phtml",
+            "default_config": {
+                "logo.display": "yes",
+                "logo.text": "VaultPay",
+                "logo.width": 40,
+                "navigation.show_cta": "yes",
+                "navigation.cta_text": "Open Account",
+                "navigation.cta_url": "#hero"
+            }
+        },
+        "hero": {
+            "name": "首屏英雄区",
+            "name_en": "Hero Section",
+            "description": "首屏大图区域，包含标题、描述、CTA按钮和平台统计数据",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-badge-hd",
+            "sort_order": 10,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "cta", "style"],
+            "file": "content/hero.phtml",
+            "default_config": {
+                "content.badge": "Trusted by 1M+ Users",
+                "content.title": "The future of digital finance starts here",
+                "cta.primary_text": "Open Free Account",
+                "cta.secondary_text": "Explore Products"
+            }
+        },
+        "features": {
+            "name": "核心优势",
+            "name_en": "Features Section",
+            "description": "展示平台核心功能优势，6列卡片布局",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-stars",
+            "sort_order": 20,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "features", "style"],
+            "file": "content/features.phtml",
+            "default_config": {
+                "content.badge": "Core Advantages",
+                "content.title": "Why choose VaultPay"
+            }
+        },
+        "stats": {
+            "name": "平台数据",
+            "name_en": "Stats Section",
+            "description": "展示平台关键运营数据和指标",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-graph-up",
+            "sort_order": 30,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "stats", "style"],
+            "file": "content/stats.phtml",
+            "default_config": {
+                "content.badge": "Platform Metrics",
+                "content.title": "Numbers that speak for themselves"
+            }
+        },
+        "services": {
+            "name": "服务方案",
+            "name_en": "Services Section",
+            "description": "展示三种服务方案：个人、商务、企业",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-briefcase",
+            "sort_order": 40,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "services", "style"],
+            "file": "content/services.phtml",
+            "default_config": {
+                "content.badge": "Our Solutions",
+                "content.title": "Tailored financial services for everyone"
+            }
+        },
+        "testimonials": {
+            "name": "客户评价",
+            "name_en": "Testimonials",
+            "description": "展示客户评价和反馈信息",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-chat-quote",
+            "sort_order": 50,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "testimonials", "style"],
+            "file": "content/testimonials.phtml",
+            "default_config": {
+                "content.badge": "Client Testimonials",
+                "content.title": "What our clients say"
+            }
+        },
+        "faq": {
+            "name": "常见问题",
+            "name_en": "FAQ Section",
+            "description": "FAQ手风琴展示，支持展开收起效果",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-question-circle",
+            "sort_order": 60,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["faq", "style"],
+            "file": "content/faq.phtml",
+            "default_config": {
+                "content.badge": "FAQ",
+                "content.title": "Frequently asked questions"
+            }
+        },
+        "footer-links": {
+            "name": "页脚链接",
+            "name_en": "Footer with Links",
+            "description": "页脚区域，包含品牌信息、多列链接和版权声明",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "icon": "bi-layout-text-window-reverse",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["style", "layout", "content"],
+            "file": "footer/links.phtml",
+            "default_config": {
+                "brand.name": "VaultPay",
+                "brand.description": "Secure digital finance platform for payments, investments, and global transfers. Licensed and regulated.",
+                "links.items": "Features=>#features\nServices=>#services\nAbout=>#stats\nFAQ=>#faq",
+                "copyright.text": "Your money, your future, our mission."
+            }
+        }
+    },
+    "nav_config": {
+        "description": "导航可使用子页面配置",
+        "use_subpages": true,
+        "subpage_types": ["link", "anchor", "page"],
+        "default_items": [
+            {"text": "Features", "href": "#features", "type": "anchor"},
+            {"text": "Services", "href": "#services", "type": "anchor"},
+            {"text": "About", "href": "#stats", "type": "anchor"},
+            {"text": "FAQ", "href": "#faq", "type": "anchor"}
+        ]
+    },
+    "config_inheritance": {
+        "description": "组件可以继承模板的配置项",
+        "shared_configs": ["styles", "texts", "color_scheme"]
+    }
+}

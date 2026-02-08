@@ -83,11 +83,11 @@ $translatedText = $eventData['translated_text'] ?? $message;
 
 ### 前端接口
 
-- `GET /customerservice/frontend/chat/getSession` - 获取或创建会话
-- `POST /customerservice/frontend/chat/sendMessage` - 发送消息
-- `GET /customerservice/frontend/chat/getMessages` - 获取消息列表
-- `POST /customerservice/frontend/chat/setLanguage` - 设置客户语言
-- `POST /customerservice/frontend/bind/sendVerification` - 发送绑定验证邮件
+- `GET /customerservice/frontend/chat/session` - 获取或创建会话
+- `POST /customerservice/frontend/chat/send-message` - 发送消息
+- `GET /customerservice/frontend/chat/messages` - 获取消息列表
+- `POST /customerservice/frontend/chat/set-language` - 设置客户语言
+- `POST /customerservice/frontend/bind/send-verification` - 发送绑定验证邮件
 - `GET /customerservice/frontend/bind/verify` - 验证绑定令牌
 
 ### 后台接口
@@ -95,11 +95,19 @@ $translatedText = $eventData['translated_text'] ?? $message;
 - `GET /customerservice/backend/config` - 客服配置页面
 - `POST /customerservice/backend/config/save` - 保存配置
 - `GET /customerservice/backend/agent` - 客服人员列表
+- `GET /customerservice/backend/agent/agent-statistics` - 获取客服统计
 - `POST /customerservice/backend/agent/save` - 保存客服人员
-- `POST /customerservice/backend/agent/delete` - 删除客服人员
+- `POST /customerservice/backend/agent/remove` - 删除客服人员
 - `GET /customerservice/backend/session` - 会话列表
 - `GET /customerservice/backend/session/view` - 会话详情
 - `POST /customerservice/backend/session/close` - 关闭会话
+- `GET /customerservice/backend/console` - 客服工作台
+- `GET /customerservice/backend/console/sessions` - 获取客服会话列表
+- `GET /customerservice/backend/console/messages` - 获取会话消息
+- `GET /customerservice/backend/console/statistics` - 获取客服统计
+- `POST /customerservice/backend/console/send-message` - 客服发送消息
+- `POST /customerservice/backend/console/assign-session` - 分配会话
+- `POST /customerservice/backend/console/close-session` - 关闭会话
 
 ## 使用说明
 

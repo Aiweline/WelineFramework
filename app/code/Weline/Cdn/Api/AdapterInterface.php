@@ -125,5 +125,47 @@ interface AdapterInterface
      * @throws \Weline\Framework\Exception\Core
      */
     public function ensureZone(string $domain, array $credentials): array;
+    
+    /**
+     * 开启攻击防护模式
+     * 
+     * 当检测到攻击时，由 Server 模块触发此方法，
+     * 通知 CDN 服务商开启攻击防护模式。
+     * 
+     * @param string $zoneId Zone ID
+     * @param array $credentials 凭据数组
+     * @param array $attackData 攻击数据，包含：
+     *   - signal: array 攻击信号详情
+     *     - type: string 攻击类型
+     *     - domain: string 被攻击域名
+     *     - ip: string 攻击者IP
+     *     - timestamp: int 时间戳
+     *     - reason: string 原因
+     *   - summary: array 攻击摘要
+     *     - total: int 总攻击次数
+     *     - by_type: array 按类型分组
+     *     - recent_ips: array 最近攻击IP
+     *   - attacker_ips: array 攻击者IP列表
+     * @return array ['success' => bool, 'message' => string, ...]
+     */
+    public function enableAttackMode(string $zoneId, array $credentials, array $attackData = []): array;
+    
+    /**
+     * 关闭攻击防护模式
+     * 
+     * 当攻击结束后，关闭攻击防护模式恢复正常访问。
+     * 
+     * @param string $zoneId Zone ID
+     * @param array $credentials 凭据数组
+     * @return array ['success' => bool, 'message' => string, ...]
+     */
+    public function disableAttackMode(string $zoneId, array $credentials): array;
+    
+    /**
+     * 检查是否支持攻击防护模式
+     * 
+     * @return bool
+     */
+    public function supportsAttackMode(): bool;
 }
 

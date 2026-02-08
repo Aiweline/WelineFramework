@@ -49,7 +49,7 @@ class WarmupRunner
         // 获取待处理的URL（启用状态、未达到目标次数）
         $urls = $warmupUrlModel->reset()
             ->where(WarmupUrl::fields_ENABLED, 1)
-            ->where(WarmupUrl::fields_PROCESSED_COUNT . ' < ' . WarmupUrl::fields_TARGET_COUNT)
+            ->whereRaw(WarmupUrl::fields_PROCESSED_COUNT . ' < ' . WarmupUrl::fields_TARGET_COUNT)
             ->limit($limit)
             ->select()
             ->fetch()

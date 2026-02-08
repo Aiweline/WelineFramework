@@ -51,25 +51,25 @@ class CheckFullPageCache implements ObserverInterface
             return;
         }
 
+        // 检查 URL 是否已经解析完成
+        // 使用 WELINE_URL_PARSED 标志判断，这是最可靠的方式
+        // 在 WLS 模式下，GlobalsEmulator 不再设置 WELINE_IS_BACKEND，而是使用 WELINE_URL_PARSED
+        if (!isset($_SERVER['WELINE_URL_PARSED']) || !$_SERVER['WELINE_URL_PARSED']) {
+            // URL 解析未完成，无法生成正确的缓存键，直接返回
+            // 等待 Weline_Framework::App::url_parsed_after 事件触发时再检查
+            return;
+        }
+        
         // 检查是否是后端请求（后端请求不缓存）
-        // 优先使用全局变量 WELINE_IS_BACKEND（在 App.php 的 URL 解析阶段已设置）
+        // 此时 URL 已解析完成，WELINE_IS_BACKEND 已正确设置
         if (isset($_SERVER['WELINE_IS_BACKEND']) && $_SERVER['WELINE_IS_BACKEND']) {
             return;
         }
         
-        // 如果 WELINE_IS_BACKEND 还未设置（URL 解析之前），通过原始 REQUEST_URI 进行简单判断
+        // 备用检查：通过原始 REQUEST_URI 判断是否是后端请求
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $backendArea = Env::get('admin') ?: 'admin';
-        if (str_starts_with($requestUri, '/' . $backendArea . '/') || str_starts_with($requestUri, '/' . $backendArea)) {
-            return;
-        }
-
-        // 检查 URL 是否已经解析完成
-        // 如果 WELINE_IS_BACKEND 未设置，说明 URL 解析未完成，此时无法生成正确的缓存键
-        // 应该跳过检查，等待 Weline_Framework::App::url_parsed_after 事件触发
-        if (!isset($_SERVER['WELINE_IS_BACKEND'])) {
-            // URL 解析未完成，无法生成正确的缓存键，直接返回
-            // 等待 Weline_Framework::App::url_parsed_after 事件触发时再检查
+        $backendPrefix = Env::getAreaRoutePrefix('backend') ?: 'admin';
+        if (str_starts_with($requestUri, '/' . $backendPrefix . '/') || str_starts_with($requestUri, '/' . $backendPrefix)) {
             return;
         }
         

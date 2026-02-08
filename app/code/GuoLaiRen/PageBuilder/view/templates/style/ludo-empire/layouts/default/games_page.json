@@ -1,0 +1,50 @@
+{
+    "page_type": "games_page",
+    "name": "Games Page Layout",
+    "description": "LudoEmpire games page showing all game modes",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "games",
+                "enabled": true,
+                "instance_id": "games-page-default",
+                "config": {
+                    "content.badge": "All Game Modes",
+                    "content.title": "Choose Your Battle",
+                    "content.description": "Four exciting ways to play Ludo. Pick your mode and start winning!"
+                }
+            },
+            {
+                "code": "advantages",
+                "enabled": true,
+                "instance_id": "games-page-advantages",
+                "config": {
+                    "content.badge": "Why Choose Us",
+                    "content.title": "The Ultimate Ludo Experience",
+                    "content.description": "Everything you need for the perfect game, all in one place."
+                }
+            },
+            {
+                "code": "cta-banner",
+                "enabled": true,
+                "instance_id": "games-page-cta",
+                "config": {
+                    "content.title": "Ready to Play?",
+                    "content.description": "Pick your game mode and start playing now!",
+                    "buttons.primary_text": "Play Now",
+                    "buttons.primary_url": "#",
+                    "buttons.secondary_text": "Download App",
+                    "buttons.secondary_url": "#download"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Games page showing all available game modes"
+}

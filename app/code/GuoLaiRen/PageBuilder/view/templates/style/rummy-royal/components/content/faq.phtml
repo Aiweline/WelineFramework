@@ -1,0 +1,242 @@
+<?php
+/**
+ * RummyRoyal - FAQ Section Component
+ * 
+ * 常见问题手风琴展示区域
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:FAQ
+ * content.title => 标题:text:Frequently Asked Questions
+ * content.description => 描述:textarea:Everything you need to know about playing rummy on RummyRoyal.
+ * 
+ * group:faq => FAQ列表
+ * faq.items => FAQ列表:textarea:Is online rummy legal in India?|Yes, the Supreme Court of India has declared rummy as a game of skill. It is legal to play online rummy for cash in most Indian states.\r\nHow do I withdraw my winnings?|You can withdraw your winnings instantly via UPI, bank transfer, or Paytm. Minimum withdrawal is ₹100 and processing is within minutes.\r\nIs it safe to play on RummyRoyal?|Absolutely. We use RNG-certified card shuffling, SSL encryption for data protection, and are licensed by recognized gaming authorities.\r\nWhat are the entry fees for games?|Entry fees vary by format. Practice tables are free. Cash games start from as low as ₹1 entry fee. Tournament entry ranges from ₹10 to ₹10,000.\r\nHow does the welcome bonus work?|New players get up to ₹5,000 welcome bonus on their first deposit. The bonus is released in installments as you play cash games.\r\nCan I play on my mobile phone?|Yes! Our app is available on Android and iOS. You can also play directly in your mobile browser without downloading.|格式：问题|回答，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['faq_bg'] ?? '#0a0514';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$textMuted = $colors['text_muted'] ?? '#8b6f47';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#facc15';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+
+$badge = $config['content.badge'] ?? 'FAQ';
+$title = $config['content.title'] ?? 'Frequently Asked Questions';
+$description = $config['content.description'] ?? 'Everything you need to know about playing rummy on RummyRoyal.';
+
+$faqRaw = $config['faq.items'] ?? "Is online rummy legal in India?|Yes, the Supreme Court of India has declared rummy as a game of skill. It is legal to play online rummy for cash in most Indian states.\nHow do I withdraw my winnings?|You can withdraw your winnings instantly via UPI, bank transfer, or Paytm. Minimum withdrawal is ₹100 and processing is within minutes.\nIs it safe to play on RummyRoyal?|Absolutely. We use RNG-certified card shuffling, SSL encryption for data protection, and are licensed by recognized gaming authorities.\nWhat are the entry fees for games?|Entry fees vary by format. Practice tables are free. Cash games start from as low as ₹1 entry fee. Tournament entry ranges from ₹10 to ₹10,000.\nHow does the welcome bonus work?|New players get up to ₹5,000 welcome bonus on their first deposit. The bonus is released in installments as you play cash games.\nCan I play on my mobile phone?|Yes! Our app is available on Android and iOS. You can also play directly in your mobile browser without downloading.";
+
+$faqs = [];
+$lines = preg_split('/[\r\n]+/', $faqRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $question = trim($parts[0] ?? '');
+    $answer = trim($parts[1] ?? '');
+    if (!empty($question)) {
+        $faqs[] = ['question' => $question, 'answer' => $answer];
+    }
+}
+
+$instanceId = 'rr-faq-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item:hover {
+            border-color: rgba(234, 179, 8, 0.25);
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item.active {
+            border-color: <?= $accentPrimary ?>;
+            box-shadow: 0 4px 20px rgba(234, 179, 8, 0.08);
+        }
+        
+        #<?= $instanceId ?> .rr-faq-question {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 24px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-question:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        #<?= $instanceId ?> .rr-faq-question-text {
+            font-size: 1rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            flex: 1;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-question-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(234, 179, 8, 0.12);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-question-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: <?= $accentPrimary ?>;
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item.active .rr-faq-question-icon {
+            background: <?= $accentPrimary ?>;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item.active .rr-faq-question-icon svg {
+            fill: #1a0a2e;
+            transform: rotate(180deg);
+        }
+        
+        #<?= $instanceId ?> .rr-faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-item.active .rr-faq-answer {
+            max-height: 500px;
+        }
+        
+        #<?= $instanceId ?> .rr-faq-answer-content {
+            padding: 0 24px 24px;
+            font-size: 0.95rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.7;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-faq-title {
+                font-size: 1.85rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .rr-faq-question {
+                padding: 16px 20px;
+            }
+            
+            #<?= $instanceId ?> .rr-faq-question-text {
+                font-size: 0.95rem;
+            }
+            
+            #<?= $instanceId ?> .rr-faq-answer-content {
+                padding: 0 20px 20px;
+            }
+        }
+    </style>
+    
+    <div class="rr-faq-container">
+        <div class="rr-faq-header">
+            <div class="rr-faq-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="rr-faq-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="rr-faq-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="rr-faq-list">
+            <?php foreach ($faqs as $index => $faq): ?>
+            <div class="rr-faq-item<?= $index === 0 ? ' active' : '' ?>">
+                <div class="rr-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                    <span class="rr-faq-question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                    <span class="rr-faq-question-icon">
+                        <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </span>
+                </div>
+                <div class="rr-faq-answer">
+                    <div class="rr-faq-answer-content"><?= htmlspecialchars($faq['answer']) ?></div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

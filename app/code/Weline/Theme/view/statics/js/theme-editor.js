@@ -249,9 +249,6 @@
                 // 点击区域标签或区域空白处（排除已有部件）
                 const area = previewArea || (areaLabel ? areaLabel.closest('.preview-area') : null);
                 if (area && area.dataset.area) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:structureAreaClick',message:'Structure area clicked',data:{areaCode:area.dataset.area,areaClassName:area.className,clickedElement:e.target.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-                    // #endregion
                     selectArea(area);
                     return;
                 }
@@ -481,10 +478,6 @@
     function handleSlotSelected(slot) {
         console.log('插槽被选中:', slot);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:handleSlotSelected',message:'Slot selected - entry',data:{slot:slot,slotId:slot?.id,slotArea:slot?.area},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
-        // #endregion
-        
         // 保存当前选中的插槽
         state.selectedSlot = slot;
         
@@ -495,9 +488,8 @@
         
         console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', slot.area, 'resolved areaCode:', areaCode);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:handleSlotSelected',message:'Area code resolved',data:{slotId:slotId,areaCode:areaCode,hasArea:!!slot.area},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
+        // 切换插槽前，先完全重置前次过滤状态
+        restoreWidgetOrder();
         
         // 调用区域过滤函数，隐藏不适合该区域的部件
         if (areaCode) {
@@ -1690,6 +1682,16 @@
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
         const acceptCodes = slot.accept || [];
+        const isExclusive = slot.exclusive === true || isExclusiveSlot(slotId, '');
+        const isMultiple = slot.multiple === true;
+        
+        // 插槽模式标签
+        let modeBadge = '';
+        if (isExclusive) {
+            modeBadge = '<span class="badge bg-warning text-dark"><i class="ri-lock-line"></i> 独占 (仅限1个部件)</span>';
+        } else if (isMultiple) {
+            modeBadge = '<span class="badge bg-info"><i class="ri-stack-line"></i> 可多个部件</span>';
+        }
         
         // 生成接受的部件列表 HTML
         let acceptHtml = '';
@@ -1710,6 +1712,7 @@
                     <div class="slot-title">
                         <h5>${slotName}</h5>
                         <span class="slot-id text-muted">ID: ${slotId}</span>
+                        ${modeBadge ? `<div class="mt-1">${modeBadge}</div>` : ''}
                     </div>
                 </div>
                 
@@ -1732,7 +1735,7 @@
                     <div class="action-hint-box">
                         <i class="ri-drag-drop-line"></i>
                         <p><strong>从右侧部件库拖拽部件</strong></p>
-                        <small>部件将替换当前的原生 HTML 内容</small>
+                        <small>${isExclusive ? '独占插槽：新部件将替换现有部件' : '将部件拖入此区域'}</small>
                     </div>
                 </div>
             </div>
@@ -1749,6 +1752,8 @@
         
         const area = slot.position || slot.id;
         const slotId = slot.id;
+        // 独占判断：优先取插槽的 exclusive 属性，其次用 isExclusiveSlot 兜底
+        const exclusive = slot.exclusive === true || isExclusiveSlot(slotId, widget.code);
         
         // 保存部件到该插槽
         try {
@@ -1764,25 +1769,28 @@
                     widget_type: widget.type || '',
                     page_type: state.pageType,
                     config: {},
-                    sort_order: 0
+                    sort_order: exclusive ? 0 : getNextSlotSortOrder(slotId),
+                    exclusive: exclusive,
                 }),
             });
 
             const result = await response.json();
 
             if (result.success) {
-                showToast(`${widget.name || widget.code} 已添加到 ${slot.name}`, 'success');
+                showToast(exclusive 
+                    ? `${widget.name || widget.code} 已替换到 ${slot.name}` 
+                    : `${widget.name || widget.code} 已添加到 ${slot.name}`, 'success');
                 
                 // 更新结构视图：添加部件到结构面板
                 const layoutId = result.data?.layout_id;
                 if (layoutId) {
-                    addWidgetToStructureView(area, slotId, widget, layoutId, false);
+                    addWidgetToStructureView(area, slotId, widget, layoutId, exclusive);
                 }
                 
                 // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true，以便触发重试或完整刷新
+                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
                 if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true);
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
                 } else {
                     // 没有返回 preview_html，直接刷新整个预览
                     loadLayoutPreview();
@@ -1802,16 +1810,16 @@
     function handlePreviewWidgetSelected(data) {
         const layoutId = data.layoutId;
         const widgetCode = data.widgetCode;
-        let config = {};
+        let widgetConfig = {};
         
         try {
-            config = JSON.parse(data.config || '{}');
+            widgetConfig = JSON.parse(data.config || '{}');
         } catch (e) {
-            config = {};
+            widgetConfig = {};
         }
 
         // 打开配置模态框
-        openConfigModalForLayout(layoutId, widgetCode, config);
+        openConfigModalForLayout(layoutId, widgetCode, widgetConfig);
     }
 
     /**
@@ -1838,8 +1846,12 @@
      */
     function highlightAcceptableWidgets(acceptCodes) {
         if (!acceptCodes || acceptCodes.length === 0) {
-            // 如果没有接受代码，恢复原始顺序并移除高亮
-            restoreWidgetOrder();
+            // 没有 accept 限制 → 保留区域过滤结果，不做进一步筛选
+            return;
+        }
+
+        // accept 包含 * 表示接受所有部件，等同于无限制
+        if (acceptCodes.includes('*')) {
             return;
         }
 
@@ -1853,128 +1865,56 @@
             el.classList.remove('highlighted');
         });
 
-        // 获取所有分组并分类：包含匹配部件的分组和不包含的
         const widgetList = elements.widgetList;
         if (!widgetList) return;
 
-        const allGroups = Array.from(widgetList.querySelectorAll('.widget-group'));
-        const groupsWithMatches = [];
-        const groupsWithoutMatches = [];
+        let totalChecked = 0, totalMatched = 0, totalHidden = 0;
 
-        // 先遍历所有分组，找出哪些包含匹配的部件
-        allGroups.forEach(group => {
+        // 简单逻辑：遍历所有部件，只显示插槽 accept 列表中的部件
+        widgetList.querySelectorAll('.widget-group').forEach(group => {
             const groupContent = group.querySelector('.widget-group-content');
             if (!groupContent) {
-                groupsWithoutMatches.push(group);
+                group.style.display = 'none';
                 return;
             }
 
             const allWidgets = Array.from(groupContent.querySelectorAll('.widget-item'));
             let hasMatch = false;
 
-            // 检查是否有匹配的部件
             allWidgets.forEach(widget => {
-                const widgetCode = widget.getAttribute('data-widget-code');
-                const widgetSlot = widget.getAttribute('data-widget-slot') || '';
+                totalChecked++;
+                const widgetCode = (widget.getAttribute('data-widget-code') || '').toLowerCase();
+                const widgetSlot = (widget.getAttribute('data-widget-slot') || '').toLowerCase();
+                // 已被区域过滤隐藏的，保持隐藏不参与
+                if (widget.style.display === 'none') {
+                    totalHidden++;
+                    return;
+                }
                 
-                const isMatch = acceptCodes.some(acceptCode => {
-                    const trimmedAccept = acceptCode.trim().toLowerCase();
-                    const codeLower = (widgetCode || '').toLowerCase();
-                    const slotLower = (widgetSlot || '').toLowerCase();
-                    
-                    if (codeLower === trimmedAccept) return true;
-                    if (slotLower && slotLower === trimmedAccept) return true;
-                    if (codeLower && codeLower.includes(trimmedAccept) || trimmedAccept.includes(codeLower)) return true;
-                    return false;
+                // 简单精确匹配：code 或 slot 与 accept 码一致
+                const isMatch = acceptCodes.some(ac => {
+                    const code = ac.trim().toLowerCase();
+                    return widgetCode === code || (widgetSlot && widgetSlot === code);
                 });
 
                 if (isMatch) {
                     hasMatch = true;
-                }
-            });
-
-            if (hasMatch) {
-                groupsWithMatches.push(group);
-            } else {
-                groupsWithoutMatches.push(group);
-            }
-        });
-
-        // 重新排序分组：包含匹配部件的分组排到前面
-        if (groupsWithMatches.length > 0) {
-            // 先移除所有分组
-            allGroups.forEach(group => group.remove());
-            
-            // 先添加包含匹配部件的分组
-            groupsWithMatches.forEach(group => widgetList.appendChild(group));
-            
-            // 再添加不包含匹配部件的分组
-            groupsWithoutMatches.forEach(group => widgetList.appendChild(group));
-        }
-
-        // 遍历所有部件组，排序部件（重新获取分组，因为DOM已改变）
-        widgetList.querySelectorAll('.widget-group').forEach(group => {
-            const groupContent = group.querySelector('.widget-group-content');
-            if (!groupContent) return;
-
-            const allWidgets = Array.from(groupContent.querySelectorAll('.widget-item'));
-            const matchingWidgets = [];
-            const nonMatchingWidgets = [];
-
-            // 分类部件：匹配的和不匹配的
-            allWidgets.forEach(widget => {
-                const widgetCode = widget.getAttribute('data-widget-code');
-                const widgetSlot = widget.getAttribute('data-widget-slot') || '';
-                
-                // 检查是否匹配：精确匹配 widget code 或 slot 匹配
-                const isMatch = acceptCodes.some(acceptCode => {
-                    const trimmedAccept = acceptCode.trim().toLowerCase();
-                    const codeLower = (widgetCode || '').toLowerCase();
-                    const slotLower = (widgetSlot || '').toLowerCase();
-                    
-                    // 精确匹配 widget code
-                    if (codeLower === trimmedAccept) {
-                        return true;
-                    }
-                    // 匹配 slot 属性
-                    if (slotLower && slotLower === trimmedAccept) {
-                        return true;
-                    }
-                    // 部分匹配（code 包含 accept 或 accept 包含 code）
-                    if (codeLower && codeLower.includes(trimmedAccept) || trimmedAccept.includes(codeLower)) {
-                        return true;
-                    }
-                    return false;
-                });
-
-                if (isMatch) {
-                    matchingWidgets.push(widget);
+                    totalMatched++;
+                    widget.style.display = '';
                     widget.classList.add('highlighted');
                 } else {
-                    nonMatchingWidgets.push(widget);
+                    widget.style.display = 'none';
+                    totalHidden++;
                 }
             });
 
-            // 重新排序：匹配的部件排到前面
-            if (matchingWidgets.length > 0) {
-                // 先移除所有部件
-                allWidgets.forEach(widget => widget.remove());
-                
-                // 先添加匹配的部件
-                matchingWidgets.forEach(widget => groupContent.appendChild(widget));
-                
-                // 再添加不匹配的部件
-                nonMatchingWidgets.forEach(widget => groupContent.appendChild(widget));
-            }
-        });
-
-        // 自动展开包含匹配部件的组
-        document.querySelectorAll('.widget-group').forEach(group => {
-            const hasHighlighted = group.querySelector('.widget-item.highlighted');
-            if (hasHighlighted && group.classList.contains('collapsed')) {
+            // 没有匹配部件的分组整体隐藏
+            group.style.display = hasMatch ? '' : 'none';
+            if (hasMatch && group.classList.contains('collapsed')) {
                 group.classList.remove('collapsed');
             }
         });
+        
     }
 
     /**
@@ -2048,9 +1988,15 @@
         const widgetList = elements.widgetList;
         if (!widgetList) return;
 
-        // 移除所有高亮
+        // 移除所有高亮，恢复被隐藏的部件和分组
         document.querySelectorAll('.widget-item.highlighted').forEach(el => {
             el.classList.remove('highlighted');
+        });
+        document.querySelectorAll('.widget-item').forEach(el => {
+            el.style.display = '';
+        });
+        document.querySelectorAll('.widget-group').forEach(el => {
+            el.style.display = '';
         });
 
         // 恢复分组顺序
@@ -2547,8 +2493,9 @@
      * @param {string|number} layoutId 部件布局ID
      * @param {string} previewHtml 预览HTML内容
      * @param {boolean} isNewWidget 是否为新添加的部件（默认false）
+     * @param {string|null} targetSlotId 目标插槽ID（新部件时必传，避免依赖全局 state 导致插入错误区域）
      */
-    function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false) {
+    function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false, targetSlotId = null) {
         const iframe = elements.previewFrame;
         if (!iframe) {
             console.warn('[ThemeEditor] iframe not found, triggering full refresh');
@@ -2581,7 +2528,13 @@
                 
                 if (widgetEl) {
                     // 找到部件，更新其内容
-                    const contentEl = widgetEl.querySelector('.widget-content') || widgetEl;
+                    let contentEl = widgetEl.querySelector('.widget-content');
+                    if (!contentEl) {
+                        // 没有 .widget-content 容器 → 创建一个，保留已有 .widget-hover-actions
+                        contentEl = iframe.contentDocument.createElement('div');
+                        contentEl.className = 'widget-content';
+                        widgetEl.appendChild(contentEl);
+                    }
                     contentEl.innerHTML = previewHtml;
                     console.log(`[ThemeEditor] Widget ${layoutId} preview updated successfully`);
                     
@@ -2589,8 +2542,8 @@
                     widgetEl.classList.add('widget-updated');
                     setTimeout(() => widgetEl.classList.remove('widget-updated'), 1000);
                 } else if (isNewWidget) {
-                    // 新部件 - 尝试在对应插槽中插入
-                    const slotId = state.selectedSlot?.id || state.draggingWidget?.slot;
+                    // 新部件 - 尝试在对应插槽中插入（优先使用调用方传入的 targetSlotId，避免依赖全局 state 导致插入到错误区域）
+                    const slotId = targetSlotId || state.selectedSlot?.id || state.draggingWidget?.slot;
                     let slotEl = null;
                     
                     if (slotId) {
@@ -2612,8 +2565,9 @@
                         wrapper.classList.add('widget-wrapper', 'widget-new');
                         wrapper.style.position = 'relative';
                         
-                        // 判断是否独占
-                        const isExclusive = isExclusiveSlot(slotId, state.draggingWidget?.code || '');
+                        // 判断是否独占（从 DOM 属性或 isExclusiveSlot 判断）
+                        const isExclusive = slotEl.getAttribute('data-wslot-exclusive') === 'true' 
+                            || isExclusiveSlot(slotId, state.draggingWidget?.code || '');
                         
                         // 生成操作按钮
                         const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, true, true);
@@ -2621,9 +2575,15 @@
                         // 组装部件内容
                         wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + previewHtml + '</div>';
                         
-                        // 清除插槽中的原有内容（独占模式）
-                        slotEl.innerHTML = '';
-                        slotEl.appendChild(wrapper);
+                        if (isExclusive) {
+                            // 独占模式：清空原内容，替换为新部件
+                            slotEl.innerHTML = '';
+                            slotEl.appendChild(wrapper);
+                        } else {
+                            // 非独占模式：移除占位符后追加新部件（保留已有部件）
+                            slotEl.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
+                            slotEl.appendChild(wrapper);
+                        }
                         
                         // 绑定按钮事件（如果还没有绑定）
                         if (!iframe.contentDocument.body._widgetActionsInitialized) {
@@ -2734,6 +2694,137 @@
             slot.addEventListener('dragleave', handleSlotDragLeave);
             slot.addEventListener('drop', handleSlotDrop);
         });
+    }
+
+    // ========== 拖拽排序辅助函数 ==========
+
+    /**
+     * 从插槽 DOM 元素提取完整的插槽信息
+     * @param {Element} slotEl 插槽 DOM 元素
+     * @returns {object} 插槽属性
+     */
+    function getSlotInfo(slotEl) {
+        if (!slotEl) return { exclusive: false, multiple: true, max: -1, currentCount: 0 };
+        
+        const exclusiveAttr = slotEl.dataset.wslotExclusive || slotEl.dataset.slotExclusive || slotEl.dataset.exclusive;
+        const multipleAttr = slotEl.dataset.wslotMultiple || slotEl.dataset.slotMultiple || slotEl.dataset.multiple;
+        const maxAttr = slotEl.dataset.wslotMax || slotEl.dataset.slotMax;
+        const slotId = slotEl.dataset.wslot || slotEl.dataset.slot;
+        
+        const exclusive = exclusiveAttr === 'true';
+        const multiple = multipleAttr !== 'false'; // 默认允许多个
+        const max = maxAttr ? parseInt(maxAttr, 10) : -1; // -1 表示无限制
+        
+        // 如果 exclusive 为 true，max 固定为 1
+        const effectiveMax = exclusive ? 1 : max;
+        
+        // 统计当前已有部件数量
+        let currentCount = 0;
+        if (slotEl.classList.contains('preview-area') || slotEl.classList.contains('area-slot')) {
+            // 结构视图区域
+            const widgetsContainer = slotEl.querySelector('.area-widgets');
+            if (widgetsContainer) {
+                currentCount = widgetsContainer.querySelectorAll('.preview-widget-item').length;
+            }
+        } else {
+            // 容器插槽
+            const slotWidgets = slotEl.querySelector('.slot-widgets');
+            if (slotWidgets) {
+                currentCount = slotWidgets.querySelectorAll('.preview-widget-item').length;
+            } else {
+                currentCount = slotEl.querySelectorAll('.preview-widget-item, .widget-wrapper[data-layout-id]').length;
+            }
+        }
+        
+        return {
+            slotId,
+            exclusive,
+            multiple,
+            max: effectiveMax,
+            currentCount,
+            isFull: effectiveMax > 0 && currentCount >= effectiveMax,
+        };
+    }
+
+    /**
+     * 计算鼠标在部件列表中的插入位置索引
+     * @param {Element} container 包含部件项的容器
+     * @param {number} mouseY 鼠标 Y 坐标（clientY）
+     * @returns {number} 插入索引（0 = 最前面）
+     */
+    function getInsertionIndex(container, mouseY) {
+        const items = container.querySelectorAll('.preview-widget-item');
+        if (items.length === 0) return 0;
+        
+        for (let i = 0; i < items.length; i++) {
+            const rect = items[i].getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            if (mouseY < midY) {
+                return i;
+            }
+        }
+        return items.length; // 插入到最后
+    }
+
+    /**
+     * 显示插入位置指示器
+     * @param {Element} container 部件容器
+     * @param {number} mouseY 鼠标 Y 坐标
+     */
+    function showInsertionIndicator(container, mouseY) {
+        // 先移除旧的指示器
+        removeInsertionIndicators(container);
+        
+        const items = container.querySelectorAll('.preview-widget-item');
+        if (items.length === 0) {
+            // 空容器：显示整体高亮
+            container.classList.add('drag-insert-empty');
+            return;
+        }
+        
+        const insertIndex = getInsertionIndex(container, mouseY);
+        
+        // 创建指示器
+        const indicator = document.createElement('div');
+        indicator.className = 'drag-insert-indicator';
+        indicator.innerHTML = '<span class="drag-insert-dot"></span><span class="drag-insert-line"></span><span class="drag-insert-dot"></span>';
+        
+        if (insertIndex < items.length) {
+            items[insertIndex].before(indicator);
+        } else {
+            container.appendChild(indicator);
+        }
+        
+        // 保存插入索引
+        state.dragInsertIndex = insertIndex;
+    }
+
+    /**
+     * 移除所有插入位置指示器
+     * @param {Element} [container] 限定范围，不传则移除所有
+     */
+    function removeInsertionIndicators(container) {
+        const scope = container || document;
+        scope.querySelectorAll('.drag-insert-indicator').forEach(el => el.remove());
+        scope.querySelectorAll('.drag-insert-empty').forEach(el => el.classList.remove('drag-insert-empty'));
+        // 移除独占/满额的提示标签
+        scope.querySelectorAll('.drag-slot-hint').forEach(el => el.remove());
+    }
+
+    /**
+     * 显示插槽状态提示（独占替换 / 已满）
+     * @param {Element} slotEl 插槽元素
+     * @param {string} text 提示文字
+     * @param {string} type 'replace' | 'full'
+     */
+    function showSlotHint(slotEl, text, type) {
+        // 避免重复
+        slotEl.querySelectorAll('.drag-slot-hint').forEach(el => el.remove());
+        
+        const hint = document.createElement('div');
+        hint.className = `drag-slot-hint drag-slot-hint-${type}`;
+        hint.textContent = text;
+        slotEl.appendChild(hint);
     }
 
     /**
@@ -2989,17 +3080,11 @@
             const rejected = rejectCodes.includes(widgetType) || rejectCodes.includes(widgetCode);
             
             // 检查部件是否可以放入此插槽
-            // 1. 不能被拒绝
-            // 2. 部件的 slot 属性匹配
-            // 3. 或者部件 code 在 accept 列表中
-            // 4. 或者无限制（acceptCodes 为空）
             const allowed = !rejected && (
                 (widgetSlot && widgetSlot === slotId) || 
                 acceptCodes.includes(widgetCode) || 
                 acceptCodes.length === 0
             );
-            
-            console.log('SlotDragOver - widget:', widgetCode, 'type:', widgetType, 'slot:', slotId, 'accept:', acceptCodes, 'reject:', rejectCodes, 'allowed:', allowed);
             
             if (allowed) {
                 e.dataTransfer.dropEffect = 'copy';
@@ -3104,8 +3189,6 @@
             acceptCodes.includes(widgetCode) || 
             acceptCodes.length === 0
         );
-        
-        console.log('SlotDrop - widget:', widgetCode, 'type:', widgetType, 'to slot:', slotId, 'in area:', areaCode, 'reject:', rejectCodes, 'allowed:', allowed, 'exclusive:', exclusive);
 
         if (!allowed) {
             const reason = rejected ? '该类型部件不允许放入此区域' : `部件 "${widgetData.name}" 不能放入插槽 "${slotName}"`;
@@ -3171,9 +3254,9 @@
                 // 切换到预览视图
                 switchPreviewView('preview');
                 // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true
+                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
                 if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true);
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
                 } else {
                     // 没有返回 preview_html，直接刷新整个预览
                     loadLayoutPreview();
@@ -3643,9 +3726,9 @@
                 // 切换到预览视图
                 switchPreviewView('preview');
                 // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true
+                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
                 if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true);
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
                 } else {
                     // 没有返回 preview_html，直接刷新整个预览
                     loadLayoutPreview();
@@ -3660,40 +3743,52 @@
     }
 
     /**
-     * 判断插槽是否为独占类型
-     * 独占插槽：同一插槽只能有一个部件，新部件会替换旧部件
+     * 判断插槽是否为独占类型（兜底逻辑）
+     * 
+     * 优先从插槽 DOM 的 data-wslot-exclusive="true" 判断，
+     * 此函数仅作为 DOM 属性不可用时的兜底。
+     * 
+     * 独占插槽：同一插槽只能有一个部件，新部件会替换旧部件。
+     * 
+     * 与模板保持一致：
+     * - exclusive=true 的插槽：header, logo, search, navigation, footer,
+     *   footer-social, footer-copyright, widget-hero, list-grid, list-pagination
+     * - multiple=true 的插槽：user-area, footer-links, widget-featured,
+     *   widget-main, widget-sidebar-*, widget-bottom 等
      */
     function isExclusiveSlot(slotId, widgetCode) {
-        // 独占插槽列表
+        // 独占插槽列表 — 与 <w:slot exclusive="true"> 和 data-wslot-exclusive="true" 一致
         const exclusiveSlots = [
-            'logo',           // Logo 只能有一个
-            'search',         // 搜索框只能有一个
-            'main-nav',       // 主导航只能有一个
-            'header-container', // Header 容器独占
-            'footer-container', // Footer 容器独占
-            'copyright',      // 版权信息只能有一个
-            'user-area',      // 用户区域独占
-            'cart',           // 购物车独占
-            'language',       // 语言切换独占
-            'currency',       // 货币切换独占
-            'top-bar',        // 顶栏独占
-            'footer-links',   // 底部链接独占
-            'footer-social',  // 底部社交独占
-            'footer-newsletter', // 底部订阅独占
+            // Header 区域
+            'header',             // 整体头部
+            'logo',               // Logo 只能有一个
+            'search',             // 搜索框只能有一个
+            'navigation',         // 导航菜单只能有一个
+            // Footer 区域
+            'footer',             // 整体底部
+            'footer-social',      // 社交媒体只能有一个
+            'footer-copyright',   // 版权信息只能有一个
+            // Content 容器
+            'widget-hero',        // Hero 轮播只能有一个
+            // 产品列表页
+            'list-grid',          // 产品网格只能有一个
+            'list-pagination',    // 分页只能有一个
         ];
 
-        // 独占部件类型：这些部件在同一区域只能有一个
+        // 独占部件 code：这些部件自身声明了独占
         const exclusiveWidgets = [
             'logo',
-            'main-nav',
-            'search-box',
             'header-container',
             'footer-container',
+            'full-header',
+            'content-container',
             'footer-copyright',
-            'language-switcher',
-            'currency-switcher',
-            'cart-mini',
-            'user-menu',
+            'footer-social',
+            'footer-payment',
+            'footer-newsletter',
+            'header-search',
+            'main-nav',
+            'category-menu',
         ];
 
         if (slotId && exclusiveSlots.includes(slotId)) {
@@ -3891,12 +3986,16 @@
         `;
         iframeDoc.head.appendChild(style);
         
-        // 同时注入 Remix Icon 如果不存在
+        // 同时注入 Remix Icon 如果不存在（使用本地资源，禁止外网 CDN）
         if (!iframeDoc.querySelector('link[href*="remixicon"]')) {
             const link = iframeDoc.createElement('link');
             link.rel = 'stylesheet';
-            link.href = 'https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css';
-            iframeDoc.head.appendChild(link);
+            link.href = (typeof window.WELINE_REMIXICON_CSS_URL !== 'undefined' && window.WELINE_REMIXICON_CSS_URL)
+                ? window.WELINE_REMIXICON_CSS_URL
+                : (document.querySelector('link[href*="remixicon"]')?.href || '');
+            if (link.href) {
+                iframeDoc.head.appendChild(link);
+            }
         }
         
         console.log('[ThemeEditor] Styles injected into iframe');
@@ -4008,10 +4107,8 @@
         
         // 使用事件委托，监听所有 slot 的点击
         doc.body.addEventListener('click', function(e) {
-            // 如果点击的是部件或操作按钮，跳过
-            if (e.target.closest('.widget-hover-actions') || 
-                e.target.closest('[data-layout-id]') ||
-                e.target.closest('.widget-wrapper')) {
+            // 操作按钮点击始终跳过
+            if (e.target.closest('.widget-hover-actions')) {
                 return;
             }
             
@@ -4021,6 +4118,13 @@
                           e.target.closest('.content-slot');
             
             if (!slotEl) return;
+            
+            // 如果点击的是 widget-wrapper 内的子插槽，优先处理子插槽选择
+            // 只有点击 widget-wrapper 但没有命中子插槽时才跳过
+            const inWidgetWrapper = e.target.closest('.widget-wrapper') || e.target.closest('[data-layout-id]');
+            if (inWidgetWrapper && !e.target.closest('[data-wslot]') && !e.target.closest('[data-slot]')) {
+                return;
+            }
             
             // 获取 slot 信息
             const slotId = slotEl.getAttribute('data-slot') || 
@@ -4039,10 +4143,6 @@
                                 slotEl.getAttribute('data-position') || '';
             
             console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr, 'position:', positionAttr);
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:iframeSlotClick',message:'Slot clicked in iframe',data:{slotId:slotId,slotName:slotName,acceptAttr:acceptAttr,positionAttr:positionAttr,slotElTagName:slotEl?.tagName,slotElClassName:slotEl?.className},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,E'})}).catch(()=>{});
-            // #endregion
             
             // 构造 slot 信息，area 优先使用 position 属性
             const slotInfo = {
@@ -4639,12 +4739,12 @@
         const widgetModule = widgetElement.dataset.widgetModule;
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
-        let config = {};
+        let widgetConfig = {};
 
         try {
-            config = JSON.parse(widgetElement.dataset.config || '{}');
+            widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
         } catch (e) {
-            config = {};
+            widgetConfig = {};
         }
 
         // 获取部件参数定义（传递页面类型以获取适用的部件）
@@ -4672,7 +4772,7 @@
                         widget_code: widgetCode,
                         widget_module: widgetModule,
                         widget_type: widgetType,
-                        config: config,
+                        config: widgetConfig,
                         meta: widgetMeta,
                     }, widgetMeta.params || {}, modalBody, widgetElement);
                 } else {
@@ -4761,7 +4861,7 @@
         const icon = typeIcons[widget.widget_type] || 'ri-widgets-line';
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
-        const config = widget.config || {};
+        const savedConfig = widget.config || {};
 
         let html = `
             <div class="config-widget-header mb-4">
@@ -4784,7 +4884,7 @@
                 const type = param.type || 'string';
                 const label = param.label || key;
                 const defaultVal = param.default || '';
-                const value = config[key] !== undefined ? config[key] : defaultVal;
+                const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
                 const required = param.required || false;
                 const description = param.description || '';
                 const placeholder = param.placeholder || '';
@@ -4901,7 +5001,7 @@
         const icon = typeIcons[widget.widget_type] || 'ri-widgets-line';
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
-        const config = widget.config || {};
+        const savedConfig = widget.config || {};
 
         let html = `
             <div class="widget-config-panel">
@@ -4934,7 +5034,7 @@
                 const type = param.type || 'string';
                 const label = param.label || key;
                 const defaultVal = param.default || '';
-                const value = config[key] !== undefined ? config[key] : defaultVal;
+                const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
                 const required = param.required || false;
                 const description = param.description || '';
                 const placeholder = param.placeholder || '';
@@ -5173,18 +5273,18 @@
         if (!layoutId) return;
 
         const formData = new FormData(form);
-        const config = {};
+        const configData = {};
 
         formData.forEach((value, key) => {
-            config[key] = value;
+            configData[key] = value;
         });
 
         // 处理复选框（未选中时不会在 FormData 中）
         form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             if (!formData.has(checkbox.name)) {
-                config[checkbox.name] = false;
+                configData[checkbox.name] = false;
             } else {
-                config[checkbox.name] = true;
+                configData[checkbox.name] = true;
             }
         });
 
@@ -5196,7 +5296,7 @@
                 },
                 body: JSON.stringify({
                     layout_id: layoutId,
-                    config: config,
+                    config: configData,
                 }),
             });
 
@@ -5206,7 +5306,7 @@
                 showToast('配置已保存', 'success');
                 // 更新部件的 data-config
                 if (widgetElement) {
-                    widgetElement.dataset.config = JSON.stringify(config);
+                    widgetElement.dataset.config = JSON.stringify(configData);
                 }
                 // 关闭模态框
                 const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
@@ -5217,7 +5317,6 @@
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
                 }
-                // 注意：不再调用 refreshPreview()
             } else {
                 showToast(result.message || '保存失败', 'error');
             }
@@ -5235,18 +5334,18 @@
         if (!layoutId) return;
 
         const formData = new FormData(form);
-        const config = {};
+        const configData = {};
 
         formData.forEach((value, key) => {
-            config[key] = value;
+            configData[key] = value;
         });
 
         // 处理复选框（未选中时不会在 FormData 中）
         form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             if (!formData.has(checkbox.name)) {
-                config[checkbox.name] = false;
+                configData[checkbox.name] = false;
             } else {
-                config[checkbox.name] = true;
+                configData[checkbox.name] = true;
             }
         });
 
@@ -5258,7 +5357,7 @@
                 },
                 body: JSON.stringify({
                     layout_id: layoutId,
-                    config: config,
+                    config: configData,
                 }),
             });
 
@@ -5268,13 +5367,12 @@
                 showToast('配置已保存', 'success');
                 // 更新部件的 data-config
                 if (state.selectedWidget) {
-                    state.selectedWidget.dataset.config = JSON.stringify(config);
+                    state.selectedWidget.dataset.config = JSON.stringify(configData);
                 }
                 // 使用返回的 preview_html 更新预览（如果有）
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
                 }
-                // 注意：不再调用 refreshPreview()
             } else {
                 showToast(result.message || '保存失败', 'error');
             }
@@ -5598,10 +5696,6 @@
      * @param {Array} rejectTypes 该区域拒绝的部件类型（从 data-wslot-reject 获取）
      */
     function filterWidgetsByArea(areaCode, rejectTypes = []) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea',message:'Filter called',data:{areaCode:areaCode,rejectTypes:rejectTypes},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        
         // 如果没有指定区域，显示所有部件
         if (!areaCode) {
             document.querySelectorAll('.widget-item.draggable').forEach(item => {
@@ -5728,12 +5822,6 @@
             // 只有当区域允许且类型未被拒绝时才能放置
             const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
             
-            // #region agent log
-            if (widgetType === 'header' || widgetType === 'footer') {
-                fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea:loop',message:'Header/Footer widget check',data:{widgetCode:widgetCode,widgetType:widgetType,widgetPositions:widgetPositions,allowedAreas:allowedAreas,areaCode:areaCode,isTypeRejected:isTypeRejected,canPlace:canPlace,finalRejectTypes:finalRejectTypes},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D'})}).catch(()=>{});
-            }
-            // #endregion
-            
             // 清除所有匹配相关的类
             item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
@@ -5766,13 +5854,6 @@
                 }
             }
         });
-
-        // #region agent log
-        const visibleWidgets = document.querySelectorAll('.widget-item.draggable:not([style*="display: none"])');
-        const headerTypeWidgets = document.querySelectorAll('.widget-item.draggable[data-widget-type="header"]');
-        const footerTypeWidgets = document.querySelectorAll('.widget-item.draggable[data-widget-type="footer"]');
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:filterWidgetsByArea',message:'Filter result summary',data:{areaCode:areaCode,visibleCount:visibleWidgets.length,headerTypeCount:headerTypeWidgets.length,footerTypeCount:footerTypeWidgets.length,hasMatchInGroup:Object.fromEntries(hasMatchInGroup)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D'})}).catch(()=>{});
-        // #endregion
         
         // 隐藏没有匹配部件的分组，展开有匹配的分组
         document.querySelectorAll('.widget-group').forEach(group => {
@@ -6214,6 +6295,9 @@
             
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
+                // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
+                if (e.target.closest('[data-editor-interactive]')) return;
+                
                 // 检查是否点击了区域元素
                 const themeArea = e.target.closest('.theme-area[data-area]');
                 if (themeArea && !e.target.closest('[data-layout-id]') && !e.target.closest('a')) {
@@ -6236,6 +6320,9 @@
             
             // 拦截所有链接点击
             iframeDoc.addEventListener('click', function(e) {
+                // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
+                if (e.target.closest('[data-editor-interactive]')) return;
+                
                 const link = e.target.closest('a');
                 if (!link) return;
                 

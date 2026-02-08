@@ -14,8 +14,10 @@ namespace Weline\DeveloperWorkspace\Observer;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\View\Template;
 
 /**
  * 开发工具面板 Observer
@@ -164,6 +166,16 @@ class DevToolPanelObserver implements ObserverInterface
             // 调试：输出检测信息（生产环境可删除）
             // $this->logToConsole('info', 'DevToolPanel Detection: URI=' . $uri . ', isBackend=' . ($isBackend ? 'TRUE' : 'FALSE'));
             
+            // 扩展标签/搜索区由各模块通过 Hook 注入，面板本身不包含具体实现
+            $extraTabsHtml = '';
+            $extraSearchAreasHtml = '';
+            try {
+                $template = Template::getInstance();
+                $extraTabsHtml = $template->getHook(HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_TABS_AFTER);
+                $extraSearchAreasHtml = $template->getHook(HookInterface::DEVELOPER_WORKSPACE_DEVTOOL_PANEL_SEARCH_AREAS_AFTER);
+            } catch (\Throwable $e) {
+                // Hook 未实现或未注册时不影响主面板
+            }
             // 使用输出缓冲捕获模板输出
             ob_start();
             $panelType = $isBackend ? 'backend' : 'frontend';

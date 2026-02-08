@@ -1,0 +1,206 @@
+<?php
+/**
+ * RummyRoyal - CTA Banner Component
+ * 
+ * 行动号召横幅区域，"Ready to Win Big?" 配背景发光效果
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.title => 标题:text:Ready to Win Big?
+ * content.description => 描述:textarea:Join millions of rummy players and start winning real cash prizes today. Your first game is just a click away.
+ * 
+ * group:buttons => 按钮设置
+ * buttons.primary_text => 主按钮文字:text:Register Now
+ * buttons.primary_url => 主按钮链接:text:#
+ * buttons.secondary_text => 次按钮文字:text:Download App
+ * buttons.secondary_url => 次按钮链接:text:#download
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$ctaBg = $colors['cta_bg'] ?? 'linear-gradient(135deg, #1a0a2e 0%, #2d1040 50%, #1a0a2e 100%)';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+$accentSecondary = $colors['accent_secondary'] ?? '#dc2626';
+
+$title = $config['content.title'] ?? 'Ready to Win Big?';
+$description = $config['content.description'] ?? 'Join millions of rummy players and start winning real cash prizes today. Your first game is just a click away.';
+$primaryBtnText = $config['buttons.primary_text'] ?? 'Register Now';
+$primaryBtnUrl = $config['buttons.primary_url'] ?? '#';
+$secondaryBtnText = $config['buttons.secondary_text'] ?? 'Download App';
+$secondaryBtnUrl = $config['buttons.secondary_url'] ?? '#download';
+
+$instanceId = 'rr-cta-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $ctaBg ?>;
+            padding: 80px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?>::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(234, 179, 8, 0.12) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?>::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 30%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fef3c7 0%, #eab308 50%, #fef3c7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-desc {
+            font-size: 1.15rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+            margin-bottom: 40px;
+            max-width: 550px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 25px rgba(234, 179, 8, 0.4);
+        }
+        
+        #<?= $instanceId ?> .rr-cta-btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 35px rgba(234, 179, 8, 0.55);
+        }
+        
+        #<?= $instanceId ?> .rr-cta-btn-primary svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: transparent;
+            color: <?= $accentPrimary ?>;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border: 2px solid rgba(234, 179, 8, 0.4);
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-cta-btn-secondary:hover {
+            background: rgba(234, 179, 8, 0.08);
+            border-color: <?= $accentPrimary ?>;
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-cta-title {
+                font-size: 2.25rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .rr-cta-title {
+                font-size: 1.85rem;
+            }
+            
+            #<?= $instanceId ?> .rr-cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            #<?= $instanceId ?> .rr-cta-btn-primary,
+            #<?= $instanceId ?> .rr-cta-btn-secondary {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+    
+    <div class="rr-cta-container">
+        <h2 class="rr-cta-title"><?= htmlspecialchars($title) ?></h2>
+        <p class="rr-cta-desc"><?= htmlspecialchars($description) ?></p>
+        
+        <div class="rr-cta-buttons">
+            <?php if ($primaryBtnText): ?>
+            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="rr-cta-btn-primary">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <?= htmlspecialchars($primaryBtnText) ?>
+            </a>
+            <?php endif; ?>
+            
+            <?php if ($secondaryBtnText): ?>
+            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="rr-cta-btn-secondary">
+                <?= htmlspecialchars($secondaryBtnText) ?>
+            </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>

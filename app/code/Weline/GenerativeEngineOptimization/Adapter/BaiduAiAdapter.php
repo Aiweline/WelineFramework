@@ -120,7 +120,7 @@ class BaiduAiAdapter extends BaseAdapter
     /**
      * @inheritDoc
      */
-    public function testConnection(PlatformAccount $account): PushResult
+    public function testConnection(PlatformAccount $account): bool
     {
         try {
             /** @var SecretStoreService $secretStore */
@@ -129,17 +129,17 @@ class BaiduAiAdapter extends BaseAdapter
             $apiSecret = $secretStore->decryptApiKey($account->getData('api_secret'));
 
             if (empty($apiKey) || empty($apiSecret)) {
-                return new PushResult(false, 'API密钥解密失败');
+                return false;
             }
 
             $accessToken = $this->getBaiduAccessToken($apiKey, $apiSecret);
             if (empty($accessToken)) {
-                return new PushResult(false, '获取Access Token失败，请检查API密钥');
+                return false;
             }
 
-            return new PushResult(true, '连接测试成功');
+            return true;
         } catch (\Exception $e) {
-            return new PushResult(false, $e->getMessage());
+            return false;
         }
     }
 }

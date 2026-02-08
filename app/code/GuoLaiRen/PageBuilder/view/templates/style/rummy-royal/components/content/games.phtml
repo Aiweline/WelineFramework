@@ -1,0 +1,241 @@
+<?php
+/**
+ * RummyRoyal - Games Showcase Component
+ * 
+ * 游戏模式展示区域，4列卡片网格布局
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Game Variants
+ * content.title => 标题:text:Choose Your Rummy Style
+ * content.description => 描述:textarea:From quick rounds to high-stakes tournaments, we have a rummy format for every player.
+ * 
+ * group:games => 游戏列表
+ * games.items => 游戏列表:textarea:Points Rummy|The fastest format. Play a single deal, score lowest points, and win the pool instantly.|🃏|Play Now\r\nPool Rummy|Compete until opponents hit the point limit. Strategic play with 101 and 201 pool variants.|🎯|Play Now\r\nDeals Rummy|Fixed number of deals with chip-based scoring. Perfect for calculated players.|💎|Play Now\r\nRummy Tournament|Multi-table knockout tournaments with massive prize pools and leaderboard glory.|🏆|Join Now|格式：名称|描述|图标|按钮文字，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['games_bg'] ?? '#110822';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d4a574';
+$textMuted = $colors['text_muted'] ?? '#8b6f47';
+$accentPrimary = $colors['accent_primary'] ?? '#eab308';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#facc15';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)';
+$buttonPrimaryText = $colors['button_primary_text'] ?? '#1a0a2e';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
+
+$badge = $config['content.badge'] ?? 'Game Variants';
+$title = $config['content.title'] ?? 'Choose Your Rummy Style';
+$description = $config['content.description'] ?? 'From quick rounds to high-stakes tournaments, we have a rummy format for every player.';
+
+$gamesRaw = $config['games.items'] ?? "Points Rummy|The fastest format. Play a single deal, score lowest points, and win the pool instantly.|🃏|Play Now\nPool Rummy|Compete until opponents hit the point limit. Strategic play with 101 and 201 pool variants.|🎯|Play Now\nDeals Rummy|Fixed number of deals with chip-based scoring. Perfect for calculated players.|💎|Play Now\nRummy Tournament|Multi-table knockout tournaments with massive prize pools and leaderboard glory.|🏆|Join Now";
+
+$games = [];
+$lines = preg_split('/[\r\n]+/', $gamesRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line);
+    $gameName = trim($parts[0] ?? '');
+    $gameDesc = trim($parts[1] ?? '');
+    $gameIcon = trim($parts[2] ?? '🃏');
+    $gameCta = trim($parts[3] ?? 'Play Now');
+    if (!empty($gameName)) {
+        $games[] = ['name' => $gameName, 'description' => $gameDesc, 'icon' => $gameIcon, 'cta' => $gameCta];
+    }
+}
+
+$instanceId = 'rr-games-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .rr-games-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(234, 179, 8, 0.12);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: <?= $accentPrimary ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .rr-games-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: <?= $buttonPrimaryBg ?>;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(234, 179, 8, 0.35);
+            transform: translateY(-6px);
+            box-shadow: 0 12px 40px rgba(234, 179, 8, 0.12);
+        }
+        
+        #<?= $instanceId ?> .rr-games-card:hover::before {
+            opacity: 1;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card-icon {
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(145deg, rgba(234, 179, 8, 0.12) 0%, rgba(220, 38, 38, 0.08) 100%);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card:hover .rr-games-card-icon {
+            transform: scale(1.1) rotate(-5deg);
+        }
+        
+        #<?= $instanceId ?> .rr-games-card-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 12px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card-desc {
+            font-size: 0.88rem;
+            color: <?= $textMuted ?>;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            background: <?= $buttonPrimaryBg ?>;
+            color: <?= $buttonPrimaryText ?>;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .rr-games-card-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(234, 179, 8, 0.4);
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .rr-games-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .rr-games-title {
+                font-size: 1.85rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .rr-games-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <div class="rr-games-container">
+        <div class="rr-games-header">
+            <div class="rr-games-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="rr-games-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="rr-games-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="rr-games-grid">
+            <?php foreach ($games as $game): ?>
+            <div class="rr-games-card">
+                <div class="rr-games-card-icon"><?= $game['icon'] ?></div>
+                <h3 class="rr-games-card-name"><?= htmlspecialchars($game['name']) ?></h3>
+                <p class="rr-games-card-desc"><?= htmlspecialchars($game['description']) ?></p>
+                <a href="#" class="rr-games-card-btn"><?= htmlspecialchars($game['cta']) ?></a>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

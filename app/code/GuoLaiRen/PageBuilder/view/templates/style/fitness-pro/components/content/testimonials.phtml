@@ -1,0 +1,105 @@
+<?php
+/**
+ * Fitness Pro - Testimonials Section Component
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors
+ * @var array $component_config
+ * 
+ * @fields_start
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Success Stories
+ * content.title => 标题:text:What Our Members Say
+ * content.description => 描述:textarea:Real stories from real members who transformed their lives at FitZone.
+ * group:testimonials => 评价列表
+ * testimonials.items => 评价列表:textarea:Alex Thompson|Premium Member|FitZone completely changed my life. Lost 30 pounds in 4 months and gained confidence I never knew I had. The trainers are incredible!|⭐⭐⭐⭐⭐\r\nSarah Mitchell|CrossFit Member|The CrossFit program here is next level. The coaches push you just right - challenging but never overwhelming. Best gym I've ever been to.|⭐⭐⭐⭐⭐\r\nDavid Chen|Yoga Member|As a software developer, I needed something for my back and stress. The yoga classes here are transformative. I feel 10 years younger!|⭐⭐⭐⭐⭐|格式：姓名|会员类型|评价内容|评分，一行一个
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['testimonials_bg'] ?? '#140e08';
+$textPrimary = $colors['text_primary'] ?? '#fef3c7';
+$textSecondary = $colors['text_secondary'] ?? '#d6b87a';
+$textMuted = $colors['text_muted'] ?? '#a68b5b';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#fb923c';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(249, 115, 22, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(249, 115, 22, 0.3)';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)';
+
+$badge = $config['content.badge'] ?? 'Success Stories';
+$title = $config['content.title'] ?? 'What Our Members Say';
+$description = $config['content.description'] ?? 'Real stories from real members who transformed their lives at FitZone.';
+
+$testimonialsRaw = $config['testimonials.items'] ?? "Alex Thompson|Premium Member|FitZone completely changed my life. Lost 30 pounds in 4 months and gained confidence I never knew I had. The trainers are incredible!|⭐⭐⭐⭐⭐\nSarah Mitchell|CrossFit Member|The CrossFit program here is next level. The coaches push you just right - challenging but never overwhelming. Best gym I've ever been to.|⭐⭐⭐⭐⭐\nDavid Chen|Yoga Member|As a software developer, I needed something for my back and stress. The yoga classes here are transformative. I feel 10 years younger!|⭐⭐⭐⭐⭐";
+
+$testimonials = [];
+foreach (preg_split('/[\r\n]+/', $testimonialsRaw) as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line);
+    $name = trim($parts[0] ?? '');
+    if (!empty($name)) {
+        $testimonials[] = [
+            'name' => $name,
+            'role' => trim($parts[1] ?? ''),
+            'content' => trim($parts[2] ?? ''),
+            'rating' => trim($parts[3] ?? '⭐⭐⭐⭐⭐'),
+        ];
+    }
+}
+
+$instanceId = 'fp-testimonials-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 100px 0; }
+        #<?= $instanceId ?> .fp-testi-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        #<?= $instanceId ?> .fp-testi-header { text-align: center; margin-bottom: 64px; }
+        #<?= $instanceId ?> .fp-testi-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: <?= $badgeBg ?>; border: 1px solid <?= $badgeBorder ?>; border-radius: 50px; font-size: 0.875rem; font-weight: 500; color: <?= $accentPrimaryLight ?>; margin-bottom: 20px; }
+        #<?= $instanceId ?> .fp-testi-title { font-size: 2.5rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 16px; }
+        #<?= $instanceId ?> .fp-testi-subtitle { font-size: 1.125rem; color: <?= $textSecondary ?>; max-width: 600px; margin: 0 auto; }
+        #<?= $instanceId ?> .fp-testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        #<?= $instanceId ?> .fp-testi-card { background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>; border-radius: 16px; padding: 32px; transition: all 0.3s ease; display: flex; flex-direction: column; }
+        #<?= $instanceId ?> .fp-testi-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(249,115,22,0.3); transform: translateY(-4px); }
+        #<?= $instanceId ?> .fp-testi-rating { font-size: 1.25rem; margin-bottom: 16px; }
+        #<?= $instanceId ?> .fp-testi-content { font-size: 1rem; color: <?= $textSecondary ?>; line-height: 1.7; flex: 1; margin-bottom: 24px; font-style: italic; }
+        #<?= $instanceId ?> .fp-testi-author { display: flex; align-items: center; gap: 14px; }
+        #<?= $instanceId ?> .fp-testi-avatar { width: 44px; height: 44px; background: <?= $buttonPrimaryBg ?>; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #fff; }
+        #<?= $instanceId ?> .fp-testi-name { font-size: 0.95rem; font-weight: 600; color: <?= $textPrimary ?>; }
+        #<?= $instanceId ?> .fp-testi-role { font-size: 0.85rem; color: <?= $textMuted ?>; margin-top: 2px; }
+        @media (max-width: 992px) { #<?= $instanceId ?> .fp-testi-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .fp-testi-title { font-size: 1.75rem; } #<?= $instanceId ?> .fp-testi-grid { grid-template-columns: 1fr; } }
+    </style>
+    
+    <div class="fp-testi-container">
+        <div class="fp-testi-header">
+            <div class="fp-testi-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="fp-testi-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="fp-testi-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="fp-testi-grid" id="testimonials">
+            <?php foreach ($testimonials as $t): ?>
+            <div class="fp-testi-card">
+                <div class="fp-testi-rating"><?= $t['rating'] ?></div>
+                <p class="fp-testi-content">"<?= htmlspecialchars($t['content']) ?>"</p>
+                <div class="fp-testi-author">
+                    <div class="fp-testi-avatar"><?= mb_substr($t['name'], 0, 1) ?></div>
+                    <div>
+                        <div class="fp-testi-name"><?= htmlspecialchars($t['name']) ?></div>
+                        <div class="fp-testi-role"><?= htmlspecialchars($t['role']) ?></div>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

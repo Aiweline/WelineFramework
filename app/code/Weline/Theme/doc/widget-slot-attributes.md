@@ -83,7 +83,8 @@
 1. 为所有带 `data-wslot` 的元素添加高亮边框（hover 时显示）
 2. 显示 `data-wslot-name` 作为标签
 3. 支持拖放部件到 slot
-4. 根据 `data-wslot-accept` 验证部件是否可放置
+4. 根据 `data-wslot-accept` 过滤显示的部件（只显示接受的部件）
+5. 动态渲染的子插槽（容器部件内部的 `data-wslot`）会自动初始化交互事件
 
 ## 迁移指南
 
@@ -112,3 +113,17 @@
 - 移除了额外的包裹 div
 - 不影响 flex/grid 布局
 - 代码更简洁
+
+## 完整属性示例
+
+### 无限制插槽
+
+```html
+<!-- 主内容区：接受所有部件 -->
+<section class="main-content"
+         data-wslot="widget-main"
+         data-wslot-name="主内容区"
+         data-wslot-accept="*"
+         data-wslot-multiple="true">
+</section>
+```

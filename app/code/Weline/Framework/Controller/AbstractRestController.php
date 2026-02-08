@@ -58,10 +58,10 @@ abstract class AbstractRestController extends Core
                 break;
             case self::fetch_JSON:
             default:
-                header('Content-Type:application/json');
+                header('Content-Type: application/json; charset=utf-8');
                 // 将所有值转换为字符串
                 $data = $this->convertAllToString($data);
-                $result = json_encode($data);
+                $result = json_encode($data, JSON_UNESCAPED_UNICODE);
 
                 break;
         }

@@ -50,10 +50,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      * @inheritDoc
      */
     public function execute(Event &$event): void
-    {// 从事件中获取 route 对象
+    {
+        // 从事件中获取 route 对象
         // 事件数据格式：['route' => $routeObject]
         // 由于 Event 类将数据直接存储在 _data 中（而不是 _data['data']），
         // 需要直接从事件数据中获取 route
+        
         $route = $event->getData('route');
         
         // 如果 getData('route') 返回的是数组，可能是整个事件数据
@@ -86,6 +88,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         }
         
         $request = $route->getRequest();
+        
+        // HEAD 请求跳过权限检查和重定向逻辑
+        // HEAD 请求只是为了获取响应头信息（如 Content-Length），不应该触发业务逻辑重定向
+        // 浏览器发起 HEAD 请求通常是为了预检或缓存验证
+        if (\strtoupper($request->getMethod()) === 'HEAD') {
+            return;
+        }
 
         // 处理后台和后台API请求
         if ($request->isBackend() || $request->isApiBackend()) {$this->validateBackendAccess($request, $event);}
@@ -107,18 +116,22 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ->where('type', \Weline\Acl\Model\WhiteAclSource::type_PC)
                 ->select()
                 ->fetchArray();
+            
             foreach ($white_lists as $key => $white_list) {
                 unset($white_lists[$key]);
                 $white_lists[] = $white_list['path'];
             }
             $this->aclCache->set($white_acl_cache_key, $white_lists);
         }
+        
         // 不在白名单内
         $uri = trim($request->getRouteUrlPath(), '/');
         $referer = $request->getReferer();
+        
         if (str_contains($referer, 'isIframe')) {
             $referer = '';
         }
+        
         if (!in_array(strtolower($uri), $white_lists)) {
             // 获取用户和角色（支持多种认证方式）
             $user = null;
@@ -170,7 +183,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     /**@var EventsManager $event */
                     $event = ObjectManager::getInstance(EventsManager::class);
                     $event->dispatch('Weline_Acl::no_access_redirect_before');
-                    $request->_response->noRouter(DEV ? 403 : 404);
+                    $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
             }
@@ -182,7 +195,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     return;
                 } else {
                     $this->session->logout();
-                    $request->_response->noRouter(DEV ? 403 : 404);
+                    $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
             }
@@ -197,7 +210,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     /**@var EventsManager $event */
                     $event = ObjectManager::getInstance(EventsManager::class);
                     $event->dispatch('Weline_Acl::no_access_redirect_before');
-                    $request->_response->noRouter(DEV ? 403 : 404);
+                    $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
                 }
             }
@@ -236,7 +249,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         /**@var EventsManager $event */
                         $event = ObjectManager::getInstance(EventsManager::class);
                         $event->dispatch('Weline_Acl::no_access_redirect_before');
-                        $request->_response->noRouter(DEV ? 403 : 404);
+                        $request->getResponse()->noRouter(DEV ? 403 : 404);
                         return;
                     }
                 }
@@ -302,7 +315,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                             /**@var MessageManager $message */
                                             $message = ObjectManager::getInstance(MessageManager::class);
                                             $message->addWarning(__('你无权进行该操作！已将你带回来源网址！你不具备：%{1} 操作权限！', $request->getMethod()));
-                                            $request->_response->redirect($referer);
+                                            $request->getResponse()->redirect($referer);
                                         }
                                     } else {
                                         // 找一个有权限的get请求路由访问
@@ -317,7 +330,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                     $event = ObjectManager::getInstance(EventsManager::class);
                                     $event->dispatch('Weline_Acl::no_access_redirect_before');
                                     if (!$request->isApiBackend()) {
-                                        $request->_response->noRouter(DEV ? 403 : 404);
+                                        $request->getResponse()->noRouter(DEV ? 403 : 404);
                                     }
                                     return;
                                 } else {
@@ -355,7 +368,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                         /**@var MessageManager $message */
                                         $message = ObjectManager::getInstance(MessageManager::class);
                                         $message->addWarning(__('你无权进行该操作！已将你带回来源网址！'));
-                                        $request->_response->redirect($referer);
+                                        $request->getResponse()->redirect($referer);
                                     }
                                 } else {
                                     // 找一个有权限的get请求路由访问
@@ -370,7 +383,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                 $event = ObjectManager::getInstance(EventsManager::class);
                                 $event->dispatch('Weline_Acl::no_access_redirect_before');
                                 if (!$request->isApiBackend()) {
-                                    $request->_response->noRouter(DEV ? 403 : 404);
+                                    $request->getResponse()->noRouter(DEV ? 403 : 404);
                                 }
                                 return;
                             }
@@ -500,7 +513,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     ]));
                     // 使用后台 URL 构建器生成正确的后台地址
                     $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
-                    $request->_response->redirect($backendUrl);
+                    $request->getResponse()->redirect($backendUrl);
                 }
             }
         }
@@ -509,7 +522,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         /**@var EventsManager $event */
         $event = ObjectManager::getInstance(EventsManager::class);
         $event->dispatch('Weline_Acl::no_access_redirect_before');
-        $request->_response->noRouter(DEV ? 403 : 404);
+        $request->getResponse()->noRouter(DEV ? 403 : 404);
     }
 
     /**
