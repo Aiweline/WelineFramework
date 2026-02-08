@@ -34,8 +34,10 @@ class SearchEngineAdapterRegistry
     {
         $this->objectManager = $objectManager;
 
-        // 默认内置 google_indexing_api 适配器
+        // 内置适配器注册
         $this->adapters['google_indexing_api'] = \Weline\Seo\Service\Adapter\GoogleIndexingApiAdapter::class;
+        $this->adapters['bing_webmaster'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
+        $this->adapters['baidu_push_api'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
     }
 
     /**

@@ -59,10 +59,62 @@ class Cli extends CliAbstract
             return;
         }
         
+        // 执行命令
+        $command = $command_class['command'] ?? '';
         $data = $command_class['data'];
         ObjectManager::getInstance($command_class['class'])->execute($args, $data);
+        
+        // 触发命令执行完成事件（传规范命令名，便于观察者按前缀匹配，如 setup: 而非别名 s:up）
+        $canonicalCommand = $this->getCanonicalCommandName($command, $command_class['class']);
+        $this->dispatchCommandExecutedEvent($canonicalCommand, $args);
         $this->printer->printing("\n");
         $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
+    }
+    
+    /**
+     * 触发命令执行完成事件
+     * 
+     * @param string $command 命令名称（规范名，非别名）
+     * @param array $args 命令参数
+     */
+    private function dispatchCommandExecutedEvent(string $command, array $args): void
+    {
+        try {
+            /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $eventData = ['command' => $command, 'args' => $args];
+            $eventsManager->dispatch('Weline_Framework::cli::command_executed', $eventData);
+        } catch (\Throwable $e) {
+            // 事件触发失败不影响命令执行
+        }
+    }
+
+    /**
+     * 根据已匹配的命令（可能为别名）和命令类，解析出规范命令名
+     * 规范名为同一命令类在 getCommands() 中键名最长的那条（主命令先注册，别名后注册，主命令名更长）
+     *
+     * @param string $matchedCommand 当前匹配到的命令名（可能是别名，如 s:up）
+     * @param string $commandClass 命令类全限定名
+     * @return string 规范命令名（如 setup:upgrade）
+     */
+    private function getCanonicalCommandName(string $matchedCommand, string $commandClass): string
+    {
+        $commands = Env::getCommands();
+        $canonical = $matchedCommand;
+        foreach ($commands as $group_commands) {
+            if (!\is_array($group_commands)) {
+                continue;
+            }
+            foreach ($group_commands as $name => $command_data) {
+                if (!\is_array($command_data) || ($command_data['class'] ?? '') !== $commandClass) {
+                    continue;
+                }
+                if (\strlen($name) > \strlen($canonical)) {
+                    $canonical = $name;
+                }
+            }
+        }
+        return $canonical;
     }
     
     /**
@@ -475,6 +527,28 @@ class Cli extends CliAbstract
             }
         }
         
+        // 多个匹配但都指向同一命令类（主命令+别名）时，直接执行
+        $uniqueClasses = [];
+        $classToCommand = [];
+        foreach ($commands as $cmdItem) {
+            if (!is_array($cmdItem)) {
+                continue;
+            }
+            foreach ($cmdItem as $c => $data) {
+                if (is_array($data) && isset($data['class'])) {
+                    $cls = $data['class'];
+                    $uniqueClasses[$cls] = true;
+                    if (!isset($classToCommand[$cls]) || strlen($c) > strlen($classToCommand[$cls]['command'])) {
+                        $classToCommand[$cls] = ['class' => $cls, 'command' => $c, 'data' => $data];
+                    }
+                }
+            }
+        }
+        if (count($uniqueClasses) === 1 && !empty($classToCommand)) {
+            $single = reset($classToCommand);
+            return $single;
+        }
+        
         // 如果没有找到唯一匹配，返回推荐列表
         if (empty($commands)) {
             return $recommendCommands;
@@ -721,4 +795,5 @@ class Cli extends CliAbstract
             $this->printer->error(__('获取命令帮助信息失败') . ': ' . $e->getMessage());
         }
     }
+    
 }

@@ -51,13 +51,13 @@ $this->assign('title', $title);
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     
     <div class="weline-page-wrapper">
-        <?php if ($showHeader): ?>
+        <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::category::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::category::header-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
-        <?php endif; ?>
+        </if>
 
         <div class="weline-main-content">
             <!-- 分类页布局的面包屑导航区域 -->
@@ -129,7 +129,7 @@ $this->assign('title', $title);
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
 
-        <?php if ($showFooter): ?>
+        <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::category::footer-before</w:hook>
             <footer class="weline-footer">
@@ -137,7 +137,7 @@ $this->assign('title', $title);
             </footer>
             <w:hook>Weline_Theme::frontend::layouts::category::footer-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-        <?php endif; ?>
+        </if>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::category::body-end</w:hook>

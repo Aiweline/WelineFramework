@@ -1,0 +1,330 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * WLS IPC 控制通道 - NDJSON 消息协议
+ *
+ * 所有进程间控制消息均使用 NDJSON（Newline-Delimited JSON）格式：
+ * 每条消息为一行 JSON + "\n"
+ *
+ * @author Aiweline
+ */
+
+namespace Weline\Server\IPC;
+
+class ControlMessage
+{
+    // ========== 消息类型常量 ==========
+
+    /** 子进程 → Master：注册身份（角色、PID、端口） */
+    public const TYPE_REGISTER = 'register';
+
+    /** Master → 子进程：注册确认，附带复活优先级 */
+    public const TYPE_ACK = 'ack';
+
+    /** 子进程 → Master：框架初始化 + 端口监听完成，可接收流量 */
+    public const TYPE_READY = 'ready';
+
+    /** Master → 子进程：通知优雅退出（主动终结） */
+    public const TYPE_SHUTDOWN = 'shutdown';
+
+    /** Master → Worker：通知代码重载（Worker 需优雅退出后重启） */
+    public const TYPE_RELOAD = 'reload';
+
+    /** Master → Worker：通知清缓存（原地执行，不重启） */
+    public const TYPE_CACHE_CLEAR = 'cache_clear';
+
+    /** Master → Dispatcher：将指定端口加入黑名单 */
+    public const TYPE_DRAIN = 'drain';
+
+    /** Master → Dispatcher：将指定端口从黑名单移除 */
+    public const TYPE_UNDRAIN = 'undrain';
+
+    /** Master → Dispatcher：动态添加 Worker 端口到负载均衡池 */
+    public const TYPE_ADD_WORKER = 'add_worker';
+
+    /** Master → Dispatcher：从负载均衡池移除端口 */
+    public const TYPE_REMOVE_WORKER = 'remove_worker';
+
+    /** Worker → Master：所有请求处理完毕，准备退出 */
+    public const TYPE_DRAINING_COMPLETE = 'draining_complete';
+
+    /** 子进程 → Master：上报运行状态 */
+    public const TYPE_STATUS_REPORT = 'status_report';
+
+    /** CLI → Master：CLI 命令 */
+    public const TYPE_COMMAND = 'command';
+
+    /** Master → CLI：CLI 命令执行结果 */
+    public const TYPE_COMMAND_RESULT = 'command_result';
+
+    // ========== 角色常量 ==========
+
+    public const ROLE_WORKER = 'worker';
+    public const ROLE_DISPATCHER = 'dispatcher';
+    public const ROLE_REDIRECT = 'redirect';
+    public const ROLE_MAINTENANCE = 'maintenance';
+
+    // ========== 重载类型 ==========
+
+    public const RELOAD_TYPE_CODE = 'code';
+    public const RELOAD_TYPE_CACHE = 'cache';
+
+    // ========== CLI 命令动作 ==========
+
+    public const ACTION_STOP = 'stop';
+    public const ACTION_RELOAD = 'reload';
+    public const ACTION_CACHE_CLEAR = 'cache_clear';
+    public const ACTION_STATUS = 'status';
+
+    // ========== 复活优先级 ==========
+
+    /** 不参与复活 */
+    public const RESURRECTION_NONE = 0;
+    /** HTTP Redirect Worker：延迟 1 秒 */
+    public const RESURRECTION_REDIRECT = 1;
+    /** Dispatcher：延迟 3 秒 */
+    public const RESURRECTION_DISPATCHER = 2;
+    /** Worker #1：延迟 6 秒 */
+    public const RESURRECTION_WORKER = 3;
+
+    // ========== 编解码方法 ==========
+
+    /**
+     * 编码消息为 NDJSON 行
+     *
+     * @param array $data 消息数据（必须包含 'type' 键）
+     * @return string 以 "\n" 结尾的 JSON 字符串
+     */
+    public static function encode(array $data): string
+    {
+        return \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+    }
+
+    /**
+     * 解码一行 NDJSON 消息
+     *
+     * @param string $line 单行 JSON 字符串（可含尾部换行）
+     * @return array|null 解码后的数组，失败返回 null
+     */
+    public static function decode(string $line): ?array
+    {
+        $line = \trim($line);
+        if ($line === '') {
+            return null;
+        }
+
+        $data = \json_decode($line, true);
+        if (!\is_array($data) || !isset($data['type'])) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * 从缓冲区提取所有完整消息（处理粘包/半包）
+     *
+     * 传入引用缓冲区，提取所有完整的 NDJSON 行，
+     * 未完成的半包数据留在缓冲区中等待下次追加。
+     *
+     * @param string &$buffer 读取缓冲区（引用传递，会被修改）
+     * @return array 解码后的消息数组
+     */
+    public static function extractMessages(string &$buffer): array
+    {
+        $messages = [];
+
+        // 找最后一个换行符的位置
+        $lastNewline = \strrpos($buffer, "\n");
+        if ($lastNewline === false) {
+            // 没有完整行，全部留在缓冲区
+            return $messages;
+        }
+
+        // 提取完整行部分
+        $complete = \substr($buffer, 0, $lastNewline + 1);
+        // 剩余半包留在缓冲区
+        $buffer = \substr($buffer, $lastNewline + 1);
+
+        // 逐行解码
+        $lines = \explode("\n", $complete);
+        foreach ($lines as $line) {
+            $msg = self::decode($line);
+            if ($msg !== null) {
+                $messages[] = $msg;
+            }
+        }
+
+        return $messages;
+    }
+
+    // ========== 消息构建快捷方法 ==========
+
+    /**
+     * 构建 register 消息
+     */
+    public static function register(string $role, int $pid, int $port = 0, int $workerId = 0): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_REGISTER,
+            'role'      => $role,
+            'pid'       => $pid,
+            'port'      => $port,
+            'worker_id' => $workerId,
+        ]);
+    }
+
+    /**
+     * 构建 ack 消息
+     */
+    public static function ack(int $resurrectionPriority = self::RESURRECTION_NONE): string
+    {
+        return self::encode([
+            'type'                  => self::TYPE_ACK,
+            'resurrection_priority' => $resurrectionPriority,
+        ]);
+    }
+
+    /**
+     * 构建 ready 消息
+     */
+    public static function ready(string $role, int $workerId = 0, int $port = 0): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_READY,
+            'role'      => $role,
+            'worker_id' => $workerId,
+            'port'      => $port,
+        ]);
+    }
+
+    /**
+     * 构建 shutdown 消息
+     */
+    public static function shutdown(string $reason = ''): string
+    {
+        return self::encode([
+            'type'   => self::TYPE_SHUTDOWN,
+            'reason' => $reason,
+        ]);
+    }
+
+    /**
+     * 构建 reload 消息
+     */
+    public static function reload(string $reloadType = self::RELOAD_TYPE_CODE): string
+    {
+        return self::encode([
+            'type'        => self::TYPE_RELOAD,
+            'reload_type' => $reloadType,
+        ]);
+    }
+
+    /**
+     * 构建 cache_clear 消息
+     */
+    public static function cacheClear(): string
+    {
+        return self::encode([
+            'type' => self::TYPE_CACHE_CLEAR,
+        ]);
+    }
+
+    /**
+     * 构建 drain 消息
+     */
+    public static function drain(array $ports): string
+    {
+        return self::encode([
+            'type'  => self::TYPE_DRAIN,
+            'ports' => $ports,
+        ]);
+    }
+
+    /**
+     * 构建 undrain 消息
+     */
+    public static function undrain(array $ports): string
+    {
+        return self::encode([
+            'type'  => self::TYPE_UNDRAIN,
+            'ports' => $ports,
+        ]);
+    }
+
+    /**
+     * 构建 add_worker 消息
+     */
+    public static function addWorker(array $ports): string
+    {
+        return self::encode([
+            'type'  => self::TYPE_ADD_WORKER,
+            'ports' => $ports,
+        ]);
+    }
+
+    /**
+     * 构建 remove_worker 消息
+     */
+    public static function removeWorker(array $ports): string
+    {
+        return self::encode([
+            'type'  => self::TYPE_REMOVE_WORKER,
+            'ports' => $ports,
+        ]);
+    }
+
+    /**
+     * 构建 draining_complete 消息
+     */
+    public static function drainingComplete(int $workerId, int $port): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_DRAINING_COMPLETE,
+            'worker_id' => $workerId,
+            'port'      => $port,
+        ]);
+    }
+
+    /**
+     * 构建 status_report 消息
+     */
+    public static function statusReport(int $connections, int $memory, int $requests): string
+    {
+        return self::encode([
+            'type'        => self::TYPE_STATUS_REPORT,
+            'connections' => $connections,
+            'memory'      => $memory,
+            'requests'    => $requests,
+        ]);
+    }
+
+    /**
+     * 构建 command 消息
+     */
+    public static function command(string $action, string $reloadType = ''): string
+    {
+        $data = [
+            'type'   => self::TYPE_COMMAND,
+            'action' => $action,
+        ];
+        if ($reloadType !== '') {
+            $data['reload_type'] = $reloadType;
+        }
+        return self::encode($data);
+    }
+
+    /**
+     * 构建 command_result 消息
+     */
+    public static function commandResult(bool $success, array $data = [], string $message = ''): string
+    {
+        return self::encode([
+            'type'    => self::TYPE_COMMAND_RESULT,
+            'success' => $success,
+            'data'    => $data,
+            'message' => $message,
+        ]);
+    }
+}

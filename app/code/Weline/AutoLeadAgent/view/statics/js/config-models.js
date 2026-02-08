@@ -10,7 +10,7 @@
         var card = document.getElementById('hf-model-config-card');
         if (!card) return;
 
-        var currentModelId = card.getAttribute('data-current-model-id') || '';
+        var currentModelId = (card.getAttribute('data-current-model-id') || '').trim();
         var enabledInput = document.getElementById('hf_model_enabled');
         var cacheInput = document.getElementById('hf_model_cache_size');
         var searchInput = document.getElementById('hf_model_search_input');
@@ -150,6 +150,25 @@
         }
 
         /**
+         * 推荐的兼容模型（已确认可在 transformers.js v3.4+ 中运行）
+         */
+        var RECOMMENDED_MODELS = [
+            // 轻量级优先 —— 浏览器中 > 500MB 可能导致崩溃
+            { id: 'onnx-community/gemma-3-270m-it-ONNX', downloads: 965, likes: 24, _recommended: true, _recLabel: '⭐ 首选 · 270M · ~150MB · 最稳定', _sizeEstimate: '~150MB', _sizeMB: 150 },
+            { id: 'onnx-community/SmolLM2-360M-ONNX', downloads: 18, likes: 1, _recommended: true, _recLabel: '⭐ 推荐 · 360M · ~200MB · 轻量快速', _sizeEstimate: '~200MB', _sizeMB: 200 },
+            { id: 'onnx-community/Qwen2.5-0.5B-Instruct', downloads: 2230, likes: 11, _recommended: true, _recLabel: '推荐 · 0.5B · ~300MB · 中文好', _sizeEstimate: '~300MB', _sizeMB: 300 },
+            { id: 'onnx-community/Qwen3-0.6B-ONNX', downloads: 44, likes: 3, _recommended: true, _recLabel: '⚠️ 较大 · 0.6B · ~400MB · 可能卡顿', _sizeEstimate: '~400MB', _sizeMB: 400 },
+            { id: 'onnx-community/Llama-3.2-1B-Instruct-ONNX', downloads: 1580, likes: 29, _recommended: true, _recLabel: '⚠️ 大模型 · 1B · ~600MB · 需8G+内存', _sizeEstimate: '~600MB', _sizeMB: 600 },
+            { id: 'onnx-community/Qwen2.5-1.5B-Instruct', downloads: 449, likes: 6, _recommended: true, _recLabel: '⚠️ 大模型 · 1.5B · ~900MB · 可能崩溃', _sizeEstimate: '~900MB', _sizeMB: 900 },
+        ];
+
+        /**
+         * 不兼容的模型类型（已知不支持的架构）
+         * 注：transformers.js v3.8.1 已支持 Qwen3、Gemma3n、SmolLM3 等
+         */
+        var INCOMPATIBLE_PATTERNS = [];
+
+        /**
          * 处理搜索响应数据
          */
         function handleSearchResponse(models) {
@@ -159,11 +178,38 @@
                 return;
             }
 
+            // 过滤不兼容的模型（如 Qwen3 非 ONNX 版本）
+            var filteredModels = models.filter(function (m) {
+                var mid = (m.id || m.name || '').toLowerCase();
+                for (var i = 0; i < INCOMPATIBLE_PATTERNS.length; i++) {
+                    if (INCOMPATIBLE_PATTERNS[i].test(mid)) return false;
+                }
+                return true;
+            });
+
+            // 将推荐模型置顶（去重后合并）
+            var existingIds = {};
+            filteredModels.forEach(function (m) { existingIds[(m.id || m.name || '').toLowerCase()] = true; });
+            var topModels = [];
+            RECOMMENDED_MODELS.forEach(function (rm) {
+                if (!existingIds[rm.id.toLowerCase()]) {
+                    topModels.push(rm);
+                } else {
+                    // 已在搜索结果中 → 标记为推荐
+                    filteredModels.forEach(function (m) {
+                        if ((m.id || m.name || '').toLowerCase() === rm.id.toLowerCase()) {
+                            m._recommended = true;
+                            m._recLabel = rm._recLabel;
+                        }
+                    });
+                }
+            });
+            filteredModels = topModels.concat(filteredModels);
+
             // 兼容性检查：过滤掉不支持 WebLLM/ONNX 格式的模型
-            var filteredModels = models;
-            if (models.length > 0) {
+            if (filteredModels.length > 0) {
                 if (typeof HFModelManager !== 'undefined' && HFModelManager.isModelSupportedForWebLLM) {
-                    filteredModels = models.filter(function (m) {
+                    filteredModels = filteredModels.filter(function (m) {
                         var modelId = m.id || m.name || '';
                         var isSupported = HFModelManager.isModelSupportedForWebLLM(modelId);
                         if (!isSupported) {
@@ -196,7 +242,8 @@
          * 加载详情
          */
         function loadModelInfo(modelId) {
-            if (!modelId) {
+            var id = (modelId != null && modelId !== undefined) ? String(modelId).trim() : '';
+            if (!id) {
                 ConfigUtils.safeToast('error', '模型ID不能为空');
                 return;
             }
@@ -204,12 +251,12 @@
             // 先尝试通过扩展获取，如果扩展不可用则降级到后端 API
             ConfigExtensionClient.sendMessage({
                 type: 'HF_GET_MODEL_INFO',
-                modelId: modelId
+                modelId: id
             }, function (response) {
                 // 如果扩展未响应或失败，降级到后端 API
                 if (!response || !response.success) {
                     console.log('[HFModelConfig] 扩展获取模型信息失败，降级到后端 API');
-                    loadModelInfoViaBackend(modelId);
+                    loadModelInfoViaBackend(id);
                     return;
                 }
 
@@ -222,8 +269,13 @@
          * 通过后端 API 获取模型信息（降级方案）
          */
         function loadModelInfoViaBackend(modelId) {
+            var id = (modelId != null && modelId !== undefined) ? String(modelId).trim() : '';
+            if (!id) {
+                ConfigUtils.safeToast('error', '模型ID不能为空');
+                return;
+            }
             var url = ConfigUtils.buildUrl('get-model-info', {
-                model_id: modelId
+                model_id: id
             });
 
             console.log('[HFModelConfig] 通过后端 API 获取模型信息:', url);
@@ -256,6 +308,18 @@
                 return;
             }
 
+            // 大模型警告 —— 检查模型大小并提示用户
+            var selectedModel = null;
+            for (var i = 0; i < RECOMMENDED_MODELS.length; i++) {
+                if (RECOMMENDED_MODELS[i].id === selectedModelId) { selectedModel = RECOMMENDED_MODELS[i]; break; }
+            }
+            if (selectedModel && selectedModel._sizeMB && selectedModel._sizeMB >= 400) {
+                var confirmMsg = '⚠️ 警告：该模型预估大小约 ' + selectedModel._sizeEstimate + '，加载后占用内存可能超过 ' + Math.round(selectedModel._sizeMB * 2.5) + 'MB。\n\n大模型可能导致浏览器卡顿甚至崩溃。\n\n推荐选择较小的模型（如 gemma-3-270m-it ~150MB）。\n\n确定要继续吗？';
+                if (!confirm(confirmMsg)) {
+                    return;
+                }
+            }
+
             var enabled = enabledInput ? enabledInput.checked : false;
             var cache = cacheInput ? parseInt(cacheInput.value || '10240', 10) : 10240;
 
@@ -275,16 +339,17 @@
                 if (isModelDownloaded) {
                     console.log('[HFModelConfig] 模型已下载，直接加载');
 
-                    // 保存配置到后端
+                    // 保存配置到后端（JSON 提交）
                     var url = ConfigUtils.buildUrl('save-model-config');
-                    var formData = new FormData();
-                    formData.append('model_id', selectedModelId);
-                    formData.append('enabled', enabled ? '1' : '0');
-                    formData.append('cache_size', String(cache));
+                    var postBody = JSON.stringify({
+                        model_id: selectedModelId,
+                        enabled: enabled ? '1' : '0',
+                        cache_size: String(cache)
+                    });
 
                     console.log('[HFModelConfig] 保存配置到后端:', url, 'model_id:', selectedModelId, 'enabled:', enabled, 'cache:', cache);
                     saveBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> 保存配置...';
-                    var res = await fetch(url, { method: 'POST', body: formData });
+                    var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: postBody });
                     console.log('[HFModelConfig] 响应状态:', res.status, res.statusText);
 
                     var responseText = await res.text();
@@ -333,16 +398,17 @@
 
                 // 2. 模型未下载，直接继续保存流程（模型统一存储在 pub/models 目录）
 
-                // 3. 保存配置到后端
+                // 3. 保存配置到后端（JSON 提交）
                 var url = ConfigUtils.buildUrl('save-model-config');
-                var formData = new FormData();
-                formData.append('model_id', selectedModelId);
-                formData.append('enabled', enabled ? '1' : '0');
-                formData.append('cache_size', String(cache));
+                var postBody = JSON.stringify({
+                    model_id: selectedModelId,
+                    enabled: enabled ? '1' : '0',
+                    cache_size: String(cache)
+                });
 
                 console.log('[HFModelConfig] 保存配置到后端:', url, 'model_id:', selectedModelId, 'enabled:', enabled, 'cache:', cache);
                 saveBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> 保存配置...';
-                var res = await fetch(url, { method: 'POST', body: formData });
+                var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: postBody });
                 console.log('[HFModelConfig] 响应状态:', res.status, res.statusText);
 
                 var responseText = await res.text();

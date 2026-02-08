@@ -302,7 +302,7 @@ class MetaConfig extends AbstractModel
             $query->where(self::fields_IDENTIFY_ID, (string)$identifyId);
         }
         
-        $query->where(self::fields_LOCALE . ' IS NULL')
+        $query->where(self::fields_LOCALE, null, 'IS NULL')
             ->find()
             ->fetch();
         
@@ -405,7 +405,7 @@ class MetaConfig extends AbstractModel
         
         // 处理 locale 为 null 的情况（需要使用 IS NULL）
         if ($locale === null) {
-            $query->where(self::fields_LOCALE . ' IS NULL');
+            $query->where(self::fields_LOCALE, null, 'IS NULL');
         } else {
             $query->where(self::fields_LOCALE, $locale);
         }
@@ -471,7 +471,7 @@ class MetaConfig extends AbstractModel
                     ->where(self::fields_SCOPE, $scope);
                 
                 if ($locale === null) {
-                    $retryQuery->where(self::fields_LOCALE . ' IS NULL');
+                    $retryQuery->where(self::fields_LOCALE, null, 'IS NULL');
                 } else {
                     $retryQuery->where(self::fields_LOCALE, $locale);
                 }

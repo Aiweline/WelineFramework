@@ -21,6 +21,10 @@ use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\Console\Server\Stop as MainStop;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
+use Weline\Server\Service\MasterProcess;
+use Weline\Server\Strategy\ServerStrategyFactory;
+use Weline\Server\Strategy\ServerStrategyInterface;
+use Weline\Server\Strategy\ServerConfig;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -28,9 +32,19 @@ use Weline\Server\Service\SslCertificateService;
 class Start extends CommandAbstract
 {
     /**
-     * 默认端口
+     * 默认 HTTP 端口（直连省去 Nginx）
      */
-    public const DEFAULT_PORT = 9981;
+    public const DEFAULT_PORT = 80;
+    
+    /**
+     * 默认 HTTPS 端口
+     */
+    public const DEFAULT_PORT_HTTPS = 443;
+    
+    /**
+     * 默认端口（80/443）被占用时的备用端口
+     */
+    public const DEFAULT_PORT_FALLBACK = 9981;
     
     /**
      * 可用的进程控制函数
@@ -62,6 +76,43 @@ class Start extends CommandAbstract
             return;
         }
         
+        // --strategy / -strategy：使用跨平台优化策略模式
+        // Linux/Mac 使用 SO_REUSEPORT 直连模式
+        // Windows 使用 Dispatcher TCP 透传模式
+        $useStrategy = isset($args['strategy']);
+        if (!$useStrategy) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && ($val === '--strategy' || $val === '-strategy')) {
+                    $useStrategy = true;
+                    break;
+                }
+            }
+        }
+        
+        // --strategy-info：显示策略信息
+        $showStrategyInfo = isset($args['strategy-info']);
+        if (!$showStrategyInfo) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && ($val === '--strategy-info' || $val === '-strategy-info')) {
+                    $showStrategyInfo = true;
+                    break;
+                }
+            }
+        }
+        
+        if ($showStrategyInfo) {
+            $this->showStrategyInfo();
+            return;
+        }
+        
+        if ($useStrategy) {
+            $result = $this->executeWithStrategy($args);
+            if (!$result) {
+                $this->printer->error(__('策略模式启动失败'));
+            }
+            return;
+        }
+        
         // 检测可用函数
         $this->detectAvailableFunctions();
         
@@ -78,33 +129,110 @@ class Start extends CommandAbstract
         // 解析实例名称
         $instanceName = $this->parseInstanceName($args);
         
-        // 获取配置（命令行参数 > env配置 > 默认值）
+        // 仅运行 Master 进程（由 daemon 模式后台启动时调用，内部使用）
+        if (isset($args['master-only']) || getenv('WLS_MASTER_ONLY')) {
+            $this->runMasterOnly($instanceName);
+            return;
+        }
+        
+        // --frontend / -frontend：前台运行（不后台）
+        $frontend = isset($args['frontend']);
+        if (!$frontend) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && ($val === '--frontend' || $val === '-frontend')) {
+                    $frontend = true;
+                    break;
+                }
+            }
+        }
+        
+        // -log / --log：启用进程日志（覆盖 env 配置 system.processer.log）
+        $enableLog = isset($args['log']);
+        if (!$enableLog) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && ($val === '--log' || $val === '-log')) {
+                    $enableLog = true;
+                    break;
+                }
+            }
+        }
+        if ($enableLog) {
+            Processer::setLogEnabled(true);
+        }
+        
+        // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $config = $this->getServerConfig($instanceName, $args);
+        
+        // 提示配置来源（已保存的实例配置时特别提示，让用户知道为什么不用指定端口）
+        $source = $config['source'] ?? '';
+        if (\is_string($source) && \str_contains($source, $instanceName) && $this->loadSavedInstanceConfig($instanceName) !== null) {
+            $savedConfig = $this->loadSavedInstanceConfig($instanceName);
+            $savedPort = $savedConfig['port'] ?? '?';
+            $savedHost = $savedConfig['host'] ?? '?';
+            $this->printer->note(__('使用已保存的实例配置：%{1} (%{2}:%{3})', [$instanceName, $savedHost, $savedPort]));
+        }
         
         $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
-        $daemon = $config['daemon'];
+        // 如果指定了 --frontend，强制前台运行
+        $daemon = $frontend ? false : $config['daemon'];
         
-        // 默认启用 HTTPS - 自动获取或生成证书
-        $sslResult = $this->ensureSslCertificate($instanceName, $config);
-        if (!$sslResult['success']) {
-            $this->printer->error($sslResult['message']);
-            return;
-        }
+        // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
+        $noSsl = !empty($config['no_ssl']);
+        $portExplicit = isset($args['port']) || isset($args['p']);
         
-        $sslCert = $sslResult['cert_path'];
-        $sslKey = $sslResult['key_path'];
-        $sslEnabled = true;
-        
-        // 显示证书信息
-        if ($sslResult['is_new'] ?? false) {
-            $this->printer->success(__('已生成新证书：%{1}', [$sslResult['issuer']]));
+        if ($noSsl) {
+            $sslEnabled = false;
+            $sslCert = '';
+            $sslKey = '';
+            $sslResult = ['success' => true, 'is_new' => false, 'issuer' => '', 'expires_at' => ''];
+            if ($port === self::DEFAULT_PORT) {
+                $port = self::DEFAULT_PORT;  // 保持 80
+                $config['port'] = $port;
+            }
+            $this->printer->note(__('以 HTTP 运行（端口 %{1}）。由 env.server.https=false 或 --no-ssl 生效。', [$port]));
         } else {
-            $this->printer->note(__('使用已有证书：%{1}', [$sslResult['issuer']]));
-        }
-        if (!empty($sslResult['expires_at'])) {
-            $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
+            // Windows 下未安装 event 时允许强制运行 SSL；提示延后到「服务器已在后台运行」之后输出（后台模式）或此处输出（前台模式）
+            $isMasterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
+            if (IS_WIN && !\extension_loaded('event') && !$isMasterOnly && !$daemon) {
+                $this->printWindowsEventHttpsWarning();
+            }
+            
+            $sslResult = $this->ensureSslCertificate($instanceName, $config);
+            if (!$sslResult['success']) {
+                $this->printer->error($sslResult['message']);
+                return;
+            }
+            $sslCert = $sslResult['cert_path'];
+            $sslKey = $sslResult['key_path'];
+            $sslEnabled = true;
+            // 默认 80 且启用 HTTPS 时使用 443
+            if ($port === self::DEFAULT_PORT) {
+                $port = self::DEFAULT_PORT_HTTPS;
+                $config['port'] = $port;
+                
+                // 检查 443 端口是否可用（仅在未显式指定端口时检查）
+                if (!$portExplicit && Processer::isPortInUse($port)) {
+                    // 443 被占用，直接报错退出（不再自动切换到备用端口）
+                    $this->printer->error(__('默认 HTTPS 端口 443 被占用！'));
+                    $this->printer->note(__(''));
+                    $this->printer->setup(__('解决方案：'));
+                    $this->printer->note(__('  1. 使用 -p 参数指定其他端口：php bin/w server:start -p 8443'));
+                    $this->printer->note(__('  2. 或使用 --no-ssl 以 HTTP 模式启动：php bin/w server:start --no-ssl'));
+                    $this->printer->note(__('  3. 或停止占用端口 443 的进程：php bin/w server:kill-port -p 443'));
+                    $this->printer->note(__('  4. 或查看占用端口的进程：netstat -ano | findstr :443 (Windows) 或 lsof -i :443 (Linux/Mac)'));
+                    return;
+                }
+            }
+            if ($sslResult['is_new'] ?? false) {
+                $this->printer->success(__('已生成新证书：%{1}', [$sslResult['issuer']]));
+            } else {
+                $this->printer->note(__('使用已有证书：%{1}', [$sslResult['issuer']]));
+            }
+            if (!empty($sslResult['expires_at'])) {
+                $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
+            }
         }
         
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
@@ -115,11 +243,19 @@ class Start extends CommandAbstract
         $cliStatus = $cliService->getCliServerStatus();
         $occupantCli = $cliStatus && (($cliStatus['port'] ?? 0) === (int) $port);
 
-        // 同端口只能存在一个服务器：其他 WLS 实例占用 → 先停
+        // 同端口已被其他 WLS 实例占用 → 报错提示，不自动停旧实例（支持多实例并行）
         if ($occupantWls !== null && $occupantWls !== $instanceName) {
-            $this->printer->note(__('端口 %{1} 已被 Weline Server 实例 [%{2}] 占用，正在停止该实例...', [$port, $occupantWls]));
-            $mainStop->stopWelineServerOnPort($port);
-            \sleep(2);
+            $this->printer->error(__('端口 %{1} 已被 Weline Server 实例 [%{2}] 占用！', [$port, $occupantWls]));
+            $this->printer->note('');
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note('  ' . __('1. 使用 -p 参数指定其他端口启动新实例：'));
+            $this->printer->note('     php bin/w server:start ' . $instanceName . ' -p ' . ($port + 1000));
+            $this->printer->note('  ' . __('2. 或先停止实例 [%{1}]：', [$occupantWls]));
+            $this->printer->note('     php bin/w server:stop ' . $occupantWls);
+            $this->printer->note('  ' . __('3. 查看所有运行中的实例：'));
+            $this->printer->note('     php bin/w server:status --all');
+            $this->printer->note('');
+            return;
         }
         // CLI 服务器占用该端口 → 先停
         if ($occupantCli) {
@@ -137,56 +273,452 @@ class Start extends CommandAbstract
             if ($forceSwitch) {
                 $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 $this->stopExistingServer($instanceName, $port, $count);
-                \sleep(1);
+                // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
+                // 等待最多 3 秒让端口完全释放
+                $maxWaitMs = 3000;
+                $waitStep = 200;
+                $waited = 0;
+                while ($waited < $maxWaitMs) {
+                    \usleep($waitStep * 1000);
+                    $waited += $waitStep;
+                    // 检查主要端口是否已释放
+                    if (!Processer::isPortInUse($port)) {
+                        break;
+                    }
+                }
             } else {
-                $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，等待 Worker 无请求后再切换...'));
+                $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...'));
                 $this->enableMaintenanceMode();
                 $maintenanceEnabledByUs = true;
-                $waitSeconds = (int) ($args['wait'] ?? 30);
-                $waitSeconds = $waitSeconds > 0 ? $waitSeconds : 30;
-                $this->printer->note(__('已开启维护模式，等待 %{1} 秒让当前请求处理完成...', [$waitSeconds]));
-                \sleep($waitSeconds);
+                
+                // 通过健康检查接口智能等待
+                $maxWait = (int) ($args['wait'] ?? 30);
+                $maxWait = $maxWait > 0 ? $maxWait : 30;
+                $waited = $this->waitForIdleWorkers($host, $port, $count, $maxWait, $sslEnabled ?? false);
+                
+                if ($waited) {
+                    $this->printer->success(__('所有 Worker 已空闲，开始切换...'));
+                } else {
+                    $this->printer->warning(__('等待超时，强制切换...'));
+                }
+                
                 $this->stopExistingServer($instanceName, $port, $count);
                 \sleep(1);
             }
         }
 
-        // 显示启动信息
-        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled);
-
-        // 检查端口是否被占用（强制释放或报错）
-        if (!$this->checkAndReleasePorts($host, $port, $count, $forceRestart)) {
-            if (!empty($maintenanceEnabledByUs)) {
-                $this->disableMaintenanceMode();
-                $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+        // ========== 架构模式检测：直连模式 vs Dispatcher 模式 ==========
+        // 
+        // 直连模式：多 Worker 直接监听同一端口，内核负载均衡（SO_REUSEPORT）
+        //   - 要求：Linux 3.9+ 内核
+        //   - 优势：无单点瓶颈，性能最佳
+        //   - 架构：客户端 → Worker1/2/3/...(直接处理 SSL)
+        //
+        // Dispatcher 模式（降级方案）：单进程 Dispatcher 分发给多 Worker
+        //   - 适用：Windows 或不支持 SO_REUSEPORT 的系统
+        //   - 架构：客户端 → Dispatcher(单进程SSL) → Worker(多进程HTTP)
+        //
+        $noDispatcher = isset($args['no-dispatcher']) || isset($args['no_dispatcher']);
+        $forceDispatcher = isset($args['dispatcher']) || isset($args['force-dispatcher']);
+        
+        // 检测 SO_REUSEPORT 支持（Linux 3.9+）
+        $supportsReusePort = false;
+        if (!IS_WIN && PHP_OS === 'Linux') {
+            $release = \php_uname('r');
+            if (\version_compare($release, '3.9', '>=')) {
+                $supportsReusePort = true;
             }
+        }
+        
+        // 决定使用哪种架构
+        // - 单 Worker：无需 Dispatcher
+        // - 多 Worker + SO_REUSEPORT：直连模式（除非强制 Dispatcher）
+        // - 多 Worker + 不支持 SO_REUSEPORT：Dispatcher 模式
+        // - --no-dispatcher：强制禁用 Dispatcher（多端口模式）
+        if ($count <= 1) {
+            $dispatcherEnabled = false;
+        } elseif ($noDispatcher) {
+            $dispatcherEnabled = false;
+        } elseif ($supportsReusePort && !$forceDispatcher) {
+            // Linux + SO_REUSEPORT：使用直连模式，绕过 Dispatcher
+            $dispatcherEnabled = false;
+            $this->printer->success(__('启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）', [$count, $port]));
+        } else {
+            // Windows 或不支持 SO_REUSEPORT：使用 Dispatcher 模式
+            $dispatcherEnabled = true;
+            if (IS_WIN) {
+                $this->printer->note(__('Windows 不支持 SO_REUSEPORT，使用 Dispatcher 模式'));
+            }
+        }
+        
+        $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
+        
+        // Dispatcher 模式下：Worker 监听内网高端口，Dispatcher 监听主端口
+        // 直连模式：所有 Worker 直接监听主端口（SO_REUSEPORT）
+        $workerPort = $dispatcherEnabled ? ($workerBasePort + $port) : $port;
+        // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
+        // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
+        $workerSslEnabled = $sslEnabled;
+        
+        // ========== HTTP Redirect 端口计算（HTTPS 模式始终启动） ==========
+        $httpRedirectPort = 0;
+        if ($sslEnabled) {
+            // 优先级：命令行参数 > 配置文件 > 自动计算
+            // 检查是否明确指定（命令行参数或配置文件中明确设置为 0 表示禁用）
+            $explicitRedirectPort = $config['http_redirect_port_explicit'] ?? false;
+            // 检查配置文件中是否明确设置了 http_redirect_port（包括 0）
+            $configHasRedirectPort = isset($config['http_redirect_port']);
+            $configRedirectPort = (int)($config['http_redirect_port'] ?? 0);
+            
+            if ($explicitRedirectPort) {
+                // 命令行明确指定（包括 0，表示禁用）
+                $httpRedirectPort = $configRedirectPort;
+                if ($httpRedirectPort === 0) {
+                    $this->printer->note(__('HTTP 重定向已禁用（--http-redirect-port 0）'));
+                }
+            } elseif ($configHasRedirectPort) {
+                // 配置文件明确指定（包括 0，表示禁用）
+                $httpRedirectPort = $configRedirectPort;
+                if ($httpRedirectPort === 0) {
+                    $this->printer->note(__('HTTP 重定向已禁用（env.server.http_redirect_port = 0）'));
+                }
+            } else {
+                // 未配置，自动计算：httpsPort - 463（如 443→80, 9443→9980）
+                $httpRedirectPort = $port - 463;
+                // 确保端口合法
+                if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                    $httpRedirectPort = 80;  // 回退到默认 80
+                }
+            }
+            
+            // 验证端口范围（0 表示禁用，允许；其他值必须在 1-65535）
+            if ($httpRedirectPort !== 0 && ($httpRedirectPort < 1 || $httpRedirectPort > 65535)) {
+                $this->printer->error(__('HTTP 重定向端口无效: %{1}，将使用默认端口 80', [$httpRedirectPort]));
+                $httpRedirectPort = 80;
+            }
+        }
+        
+        // 默认端口（80/443）被占用时的处理 - 直接报错，不再自动切换到备用端口
+        if (($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)
+            && Processer::isPortInUse($port)
+            && !$portExplicit) {
+            $portName = $port === self::DEFAULT_PORT ? 'HTTP (80)' : 'HTTPS (443)';
+            $this->printer->error(__('默认 %{1} 端口被占用！', [$portName]));
+            $this->printer->note(__(''));
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note(__('  1. 使用 -p 参数指定其他端口：php bin/w server:start -p %{1}', [$port === self::DEFAULT_PORT ? '8080' : '8443']));
+            if ($sslEnabled) {
+                $this->printer->note(__('  2. 或使用 --no-ssl 以 HTTP 模式启动：php bin/w server:start --no-ssl'));
+            }
+            $this->printer->note(__('  3. 或停止占用端口 %{1} 的进程：php bin/w server:kill-port -p %{1}', [$port]));
+            $this->printer->note(__('  4. 或查看占用端口的进程：netstat -ano | findstr :%{1} (Windows) 或 lsof -i :%{1} (Linux/Mac)', [$port]));
             return;
         }
         
-        // 保存实例信息
-        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey);
+        // 显示启动信息
+        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort);
+
+        // 80/443 端口自我处理提示（特权端口、单端口建议）
+        if (!$dispatcherEnabled) {
+            $this->showStandardPortHints($port, $count, $sslEnabled);
+        }
+
+        // 检查端口是否被占用
+        if ($dispatcherEnabled) {
+            // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
+            if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher')) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                }
+                return;
+            }
+            if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart)) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                }
+                return;
+            }
+        } else {
+            // 直连模式：检查 Worker 端口
+            if (!$this->checkAndReleasePorts($host, $port, $count, $forceRestart)) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
+                }
+                return;
+            }
+        }
         
-        // 创建 Worker 脚本
-        $workerScript = $this->ensureWorkerScript($sslEnabled);
+        // ========== 检查 HTTP 重定向端口（在启动前检测，避免启动到一半才报错） ==========
+        if ($sslEnabled && $httpRedirectPort > 0) {
+            if (!$this->checkAndReleasePort($host, $httpRedirectPort, $forceRestart, 'HTTP Redirect')) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('维护模式已关闭（HTTP 重定向端口检查未通过）。'));
+                }
+                $this->printer->note(__(''));
+                $this->printer->setup(__('解决方案：'));
+                $this->printer->note(__('  1. 停止占用端口 %{1} 的进程', [$httpRedirectPort]));
+                $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
+                $this->printer->note(__('  3. 或在 env.php 中配置 http_redirect_port'));
+                $this->printer->note(__('  4. 或使用 --http-redirect-port 0 禁用 HTTP 重定向'));
+                return;
+            }
+        }
         
-        // 启动多进程
-        $this->startWorkers($instanceName, $host, $port, $count, $workerScript, $sslCert, $sslKey);
+        // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
+        $workerScript = $this->ensureWorkerScript($workerSslEnabled);
+        
+        // 保存实例信息（Master 将从这里读取配置并启动所有进程）
+        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog);
+        
+        // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
+        $this->saveInstanceConfig($instanceName, $args, $config);
         
         // 显示优化建议
         $this->showOptimizationTips($count, $config['mode'] ?? 'io');
         
-        // 显示使用说明
-        $this->showUsageInfo($host, $port, $instanceName);
-
+        // 显示使用说明（按实际协议显示 http/https）
+        $this->showUsageInfo($host, $port, $instanceName, $sslEnabled);
+        
+        // ========== 开发模式热重载支持 ==========
+        $this->startHotReloadIfEnabled($config, $instanceName);
+        // ========== 热重载结束 ==========
+        
         // 平滑重启时由我们开启的维护模式，启动完成后关闭
         if (!empty($maintenanceEnabledByUs)) {
             $this->disableMaintenanceMode();
             $this->printer->success(__('维护模式已关闭。'));
         }
+        
+        // ========== Master 进程负责启动所有进程 ==========
+        // Master 统一管理：Dispatcher、Worker、HTTP Redirect
+        $config['worker_port'] = $workerPort;
+        $config['dispatcher_enabled'] = $dispatcherEnabled;
+        
+        if ($daemon) {
+            $this->startMasterInBackground($instanceName, $sslEnabled, $host, $port);
+            return;
+        }
+        
+        // 前台运行：Master 将占用当前终端
+        $this->printer->note(__('Master 进程启动中，将管理所有 Worker 和 Dispatcher...'));
+        if (\function_exists('flush')) {
+            @\flush();
+        }
+        
+        // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
+        $this->runMasterProcess($instanceName, $config, $workerScript, [], $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
+    }
+    
+    /**
+     * 仅运行 Master 进程（由 startMasterInBackground 通过子进程调用，从实例文件恢复状态）
+     */
+    protected function runMasterOnly(string $instanceName): void
+    {
+        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        if (!\is_file($instanceFile)) {
+            $this->printer->error(__('实例文件不存在：%{1}', [$instanceFile]));
+            return;
+        }
+        $content = \file_get_contents($instanceFile);
+        $data = \json_decode($content, true);
+        if (!\is_array($data)) {
+            $this->printer->error(__('实例文件无效'));
+            return;
+        }
+        $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
+        $dispatcherEnabled = (bool)($data['dispatcher_enabled'] ?? false);
+        // Dispatcher 只做 TCP 透传，SSL 握手始终由 Worker 处理
+        $workerScript = $this->ensureWorkerScript($sslEnabled);
+        $port = (int)($data['port'] ?? 443);
+        $config = [
+            'host' => (string)($data['host'] ?? '127.0.0.1'),
+            'port' => $port,
+            'worker_count' => (int)($data['count'] ?? 1),
+            'worker_port' => (int)($data['worker_port'] ?? $data['port'] ?? 443),
+            'daemon' => true,
+        ];
+        // HTTPS 模式始终启动 HTTP Redirect Worker（从实例文件或智能计算）
+        $httpRedirectPort = 0;
+        if ($sslEnabled) {
+            // 优先使用实例文件中保存的端口，否则智能计算
+            $httpRedirectPort = (int)($data['http_redirect_port'] ?? 0);
+            if ($httpRedirectPort <= 0) {
+                $httpRedirectPort = $port - 463;
+                if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
+                    $httpRedirectPort = 80;
+                }
+            }
+        }
+        $workerPids = \array_values($data['worker_pids'] ?? []);
+        // 读取前台模式标记
+        $frontend = (bool)($data['frontend'] ?? false);
+        
+        // 读取进程日志开关（-log 参数传递过来的标记）
+        $enableLog = (bool)($data['enable_log'] ?? false);
+        if ($enableLog) {
+            Processer::setLogEnabled(true);
+        }
+        
+        // 读取运行模式（策略模式使用）
+        $masterMode = (string)($data['master_mode'] ?? MasterProcess::MODE_LEGACY);
+        $mainPort = (int)($data['main_port'] ?? $port);
+        
+        /** @var MasterProcess $master */
+        $master = ObjectManager::getInstance(MasterProcess::class);
+        $master->setPrinter($this->printer)
+            ->setMode($masterMode)
+            ->setMainPort($mainPort)
+            ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
+            ->setWorkerPids($workerPids)
+            ->run();
+    }
+    
+    /**
+     * 在后台启动 Master 进程（默认模式：启动后立即返回，不阻塞终端）
+     * Windows：用 PowerShell Start-Process 独立启动 Master，避免 cmd/batch 退出时牵连子进程导致 Master 被关。
+     * 传参使用 -ArgumentList 数组，保证 server:start instanceName --master-only 被正确解析。
+     * 后台模式下将 Windows + HTTPS 相关提示放在「服务器已在后台运行」之后，便于用户看到。
+     */
+    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): void
+    {
+        $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
+        $script = BP . 'bin' . DS . 'w';
+        
+        if (IS_WIN) {
+            $bp = \str_replace("'", "''", BP);
+            $phpBin = \str_replace("'", "''", $phpBinary);
+            $scriptRel = 'bin' . DS . 'w';
+            $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only'";
+            $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
+            $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
+            @\exec($fullCmd . ' 2>NUL');
+        } else {
+            $cmd = \sprintf('%s %s server:start %s --master-only', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName));
+            Processer::create($cmd, false);
+        }
+        
+        $this->printer->success(__('服务器已在后台运行。使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+        
+        // Windows + HTTPS 时在「服务器已在后台运行」之后集中提示，避免被前面输出淹没
+        if (IS_WIN && $sslEnabled) {
+            if (!\extension_loaded('event')) {
+                $this->printWindowsEventHttpsWarning();
+            }
+            $this->showWindowsNginxProxyHint($host, $port);
+        }
+    }
+    
+    /**
+     * 输出 Windows 下未安装 event 时的 HTTPS 提示（SSL 握手阻塞约 60s，建议安装 event）
+     * 与 showWindowsNginxProxyHint 相同的框式格式化输出。
+     */
+    protected function printWindowsEventHttpsWarning(): void
+    {
+        $extDir = \ini_get('extension_dir');
+        $extDirAbs = $extDir;
+        if ($extDir) {
+            if (\preg_match('#^[a-zA-Z]:[\\\\/]|^/#', $extDir)) {
+                $extDirAbs = \is_dir($extDir) ? \realpath($extDir) : $extDir;
+            } else {
+                $phpDir = \defined('PHP_BINARY') && PHP_BINARY ? \dirname(PHP_BINARY) : '';
+                $candidate = $phpDir ? $phpDir . \DIRECTORY_SEPARATOR . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $extDir) : $extDir;
+                $extDirAbs = \is_dir($candidate) ? \realpath($candidate) : $candidate;
+            }
+        }
+        $extPath = $extDirAbs ?: $extDir ?: __('(未知)');
+        $iniFile = \php_ini_loaded_file() ?: __('(未找到，请 php --ini 查看)');
+        echo "\n";
+        $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
+        $this->printer->warning(__('║  【Windows + HTTPS】当前未安装 PHP event 扩展。                              ║'));
+        $this->printer->warning(__('║  在此环境下运行 HTTPS 会出现 SSL 握手阻塞（每次新连接可能卡住约 60 秒）。  ║'));
+        $this->printer->warning(__('║  强烈建议安装 event 后再使用 HTTPS。                                        ║'));
+        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
+        $this->printer->warning(__('║  下载 event：https://windows.php.net/downloads/pecl/releases/event/           ║'));
+        $this->printer->warning(__('║  选 3.0.x，按 PHP 版本/ts|nts/x64|x86 选 zip，php_event.dll 放入 ext 目录，  ║'));
+        $this->printer->warning(__('║  在 php.ini 添加 extension=event。                                           ║'));
+        $this->printer->warning(__('║  ext 目录：%{1}                                                                ║', [$extPath]));
+        $this->printer->warning(__('║  php.ini：%{1}                                                                 ║', [$iniFile]));
+        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
+        $this->printer->warning(__('║  当前已允许继续启动 HTTPS；若无法接受握手阻塞，请安装 event 或使用         ║'));
+        $this->printer->warning(__('║  --no-ssl / env.server.https=false 仅跑 HTTP。                               ║'));
+        $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
+    }
+    
+    /**
+     * 运行 Master 进程（监控并自动重启 Worker；HTTPS 启用时可自动启动 HTTP 重定向进程）
+     */
+    protected function runMasterProcess(string $instanceName, array $config, string $workerScript, array $workerPids, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $frontend = false): void
+    {
+        $masterPid = \getmypid();
+        
+        // 更新实例信息，记录 Master PID
+        $this->updateInstanceMasterInfo($instanceName, $masterPid, true);
+        
+        $this->printer->note(__(''));
+        $this->printer->success(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
+        $this->printer->success(__('║  Master 进程将监控并自动重启异常退出的 Worker                              ║'));
+        $this->printer->success(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
+        $this->printer->note(__(''));
+        $this->printer->note(__('Master PID: %{1}', [$masterPid]));
+        if ($sslEnabled && $httpRedirectPort > 0) {
+            $this->printer->note(__('HTTP 重定向: 端口 %{1} → HTTPS（不计入 Worker 数）', [$httpRedirectPort]));
+        }
+        $this->printer->note(__('健康检查间隔: 5 秒'));
+        $this->printer->note(__('按 Ctrl+C 停止服务'));
+        $this->printer->note(__(''));
+        
+        /** @var MasterProcess $master */
+        $master = ObjectManager::getInstance(MasterProcess::class);
+        try {
+            $master->setPrinter($this->printer)
+                ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
+                ->setWorkerPids($workerPids)
+                ->run();
+        } catch (\RuntimeException $e) {
+            // HTTP 重定向端口被占用或其他启动错误
+            $this->printer->error(__('服务器启动失败'));
+            $this->printer->error($e->getMessage());
+            $this->printer->note(__(''));
+            $this->printer->note(__('解决方案：'));
+            $this->printer->note(__('  1. 停止占用端口的进程'));
+            $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
+            $this->printer->note(__('  3. 或在 env.php 中配置 http_redirect_port'));
+            $this->printer->note(__(''));
+            throw $e;
+        }
+    }
+    
+    /**
+     * 更新实例的 Master 信息
+     */
+    protected function updateInstanceMasterInfo(string $instanceName, int $masterPid, bool $enabled): void
+    {
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $instanceFile = $instanceDir . $instanceName . '.json';
+        
+        if (!\file_exists($instanceFile)) {
+            return;
+        }
+        
+        $content = \file_get_contents($instanceFile);
+        $data = \json_decode($content, true);
+        
+        if (\is_array($data)) {
+            $data['master_enabled'] = $enabled;
+            $data['master_pid'] = $masterPid;
+            $data['master_started_at'] = \date('Y-m-d H:i:s');
+            \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
     }
 
     /**
      * 开启维护模式（平滑重启时先开启，避免新请求进入）
+     * 
+     * 使用框架的维护模式配置，框架会自动处理维护页面显示
      */
     protected function enableMaintenanceMode(): void
     {
@@ -199,6 +731,162 @@ class Start extends CommandAbstract
     protected function disableMaintenanceMode(): void
     {
         Env::getInstance()->setConfig('maintenance', false);
+    }
+    
+    /**
+     * 通过健康检查接口等待所有 Worker 空闲
+     * 
+     * @param string $host 主机地址
+     * @param int $port 端口
+     * @param int $workerCount Worker 数量
+     * @param int $maxWait 最大等待秒数
+     * @param bool $sslEnabled 是否 HTTPS
+     * @return bool 是否成功等待到空闲
+     */
+    protected function waitForIdleWorkers(string $host, int $port, int $workerCount, int $maxWait, bool $sslEnabled = false): bool
+    {
+        $startTime = \time();
+        $checkInterval = 500000; // 500ms
+        $scheme = $sslEnabled ? 'https' : 'http';
+        $healthUrl = "/_wls/health";
+        
+        $this->printer->note(__('正在检测 Worker 状态（最长等待 %{1} 秒）...', [$maxWait]));
+        
+        $lastActiveRequests = -1;
+        
+        while ((\time() - $startTime) < $maxWait) {
+            $totalActiveRequests = 0;
+            $healthyWorkers = 0;
+            
+            // 检查所有 Worker 端口的健康状态
+            for ($i = 0; $i < $workerCount; $i++) {
+                $workerPort = $port + $i;
+                $health = $this->checkWorkerHealth($host, $workerPort, $sslEnabled);
+                
+                if ($health !== null) {
+                    $healthyWorkers++;
+                    $totalActiveRequests += ($health['active_requests'] ?? 0);
+                }
+            }
+            
+            // 只在状态变化时输出
+            if ($totalActiveRequests !== $lastActiveRequests) {
+                if ($totalActiveRequests > 0) {
+                    $this->printer->note(__('当前有 %{1} 个请求正在处理...', [$totalActiveRequests]));
+                }
+                $lastActiveRequests = $totalActiveRequests;
+            }
+            
+            // 所有 Worker 都空闲
+            if ($healthyWorkers > 0 && $totalActiveRequests === 0) {
+                return true;
+            }
+            
+            // 如果没有健康的 Worker，说明服务器可能已经停止或无法访问
+            if ($healthyWorkers === 0) {
+                $this->printer->note(__('无法连接到 Worker，直接切换...'));
+                return true;
+            }
+            
+            \usleep($checkInterval);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 检查单个 Worker 的健康状态
+     * 
+     * 优先尝试 SSL，失败后回退到 TCP（Windows 兼容性）
+     * 
+     * @param string $host 主机地址
+     * @param int $port 端口
+     * @param bool $sslEnabled 是否 HTTPS（会同时尝试 SSL 和 TCP）
+     * @return array|null 健康信息或 null（连接失败）
+     */
+    protected function checkWorkerHealth(string $host, int $port, bool $sslEnabled = false): ?array
+    {
+        $socket = null;
+        
+        // 优先尝试 SSL 连接
+        if ($sslEnabled) {
+            $context = \stream_context_create([
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,
+                ],
+            ]);
+            $socket = @\stream_socket_client(
+                "ssl://{$host}:{$port}",
+                $errno,
+                $errstr,
+                2,
+                STREAM_CLIENT_CONNECT,
+                $context
+            );
+        }
+        
+        // 如果 SSL 失败或未启用 SSL，尝试 TCP（Windows 兼容性回退）
+        if (!$socket) {
+            $socket = @\stream_socket_client(
+                "tcp://{$host}:{$port}",
+                $errno,
+                $errstr,
+                2,
+                STREAM_CLIENT_CONNECT
+            );
+        }
+        
+        if (!$socket) {
+            return null;
+        }
+        
+        // 发送 HTTP 请求
+        $request = "GET /_wls/health HTTP/1.1\r\n";
+        $request .= "Host: {$host}:{$port}\r\n";
+        $request .= "Connection: close\r\n";
+        $request .= "\r\n";
+        
+        @\fwrite($socket, $request);
+        
+        // 读取响应
+        $response = '';
+        \stream_set_timeout($socket, 2);
+        while (!@\feof($socket)) {
+            $chunk = @\fread($socket, 8192);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $response .= $chunk;
+        }
+        @\fclose($socket);
+        
+        if (empty($response)) {
+            return null;
+        }
+        
+        // 解析 JSON body
+        $parts = \explode("\r\n\r\n", $response, 2);
+        $body = $parts[1] ?? '';
+        
+        if (empty($body)) {
+            return null;
+        }
+        
+        $data = \json_decode($body, true);
+        
+        if (!\is_array($data)) {
+            return null;
+        }
+        
+        // 健康检查返回 maintenance 或 healthy 都算成功
+        $status = $data['status'] ?? '';
+        if ($status !== 'healthy' && $status !== 'maintenance') {
+            return null;
+        }
+        
+        return $data;
     }
     
     /**
@@ -226,15 +914,17 @@ class Start extends CommandAbstract
      */
     protected function getServerConfig(string $instanceName, array $args): array
     {
-        // 默认配置
+        // 默认配置（文件监听默认关闭，避免频繁触发热重载导致 Worker 不断重启）
         $defaults = [
             'host' => '127.0.0.1',
             'port' => self::DEFAULT_PORT,
             'worker_count' => 'auto',
             'mode' => 'io',
-            'daemon' => false,
+            'daemon' => true,
+            'hot_reload' => false,  // 默认值，实际启用逻辑：开发模式默认 true，生产模式默认 false
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
+            'worker_base_port' => 10000,  // Dispatcher 模式下 Worker 内网端口基数（实际端口 = base + 外网端口）
             'source' => __('默认值'),
         ];
         
@@ -251,30 +941,49 @@ class Start extends CommandAbstract
         }
         // 2. 检查默认服务器配置 server
         elseif (isset($envConfig['server']) && \is_array($envConfig['server'])) {
-            $serverConfig = $envConfig['server'];
-            if (isset($serverConfig['worker_count']) || isset($serverConfig['mode'])) {
-                $config = \array_merge($config, $serverConfig);
-                $config['source'] = __('env.server');
-            }
+            $config = \array_merge($config, $envConfig['server']);
+            $config['source'] = __('env.server');
+        }
+        // env.server.https = false 时也禁用 HTTPS（与 --no-ssl 一致，供生成地址等使用）
+        if (isset($config['https']) && $config['https'] === false) {
+            $config['no_ssl'] = true;
         }
         
-        // 3. 命令行参数覆盖
+        // 2.5 加载已保存的实例配置（配置记忆：首次 server:start api -p 8443 后自动保存，下次直接用）
+        // 优先级：命令行参数 > 已保存实例配置 > env 配置 > 默认值
+        $savedConfig = $this->loadSavedInstanceConfig($instanceName);
+        if ($savedConfig) {
+            $config = \array_merge($config, $savedConfig);
+            $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
+        }
+        
+        // 3. 命令行参数覆盖（最高优先级）
+        $hasCliOverride = false;
         if (isset($args['host']) || isset($args['h'])) {
             $config['host'] = $args['host'] ?? $args['h'];
             $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
         }
         if (isset($args['port']) || isset($args['p'])) {
             $config['port'] = (int) ($args['port'] ?? $args['p']);
             $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
         }
         if (isset($args['count']) || isset($args['c'])) {
             $config['worker_count'] = (int) ($args['count'] ?? $args['c']);
             $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
         }
-        if (isset($args['d']) || isset($args['daemon'])) {
-            $config['daemon'] = true;
-        }
+        // 默认一律后台运行；仅显式传入 --no-daemon 时前台运行（忽略 env 中的 daemon 配置）
+        // 带 -r/--restart 时强制后台，避免被框架或 env 误判为前台
+        $requestNoDaemon = (isset($args['no-daemon']) || isset($args['no_daemon']))
+            && !(isset($args['r']) || isset($args['restart']));
+        $config['daemon'] = !$requestNoDaemon;
         
+        // --no-ssl / --http-only：仅 HTTP，不启用 HTTPS（Windows 下可不装 event）
+        if (isset($args['no-ssl']) || isset($args['no_ssl']) || isset($args['http-only'])) {
+            $config['no_ssl'] = true;
+        }
         // SSL 证书配置（命令行参数优先）
         if (isset($args['ssl-cert'])) {
             $config['ssl_cert'] = $args['ssl-cert'];
@@ -286,6 +995,18 @@ class Start extends CommandAbstract
         // SSL 域名配置（用于证书生成）
         if (isset($args['ssl-domain']) || isset($args['domain'])) {
             $config['ssl_domain'] = $args['ssl-domain'] ?? $args['domain'] ?? '';
+        }
+        
+        // HTTP 重定向端口配置（命令行参数优先）
+        // 注意：需要区分"未指定"和"明确指定 0"（0 表示禁用重定向）
+        if (isset($args['http-redirect-port']) || isset($args['redirect-port'])) {
+            $redirectPortArg = $args['http-redirect-port'] ?? $args['redirect-port'] ?? null;
+            // 即使值为 0，也认为是用户明确指定（禁用重定向）
+            if ($redirectPortArg !== null) {
+                $config['http_redirect_port'] = (int) $redirectPortArg;
+                $config['http_redirect_port_explicit'] = true; // 标记为明确指定
+                $config['source'] = __('命令行参数');
+            }
         }
         
         // 如果未显式配置 SSL，检查是否有已存在的证书可用
@@ -326,6 +1047,10 @@ class Start extends CommandAbstract
     {
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $host = $config['host'] ?? '127.0.0.1';
+        
+        // 智能判断是否为本地/内网环境（127.x, 10.x, 172.16-31.x, 192.168.x, localhost, *.local 等）
+        $needsLocalCert = $sslService->needsSelfSignedCertificate($host);
         
         // 1. 如果命令行或配置中已指定证书，验证并使用
         if (!empty($config['ssl_cert']) && !empty($config['ssl_key'])) {
@@ -339,26 +1064,31 @@ class Start extends CommandAbstract
                 return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}', [$keyPath])];
             }
             
-            // 解析证书信息
-            $certInfo = $sslService->parseCertificate($certPath);
-            
-            return [
-                'success' => true,
-                'cert_path' => $certPath,
-                'key_path' => $keyPath,
-                'issuer' => $certInfo['issuer'] ?? __('手动配置'),
-                'expires_at' => $certInfo['expires_at'] ?? '',
-                'is_new' => false,
-            ];
+            // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
+            if ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
+                $config['ssl_cert'] = '';
+                $config['ssl_key'] = '';
+            } else {
+                $certInfo = $sslService->parseCertificate($certPath);
+                return [
+                    'success' => true,
+                    'cert_path' => $certPath,
+                    'key_path' => $keyPath,
+                    'issuer' => $certInfo['issuer'] ?? __('手动配置'),
+                    'expires_at' => $certInfo['expires_at'] ?? '',
+                    'is_new' => false,
+                ];
+            }
         }
         
         // 2. 确定域名
         $domain = $config['ssl_domain'] ?? '';
         if (empty($domain)) {
-            // 从 host 获取域名，如果是 IP 则使用 localhost
-            $host = $config['host'] ?? '127.0.0.1';
-            if (\filter_var($host, FILTER_VALIDATE_IP)) {
+            // 本地回环 IP 用 localhost 作为证书域名；内网 IP 直接用 IP；域名保持原样
+            if ($host === '127.0.0.1' || $host === '::1') {
                 $domain = 'localhost';
+            } elseif (\filter_var($host, FILTER_VALIDATE_IP)) {
+                $domain = $host;  // 内网 IP 如 192.168.1.100 直接作为域名
             } else {
                 $domain = $host;
             }
@@ -628,13 +1358,14 @@ class Start extends CommandAbstract
     /**
      * 显示启动信息
      */
-    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false): void
+    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false, bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0): void
     {
         $this->printer->setup(__('Weline Server'));
         echo "\n";
         
         $cpuCores = $this->getCpuCoreCount();
         $protocol = $sslEnabled ? 'https' : 'http';
+        $workerPort = $workerPort ?: $port;
         
         $this->printer->note('╔══════════════════════════════════════════════════════════════╗');
         $this->printer->note('║                   服务器启动配置                               ║');
@@ -642,16 +1373,123 @@ class Start extends CommandAbstract
         $this->printer->note(\sprintf('║  实例名称：%-50s║', $instanceName));
         $this->printer->note(\sprintf('║  监听地址：%-50s║', "{$protocol}://{$host}:{$port}"));
         $this->printer->note(\sprintf('║  Worker 数：%-49s║', "{$count} (CPU: {$cpuCores} 核)"));
-        $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
-        $this->printer->note(\sprintf('║  运行模式：%-50s║', $daemon ? __('守护进程') : __('后台运行')));
+        
+        if ($dispatcherEnabled) {
+            $this->printer->note(\sprintf('║  流量分发：%-50s║', __('Dispatcher 模式（TCP 透传）')));
+            $dispatcherProtocol = $sslEnabled ? 'TCP→SSL' : 'TCP';
+            $this->printer->note(\sprintf('║  Dispatcher：%-48s║', "端口 {$port} ({$dispatcherProtocol})"));
+            $workerProtocol = $sslEnabled ? 'SSL' : 'HTTP';
+            $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$workerPort} - " . ($workerPort + $count - 1) . " ({$workerProtocol})"));
+        } else {
+            $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
+        }
+        
+        // HTTPS 模式显示 HTTP 重定向端口
+        if ($sslEnabled && $httpRedirectPort > 0) {
+            $this->printer->note(\sprintf('║  HTTP 重定向：%-47s║', "端口 {$httpRedirectPort} → HTTPS"));
+        }
+        
+        $this->printer->note(\sprintf('║  运行模式：%-50s║', $daemon ? __('后台运行（默认）') : __('前台运行')));
         $this->printer->note(\sprintf('║  SSL/HTTPS：%-49s║', $sslEnabled ? __('已启用') : __('未启用')));
         $this->printer->note(\sprintf('║  平台：%-54s║', IS_WIN ? 'Windows' : 'Linux/Mac'));
         $this->printer->note(\sprintf('║  配置来源：%-50s║', $source ?: __('智能模式')));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
         echo "\n";
         
+        // 显示访问地址表格
+        $this->showAccessUrls($host, $port, $sslEnabled, $httpRedirectPort);
+        
         // 显示函数状态
         $this->showFunctionStatus();
+    }
+    
+    /**
+     * 80/443 标准端口自我处理提示
+     * 
+     * - Linux/Mac：特权端口需 root 或 setcap，否则提示
+     * - 80/443 通常单端口监听，多 Worker 会占用 port~port+count-1
+     */
+    protected function showStandardPortHints(int $port, int $count, bool $sslEnabled): void
+    {
+        if ($port !== 80 && $port !== 443) {
+            return;
+        }
+        
+        $isPrivileged = ($port === 80 || $port === 443);
+        
+        if ($isPrivileged && !IS_WIN) {
+            $this->printer->note(__('提示：端口 %{1} 为特权端口，Linux/Mac 下需 root 或 setcap 才能绑定。', [$port]));
+            $this->printer->note(__('  • 以 root 运行：sudo php bin/w server:start -p %{1}', [$port]));
+            $this->printer->note(__('  • 或授权能力：sudo setcap cap_net_bind_service=+ep $(which php)'));
+            $this->printer->note(__('  • 或 Nginx 反代：Nginx 监听 %{1}，proxy_pass 到本机高端口（如 9981）', [$port]));
+            echo "\n";
+        }
+        
+        if ($port === 80 && $count > 1) {
+            $this->printer->note(__('提示：HTTP 标准端口 80 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 80，请 -c 1。', [$count, $port, $port + $count - 1]));
+            echo "\n";
+        }
+        
+        if ($port === 443 && $count > 1) {
+            $this->printer->note(__('提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。', [$count, $port, $port + $count - 1]));
+            echo "\n";
+        }
+    }
+    
+    /**
+     * 显示访问地址表格
+     * 
+     * @param string $host 主机地址
+     * @param int $port 端口
+     * @param bool $sslEnabled 是否启用 HTTPS
+     * @param int $httpRedirectPort HTTP 重定向端口
+     */
+    protected function showAccessUrls(string $host, int $port, bool $sslEnabled, int $httpRedirectPort = 0): void
+    {
+        $protocol = $sslEnabled ? 'https' : 'http';
+        $baseUrl = "{$protocol}://{$host}";
+        
+        // 非默认端口时显示端口号
+        $defaultPort = $sslEnabled ? 443 : 80;
+        if ($port != $defaultPort) {
+            $baseUrl .= ":{$port}";
+        }
+        
+        // 获取后端路径（使用新的 area_routes 配置）
+        $adminPath = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
+        $apiPath = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
+        $apiAdminPath = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin';
+        
+        // 表格宽度
+        $tableWidth = 76;
+        $colType = 16;
+        $colUrl = $tableWidth - $colType - 5;
+        
+        $this->printer->success('╔' . \str_repeat('═', $tableWidth) . '╗');
+        $this->printer->success('║' . \str_pad(__('  访问地址'), $tableWidth, ' ', STR_PAD_RIGHT) . '║');
+        $this->printer->success('╠' . \str_repeat('═', $colType) . '╤' . \str_repeat('═', $tableWidth - $colType - 1) . '╣');
+        
+        // 前端地址
+        $frontendUrl = $baseUrl . '/';
+        $this->printer->success('║ ' . \str_pad(__('前端'), $colType - 2, ' ') . '│ ' . \str_pad($frontendUrl, $colUrl - 1, ' ') . '║');
+        
+        // 后端地址
+        $backendUrl = $baseUrl . '/' . $adminPath;
+        $this->printer->success('║ ' . \str_pad(__('后端'), $colType - 2, ' ') . '│ ' . \str_pad($backendUrl, $colUrl - 1, ' ') . '║');
+        
+        // 分隔线后显示 REST API 与 HTTP 重定向（放在最后）
+        $this->printer->success('╟' . \str_repeat('─', $colType) . '┼' . \str_repeat('─', $tableWidth - $colType - 1) . '╢');
+        $apiUrl = $baseUrl . '/' . $apiPath . '/';
+        $this->printer->success('║ ' . \str_pad(__('REST API 前端'), $colType - 2, ' ') . '│ ' . \str_pad($apiUrl, $colUrl - 1, ' ') . '║');
+        $apiAdminUrl = $baseUrl . '/' . $apiAdminPath . '/';
+        $this->printer->success('║ ' . \str_pad(__('REST API 后端'), $colType - 2, ' ') . '│ ' . \str_pad($apiAdminUrl, $colUrl - 1, ' ') . '║');
+        if ($sslEnabled && $httpRedirectPort > 0) {
+            $httpUrl = "http://{$host}:{$httpRedirectPort}/ → HTTPS";
+            $this->printer->success('║ ' . \str_pad(__('HTTP 重定向'), $colType - 2, ' ') . '│ ' . \str_pad($httpUrl, $colUrl - 1, ' ') . '║');
+        }
+        
+        $this->printer->success('╚' . \str_repeat('═', $colType) . '╧' . \str_repeat('═', $tableWidth - $colType - 1) . '╝');
+        echo "\n";
     }
     
     /**
@@ -674,25 +1512,76 @@ class Start extends CommandAbstract
     
     /**
      * 检查服务器是否已运行
+     * 
+     * 检测优先级（快→慢）：
+     * 1. Processer 文件映射获取 PID（毫秒级，最快！）
+     * 2. 端口检测（服务是否可用，与 server:status 一致）
+     * 3. 实例文件中的 PID（兼容旧数据）
+     * 
+     * 注：进程名仅用于判断是否可以安全杀死，不用于存活检测
      */
     protected function isServerRunning(string $instanceName, int $port): bool
     {
-        // 检查实例文件
+        // 检查实例文件（无实例文件 = 从未启动过）
         $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        if (\is_file($instanceFile)) {
-            $instanceData = \json_decode(\file_get_contents($instanceFile), true);
-            if ($instanceData && !empty($instanceData['workers'])) {
-                // 验证进程是否真的在运行
-                foreach ($instanceData['workers'] as $workerInfo) {
-                    if (isset($workerInfo['pid']) && Processer::isRunningByPid($workerInfo['pid'])) {
-                        return true;
-                    }
-                }
+        if (!\is_file($instanceFile)) {
+            return false;
+        }
+        
+        $instanceData = \json_decode(\file_get_contents($instanceFile), true);
+        if (!$instanceData) {
+            return false;
+        }
+        
+        $count = (int) ($instanceData['count'] ?? 4);
+        $workerPortBase = (int)($instanceData['worker_port'] ?? $port);
+        
+        // ========== 方案1：Processer 文件映射获取 PID（最快！） ==========
+        // Worker 和 Dispatcher 启动时会调用 Processer::setPid 保存映射
+        // getData() 直接读文件（< 1ms），isRunningByPid() 用 tasklist 精确匹配（10-50ms）
+        
+        // 检查 Dispatcher PID
+        $dispatcherProcessName = '--name=weline-dispatcher-' . $instanceName;
+        $dispatcherPid = (int) Processer::getData($dispatcherProcessName, 'pid');
+        if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
+            return true;
+        }
+        
+        // 检查 Worker PIDs
+        for ($i = 1; $i <= $count; $i++) {
+            $workerProcessName = '--name=weline-master-' . $instanceName . '-worker-' . $i;
+            $workerPid = (int) Processer::getData($workerProcessName, 'pid');
+            if ($workerPid > 0 && Processer::isRunningByPid($workerPid)) {
+                return true;
             }
         }
         
-        // 检查端口是否被占用
+        // ========== 方案2：端口检测（服务是否可用） ==========
+        // 与 server:status 使用相同的 Processer::isPortInUse 逻辑
+        
+        // 检查主端口（Dispatcher 或直连）
         if (Processer::isPortInUse($port)) {
+            return true;
+        }
+        
+        // 检查 Worker 端口
+        for ($i = 0; $i < $count; $i++) {
+            $workerPort = $workerPortBase + $i;
+            if (Processer::isPortInUse($workerPort)) {
+                return true;
+            }
+        }
+        
+        // ========== 方案3：实例文件中的 PID（兼容旧数据） ==========
+        // 检查 Master PID
+        $masterPid = (int)($instanceData['master_pid'] ?? 0);
+        if ($masterPid > 0 && Processer::processExists($masterPid)) {
+            return true;
+        }
+        
+        // 检查实例文件中的 Dispatcher PID
+        $instDispatcherPid = (int)($instanceData['dispatcher_pid'] ?? 0);
+        if ($instDispatcherPid > 0 && Processer::processExists($instDispatcherPid)) {
             return true;
         }
         
@@ -705,81 +1594,138 @@ class Start extends CommandAbstract
     protected function showAlreadyRunningInfo(string $instanceName, int $port): void
     {
         echo "\n";
-        $this->printer->success(__('✓ 服务器已在运行中'));
+        $this->printer->success(__('服务器实例 [%{1}] 已在运行中（端口 %{2}）', [$instanceName, $port]));
         echo "\n";
         
-        $this->printer->note(__('实例名称：%{1}', [$instanceName]));
-        $this->printer->note(__('监听端口：%{1}', [$port]));
-        echo "\n";
-        
-        $this->printer->setup(__('如需重启服务器，请使用以下命令：'));
+        $this->printer->setup(__('如需重启该实例：'));
         $this->printer->note('  php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-r');
-        $this->printer->note('  ' . __('或'));
-        $this->printer->note('  php bin/w server:restart' . ($instanceName !== 'default' ? ' ' . $instanceName : ''));
+        $this->printer->note('  ' . __('或使用 -r -f 强制切换（不等待请求完成）：'));
+        $this->printer->note('  php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-r -f');
+        echo "\n";
+        
+        $this->printer->setup(__('如需启动另一个实例（多实例并行）：'));
+        $this->printer->note('  php bin/w server:start <name> -p <port>');
+        $this->printer->note('  ' . __('示例：php bin/w server:start api -p %{1}', [$port + 1000]));
+        $this->printer->note('  ' . __('首次指定端口后会自动记住，下次只需：php bin/w server:start api'));
         echo "\n";
         
         $this->printer->setup(__('其他操作：'));
-        $this->printer->note('  ' . __('查看状态：php bin/w server:status'));
-        $this->printer->note('  ' . __('停止服务：php bin/w server:stop') . ($instanceName !== 'default' ? ' ' . $instanceName : ''));
+        $this->printer->note('  ' . __('查看所有实例：php bin/w server:status --all'));
+        $this->printer->note('  ' . __('停止该实例：php bin/w server:stop') . ($instanceName !== 'default' ? ' ' . $instanceName : ''));
+        $this->printer->note('  ' . __('停止所有实例：php bin/w server:stop --all'));
         echo "\n";
     }
     
     /**
      * 停止现有服务器
+     *
+     * 委托给 server:stop 统一执行：先停 Master，再按进程名杀 Worker/Dispatcher 并清理 PID 文件，
+     * 避免重复逻辑与 var/process/pid 残留。
      */
     protected function stopExistingServer(string $instanceName, int $port, int $count): void
     {
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        
-        // 读取实例信息并停止进程
-        if (\is_file($instanceFile)) {
-            $instanceData = \json_decode(\file_get_contents($instanceFile), true);
-            if ($instanceData && !empty($instanceData['workers'])) {
-                foreach ($instanceData['workers'] as $workerInfo) {
-                    if (isset($workerInfo['pid'])) {
-                        Processer::killByPid($workerInfo['pid']);
-                    }
-                }
-            }
-            // 删除实例文件
-            @\unlink($instanceFile);
-        }
-        
-        // 释放端口
-        for ($i = 0; $i < $count; $i++) {
-            $currentPort = $port + $i;
-            if (Processer::isPortInUse($currentPort)) {
-                Processer::killProcessByPort($currentPort);
-            }
-        }
-        
-        // 等待端口释放
-        \sleep(1);
-        $this->printer->success(__('已停止现有服务器'));
+        $mainStop = ObjectManager::getInstance(MainStop::class);
+        $mainStop->execute([0 => 'server:stop', 1 => $instanceName, 'force' => true, 'f' => true], []);
     }
     
     /**
      * 检查并释放端口
+     * 
+     * 注意：只杀框架进程（通过 --name=weline-xxx 识别），非框架进程不乱杀，提示用户手动处理。
+     */
+    /**
+     * 检查并释放单个端口
+     */
+    protected function checkAndReleasePort(string $host, int $port, bool $forceRelease = false, string $label = 'Port'): bool
+    {
+        $this->printer->note(__('检查 %{1} 端口 %{2} 可用性...', [$label, $port]));
+        
+        if (Processer::isPortInUse($port)) {
+            $isWelineProcess = Processer::isPortUsedByWeline($port);
+            if ($forceRelease) {
+                if ($isWelineProcess) {
+                    $this->printer->warning(__('%{1} 端口 %{2} 已被框架进程占用，强制释放...', [$label, $port]));
+                    // 使用改进的端口释放方法（内部会重试）
+                    $released = Processer::killProcessByPort($port);
+                    if (!$released) {
+                        // 普通方式失败，尝试强制方式
+                        $this->printer->warning(__('普通方式失败，尝试强制释放端口 %{1}...', [$port]));
+                        $released = Processer::forceReleasePort($port);
+                    }
+                    // Windows 端口释放需要额外等待（TIME_WAIT 状态）
+                    if (!$released && IS_WIN) {
+                        $maxWaitMs = 3000;
+                        $waitStep = 300;
+                        $waited = 0;
+                        while ($waited < $maxWaitMs && Processer::isPortInUse($port)) {
+                            \usleep($waitStep * 1000);
+                            $waited += $waitStep;
+                        }
+                        $released = !Processer::isPortInUse($port);
+                    }
+                } else {
+                    $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
+                    $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
+                    $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
+                    return false;
+                }
+            } else {
+                $this->printer->error(__('%{1} 端口 %{2} 已被占用', [$label, $port]));
+                $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
+                $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
+                return false;
+            }
+            
+            if (Processer::isPortInUse($port)) {
+                $this->printer->error(__('无法释放 %{1} 端口 %{2}', [$label, $port]));
+                $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$port]));
+                return false;
+            }
+        }
+        
+        $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
+        return true;
+    }
+    
+    /**
+     * 检查并释放端口
+     * 
+     * 注意：只杀框架进程（通过 --name=weline-xxx 识别），非框架进程不乱杀，提示用户手动处理。
      */
     protected function checkAndReleasePorts(string $host, int $port, int $count, bool $forceRelease = false): bool
     {
-        $this->printer->note(__('检查端口可用性...'));
+        $this->printer->note(__('检查 Worker 端口可用性...'));
         
         for ($i = 0; $i < $count; $i++) {
             $currentPort = $port + $i;
             if (Processer::isPortInUse($currentPort)) {
+                $isWelineProcess = Processer::isPortUsedByWeline($currentPort);
                 if ($forceRelease) {
-                    $this->printer->warning(__('端口 %{1} 已被占用，强制释放...', [$currentPort]));
-                    Processer::killProcessByPort($currentPort);
-                    \sleep(1);
+                    if ($isWelineProcess) {
+                        $this->printer->warning(__('端口 %{1} 已被框架进程占用，强制释放...', [$currentPort]));
+                        // 使用改进的端口释放方法（内部会重试）
+                        $released = Processer::killProcessByPort($currentPort);
+                        if (!$released) {
+                            // 普通方式失败，尝试强制方式
+                            $this->printer->warning(__('普通方式失败，尝试强制释放端口 %{1}...', [$currentPort]));
+                            $released = Processer::forceReleasePort($currentPort);
+                        }
+                    } else {
+                        $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$currentPort]));
+                        $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
+                        $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$currentPort]));
+                        return false;
+                    }
                 } else {
                     $this->printer->error(__('端口 %{1} 已被占用', [$currentPort]));
-                    $this->printer->note(__('使用 -r 参数强制重启，或手动停止占用该端口的进程'));
+                    $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
+                    $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$currentPort]));
                     return false;
                 }
                 
                 if (Processer::isPortInUse($currentPort)) {
-                    $this->printer->error(__('无法释放端口 %{1}，请手动停止占用该端口的进程', [$currentPort]));
+                    $this->printer->error(__('无法释放端口 %{1}', [$currentPort]));
+                    $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$currentPort]));
                     return false;
                 }
             }
@@ -793,7 +1739,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = ''): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false): void
     {
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
         if (!\is_dir($instanceDir)) {
@@ -811,15 +1757,138 @@ class Start extends CommandAbstract
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
             'started_at' => \date('Y-m-d H:i:s'),
+            'started_timestamp' => \time(),
             'pid' => \getmypid(),
-            'workers' => [],
+            'worker_pids' => $workerPids,
+            'master_enabled' => false,
+            'master_pid' => 0,
+            // Dispatcher 模式信息
+            'dispatcher_enabled' => $dispatcherEnabled,
+            'dispatcher_port' => $dispatcherEnabled ? $port : 0,
+            'dispatcher_pid' => 0,
+            'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
+            // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
+            'http_redirect_port' => $httpRedirectPort,
+            // 前台模式（重启 Worker 时保持可见窗口）
+            'frontend' => $frontend,
+            // 进程日志开关（-log 参数或 env 配置 system.processer.log）
+            'enable_log' => $enableLog,
         ];
         
         \file_put_contents($instanceFile, \json_encode($instanceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
     
+    /*----------------------------------------实例配置记忆（Config Shorthand）------------------------------------------*/
+    
+    /**
+     * 获取实例配置文件目录
+     */
+    protected function getInstanceConfigDir(): string
+    {
+        return Env::VAR_DIR . 'server' . DS . 'config' . DS;
+    }
+    
+    /**
+     * 获取实例配置文件路径
+     */
+    protected function getInstanceConfigFile(string $instanceName): string
+    {
+        return $this->getInstanceConfigDir() . $instanceName . '.json';
+    }
+    
+    /**
+     * 加载已保存的实例配置
+     * 
+     * 当用户首次使用 server:start api -p 8443 启动后，配置会被记住。
+     * 下次运行 server:start api 时自动加载已保存的端口、地址、Worker 数等配置。
+     * 
+     * @param string $instanceName 实例名称
+     * @return array|null 已保存的配置，未保存时返回 null
+     */
+    protected function loadSavedInstanceConfig(string $instanceName): ?array
+    {
+        $configFile = $this->getInstanceConfigFile($instanceName);
+        if (!\is_file($configFile)) {
+            return null;
+        }
+        $content = @\file_get_contents($configFile);
+        if ($content === false) {
+            return null;
+        }
+        $data = \json_decode($content, true);
+        if (!\is_array($data) || empty($data)) {
+            return null;
+        }
+        return $data;
+    }
+    
+    /**
+     * 保存实例配置（配置记忆）
+     * 
+     * 将命令行指定的参数（端口、地址、Worker 数等）保存到实例配置文件。
+     * 下次用相同实例名启动时，无需再次指定这些参数。
+     * 
+     * 仅保存用户显式指定的配置项，不保存运行时状态（如 PID、Worker PIDs 等）。
+     * 
+     * @param string $instanceName 实例名称
+     * @param array $args 命令行参数
+     * @param array $config 最终合并后的配置
+     */
+    protected function saveInstanceConfig(string $instanceName, array $args, array $config): void
+    {
+        $configDir = $this->getInstanceConfigDir();
+        if (!\is_dir($configDir)) {
+            @\mkdir($configDir, 0755, true);
+        }
+        
+        // 仅保存可复用的配置项（不包含运行时状态）
+        $savedConfig = [];
+        
+        // 从当前合并后的配置中提取可复用项
+        $persistKeys = ['host', 'port', 'worker_count', 'mode', 'no_ssl', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
+        foreach ($persistKeys as $key) {
+            if (isset($config[$key])) {
+                $savedConfig[$key] = $config[$key];
+            }
+        }
+        
+        // 记录保存时间
+        $savedConfig['saved_at'] = \date('Y-m-d H:i:s');
+        
+        $configFile = $this->getInstanceConfigFile($instanceName);
+        \file_put_contents($configFile, \json_encode($savedConfig, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE));
+    }
+    
+    /*----------------------------------------实例配置记忆结束------------------------------------------*/
+    
+    /**
+     * 更新实例的 Worker PID 列表
+     */
+    protected function updateInstanceWorkerPids(string $instanceName, array $workerPids): void
+    {
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $instanceFile = $instanceDir . $instanceName . '.json';
+        
+        if (!\file_exists($instanceFile)) {
+            return;
+        }
+        
+        $content = \file_get_contents($instanceFile);
+        $data = \json_decode($content, true);
+        
+        if (!\is_array($data)) {
+            return;
+        }
+        
+        $data['worker_pids'] = $workerPids;
+        
+        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+    
     /**
      * 确保 Worker 脚本存在
+     * 
+     * 注意：不再覆盖已有文件，bin/worker.php 和 bin/worker_ssl.php 已集成框架路由
      */
     protected function ensureWorkerScript(bool $sslEnabled = false): string
     {
@@ -831,9 +1900,11 @@ class Start extends CommandAbstract
             @\mkdir($scriptDir, 0755, true);
         }
         
-        // 总是更新脚本以确保最新版本
-        $script = $sslEnabled ? $this->getSslWorkerScriptContent() : $this->getWorkerScriptContent();
-        \file_put_contents($workerScript, $script);
+        // 只在文件不存在时创建（不覆盖已有的框架集成版本）
+        if (!\file_exists($workerScript)) {
+            $script = $sslEnabled ? $this->getSslWorkerScriptContent() : $this->getWorkerScriptContent();
+            \file_put_contents($workerScript, $script);
+        }
         
         return $workerScript;
     }
@@ -1072,8 +2143,10 @@ PHP;
     
     /**
      * 启动 Workers
+     * 
+     * @return array 成功启动的 Worker PID 列表
      */
-    protected function startWorkers(string $instanceName, string $host, int $port, int $count, string $workerScript, string $sslCert = '', string $sslKey = ''): void
+    protected function startWorkers(string $instanceName, string $host, int $port, int $count, string $workerScript, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
         $this->printer->note(__('启动 Worker 进程...'));
         echo "\n";
@@ -1086,7 +2159,7 @@ PHP;
             $workerPort = $port + $i;
             $workerId = $i + 1;
             
-            $result = $this->startSingleWorker($phpBinary, $workerScript, $host, $workerPort, $workerId, $instanceName, $sslCert, $sslKey);
+            $result = $this->startSingleWorker($phpBinary, $workerScript, $host, $workerPort, $workerId, $instanceName, $sslCert, $sslKey, $frontend);
             
             if ($result['success']) {
                 $protocol = $sslEnabled ? 'HTTPS' : 'HTTP';
@@ -1099,17 +2172,98 @@ PHP;
         
         echo "\n";
         
-        // 等待进程启动
-        \sleep(2);
+        // 启动时不校验进程状态（避免检测延迟导致误报），用户可用 server:status 自行校验
+        return $pids;
+    }
+    
+    /**
+     * 启动 Dispatcher 进程（流量分发器）
+     * 
+     * Dispatcher 监听主端口（如 443），将请求转发给 Worker（监听内网端口）
+     * 
+     * @return int Dispatcher PID，失败返回 0
+     */
+    protected function startDispatcher(string $instanceName, string $host, int $dispatcherPort, int $workerBasePort, int $workerCount, bool $frontend = false): int
+    {
+        $this->printer->note(__('启动 Dispatcher 进程...'));
         
-        // 验证进程状态
-        $this->verifyWorkers($host, $port, $count, $sslEnabled);
+        $phpBinary = PHP_BINARY;
+        $dispatcherScript = \dirname(__DIR__, 2) . DS . 'bin' . DS . 'dispatcher.php';
+        
+        if (!\is_file($dispatcherScript)) {
+            $this->printer->error(__('Dispatcher 脚本不存在: %{1}', [$dispatcherScript]));
+            return 0;
+        }
+        
+        $logDir = Env::VAR_DIR . 'log' . DS;
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0755, true);
+        }
+        
+        // 统一进程名
+        $processName = 'weline-dispatcher-' . $instanceName;
+        
+        // 使用进程管理器统一创建进程
+        // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
+        $command = "\"{$phpBinary}\" \"{$dispatcherScript}\" {$host} {$dispatcherPort} {$workerBasePort} {$workerCount} {$instanceName} --name={$processName}";
+        if ($frontend) {
+            $command .= " --frontend";
+        }
+        
+        $pid = Processer::create($command, true, $frontend);
+        
+        if ($pid > 0) {
+            $this->updateInstanceDispatcherPid($instanceName, $pid);
+        }
+        
+        // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
+        if ($pid <= 0) {
+            $maxWait = $frontend ? 3000 : 500;
+            $waitStep = 100;
+            $waited = 0;
+            
+            while ($waited < $maxWait) {
+                \usleep($waitStep * 1000);
+                $waited += $waitStep;
+                
+                $pid = Processer::getProcessIdByPort($dispatcherPort);
+                if ($pid > 0) {
+                    Processer::setPid($processName, $pid);
+                    $this->updateInstanceDispatcherPid($instanceName, $pid);
+                    break;
+                }
+            }
+        }
+        
+        return $pid;
+    }
+    
+    /**
+     * 更新实例的 Dispatcher PID
+     */
+    protected function updateInstanceDispatcherPid(string $instanceName, int $dispatcherPid): void
+    {
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $instanceFile = $instanceDir . $instanceName . '.json';
+        
+        if (!\file_exists($instanceFile)) {
+            return;
+        }
+        
+        $content = \file_get_contents($instanceFile);
+        $data = \json_decode($content, true);
+        if (!\is_array($data)) {
+            return;
+        }
+        
+        $data['dispatcher_pid'] = $dispatcherPid;
+        \file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
     
     /**
      * 启动单个 Worker
      */
-    protected function startSingleWorker(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $sslCert = '', string $sslKey = ''): array
+    protected function startSingleWorker(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
         $logDir = Env::VAR_DIR . 'log' . DS;
         if (!\is_dir($logDir)) {
@@ -1119,7 +2273,7 @@ PHP;
         
         // 方案1：proc_open（最可靠）
         if ($this->availableFunctions['proc_open'] && $this->availableFunctions['proc_close']) {
-            $result = $this->startWithProcOpen($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey);
+            $result = $this->startWithProcOpen($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
             if ($result['success']) {
                 $this->usedMethod = 'proc_open';
                 return $result;
@@ -1128,7 +2282,7 @@ PHP;
         
         // 方案2：pcntl_fork（仅 Linux/Mac）
         if (!IS_WIN && $this->availableFunctions['pcntl_fork']) {
-            $result = $this->startWithPcntlFork($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey);
+            $result = $this->startWithPcntlFork($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
             if ($result['success']) {
                 $this->usedMethod = 'pcntl_fork';
                 return $result;
@@ -1137,7 +2291,7 @@ PHP;
         
         // 方案3（备用）：exec + 批处理/nohup
         if ($this->availableFunctions['exec']) {
-            $result = $this->startWithExec($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey);
+            $result = $this->startWithExec($phpBinary, $workerScript, $host, $port, $workerId, $instanceName, $logFile, $sslCert, $sslKey, $frontend);
             if ($result['success']) {
                 $this->usedMethod = IS_WIN ? 'exec (bat)' : 'exec (nohup)';
                 return $result;
@@ -1150,39 +2304,54 @@ PHP;
     /**
      * 使用 proc_open 启动
      */
-    protected function startWithProcOpen(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = ''): array
+    protected function startWithProcOpen(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
+        // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
+        $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
         $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
         if ($sslCert && $sslKey) {
             $command .= " \"{$sslCert}\" \"{$sslKey}\"";
+            // TCP 透传模式：Worker 需要延迟 SSL 握手
+            // Dispatcher 透传原始 TCP 字节，Worker 在 accept 后手动启用 SSL
+            $command .= " --defer-ssl";
+        }
+        $command .= " --name={$processName}";
+        if ($frontend) {
+            $command .= " --frontend";
         }
         
-        $descriptorspec = [
-            0 => ['pipe', 'r'],
-            1 => ['file', $logFile, 'a'],
-            2 => ['file', $logFile, 'a'],
-        ];
+        // 使用进程管理器统一创建进程
+        $pid = Processer::create($command, true, $frontend);
         
-        $process = @\proc_open($command, $descriptorspec, $pipes);
-        
-        if (!\is_resource($process)) {
-            return ['success' => false, 'pid' => 0, 'error' => 'proc_open failed'];
+        // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
+        // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
+        if ($pid <= 0) {
+            // 等待进程启动并绑定端口
+            // SSL Worker 需要更长的启动时间（加载框架、证书等）
+            $maxWait = $frontend ? 3000 : 2000; // 后台模式等待 2 秒，前台模式 3 秒
+            $waitStep = 100; // 每次检测间隔 100ms
+            $waited = 0;
+            
+            while ($waited < $maxWait) {
+                \usleep($waitStep * 1000);
+                $waited += $waitStep;
+                
+                $detectedPid = Processer::getProcessIdByPort($port);
+                if ($detectedPid > 0) {
+                    Processer::setPid($processName, $detectedPid);
+                    $pid = $detectedPid;
+                    break;
+                }
+            }
         }
         
-        if (isset($pipes[0])) {
-            \fclose($pipes[0]);
-        }
-        
-        $status = @\proc_get_status($process);
-        $pid = $status['pid'] ?? 0;
-        
-        return ['success' => true, 'pid' => $pid, 'error' => ''];
+        return ['success' => $pid > 0 || $frontend, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
     }
     
     /**
      * 使用 pcntl_fork 启动（Linux/Mac）
      */
-    protected function startWithPcntlFork(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = ''): array
+    protected function startWithPcntlFork(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
         $pid = \pcntl_fork();
         
@@ -1196,9 +2365,17 @@ PHP;
                 \posix_setsid();
             }
             
+            // 进程名包含实例名和 Worker ID
+            $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
             $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
             if ($sslCert && $sslKey) {
                 $command .= " \"{$sslCert}\" \"{$sslKey}\"";
+                // TCP 透传模式：Worker 需要延迟 SSL 握手
+                $command .= " --defer-ssl";
+            }
+            $command .= " --name={$processName}";
+            if ($frontend) {
+                $command .= " --frontend";
             }
             $command .= " > \"{$logFile}\" 2>&1";
             @\exec($command);
@@ -1210,61 +2387,50 @@ PHP;
     
     /**
      * 使用 exec 启动（备用方案）
+     * 
+     * 注意：此方法现在统一使用 Processer::create，保留作为备用入口
      */
-    protected function startWithExec(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = ''): array
+    protected function startWithExec(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $logFile, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
-        if (IS_WIN) {
-            // Windows: 使用 PowerShell 静默启动（最可靠，完全无窗口）
-            $workerScript = \str_replace('/', '\\', $workerScript);
-            $logFile = \str_replace('/', '\\', $logFile);
-            $phpBinary = \str_replace('/', '\\', $phpBinary);
-            
-            // 构建参数列表
-            $args = "\"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
-            if ($sslCert && $sslKey) {
-                $sslCert = \str_replace('/', '\\', $sslCert);
-                $sslKey = \str_replace('/', '\\', $sslKey);
-                $args .= " \"{$sslCert}\" \"{$sslKey}\"";
-            }
-            
-            // 使用 PowerShell Start-Process 静默启动
-            // -WindowStyle Hidden 确保完全无窗口
-            $psScript = <<<POWERSHELL
-\$process = Start-Process -FilePath "{$phpBinary}" -ArgumentList '{$args}' -WindowStyle Hidden -PassThru
-exit 0
-POWERSHELL;
-            
-            // 创建临时 PS1 脚本
-            $ps1File = Env::VAR_DIR . 'tmp' . DS . "start_worker_{$port}.ps1";
-            $ps1Dir = \dirname($ps1File);
-            if (!\is_dir($ps1Dir)) {
-                @\mkdir($ps1Dir, 0755, true);
-            }
-            
-            \file_put_contents($ps1File, $psScript);
-            
-            // 执行 PowerShell 脚本
-            @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" > NUL 2>&1");
-            
-            // 延迟删除脚本文件
-            @\usleep(200000); // 200ms
-            @\unlink($ps1File);
-            
-            return ['success' => true, 'pid' => 0, 'error' => ''];
-        } else {
-            // Linux/Mac: nohup
-            $command = "nohup \"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
-            if ($sslCert && $sslKey) {
-                $command .= " \"{$sslCert}\" \"{$sslKey}\"";
-            }
-            $command .= " > \"{$logFile}\" 2>&1 & echo \$!";
-            $output = [];
-            @\exec($command, $output);
-            
-            $pid = !empty($output[0]) && \is_numeric($output[0]) ? (int)$output[0] : 0;
-            
-            return ['success' => true, 'pid' => $pid, 'error' => ''];
+        // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
+        $processName = 'weline-master-' . $instanceName . '-worker-' . $workerId;
+        $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
+        if ($sslCert && $sslKey) {
+            $command .= " \"{$sslCert}\" \"{$sslKey}\"";
+            // TCP 透传模式：Worker 需要延迟 SSL 握手
+            $command .= " --defer-ssl";
         }
+        $command .= " --name={$processName}";
+        if ($frontend) {
+            $command .= " --frontend";
+        }
+        
+        // 使用进程管理器统一创建进程
+        $pid = Processer::create($command, true, $frontend);
+        
+        // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
+        // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
+        if ($pid <= 0) {
+            // 等待进程启动并绑定端口
+            // SSL Worker 需要更长的启动时间（加载框架、证书等）
+            $maxWait = $frontend ? 3000 : 2000; // 后台模式等待 2 秒，前台模式 3 秒
+            $waitStep = 100; // 每次检测间隔 100ms
+            $waited = 0;
+            
+            while ($waited < $maxWait) {
+                \usleep($waitStep * 1000);
+                $waited += $waitStep;
+                
+                $detectedPid = Processer::getProcessIdByPort($port);
+                if ($detectedPid > 0) {
+                    Processer::setPid($processName, $detectedPid);
+                    $pid = $detectedPid;
+                    break;
+                }
+            }
+        }
+        
+        return ['success' => $pid > 0 || $frontend, 'pid' => $pid, 'error' => $pid > 0 ? '' : 'Processer::create failed'];
     }
     
     /**
@@ -1605,15 +2771,52 @@ POWERSHELL;
     }
     
     /**
+     * 显示 Windows 下 Nginx/Caddy HTTPS 代理提示
+     *
+     * Windows 上 PHP 的 SSL accept 会阻塞约 60 秒（底层 OpenSSL/WinSock 限制），
+     * 故建议使用 TCP 模式，由 Nginx 或 Caddy 做 SSL 终结并反代到本端口。
+     */
+    protected function showWindowsNginxProxyHint(string $host, int $port): void
+    {
+        echo "\n";
+        $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
+        $this->printer->warning(__('║  Windows 环境：建议使用 TCP 模式，用 Nginx 或 Caddy 做 SSL 处理。            ║'));
+        $this->printer->warning(__('║  由 Nginx/Caddy 监听 443 做 HTTPS，反代到本端口。                            ║'));
+        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
+        $this->printer->warning(__('║  Nginx 配置示例（假设 Nginx HTTPS 监听 443，反代到 %{1}）：          ║', [$port]));
+        $this->printer->warning(__('║                                                                              ║'));
+        $this->printer->warning(__('║    server {                                                                  ║'));
+        $this->printer->warning(__('║        listen 443 ssl;                                                       ║'));
+        $this->printer->warning(__('║        server_name your-domain.com;                                          ║'));
+        $this->printer->warning(__('║        ssl_certificate     /path/to/cert.pem;                                ║'));
+        $this->printer->warning(__('║        ssl_certificate_key /path/to/key.pem;                                 ║'));
+        $this->printer->warning(__('║        location / {                                                          ║'));
+        $this->printer->warning(__('║            proxy_pass http://%{1}:%{2};                                    ║', [$host, $port]));
+        $this->printer->warning(__('║            proxy_set_header Host $host;                                      ║'));
+        $this->printer->warning(__('║            proxy_set_header X-Real-IP $remote_addr;                          ║'));
+        $this->printer->warning(__('║        }                                                                     ║'));
+        $this->printer->warning(__('║    }                                                                         ║'));
+        $this->printer->warning(__('║                                                                              ║'));
+        $this->printer->warning(__('║  配置完成后，访问 https://your-domain.com 即可                              ║'));
+        $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
+    }
+
+    /**
      * 显示使用说明
      */
-    protected function showUsageInfo(string $host, int $port, string $instanceName): void
+    protected function showUsageInfo(string $host, int $port, string $instanceName, bool $sslEnabled = false): void
     {
+        $scheme = $sslEnabled ? 'https' : 'http';
+        // 默认端口（HTTP 80 或 HTTPS 443）不在 URL 中显示
+        $portNum = (int)$port;
+        $portSuffix = (($portNum == 80 && !$sslEnabled) || ($portNum == 443 && $sslEnabled)) ? '' : ':' . $port;
+        $testUrl = $scheme . '://' . $host . $portSuffix . '/';
+        
         echo "\n";
         $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
         $this->printer->note(__('║                      使用说明                                  ║'));
         $this->printer->note(__('╠══════════════════════════════════════════════════════════════╣'));
-        $this->printer->note(__('║  测试请求：curl http://%{1}:%{2}/                      ║', [$host, $port]));
+        $this->printer->note(__('║  测试请求：curl %{1}                      ║', [$testUrl]));
         $this->printer->note(__('║  查看状态：php bin/w server:status %{1}                    ║', [$instanceName]));
         $this->printer->note(__('║  停止服务：php bin/w server:stop %{1}                      ║', [$instanceName]));
         $this->printer->note(__('║  压力测试：php bin/w server:benchmark                       ║'));
@@ -1640,49 +2843,415 @@ POWERSHELL;
             [
                 '[name]' => __('实例名称（默认：default）'),
                 '--cli' => __('使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）'),
+                '--strategy' => __('使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）'),
+                '--strategy-info' => __('显示可用策略信息'),
                 '-h, --host <ip>' => __('监听地址（默认：127.0.0.1）'),
-                '-p, --port <port>' => __('基础端口（默认：9981）'),
+                '-p, --port <port>' => __('基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
-                '-d, --daemon' => __('守护进程模式（默认）'),
+                '--no-daemon' => __('前台运行（查看实时日志）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
-                '-r, --restart' => __('重启：默认平滑重启（先开维护模式、等待请求完成再切换）；与 -f 同用则直接切换'),
-                '-f' => __('与 -r 同用时直接切换（不等维护模式、不等待）；仅 --cli 时 -f 表示前台运行'),
-                '--wait <秒>' => __('平滑重启（-r 未加 -f）时等待秒数，默认 30'),
+                '-r, --restart' => __('平滑重启：开维护模式（新请求返回503）、通过健康检查等待现有请求完成后切换'),
+                '-f' => __('与 -r 同用时直接切换（不开维护模式、不等待）；仅 --cli 时 -f 表示前台运行'),
+                '--wait <秒>' => __('平滑重启最长等待秒数，默认 30（实际会通过健康检查尽快切换）'),
+                '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
                 '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
+                '--http-redirect-port <port>' => __('HTTP 重定向端口（HTTPS 模式专用，默认：自动计算或 80）'),
+                '--redirect-port <port>' => __('HTTP 重定向端口（--http-redirect-port 的简写）'),
                 '--help' => __('显示帮助信息'),
             ],
             [
-                __('配置优先级') => __('命令行参数 > env.servers.[name] > env.server > 默认值'),
+                __('配置优先级') => __('命令行参数 > 已保存实例配置 > env.servers.[name] > env.server > 默认值'),
+                __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
+                __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
                 __('智能模式') => __('worker_count 设为 "auto" 时根据 CPU 核心数和模式自动计算'),
                 __('事件循环') => __('自动选择最优：Event 扩展 > stream_select'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
+                __('禁用 HTTPS') => __('env.server.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本'),
+                __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
+                __('80/443 端口') => __('默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
+                __('HTTP 重定向端口') => __('HTTPS 模式下自动启动 HTTP 重定向进程，默认自动计算（HTTPS端口-463，如 443→80）；可通过 --http-redirect-port 指定；设为 0 禁用重定向'),
             ],
             [
                 __('启动默认实例') => 'php bin/w server:start',
                 __('使用 CLI 服务器') => 'php bin/w server:start --cli',
-                __('短命令') => 'php bin/w ser:start',
-                __('启动命名实例') => 'php bin/w server:start api -p 9000',
+                __('启动命名实例（首次需指定端口）') => 'php bin/w server:start api -p 8443',
+                __('再次启动已配置实例（自动记忆）') => 'php bin/w server:start api',
+                __('同时运行多个实例') => 'php bin/w server:start web -p 8443 && php bin/w server:start api -p 9443',
                 __('启动 8 个进程') => 'php bin/w server:start -c 8',
                 __('CPU密集模式') => 'php bin/w server:start -m cpu',
                 __('平滑重启') => 'php bin/w server:start -r',
-                __('直接切换（不等）') => 'php bin/w server:start -r -f',
+                __('强制重启（不等待）') => 'php bin/w server:start -r -f',
                 __('启用 HTTPS') => 'php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
-                __('查看状态') => 'php bin/w server:status',
-                __('停止服务') => 'php bin/w server:stop',
+                __('Windows 无 HTTPS 运行') => 'php bin/w server:start --no-ssl',
+                __('指定 HTTP 重定向端口') => 'php bin/w server:start --http-redirect-port 8080',
+                __('禁用 HTTP 重定向') => 'php bin/w server:start --http-redirect-port 0',
+                __('策略模式（跨平台优化）') => 'php bin/w server:start --strategy',
+                __('查看所有实例状态') => 'php bin/w server:status --all',
+                __('停止指定实例') => 'php bin/w server:stop api',
+                __('停止所有实例') => 'php bin/w server:stop --all',
                 __('压力测试') => 'php bin/w server:benchmark',
-                __('优化指南') => 'php bin/w server:doc',
             ]
         );
     }
     
+    
+    // ========== 热重载支持方法 ==========
+    
     /**
-     * 命令别名（ser:start 等同 server:start）
+     * 根据配置启动热重载监控
+     * 
+     * 开发模式下默认启用热重载，生产模式默认关闭
+     * 文件变更时触发 code 级别重载（Worker 重启加载新代码）
      */
-    public function aliases(): array
+    protected function startHotReloadIfEnabled(array $config, string $instanceName): void
     {
-        return ['ser:start'];
+        // 检查开发模式
+        $isDevMode = (Env::getInstance()->getConfig('deploy') ?? '') === 'dev';
+        
+        // 开发模式默认启用热重载，生产模式默认关闭
+        // 可通过 env.server.hot_reload 显式覆盖
+        $hotReload = $config['hot_reload'] ?? $isDevMode;
+        if (!$hotReload) {
+            return;
+        }
+        
+        // 仅非守护进程模式支持热重载（前台运行时）
+        if ($config['daemon'] ?? true) {
+            $this->printer->note(__('热重载仅在前台模式 (--no-daemon) 下生效'));
+            $this->printer->note(__('使用 "php bin/w s:up --hot" 手动触发热更新'));
+            return;
+        }
+        
+        $this->printer->note(__('启动热重载监控...'));
+        
+        // 获取监控配置
+        $serverEnv = Env::getInstance()->getConfig('server') ?? [];
+        $watchDirs = $serverEnv['watch_dirs'] ?? ['app/code', 'app/etc'];
+        $watchInterval = (float) ($serverEnv['watch_interval'] ?? 1);
+        
+        // 转换为绝对路径
+        $absoluteDirs = [];
+        foreach ($watchDirs as $dir) {
+            $absoluteDirs[] = BP . \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $dir);
+        }
+        
+        $this->printer->success(__('热重载已启用'));
+        $this->printer->note(__('监控目录：%{1}', [\implode(', ', $watchDirs)]));
+        $this->printer->note(__('检查间隔：%{1} 秒', [$watchInterval]));
+        echo "\n";
+        
+        // 启动文件监控（变更时通知所有 WLS Worker 重载，与 CLI 命令重载机制一致）
+        $this->runFileWatcher($absoluteDirs, $watchInterval);
+    }
+    
+    /**
+     * 文件监控进程名（符合 Processer 规范：--name 标识）
+     */
+    protected const FILE_WATCHER_PROCESS_NAME = 'weline-file-watcher';
+
+    /**
+     * 运行文件监控器（子进程模式）
+     *
+     * 遵循 Processer 进程管理规范：注册、检测、终止均通过 Processer
+     * 文件监控在独立子进程中运行，主进程负责信号处理
+     */
+    protected function runFileWatcher(array $watchDirs, float $interval): void
+    {
+        $configDir = Env::VAR_DIR . 'tmp' . DS;
+        if (!\is_dir($configDir)) {
+            @\mkdir($configDir, 0755, true);
+        }
+        $configFile = $configDir . 'file_watcher_' . \getmypid() . '_' . \time() . '.json';
+        \file_put_contents($configFile, \json_encode([
+            'watch_dirs' => $watchDirs,
+            'check_interval' => $interval,
+        ]));
+
+        $watcherScript = \dirname(__DIR__, 2) . DS . 'bin' . DS . 'file_watcher.php';
+        $phpBinary = \defined('PHP_BINARY') && \PHP_BINARY ? \PHP_BINARY : 'php';
+        $processName = "\"{$phpBinary}\" \"{$watcherScript}\" \"{$configFile}\" --name=" . self::FILE_WATCHER_PROCESS_NAME;
+
+        // 若已存在同进程，先销毁
+        if (Processer::running($processName)) {
+            Processer::destroy($processName);
+        }
+
+        $this->printer->note(__('按 Ctrl+C 停止监控...'));
+        echo "\n";
+
+        // 方案1：pcntl_fork（Linux/Mac），主进程可正确处理信号
+        if (!IS_WIN && $this->availableFunctions['pcntl_fork']) {
+            $this->runFileWatcherWithFork($phpBinary, $watcherScript, $configFile, $processName);
+            return;
+        }
+
+        // 方案2：proc_open（Windows 或 pcntl 不可用）
+        $this->runFileWatcherWithProcOpen($phpBinary, $watcherScript, $configFile, $processName);
+    }
+
+    /**
+     * 使用 pcntl_fork 运行文件监控子进程
+     */
+    protected function runFileWatcherWithFork(string $phpBinary, string $watcherScript, string $configFile, string $processName): void
+    {
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            $this->printer->error(__('创建文件监控子进程失败'));
+            @\unlink($configFile);
+            return;
+        }
+        if ($pid === 0) {
+            if (\function_exists('posix_setsid')) {
+                \posix_setsid();
+            }
+            \pcntl_exec($phpBinary, [$watcherScript, $configFile, '--name=' . self::FILE_WATCHER_PROCESS_NAME]);
+            exit(1);
+        }
+
+        Processer::setPid($processName, $pid);
+
+        $shutdown = false;
+        \pcntl_async_signals(true);
+        \pcntl_signal(\SIGINT, function () use (&$shutdown) {
+            $shutdown = true;
+        });
+        \pcntl_signal(\SIGTERM, function () use (&$shutdown) {
+            $shutdown = true;
+        });
+
+        while (!$shutdown) {
+            $result = \pcntl_waitpid($pid, $status, \WNOHANG);
+            if ($result === $pid) {
+                break;
+            }
+            if ($result === -1) {
+                break;
+            }
+            \pcntl_signal_dispatch();
+            \usleep(200000);
+        }
+
+        if ($shutdown && Processer::isRunningByPid($pid)) {
+            Processer::killByPid($pid);
+            \pcntl_waitpid($pid, $status);
+        }
+        Processer::destroy($processName);
+        @\unlink($configFile);
+    }
+
+    /**
+     * 使用 proc_open 运行文件监控子进程
+     */
+    protected function runFileWatcherWithProcOpen(string $phpBinary, string $watcherScript, string $configFile, string $processName): void
+    {
+        $descriptorspec = [
+            0 => ['pipe', 'r'],
+        ];
+        $command = [$phpBinary, $watcherScript, $configFile, '--name=' . self::FILE_WATCHER_PROCESS_NAME];
+        $proc = @\proc_open($command, $descriptorspec, $pipes, null, null, ['bypass_shell' => true]);
+        if (!\is_resource($proc)) {
+            $this->printer->error(__('创建文件监控子进程失败'));
+            @\unlink($configFile);
+            return;
+        }
+        if (isset($pipes[0])) {
+            \fclose($pipes[0]);
+        }
+
+        $status = \proc_get_status($proc);
+        $pid = $status['pid'] ?? 0;
+        if ($pid > 0) {
+            Processer::setPid($processName, $pid);
+        }
+
+        $shutdown = false;
+        if (!IS_WIN && \function_exists('pcntl_async_signals')) {
+            \pcntl_async_signals(true);
+            \pcntl_signal(\SIGINT, function () use (&$shutdown) {
+                $shutdown = true;
+            });
+            \pcntl_signal(\SIGTERM, function () use (&$shutdown) {
+                $shutdown = true;
+            });
+        }
+
+        while (true) {
+            $status = \proc_get_status($proc);
+            if (!$status || !$status['running']) {
+                break;
+            }
+            if ($shutdown) {
+                Processer::killByPid($pid);
+                break;
+            }
+            if (!IS_WIN) {
+                \pcntl_signal_dispatch();
+            }
+            \usleep(200000);
+        }
+        \proc_close($proc);
+        Processer::destroy($processName);
+        @\unlink($configFile);
+    }
+    
+    // ========== 策略模式支持（跨平台优化架构） ==========
+    
+    /**
+     * 获取策略工厂
+     * 
+     * @return ServerStrategyFactory
+     */
+    protected function getStrategyFactory(): ServerStrategyFactory
+    {
+        static $factory = null;
+        if ($factory === null) {
+            $factory = new ServerStrategyFactory();
+        }
+        return $factory;
+    }
+    
+    /**
+     * 获取当前平台的最优策略
+     * 
+     * @return ServerStrategyInterface
+     */
+    protected function getOptimalStrategy(): ServerStrategyInterface
+    {
+        return $this->getStrategyFactory()->getStrategy();
+    }
+    
+    /**
+     * 显示策略信息
+     * 
+     * @param string $format 输出格式: table|json|text
+     */
+    public function showStrategyInfo(string $format = 'table'): void
+    {
+        $factory = $this->getStrategyFactory();
+        $comparison = $factory->getStrategyComparison();
+        
+        if ($format === 'json') {
+            echo \json_encode($comparison, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
+            return;
+        }
+        
+        $this->printer->note(__('可用服务器启动策略:'));
+        echo "\n";
+        
+        foreach ($comparison as $info) {
+            $supported = $info['supported'] ? '✓' : '✗';
+            $current = $info['supported'] ? ' (当前)' : '';
+            $this->printer->printList([
+                __('标识') => $info['identifier'],
+                __('名称') => $info['name'] . $current,
+                __('支持') => $supported,
+                __('优先级') => $info['priority'],
+                __('架构') => $info['architecture'],
+            ]);
+            echo "\n";
+        }
+    }
+    
+    /**
+     * 使用策略模式启动服务器
+     * 
+     * 这是新的跨平台优化启动方式：
+     * - Linux/Mac: SO_REUSEPORT 直连模式
+     * - Windows: Dispatcher TCP 透传模式
+     * 
+     * @param array $args 命令行参数
+     * @return bool 是否启动成功
+     */
+    protected function executeWithStrategy(array $args = []): bool
+    {
+        // 构建 ServerConfig
+        $instanceName = $args['instance'] ?? $args['name'] ?? 'default';
+        $config = $this->getServerConfig($instanceName, $args);
+        
+        // 检查是否前台运行
+        $frontend = !empty($args['frontend']) || \in_array('--frontend', $args, true) || \in_array('-frontend', $args, true);
+        
+        // 获取 SSL 证书
+        $sslCert = '';
+        $sslKey = '';
+        $sslEnabled = empty($args['no-ssl']) && empty($config['no_ssl']);
+        
+        if ($sslEnabled) {
+            $sslResult = $this->ensureSslCertificate($instanceName, $config);
+            if (!$sslResult['success']) {
+                $this->printer->error($sslResult['message']);
+                return false;
+            }
+            $sslCert = $sslResult['cert_path'];
+            $sslKey = $sslResult['key_path'];
+        }
+        
+        // 创建配置对象
+        $serverConfig = new ServerConfig([
+            'instance_name' => $instanceName,
+            'host' => $config['host'] ?? '127.0.0.1',
+            'port' => (int) ($config['port'] ?? ($sslEnabled ? 443 : 80)),
+            'worker_count' => (int) ($config['worker_count'] ?? 4),
+            'worker_base_port' => (int) ($config['worker_base_port'] ?? 10443),
+            'ssl_cert' => $sslCert,
+            'ssl_key' => $sslKey,
+            'frontend' => $frontend,
+            'http_redirect_port' => (int) ($config['http_redirect_port'] ?? 80),
+            'http_redirect_enabled' => $sslEnabled && (($config['http_redirect_port'] ?? 80) > 0),
+            'log_dir' => Env::VAR_DIR . 'log' . DS,
+            'bin_dir' => \dirname(__DIR__, 2) . DS . 'bin' . DS,
+        ]);
+        
+        // 获取最优策略
+        $strategy = $this->getOptimalStrategy();
+        
+        // 设置日志回调
+        $strategy->setLogCallback(function (string $message, string $level) {
+            switch ($level) {
+                case 'ERROR':
+                    $this->printer->error($message);
+                    break;
+                case 'WARN':
+                    $this->printer->warning($message);
+                    break;
+                default:
+                    $this->printer->note($message);
+            }
+        });
+        
+        // 显示策略信息
+        $this->printer->success(__('使用策略: %{1}', [$strategy->getName()]));
+        $this->printer->note(__('架构: %{1}', [$strategy->getArchitectureDescription()]));
+        echo "\n";
+        
+        // 启动服务器
+        return $strategy->start($serverConfig);
+    }
+    
+    /**
+     * 使用策略模式停止服务器
+     * 
+     * @param string $instanceName 实例名称
+     * @return bool 是否停止成功
+     */
+    protected function stopWithStrategy(string $instanceName): bool
+    {
+        $strategy = $this->getOptimalStrategy();
+        return $strategy->stop($instanceName);
+    }
+    
+    /**
+     * 获取策略模式下的服务器状态
+     * 
+     * @param string $instanceName 实例名称
+     * @return array
+     */
+    protected function getStrategyStatus(string $instanceName): array
+    {
+        $strategy = $this->getOptimalStrategy();
+        return $strategy->getStatus($instanceName);
     }
 }

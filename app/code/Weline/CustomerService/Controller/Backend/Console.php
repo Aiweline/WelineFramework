@@ -140,6 +140,7 @@ class Console extends BackendController
 
     /**
      * 获取会话列表（AJAX）
+     * GET /customerservice/backend/console/sessions
      */
     public function getSessions(): string
     {
@@ -210,6 +211,7 @@ class Console extends BackendController
 
     /**
      * 获取会话消息（AJAX）
+     * GET /customerservice/backend/console/messages
      */
     public function getMessages(): string
     {
@@ -258,13 +260,10 @@ class Console extends BackendController
 
     /**
      * 发送消息（AJAX）
+     * POST /customerservice/backend/console/send-message
      */
-    public function sendMessage(): string
+    public function postSendMessage(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
             $content = trim($this->request->getPost('content', ''));
@@ -329,13 +328,10 @@ class Console extends BackendController
 
     /**
      * 分配会话给当前客服（AJAX）
+     * POST /customerservice/backend/console/assign-session
      */
-    public function assignSession(): string
+    public function postAssignSession(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
 
@@ -391,13 +387,10 @@ class Console extends BackendController
 
     /**
      * 关闭会话（AJAX）
+     * POST /customerservice/backend/console/close-session
      */
-    public function closeSession(): string
+    public function postCloseSession(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->jsonResponse(false, __('无效的请求方法'));
-        }
-
         try {
             $sessionId = (int)$this->request->getPost('session_id', 0);
 
@@ -441,6 +434,7 @@ class Console extends BackendController
 
     /**
      * 获取统计数据（AJAX）
+     * GET /customerservice/backend/console/statistics
      */
     public function getStatistics(): string
     {
@@ -464,6 +458,66 @@ class Console extends BackendController
             return $this->jsonResponse(true, __('获取成功'), $statistics);
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('获取统计数据失败：%{1}', $e->getMessage()));
+        }
+    }
+
+    /**
+     * 客服心跳（标记在线状态）
+     * POST /customerservice/backend/console/heartbeat
+     */
+    public function postHeartbeat(): string
+    {
+        try {
+            $userId = $this->session->getLoginUserID();
+
+            /** @var ServiceAgent $agent */
+            $agent = ObjectManager::getInstance(ServiceAgent::class);
+            $agent->where(ServiceAgent::fields_user_id, $userId)
+                ->where(ServiceAgent::fields_is_active, 1)
+                ->find()
+                ->fetch();
+
+            if (!$agent->getId()) {
+                return $this->jsonResponse(false, __('您不是客服人员'));
+            }
+
+            $agent->updateHeartbeat()->save();
+
+            return $this->jsonResponse(true, 'ok');
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, $e->getMessage());
+        }
+    }
+
+    /**
+     * 获取所有客服在线状态（AJAX）
+     * GET /customerservice/backend/console/agent-status
+     */
+    public function getAgentStatus(): string
+    {
+        try {
+            /** @var ServiceAgent $agentModel */
+            $agentModel = ObjectManager::getInstance(ServiceAgent::class);
+            $agents = $agentModel->reset()
+                ->where(ServiceAgent::fields_is_active, 1)
+                ->select()
+                ->fetch()
+                ->getItems();
+
+            $result = [];
+            foreach ($agents as $a) {
+                $lastHb = $a[ServiceAgent::fields_last_heartbeat] ?? null;
+                $online = $lastHb && (time() - strtotime($lastHb)) < ServiceAgent::HEARTBEAT_TIMEOUT;
+                $result[] = [
+                    'agent_id'   => $a[ServiceAgent::fields_ID],
+                    'name'       => $a[ServiceAgent::fields_name],
+                    'online'     => $online,
+                ];
+            }
+
+            return $this->jsonResponse(true, __('获取成功'), ['agents' => $result]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse(false, __('获取客服状态失败：%{1}', $e->getMessage()));
         }
     }
 

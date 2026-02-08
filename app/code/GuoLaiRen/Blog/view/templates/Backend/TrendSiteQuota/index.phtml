@@ -1,0 +1,169 @@
+<?php
+/** @var array $quotas */
+/** @var array $profileNames */
+/** @var array $siteNames */
+/** @var array $categoryNames */
+/** @var mixed $pagination */
+$quotas = $this->getData('quotas') ?? [];
+$profileNames = $this->getData('profileNames') ?? [];
+$siteNames = $this->getData('siteNames') ?? [];
+$categoryNames = $this->getData('categoryNames') ?? [];
+$pagination = $this->getData('pagination');
+?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= $this->getData('page_title') ?: __('站点发文配额') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('blog/backend/post/index') ?>"><?= __('博客管理') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('站点发文配额') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="card-title mb-0"><lang>配额列表</lang></h4>
+                <block class='Weline\Component\Block\OffCanvas'
+                       template='Weline_Component::off-canvas.phtml'
+                       cache='0'
+                       id='offcanvas_site_quota_create'
+                       action="blog/backend/trend-site-quota/offcanvas-create"
+                       target-tag="button"
+                       icon="mdi mdi-plus"
+                       target-button-text="新建配额"
+                       target-button-class="btn btn-sm btn-primary"
+                       title="新建站点发文配额"
+                       close-button-show="1"
+                       close-button-text="关闭"
+                       submit-button-text="创建"
+                       submit-button-class="btn btn-primary"
+                       direction="right"
+                       class-names="offcanvas-end"
+                       save="1"
+                       flush="1"
+                       flush-button-text="刷新"
+                       flush-button-class="btn btn-outline-secondary"
+                       off-canvas-body-style=""
+                />
+            </div>
+            <div class="card-body">
+                <?php if (empty($quotas)): ?>
+                    <div class="alert alert-info mb-0"><lang>暂无配额，请点击右上角新建</lang></div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-centered mb-0">
+                            <thead>
+                                <tr>
+                                    <th width="60">ID</th>
+                                    <th><lang>站点</lang></th>
+                                    <th><lang>画像</lang></th>
+                                    <th><lang>每日篇数</lang></th>
+                                    <th><lang>默认分类</lang></th>
+                                    <th width="150"><lang>操作</lang></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($quotas as $q): ?>
+                                    <?php
+                                    $siteId = (int)$q->getData('site_id');
+                                    $profileId = (int)$q->getData('profile_id');
+                                    $catId = (int)$q->getData('default_category_id');
+                                    ?>
+                                    <tr>
+                                        <td><?= (int)$q->getData('quota_id') ?></td>
+                                        <td><?= htmlspecialchars($siteNames[$siteId] ?? (string)$siteId) ?></td>
+                                        <td><?= htmlspecialchars($profileNames[$profileId] ?? (string)$profileId) ?></td>
+                                        <td><?= (int)$q->getData('articles_per_day') ?></td>
+                                        <td><?= $catId > 0 ? htmlspecialchars($categoryNames[$catId] ?? (string)$catId) : __('未设置') ?></td>
+                                        <td>
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   template='Weline_Component::off-canvas.phtml'
+                                                   cache='0'
+                                                   id='offcanvas_site_quota_edit'
+                                                   action="blog/backend/trend-site-quota/offcanvas-edit"
+                                                   target-tag="button"
+                                                   vars="q"
+                                                   action-params="{id: q.quota_id}"
+                                                   icon="mdi mdi-pencil"
+                                                   target-button-text=""
+                                                   target-button-class="btn btn-sm btn-outline-primary"
+                                                   title="编辑站点发文配额"
+                                                   close-button-show="1"
+                                                   close-button-text="关闭"
+                                                   submit-button-text="保存"
+                                                   submit-button-class="btn btn-primary"
+                                                   direction="right"
+                                                   class-names="offcanvas-end"
+                                                   save="1"
+                                                   flush="1"
+                                                   flush-button-text="刷新"
+                                                   flush-button-class="btn btn-outline-secondary"
+                                                   off-canvas-body-style=""
+                                            />
+                                            <a href="<?= $this->getBackendUrl('blog/backend/trend-site-quota/delete', ['id' => $q->getData('quota_id')]) ?>"
+                                               class="btn btn-sm btn-outline-danger blog-delete-confirm"
+                                               data-msg="<?= htmlspecialchars(__('确定要删除该配额吗？')) ?>"><i class="mdi mdi-delete"></i></a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php if ($pagination): ?>
+                        <div class="mt-3"><?= $pagination ?></div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认弹窗（替代原生 confirm，符合友好通知规范；使用主题变量以适配暗色/亮色；role/aria 便于无障碍） -->
+<div id="blogDeleteConfirmModal" role="dialog" aria-modal="true" aria-labelledby="blogDeleteConfirmMsg" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--backend-color-bg-overlay, rgba(0,0,0,0.5)); align-items:center; justify-content:center;">
+    <div style="background:var(--backend-color-bg-surface, #fff); padding:var(--backend-padding-modal, 1.5rem); border-radius:8px; max-width:400px; box-shadow:var(--backend-modal-shadow, 0 4px 12px rgba(0,0,0,0.15)); color:var(--backend-color-text-primary, #212529);">
+        <p id="blogDeleteConfirmMsg" style="margin-bottom:1rem;"></p>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="blogDeleteCancelBtn"><lang>取消</lang></button>
+            <button type="button" class="btn btn-danger" id="blogDeleteConfirmBtn"><lang>确定</lang></button>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+    var modal = document.getElementById('blogDeleteConfirmModal');
+    var msgEl = document.getElementById('blogDeleteConfirmMsg');
+    var confirmBtn = document.getElementById('blogDeleteConfirmBtn');
+    var cancelBtn = document.getElementById('blogDeleteCancelBtn');
+    var deleteHref = '';
+    if (!modal || !msgEl) return;
+    modal.style.display = 'flex';
+    modal.style.display = 'none';
+    document.querySelectorAll('.blog-delete-confirm').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault(); deleteHref = this.getAttribute('href'); msgEl.textContent = this.getAttribute('data-msg') || ''; modal.style.display = 'flex'; });
+    });
+    confirmBtn.addEventListener('click', function(){ if(deleteHref) window.location = deleteHref; });
+    cancelBtn.addEventListener('click', function(){ modal.style.display = 'none'; deleteHref = ''; });
+})();
+</script>
+<script>
+/* Offcanvas 关闭后自动刷新主页面列表 */
+(function(){
+    document.querySelectorAll('.offcanvas').forEach(function(el){
+        el.addEventListener('hidden.bs.offcanvas', function(){ window.location.reload(); });
+    });
+})();
+</script>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

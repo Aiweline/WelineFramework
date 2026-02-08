@@ -154,11 +154,35 @@ return [
         'doc' => 'controller/控制器模板获取后.md',
     ],
     
+    // ========== 缓存事件 ==========
+    'Weline_Framework_Cache::integration::cache_flushed' => [
+        'name' => __('缓存清理完成'),
+        'description' => __('当 CacheFactory 的 flush() 或 clear() 被调用后触发。允许其他模块（如 Server）监听缓存变更并执行后续操作（如通知 WLS Worker 重载内存缓存）。在 HTTP 请求和 CLI 环境下均会触发。'),
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'identity' => ['type' => 'string', 'required' => true, 'description' => '缓存实例标识（如 router_cache、theme_cache 等）'],
+            'operation' => ['type' => 'string', 'required' => true, 'description' => '操作类型：flush 或 clear'],
+            'tip' => ['type' => 'string', 'required' => false, 'description' => '缓存说明'],
+        ],
+    ],
+    
     // ========== 控制台事件 ==========
     'Weline_Framework_Console::compile' => [
         'name' => __('控制台编译'),
         'description' => __('在控制台编译时触发，允许其他模块执行编译相关操作。'),
         'doc' => 'console/控制台编译.md',
+    ],
+    'Weline_Framework::cli::command_executed' => [
+        'name' => __('CLI命令执行完成'),
+        'description' => __('在CLI命令执行完成后触发，允许其他模块监听命令执行并执行后续操作（如通知WLS Worker重载）。'),
+        'doc' => 'console/CLI命令执行完成.md',
+        'version' => '1.0.0',
+        'type' => 'application',
+        'data_contract' => [
+            'command' => ['type' => 'string', 'required' => true, 'description' => '执行的命令名称'],
+            'args' => ['type' => 'array', 'required' => true, 'description' => '命令参数'],
+        ],
     ],
     
     

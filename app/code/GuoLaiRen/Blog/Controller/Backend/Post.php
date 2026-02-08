@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\Blog\Controller\Backend;
 
+use GuoLaiRen\Blog\Cron\AiPublish;
 use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
 use Weline\Framework\App\Controller\BackendController;
@@ -272,6 +273,61 @@ class Post extends BackendController
         }
     }
 
+    /**
+     * 手动触发 AI 生成 SEO 文章（AJAX）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_trigger_ai', '手动生成SEO文章', 'mdi mdi-robot', '手动触发 AI 生成 SEO 博客文章', 'GuoLaiRen_Blog::blog')]
+    public function postTriggerAiPublish(): string
+    {
+        try {
+            /** @var AiPublish $cron */
+            $cron = ObjectManager::getInstance(AiPublish::class);
+            $result = $cron->execute();
+
+            return json_encode([
+                'success' => true,
+                'message' => $result,
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return json_encode([
+                'success' => false,
+                'message' => __('执行失败：%{error}', ['error' => $e->getMessage()]),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * 审批发布草稿文章
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_publish', '审批发布', 'mdi mdi-check-decagram', '审批并发布草稿文章', 'GuoLaiRen_Blog::blog')]
+    public function getPublish(): void
+    {
+        try {
+            $id = (int)$this->request->getGet('id', 0);
+
+            $post = clone $this->postModel;
+            $post->clear()->load($id);
+
+            if (!$post->getId()) {
+                throw new \Exception(__('博客文章不存在'));
+            }
+
+            if ((int)$post->getData(PostModel::fields_STATUS) === PostModel::STATUS_PUBLISHED) {
+                throw new \Exception(__('该文章已经是发布状态'));
+            }
+
+            $post->setData(PostModel::fields_STATUS, PostModel::STATUS_PUBLISHED)
+                ->setData(PostModel::fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
+                ->save();
+
+            MessageManager::success(__('文章已审批发布'));
+        } catch (\Throwable $e) {
+            MessageManager::error($e->getMessage());
+        }
+
+        $this->redirect('blog/backend/post/index');
+    }
+
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_delete', '删除博客', 'mdi mdi-delete', '删除博客文章', 'GuoLaiRen_Blog::blog')]
     public function delete()
     {
@@ -285,7 +341,7 @@ class Post extends BackendController
                 throw new \Exception(__('博客文章不存在'));
             }
 
-            $post->delete();
+            $post->delete()->fetch();
             MessageManager::success(__('博客文章已删除'));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());

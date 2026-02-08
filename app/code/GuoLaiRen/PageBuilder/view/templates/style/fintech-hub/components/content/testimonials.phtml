@@ -1,0 +1,285 @@
+<?php
+/**
+ * FinTech Hub - Testimonials Section Component
+ * 
+ * 客户评价展示区域，3列卡片布局
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Client Testimonials
+ * content.title => 标题:text:What our clients say
+ * content.description => 描述:textarea:Trusted by financial professionals and everyday users around the world.
+ * 
+ * group:testimonials => 评价列表
+ * testimonials.items => 评价列表:textarea:VaultPay transformed how we handle international payments. The speed and transparency are unmatched.|Sarah Chen|Chief Financial Officer, TechGlobal Inc.|SC\r\nThe smart investing tools helped me grow my portfolio by 34% in the first year. The AI recommendations are incredibly accurate.|Marcus Rodriguez|Investment Analyst, Meridian Partners|MR\r\nAs a startup founder, having business banking and invoicing in one platform saves us hours every week. Outstanding service.|Priya Sharma|CEO & Founder, NovaPay Solutions|PS|格式：评价内容|姓名|职位|头像缩写，条目间用\r\n分隔
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+// 确保颜色变量可用
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// 颜色配置
+$sectionBg = $colors['testimonials_bg'] ?? '#0e1425';
+$textPrimary = $colors['text_primary'] ?? '#f8fafc';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$textMuted = $colors['text_muted'] ?? '#64748b';
+$accentPrimary = $colors['accent_primary'] ?? '#2563eb';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#3b82f6';
+$accentSecondary = $colors['accent_secondary'] ?? '#f59e0b';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(37, 99, 235, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(37, 99, 235, 0.3)';
+
+// 内容配置
+$badge = $config['content.badge'] ?? 'Client Testimonials';
+$title = $config['content.title'] ?? 'What our clients say';
+$description = $config['content.description'] ?? 'Trusted by financial professionals and everyday users around the world.';
+
+// 评价列表
+$testimonialsRaw = $config['testimonials.items'] ?? "VaultPay transformed how we handle international payments. The speed and transparency are unmatched.|Sarah Chen|Chief Financial Officer, TechGlobal Inc.|SC\r\nThe smart investing tools helped me grow my portfolio by 34% in the first year. The AI recommendations are incredibly accurate.|Marcus Rodriguez|Investment Analyst, Meridian Partners|MR\r\nAs a startup founder, having business banking and invoicing in one platform saves us hours every week. Outstanding service.|Priya Sharma|CEO & Founder, NovaPay Solutions|PS";
+
+$testimonials = [];
+$blocks = preg_split('/\r\n/', $testimonialsRaw);
+foreach ($blocks as $block) {
+    $block = trim($block);
+    if (empty($block)) continue;
+    
+    $parts = explode('|', $block, 4);
+    $quote = trim($parts[0] ?? '');
+    $name = trim($parts[1] ?? '');
+    $role = trim($parts[2] ?? '');
+    $initials = trim($parts[3] ?? '');
+    
+    if (empty($initials) && !empty($name)) {
+        $words = explode(' ', $name);
+        $initials = '';
+        foreach ($words as $word) {
+            $initials .= mb_substr($word, 0, 1);
+        }
+        $initials = mb_strtoupper(mb_substr($initials, 0, 2));
+    }
+    
+    if (!empty($quote)) {
+        $testimonials[] = [
+            'quote' => $quote,
+            'name' => $name,
+            'role' => $role,
+            'initials' => $initials,
+        ];
+    }
+}
+
+// 星级颜色
+$starColors = ['#f59e0b', '#3b82f6', '#10b981'];
+
+$instanceId = 'fh-testimonials-' . uniqid();
+?>
+
+<section class="fh-testimonials" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: <?= $badgeBg ?>;
+            border: 1px solid <?= $badgeBorder ?>;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-subtitle {
+            font-size: 1.125rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            padding: 32px;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(37, 99, 235, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-stars {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-stars svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-quote {
+            font-size: 1rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.7;
+            flex: 1;
+            margin-bottom: 24px;
+            font-style: italic;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-quote::before {
+            content: '"';
+            font-size: 2rem;
+            color: <?= $accentPrimaryLight ?>;
+            line-height: 0;
+            vertical-align: -0.3em;
+            margin-right: 4px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-author {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #ffffff;
+            flex-shrink: 0;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-author-info {
+            flex: 1;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-author-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 2px;
+        }
+        
+        #<?= $instanceId ?> .fh-testimonials-author-role {
+            font-size: 0.8rem;
+            color: <?= $textMuted ?>;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .fh-testimonials-grid {
+                grid-template-columns: 1fr;
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .fh-testimonials-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .fh-testimonials-card {
+                padding: 24px;
+            }
+        }
+    </style>
+    
+    <div class="fh-testimonials-container">
+        <div class="fh-testimonials-header">
+            <div class="fh-testimonials-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                </svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="fh-testimonials-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="fh-testimonials-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="fh-testimonials-grid">
+            <?php foreach ($testimonials as $index => $testimonial): ?>
+            <?php
+                $avatarBg = $buttonPrimaryBg;
+                if ($index === 1) $avatarBg = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)';
+                if ($index === 2) $avatarBg = 'linear-gradient(135deg, #10b981 0%, #34d399 100%)';
+                $starColor = $starColors[$index % count($starColors)];
+            ?>
+            <div class="fh-testimonials-card">
+                <div class="fh-testimonials-stars">
+                    <?php for ($i = 0; $i < 5; $i++): ?>
+                    <svg viewBox="0 0 24 24" fill="<?= $starColor ?>"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                    <?php endfor; ?>
+                </div>
+                
+                <p class="fh-testimonials-quote"><?= htmlspecialchars($testimonial['quote']) ?></p>
+                
+                <div class="fh-testimonials-author">
+                    <div class="fh-testimonials-avatar" style="background: <?= $avatarBg ?>;">
+                        <?= htmlspecialchars($testimonial['initials']) ?>
+                    </div>
+                    <div class="fh-testimonials-author-info">
+                        <div class="fh-testimonials-author-name"><?= htmlspecialchars($testimonial['name']) ?></div>
+                        <div class="fh-testimonials-author-role"><?= htmlspecialchars($testimonial['role']) ?></div>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

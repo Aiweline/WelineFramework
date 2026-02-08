@@ -36,5 +36,10 @@
     <event name="Weline_Framework_Register::register_installer">
         <observer name="Weline_Framework_Router::register_installer" instance="Weline\Framework\Router\Observer\RegisterInstaller" disabled="false" shared="true" sort="0"/>
     </event>
-    
+
+    <!-- URI 处理前：剥离路径开头的 货币/语言 前缀，确保前端路由能匹配（兜底） -->
+    <event name="Weline_Framework_Router::process_uri_before">
+        <observer name="Weline_Framework_Router::strip_currency_locale_prefix" instance="Weline\Framework\Router\Observer\StripCurrencyLocalePrefix" disabled="false" shared="true" sort="-10"/>
+    </event>
+
 </config>

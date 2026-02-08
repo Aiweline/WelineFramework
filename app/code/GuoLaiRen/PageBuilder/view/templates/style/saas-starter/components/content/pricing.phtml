@@ -1,0 +1,157 @@
+<?php
+/**
+ * SaaS Starter - Pricing Section Component
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors
+ * @var array $component_config
+ * 
+ * @fields_start
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:Pricing
+ * content.title => 标题:text:Simple, transparent pricing
+ * content.description => 描述:textarea:No hidden fees. No surprises. Pick a plan that fits your team size and scale as you grow.
+ * group:plans => 定价方案
+ * plans.plan1_name => 方案1名称:text:Starter
+ * plans.plan1_price => 方案1价格:text:$19
+ * plans.plan1_period => 方案1周期:text:/month
+ * plans.plan1_desc => 方案1描述:text:Perfect for small teams getting started
+ * plans.plan1_features => 方案1特性:textarea:Up to 5 team members\r\n10GB storage\r\nBasic analytics\r\nEmail support\r\nAPI access|一行一个特性
+ * plans.plan1_btn_text => 方案1按钮:text:Get Started
+ * plans.plan1_btn_url => 方案1链接:text:#
+ * plans.plan2_name => 方案2名称:text:Pro
+ * plans.plan2_price => 方案2价格:text:$49
+ * plans.plan2_period => 方案2周期:text:/month
+ * plans.plan2_desc => 方案2描述:text:For growing teams that need more power
+ * plans.plan2_features => 方案2特性:textarea:Up to 20 team members\r\n100GB storage\r\nAdvanced analytics\r\nPriority support\r\nCustom integrations\r\nTeam permissions|一行一个特性
+ * plans.plan2_btn_text => 方案2按钮:text:Start Free Trial
+ * plans.plan2_btn_url => 方案2链接:text:#
+ * plans.plan2_popular => 方案2推荐:select:yes|yes,no
+ * plans.plan3_name => 方案3名称:text:Enterprise
+ * plans.plan3_price => 方案3价格:text:Custom
+ * plans.plan3_period => 方案3周期:text:
+ * plans.plan3_desc => 方案3描述:text:For large organizations with custom needs
+ * plans.plan3_features => 方案3特性:textarea:Unlimited team members\r\nUnlimited storage\r\nCustom analytics\r\n24/7 dedicated support\r\nCustom SLA\r\nOn-premise option|一行一个特性
+ * plans.plan3_btn_text => 方案3按钮:text:Contact Sales
+ * plans.plan3_btn_url => 方案3链接:text:/contact
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+if (!isset($colors) || !is_array($colors)) { $colors = []; }
+
+$sectionBg = $colors['pricing_bg'] ?? '#111827';
+$textPrimary = $colors['text_primary'] ?? '#f1f5f9';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$textMuted = $colors['text_muted'] ?? '#64748b';
+$accentPrimary = $colors['accent_primary'] ?? '#10b981';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#34d399';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.03)';
+$borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
+$badgeBg = $colors['badge_bg'] ?? 'rgba(16, 185, 129, 0.15)';
+$badgeBorder = $colors['badge_border'] ?? 'rgba(16, 185, 129, 0.3)';
+$popularBg = $colors['pricing_card_popular_bg'] ?? 'rgba(16, 185, 129, 0.08)';
+$popularBorder = $colors['pricing_card_popular_border'] ?? 'rgba(16, 185, 129, 0.5)';
+
+$badge = $config['content.badge'] ?? 'Pricing';
+$title = $config['content.title'] ?? 'Simple, transparent pricing';
+$description = $config['content.description'] ?? 'No hidden fees. No surprises. Pick a plan that fits your team size and scale as you grow.';
+
+// 构建定价方案
+$plans = [];
+for ($i = 1; $i <= 3; $i++) {
+    $name = $config["plans.plan{$i}_name"] ?? '';
+    if (empty($name)) {
+        $defaults = [
+            1 => ['Starter', '$19', '/month', 'Perfect for small teams', "Up to 5 team members\n10GB storage\nBasic analytics\nEmail support\nAPI access", 'Get Started', '#', 'no'],
+            2 => ['Pro', '$49', '/month', 'For growing teams', "Up to 20 team members\n100GB storage\nAdvanced analytics\nPriority support\nCustom integrations\nTeam permissions", 'Start Free Trial', '#', 'yes'],
+            3 => ['Enterprise', 'Custom', '', 'For large organizations', "Unlimited team members\nUnlimited storage\nCustom analytics\n24/7 dedicated support\nCustom SLA\nOn-premise option", 'Contact Sales', '/contact', 'no'],
+        ];
+        $d = $defaults[$i];
+        $name = $d[0];
+        $price = $d[1]; $period = $d[2]; $desc = $d[3]; $featuresRaw = $d[4]; $btnText = $d[5]; $btnUrl = $d[6]; $popular = $d[7];
+    } else {
+        $price = $config["plans.plan{$i}_price"] ?? '';
+        $period = $config["plans.plan{$i}_period"] ?? '';
+        $desc = $config["plans.plan{$i}_desc"] ?? '';
+        $featuresRaw = $config["plans.plan{$i}_features"] ?? '';
+        $btnText = $config["plans.plan{$i}_btn_text"] ?? 'Get Started';
+        $btnUrl = $config["plans.plan{$i}_btn_url"] ?? '#';
+        $popular = $config["plans.plan{$i}_popular"] ?? 'no';
+    }
+    $featureList = array_filter(array_map('trim', preg_split('/[\r\n]+/', $featuresRaw)));
+    $plans[] = [
+        'name' => $name, 'price' => $price, 'period' => $period, 'desc' => $desc,
+        'features' => $featureList, 'btn_text' => $btnText, 'btn_url' => $btnUrl, 'popular' => $popular === 'yes',
+    ];
+}
+
+$instanceId = 'ss-pricing-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> { background: <?= $sectionBg ?>; padding: 100px 0; }
+        #<?= $instanceId ?> .ss-pricing-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        #<?= $instanceId ?> .ss-pricing-header { text-align: center; margin-bottom: 64px; }
+        #<?= $instanceId ?> .ss-pricing-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: <?= $badgeBg ?>; border: 1px solid <?= $badgeBorder ?>; border-radius: 50px; font-size: 0.875rem; font-weight: 500; color: <?= $accentPrimaryLight ?>; margin-bottom: 20px; }
+        #<?= $instanceId ?> .ss-pricing-title { font-size: 2.5rem; font-weight: 700; color: <?= $textPrimary ?>; margin-bottom: 16px; }
+        #<?= $instanceId ?> .ss-pricing-subtitle { font-size: 1.125rem; color: <?= $textSecondary ?>; max-width: 600px; margin: 0 auto; }
+        #<?= $instanceId ?> .ss-pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+        #<?= $instanceId ?> .ss-pricing-card { background: <?= $cardBg ?>; border: 1px solid <?= $borderLight ?>; border-radius: 20px; padding: 40px 32px; transition: all 0.3s ease; position: relative; }
+        #<?= $instanceId ?> .ss-pricing-card:hover { transform: translateY(-4px); }
+        #<?= $instanceId ?> .ss-pricing-card.popular { background: <?= $popularBg ?>; border-color: <?= $popularBorder ?>; box-shadow: 0 0 40px rgba(16,185,129,0.15); }
+        #<?= $instanceId ?> .ss-pricing-popular-tag { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); padding: 4px 16px; background: <?= $buttonPrimaryBg ?>; color: #fff; font-size: 0.8rem; font-weight: 600; border-radius: 50px; white-space: nowrap; }
+        #<?= $instanceId ?> .ss-pricing-card-name { font-size: 1.25rem; font-weight: 600; color: <?= $textPrimary ?>; margin-bottom: 8px; }
+        #<?= $instanceId ?> .ss-pricing-card-desc { font-size: 0.9rem; color: <?= $textMuted ?>; margin-bottom: 24px; }
+        #<?= $instanceId ?> .ss-pricing-card-price { margin-bottom: 32px; }
+        #<?= $instanceId ?> .ss-pricing-card-price .price { font-size: 3rem; font-weight: 800; color: <?= $textPrimary ?>; }
+        #<?= $instanceId ?> .ss-pricing-card-price .period { font-size: 1rem; color: <?= $textMuted ?>; }
+        #<?= $instanceId ?> .ss-pricing-card-features { list-style: none; padding: 0; margin: 0 0 32px; display: flex; flex-direction: column; gap: 14px; }
+        #<?= $instanceId ?> .ss-pricing-card-features li { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; color: <?= $textSecondary ?>; }
+        #<?= $instanceId ?> .ss-pricing-card-features li::before { content: ''; width: 20px; height: 20px; min-width: 20px; background: rgba(16,185,129,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310b981'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E"); background-size: 14px; background-position: center; background-repeat: no-repeat; }
+        #<?= $instanceId ?> .ss-pricing-card-btn { display: block; width: 100%; padding: 14px; text-align: center; font-size: 1rem; font-weight: 600; border-radius: 12px; transition: all 0.3s ease; text-decoration: none; }
+        #<?= $instanceId ?> .ss-pricing-card-btn.primary { background: <?= $buttonPrimaryBg ?>; color: #fff; box-shadow: 0 4px 20px rgba(16,185,129,0.3); }
+        #<?= $instanceId ?> .ss-pricing-card-btn.primary:hover { box-shadow: 0 8px 30px rgba(16,185,129,0.5); transform: translateY(-2px); }
+        #<?= $instanceId ?> .ss-pricing-card-btn.secondary { background: transparent; color: <?= $accentPrimaryLight ?>; border: 2px solid rgba(16,185,129,0.4); }
+        #<?= $instanceId ?> .ss-pricing-card-btn.secondary:hover { background: rgba(16,185,129,0.1); }
+        @media (max-width: 992px) { #<?= $instanceId ?> .ss-pricing-grid { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; } }
+        @media (max-width: 576px) { #<?= $instanceId ?> .ss-pricing-title { font-size: 1.75rem; } }
+    </style>
+    
+    <div class="ss-pricing-container">
+        <div class="ss-pricing-header">
+            <div class="ss-pricing-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                <?= htmlspecialchars($badge) ?>
+            </div>
+            <h2 class="ss-pricing-title"><?= htmlspecialchars($title) ?></h2>
+            <p class="ss-pricing-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+        
+        <div class="ss-pricing-grid">
+            <?php foreach ($plans as $plan): ?>
+            <div class="ss-pricing-card<?= $plan['popular'] ? ' popular' : '' ?>">
+                <?php if ($plan['popular']): ?>
+                <span class="ss-pricing-popular-tag">Most Popular</span>
+                <?php endif; ?>
+                <h3 class="ss-pricing-card-name"><?= htmlspecialchars($plan['name']) ?></h3>
+                <p class="ss-pricing-card-desc"><?= htmlspecialchars($plan['desc']) ?></p>
+                <div class="ss-pricing-card-price">
+                    <span class="price"><?= htmlspecialchars($plan['price']) ?></span>
+                    <span class="period"><?= htmlspecialchars($plan['period']) ?></span>
+                </div>
+                <ul class="ss-pricing-card-features">
+                    <?php foreach ($plan['features'] as $feature): ?>
+                    <li><?= htmlspecialchars($feature) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                <a href="<?= htmlspecialchars($plan['btn_url']) ?>" class="ss-pricing-card-btn <?= $plan['popular'] ? 'primary' : 'secondary' ?>">
+                    <?= htmlspecialchars($plan['btn_text']) ?>
+                </a>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

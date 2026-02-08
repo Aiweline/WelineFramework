@@ -15,6 +15,8 @@ $timezones = $timezones ?? [];
 $currencies = $currencies ?? [];
 $selected_currencies = $selected_currencies ?? [];
 $selected_languages = $selected_languages ?? [];
+$domain_options = $domain_options ?? [];
+$address_lines = $address_lines ?? '';
 ?>
 <!DOCTYPE html>
 <!--
@@ -102,25 +104,40 @@ $selected_languages = $selected_languages ?? [];
                         <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
                     <?php endif; ?>
 
+                    <div class="col-12 mb-3">
+                        <label for="domain_values" class="form-label"><lang>选择域名</lang></label>
+                        <select class="form-select" name="domain_values[]" id="domain_values" multiple size="6">
+                            <?php foreach ($domain_options as $group): ?>
+                                <optgroup label="<?= htmlspecialchars($group['label'] ?? '') ?>">
+                                    <?php foreach ($group['options'] ?? [] as $opt): ?>
+                                        <option value="<?= htmlspecialchars($opt['value'] ?? '') ?>"><?= htmlspecialchars($opt['label'] ?? $opt['value']) ?></option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text-hint"><lang>从域名池多选域名；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。</lang></div>
+                    </div>
+
                     <div class="col-4 mb-3">
-                        <label for="name" class="form-label">网站名称</label>
+                        <label for="name" class="form-label"><lang>网站名称</lang></label>
                         <input type="text" class="form-control" id="name" name="name"
-                               value="<?= $website['name'] ?? '' ?>" required>
-                        <div class="invalid-feedback">请输入网站名称</div>
+                               value="<?= htmlspecialchars($website['name'] ?? '') ?>" required>
+                        <div class="invalid-feedback"><lang>请输入网站名称</lang></div>
                     </div>
 
                     <div class="col-4 mb-3">
-                        <label for="code" class="form-label">网站代码</label>
+                        <label for="code" class="form-label"><lang>网站代码</lang></label>
                         <input type="text" class="form-control" id="code" name="code"
-                               value="<?= $website['code'] ?? '' ?>" required>
-                        <div class="invalid-feedback">请输入网站代码</div>
+                               value="<?= htmlspecialchars($website['code'] ?? '') ?>" required>
+                        <div class="invalid-feedback"><lang>请输入网站代码</lang></div>
+                        <div class="form-text-hint"><lang>可由选择域名自动生成（域名转下划线），可修改</lang></div>
                     </div>
 
-                    <div class="col-4 mb-3">
-                        <label for="url" class="form-label">网站URL</label>
-                        <input type="url" class="form-control" id="url" name="url"
-                               value="<?= $website['url'] ?? '' ?>" required>
-                        <div class="invalid-feedback">请输入有效的URL</div>
+                    <div class="col-12 mb-3">
+                        <label for="address_lines" class="form-label"><lang>网站地址</lang></label>
+                        <textarea class="form-control" name="address_lines" id="address_lines" rows="5" required placeholder="www.example.com&#10;www.example.com/shop&#10;shop.example.com"><?= htmlspecialchars($address_lines) ?></textarea>
+                        <div class="invalid-feedback"><lang>请至少填写一行地址</lang></div>
+                        <div class="form-text-hint"><lang>每行一个地址：可只填域名，或 域名/子路径（如 /shop）。同一域名被多站使用时子路径不能重复，否则会提示已被某站点使用。</lang></div>
                     </div>
 
                     <div class="col-4 mb-3">
@@ -367,6 +384,31 @@ $selected_languages = $selected_languages ?? [];
         if (timezoneSelect.value) {
             timezoneSearch.value = timezoneSelect.options[timezoneSelect.selectedIndex].textContent;
         }
+    })();
+
+    // 选择域名：自动填充网站代码与网站地址
+    (function() {
+        var domainSelect = document.getElementById('domain_values');
+        var codeInput = document.getElementById('code');
+        var addressLines = document.getElementById('address_lines');
+        if (!domainSelect || !codeInput || !addressLines) return;
+
+        function domainToCode(domain) {
+            return (domain || '').toLowerCase().trim().replace(/\./g, '_');
+        }
+
+        domainSelect.addEventListener('change', function() {
+            var selected = [];
+            for (var i = 0; i < domainSelect.options.length; i++) {
+                if (domainSelect.options[i].selected) {
+                    selected.push(domainSelect.options[i].value);
+                }
+            }
+            if (selected.length > 0) {
+                codeInput.value = domainToCode(selected[0]);
+                addressLines.value = selected.join('\n');
+            }
+        });
     })();
 </script>
 <w:scope url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>

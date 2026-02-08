@@ -16,6 +16,9 @@ Register::register(
     [
         'Weline_Framework',
         'Weline_Frontend',
+        'Weline_Backend',
+        'Weline_Websites',
+        'Weline_Ai',
         'GuoLaiRen_PageBuilder',
     ]
 );

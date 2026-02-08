@@ -2,6 +2,13 @@
 
 namespace Weline\Taglib\example;
 
+// 此文件为纯示例文件，不参与反射编译和自动加载
+// 标签依赖管理示例 - 仅供文档参考
+if (defined('TAGLIB_EXAMPLE_LOADED')) {
+    return;
+}
+define('TAGLIB_EXAMPLE_LOADED', true);
+
 use Weline\Taglib\TaglibInterface;
 
 /**

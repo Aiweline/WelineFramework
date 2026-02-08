@@ -50,6 +50,7 @@ class Router implements RouterInterface
         if (!empty($rule['module'])) {
             return;
         }
+        
         // 2. 标准化路径：去掉首尾斜杠
         $path = trim($path, '/');
 
@@ -62,6 +63,7 @@ class Router implements RouterInterface
         if (!str_starts_with($workingPath, $prefix)) {
             // 尝试查找 catalog/category/ 在路径中的位置
             $catalogPos = strpos($workingPath, $prefix);
+            
             if ($catalogPos !== false) {
                 // 提取 catalog/category/ 及其后面的部分
                 $workingPath = substr($workingPath, $catalogPos);
@@ -74,6 +76,7 @@ class Router implements RouterInterface
         // 4. 取 catalog/category/ 后面的全部作为 handle（支持层级路径，如 men/shirts）
         $categoryHandle = substr($workingPath, strlen($prefix));
         $categoryHandle = trim($categoryHandle, '/');
+        
         if ($categoryHandle === '') {
             return;
         }
@@ -97,17 +100,19 @@ class Router implements RouterInterface
      * @return bool
      */
     private static function categoryHandleExists(string &$categoryHandle): bool
-    {   
+    {
         // 1. 首先检查请求内静态缓存（最快）
         if (isset(self::$urlKeyCache[$categoryHandle])) {
             return self::$urlKeyCache[$categoryHandle];
         }
+        
         // 2. 检查跨请求缓存（文件缓存或Redis缓存）
         // 注意：由于支持suffix匹配，缓存键需要基于原始handle，但查询逻辑会尝试匹配完整路径
         // 暂时跳过缓存，直接查询数据库，确保能够匹配完整路径的handle
         // TODO: 优化缓存策略，支持suffix匹配
         $crossRequestCacheKey = self::CACHE_KEY_PREFIX . md5($categoryHandle);
         $cachedResult = boolval(self::getCrossRequestCache()->get($crossRequestCacheKey));
+        
         // 暂时跳过缓存，直接查询数据库（因为需要支持suffix匹配）
         if ($cachedResult) {
             // 缓存命中，更新静态缓存并返回
@@ -119,6 +124,7 @@ class Router implements RouterInterface
         try {
             /** @var Category $categoryModel */
             $categoryModel = ObjectManager::getInstance(Category::class);
+            
             $category = clone $categoryModel;
 
             // 查询启用的分类（只查询启用的分类），使用 handle 字段匹配

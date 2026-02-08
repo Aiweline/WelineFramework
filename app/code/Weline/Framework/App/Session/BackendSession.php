@@ -18,7 +18,8 @@ class BackendSession extends \Weline\Framework\Session\Session
     public function __init()
     {
         parent::__init();
-        if(!CLI){
+        // WLS 模式下 CLI=true 但需要处理 HTTP 请求，通过 REQUEST_URI 检测
+        if (!CLI || isset($_SERVER['REQUEST_URI'])) {
             $this->setType('backend');
         }
     }

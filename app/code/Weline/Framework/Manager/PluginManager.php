@@ -25,11 +25,12 @@ class PluginManager implements ManagerInterface
     {
     }
 
-    public static function getInstance($class = '')
+    public static function getInstance(string $class = ''): mixed
     {
         if (empty($class)) {
             return isset(self::$instance) ? self::$instance : new self();
         }
+        return null;
     }
 
     public function register()

@@ -46,7 +46,6 @@ class View extends BaseController
         // 优先使用 handle 参数（从Router重写或URL参数）
         $handle = $this->request->getParam('handle') ?? $this->request->getGet('handle');
         $categoryId = (int)($this->request->getParam('id') ?? $this->request->getGet('id') ?? 0);
-        
         $category = null;
         
         // 优先通过 handle 获取分类

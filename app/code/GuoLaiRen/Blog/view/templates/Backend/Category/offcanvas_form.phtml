@@ -1,0 +1,173 @@
+<?php
+/**
+ * 博客分类 Offcanvas 表单（iframe 内加载）
+ *
+ * @var \GuoLaiRen\Blog\Model\Category|null $category
+ * @var string $action
+ * @var array  $parent_options
+ * @var array  $sites
+ */
+
+use GuoLaiRen\Blog\Model\Category;
+
+$isEdit = $category && $category->getId();
+$sites  = $this->getData('sites') ?? [];
+$title  = $isEdit ? __('编辑分类') : __('新建分类');
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?></title>
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
+    <style>
+        body { padding: 1rem; background: #fff; }
+    </style>
+</head>
+<body>
+
+<template>Weline_Component::message.phtml</template>
+
+<form id="offcanvasForm" action="<?= htmlspecialchars($action) ?>" method="post">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="name" class="form-label">
+                <lang>分类名称</lang> <span class="text-danger">*</span>
+            </label>
+            <input type="text" class="form-control" id="name" name="name"
+                   value="<?= htmlspecialchars($category ? $category->getData(Category::fields_NAME) : '') ?>"
+                   required>
+        </div>
+        <div class="col-md-6">
+            <label for="slug" class="form-label">
+                <lang>URL别名</lang> <span class="text-danger">*</span>
+            </label>
+            <input type="text" class="form-control" id="slug" name="slug"
+                   value="<?= htmlspecialchars($category ? $category->getData(Category::fields_SLUG) : '') ?>"
+                   pattern="[a-z0-9\-]+"
+                   title="<?= __('只能包含小写字母、数字和连字符') ?>"
+                   required>
+            <small class="text-muted"><lang>只能包含小写字母、数字和连字符</lang></small>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <label for="site_id" class="form-label">
+                <lang>所属站点</lang> <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" id="site_id" name="site_id" required>
+                <option value=""><lang>请选择</lang></option>
+                <?php foreach ($sites as $site): ?>
+                    <option value="<?= $site['site_id'] ?>"
+                        <?= ($category && (int)$category->getData(Category::fields_SITE_ID) == $site['site_id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($site['site_name']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="parent_id" class="form-label">
+                <lang>父级分类</lang>
+            </label>
+            <select class="form-select" id="parent_id" name="parent_id">
+                <option value="0"><lang>无（顶级分类）</lang></option>
+                <?php foreach ($parent_options as $id => $name): ?>
+                    <option value="<?= $id ?>"
+                        <?= ($category && $category->getData(Category::fields_PARENT_ID) == $id) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($name) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <label for="sort_order" class="form-label"><lang>排序</lang></label>
+            <input type="number" class="form-control" id="sort_order" name="sort_order"
+                   value="<?= (int)($category ? $category->getData(Category::fields_SORT_ORDER) : 0) ?>"
+                   min="0">
+            <small class="text-muted"><lang>数字越小越靠前</lang></small>
+        </div>
+        <div class="col-md-6">
+            <label for="status" class="form-label"><lang>状态</lang></label>
+            <select class="form-select" id="status" name="status">
+                <?php foreach (Category::getStatusOptions() as $value => $label): ?>
+                    <option value="<?= $value ?>"
+                        <?= ($category && $category->getData(Category::fields_STATUS) == $value) ? 'selected' : '' ?>
+                        <?= (!$category && $value == Category::STATUS_ENABLED) ? 'selected' : '' ?>>
+                        <?= $label ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <label for="description" class="form-label"><lang>分类描述</lang></label>
+        <textarea class="form-control" id="description" name="description" rows="2"><?= htmlspecialchars($category ? $category->getData(Category::fields_DESCRIPTION) : '') ?></textarea>
+    </div>
+
+    <div class="mt-3">
+        <label for="cover_image" class="form-label"><?= __('封面图片') ?></label>
+        <?php $cat_cover_image = $category ? $category->getData(Category::fields_COVER_IMAGE) : ''; ?>
+        <input type="hidden" id="cover_image" name="cover_image"
+               value="<?= htmlspecialchars($cat_cover_image) ?>">
+        <file-manager target="#cover_image"
+                      title="选择封面图片"
+                      vars="cat_cover_image"
+                      path="blog/categories/"
+                      value="cat_cover_image"
+                      multi="0"
+                      ext="jpg,jpeg,png,gif,webp"
+                      w="100"
+                      h="60"/>
+        <small class="text-muted"><?= __('点击上方按钮选择或上传封面图片') ?></small>
+    </div>
+
+    <hr>
+    <h6 class="mb-3"><lang>SEO设置</lang></h6>
+
+    <div class="mb-3">
+        <label for="meta_title" class="form-label"><lang>SEO标题</lang></label>
+        <input type="text" class="form-control" id="meta_title" name="meta_title"
+               value="<?= htmlspecialchars($category ? $category->getData(Category::fields_META_TITLE) : '') ?>">
+        <small class="text-muted"><lang>留空则使用分类名称</lang></small>
+    </div>
+    <div class="mb-3">
+        <label for="meta_description" class="form-label"><lang>SEO描述</lang></label>
+        <textarea class="form-control" id="meta_description" name="meta_description" rows="2"><?= htmlspecialchars($category ? $category->getData(Category::fields_META_DESCRIPTION) : '') ?></textarea>
+    </div>
+    <div class="mb-3">
+        <label for="meta_keywords" class="form-label"><lang>SEO关键词</lang></label>
+        <input type="text" class="form-control" id="meta_keywords" name="meta_keywords"
+               value="<?= htmlspecialchars($category ? $category->getData(Category::fields_META_KEYWORDS) : '') ?>"
+               placeholder="<?= __('关键词1, 关键词2, 关键词3') ?>">
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">
+        <i class="mdi mdi-content-save me-1"></i>
+        <?= $isEdit ? __('保存分类') : __('创建分类') ?>
+    </button>
+</form>
+
+<script>
+// 自动生成 URL 别名
+document.getElementById('name').addEventListener('blur', function() {
+    var slugInput = document.getElementById('slug');
+    if (slugInput.value === '') {
+        var name = this.value.toLowerCase()
+            .replace(/[^a-z0-9\u4e00-\u9fa5\s-]/g, '')
+            .replace(/[\s]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        slugInput.value = name.replace(/[\u4e00-\u9fa5]/g, '');
+    }
+});
+</script>
+
+</body>
+</html>

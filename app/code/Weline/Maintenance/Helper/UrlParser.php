@@ -36,17 +36,17 @@ class UrlParser
         $server = $_SERVER;
         $server['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
         
-        // 获取API area前缀，用于URL匹配和生成
-        $apiArea = \Weline\Framework\App\Env::get('api');
-        if (empty($apiArea)) {
+        // 获取 REST API 前缀，用于URL匹配和生成（使用新的 area_routes 配置）
+        $restFrontendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend');
+        if (empty($restFrontendPrefix)) {
             $server['WELINE_API_AREA'] = 'api';
             $server['WELINE_API_AREA_PREFIX'] = '/api/rest/';
         } else {
-            $server['WELINE_API_AREA'] = strtolower($apiArea);
-            $server['WELINE_API_AREA_PREFIX'] = '/' . strtolower($apiArea) . '/';
+            $server['WELINE_API_AREA'] = strtolower($restFrontendPrefix);
+            $server['WELINE_API_AREA_PREFIX'] = '/' . strtolower($restFrontendPrefix) . '/';
         }
-        $server['WELINE_API_ADMIN_AREA'] = \Weline\Framework\App\Env::get('api_admin') ?: '';
-        $server['WELINE_BACKEND_AREA'] = \Weline\Framework\App\Env::get('admin') ?: 'admin';
+        $server['WELINE_API_ADMIN_AREA'] = \Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: '';
+        $server['WELINE_BACKEND_AREA'] = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_AREA'] = 'frontend';
         $server['WELINE_USER_CURRENCY'] = $_COOKIE['WELINE_USER_CURRENCY'] ?? 'CNY';
@@ -105,22 +105,22 @@ class UrlParser
         $hasArea = false;
         // 使用不区分大小写的比较，因为配置值可能是小写，但 URL 中可能是原始大小写
         if (strcasecmp($firstSegment, $apiArea) === 0) {
-            $result['area'] = 'api';
-            $server['WELINE_AREA'] = 'api';
+            $result['area'] = 'rest_frontend';
+            $server['WELINE_AREA'] = 'rest_frontend';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_API_AREA_PREFIX'] ?? '/api/rest/';
             $result['area_route'] = $server['WELINE_AREA_ROUTE'];
             array_shift($segments);
             $hasArea = true;
         } elseif (!empty($apiAdminArea) && strcasecmp($firstSegment, $apiAdminArea) === 0) {
-            $result['area'] = 'api_admin';
-            $server['WELINE_AREA'] = 'api_admin';
+            $result['area'] = 'rest_backend';
+            $server['WELINE_AREA'] = 'rest_backend';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_API_ADMIN_AREA'];
             $result['area_route'] = $server['WELINE_AREA_ROUTE'];
             array_shift($segments);
             $hasArea = true;
         } elseif (strcasecmp($firstSegment, $adminArea) === 0) {
-            $result['area'] = 'admin';
-            $server['WELINE_AREA'] = 'admin';
+            $result['area'] = 'backend';
+            $server['WELINE_AREA'] = 'backend';
             $server['WELINE_AREA_ROUTE'] = $server['WELINE_BACKEND_AREA'];
             $result['area_route'] = $server['WELINE_AREA_ROUTE'];
             array_shift($segments);
@@ -267,7 +267,7 @@ class UrlParser
     public static function isApiRequest(string $uri): bool
     {
         $parsed = self::parse($uri);
-        return $parsed['area'] === 'api' || $parsed['area'] === 'api_admin';
+        return $parsed['area'] === 'rest_frontend' || $parsed['area'] === 'rest_backend';
     }
 
     /**
@@ -279,7 +279,7 @@ class UrlParser
     public static function isBackendRequest(string $uri): bool
     {
         $parsed = self::parse($uri);
-        return $parsed['area'] === 'admin';
+        return $parsed['area'] === 'backend';
     }
 
     /**

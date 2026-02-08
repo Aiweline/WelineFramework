@@ -1,0 +1,205 @@
+{
+    "template": "fitness-pro",
+    "name": "Fitness Pro",
+    "description": "健身运动落地页模板，活力橙色主题，适合健身房、运动品牌、健康应用推广",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "description": "页面顶部导航区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["header"],
+            "default_component": "header-nav"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "description": "页面主要内容区域",
+            "multiple": true,
+            "required": false,
+            "accepts": ["content", "widget"],
+            "default_components": ["hero", "programs", "stats", "testimonials", "cta-banner", "faq"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "description": "页面底部链接和版权区域",
+            "multiple": false,
+            "required": true,
+            "accepts": ["footer"],
+            "default_component": "footer-links"
+        }
+    },
+    "components": {
+        "header-nav": {
+            "name": "导航栏",
+            "name_en": "Navigation Header",
+            "description": "顶部导航，支持Logo、导航链接和CTA按钮",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-menu-button-wide",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["header", "navigation", "cta"],
+            "file": "header/nav.phtml",
+            "default_config": {
+                "logo.display": "yes",
+                "logo.text": "FitZone",
+                "logo.width": 40,
+                "navigation.show_cta": "yes",
+                "navigation.cta_text": "Join Now",
+                "navigation.cta_url": "#cta"
+            }
+        },
+        "hero": {
+            "name": "首屏英雄区",
+            "name_en": "Hero Section",
+            "description": "首屏大图区域，包含标题、描述和CTA按钮",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-badge-hd",
+            "sort_order": 10,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "cta", "style"],
+            "file": "content/hero.phtml",
+            "default_config": {
+                "content.badge": "Transform Your Body",
+                "content.title": "Unleash Your Full Potential",
+                "cta.primary_text": "Start Training",
+                "cta.secondary_text": "View Programs"
+            }
+        },
+        "programs": {
+            "name": "训练项目",
+            "name_en": "Programs Section",
+            "description": "展示健身课程和训练项目",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-calendar-check",
+            "sort_order": 20,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "programs", "style"],
+            "file": "content/programs.phtml",
+            "default_config": {
+                "content.badge": "Our Programs",
+                "content.title": "Train Like a Pro"
+            }
+        },
+        "stats": {
+            "name": "数据成就",
+            "name_en": "Stats Section",
+            "description": "展示成就数据和社区规模",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-graph-up",
+            "sort_order": 30,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "stats", "style"],
+            "file": "content/stats.phtml",
+            "default_config": {
+                "content.badge": "Our Results",
+                "content.title": "Numbers That Speak"
+            }
+        },
+        "testimonials": {
+            "name": "用户评价",
+            "name_en": "Testimonials",
+            "description": "学员/会员评价展示",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-chat-quote",
+            "sort_order": 40,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "testimonials", "style"],
+            "file": "content/testimonials.phtml",
+            "default_config": {
+                "content.badge": "Success Stories",
+                "content.title": "What Our Members Say"
+            }
+        },
+        "cta-banner": {
+            "name": "行动号召",
+            "name_en": "CTA Banner",
+            "description": "引导用户加入或注册",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-megaphone",
+            "sort_order": 50,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "buttons", "style"],
+            "file": "content/cta-banner.phtml",
+            "default_config": {
+                "content.title": "Start Your Transformation Today",
+                "buttons.primary_text": "Join Now",
+                "buttons.secondary_text": "Book Free Trial"
+            }
+        },
+        "faq": {
+            "name": "常见问题",
+            "name_en": "FAQ Section",
+            "description": "FAQ手风琴展示",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-question-circle",
+            "sort_order": 60,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["faq", "style"],
+            "file": "content/faq.phtml",
+            "default_config": {
+                "content.badge": "FAQ",
+                "content.title": "Frequently Asked Questions"
+            }
+        },
+        "footer-links": {
+            "name": "页脚链接",
+            "name_en": "Footer with Links",
+            "description": "底部链接和版权",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "icon": "bi-layout-text-window-reverse",
+            "sort_order": 1,
+            "is_default": true,
+            "compatible_styles": ["*"],
+            "config_groups": ["style", "layout", "content"],
+            "file": "footer/links.phtml",
+            "default_config": {
+                "brand.name": "FitZone",
+                "brand.description": "Transform your body and mind with expert-led fitness programs.",
+                "copyright.text": "All rights reserved."
+            }
+        }
+    },
+    "nav_config": {
+        "description": "导航可使用子页面配置",
+        "use_subpages": true,
+        "subpage_types": ["link", "anchor", "page"],
+        "default_items": [
+            {"text": "Programs", "href": "#programs", "type": "anchor"},
+            {"text": "Results", "href": "#stats", "type": "anchor"},
+            {"text": "Reviews", "href": "#testimonials", "type": "anchor"},
+            {"text": "FAQ", "href": "#faq", "type": "anchor"}
+        ]
+    },
+    "config_inheritance": {
+        "description": "组件可以继承模板的配置项",
+        "shared_configs": ["styles", "texts", "color_scheme"]
+    }
+}

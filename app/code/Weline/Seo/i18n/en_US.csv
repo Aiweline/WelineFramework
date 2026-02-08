@@ -22,7 +22,7 @@
 "缺少 Service Account 配置（client_email 或 private_key）","缺少 Service Account 配置（client_email 或 private_key）"
 "获取 Google Access Token 失败","获取 Google Access Token 失败"
 "Indexing API 请求失败：%{1}","Indexing API 请求失败：%{1}"
-未知错误,未知错误
+未知错误,"Unknown error"
 "权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者","权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者"
 "Google Indexing API 错误：%{1}","Google Indexing API 错误：%{1}"
 "已成功通过 Indexing API 通知 Google 更新 URL","已成功通过 Indexing API 通知 Google 更新 URL"
@@ -41,7 +41,6 @@ SEO账户配置,"SEO Account Configuration"
 账户ID无效,账户ID无效
 获取站点列表失败：%{1},获取站点列表失败：%{1}
 未接收到请求数据,未接收到请求数据
-无效的请求数据格式,无效的请求数据格式
 "绑定了 %{1} 个站点，解绑了 %{2} 个站点","绑定了 %{1} 个站点，解绑了 %{2} 个站点"
 "成功绑定 %{1} 个站点","成功绑定 %{1} 个站点"
 "成功解绑 %{1} 个站点","成功解绑 %{1} 个站点"
@@ -75,12 +74,32 @@ SEO主体管理,"SEO Subject Management"
 商品,Product
 站点,Website
 加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
-"已同步 %{1} 个URL，生成 %{2} 个sitemap文件","已同步 %{1} 个URL，生成 %{2} 个sitemap文件"
-请选择站点,"Please select a website"
-Sitemap生成成功,"Sitemap generated successfully"
 生成Sitemap失败：%{1},生成Sitemap失败：%{1}
 生成失败：%{1},生成失败：%{1}
 "成功生成 %{1} 个平台的 sitemap，共 %{2} 个文件","成功生成 %{1} 个平台的 sitemap，共 %{2} 个文件"
+概览,Overview
+"同步 URL 总数：%{1}","Total URLs synced: %{1}"
+生成站点数：%{1},"Sites generated: %{1}"
+生成文件总数：%{1},"Total files generated: %{1}"
+"URL Provider 数：%{1}","URL Providers: %{1}"
+"Provider 同步明细","Provider Sync Details"
+未知,Unknown
+"%{1} 个URL","%{1} URLs"
+各站点生成明细,"Site Generation Details"
+"站点 #%{1}：%{2}","Site #%{1}: %{2}"
+生成失败,"Generation failed"
+"站点 #%{1}：%{2} 个URL，%{3} 个平台，%{4} 个文件","Site #%{1}: %{2} URLs, %{3} platforms, %{4} files"
+处理站点数：%{1},"Sites processed: %{1}"
+成功：%{1}，失败：%{2},"Success: %{1}, Failed: %{2}"
+"URL 总数：%{1}","Total URLs: %{1}"
+各站点明细,"Site Details"
+"站点 #%{1} 生成失败：%{2}","Site #%{1} generation failed: %{2}"
+"站点 #%{1} 生成完毕","Site #%{1} generation completed"
+"URL 数量：%{1}","URL count: %{1}"
+平台数量：%{1},"Platform count: %{1}"
+生成文件数：%{1},"Files generated: %{1}"
+平台明细,"Platform Details"
+"%{1} 个文件","%{1} files"
 站点ID无效,站点ID无效
 站点不存在,站点不存在
 "绑定配置保存成功，共绑定 %{1} 个SEO账户","绑定配置保存成功，共绑定 %{1} 个SEO账户"
@@ -109,10 +128,24 @@ SEO任务处理完成,SEO任务处理完成
 当SEO任务处理完成时触发，允许其他模块监听任务完成事件。,当SEO任务处理完成时触发，允许其他模块监听任务完成事件。
 SEO趋势数据同步完成,SEO趋势数据同步完成
 当趋势数据同步任务完成时触发，允许其他模块监听趋势同步结果。,当趋势数据同步任务完成时触发，允许其他模块监听趋势同步结果。
+百度站长平台,百度站长平台
+"缺少百度站点 URL","缺少百度站点 URL"
+"URL 列表为空","URL 列表为空"
+"已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}"
+"百度 URL 提交失败","百度 URL 提交失败"
+"百度站长平台 API Token","百度站长平台 API Token"
+"已在百度站长平台验证的站点 URL","已在百度站长平台验证的站点 URL"
+"Bing API 请求失败：%{1}","Bing API 请求失败：%{1}"
+"Bing API 返回错误码：%{1}","Bing API 返回错误码：%{1}"
+"已在 Bing Webmaster Tools 验证的站点 URL","已在 Bing Webmaster Tools 验证的站点 URL"
+"已成功向 Bing 提交 %{1} 个 URL","已成功向 Bing 提交 %{1} 个 URL"
+"缺少 IndexNow Key","缺少 IndexNow Key"
+"已通过 IndexNow 提交 %{1} 个 URL","已通过 IndexNow 提交 %{1} 个 URL"
+"IndexNow 返回错误码：%{1}","IndexNow 返回错误码：%{1}"
 "已向Google Indexing API 提交 %{success} 个URL","已向Google Indexing API 提交 %{success} 个URL"
 "向Google Indexing API 提交URL失败","向Google Indexing API 提交URL失败"
 "Sitemap URL为空","Sitemap URL为空"
-"Google Service Account 配置缺失或格式错误","Google Service Account 配置缺失或格式错误"
+"Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）","Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）"
 "获取 Google Indexing API 访问令牌失败","获取 Google Indexing API 访问令牌失败"
 "URL 已提交给 Google Indexing API","URL 已提交给 Google Indexing API"
 "服务器未启用 cURL 扩展，无法调用 Google Indexing API","服务器未启用 cURL 扩展，无法调用 Google Indexing API"
@@ -400,6 +433,11 @@ Sitemap提交,"Sitemap Submit"
 共,共
 个账户,个账户
 过滤条件,Filter
+"已同步 %{1} 个URL，生成 %{2} 个sitemap文件","已同步 %{1} 个URL，生成 %{2} 个sitemap文件"
+Sitemap生成成功,"Sitemap generated successfully"
+无效的请求数据格式,无效的请求数据格式
+请选择站点,"Please select a website"
+"Google Service Account 配置缺失或格式错误","Google Service Account 配置缺失或格式错误"
 URL定时推送,URL定时推送
 Sitemap定时提交,Sitemap定时提交
 开启,开启

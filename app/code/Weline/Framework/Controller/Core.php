@@ -32,9 +32,10 @@ class Core implements Data\DataInterface
 
     public function __init()
     {
-        if (!isset($this->request)) {
-            $this->request = ObjectManager::getInstance(Request::class);
-        }
+        // WLS 模式下每个请求使用新的 Request 对象
+        // 必须每次都从 ObjectManager 获取最新的 Request，不能使用缓存的实例
+        // 因为 WlsRuntime 会在每个请求开始时调用 ObjectManager::setInstance() 设置新的 Request
+        $this->request = ObjectManager::getInstance(Request::class);
         $this->getObjectManager();
     }
 
@@ -54,6 +55,10 @@ class Core implements Data\DataInterface
     public function __setModuleInfo(mixed $module): static
     {
         $this->_module = $module;
+        // WLS 模式下：Router 每次分发前都会调用此方法
+        // 必须刷新 request 引用，因为 WlsRuntime 已在 ObjectManager 中注册了新的 WlsRequest
+        // 而控制器单例的 __init() 只在首次创建时调用一次，$this->request 会指向旧的 WlsRequest
+        $this->request = ObjectManager::getInstance(Request::class);
         return $this;
     }
 

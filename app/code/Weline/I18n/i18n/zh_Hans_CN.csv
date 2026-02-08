@@ -285,9 +285,6 @@ CSV词典导入失败,CSV词典导入失败
 翻译窗口,翻译窗口
 刷新,刷新
 提交,提交
-Weline_I18n:语言包读取,Weline_I18n:语言包读取
-Weline_I18n:语言包Locals读取,Weline_I18n:语言包Locals读取
-Weline_I18n:语言包Locals翻译词典读取,Weline_I18n:语言包Locals翻译词典读取
 成功推送收集词汇！推送消息：%{msg},成功推送收集词汇！推送消息：%{msg}
 推送收集词汇失败！推送消息：%{1},推送收集词汇失败！推送消息：%{1}
 切换货币,切换货币
@@ -454,6 +451,9 @@ I18n翻译,I18n翻译
 是否禁用,是否禁用
 国际化支持：翻译管理多种语言词典.,国际化支持：翻译管理多种语言词典.
 国旗,国旗
+Weline_I18n:语言包读取,Weline_I18n:语言包读取
+Weline_I18n:语言包Locals读取,Weline_I18n:语言包Locals读取
+Weline_I18n:语言包Locals翻译词典读取,Weline_I18n:语言包Locals翻译词典读取
 搜索菜单,搜索菜单
 搜索菜单...,搜索菜单...
 常用菜单,常用菜单

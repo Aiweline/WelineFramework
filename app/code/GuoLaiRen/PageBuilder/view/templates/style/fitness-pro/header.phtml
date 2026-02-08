@@ -1,0 +1,192 @@
+<?php
+/**
+ * Fitness Pro 模板 - Header
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:FitZone
+ * logo.url => Logo图片URL:text:
+ * logo.width => Logo宽度:number:36|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 背景颜色:color:rgba(15, 10, 7, 0.95)
+ * navigation.text_color => 文字颜色:color:#fef3c7
+ * navigation.link_hover_color => 链接悬停颜色:color:#fb923c
+ * navigation.links => 导航链接:textarea:Programs=>#programs\r\nResults=>#stats\r\nReviews=>#testimonials\r\nFAQ=>#faq|格式：名称=>链接，一行一个
+ * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
+ * navigation.cta_text => CTA按钮文字:text:Join Now
+ * navigation.cta_url => CTA按钮链接:text:#cta
+ * 
+ * group:pixel => 像素统计:📊访客像素统计配置:配置访客像素统计功能
+ * pixel.enabled => 启用像素统计:select:yes|yes,no
+ * pixel.name => 像素名称:text:{handle}:用于区分不同页面的统计来源
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+$templateCode = $page ? $page->getData('style') : 'fitness-pro';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'fitness-pro';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+if (!function_exists('fp_color')) {
+    function fp_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+
+if (!function_exists('fp_getConfig')) {
+    function fp_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+$logoDisplay = fp_getConfig($styleSettings, 'logo.display', 'yes');
+$logoText = fp_getConfig($styleSettings, 'logo.text', 'FitZone');
+$logoUrl = fp_getConfig($styleSettings, 'logo.url', '');
+$logoWidth = fp_getConfig($styleSettings, 'logo.width', '36');
+
+$navDisplay = fp_getConfig($styleSettings, 'navigation.display', 'yes');
+$navBgColor = fp_getConfig($styleSettings, 'navigation.bg_color', 'rgba(15, 10, 7, 0.95)');
+$navTextColor = fp_getConfig($styleSettings, 'navigation.text_color', '#fef3c7');
+$navLinkHoverColor = fp_getConfig($styleSettings, 'navigation.link_hover_color', '#fb923c');
+$navLinksRaw = fp_getConfig($styleSettings, 'navigation.links', "Programs=>#programs\nResults=>#stats\nReviews=>#testimonials\nFAQ=>#faq");
+$showCta = fp_getConfig($styleSettings, 'navigation.show_cta', 'yes');
+$ctaText = fp_getConfig($styleSettings, 'navigation.cta_text', 'Join Now');
+$ctaUrl = fp_getConfig($styleSettings, 'navigation.cta_url', '#cta');
+
+$accentPrimary = fp_color($colors, 'accent_primary', '#f97316');
+$buttonPrimaryBg = fp_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)');
+
+$navLinks = [];
+$lines = preg_split('/[\r\n]+/', $navLinksRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('=>', $line, 2);
+    $name = trim($parts[0] ?? '');
+    $url = trim($parts[1] ?? '#');
+    if (!empty($name)) {
+        $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+?>
+
+<?php if ($navDisplay === 'yes'): ?>
+<style>
+    .fp-header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; }
+    .fp-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    .fp-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
+    .fp-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .fp-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
+    .fp-logo-text { font-size: 1.25rem; font-weight: 700; }
+    .fp-nav { display: flex; align-items: center; gap: 32px; }
+    .fp-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
+    .fp-nav-link { color: <?= htmlspecialchars($navTextColor) ?>; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: color 0.3s ease; opacity: 0.8; }
+    .fp-nav-link:hover { color: <?= htmlspecialchars($navLinkHoverColor) ?>; opacity: 1; }
+    .fp-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
+    .fp-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(249, 115, 22, 0.4); }
+    @media (max-width: 768px) {
+        .fp-nav-links { display: none; }
+        .fp-header-cta span { display: none; }
+        .fp-header-cta { padding: 10px; }
+    }
+</style>
+
+<header class="fp-header">
+    <div class="fp-header-container">
+        <?php if ($logoDisplay === 'yes'): ?>
+        <a href="/" class="fp-logo">
+            <span class="fp-logo-icon">
+                <?php if ($logoUrl): ?>
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain;">
+                <?php else: ?>
+                    <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg>
+                <?php endif; ?>
+            </span>
+            <span class="fp-logo-text"><?= htmlspecialchars($logoText) ?></span>
+        </a>
+        <?php endif; ?>
+        
+        <nav class="fp-nav">
+            <ul class="fp-nav-links">
+                <?php foreach ($navLinks as $link): ?>
+                <li><a href="<?= htmlspecialchars($link['url']) ?>" class="fp-nav-link"><?= htmlspecialchars($link['name']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($showCta === 'yes'): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="fp-header-cta">
+                <span><?= htmlspecialchars($ctaText) ?></span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <?php endif; ?>
+        </nav>
+    </div>
+</header>
+<?php endif; ?>
+
+<?php
+$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
+if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
+    $isPreviewMode = true;
+}
+$pixelEnabled = fp_getConfig($styleSettings, 'pixel.enabled', 'yes');
+$pixelEnabled = (string)($pixelEnabled ?? 'yes');
+$pixelName = fp_getConfig($styleSettings, 'pixel.name', '');
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+
+if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
+    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
+    $websiteUrl = '';
+    $websiteCode = '';
+    try {
+        if (class_exists('\Weline\Websites\Model\Website')) {
+            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()->load($websiteId);
+            if ($website->getId()) {
+                $websiteUrl = $website->getData('url') ?? '';
+                $websiteCode = $website->getData('code') ?? '';
+            }
+        }
+    } catch (\Exception $e) {}
+    if (!empty($websiteUrl)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
+    }
+    if (!empty($websiteCode)) {
+        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
+    }
+    $this->assign('pixel_name', htmlspecialchars($pixelName));
+    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
+?>
+    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
+<?php endif; ?>

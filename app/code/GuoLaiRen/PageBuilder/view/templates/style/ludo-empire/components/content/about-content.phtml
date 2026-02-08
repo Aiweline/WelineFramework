@@ -1,0 +1,283 @@
+<?php
+/**
+ * LudoEmpire - About Content Component
+ * 
+ * 关于页面，包含品牌故事、统计数据和团队介绍
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $colors 颜色配置
+ * @var array $component_config 组件配置
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容设置
+ * content.badge => 徽章文字:text:About Us
+ * content.title => 标题:text:The Story Behind LudoEmpire
+ * content.description => 描述:textarea:We're on a mission to bring the classic board game experience to millions of players worldwide.
+ * content.story => 品牌故事:textarea:LudoEmpire was born from a simple idea: what if the beloved board game Ludo could be played online with the same excitement, fairness, and fun? Founded in 2024, we've grown from a small team of gaming enthusiasts to a platform serving millions of players across the globe.\n\nOur commitment to fair play, transparent gameplay, and community-driven development has made us one of the most trusted online Ludo platforms in the world.
+ * 
+ * group:stats => 统计数据
+ * stats.items => 统计列表:textarea:10M+|Active Players|Players who love our platform\r\n50M+|Games Played|Total games completed\r\n₹10Cr+|Prizes Awarded|Total winnings distributed\r\n4.8|App Rating|On Google Play Store|格式：数值|标签|描述，一行一个
+ * 
+ * group:values => 核心价值
+ * values.items => 价值列表:textarea:🎯 Fair Play|Every game is powered by certified RNG. We believe in equal opportunities for all players.\r\n🔒 Security First|Your data and money are protected with bank-grade encryption and security measures.\r\n🤝 Community|We're building more than a game - we're building a community of passionate Ludo players.\r\n🚀 Innovation|Constantly improving with new features, game modes, and experiences.|格式：图标 标题|描述，一行一个
+ * 
+ * @fields_end
+ */
+
+$config = $component_config ?? [];
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sectionBg = $colors['section_bg_1'] ?? '#0d0020';
+$sectionBg2 = $colors['section_bg_2'] ?? '#110028';
+$textPrimary = $colors['text_primary'] ?? '#f5f3ff';
+$textSecondary = $colors['text_secondary'] ?? '#c4b5fd';
+$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#a78bfa';
+$accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
+$cardBg = $colors['card_bg'] ?? 'rgba(255, 255, 255, 0.04)';
+$borderLight = $colors['border_light'] ?? 'rgba(139, 92, 246, 0.12)';
+
+$badge = $config['content.badge'] ?? 'About Us';
+$title = $config['content.title'] ?? 'The Story Behind LudoEmpire';
+$description = $config['content.description'] ?? "We're on a mission to bring the classic board game experience to millions of players worldwide.";
+$story = $config['content.story'] ?? "LudoEmpire was born from a simple idea: what if the beloved board game Ludo could be played online with the same excitement, fairness, and fun? Founded in 2024, we've grown from a small team of gaming enthusiasts to a platform serving millions of players across the globe.\n\nOur commitment to fair play, transparent gameplay, and community-driven development has made us one of the most trusted online Ludo platforms in the world.";
+
+$statsRaw = $config['stats.items'] ?? "10M+|Active Players|Players who love our platform\n50M+|Games Played|Total games completed\n₹10Cr+|Prizes Awarded|Total winnings distributed\n4.8|App Rating|On Google Play Store";
+$stats = [];
+$lines = preg_split('/[\r\n]+/', $statsRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 3);
+    $stats[] = ['value' => trim($parts[0] ?? ''), 'label' => trim($parts[1] ?? ''), 'desc' => trim($parts[2] ?? '')];
+}
+
+$valuesRaw = $config['values.items'] ?? "🎯 Fair Play|Every game is powered by certified RNG. We believe in equal opportunities for all players.\n🔒 Security First|Your data and money are protected with bank-grade encryption and security measures.\n🤝 Community|We're building more than a game - we're building a community of passionate Ludo players.\n🚀 Innovation|Constantly improving with new features, game modes, and experiences.";
+$values = [];
+$lines = preg_split('/[\r\n]+/', $valuesRaw);
+foreach ($lines as $line) {
+    $line = trim($line);
+    if (empty($line)) continue;
+    $parts = explode('|', $line, 2);
+    $values[] = ['title' => trim($parts[0] ?? ''), 'desc' => trim($parts[1] ?? '')];
+}
+
+$instanceId = 'le-about-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> .le-about-hero {
+            background: <?= $sectionBg ?>;
+            padding: 100px 0 60px;
+            text-align: center;
+        }
+        
+        #<?= $instanceId ?> .le-about-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        #<?= $instanceId ?> .le-about-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: <?= $accentPrimaryLight ?>;
+            margin-bottom: 20px;
+        }
+        
+        #<?= $instanceId ?> .le-about-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 16px;
+        }
+        
+        #<?= $instanceId ?> .le-about-subtitle {
+            font-size: 1.2rem;
+            color: <?= $textSecondary ?>;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        
+        #<?= $instanceId ?> .le-about-stats {
+            background: <?= $sectionBg2 ?>;
+            padding: 60px 0;
+        }
+        
+        #<?= $instanceId ?> .le-about-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .le-about-stat {
+            text-align: center;
+            padding: 24px;
+        }
+        
+        #<?= $instanceId ?> .le-about-stat-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, <?= $accentPrimary ?>, <?= $accentSecondary ?>);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        
+        #<?= $instanceId ?> .le-about-stat-label {
+            font-size: 1rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 4px;
+        }
+        
+        #<?= $instanceId ?> .le-about-stat-desc {
+            font-size: 0.85rem;
+            color: <?= $textSecondary ?>;
+        }
+        
+        #<?= $instanceId ?> .le-about-story {
+            background: <?= $sectionBg ?>;
+            padding: 80px 0;
+        }
+        
+        #<?= $instanceId ?> .le-about-story-content {
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.8;
+        }
+        
+        #<?= $instanceId ?> .le-about-values {
+            background: <?= $sectionBg2 ?>;
+            padding: 80px 0;
+        }
+        
+        #<?= $instanceId ?> .le-about-values-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: <?= $textPrimary ?>;
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        
+        #<?= $instanceId ?> .le-about-values-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        
+        #<?= $instanceId ?> .le-about-value-card {
+            background: <?= $cardBg ?>;
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 16px;
+            padding: 28px;
+            transition: all 0.3s ease;
+        }
+        
+        #<?= $instanceId ?> .le-about-value-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.15);
+        }
+        
+        #<?= $instanceId ?> .le-about-value-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: <?= $textPrimary ?>;
+            margin-bottom: 8px;
+        }
+        
+        #<?= $instanceId ?> .le-about-value-desc {
+            font-size: 0.95rem;
+            color: <?= $textSecondary ?>;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 992px) {
+            #<?= $instanceId ?> .le-about-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 576px) {
+            #<?= $instanceId ?> .le-about-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            #<?= $instanceId ?> .le-about-values-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            #<?= $instanceId ?> .le-about-title {
+                font-size: 1.75rem;
+            }
+            
+            #<?= $instanceId ?> .le-about-stat-value {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+    
+    <div class="le-about-hero">
+        <div class="le-about-container">
+            <div class="le-about-badge"><?= htmlspecialchars($badge) ?></div>
+            <h1 class="le-about-title"><?= htmlspecialchars($title) ?></h1>
+            <p class="le-about-subtitle"><?= htmlspecialchars($description) ?></p>
+        </div>
+    </div>
+    
+    <?php if (!empty($stats)): ?>
+    <div class="le-about-stats">
+        <div class="le-about-container">
+            <div class="le-about-stats-grid">
+                <?php foreach ($stats as $stat): ?>
+                <div class="le-about-stat">
+                    <div class="le-about-stat-value"><?= htmlspecialchars($stat['value']) ?></div>
+                    <div class="le-about-stat-label"><?= htmlspecialchars($stat['label']) ?></div>
+                    <div class="le-about-stat-desc"><?= htmlspecialchars($stat['desc']) ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <div class="le-about-story">
+        <div class="le-about-container">
+            <div class="le-about-story-content">
+                <?= nl2br(htmlspecialchars($story)) ?>
+            </div>
+        </div>
+    </div>
+    
+    <?php if (!empty($values)): ?>
+    <div class="le-about-values">
+        <div class="le-about-container">
+            <h2 class="le-about-values-title">Our Core Values</h2>
+            <div class="le-about-values-grid">
+                <?php foreach ($values as $val): ?>
+                <div class="le-about-value-card">
+                    <h3 class="le-about-value-title"><?= htmlspecialchars($val['title']) ?></h3>
+                    <p class="le-about-value-desc"><?= htmlspecialchars($val['desc']) ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</section>

@@ -49,9 +49,28 @@ use GuoLaiRen\Blog\Model\Category;
                             <i class="mdi mdi-magnify"></i>
                         </button>
                     </form>
-                    <a href="<?= $this->getUrl('blog/backend/category/create') ?>" class="btn btn-sm btn-primary">
-                        <i class="mdi mdi-plus"></i> <lang>新建分类</lang>
-                    </a>
+                    <block class='Weline\Component\Block\OffCanvas'
+                           template='Weline_Component::off-canvas.phtml'
+                           cache='0'
+                           id='offcanvas_category_create'
+                           action="blog/backend/category/offcanvas-create"
+                           target-tag="button"
+                           icon="mdi mdi-plus"
+                           target-button-text="新建分类"
+                           target-button-class="btn btn-sm btn-primary"
+                           title="新建分类"
+                           close-button-show="1"
+                           close-button-text="关闭"
+                           submit-button-text="创建"
+                           submit-button-class="btn btn-primary"
+                           direction="right"
+                           class-names="offcanvas-end w-50"
+                           save="1"
+                           flush="1"
+                           flush-button-text="刷新"
+                           flush-button-class="btn btn-outline-secondary"
+                           off-canvas-body-style=""
+                    />
                 </div>
             </div>
             <div class="card-body">
@@ -66,12 +85,12 @@ use GuoLaiRen\Blog\Model\Category;
                             <thead>
                                 <tr>
                                     <th width="60">ID</th>
-                                    <th><?= __('分类名称') ?></th>
-                                    <th><?= __('URL别名') ?></th>
-                                    <th width="80"><?= __('文章数') ?></th>
-                                    <th width="80"><?= __('排序') ?></th>
-                                    <th width="80"><?= __('状态') ?></th>
-                                    <th width="150"><?= __('操作') ?></th>
+                                    <th><lang>分类名称</lang></th>
+                                    <th><lang>URL别名</lang></th>
+                                    <th width="80"><lang>文章数</lang></th>
+                                    <th width="80"><lang>排序</lang></th>
+                                    <th width="80"><lang>状态</lang></th>
+                                    <th width="150"><lang>操作</lang></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -102,18 +121,38 @@ use GuoLaiRen\Blog\Model\Category;
                                             <?php if ($category->getData(Category::fields_STATUS) == Category::STATUS_ENABLED): ?>
                                                 <span class="badge bg-success"><?= __('启用') ?></span>
                                             <?php else: ?>
-                                                <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                <span class="badge bg-secondary"><lang>禁用</lang></span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <a href="<?= $this->getUrl('blog/backend/category/edit', ['id' => $category->getId()]) ?>"
-                                               class="btn btn-sm btn-outline-primary" title="<?= __('编辑') ?>">
-                                                <i class="mdi mdi-pencil"></i>
-                                            </a>
-                                            <a href="<?= $this->getUrl('blog/backend/category/delete', ['id' => $category->getId()]) ?>"
-                                               class="btn btn-sm btn-outline-danger"
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   template='Weline_Component::off-canvas.phtml'
+                                                   cache='0'
+                                                   id='offcanvas_category_edit'
+                                                   action="blog/backend/category/offcanvas-edit"
+                                                   target-tag="button"
+                                                   vars="category"
+                                                   action-params="{id: category.category_id}"
+                                                   icon="mdi mdi-pencil"
+                                                   target-button-text=""
+                                                   target-button-class="btn btn-sm btn-outline-primary"
+                                                   title="编辑分类"
+                                                   close-button-show="1"
+                                                   close-button-text="关闭"
+                                                   submit-button-text="保存"
+                                                   submit-button-class="btn btn-primary"
+                                                   direction="right"
+                                                   class-names="offcanvas-end w-50"
+                                                   save="1"
+                                                   flush="1"
+                                                   flush-button-text="刷新"
+                                                   flush-button-class="btn btn-outline-secondary"
+                                                   off-canvas-body-style=""
+                                            />
+                                            <a href="<?= $this->getBackendUrl('blog/backend/category/delete', ['id' => $category->getId()]) ?>"
+                                               class="btn btn-sm btn-outline-danger blog-delete-confirm"
                                                title="<?= __('删除') ?>"
-                                               onclick="return confirm('<?= __('确定要删除这个分类吗？') ?>')">
+                                               data-msg="<?= htmlspecialchars(__('确定要删除这个分类吗？')) ?>">
                                                 <i class="mdi mdi-delete"></i>
                                             </a>
                                         </td>
@@ -133,5 +172,41 @@ use GuoLaiRen\Blog\Model\Category;
         </div>
     </div>
 </div>
+
+<!-- 删除确认弹窗（替代原生 confirm，符合友好通知规范；使用主题变量以适配暗色/亮色；role/aria 便于无障碍） -->
+<div id="blogDeleteConfirmModal" role="dialog" aria-modal="true" aria-labelledby="blogDeleteConfirmMsg" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--backend-color-bg-overlay, rgba(0,0,0,0.5)); align-items:center; justify-content:center;">
+    <div style="background:var(--backend-color-bg-surface, #fff); padding:var(--backend-padding-modal, 1.5rem); border-radius:8px; max-width:400px; box-shadow:var(--backend-modal-shadow, 0 4px 12px rgba(0,0,0,0.15)); color:var(--backend-color-text-primary, #212529);">
+        <p id="blogDeleteConfirmMsg" style="margin-bottom:1rem;"></p>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" id="blogDeleteCancelBtn"><lang>取消</lang></button>
+            <button type="button" class="btn btn-danger" id="blogDeleteConfirmBtn"><lang>确定</lang></button>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+    var modal = document.getElementById('blogDeleteConfirmModal');
+    var msgEl = document.getElementById('blogDeleteConfirmMsg');
+    var confirmBtn = document.getElementById('blogDeleteConfirmBtn');
+    var cancelBtn = document.getElementById('blogDeleteCancelBtn');
+    var deleteHref = '';
+    if (!modal || !msgEl) return;
+    modal.style.display = 'flex';
+    modal.style.display = 'none';
+    document.querySelectorAll('.blog-delete-confirm').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault(); deleteHref = this.getAttribute('href'); msgEl.textContent = this.getAttribute('data-msg') || ''; modal.style.display = 'flex'; });
+    });
+    confirmBtn.addEventListener('click', function(){ if(deleteHref) window.location = deleteHref; });
+    cancelBtn.addEventListener('click', function(){ modal.style.display = 'none'; deleteHref = ''; });
+})();
+</script>
+<script>
+/* Offcanvas 关闭后自动刷新主页面列表 */
+(function(){
+    document.querySelectorAll('.offcanvas').forEach(function(el){
+        el.addEventListener('hidden.bs.offcanvas', function(){ window.location.reload(); });
+    });
+})();
+</script>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

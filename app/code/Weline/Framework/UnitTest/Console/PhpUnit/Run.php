@@ -2290,6 +2290,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
             }
         }
         
+        # PHPUnit 10 输出 "OK, but there were issues!" 时没有 "OK (N test)"，需根据总测试数补全通过数
+        if ($totalTests > 0 && $passedTests === 0 && $returnCode === 0 && !$hasFailures && !$hasErrors) {
+            $passedTests = $totalTests;
+            $failedTests = 0;
+        }
+        
         # 优先使用预期的测试总数，如果没有则使用PHPUnit输出或计算的结果
         if ($expectedTotalTests > 0) {
             $totalTests = $expectedTotalTests;

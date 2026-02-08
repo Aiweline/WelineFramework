@@ -1,0 +1,96 @@
+<?php
+/**
+ * SaaS Starter 模板 - Content
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1200|px
+ * group:style => 样式设置
+ * style.background_color => 背景颜色:color:#0d1321
+ * style.text_color => 文字颜色:color:#94a3b8
+ * style.heading_color => 标题颜色:color:#f1f5f9
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'saas-starter';
+if (empty($templateCode)) {
+    $templateCode = 'saas-starter';
+}
+$this->assign('template_code', $templateCode);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+if (!function_exists('ss_content_color')) {
+    function ss_content_color($colors, $key, $default = '') {
+        return $colors[$key] ?? $default;
+    }
+}
+if (!function_exists('ss_content_getConfig')) {
+    function ss_content_getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+$maxWidth = ss_content_getConfig($styleSettings, 'layout.max_width', '1200');
+$bgColor = ss_content_getConfig($styleSettings, 'style.background_color', ss_content_color($colors, 'section_bg_1', '#0d1321'));
+$textColor = ss_content_getConfig($styleSettings, 'style.text_color', ss_content_color($colors, 'text_secondary', '#94a3b8'));
+$headingColor = ss_content_getConfig($styleSettings, 'style.heading_color', ss_content_color($colors, 'text_primary', '#f1f5f9'));
+
+$layoutConfig = $this->getData('layout_config') ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+?>
+
+<style>
+    .ss-content { background: <?= htmlspecialchars($bgColor) ?>; color: <?= htmlspecialchars($textColor) ?>; min-height: 50vh; padding-top: 80px; }
+    .ss-content-container { max-width: <?= intval($maxWidth) ?>px; margin: 0 auto; padding: 0 20px; }
+    .ss-content h1, .ss-content h2, .ss-content h3, .ss-content h4 { color: <?= htmlspecialchars($headingColor) ?>; }
+</style>
+
+<main class="ss-content">
+    <?php
+    $componentFiles = [
+        'hero' => 'content/hero.phtml',
+        'features' => 'content/features.phtml',
+        'pricing' => 'content/pricing.phtml',
+        'testimonials' => 'content/testimonials.phtml',
+        'cta-banner' => 'content/cta-banner.phtml',
+        'faq' => 'content/faq.phtml',
+    ];
+    
+    if (!empty($contentComponents)) {
+        foreach ($contentComponents as $index => $component) {
+            $componentCode = $component['code'] ?? $component['component'] ?? '';
+            $componentConfig = $component['config'] ?? [];
+            if (empty($componentCode)) continue;
+            $componentFile = $componentFiles[$componentCode] ?? null;
+            if ($componentFile) {
+                $this->assign('component_config', $componentConfig);
+                $this->assign('component_instance_id', 'ss-component-' . $componentCode . '-' . $index);
+                $this->assign('colors', $colors);
+                ?>
+                <div class="ss-component-wrapper" data-component="<?= htmlspecialchars($componentCode) ?>" data-index="<?= $index ?>">
+                    <?= $this->fetchTemplate("GuoLaiRen_PageBuilder::templates/style/saas-starter/components/{$componentFile}") ?>
+                </div>
+                <?php
+            }
+        }
+    } else {
+        if ($page) {
+            $pageContent = $page->getData('content') ?? '';
+            if ($pageContent) {
+                echo '<div class="ss-content-container">' . $pageContent . '</div>';
+            }
+        }
+    }
+    ?>
+</main>
