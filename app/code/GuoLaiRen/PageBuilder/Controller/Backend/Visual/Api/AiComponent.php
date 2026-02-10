@@ -85,6 +85,9 @@ class AiComponent extends BackendController
             if (!empty($body['code'])) {
                 $options['code'] = $body['code'];
             }
+            if (!empty($body['style_code'])) {
+                $options['style_code'] = $body['style_code'];
+            }
             
             // 如果提供了组件ID，尝试从locale读取历史参数并回填
             if ($componentId > 0) {
@@ -227,16 +230,66 @@ class AiComponent extends BackendController
                 ]);
             }
             
-            // 立即生成预览
-            $previewResult = $this->generator->previewTemplateContent($result->getTemplateContent());
+            $newTemplateContent = $result->getTemplateContent();
+            $componentCode = $body['code'] ?? '';
+            $previewHtml = '';
+            $previewSuccess = false;
+            $previewError = '';
+            
+            // 如果有组件代码，更新数据库记录和实体文件，然后用系统组件预览接口渲染
+            if (!empty($componentCode)) {
+                // 查找数据库中的组件记录
+                $componentModel = ObjectManager::getInstance(Component::class);
+                $existing = clone $componentModel;
+                $existing->clear()
+                    ->where(Component::fields_CODE, $componentCode)
+                    ->where(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
+                    ->find()
+                    ->fetch();
+                
+                if ($existing->getId()) {
+                    // 更新模板内容
+                    if (method_exists($existing, 'setTemplateContent')) {
+                        $existing->setTemplateContent($newTemplateContent);
+                    } else {
+                        $existing->setData(Component::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    }
+                    $existing->save();
+                    
+                    // 同步实体文件
+                    $this->entityFileManager->syncEntityFile($existing);
+                    
+                    // 用系统组件预览接口渲染（和正式组件一致）
+                    try {
+                        $html = $this->componentService->renderPreview(
+                            $componentCode,
+                            [],
+                            Component::STYLE_CODE_AI_GENERATED
+                        );
+                        $previewHtml = $html;
+                        $previewSuccess = true;
+                    } catch (\Throwable $e) {
+                        $previewError = $e->getMessage();
+                    }
+                }
+            }
+            
+            // 兜底：如果组件预览失败，用旧的 PreviewRenderer
+            if (!$previewSuccess) {
+                $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
+                $previewHtml = $previewResult['html'] ?? '';
+                $previewSuccess = $previewResult['success'] ?? false;
+                $previewError = $previewResult['error'] ?? '';
+            }
             
             return $this->fetchJson([
                 'success' => true,
                 'result' => $result->toArray(),
+                'agent' => $result->getAgentInfo(),
                 'preview' => [
-                    'html' => $previewResult['html'] ?? '',
-                    'success' => $previewResult['success'] ?? false,
-                    'error' => $previewResult['error'] ?? '',
+                    'html' => $previewHtml,
+                    'success' => $previewSuccess,
+                    'error' => $previewError,
                 ],
             ]);
             
@@ -245,6 +298,137 @@ class AiComponent extends BackendController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * API: 微调 AI 组件（流式 SSE）
+     * GET /backend/visual/api/ai-component/refine-stream?params=base64编码JSON
+     */
+    public function getRefine_stream(): void
+    {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            $paramsRaw = $this->request->getParam('params', '');
+            $body = [];
+            if (is_array($paramsRaw)) {
+                $body = $paramsRaw;
+            } elseif (is_string($paramsRaw) && !empty($paramsRaw)) {
+                $paramsJson = base64_decode($paramsRaw);
+                if ($paramsJson !== false) {
+                    $body = json_decode($paramsJson, true) ?: [];
+                }
+            }
+
+            $templateContent = $body['template_content'] ?? '';
+            $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
+            $category = $body['category'] ?? 'content';
+
+            if (empty($templateContent)) {
+                $sse->sendEvent('error', ['message' => __('请提供模板内容')]);
+                $sse->close();
+                return;
+            }
+            if (empty($adjustmentPrompt)) {
+                $sse->sendEvent('error', ['message' => __('请提供调整提示词')]);
+                $sse->close();
+                return;
+            }
+
+            $options = [];
+            if (!empty($body['code'])) {
+                $options['code'] = $body['code'];
+            }
+            if (!empty($body['last_error'])) {
+                $options['last_error'] = $body['last_error'];
+            }
+            if (!empty($body['style_code'])) {
+                $options['style_code'] = $body['style_code'];
+            }
+
+            $sse->sendEvent('start', [
+                'message' => __('开始微调'),
+                'category' => $category,
+            ]);
+
+            $options['stream_callback'] = function (string $event, array $data = []) use ($sse) {
+                $sse->sendEvent($event, $data);
+            };
+
+            $result = $this->generator->refine($templateContent, $adjustmentPrompt, $category, $options);
+
+            if (!$result->isSuccess()) {
+                $sse->sendEvent('error', ['message' => $result->getError()]);
+                $sse->close();
+                return;
+            }
+
+            $newTemplateContent = $result->getTemplateContent();
+            $componentCode = $body['code'] ?? '';
+            $previewHtml = '';
+            $previewSuccess = false;
+            $previewError = '';
+
+            if (!empty($componentCode)) {
+                $componentModel = ObjectManager::getInstance(Component::class);
+                $existing = clone $componentModel;
+                $existing->clear()
+                    ->where(Component::fields_CODE, $componentCode)
+                    ->where(Component::fields_STYLE_CODE, Component::STYLE_CODE_AI_GENERATED)
+                    ->find()
+                    ->fetch();
+
+                if ($existing->getId()) {
+                    if (method_exists($existing, 'setTemplateContent')) {
+                        $existing->setTemplateContent($newTemplateContent);
+                    } else {
+                        $existing->setData(Component::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    }
+                    $existing->save();
+                    $this->entityFileManager->syncEntityFile($existing);
+
+                    try {
+                        $html = $this->componentService->renderPreview(
+                            $componentCode,
+                            [],
+                            Component::STYLE_CODE_AI_GENERATED
+                        );
+                        $previewHtml = $html;
+                        $previewSuccess = true;
+                    } catch (\Throwable $e) {
+                        $previewError = $e->getMessage();
+                    }
+                }
+            }
+
+            if (!$previewSuccess) {
+                $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
+                $previewHtml = $previewResult['html'] ?? '';
+                $previewSuccess = $previewResult['success'] ?? false;
+                $previewError = $previewResult['error'] ?? '';
+            }
+
+            $sse->sendEvent('complete', [
+                'success' => true,
+                'result' => $result->toArray(),
+                'agent' => $result->getAgentInfo(),
+                'preview' => [
+                    'html' => $previewHtml,
+                    'success' => $previewSuccess,
+                    'error' => $previewError,
+                ],
+            ]);
+
+            $sse->complete(['message' => __('微调完成')]);
+        } catch (\Throwable $e) {
+            $cleanMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
+            $sse->sendEvent('error', ['message' => $cleanMsg]);
+            $sse->close();
         }
     }
     
@@ -437,33 +621,36 @@ class AiComponent extends BackendController
     }
     
     /**
-     * API: 获取单个 AI 组件信息
+     * API: 获取单个 AI 组件信息（用于随时微调）
      * GET /backend/visual/api/ai-component/info
-     * 
+     *
      * 请求参数：
      * - code: 组件代码
+     * - include_preview: 1 时返回预览 HTML（用于打开微调工坊）
      */
     public function info()
     {
         try {
             $code = $this->request->getParam('code', '');
-            
+            $includePreview = $this->request->getParam('include_preview', '') === '1';
+
             if (empty($code)) {
                 throw new \Exception('请提供组件代码');
             }
-            
+
             $component = $this->registry->getComponent($code);
-            
+
             if (!$component) {
                 throw new \Exception('组件不存在: ' . $code);
             }
-            
+
+            $componentArray = $this->componentService->toArray($component, $includePreview);
+
             return $this->fetchJson([
                 'success' => true,
-                'component' => $this->componentService->toArray($component),
+                'component' => $componentArray,
                 'template_content' => $component->getTemplateContent(),
             ]);
-            
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -655,35 +842,13 @@ class AiComponent extends BackendController
     
     /**
      * 渲染模板内容（用于预览）
+     * 使用 PreviewRenderer 走框架 Template 编译流程
      */
     private function renderTemplateContent(string $templateContent): array
     {
         try {
-            // 创建临时文件
-            $tempFile = sys_get_temp_dir() . '/pb_preview_' . uniqid() . '.phtml';
-            file_put_contents($tempFile, $templateContent);
-            
-            // 设置预览变量
-            $template = \Weline\Framework\View\Template::getInstance();
-            $template->assign('page', null);
-            $template->assign('component_config', []);
-            $template->assign('style_settings', []);
-            $template->assign('style', []);
-            $template->assign('is_preview', true);
-            
-            ob_start();
-            include $tempFile;
-            $html = ob_get_clean();
-            
-            // 清理临时文件
-            @unlink($tempFile);
-            
-            return [
-                'success' => true,
-                'html' => $html,
-                'error' => '',
-            ];
-            
+            $renderer = new \GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer();
+            return $renderer->render($templateContent);
         } catch (\Exception $e) {
             return [
                 'success' => false,

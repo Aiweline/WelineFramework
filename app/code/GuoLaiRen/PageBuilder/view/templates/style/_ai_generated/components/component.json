@@ -5,23 +5,43 @@
     "description": "AI 自动生成的可视化编辑组件",
     "version": "1.0.0",
     "auto_generated": true,
-    "updated_at": "2026-01-29 00:00:00",
+    "updated_at": "2026-02-09 19:49:55",
     "regions": {
         "header": {
             "name": "头部区域",
-            "name_en": "Header",
-            "accepts": ["header"]
+            "accepts": [
+                "header"
+            ]
         },
         "content": {
             "name": "内容区域",
-            "name_en": "Content",
-            "accepts": ["content", "widget"]
+            "accepts": [
+                "content",
+                "widget"
+            ]
         },
         "footer": {
             "name": "底部区域",
-            "name_en": "Footer",
-            "accepts": ["footer"]
+            "accepts": [
+                "footer"
+            ]
         }
     },
-    "components": {}
+    "components": {
+        "footer-ai-2602091949": {
+            "name": "拜金风格",
+            "description": "拜金风格，关于我们等政策齐全，棋牌",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "file": "footer\/ai-2602091949.phtml",
+            "icon": "bi-robot",
+            "ai_generated": true,
+            "ai_version": "2.0",
+            "compatible_styles": [
+                "*"
+            ],
+            "sort_order": 100
+        }
+    }
 }

@@ -23,15 +23,22 @@
  * @param layout {default="grid",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  */
 
-$title = $this->getData('title') ?? __('推荐产品');
-$subtitle = $this->getData('subtitle') ?? __('为您精选的优质商品');
-$productIds = $this->getData('product_ids') ?? '';
+$normalize = static function ($value, string $default = ''): string {
+    if (is_string($value) || is_numeric($value)) {
+        return (string)$value;
+    }
+    return $default;
+};
+
+$title = $normalize($this->getData('title'), __('推荐产品'));
+$subtitle = $normalize($this->getData('subtitle'), __('为您精选的优质商品'));
+$productIds = $normalize($this->getData('product_ids'), '');
 $limit = (int)($this->getData('limit') ?? 8);
-$columns = $this->getData('columns') ?? '4';
+$columns = $normalize($this->getData('columns'), '4');
 $showPrice = (bool)($this->getData('show_price') ?? true);
 $showRating = (bool)($this->getData('show_rating') ?? true);
 $showAddToCart = (bool)($this->getData('show_add_to_cart') ?? true);
-$layout = $this->getData('layout') ?? 'grid';
+$layout = $normalize($this->getData('layout'), 'grid');
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
 
 // 示例产品数据（实际应从产品服务获取）

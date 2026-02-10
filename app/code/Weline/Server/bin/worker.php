@@ -509,6 +509,11 @@ if ($controlPort > 0) {
             
             switch ($type) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_RELOAD:
+                    // 代码重载：先清 opcache（共享内存级），确保新 Worker 加载最新文件
+                    if (\function_exists('opcache_reset')) {
+                        \opcache_reset();
+                    }
+                    \clearstatcache(true);
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
@@ -516,7 +521,7 @@ if ($controlPort > 0) {
                         @\fclose($socket);
                         $socket = null;
                     }
-                    $wlsLog("收到 reload 命令，已关闭监听 socket，开始排水（最多等待 10 秒）...", 'INFO');
+                    $wlsLog("收到 reload 命令，已清除 opcache 并关闭监听 socket，开始排水（最多等待 10 秒）...", 'INFO');
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
@@ -1223,7 +1228,10 @@ function handleRequest(
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticResponse = handleStaticFile($uri, $rawRequest);
     if ($staticResponse !== null) {
-        $wlsLog("静态文件响应: {$uri}", 'INFO');
+        $cacheInfo = $WLS_LAST_STATIC_CACHE ?? null;
+        $cacheStatus = $cacheInfo['status'] ?? 'miss';
+        $cacheUri = $cacheInfo['uri'] ?? $uri;
+        $wlsLog(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]), 'INFO');
         return $staticResponse;
     }
     // ========== 静态文件处理结束 ==========
@@ -1398,7 +1406,8 @@ function handleRequest(
  */
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
-    global $WLS_STATIC_CACHE_MAX_TOTAL, $WLS_STATIC_CACHE_MAX_SIZE, $WLS_CACHE_EVICTION_THRESHOLD;
+    global $WLS_STATIC_CACHE_MAX_TOTAL, $WLS_STATIC_CACHE_MAX_SIZE, $WLS_CACHE_EVICTION_THRESHOLD, $WLS_LAST_STATIC_CACHE;
+    $WLS_LAST_STATIC_CACHE = null;
     
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     static $staticFileCache = [];
@@ -1540,6 +1549,13 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         return null;
     }
     
+    // 默认标记为 MISS（非内存缓存命中）
+    $WLS_LAST_STATIC_CACHE = [
+        'status' => 'miss',
+        'uri' => $uriPath,
+        'path' => $filename,
+    ];
+    
     // 获取文件修改时间
     $mtime = \filemtime($filename);
     $lastModified = \gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
@@ -1612,6 +1628,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
                 if ($cached['mtime'] === $mtime && ($now - $cached['cached_at']) < $staticFileCacheMaxAge) {
                     $content = $cached['content'];
                     $fromCache = true;
+                    $WLS_LAST_STATIC_CACHE['status'] = 'hit';
                     // 更新访问统计（冷热计数）
                     $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
                     $staticFileCache[$filename]['last_access'] = $now;

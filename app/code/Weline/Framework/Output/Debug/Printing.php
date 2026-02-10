@@ -35,6 +35,16 @@ class Printing extends AbstractPrint
         COMMAND_LIST;
         echo $doc;
     }
+    
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void
+    {
+        parent::setStickyFooter($lines, $color);
+    }
+    
+    public function clearStickyFooter(): void
+    {
+        parent::clearStickyFooter();
+    }
 
     /**
      * @DESC         |日志记录

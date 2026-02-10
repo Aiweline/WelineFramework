@@ -2,7 +2,9 @@
     "name": "DeepSeek",
     "code": "deepseek",
     "base_url": "https://api.deepseek.com/v1",
-    "models_prefix": ["deepseek-"],
+    "models_prefix": [
+        "deepseek-"
+    ],
     "test_model": "deepseek-chat",
     "api_key_field": "api_key",
     "base_url_field": "base_url",
@@ -21,36 +23,70 @@
         "requests_per_minute": 60,
         "tokens_per_minute": 100000
     },
+    "models_api": {
+        "path": "/models",
+        "auth_type": "bearer",
+        "data_key": "data",
+        "id_key": "id",
+        "name_key": "id",
+        "desc_key": "description",
+        "context_key": "context_window",
+        "max_tokens_key": "max_tokens"
+    },
+    "model_config_defaults": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 1,
+        "stream": true,
+        "timeout": 180,
+        "max_retries": 3,
+        "capabilities": [
+            "chat",
+            "code"
+        ]
+    },
     "models": [
         {
             "code": "deepseek-chat",
-            "name": "DeepSeek Chat",
+            "name": "deepseek-chat",
             "description": "DeepSeek通用对话模型",
             "max_tokens": 4096,
             "context_window": 32768,
             "input_price": 0.14,
             "output_price": 0.28,
-            "capabilities": ["chat", "code"]
-        },
-        {
-            "code": "deepseek-coder",
-            "name": "DeepSeek Coder",
-            "description": "专为代码生成和理解优化的模型",
-            "max_tokens": 4096,
-            "context_window": 16384,
-            "input_price": 0.14,
-            "output_price": 0.28,
-            "capabilities": ["chat", "code"]
+            "capabilities": [
+                "chat",
+                "code"
+            ]
         },
         {
             "code": "deepseek-reasoner",
-            "name": "DeepSeek Reasoner",
+            "name": "deepseek-reasoner",
             "description": "擅长复杂推理任务的模型",
             "max_tokens": 8192,
             "context_window": 64000,
             "input_price": 0.55,
             "output_price": 2.19,
-            "capabilities": ["chat", "reasoning", "code"]
+            "capabilities": [
+                "chat",
+                "reasoning",
+                "code"
+            ]
+        },
+        {
+            "code": "deepseek-v3",
+            "name": "DeepSeek V3",
+            "description": "DeepSeek V3 通用大模型",
+            "max_tokens": 8192,
+            "context_window": 64000,
+            "input_price": 0.55,
+            "output_price": 2.19,
+            "capabilities": [
+                "chat",
+                "reasoning",
+                "code"
+            ]
         }
-    ]
+    ],
+    "models_updated_at": 1770619721
 }

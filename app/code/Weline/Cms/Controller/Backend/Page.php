@@ -427,20 +427,7 @@ class Page extends BackendController
         $this->assign('translations', $translationsData);
         $this->assign('localized_contents', $localizedContents);
         
-        // 检查未翻译的语言
-        $missingTranslations = [];
-        foreach ($selectedLocales as $locale) {
-            if (!isset($translationsData[$locale])) {
-                $localeName = $this->i18nModel->getLocaleName($locale);
-                $missingTranslations[] = $localeName;
-            }
-        }
-        
-        if (!empty($missingTranslations)) {
-            $this->getMessageManager()->addWarning(
-                __('页面还有以下语言未翻译：%{1}', implode(', ', $missingTranslations))
-            );
-        }
+        // 未翻译语言提示已移除（表单内语言 Tab 已有未翻译标记）
         
         // 样式列表将通过AJAX加载，这里传空数组
         $this->assign('styles', []);

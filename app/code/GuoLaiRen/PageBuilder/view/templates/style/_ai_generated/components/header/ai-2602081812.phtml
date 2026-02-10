@@ -1,0 +1,622 @@
+<?php
+$component_config = $component_config ?? [];
+$getConfig = $getConfig ?? function (string $key, $default = null) use ($component_config) {
+    $value = $component_config;
+    foreach (explode('.', $key) as $segment) {
+        if (!is_array($value) || !array_key_exists($segment, $value)) {
+            return $default;
+        }
+        $value = $value[$segment];
+    }
+    return $value;
+};
+
+$showLogo = $showLogo ?? ($component_config['show_logo'] ?? true);
+$logoImage = $logoImage ?? ($component_config['logo_image'] ?? '');
+$logoText = $logoText ?? ($component_config['logo_text'] ?? __('品牌名称'));
+$logoWidth = $logoWidth ?? (int)($component_config['logo_width'] ?? 120);
+$showNav = $showNav ?? ($component_config['show_nav'] ?? true);
+$navItems = $navItems ?? ($component_config['nav_items'] ?? []);
+$showCta = $showCta ?? ($component_config['show_cta'] ?? true);
+$ctaText = $ctaText ?? ($component_config['cta_text'] ?? __('立即咨询'));
+$ctaUrl = $ctaUrl ?? ($component_config['cta_url'] ?? '#');
+$accentColor = $accentColor ?? ($component_config['accent_color'] ?? '#7c3aed');
+$bgColor = $bgColor ?? ($component_config['bg_color'] ?? '#0b0f1a');
+$textColor = $textColor ?? ($component_config['text_color'] ?? '#e5e7eb');
+$linkColor = $linkColor ?? ($component_config['link_color'] ?? '#c7d2fe');
+$linkHoverColor = $linkHoverColor ?? ($component_config['link_hover_color'] ?? '#f8fafc');
+
+$luxurySubtitle = $getConfig('luxury.subtitle', __('Premium Experience'));
+?>
+<!DOCTYPE html>
+<header id="<?= $componentId ?>" class="luxury-header">
+    <div class="luxury-header__container">
+        <!-- Logo区域 -->
+        <?php if ($showLogo): ?>
+        <div class="luxury-header__logo">
+            <?php if ($logoImage): ?>
+                <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>" loading="lazy" width="<?= $logoWidth ?>">
+            <?php else: ?>
+                <div class="luxury-header__logo-text">
+                    <span class="luxury-header__logo-main"><?= htmlspecialchars($logoText) ?></span>
+                    <span class="luxury-header__logo-sub"><?= htmlspecialchars($luxurySubtitle) ?></span>
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- 导航菜单 -->
+        <?php if ($showNav && !empty($navItems)): ?>
+        <nav class="luxury-header__nav">
+            <ul class="luxury-header__nav-list">
+                <?php foreach ($navItems as $item): ?>
+                <li class="luxury-header__nav-item">
+                    <a href="<?= htmlspecialchars($item['href']) ?>" class="luxury-header__nav-link">
+                        <span class="luxury-header__nav-text"><?= htmlspecialchars($item['text']) ?></span>
+                        <span class="luxury-header__nav-decoration"></span>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+
+        <!-- CTA按钮区域 -->
+        <div class="luxury-header__actions">
+            <?php if ($showCta): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
+                <span class="luxury-header__cta-text"><?= htmlspecialchars($ctaText) ?></span>
+                <span class="luxury-header__cta-icon">→</span>
+            </a>
+            <?php endif; ?>
+            
+            <!-- 移动端菜单按钮 -->
+            <button class="luxury-header__mobile-toggle" aria-label="<?= __('菜单') ?>">
+                <span class="luxury-header__mobile-line"></span>
+                <span class="luxury-header__mobile-line"></span>
+                <span class="luxury-header__mobile-line"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 移动端菜单 -->
+    <div class="luxury-header__mobile-menu">
+        <?php if ($showNav && !empty($navItems)): ?>
+        <ul class="luxury-header__mobile-nav">
+            <?php foreach ($navItems as $item): ?>
+            <li class="luxury-header__mobile-item">
+                <a href="<?= htmlspecialchars($item['href']) ?>" class="luxury-header__mobile-link">
+                    <?= htmlspecialchars($item['text']) ?>
+                </a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+    </div>
+</header>
+<style>
+#<?= $componentId ?> {
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($textColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-link: <?= htmlspecialchars($linkColor) ?>;
+    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+    
+    /* 拜金主题自定义变量 */
+    --luxury-gold: linear-gradient(135deg, #FFD700 0%, #FFC400 25%, #FFAA00 50%, #FF9500 75%, #FF8000 100%);
+    --luxury-gold-light: linear-gradient(135deg, #FFF9C4 0%, #FFF59D 25%, #FFF176 50%, #FFEE58 75%, #FFEB3B 100%);
+    --luxury-gold-border: linear-gradient(90deg, transparent, #FFD700, transparent);
+    --luxury-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    --luxury-glow: 0 0 20px rgba(255, 215, 0, 0.3);
+    
+    background: var(--pb-bg);
+    color: var(--pb-text);
+    position: relative;
+    z-index: 1000;
+    border-bottom: 1px solid transparent;
+    background-image: linear-gradient(to bottom, var(--pb-bg) 0%, color-mix(in srgb, var(--pb-bg) 95%, #000) 100%);
+}
+
+#<?= $componentId ?>.luxury-header {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--pb-bg) 95%, transparent);
+    border-bottom: 1px solid var(--pb-border);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#<?= $componentId ?>.luxury-header.scrolled {
+    background: color-mix(in srgb, var(--pb-bg) 98%, transparent);
+    box-shadow: var(--luxury-shadow);
+    border-bottom-color: transparent;
+}
+
+.luxury-header__container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 32px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+}
+
+/* Logo样式 */
+.luxury-header__logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-decoration: none;
+    position: relative;
+    z-index: 2;
+}
+
+.luxury-header__logo img {
+    height: <?= $logoWidth ?>px;
+    width: auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.luxury-header__logo-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.luxury-header__logo-main {
+    font-size: clamp(1.5rem, 2vw, 2rem);
+    font-weight: 800;
+    background: var(--luxury-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.5px;
+    text-shadow: var(--luxury-glow);
+    position: relative;
+    display: inline-block;
+}
+
+.luxury-header__logo-main::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--luxury-gold-border);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+}
+
+.luxury-header__logo:hover .luxury-header__logo-main::after {
+    transform: scaleX(1);
+}
+
+.luxury-header__logo-sub {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--pb-text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+/* 导航样式 */
+.luxury-header__nav {
+    position: relative;
+    z-index: 2;
+}
+
+.luxury-header__nav-list {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 48px;
+}
+
+.luxury-header__nav-item {
+    position: relative;
+}
+
+.luxury-header__nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--pb-link);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    position: relative;
+    padding: 8px 0;
+}
+
+.luxury-header__nav-text {
+    position: relative;
+    z-index: 1;
+    transition: color 0.3s ease;
+}
+
+.luxury-header__nav-decoration {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 2px;
+    background: var(--luxury-gold);
+    border-radius: 1px;
+    transition: width 0.3s ease;
+}
+
+.luxury-header__nav-link:hover .luxury-header__nav-text {
+    color: var(--pb-link-hover);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.luxury-header__nav-link:hover .luxury-header__nav-decoration {
+    width: 100%;
+}
+
+.luxury-header__nav-link.active .luxury-header__nav-text {
+    color: var(--pb-accent);
+    font-weight: 600;
+}
+
+.luxury-header__nav-link.active .luxury-header__nav-decoration {
+    width: 100%;
+    background: var(--pb-accent);
+}
+
+/* CTA按钮样式 */
+.luxury-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    position: relative;
+    z-index: 2;
+}
+
+.luxury-header__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 32px;
+    background: var(--luxury-gold);
+    color: #000;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
+}
+
+.luxury-header__cta::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: var(--luxury-gold-light);
+    transition: left 0.6s ease;
+    z-index: 1;
+}
+
+.luxury-header__cta:hover::before {
+    left: 0;
+}
+
+.luxury-header__cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+}
+
+.luxury-header__cta-text {
+    position: relative;
+    z-index: 2;
+}
+
+.luxury-header__cta-icon {
+    position: relative;
+    z-index: 2;
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+}
+
+.luxury-header__cta:hover .luxury-header__cta-icon {
+    transform: translateX(4px);
+}
+
+/* 移动端菜单按钮 */
+.luxury-header__mobile-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 32px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    z-index: 3;
+}
+
+.luxury-header__mobile-line {
+    width: 100%;
+    height: 3px;
+    background: var(--pb-text);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+    transform-origin: center;
+}
+
+.luxury-header__mobile-toggle.active .luxury-header__mobile-line:nth-child(1) {
+    transform: translateY(10px) rotate(45deg);
+}
+
+.luxury-header__mobile-toggle.active .luxury-header__mobile-line:nth-child(2) {
+    opacity: 0;
+}
+
+.luxury-header__mobile-toggle.active .luxury-header__mobile-line:nth-child(3) {
+    transform: translateY(-10px) rotate(-45deg);
+}
+
+/* 移动端菜单 */
+.luxury-header__mobile-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: color-mix(in srgb, var(--pb-bg) 98%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 1;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-100%);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-top: 120px;
+}
+
+.luxury-header__mobile-menu.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.luxury-header__mobile-nav {
+    list-style: none;
+    margin: 0;
+    padding: 0 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.luxury-header__mobile-item {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+}
+
+.luxury-header__mobile-menu.active .luxury-header__mobile-item {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.luxury-header__mobile-menu.active .luxury-header__mobile-item:nth-child(1) { transition-delay: 0.1s; }
+.luxury-header__mobile-menu.active .luxury-header__mobile-item:nth-child(2) { transition-delay: 0.2s; }
+.luxury-header__mobile-menu.active .luxury-header__mobile-item:nth-child(3) { transition-delay: 0.3s; }
+.luxury-header__mobile-menu.active .luxury-header__mobile-item:nth-child(4) { transition-delay: 0.4s; }
+.luxury-header__mobile-menu.active .luxury-header__mobile-item:nth-child(5) { transition-delay: 0.5s; }
+
+.luxury-header__mobile-link {
+    display: block;
+    padding: 16px 0;
+    color: var(--pb-text);
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid var(--pb-border);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.luxury-header__mobile-link::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 2px;
+    background: var(--luxury-gold);
+    transition: width 0.3s ease;
+}
+
+.luxury-header__mobile-link:hover {
+    color: var(--pb-link-hover);
+    padding-left: 16px;
+}
+
+.luxury-header__mobile-link:hover::before {
+    width: 100%;
+}
+/* 平板设备 */
+@media (max-width: 1024px) {
+    .luxury-header__container {
+        padding: 0 24px;
+        height: 80px;
+    }
+    
+    .luxury-header__nav-list {
+        gap: 32px;
+    }
+    
+    .luxury-header__cta {
+        padding: 12px 24px;
+        font-size: 0.9rem;
+    }
+}
+
+/* 移动设备 */
+@media (max-width: 768px) {
+    .luxury-header__container {
+        padding: 0 20px;
+        height: 70px;
+    }
+    
+    .luxury-header__nav {
+        display: none;
+    }
+    
+    .luxury-header__mobile-toggle {
+        display: flex;
+    }
+    
+    .luxury-header__cta {
+        display: none;
+    }
+    
+    .luxury-header__logo-main {
+        font-size: 1.5rem;
+    }
+    
+    .luxury-header__logo-sub {
+        font-size: 0.7rem;
+    }
+}
+
+/* 小屏幕设备 */
+@media (max-width: 480px) {
+    .luxury-header__container {
+        padding: 0 16px;
+    }
+    
+    .luxury-header__logo-main {
+        font-size: 1.3rem;
+    }
+    
+    .luxury-header__logo-sub {
+        display: none;
+    }
+    
+    .luxury-header__mobile-nav {
+        padding: 0 20px;
+    }
+    
+    .luxury-header__mobile-link {
+        font-size: 1.1rem;
+        padding: 14px 0;
+    }
+}
+</style>
+<script>
+// 滚动效果
+let lastScrollTop = 0;
+const header = component;
+
+// 滚动时添加/移除scrolled类
+window.addEventListener('scroll', () => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    if (scrollTop > 50) {
+        header.classList.add('scrolled');
+    } else {
+        header.classList.remove('scrolled');
+    }
+    
+    lastScrollTop = scrollTop;
+});
+
+// 移动端菜单切换
+const mobileToggle = header.querySelector('.luxury-header__mobile-toggle');
+const mobileMenu = header.querySelector('.luxury-header__mobile-menu');
+
+if (mobileToggle && mobileMenu) {
+    mobileToggle.addEventListener('click', () => {
+        mobileToggle.classList.toggle('active');
+        mobileMenu.classList.toggle('active');
+        
+        // 阻止滚动
+        if (mobileMenu.classList.contains('active')) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+    });
+    
+    // 点击菜单链接关闭菜单
+    const mobileLinks = mobileMenu.querySelectorAll('.luxury-header__mobile-link');
+    mobileLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            mobileToggle.classList.remove('active');
+            mobileMenu.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+    });
+    
+    // 点击菜单外部关闭
+    mobileMenu.addEventListener('click', (e) => {
+        if (e.target === mobileMenu) {
+            mobileToggle.classList.remove('active');
+            mobileMenu.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    });
+}
+
+// 导航链接激活状态
+const navLinks = header.querySelectorAll('.luxury-header__nav-link');
+const currentPath = window.location.pathname;
+
+navLinks.forEach(link => {
+    const href = link.getAttribute('href');
+    if (href && href !== '#' && currentPath.includes(href.replace(/^\/+/, ''))) {
+        link.classList.add('active');
+    }
+    
+    // 平滑滚动
+    if (href && href.startsWith('#')) {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = href.substring(1);
+            const targetElement = document.getElementById(targetId);
+            
+            if (targetElement) {
+                window.scrollTo({
+                    top: targetElement.offsetTop - 100,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    }
+});
+
+// 初始化滚动状态
+if (window.pageYOffset > 50) {
+    header.classList.add('scrolled');
+}
+</script>

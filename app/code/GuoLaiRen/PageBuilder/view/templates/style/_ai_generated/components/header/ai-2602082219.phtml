@@ -1,0 +1,383 @@
+<?php
+$showGoldEffect = $getConfig('style.gold_effect', 'yes') !== 'no';
+$showScrollEffect = $getConfig('style.scroll_effect', 'yes') !== 'no';
+?>
+<header id="<?= $componentId ?>" class="luxury-header">
+    <div class="luxury-header__container">
+        <?php if ($showLogo): ?>
+        <a href="/" class="luxury-header__logo">
+            <?php if ($logoImage): ?>
+            <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>" loading="lazy" width="<?= $logoWidth ?>">
+            <?php else: ?>
+            <span class="luxury-header__logo-text"><?= htmlspecialchars($logoText) ?></span>
+            <?php endif; ?>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($showNav && !empty($navItems)): ?>
+        <nav class="luxury-header__nav">
+            <ul class="luxury-header__nav-list">
+                <?php foreach ($navItems as $item): ?>
+                <li class="luxury-header__nav-item">
+                    <a href="<?= htmlspecialchars($item['href']) ?>" class="luxury-header__nav-link">
+                        <?= htmlspecialchars($item['text']) ?>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+
+        <div class="luxury-header__actions">
+            <?php if ($showCta): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
+                <?= htmlspecialchars($ctaText) ?>
+            </a>
+            <?php endif; ?>
+            
+            <button class="luxury-header__mobile-toggle" aria-label="菜单">
+                <span class="luxury-header__mobile-toggle-line"></span>
+                <span class="luxury-header__mobile-toggle-line"></span>
+                <span class="luxury-header__mobile-toggle-line"></span>
+            </button>
+        </div>
+    </div>
+</header>
+<style>
+#<?= $componentId ?> {
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($textColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-link: <?= htmlspecialchars($linkColor) ?>;
+    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+    --luxury-gold: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%);
+    --luxury-gold-solid: #D4AF37;
+    --luxury-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    --luxury-border: 1px solid rgba(212, 175, 55, 0.2);
+    
+    background: var(--pb-bg);
+    color: var(--pb-text);
+    position: relative;
+    z-index: 1000;
+}
+
+#<?= $componentId ?>.luxury-header {
+    background: linear-gradient(135deg, rgba(10, 10, 15, 0.95) 0%, rgba(20, 20, 30, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    border-bottom: var(--luxury-border);
+    box-shadow: var(--luxury-shadow);
+}
+
+#<?= $componentId ?> .luxury-header__container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 40px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+}
+
+#<?= $componentId ?> .luxury-header__logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    text-decoration: none;
+    position: relative;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .luxury-header__logo-text {
+    font-size: clamp(1.5rem, 2vw, 2rem);
+    font-weight: 800;
+    background: var(--luxury-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    position: relative;
+    padding: 5px 0;
+}
+
+#<?= $componentId ?> .luxury-header__logo-text::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--luxury-gold);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s ease;
+}
+
+#<?= $componentId ?> .luxury-header__logo:hover .luxury-header__logo-text::after {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+
+#<?= $componentId ?> .luxury-header__logo img {
+    height: <?= $logoWidth ?>px;
+    width: auto;
+    filter: drop-shadow(0 2px 4px rgba(212, 175, 55, 0.3));
+}
+
+#<?= $componentId ?> .luxury-header__nav {
+    position: relative;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .luxury-header__nav-list {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 40px;
+}
+
+#<?= $componentId ?> .luxury-header__nav-item {
+    position: relative;
+}
+
+#<?= $componentId ?> .luxury-header__nav-link {
+    color: var(--pb-link);
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 8px 0;
+    position: relative;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#<?= $componentId ?> .luxury-header__nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: var(--luxury-gold);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s ease;
+}
+
+#<?= $componentId ?> .luxury-header__nav-link:hover {
+    color: var(--pb-link-hover);
+}
+
+#<?= $componentId ?> .luxury-header__nav-link:hover::before {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+
+#<?= $componentId ?> .luxury-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 25px;
+    position: relative;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .luxury-header__cta {
+    padding: 12px 28px;
+    background: var(--luxury-gold);
+    color: #0a0a0f;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border-radius: 4px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .luxury-header__cta::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+#<?= $componentId ?> .luxury-header__cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+}
+
+#<?= $componentId ?> .luxury-header__cta:hover::before {
+    left: 100%;
+}
+
+#<?= $componentId ?> .luxury-header__mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+}
+
+#<?= $componentId ?> .luxury-header__mobile-toggle-line {
+    width: 24px;
+    height: 2px;
+    background: var(--luxury-gold-solid);
+    transition: all 0.3s ease;
+    border-radius: 1px;
+}
+
+#<?= $componentId ?> .luxury-header__mobile-toggle.active .luxury-header__mobile-toggle-line:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+#<?= $componentId ?> .luxury-header__mobile-toggle.active .luxury-header__mobile-toggle-line:nth-child(2) {
+    opacity: 0;
+}
+
+#<?= $componentId ?> .luxury-header__mobile-toggle.active .luxury-header__mobile-toggle-line:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .luxury-header__container {
+        padding: 0 20px;
+        height: 80px;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav-list {
+        gap: 25px;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> .luxury-header__container {
+        padding: 0 15px;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav {
+        position: fixed;
+        top: 80px;
+        left: 0;
+        width: 100%;
+        background: linear-gradient(135deg, rgba(10, 10, 15, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%);
+        backdrop-filter: blur(15px);
+        padding: 30px 20px;
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.4s ease;
+        border-bottom: var(--luxury-border);
+        box-shadow: var(--luxury-shadow);
+        z-index: 1;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav.active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav-list {
+        flex-direction: column;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav-link {
+        font-size: 1.1rem;
+        padding: 12px 0;
+    }
+    
+    #<?= $componentId ?> .luxury-header__mobile-toggle {
+        display: flex;
+    }
+    
+    #<?= $componentId ?> .luxury-header__cta {
+        padding: 10px 20px;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #<?= $componentId ?> .luxury-header__container {
+        height: 70px;
+    }
+    
+    #<?= $componentId ?> .luxury-header__logo-text {
+        font-size: 1.3rem;
+    }
+    
+    #<?= $componentId ?> .luxury-header__cta {
+        padding: 8px 16px;
+        font-size: 0.8rem;
+    }
+    
+    #<?= $componentId ?> .luxury-header__nav {
+        top: 70px;
+    }
+}
+</style>
+<script>
+const mobileToggle = component.querySelector('.luxury-header__mobile-toggle');
+const nav = component.querySelector('.luxury-header__nav');
+
+if (mobileToggle && nav) {
+    mobileToggle.addEventListener('click', () => {
+        mobileToggle.classList.toggle('active');
+        nav.classList.toggle('active');
+        
+        if (nav.classList.contains('active')) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+    });
+    
+    const navLinks = component.querySelectorAll('.luxury-header__nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            mobileToggle.classList.remove('active');
+            nav.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+    });
+}
+
+let lastScroll = 0;
+const header = component;
+
+window.addEventListener('scroll', () => {
+    const currentScroll = window.pageYOffset;
+    
+    if (currentScroll <= 0) {
+        header.style.transform = 'translateY(0)';
+        return;
+    }
+    
+    if (currentScroll > lastScroll && currentScroll > 100) {
+        header.style.transform = 'translateY(-100%)';
+    } else {
+        header.style.transform = 'translateY(0)';
+    }
+    
+    lastScroll = currentScroll;
+});
+
+header.style.transition = 'transform 0.4s ease';
+</script>
