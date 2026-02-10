@@ -34,6 +34,14 @@ class MasterProcess
     public const MODE_WINDOWS_DISPATCHER = 'windows-dispatcher'; // Windows Dispatcher TCP 透传模式
     
     /**
+     * Worker 生命周期状态（防重复启动）
+     */
+    public const WORKER_STATE_STOPPED  = 'stopped';
+    public const WORKER_STATE_STARTING = 'starting';
+    public const WORKER_STATE_RUNNING  = 'running';
+    public const WORKER_STATE_DRAINING = 'draining';
+    
+    /**
      * 实例名称
      */
     protected string $instanceName = '';
@@ -284,7 +292,7 @@ class MasterProcess
             $this->log(__('  HTTP 重定向端口: %{1}', [$httpRedirectPort > 0 ? (string)$httpRedirectPort : '(未启用)']));
         }
         
-        // 初始化 Worker 信息
+        // 初始化 Worker 信息（含状态机字段，防重复启动）
         $workerPorts = [];
         for ($i = 0; $i < $count; $i++) {
             $currentPort = $workerPort + $i;
@@ -293,6 +301,8 @@ class MasterProcess
                 'pid' => 0,
                 'restarts' => 0,
                 'last_restart' => 0,
+                'state' => self::WORKER_STATE_STOPPED,
+                'state_since' => \time(),
             ];
             $workerPorts[] = $currentPort;
         }
@@ -679,68 +689,103 @@ class MasterProcess
             return;
         }
         
-        // Windows Dispatcher 模式或 Legacy 模式：Worker 各占独立端口
+        // Windows Dispatcher 模式或 Legacy 模式：Worker 各占独立端口，按状态分流检查
         foreach ($this->workers as $workerId => &$worker) {
-            // 跳过正在滚动重启排水中的 Worker（它正在优雅退出，不应被健康检查重启）
+            // 跳过正在滚动重启排水中的 Worker
             if ($this->rollingRestart && $workerId === $this->drainingWorkerId) {
                 continue;
             }
-            // 跳过正在重启中的 Worker（防止并发重启）
+            if (($worker['state'] ?? self::WORKER_STATE_STOPPED) === self::WORKER_STATE_DRAINING) {
+                continue;
+            }
             if ($this->isWorkerRestarting($workerId)) {
                 continue;
             }
             
             $port = $worker['port'];
-            $isRunning = Processer::isPortInUse($port);
+            $state = $worker['state'] ?? self::WORKER_STATE_STOPPED;
             $needRestart = false;
             $reason = '';
+            $isPortInUse = false; // 用于重启前是否需先杀进程
             
-            if (!$isRunning) {
-                // Worker 端口未监听
-                $needRestart = true;
-                $reason = '端口未监听';
-            } else {
-                // 端口在监听，但检查 HTTP 健康检查是否响应（检测僵死进程）
-                // Workerman 模式：放宽检查频率和阈值，避免误判
-                // 每 60 秒做一次 HTTP 健康检查（降低检查频率）
-                $lastHealthCheck = $worker['last_health_check'] ?? 0;
-                if (\time() - $lastHealthCheck >= 60) {
-                    $worker['last_health_check'] = \time();
-                    $isHealthy = $this->checkWorkerHealth($port);
-                    if (!$isHealthy) {
-                        // 健康检查失败，记录失败次数
-                        $worker['health_failures'] = ($worker['health_failures'] ?? 0) + 1;
-                        // 连续 5 次失败才重启（Workerman 模式：更宽松的阈值）
-                        if ($worker['health_failures'] >= 5) {
-                            $needRestart = true;
-                            $reason = 'HTTP 健康检查连续失败 ' . $worker['health_failures'] . ' 次';
+            if ($state === self::WORKER_STATE_STARTING) {
+                // STARTING 期间豁免正常检查，仅做超时（30s）检测
+                $stateSince = (int)($worker['state_since'] ?? 0);
+                if (\time() - $stateSince >= 30) {
+                    $worker['state'] = self::WORKER_STATE_STOPPED;
+                    $worker['state_since'] = \time();
+                    $needRestart = true;
+                    $reason = __('STARTING 超时 30s');
+                }
+            } elseif ($state === self::WORKER_STATE_RUNNING) {
+                // 双信号验证：PID 存活则视为正常；PID 死亡再查端口
+                $pid = (int)($worker['pid'] ?? 0);
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    // PID 存活，可选做 60s HTTP 健康检查
+                    $lastHealthCheck = $worker['last_health_check'] ?? 0;
+                    if (\time() - $lastHealthCheck >= 60) {
+                        $worker['last_health_check'] = \time();
+                        $isHealthy = $this->checkWorkerHealth($port);
+                        if (!$isHealthy) {
+                            $worker['health_failures'] = ($worker['health_failures'] ?? 0) + 1;
+                            if ($worker['health_failures'] >= 5) {
+                                $needRestart = true;
+                                $reason = __('HTTP 健康检查连续失败 %{1} 次', [$worker['health_failures']]);
+                                $worker['health_failures'] = 0;
+                            }
+                        } else {
                             $worker['health_failures'] = 0;
                         }
+                    }
+                } else {
+                    // PID 死亡
+                    Processer::clearPortCache($port);
+                    if (Processer::isPortInUse($port)) {
+                        $newPid = Processer::getProcessIdByPort($port);
+                        if ($newPid > 0 && Processer::isRunningByPid($newPid)) {
+                            $worker['pid'] = $newPid;
+                            $worker['state'] = self::WORKER_STATE_RUNNING;
+                            $worker['state_since'] = \time();
+                        } else {
+                            $needRestart = true;
+                            $reason = __('端口在监听但无法获取有效 PID');
+                            $isPortInUse = true;
+                        }
                     } else {
-                        // 健康检查成功，重置失败计数
-                        $worker['health_failures'] = 0;
+                        $worker['state'] = self::WORKER_STATE_STOPPED;
+                        $worker['state_since'] = \time();
+                        $needRestart = true;
+                        $reason = __('PID 死亡且端口未监听');
                     }
                 }
+            } else {
+                // STOPPED 或未知状态 → 触发重启
+                if ($state !== self::WORKER_STATE_STOPPED) {
+                    $worker['state'] = self::WORKER_STATE_STOPPED;
+                    $worker['state_since'] = \time();
+                }
+                $needRestart = true;
+                if ($reason === '') {
+                    $reason = __('Worker 已停止');
+                }
+                Processer::clearPortCache($port);
+                $isPortInUse = Processer::isPortInUse($port);
             }
             
             if ($needRestart) {
-                // Worker 需要重启
                 if ($worker['restarts'] >= $this->maxRestarts) {
-                    // 重启次数过多，暂时跳过
-                    if (\time() - $worker['last_restart'] < 60) {
+                    if (\time() - ($worker['last_restart'] ?? 0) < 60) {
                         continue;
                     }
-                    // 超过 60 秒后重置计数并重试
                     $worker['restarts'] = 0;
                 }
                 
                 $this->log(__('Worker #%{1} (端口: %{2}) 需要重启，原因: %{3}', [$workerId, $port, $reason]), 'warning');
                 
-                // 如果端口在监听但无响应，先强制杀死
-                if ($isRunning) {
+                if ($isPortInUse) {
                     $this->log(__('强制终止僵死 Worker #%{1}', [$workerId]), 'warning');
                     Processer::killProcessByPort($port);
-                    \usleep(500000); // 等待 500ms
+                    \usleep(500000);
                 }
                 
                 $newPid = $this->restartWorker($workerId, $port);
@@ -1105,13 +1150,14 @@ class MasterProcess
                     }
                 }
                 
-                // 批量更新状态
+                // 批量更新状态；状态机：批量启动后进入 STARTING
                 $pidIndex = 0;
                 foreach ($this->workers as $workerId => &$worker) {
                     if (!empty($worker['pid']) && Processer::isRunningByPid($worker['pid'])) {
                         continue;
                     }
-                    
+                    $worker['state'] = self::WORKER_STATE_STARTING;
+                    $worker['state_since'] = \time();
                     $pid = $pids[$pidIndex++] ?? 0;
                     if ($pid > 0) {
                         $worker['pid'] = $pid;
@@ -1134,6 +1180,8 @@ class MasterProcess
                     $worker['pid'] = $pid;
                     $worker['started_at'] = \time();
                     $worker['restarts'] = 0;
+                    $worker['state'] = self::WORKER_STATE_STARTING;
+                    $worker['state_since'] = \time();
                     $this->log(__('Worker #%{1} (端口: %{2}) 启动成功，PID: %{3}', [$workerId, $port, $pid]), 'success');
                 }
             }
@@ -1360,6 +1408,21 @@ POWERSHELL;
      */
     protected function doRestartWorker(int $workerId, int $port): int
     {
+        // 启动前双重保护：端口已在监听且存在活跃 PID 则不再启动，避免重复 Worker
+        Processer::clearPortCache($port);
+        if (Processer::isPortInUse($port)) {
+            $existingPid = Processer::getProcessIdByPort($port);
+            if ($existingPid > 0 && Processer::isRunningByPid($existingPid)) {
+                $this->log(__('Worker #%{1} 端口 %{2} 已有活跃进程 (PID: %{3})，跳过启动', [$workerId, $port, $existingPid]));
+                if (isset($this->workers[$workerId])) {
+                    $this->workers[$workerId]['pid'] = $existingPid;
+                    $this->workers[$workerId]['state'] = self::WORKER_STATE_RUNNING;
+                    $this->workers[$workerId]['state_since'] = \time();
+                }
+                return $existingPid;
+            }
+        }
+        
         $phpBinary = PHP_BINARY;
         $host = $this->config['host'] ?? '127.0.0.1';
         
@@ -1395,6 +1458,12 @@ POWERSHELL;
         // 前台模式标记（Worker 可据此决定输出方式）
         if ($this->frontend) {
             $argList[] = '--frontend';
+        }
+        
+        // 状态机：进入 STARTING，健康检查在此期间豁免
+        if (isset($this->workers[$workerId])) {
+            $this->workers[$workerId]['state'] = self::WORKER_STATE_STARTING;
+            $this->workers[$workerId]['state_since'] = \time();
         }
         
         // 启动进程
@@ -1516,24 +1585,69 @@ POWERSHELL;
         $host = $this->config['host'] ?? '127.0.0.1';
         $httpsPort = (int)($this->config['port'] ?? 443);
         
-        // 构建命令字符串，使用 Processer 统一管理进程启动
-        // Processer::create() 会自动选择可用的启动方法（proc_open > PowerShell > cmd > nohup）
-        // 并自动注册 PID 到进程管理器
         $processName = self::HTTP_REDIRECT_PROCESS_NAME;
-        $controlPortArg = $this->controlPort > 0 ? ' --control-port=' . $this->controlPort : '';
-        $command = \sprintf(
-            '"%s" "%s" %s %d %d %s --name=%s%s',
-            $phpBinary,
+        $argList = [
             $this->httpRedirectScript,
             $host,
-            $httpPort,
-            $httpsPort,
+            (string) $httpPort,
+            (string) $httpsPort,
             $this->instanceName,
-            $processName,
-            $controlPortArg
-        );
+            '--name=' . $processName,
+        ];
+        if ($this->controlPort > 0) {
+            $argList[] = '--control-port=' . $this->controlPort;
+        }
+        if ($this->frontend) {
+            $argList[] = '--frontend';
+        }
         
-        // 使用 Processer 统一管理进程启动（会自动选择可用函数并注册 PID）
+        if (IS_WIN) {
+            // Windows: 使用 PowerShell 启动，避免 cmd 黑框
+            $phpBinaryEsc = \str_replace('/', '\\', $phpBinary);
+            $windowStyle = $this->frontend ? 'Normal' : 'Hidden';
+            $escapedArgs = \array_map(function ($arg) {
+                $arg = (string) $arg;
+                return '"' . \str_replace('"', '`"', $arg) . '"';
+            }, $argList);
+            $argsStr = \implode(',', $escapedArgs);
+            
+            $psScript = <<<POWERSHELL
+\$p = Start-Process -FilePath "{$phpBinaryEsc}" -ArgumentList {$argsStr} -WindowStyle {$windowStyle} -PassThru
+\$p.Id
+POWERSHELL;
+            
+            $ps1File = Env::VAR_DIR . 'tmp' . DS . "start_http_redirect_{$httpPort}.ps1";
+            $ps1Dir = \dirname($ps1File);
+            if (!\is_dir($ps1Dir)) {
+                @\mkdir($ps1Dir, 0755, true);
+            }
+            \file_put_contents($ps1File, $psScript);
+            $output = [];
+            @\exec("powershell -NoProfile -ExecutionPolicy Bypass -File \"{$ps1File}\" 2>&1", $output);
+            @\usleep(300000);
+            @\unlink($ps1File);
+            
+            $pid = 0;
+            foreach ($output as $line) {
+                $line = \trim($line);
+                if (\is_numeric($line)) {
+                    $pid = (int) $line;
+                    break;
+                }
+            }
+            
+            if ($pid > 0) {
+                $pname = '--name=' . $processName;
+                Processer::setPid($pname, $pid);
+                Processer::setProcessPorts($pname, [$httpPort]);
+            }
+            return $pid;
+        }
+        
+        // 非 Windows：使用 Processer 统一管理进程启动
+        $args = \array_merge([$phpBinary], $argList);
+        $command = \implode(' ', \array_map('escapeshellarg', $args));
+        
         // block=false 表示非阻塞启动（后台进程）
         // Processer::create() 内部会检查 proc_open, exec, shell_exec, popen 等函数
         // 如果函数不可用，会自动选择其他方案，并提示用户启用函数
@@ -1632,6 +1746,18 @@ POWERSHELL;
         // 额外等待 2 秒，确保进程完全稳定
         $this->log(__('  额外稳定化等待 2 秒...'));
         \sleep(2);
+        
+        // 状态机：将仍为 STARTING 且端口已就绪的 Worker 标记为 RUNNING
+        foreach ($this->workers as $wid => &$w) {
+            if (($w['state'] ?? self::WORKER_STATE_STOPPED) === self::WORKER_STATE_STARTING) {
+                $port = $w['port'] ?? 0;
+                if ($port > 0 && Processer::isPortInUse($port)) {
+                    $w['state'] = self::WORKER_STATE_RUNNING;
+                    $w['state_since'] = \time();
+                }
+            }
+        }
+        unset($w);
     }
     
     /**
@@ -1646,11 +1772,13 @@ POWERSHELL;
     protected function checkWorkerHealth(int $port): bool
     {
         $host = $this->config['host'] ?? '127.0.0.1';
+        // 健康检查应使用可连接地址，监听地址为 0.0.0.0/:: 时使用回环
+        $healthHost = ($host === '0.0.0.0' || $host === '::' || $host === '') ? '127.0.0.1' : $host;
         
         // SSL 模式下使用 HTTPS，否则使用 HTTP
         $sslEnabled = !empty($this->sslCert) && !empty($this->sslKey);
         $scheme = $sslEnabled ? 'https' : 'http';
-        $url = "{$scheme}://{$host}:{$port}/_wls/health";
+        $url = "{$scheme}://{$healthHost}:{$port}/_wls/health";
         
         // 使用 stream_context 设置超时（Workerman 模式：宽松超时，避免误判）
         $contextOptions = [
@@ -1850,6 +1978,12 @@ POWERSHELL;
     protected function handleWorkerReady(int $workerId, int $port): void
     {
         $this->log(__('Worker #%{1} (端口: %{2}) 就绪', [$workerId, $port]));
+        
+        // 状态机：READY 表示 Worker 可接收流量，转为 RUNNING
+        if (isset($this->workers[$workerId])) {
+            $this->workers[$workerId]['state'] = self::WORKER_STATE_RUNNING;
+            $this->workers[$workerId]['state_since'] = \time();
+        }
         
         // 仅在滚动重启中发送 undrain（初始启动时 Worker 从未被 drain，无需 undrain）
         if ($this->rollingRestart && $this->controlServer) {
@@ -2065,9 +2199,11 @@ POWERSHELL;
                 $wid  = $msg['worker_id'] ?? 0;
                 $this->log(__('进程注册: role=%{1}, pid=%{2}, port=%{3}, worker_id=%{4}', [$role, $pid, $port, $wid]));
                 
-                // 更新内部 workers 数组的 PID（精确 PID，不再猜测）
+                // 更新内部 workers 数组的 PID（精确 PID，不再猜测）；状态机：IPC 注册为最可靠的就绪信号
                 if ($role === ControlMessage::ROLE_WORKER && $wid > 0 && isset($this->workers[$wid])) {
                     $this->workers[$wid]['pid'] = (int)$pid;
+                    $this->workers[$wid]['state'] = self::WORKER_STATE_RUNNING;
+                    $this->workers[$wid]['state_since'] = \time();
                 }
                 break;
                 

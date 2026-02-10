@@ -200,6 +200,37 @@
         toolbar.appendChild(card);
         slot._infoCardOpen = true;
         
+        // 边界检测：自动调整水平和垂直方向
+        requestAnimationFrame(() => {
+            const cardRect = card.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            
+            // 水平边界检测
+            if (cardRect.left < 4) {
+                // 左侧溢出 → 改为向右展开
+                card.style.right = 'auto';
+                card.style.left = '0';
+            } else if (cardRect.right > vw - 4) {
+                // 右侧溢出 → 确保向左展开（默认行为，但可能需要进一步调整）
+                card.style.left = 'auto';
+                card.style.right = '0';
+                // 如果向左也溢出，限制最大宽度
+                const recalc = card.getBoundingClientRect();
+                if (recalc.left < 4) {
+                    card.style.right = 'auto';
+                    card.style.left = -recalc.left + 4 + 'px';
+                }
+            }
+            
+            // 垂直边界检测
+            if (cardRect.bottom > vh - 4) {
+                // 下方溢出 → 改为向上展示
+                card.style.top = 'auto';
+                card.style.bottom = 'calc(100% + 6px)';
+            }
+        });
+        
         // 点击其他地方关闭
         function closeCard(e) {
             if (!card.contains(e.target) && !e.target.closest('.slot-info-btn')) {
@@ -250,6 +281,92 @@
         slot.classList.add('slot-active');
     }
     
+    // ========== iframe 内拖拽排序辅助函数 ==========
+    
+    /**
+     * 获取插槽内的部件元素（widget-wrapper / data-layout-id）
+     * @param {HTMLElement} slot - 插槽元素
+     * @returns {HTMLElement[]}
+     */
+    function getSlotWidgetElements(slot) {
+        return Array.from(slot.querySelectorAll(
+            '.widget-wrapper[data-layout-id], [data-widget-code], .widget-content'
+        )).filter(function(el) {
+            // 只取直接在此 slot 下的，不取嵌套 slot 内的
+            return el.closest('[data-wslot]') === slot;
+        });
+    }
+    
+    /**
+     * 计算鼠标在部件列表中的插入位置
+     * @param {HTMLElement[]} items - 部件元素数组
+     * @param {number} mouseY - 鼠标 clientY
+     * @returns {number}
+     */
+    function getIframeInsertionIndex(items, mouseY) {
+        if (items.length === 0) return 0;
+        
+        for (var i = 0; i < items.length; i++) {
+            var rect = items[i].getBoundingClientRect();
+            var midY = rect.top + rect.height / 2;
+            if (mouseY < midY) {
+                return i;
+            }
+        }
+        return items.length;
+    }
+    
+    /**
+     * 显示插入位置指示器
+     * @param {HTMLElement} slot - 插槽元素
+     * @param {number} mouseY - 鼠标 clientY
+     */
+    function showIframeInsertionIndicator(slot, mouseY) {
+        removeIframeInsertionIndicators(slot);
+        
+        var items = getSlotWidgetElements(slot);
+        if (items.length === 0) {
+            // 空插槽：整体高亮
+            slot.classList.add('editor-drop-empty');
+            slot._editorInsertIndex = 0;
+            return;
+        }
+        
+        var insertIndex = getIframeInsertionIndex(items, mouseY);
+        slot._editorInsertIndex = insertIndex;
+        
+        // 创建指示线
+        var indicator = document.createElement('div');
+        indicator.className = 'editor-insert-indicator';
+        indicator.innerHTML = '<span class="editor-insert-dot"></span>' +
+                              '<span class="editor-insert-line"></span>' +
+                              '<span class="editor-insert-dot"></span>';
+        
+        if (insertIndex < items.length) {
+            items[insertIndex].parentNode.insertBefore(indicator, items[insertIndex]);
+        } else {
+            var lastItem = items[items.length - 1];
+            if (lastItem.nextSibling) {
+                lastItem.parentNode.insertBefore(indicator, lastItem.nextSibling);
+            } else {
+                lastItem.parentNode.appendChild(indicator);
+            }
+        }
+    }
+    
+    /**
+     * 移除所有插入指示器
+     * @param {HTMLElement} [scope] - 限定范围
+     */
+    function removeIframeInsertionIndicators(scope) {
+        var root = scope || document;
+        root.querySelectorAll('.editor-insert-indicator').forEach(function(el) { el.remove(); });
+        root.querySelectorAll('.editor-drop-empty').forEach(function(el) { el.classList.remove('editor-drop-empty'); });
+        if (scope) {
+            scope._editorInsertIndex = null;
+        }
+    }
+    
     /**
      * 初始化单个插槽的所有交互能力
      * 包括：选择按钮、点击选中、拖放接收、占位符点击
@@ -268,45 +385,52 @@
         // 添加选择按钮
         addSelectButton(slot);
         
-        // 点击事件（备用，主要用选择按钮）
+        // 插槽内链接：阻止导航跳转，但不阻止其他交互
         slot.addEventListener('click', function(e) {
-            // 如果点击的是工具栏内的按钮，不处理
-            if (e.target.closest('.slot-toolbar')) return;
-            
-            // data-editor-interactive 标记的元素保持原生交互，不拦截
-            if (e.target.closest('[data-editor-interactive]')) return;
-            
-            // 嵌套插槽：点击落在内层子插槽中时，由子插槽处理，外层跳过
-            const closestSlot = e.target.closest('[data-wslot]');
-            if (closestSlot && closestSlot !== this) return;
-            
-            // 如果点击的是链接或按钮，阻止默认行为并选中插槽
-            if (e.target.closest('a') || e.target.closest('button')) {
-                e.preventDefault();
+            const link = e.target.closest('a[href]');
+            if (link && !link.closest('.slot-toolbar') && !link.closest('[data-editor-interactive]')) {
+                e.preventDefault(); // 仅阻止导航，不调用 selectSlot
             }
-            e.stopPropagation();
-            
-            selectSlot(this);
+            // 不拦截其他元素的点击 — 选择由工具栏"选择"按钮负责
         });
         
-        // 拖放事件
+        // 拖放事件 — 带插入位置指示器
         slot.addEventListener('dragover', function(e) {
             e.preventDefault();
             e.stopPropagation();
             this.classList.add('drag-over');
             this.classList.remove('drag-invalid');
+            
+            // 计算并显示插入位置指示器
+            showIframeInsertionIndicator(this, e.clientY);
         });
         
         slot.addEventListener('dragleave', function(e) {
             if (!this.contains(e.relatedTarget)) {
                 this.classList.remove('drag-over', 'drag-invalid');
+                removeIframeInsertionIndicators(this);
             }
         });
         
         slot.addEventListener('drop', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            
+            // #region agent log
+            try {
+                var jsonRaw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                var hasData = !!jsonRaw;
+                if (typeof window.parent.fetch === 'function') {
+                    window.parent.fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'editor-mode.js:slotDrop:entry',message:'iframe slot drop',data:{slotId:this.dataset.wslot,hasJsonData:hasData},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
+                }
+            } catch (err) {}
+            // #endregion
+            // 获取插入索引（在清理前读取）
+            const insertIndex = this._editorInsertIndex;
+            
+            // 清理视觉状态
             this.classList.remove('drag-over', 'drag-invalid');
+            removeIframeInsertionIndicators(this);
             
             // 获取拖放的部件数据
             let widgetData;
@@ -325,12 +449,19 @@
                 return;
             }
             
+            const isExclusive = this.dataset.wslotExclusive === 'true';
+            const isMultiple = this.dataset.wslotMultiple !== 'false';
+            const maxAttr = this.dataset.wslotMax;
+            const maxWidgets = maxAttr ? parseInt(maxAttr, 10) : -1;
+            const currentWidgets = getSlotWidgetElements(this);
+            const currentCount = currentWidgets.length;
+            
             const slotData = {
                 id: this.dataset.wslot,
                 name: this.dataset.wslotName || this.dataset.wslot,
                 accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-                exclusive: this.dataset.wslotExclusive === 'true',
-                multiple: this.dataset.wslotMultiple === 'true',
+                exclusive: isExclusive,
+                multiple: isMultiple,
                 position: this.dataset.wslotPosition || ''
             };
             
@@ -358,12 +489,43 @@
                 return;
             }
             
-            // 通知父窗口部件被放入插槽
+            // 满额检查（独占模式走替换逻辑，不受此限制）
+            if (!isExclusive && maxWidgets > 0 && currentCount >= maxWidgets) {
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'widget-rejected',
+                        widget: widgetData,
+                        slot: slotData,
+                        reason: `插槽 "${slotData.name}" 已满（${currentCount}/${maxWidgets}）`
+                    }, '*');
+                }
+                return;
+            }
+            
+            // 计算 sort_order
+            let sortOrder;
+            if (isExclusive) {
+                sortOrder = 0;
+            } else if (insertIndex != null) {
+                sortOrder = insertIndex;
+            } else {
+                sortOrder = currentCount;
+            }
+            
+            // 通知父窗口部件被放入插槽（附带 sort_order）
             if (window.parent !== window) {
+                // #region agent log
+                try {
+                    if (typeof window.parent.fetch === 'function') {
+                        window.parent.fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'editor-mode.js:slotDrop:postMessage',message:'postMessage widget-dropped',data:{slotId:slotData.id,sortOrder:sortOrder},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
+                    }
+                } catch (err) {}
+                // #endregion
                 window.parent.postMessage({
                     type: 'widget-dropped',
                     widget: widgetData,
-                    slot: slotData
+                    slot: slotData,
+                    sort_order: sortOrder
                 }, '*');
             }
             

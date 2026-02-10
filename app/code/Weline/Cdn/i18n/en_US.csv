@@ -173,6 +173,12 @@ CDN缓存清理,CDN缓存清理
 CDN攻击检测信号,CDN攻击检测信号
 CDN攻击恢复信号,CDN攻击恢复信号
 CDN统一请求事件,CDN统一请求事件
+CDN供应商列表,"CDN Provider List"
+"获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。","Triggered when fetching provider list; allows other modules to extend or modify providers. Data includes providers array."
+CDN账户列表,"CDN Account List"
+"获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。","Triggered when fetching account list; allows other modules to extend or modify accounts. Data includes accounts and adapter filter."
+CDN域名管理工具栏扩展,"CDN domain management toolbar extension"
+在CDN域名管理列表页操作栏按钮区域后注入扩展内容。,"Inject extension content after the toolbar button area on the CDN domain management list page."
 检测到攻击,检测到攻击
 已通知CDN,已通知CDN
 秒,秒
@@ -210,6 +216,19 @@ CDN统一请求事件,CDN统一请求事件
 域名未配置账户且无默认账户,域名未配置账户且无默认账户
 账户未激活,账户未激活
 未配置账户凭据,未配置账户凭据
+id属性不能为空,id属性不能为空
+搜索CDN账户...,"Search CDN accounts..."
+请选择CDN账户,"Please select a CDN account"
+加载中...,加载中...
+未找到匹配的账户,未找到匹配的账户
+加载失败,加载失败
+请先选择供应商,"Please select a provider first"
+暂无可用账户，请先创建,"No available accounts, please create one first"
+启用,启用
+禁用,禁用
+搜索CDN供应商...,"Search CDN providers..."
+请选择CDN供应商,"Please select a CDN provider"
+未找到匹配的供应商,"No matching provider found"
 关联域名,关联域名
 账户关联域名,账户关联域名
 首页,首页
@@ -219,8 +238,6 @@ CDN统一请求事件,CDN统一请求事件
 域名名称,域名名称
 适配器,适配器
 操作,操作
-启用,启用
-禁用,禁用
 编辑,编辑
 返回,返回
 编辑账户,编辑账户
@@ -241,6 +258,9 @@ CDN统一请求事件,CDN统一请求事件
 前往Cloudflare创建Token,前往Cloudflare创建Token
 "API Token","API Token"
 "请输入API Token","请输入API Token"
+"Account ID","Account ID"
+"请输入Account ID（Cloudflare）","Enter Account ID (Cloudflare)"
+"Cloudflare Zone 创建需要 Account ID","Cloudflare zone creation requires Account ID"
 默认账户,默认账户
 设置为该适配器的默认账户,设置为该适配器的默认账户
 保存,保存
@@ -397,7 +417,6 @@ CDN规则管理,CDN规则管理
 推送到CDN,推送到CDN
 规则配置（JSON格式）,规则配置（JSON格式）
 规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。,规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。
-加载失败,加载失败
 加载失败：,加载失败：
 JSON格式错误,JSON格式错误
 JSON格式错误：,JSON格式错误：

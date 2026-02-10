@@ -53,7 +53,7 @@ class Auto extends CommandAbstract
      */
     public function tip(): string
     {
-        return __("Let's Encrypt 自动申请/续签 SSL 证书");
+        return __('自动申请/续签 SSL 证书（Let\'s Encrypt/LiteSSL）');
     }
     
     /**
@@ -66,6 +66,7 @@ class Auto extends CommandAbstract
         $domain = $args['domain'] ?? $args['d'] ?? null;
         $email = $args['email'] ?? $args['e'] ?? $this->getDefaultEmail();
         $webroot = $args['webroot'] ?? $args['w'] ?? BP . 'pub';
+        $provider = $args['provider'] ?? $args['p'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT;
         $staging = isset($args['staging']) || isset($args['test']);
         $renewDays = (int) ($args['renew-days'] ?? 30);
         
@@ -78,7 +79,7 @@ class Auto extends CommandAbstract
         switch ($action) {
             case 'request':
             case 'apply':
-                $this->requestCertificate($domain, $webroot, $email);
+                $this->requestCertificate($domain, $webroot, $email, (string) $provider);
                 break;
                 
             case 'renew':
@@ -112,7 +113,7 @@ class Auto extends CommandAbstract
     /**
      * 申请证书
      */
-    protected function requestCertificate(?string $domain, string $webroot, string $email): void
+    protected function requestCertificate(?string $domain, string $webroot, string $email, string $provider): void
     {
         if (empty($domain)) {
             $this->printer->error(__('请指定域名：--domain example.com'));
@@ -130,6 +131,7 @@ class Auto extends CommandAbstract
         $this->printer->note(__('正在为 %{1} 申请 SSL 证书...', [$domain]));
         $this->printer->note(__('联系邮箱：%{1}', [$email]));
         $this->printer->note(__('Webroot：%{1}', [$webroot]));
+        $this->printer->note(__('证书提供商：%{1}', [$provider]));
         echo "\n";
         
         // 检查 webroot 是否存在
@@ -138,7 +140,7 @@ class Auto extends CommandAbstract
             return;
         }
         
-        $result = $this->sslService->requestCertificate($domain, $webroot, $email);
+        $result = $this->sslService->requestCertificate($domain, $webroot, $email, 0, $provider);
         
         if ($result['success']) {
             $this->printer->success(__('✓ 证书申请成功！'));
@@ -148,6 +150,7 @@ class Auto extends CommandAbstract
             $this->printer->note(__('证书路径：%{1}', [$cert->getCertPath()]));
             $this->printer->note(__('私钥路径：%{1}', [$cert->getKeyPath()]));
             $this->printer->note(__('到期时间：%{1}', [$cert->getExpiresAt()]));
+            $this->printer->note(__('证书提供商：%{1}', [$cert->getProvider() ?: $provider]));
             echo "\n";
             
             $this->printer->setup(__('启用 HTTPS：'));
@@ -430,12 +433,13 @@ class Auto extends CommandAbstract
     {
         return CommandHelper::formatHelp(
             'server:ssl:auto [action]',
-            __("使用 Let's Encrypt 自动管理 SSL 证书"),
+            __('使用 Let\'s Encrypt / LiteSSL 自动管理 SSL 证书'),
             [
                 '[action]' => __('操作：status/list/request/renew/sync/enable/disable'),
                 '-d, --domain <domain>' => __('指定域名'),
                 '-e, --email <email>' => __('联系邮箱（Let\'s Encrypt 要求）'),
                 '-w, --webroot <path>' => __('Webroot 路径（默认：pub/）'),
+                '-p, --provider <provider>' => __('证书提供商（letsencrypt/litessl）'),
                 '--renew-days <days>' => __('提前续签天数（默认：30）'),
                 '--staging' => __('使用 Let\'s Encrypt 测试环境'),
             ],

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- RDP 远程桌面管理 -->
+    <add source="Weline_RdpWrapper::rdp_management"
+         name="rdp_management"
+         title="远程桌面管理"
+         action="rdpWrapper/backend/index"
+         parent="Weline_Backend::system_config"
+         icon="mdi mdi-remote-desktop"
+         order="9000"/>
+
+</menus>

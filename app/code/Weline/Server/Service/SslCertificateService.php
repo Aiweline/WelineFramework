@@ -36,10 +36,22 @@ class SslCertificateService
     public const ISSUER_LETS_ENCRYPT = "Let's Encrypt";
     
     /**
+     * 证书申请提供商
+     */
+    public const PROVIDER_LETS_ENCRYPT = 'letsencrypt';
+    public const PROVIDER_LITESSL = 'litessl';
+    public const PROVIDER_SELF_SIGNED = 'self_signed';
+    
+    /**
      * Let's Encrypt ACME 目录
      */
     protected const ACME_DIRECTORY_PROD = 'https://acme-v02.api.letsencrypt.org/directory';
     protected const ACME_DIRECTORY_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory';
+    
+    /**
+     * LiteSSL ACME 目录（Sectigo DV）
+     */
+    protected const ACME_DIRECTORY_LITESSL_PROD = 'https://acme.sectigo.com/v2/DV';
     
     /**
      * 证书存储基础目录
@@ -55,6 +67,11 @@ class SslCertificateService
      * ACME 目录 URL
      */
     protected string $acmeDirectory;
+    
+    /**
+     * ACME 提供商
+     */
+    protected string $acmeProvider = self::PROVIDER_LETS_ENCRYPT;
     
     /**
      * ACME 目录缓存
@@ -115,7 +132,7 @@ class SslCertificateService
     {
         $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
         $this->accountKeyPath = $this->certBaseDir . 'account.key';
-        $this->acmeDirectory = self::ACME_DIRECTORY_PROD;
+        $this->updateAcmeDirectory();
         $this->certModel = ObjectManager::getInstance(SslCertificate::class);
         
         // 确保目录存在
@@ -130,8 +147,74 @@ class SslCertificateService
     public function setStaging(bool $staging): self
     {
         $this->staging = $staging;
-        $this->acmeDirectory = $staging ? self::ACME_DIRECTORY_STAGING : self::ACME_DIRECTORY_PROD;
+        $this->updateAcmeDirectory();
         return $this;
+    }
+    
+    /**
+     * 设置 ACME 提供商
+     */
+    public function setAcmeProvider(string $provider): self
+    {
+        $this->acmeProvider = $this->normalizeAcmeProvider($provider);
+        $this->updateAcmeDirectory();
+        return $this;
+    }
+    
+    /**
+     * 获取 ACME 提供商
+     */
+    public function getAcmeProvider(): string
+    {
+        return $this->acmeProvider;
+    }
+    
+    /**
+     * 更新 ACME 目录
+     */
+    protected function updateAcmeDirectory(): void
+    {
+        $directory = $this->resolveAcmeDirectory($this->acmeProvider, $this->staging);
+        if ($directory !== null) {
+            if (!isset($this->acmeDirectory) || $this->acmeDirectory !== $directory) {
+                $this->directoryCache = null;
+            }
+            $this->acmeDirectory = $directory;
+        }
+    }
+    
+    /**
+     * 解析 ACME 目录
+     */
+    protected function resolveAcmeDirectory(string $provider, bool $staging): ?string
+    {
+        return match ($provider) {
+            self::PROVIDER_LETS_ENCRYPT => $staging ? self::ACME_DIRECTORY_STAGING : self::ACME_DIRECTORY_PROD,
+            self::PROVIDER_LITESSL => $staging ? null : self::ACME_DIRECTORY_LITESSL_PROD,
+            default => null,
+        };
+    }
+    
+    /**
+     * 规范化 ACME 提供商
+     */
+    protected function normalizeAcmeProvider(string $provider): string
+    {
+        $provider = \strtolower(\trim($provider));
+        return match ($provider) {
+            '', 'letsencrypt', 'let\'s encrypt', 'le' => self::PROVIDER_LETS_ENCRYPT,
+            'litessl', 'lite-ssl', 'lite_ssl' => self::PROVIDER_LITESSL,
+            'self-signed', 'self_signed', 'selfsigned' => self::PROVIDER_SELF_SIGNED,
+            default => $provider,
+        };
+    }
+    
+    /**
+     * 判断是否支持的 ACME 提供商
+     */
+    protected function isSupportedProvider(string $provider): bool
+    {
+        return \in_array($provider, [self::PROVIDER_LETS_ENCRYPT, self::PROVIDER_LITESSL, self::PROVIDER_SELF_SIGNED], true);
     }
     
     /**
@@ -667,7 +750,15 @@ CNF;
             @\chmod($keyPath, 0600);
             
             // 更新数据库记录
-            $this->updateCertificateRecord($domain, $certPath, $keyPath, self::ISSUER_SELF_SIGNED, $validDays, $websiteId);
+            $this->updateCertificateRecord(
+                $domain,
+                $certPath,
+                $keyPath,
+                self::ISSUER_SELF_SIGNED,
+                $validDays,
+                $websiteId,
+                self::PROVIDER_SELF_SIGNED
+            );
             
             return [
                 'success' => true,
@@ -696,7 +787,8 @@ CNF;
         string $keyPath,
         string $issuer,
         int $validDays,
-        int $websiteId = 0
+        int $websiteId = 0,
+        string $provider = self::PROVIDER_SELF_SIGNED
     ): void {
         try {
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
@@ -720,6 +812,7 @@ CNF;
                 ->setKeyPath($keyPath)
                 ->setCertType($certType)
                 ->setIssuer($issuer)
+                ->setProvider($provider)
                 ->setIssuedAt(\date('Y-m-d H:i:s'))
                 ->setExpiresAt($expiresAt)
                 ->setStatus(SslCertificate::STATUS_ACTIVE)
@@ -940,9 +1033,29 @@ CNF;
      * @param int $websiteId 关联的网站 ID
      * @return array ['success' => bool, 'message' => string, 'cert' => SslCertificate|null]
      */
-    public function requestCertificate(string $domain, string $webroot, string $email, int $websiteId = 0): array
+    public function requestCertificate(
+        string $domain,
+        string $webroot,
+        string $email,
+        int $websiteId = 0,
+        string $provider = self::PROVIDER_LETS_ENCRYPT
+    ): array
     {
         try {
+            $provider = $this->normalizeAcmeProvider($provider);
+            if (!\in_array($provider, [self::PROVIDER_LETS_ENCRYPT, self::PROVIDER_LITESSL], true)) {
+                return ['success' => false, 'message' => __('不支持的证书提供商：%{provider}', ['provider' => $provider]), 'cert' => null];
+            }
+            
+            if ($provider === self::PROVIDER_LITESSL && $this->staging) {
+                return ['success' => false, 'message' => __('LiteSSL 暂不支持测试环境'), 'cert' => null];
+            }
+            
+            $this->setAcmeProvider($provider);
+            if ($this->resolveAcmeDirectory($this->acmeProvider, $this->staging) === null) {
+                return ['success' => false, 'message' => __('无法获取证书提供商的 ACME 目录'), 'cert' => null];
+            }
+            
             // 1. 确保账户密钥存在
             if (!$this->ensureAccountKey()) {
                 return ['success' => false, 'message' => __('无法创建账户密钥'), 'cert' => null];
@@ -958,8 +1071,11 @@ CNF;
                 $cert->setDomain($domain)
                     ->setWebsiteId($websiteId)
                     ->setCertType($certType)
+                    ->setProvider($provider)
                     ->setStatus(SslCertificate::STATUS_PENDING)
                     ->setAutoRenew(true);
+            } else {
+                $cert->setProvider($provider);
             }
             
             // 3. 设置证书路径
@@ -1022,7 +1138,8 @@ CNF;
             $cert->getDomain(),
             $webroot,
             $email,
-            $cert->getWebsiteId()
+            $cert->getWebsiteId(),
+            $cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT
         );
     }
     

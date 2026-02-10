@@ -11,7 +11,9 @@
             "description": "页面顶部导航区域",
             "multiple": false,
             "required": true,
-            "accepts": ["header"],
+            "accepts": [
+                "header"
+            ],
             "default_component": "header-nav"
         },
         "content": {
@@ -20,8 +22,18 @@
             "description": "页面主要内容区域",
             "multiple": true,
             "required": false,
-            "accepts": ["content", "widget"],
-            "default_components": ["hero", "features", "pricing", "testimonials", "cta-banner", "faq"]
+            "accepts": [
+                "content",
+                "widget"
+            ],
+            "default_components": [
+                "hero",
+                "features",
+                "pricing",
+                "testimonials",
+                "cta-banner",
+                "faq"
+            ]
         },
         "footer": {
             "name": "底部区域",
@@ -29,7 +41,9 @@
             "description": "页面底部链接和版权区域",
             "multiple": false,
             "required": true,
-            "accepts": ["footer"],
+            "accepts": [
+                "footer"
+            ],
             "default_component": "footer-links"
         }
     },
@@ -44,9 +58,16 @@
             "icon": "bi-menu-button-wide",
             "sort_order": 1,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["header", "navigation", "cta", "color_scheme"],
-            "file": "header/nav.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "header",
+                "navigation",
+                "cta",
+                "color_scheme"
+            ],
+            "file": "header\/nav.phtml",
             "default_config": {
                 "logo.display": "yes",
                 "logo.text": "SaaSFlow",
@@ -66,9 +87,16 @@
             "icon": "bi-badge-hd",
             "sort_order": 10,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["content", "cta", "visual", "style"],
-            "file": "content/hero.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "content",
+                "cta",
+                "visual",
+                "style"
+            ],
+            "file": "content\/hero.phtml",
             "default_config": {
                 "content.badge": "Now in Public Beta",
                 "content.title": "Ship faster with the modern SaaS platform",
@@ -86,9 +114,15 @@
             "icon": "bi-stars",
             "sort_order": 20,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["content", "features", "style"],
-            "file": "content/features.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "content",
+                "features",
+                "style"
+            ],
+            "file": "content\/features.phtml",
             "default_config": {
                 "content.badge": "Features",
                 "content.title": "Everything you need to scale"
@@ -104,9 +138,15 @@
             "icon": "bi-currency-dollar",
             "sort_order": 30,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["content", "plans", "style"],
-            "file": "content/pricing.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "content",
+                "plans",
+                "style"
+            ],
+            "file": "content\/pricing.phtml",
             "default_config": {
                 "content.badge": "Pricing",
                 "content.title": "Simple, transparent pricing"
@@ -122,9 +162,15 @@
             "icon": "bi-chat-quote",
             "sort_order": 40,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["content", "testimonials", "style"],
-            "file": "content/testimonials.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "content",
+                "testimonials",
+                "style"
+            ],
+            "file": "content\/testimonials.phtml",
             "default_config": {
                 "content.badge": "Testimonials",
                 "content.title": "Loved by thousands of teams"
@@ -140,9 +186,15 @@
             "icon": "bi-megaphone",
             "sort_order": 50,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["content", "buttons", "style"],
-            "file": "content/cta-banner.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "content",
+                "buttons",
+                "style"
+            ],
+            "file": "content\/cta-banner.phtml",
             "default_config": {
                 "content.title": "Ready to supercharge your workflow?",
                 "buttons.primary_text": "Start Free Trial",
@@ -159,9 +211,14 @@
             "icon": "bi-question-circle",
             "sort_order": 60,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["faq", "style"],
-            "file": "content/faq.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "faq",
+                "style"
+            ],
+            "file": "content\/faq.phtml",
             "default_config": {
                 "content.badge": "FAQ",
                 "content.title": "Frequently asked questions"
@@ -177,29 +234,116 @@
             "icon": "bi-layout-text-window-reverse",
             "sort_order": 1,
             "is_default": true,
-            "compatible_styles": ["*"],
-            "config_groups": ["style", "layout", "content", "typography"],
-            "file": "footer/links.phtml",
+            "compatible_styles": [
+                "*"
+            ],
+            "config_groups": [
+                "style",
+                "layout",
+                "content",
+                "typography"
+            ],
+            "file": "footer\/links.phtml",
             "default_config": {
                 "brand.name": "SaaSFlow",
                 "brand.description": "The modern platform for teams who ship fast. Streamline your workflow with powerful automation.",
                 "copyright.text": "All rights reserved."
             }
+        },
+        "header-ai-2602081802": {
+            "name": "拜金头部",
+            "name_en": "",
+            "description": "奢华高端风格的深色主题头部组件，具有金色渐变、毛玻璃效果和优雅动画",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-robot",
+            "sort_order": 100,
+            "is_default": false,
+            "compatible_styles": [
+                "*"
+            ],
+            "file": "header\/header-ai-2602081802.phtml",
+            "config_schema": [],
+            "ai_generated": true,
+            "ai_generated_at": "2026-02-08T10:06:25.302Z",
+            "css_prefix": "ai-header-ai-2602081802",
+            "created_at": "2026-02-08 18:06:25"
+        },
+        "header-ai-2602081826": {
+            "name": "拜金头部",
+            "name_en": "Custom Component",
+            "description": "拜金头部",
+            "region": "header",
+            "category": "header",
+            "type": "section",
+            "icon": "bi-robot",
+            "sort_order": 100,
+            "is_default": false,
+            "compatible_styles": [
+                "*"
+            ],
+            "file": "header\/header-ai-2602081826.phtml",
+            "config_schema": {
+                "settings": {
+                    "label": "设置",
+                    "fields": {
+                        "title": {
+                            "type": "text",
+                            "label": "标题",
+                            "default": ""
+                        },
+                        "description": {
+                            "type": "textarea",
+                            "label": "描述",
+                            "default": ""
+                        }
+                    }
+                }
+            },
+            "ai_generated": true,
+            "ai_generated_at": "2026-02-08T10:44:53.056Z",
+            "css_prefix": "ai-header-ai-2602081826",
+            "created_at": "2026-02-08 18:44:53"
         }
     },
     "nav_config": {
         "description": "导航可使用子页面配置",
         "use_subpages": true,
-        "subpage_types": ["link", "anchor", "page"],
+        "subpage_types": [
+            "link",
+            "anchor",
+            "page"
+        ],
         "default_items": [
-            {"text": "Features", "href": "#features", "type": "anchor"},
-            {"text": "Pricing", "href": "#pricing", "type": "anchor"},
-            {"text": "Testimonials", "href": "#testimonials", "type": "anchor"},
-            {"text": "FAQ", "href": "#faq", "type": "anchor"}
+            {
+                "text": "Features",
+                "href": "#features",
+                "type": "anchor"
+            },
+            {
+                "text": "Pricing",
+                "href": "#pricing",
+                "type": "anchor"
+            },
+            {
+                "text": "Testimonials",
+                "href": "#testimonials",
+                "type": "anchor"
+            },
+            {
+                "text": "FAQ",
+                "href": "#faq",
+                "type": "anchor"
+            }
         ]
     },
     "config_inheritance": {
         "description": "组件可以继承模板的配置项",
-        "shared_configs": ["styles", "texts", "color_scheme"]
+        "shared_configs": [
+            "styles",
+            "texts",
+            "color_scheme"
+        ]
     }
 }
