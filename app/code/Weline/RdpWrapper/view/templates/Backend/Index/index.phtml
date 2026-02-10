@@ -1,0 +1,532 @@
+<?php
+/**
+ * RDP Wrapper 远程桌面管理后台页面
+ *
+ * @var array $status   RDP 状态信息
+ * @var array $userList 已创建用户列表
+ */
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>RDP远程桌面管理</lang></title>
+    <css>Weline_RdpWrapper::css/rdp-manager.css</css>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-remote-desktop me-2"></i>
+                                <lang>RDP远程桌面管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript:void(0);'><lang>系统管理</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>远程桌面管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ====== 第一区域：系统状态面板 ====== -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="rdp-card">
+                            <div class="rdp-card-header">
+                                <h5><i class="mdi mdi-monitor-dashboard me-2"></i><lang>系统状态</lang></h5>
+                                <button class="btn btn-sm btn-outline-primary" onclick="RdpManager.refreshStatus()">
+                                    <i class="mdi mdi-refresh me-1"></i><lang>刷新状态</lang>
+                                </button>
+                            </div>
+                            <div class="rdp-card-body">
+                                <div class="rdp-status-grid" id="statusPanel">
+                                    <!-- 操作系统 -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-microsoft-windows <?= $status['is_windows'] ? 'text-success' : 'text-danger' ?>"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label"><lang>操作系统</lang></span>
+                                            <span class="rdp-status-value" id="statusWindows">
+                                                <?= $status['is_windows'] ? __('Windows') : __('非Windows系统') ?>
+                                            </span>
+                                        </div>
+                                        <span class="rdp-badge <?= $status['is_windows'] ? 'rdp-badge-success' : 'rdp-badge-danger' ?>">
+                                            <?= $status['is_windows'] ? __('支持') : __('不支持') ?>
+                                        </span>
+                                    </div>
+
+                                    <!-- RDP Wrapper 安装状态 -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-package-variant-closed <?= $status['installed'] ? 'text-success' : 'text-warning' ?>"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label">RDP Wrapper</span>
+                                            <span class="rdp-status-value" id="statusInstalled">
+                                                <?= $status['installed'] ? __('已安装') : __('未安装') ?>
+                                            </span>
+                                        </div>
+                                        <?php if (!$status['installed'] && $status['is_windows']): ?>
+                                            <button class="btn btn-sm btn-primary" onclick="RdpManager.install()">
+                                                <i class="mdi mdi-download me-1"></i><lang>安装</lang>
+                                            </button>
+                                        <?php else: ?>
+                                            <span class="rdp-badge <?= $status['installed'] ? 'rdp-badge-success' : 'rdp-badge-warning' ?>">
+                                                <?= $status['installed'] ? __('正常') : __('待安装') ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- 远程桌面服务 -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-server <?= $status['service_running'] ? 'text-success' : 'text-danger' ?>"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label"><lang>远程桌面服务</lang></span>
+                                            <span class="rdp-status-value" id="statusService">
+                                                <?= $status['service_running'] ? __('运行中') : __('未运行') ?>
+                                            </span>
+                                        </div>
+                                        <span class="rdp-badge <?= $status['service_running'] ? 'rdp-badge-success' : 'rdp-badge-danger' ?>">
+                                            <?= $status['service_running'] ? __('正常') : __('异常') ?>
+                                        </span>
+                                    </div>
+
+                                    <!-- 远程连接 -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-lan-connect <?= $status['rdp_enabled'] ? 'text-success' : 'text-danger' ?>"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label"><lang>远程连接</lang></span>
+                                            <span class="rdp-status-value" id="statusRdp">
+                                                <?= $status['rdp_enabled'] ? __('已启用') : __('未启用') ?>
+                                            </span>
+                                        </div>
+                                        <?php if ($status['is_windows']): ?>
+                                            <?php if ($status['rdp_enabled']): ?>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="RdpManager.disableRdp()">
+                                                    <i class="mdi mdi-stop me-1"></i><lang>禁用</lang>
+                                                </button>
+                                            <?php else: ?>
+                                                <button class="btn btn-sm btn-success" onclick="RdpManager.enableRdp()">
+                                                    <i class="mdi mdi-play me-1"></i><lang>启用</lang>
+                                                </button>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- 计算机名 & IP -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-desktop-tower text-info"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label"><lang>计算机名</lang></span>
+                                            <span class="rdp-status-value" id="statusComputer">
+                                                <?= htmlspecialchars($status['computer_name']) ?>
+                                            </span>
+                                        </div>
+                                        <span class="rdp-badge rdp-badge-info">
+                                            <lang>端口</lang>: <?= (int)$status['rdp_port'] ?>
+                                        </span>
+                                    </div>
+
+                                    <!-- IP 地址 -->
+                                    <div class="rdp-status-item">
+                                        <div class="rdp-status-icon">
+                                            <i class="mdi mdi-ip-network text-info"></i>
+                                        </div>
+                                        <div class="rdp-status-info">
+                                            <span class="rdp-status-label"><lang>IP地址</lang></span>
+                                            <span class="rdp-status-value" id="statusIp">
+                                                <?= htmlspecialchars(implode(' / ', $status['ip_addresses'])) ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 未启用远程桌面提示 -->
+                                <?php if ($status['is_windows'] && !$status['rdp_enabled']): ?>
+                                <div class="rdp-alert rdp-alert-warning mt-3">
+                                    <i class="mdi mdi-alert-circle me-2"></i>
+                                    <div>
+                                        <strong><lang>远程桌面未启用</lang></strong>
+                                        <p class="mb-1">
+                                            <lang>请在 Windows 设置中启用"允许远程连接"，或点击上方的"启用"按钮自动开启。</lang>
+                                        </p>
+                                        <p class="mb-0" style="font-size: 0.85rem;">
+                                            <lang>手动设置路径：设置 → 系统 → 远程桌面 → 开启"启用远程桌面"开关</lang>
+                                        </p>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ====== 第二区域：用户管理 ====== -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="rdp-card">
+                            <div class="rdp-card-header">
+                                <h5><i class="mdi mdi-account-group me-2"></i><lang>远程用户管理</lang></h5>
+                                <button class="btn btn-sm btn-success" onclick="RdpManager.showCreateUserModal()">
+                                    <i class="mdi mdi-account-plus me-1"></i><lang>添加用户</lang>
+                                </button>
+                            </div>
+                            <div class="rdp-card-body">
+                                <!-- 用户列表表格 -->
+                                <div class="table-responsive">
+                                    <table class="rdp-table" id="userTable">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th><lang>用户名</lang></th>
+                                                <th><lang>显示名称</lang></th>
+                                                <th><lang>密码提示</lang></th>
+                                                <th><lang>管理员</lang></th>
+                                                <th><lang>状态</lang></th>
+                                                <th><lang>备注</lang></th>
+                                                <th><lang>创建时间</lang></th>
+                                                <th><lang>操作</lang></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="userTableBody">
+                                            <?php if (empty($userList)): ?>
+                                                <tr class="rdp-empty-row">
+                                                    <td colspan="9">
+                                                        <div class="rdp-empty-state">
+                                                            <i class="mdi mdi-account-off-outline"></i>
+                                                            <p><lang>暂无远程用户，请点击"添加用户"创建新账户</lang></p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($userList as $idx => $user): ?>
+                                                <tr>
+                                                    <td><?= $idx + 1 ?></td>
+                                                    <td>
+                                                        <strong><?= htmlspecialchars($user['username'] ?? '') ?></strong>
+                                                    </td>
+                                                    <td><?= htmlspecialchars($user['display_name'] ?? '') ?></td>
+                                                    <td>
+                                                        <code><?= htmlspecialchars($user['password_hint'] ?? '') ?></code>
+                                                    </td>
+                                                    <td>
+                                                        <?php if (!empty($user['is_admin'])): ?>
+                                                            <span class="rdp-badge rdp-badge-warning"><lang>管理员</lang></span>
+                                                        <?php else: ?>
+                                                            <span class="rdp-badge rdp-badge-secondary"><lang>普通用户</lang></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php if (($user['status'] ?? 0) == 1): ?>
+                                                            <span class="rdp-badge rdp-badge-success"><lang>启用</lang></span>
+                                                        <?php else: ?>
+                                                            <span class="rdp-badge rdp-badge-danger"><lang>禁用</lang></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td><?= htmlspecialchars($user['remark'] ?? '') ?></td>
+                                                    <td><?= htmlspecialchars($user['created_at'] ?? '') ?></td>
+                                                    <td>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <?php if (($user['status'] ?? 0) == 1): ?>
+                                                                <button class="btn btn-outline-warning btn-sm" title="<?= __('禁用') ?>"
+                                                                    onclick="RdpManager.toggleUser('<?= htmlspecialchars($user['username']) ?>', false)">
+                                                                    <i class="mdi mdi-account-off"></i>
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <button class="btn btn-outline-success btn-sm" title="<?= __('启用') ?>"
+                                                                    onclick="RdpManager.toggleUser('<?= htmlspecialchars($user['username']) ?>', true)">
+                                                                    <i class="mdi mdi-account-check"></i>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                            <button class="btn btn-outline-info btn-sm" title="<?= __('重置密码') ?>"
+                                                                onclick="RdpManager.showResetPasswordModal('<?= htmlspecialchars($user['username']) ?>')">
+                                                                <i class="mdi mdi-lock-reset"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>"
+                                                                onclick="RdpManager.removeUser('<?= htmlspecialchars($user['username']) ?>')">
+                                                                <i class="mdi mdi-delete"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ====== 第三区域：使用指南 ====== -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="rdp-card">
+                            <div class="rdp-card-header" onclick="RdpManager.toggleGuide()" style="cursor: pointer;">
+                                <h5><i class="mdi mdi-book-open-variant me-2"></i><lang>远程桌面使用指南</lang></h5>
+                                <i class="mdi mdi-chevron-down" id="guideToggleIcon"></i>
+                            </div>
+                            <div class="rdp-card-body" id="guideContent">
+
+                                <!-- 步骤 1 -->
+                                <div class="rdp-guide-step">
+                                    <div class="rdp-guide-step-number">1</div>
+                                    <div class="rdp-guide-step-content">
+                                        <h6><lang>启用远程桌面（被控端）</lang></h6>
+                                        <p><lang>在当前 Windows 电脑上，确保远程桌面已启用。有两种方式：</lang></p>
+                                        <ul>
+                                            <li><lang>方式一：点击上方状态面板中的"启用"按钮（推荐）</lang></li>
+                                            <li>
+                                                <lang>方式二：手动设置</lang>
+                                                <br>
+                                                <code><lang>设置 → 系统 → 远程桌面 → 开启"启用远程桌面"</lang></code>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- 步骤 2 -->
+                                <div class="rdp-guide-step">
+                                    <div class="rdp-guide-step-number">2</div>
+                                    <div class="rdp-guide-step-content">
+                                        <h6><lang>安装 RDP Wrapper（多用户支持）</lang></h6>
+                                        <p><lang>安装 RDP Wrapper 后，多个用户可同时通过远程桌面连接到本机，互不干扰。</lang></p>
+                                        <ul>
+                                            <li><lang>如果上方状态显示"未安装"，点击"安装"按钮自动安装</lang></li>
+                                            <li><lang>安装需要管理员权限，请确保以管理员身份运行 Weline Server</lang></li>
+                                            <li>
+                                                <lang>安装后可运行 RDPConf.exe 检查状态</lang>：
+                                                <code>C:\Program Files\RDP Wrapper\RDPConf.exe</code>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- 步骤 3 -->
+                                <div class="rdp-guide-step">
+                                    <div class="rdp-guide-step-number">3</div>
+                                    <div class="rdp-guide-step-content">
+                                        <h6><lang>创建远程用户账户</lang></h6>
+                                        <p><lang>为每个需要远程连接的人创建独立的 Windows 用户账户：</lang></p>
+                                        <ul>
+                                            <li><lang>点击上方"添加用户"按钮创建新用户</lang></li>
+                                            <li><lang>每个用户有独立的桌面环境，互不影响</lang></li>
+                                            <li><lang>建议为不需要安装软件的用户选择"普通用户"权限</lang></li>
+                                            <li><lang>密码要求：至少8位，包含大小写字母和数字</lang></li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- 步骤 4 -->
+                                <div class="rdp-guide-step">
+                                    <div class="rdp-guide-step-number">4</div>
+                                    <div class="rdp-guide-step-content">
+                                        <h6><lang>连接远程桌面（控制端）</lang></h6>
+                                        <p><lang>其他人如何连接到本机：</lang></p>
+                                        <div class="rdp-connect-info">
+                                            <div class="rdp-connect-detail">
+                                                <strong><lang>连接地址</lang>：</strong>
+                                                <code id="connectAddress">
+                                                    <?= htmlspecialchars(implode(' 或 ', $status['ip_addresses'])) ?>:<?= (int)$status['rdp_port'] ?>
+                                                </code>
+                                            </div>
+                                            <div class="rdp-connect-detail">
+                                                <strong><lang>计算机名</lang>：</strong>
+                                                <code><?= htmlspecialchars($status['computer_name']) ?></code>
+                                            </div>
+                                        </div>
+                                        <div class="rdp-guide-sub-steps mt-3">
+                                            <p class="mb-1"><strong>Windows <lang>用户</lang>：</strong></p>
+                                            <ol>
+                                                <li><lang>按 Win+R，输入 mstsc 回车打开"远程桌面连接"</lang></li>
+                                                <li><lang>输入上方连接地址，点击"连接"</lang></li>
+                                                <li><lang>输入分配的用户名和密码登录</lang></li>
+                                            </ol>
+                                            <p class="mb-1 mt-2"><strong>Mac <lang>用户</lang>：</strong></p>
+                                            <ol>
+                                                <li><lang>从 App Store 下载安装 "Microsoft Remote Desktop"</lang></li>
+                                                <li><lang>点击 "Add PC"，输入上方连接地址</lang></li>
+                                                <li><lang>输入分配的用户名和密码登录</lang></li>
+                                            </ol>
+                                            <p class="mb-1 mt-2"><strong><lang>手机/平板用户</lang>：</strong></p>
+                                            <ol>
+                                                <li><lang>安装 "Microsoft Remote Desktop"（iOS/Android）</lang></li>
+                                                <li><lang>添加电脑，输入上方连接地址</lang></li>
+                                                <li><lang>输入分配的用户名和密码登录</lang></li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 步骤 5 -->
+                                <div class="rdp-guide-step">
+                                    <div class="rdp-guide-step-number">5</div>
+                                    <div class="rdp-guide-step-content">
+                                        <h6><lang>注意事项</lang></h6>
+                                        <div class="rdp-alert rdp-alert-info">
+                                            <ul class="mb-0">
+                                                <li><lang>Windows 更新可能导致 RDP Wrapper 失效，需要重新安装或更新配置文件</lang></li>
+                                                <li><lang>如果无法连接，请检查防火墙是否放行了 RDP 端口（默认3389）</lang></li>
+                                                <li><lang>跨网段连接需要进行端口映射或使用 VPN</lang></li>
+                                                <li><lang>同一用户账户不能同时在多处登录，建议为每人创建独立账户</lang></li>
+                                                <li><lang>多人同时连接会消耗更多系统资源（CPU、内存），请根据硬件配置合理分配用户数</lang></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- container-fluid -->
+        </div><!-- page-content -->
+    </div><!-- main-content -->
+
+</div><!-- layout-wrapper -->
+
+<!-- ====== 创建用户弹窗 ====== -->
+<div class="rdp-modal-overlay" id="createUserModal" style="display:none;">
+    <div class="rdp-modal">
+        <div class="rdp-modal-header">
+            <h5><i class="mdi mdi-account-plus me-2"></i><lang>添加远程用户</lang></h5>
+            <button class="rdp-modal-close" onclick="RdpManager.closeModal('createUserModal')">&times;</button>
+        </div>
+        <div class="rdp-modal-body">
+            <form id="createUserForm" onsubmit="return false;">
+                <div class="mb-3">
+                    <label class="form-label"><lang>用户名</lang> <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="username" required
+                           placeholder="<?= __('3-20位，字母开头，允许字母数字下划线') ?>"
+                           pattern="[a-zA-Z][a-zA-Z0-9_]{2,19}">
+                    <small class="text-muted"><lang>创建后将作为 Windows 登录用户名</lang></small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>密码</lang> <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" name="password" required id="createPasswordInput"
+                               placeholder="<?= __('至少8位，包含大小写字母和数字') ?>" minlength="8">
+                        <button class="btn btn-outline-secondary" type="button"
+                                onclick="RdpManager.togglePasswordVisibility('createPasswordInput', this)">
+                            <i class="mdi mdi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>显示名称</lang></label>
+                    <input type="text" class="form-control" name="display_name"
+                           placeholder="<?= __('可选，用于标识用户身份') ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>备注</lang></label>
+                    <textarea class="form-control" name="remark" rows="2"
+                              placeholder="<?= __('可选，记录用户用途等信息') ?>"></textarea>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_admin" id="isAdminCheck">
+                        <label class="form-check-label" for="isAdminCheck">
+                            <lang>授予管理员权限</lang>
+                        </label>
+                    </div>
+                    <small class="text-muted"><lang>管理员可以安装软件和修改系统设置，普通用户仅能使用已安装的程序</lang></small>
+                </div>
+            </form>
+        </div>
+        <div class="rdp-modal-footer">
+            <button class="btn btn-secondary" onclick="RdpManager.closeModal('createUserModal')">
+                <lang>取消</lang>
+            </button>
+            <button class="btn btn-success" onclick="RdpManager.createUser()">
+                <i class="mdi mdi-account-plus me-1"></i><lang>创建用户</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ====== 重置密码弹窗 ====== -->
+<div class="rdp-modal-overlay" id="resetPasswordModal" style="display:none;">
+    <div class="rdp-modal">
+        <div class="rdp-modal-header">
+            <h5><i class="mdi mdi-lock-reset me-2"></i><lang>重置密码</lang></h5>
+            <button class="rdp-modal-close" onclick="RdpManager.closeModal('resetPasswordModal')">&times;</button>
+        </div>
+        <div class="rdp-modal-body">
+            <form id="resetPasswordForm" onsubmit="return false;">
+                <input type="hidden" name="username" id="resetUsername">
+                <div class="mb-3">
+                    <label class="form-label"><lang>用户名</lang></label>
+                    <input type="text" class="form-control" id="resetUsernameDisplay" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>新密码</lang> <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" name="password" required id="resetPasswordInput"
+                               placeholder="<?= __('至少8位，包含大小写字母和数字') ?>" minlength="8">
+                        <button class="btn btn-outline-secondary" type="button"
+                                onclick="RdpManager.togglePasswordVisibility('resetPasswordInput', this)">
+                            <i class="mdi mdi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="rdp-modal-footer">
+            <button class="btn btn-secondary" onclick="RdpManager.closeModal('resetPasswordModal')">
+                <lang>取消</lang>
+            </button>
+            <button class="btn btn-primary" onclick="RdpManager.resetPassword()">
+                <i class="mdi mdi-lock-reset me-1"></i><lang>重置密码</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+window.__RdpManagerConfig = {
+    api: {
+        status: "<?= $this->getBackendUrl('rdpWrapper/backend/index/status') ?>",
+        install: "<?= $this->getBackendUrl('rdpWrapper/backend/index/install') ?>",
+        enableRdp: "<?= $this->getBackendUrl('rdpWrapper/backend/index/enable-rdp') ?>",
+        disableRdp: "<?= $this->getBackendUrl('rdpWrapper/backend/index/disable-rdp') ?>",
+        createUser: "<?= $this->getBackendUrl('rdpWrapper/backend/index/create-user') ?>",
+        removeUser: "<?= $this->getBackendUrl('rdpWrapper/backend/index/remove-user') ?>",
+        toggleUser: "<?= $this->getBackendUrl('rdpWrapper/backend/index/toggle-user') ?>",
+        resetPassword: "<?= $this->getBackendUrl('rdpWrapper/backend/index/reset-password') ?>",
+        userList: "<?= $this->getBackendUrl('rdpWrapper/backend/index/user-list') ?>"
+    }
+};
+</script>
+<js>Weline_RdpWrapper::js/rdp-manager.js</js>
+
+</body>
+</html>

@@ -497,6 +497,9 @@ class Start extends CommandAbstract
         // Master 统一管理：Dispatcher、Worker、HTTP Redirect
         $config['worker_port'] = $workerPort;
         $config['dispatcher_enabled'] = $dispatcherEnabled;
+        // 同步 daemon 标志到 config（$daemon 已根据 --frontend 参数覆盖，
+        // 但 $config['daemon'] 仍是 env 默认值 true，导致 MasterProcess::log() 跳过控制台输出）
+        $config['daemon'] = $daemon;
         
         if ($daemon) {
             $this->startMasterInBackground($instanceName, $sslEnabled, $host, $port);
@@ -2813,15 +2816,21 @@ PHP;
         $testUrl = $scheme . '://' . $host . $portSuffix . '/';
         
         echo "\n";
-        $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
-        $this->printer->note(__('║                      使用说明                                  ║'));
-        $this->printer->note(__('╠══════════════════════════════════════════════════════════════╣'));
-        $this->printer->note(__('║  测试请求：curl %{1}                      ║', [$testUrl]));
-        $this->printer->note(__('║  查看状态：php bin/w server:status %{1}                    ║', [$instanceName]));
-        $this->printer->note(__('║  停止服务：php bin/w server:stop %{1}                      ║', [$instanceName]));
-        $this->printer->note(__('║  压力测试：php bin/w server:benchmark                       ║'));
-        $this->printer->note(__('║  优化指南：php bin/w server:doc                             ║'));
-        $this->printer->note(__('╚══════════════════════════════════════════════════════════════╝'));
+        $usageLines = [
+            __('╔══════════════════════════════════════════════════════════════╗'),
+            __('║                      使用说明                                  ║'),
+            __('╠══════════════════════════════════════════════════════════════╣'),
+            __('║  测试请求：curl %{1}                      ║', [$testUrl]),
+            __('║  查看状态：php bin/w server:status %{1}                    ║', [$instanceName]),
+            __('║  停止服务：php bin/w server:stop %{1}                      ║', [$instanceName]),
+            __('║  压力测试：php bin/w server:benchmark                       ║'),
+            __('║  优化指南：php bin/w server:doc                             ║'),
+            __('╚══════════════════════════════════════════════════════════════╝'),
+        ];
+        
+        foreach ($usageLines as $line) {
+            $this->printer->note($line);
+        }
     }
     
     /**

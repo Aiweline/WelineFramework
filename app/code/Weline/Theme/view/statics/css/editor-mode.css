@@ -15,13 +15,7 @@ body.editor-mode {
 }
 
 body.editor-mode a {
-    /* 编辑模式下仅禁用链接的导航（防止页面跳转） */
-    /* button 不需要禁用：不会导致导航，且 JS 层已在 [data-wslot] 内做了点击拦截 */
-    pointer-events: none;
-}
-
-body.editor-mode [data-wslot] a {
-    /* slot 内的链接恢复 —— JS 点击拦截器会处理 */
+    /* 链接保持可交互（hover 等），导航跳转由 JS 层 preventDefault 阻止 */
     pointer-events: auto;
 }
 
@@ -395,6 +389,52 @@ body.editor-mode .slot-placeholder:hover {
     border-color: #6366f1;
     background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
     color: #4f46e5;
+}
+
+/* ========================================
+   iframe 内拖拽插入指示器
+   ======================================== */
+
+/* 插入位置指示线 */
+.editor-insert-indicator {
+    display: flex;
+    align-items: center;
+    height: 4px;
+    margin: 2px 0;
+    pointer-events: none;
+    z-index: 9999;
+    position: relative;
+    animation: editor-indicator-fadein 0.15s ease;
+}
+
+@keyframes editor-indicator-fadein {
+    from { opacity: 0; transform: scaleX(0.5); }
+    to   { opacity: 1; transform: scaleX(1); }
+}
+
+.editor-insert-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6366f1;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+}
+
+.editor-insert-line {
+    flex: 1;
+    height: 3px;
+    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+/* 空插槽整体高亮 */
+body.editor-mode [data-wslot].editor-drop-empty {
+    outline-color: #10b981;
+    outline-style: dashed;
+    outline-width: 3px;
+    background-color: rgba(16, 185, 129, 0.05);
 }
 
 /* 响应式 */

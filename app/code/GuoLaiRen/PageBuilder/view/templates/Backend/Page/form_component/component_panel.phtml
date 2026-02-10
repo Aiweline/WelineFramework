@@ -419,6 +419,44 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     text-align: center;
     position: relative;
 }
+.component-ai-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 2;
+}
+.component-ai-badge .component-tag {
+    margin-top: 0;
+}
+
+.component-refine-btn {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    z-index: 3;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(102, 126, 234, 0.9);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    opacity: 0.9;
+    transition: opacity 0.2s, transform 0.2s;
+}
+.component-refine-btn:hover {
+    opacity: 1;
+    background: #667eea;
+    transform: scale(1.05);
+}
+.component-refine-btn .mdi { font-size: 16px; }
 
 .component-card:hover {
     border-color: #3498db;
@@ -568,6 +606,14 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     background: #fff3cd;
     color: #856404;
 }
+.component-tag.ai {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+.component-tag.ai-secondary {
+    background: #eef2ff;
+    color: #4f46e5;
+}
 
 /* 暗色模式标签调整 */
 @media (prefers-color-scheme: dark) {
@@ -582,6 +628,14 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     .component-tag.other {
         background: rgba(255, 193, 7, 0.2);
         color: #ffc107;
+    }
+    .component-tag.ai {
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
+    }
+    .component-tag.ai-secondary {
+        background: rgba(99, 102, 241, 0.15);
+        color: #c7d2fe;
     }
 }
 
@@ -610,6 +664,22 @@ html[data-theme="dark"] .component-tag.other,
 .visual-config-wrapper[data-theme="dark"] .component-tag.other {
     background: rgba(255, 193, 7, 0.2);
     color: #ffc107;
+}
+body.dark-mode .component-tag.ai,
+body[data-theme="dark"] .component-tag.ai,
+html[data-theme="dark"] .component-tag.ai,
+.dark-theme .component-tag.ai,
+.visual-config-wrapper[data-theme="dark"] .component-tag.ai {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+}
+body.dark-mode .component-tag.ai-secondary,
+body[data-theme="dark"] .component-tag.ai-secondary,
+html[data-theme="dark"] .component-tag.ai-secondary,
+.dark-theme .component-tag.ai-secondary,
+.visual-config-wrapper[data-theme="dark"] .component-tag.ai-secondary {
+    background: rgba(99, 102, 241, 0.15);
+    color: #c7d2fe;
 }
 
 /* 放置区域提示 */
@@ -818,6 +888,48 @@ html[data-theme="dark"] .component-tag.other,
 .swal2-fullscreen-preview-popup .swal2-close:hover {
     background: #fff;
     color: #dc3545;
+}
+
+/* 全屏预览独立遮罩（不影响工坊弹窗） */
+.ai-fullscreen-preview-open {
+    overflow: hidden;
+}
+.ai-fullscreen-preview-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    background: rgba(10, 10, 10, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup {
+    width: 95vw;
+    height: 95vh;
+    background: #0f0f12;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    padding: 10px;
+    position: relative;
+}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 110;
+}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar {
+    position: absolute;
+    top: 12px;
+    right: 60px;
+    z-index: 110;
+    display: flex;
+    gap: 8px;
+}
+.ai-fullscreen-preview-overlay .ai-fullscreen-preview-body {
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 </style>
 
@@ -1256,30 +1368,42 @@ function renderComponentCard(component, region) {
     }
     
     const recommendedClass = component.isOwn ? 'recommended' : '';
-    const tagHtml = component.isOwn 
+    const baseTagHtml = component.isOwn 
         ? '<span class="component-tag own"><?= __('推荐') ?></span>'
         : (component.isShared 
             ? '<span class="component-tag shared"><?= __('通用') ?></span>'
             : '<span class="component-tag other"><?= __('兼容') ?></span>');
-    
+    const tagHtml = baseTagHtml;
+    const aiBadgeHtml = component.is_ai_generated
+        ? '<div class="component-ai-badge"><span class="component-tag ai">AI</span><span class="component-tag ai-secondary"><?= __('生成') ?></span></div>'
+        : '';
+    const codeEsc = _escHtml(component.code || '');
+    const styleEsc = _escHtml(component.style_code || component.templateCode || '_ai_generated');
+    const nameEsc = _escHtml(component.name || '');
+    const refineBtnHtml = component.is_ai_generated
+        ? `<button type="button" class="component-refine-btn" onclick="event.stopPropagation();event.preventDefault();openRefineForSavedComponent('${codeEsc}','${styleEsc}')" title="<?= __('微调') ?>"><i class="mdi mdi-tune"></i></button>`
+        : '';
+
     // 来源标识
     const sourceLabel = component.isOwn ? '' : (component.isShared ? '<?= __('通用') ?>' : component.templateName);
-    
+
     return `
-        <div class="component-card ${recommendedClass}" 
+        <div class="component-card ${recommendedClass}"
              draggable="true"
-             data-component-code="${component.code}"
-             data-component-name="${component.name}"
+             data-component-code="${codeEsc}"
+             data-component-name="${nameEsc}"
              data-component-region="${region}"
-             data-component-template="${component.style_code || component.templateCode}"
+             data-component-template="${styleEsc}"
              data-component-is-own="${component.isOwn ? 'true' : 'false'}"
              ondragstart="handleDragStart(event)"
              ondragend="handleDragEnd(event)"
-             ondblclick="previewComponent('${component.code}')">
+             ondblclick="previewComponent('${codeEsc}')">
+            ${aiBadgeHtml}
+            ${refineBtnHtml}
             <div class="component-card-thumb">
                 ${thumbHtml}
             </div>
-            <div class="component-card-name" title="${component.name}">${component.name}</div>
+            <div class="component-card-name" title="${nameEsc}">${_escHtml(component.name)}</div>
             ${sourceLabel ? `<div class="component-card-template">${sourceLabel}</div>` : ''}
             ${tagHtml}
         </div>
@@ -1879,6 +2003,63 @@ function checkUnsavedAiComponent() {
 // 当前面板状态
 let _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
 
+// 对已保存的 AI 组件随时微调：从组件栏点击「微调」打开工坊并进入微调步骤
+async function openRefineForSavedComponent(code, styleCode) {
+    if (typeof Swal === 'undefined') { if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('SweetAlert2 未加载') ?>'); return; }
+    code = (code || '').trim();
+    styleCode = (styleCode || '_ai_generated').trim();
+    if (!code) {
+        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('组件代码为空') ?>');
+        return;
+    }
+    const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/info') ?>?code=' + encodeURIComponent(code) + '&include_preview=1';
+    try {
+        const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' });
+        const json = await resp.json();
+        if (!json.success) throw new Error(json.message || '<?= __('加载组件失败') ?>');
+        const comp = json.component || {};
+        const templateContent = json.template_content || '';
+        let previewHtml = '';
+        if (comp.preview_html_encoded && comp.preview_html) {
+            try { previewHtml = atob(comp.preview_html); } catch (e) { previewHtml = ''; }
+        }
+        const recoverable = {
+            component: {
+                code: comp.code || code,
+                name: comp.name,
+                description: comp.description,
+                region: comp.region || comp.category || 'content',
+                category: comp.category || comp.region || 'content',
+                style_code: comp.style_code || styleCode,
+                templateCode: comp.templateCode || styleCode,
+                phtml_code: templateContent
+            },
+            preview: previewHtml,
+            validation: { valid: true },
+            savedAt: new Date().toISOString()
+        };
+        _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
+        Swal.fire({
+            title: '<i class="mdi mdi-auto-fix"></i> <?= __('AI 组件工坊') ?>',
+            html: _buildWorkshopHtml({}),
+            width: '820px',
+            showConfirmButton: false,
+            showCancelButton: false,
+            allowOutsideClick: false,
+            customClass: { container: 'swal2-dark-theme', popup: 'ai-workshop-popup' },
+            didOpen: () => {
+                _workshopGoToStep(1);
+                loadReferenceComponents(recoverable.component.region || 'content', '');
+                _loadAiServiceInfo();
+                _loadAgentList();
+                _recoverToWorkshop(recoverable);
+            }
+        });
+    } catch (e) {
+        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('加载失败') ?>: ' + (e.message || String(e)));
+    }
+}
+
 // 打开AI组件工坊
 function openAiGenerateComponent() {
     if (typeof Swal === 'undefined') { alert('SweetAlert2 未加载'); return; }
@@ -1994,11 +2175,11 @@ function _buildWorkshopHtml(s) {
 .ai-ws-btn-secondary{background:#444;color:#ccc;}.ai-ws-btn-secondary:hover{background:#555;}
 .ai-ws-btn-success{background:#10b981;color:#fff;}.ai-ws-btn-success:hover{background:#0ea370;}
 .ai-ws-btn-danger{background:#dc3545;color:#fff;}.ai-ws-btn-danger:hover{background:#c82333;}
-.ai-ws-console{background:#1e1e1e;border-radius:8px;max-height:280px;overflow:auto;margin-top:8px;}
-.ai-ws-console-header{background:#2d2d2d;padding:4px 12px;font-size:11px;color:#888;display:flex;gap:0;position:sticky;top:0;z-index:2;}
+.ai-ws-console{background:#1e1e1e;border-radius:8px;max-height:420px;overflow:hidden;margin-top:8px;display:flex;flex-direction:column;}
+.ai-ws-console-header{background:#2d2d2d;padding:4px 12px;font-size:11px;color:#888;display:flex;gap:0;flex-shrink:0;z-index:2;}
 .ai-ws-console-tab{background:transparent;border:none;padding:5px 12px;font-size:11px;color:#888;cursor:pointer;border-bottom:2px solid transparent;}
 .ai-ws-console-tab.active{background:#1e1e1e;color:#d4d4d4;border-bottom-color:#667eea;}
-.ai-ws-console-body{padding:10px;font-family:'Consolas','Monaco',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;color:#d4d4d4;min-height:120px;max-height:420px;overflow-y:auto;}
+.ai-ws-console-body{padding:10px;font-family:'Consolas','Monaco',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;color:#d4d4d4;min-height:120px;flex:1;overflow-y:auto;}
 .ai-ws-preview-frame{width:100%;min-height:300px;border:1px solid #444;border-radius:8px;background:#fff;}
 .ai-ws-color-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
 .ai-ws-color-item{display:flex;align-items:center;gap:6px;font-size:12px;}
@@ -2182,7 +2363,10 @@ function _buildWorkshopHtml(s) {
             <button class="ai-ws-console-tab" onclick="_wsPreviewTab('code',this)"><?= __('代码') ?></button>
             <button class="ai-ws-console-tab" onclick="_wsPreviewTab('colors',this)"><i class="mdi mdi-palette"></i> <?= __('颜色') ?></button>
         </div>
-        <div id="ai-ws-tab-preview" style="background:#fff;min-height:280px;max-height:400px;overflow:auto;">
+        <div id="ai-ws-tab-preview" style="background:#fff;min-height:280px;max-height:400px;overflow:auto;position:relative;">
+            <button type="button" class="ai-ws-btn-secondary" onclick="window.openFullscreenPreview()" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
+                <i class="mdi mdi-fullscreen"></i> <?= __('全屏预览') ?>
+            </button>
             <iframe id="ai-ws-preview-iframe" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:280px;" srcdoc=""></iframe>
         </div>
         <div id="ai-ws-tab-code" style="display:none;background:#1e1e1e;max-height:350px;overflow:auto;padding:12px;">
@@ -2206,9 +2390,15 @@ function _buildWorkshopHtml(s) {
 <div class="ai-ws-panel" id="ai-ws-step4">
     <div style="display:flex;gap:12px;height:100%;">
         <!-- 左侧：实时预览 -->
-        <div style="flex:1;min-width:0;">
-            <div style="border-radius:8px;overflow:hidden;border:1px solid #444;background:#fff;min-height:260px;max-height:350px;">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+            <div style="border-radius:8px;overflow:hidden;border:1px solid #444;background:#fff;min-height:260px;max-height:350px;position:relative;">
+<button type="button" class="ai-ws-btn-secondary" onclick="window.openFullscreenPreview()" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
+                <i class="mdi mdi-fullscreen"></i> <?= __('全屏预览') ?>
+            </button>
                 <iframe id="ai-ws-refine-preview" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:260px;" srcdoc=""></iframe>
+            </div>
+            <div style="border-radius:8px;border:1px solid #333;background:var(--backend-color-card-bg,#1e1e1e);padding:8px;min-height:120px;max-height:180px;overflow:auto;" id="ai-refine-log">
+                <div class="text-muted small" style="opacity:0.8;"><i class="mdi mdi-text-box-outline"></i> <?= __('微调日志') ?></div>
             </div>
         </div>
         <!-- 右侧：微调面板 -->
@@ -2243,6 +2433,14 @@ async function _loadAiServiceInfo() {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'include'
         });
+        const contentType = resp.headers.get('content-type') || '';
+        if (!resp.ok) {
+            throw new Error('<?= __('AI 服务不可用') ?>');
+        }
+        if (contentType.indexOf('application/json') === -1) {
+            await resp.text();
+            throw new Error('<?= __('AI 信息返回格式不正确') ?>');
+        }
         const json = await resp.json();
         if (!json.success) {
             bar.classList.remove('ai-info-loading');
@@ -2290,6 +2488,10 @@ function _workshopGoToStep(step) {
     document.querySelectorAll('.ai-ws-panel').forEach((el, i) => {
         el.classList.toggle('active', i + 1 === step);
     });
+    // 切换到微调步骤时自动同步预览
+    if (step === 4) {
+        _syncRefinePreview();
+    }
 }
 
 // 用户点击步骤指示器
@@ -2516,7 +2718,7 @@ function _workshopShowResult(result) {
     // 代码
     const codeEl = document.getElementById('ai-ws-code-content');
     if (codeEl) {
-        codeEl.textContent = code.substring(0, 5000) + (code.length > 5000 ? '\n\n... <?= __('代码过长已截断') ?> ...' : '');
+        codeEl.textContent = code;
     }
     
     // 颜色字段
@@ -2719,10 +2921,16 @@ async function generateComponentWithAgent(params) {
                     if (lenEl) lenEl.textContent = '(' + d.prompt_length + ' <?= __('字符') ?>)';
                     _logLine('▶ <?= __('提示词已构建') ?> (' + d.prompt_length + ' <?= __('字符') ?>)', '#94a3b8');
                 }
+                // 填充提示词 tab 内容
+                if (d?.prompt_content) {
+                    const promptEl = document.getElementById('ai-gen-prompt-content');
+                    if (promptEl) { promptEl.textContent = d.prompt_content; promptEl.style.opacity = '1'; }
+                }
             });
 
             eventSource.addEventListener('generating', e => {
                 updateStreamStatus('<?= __('智能体正在工作...') ?>', 25);
+                _logLine('▶ <?= __('智能体正在工作...') ?>', '#94a3b8');
             });
 
             // 智能体迭代事件
@@ -2750,7 +2958,8 @@ async function generateComponentWithAgent(params) {
                         const toolsTab = document.getElementById('ai-gen-tab-tools');
                         if (toolsTab) toolsTab.scrollTop = toolsTab.scrollHeight;
                     }
-                    _logLine('🔧 ' + d.name + '(' + JSON.stringify(d.arguments || {}).substring(0, 80) + ')', '#fbbf24');
+                    const argsStr = JSON.stringify(d.arguments || {});
+                    _logLine('🔧 ' + d.name + '(' + (argsStr.length > 200 ? argsStr.substring(0, 200) + '...' : argsStr) + ')', '#fbbf24');
                 }
             });
 
@@ -2771,6 +2980,11 @@ async function generateComponentWithAgent(params) {
                         if (toolsTab2) toolsTab2.scrollTop = toolsTab2.scrollHeight;
                     }
                     _logLine('  ✓ ' + d.name + ' (' + (d.result_size || 0) + 'B)', '#4ade80');
+                    // 将工具返回内容也输出到日志（截断显示）
+                    if (d.result) {
+                        const preview = d.result.length > 300 ? d.result.substring(0, 300) + '...' : d.result;
+                        _logLine('    ↳ ' + preview, '#6b7280');
+                    }
                 }
             });
 
@@ -2778,8 +2992,9 @@ async function generateComponentWithAgent(params) {
             eventSource.addEventListener('thinking', e => {
                 const d = safeParseJson(e.data);
                 if (d?.content) {
+                    // AI 已开始返回数据，清除等待状态
+                    const w = document.getElementById('ai-wait-status'); if (w) w.remove();
                     updateStreamStatus('<?= __('AI 思考中...') ?>', 35);
-                    // streaming=true: 追加到同一迭代的 thinking 块
                     _appendAiContent(d.content, d.iteration, 'thinking', !!d.streaming);
                 }
             });
@@ -2788,8 +3003,38 @@ async function generateComponentWithAgent(params) {
             eventSource.addEventListener('ai_response', e => {
                 const d = safeParseJson(e.data);
                 if (d?.content) {
+                    // AI 已开始返回数据，清除等待状态
+                    const w = document.getElementById('ai-wait-status'); if (w) w.remove();
                     updateStreamStatus('<?= __('AI 回复中...') ?>', 50);
                     _appendAiContent(d.content, d.iteration, 'response', !!d.streaming);
+                }
+            });
+
+            // 智能体状态事件（调用 AI、执行工具、准备下一轮等过程通知）
+            eventSource.addEventListener('agent_status', e => {
+                const d = safeParseJson(e.data);
+                if (d?.message) {
+                    if (d.status === 'waiting_ai') {
+                        // 等待状态：原地更新同一行，避免日志刷屏
+                        const el = document.getElementById('ai-gen-output');
+                        if (el) {
+                            let waitLine = document.getElementById('ai-wait-status');
+                            if (!waitLine) {
+                                waitLine = document.createElement('div');
+                                waitLine.id = 'ai-wait-status';
+                                waitLine.style.cssText = 'margin:1px 0;white-space:pre-wrap;color:#fbbf24;';
+                                el.appendChild(waitLine);
+                            }
+                            waitLine.textContent = '⏳ ' + d.message;
+                            _scrollLogToBottom();
+                        }
+                        updateStreamStatus(d.message, 30);
+                    } else {
+                        // 其他状态事件：移除等待行（AI 已开始响应），追加新日志行
+                        const waitLine = document.getElementById('ai-wait-status');
+                        if (waitLine) waitLine.remove();
+                        _logLine('⚙ ' + d.message, '#94a3b8');
+                    }
                 }
             });
 
@@ -2800,12 +3045,28 @@ async function generateComponentWithAgent(params) {
                 const d = safeParseJson(e.data);
                 if (d?.content) {
                     updateStreamStatus('<?= __('生成中...') ?>', 70);
+                    _logLine('📦 <?= __('最终输出') ?> (' + d.content.length + ' <?= __('字符') ?>)', '#22d3ee');
+                    // 显示代码预览（前500字符）
+                    const preview = d.content.length > 500 ? d.content.substring(0, 500) + '\n...' : d.content;
+                    _logLine(preview, '#94a3b8');
                 }
             });
 
             eventSource.addEventListener('complete', e => {
                 const d = safeParseJson(e.data);
-                if (d) result = d;
+                if (d) {
+                    result = d;
+                    if (d.success) {
+                        _logLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '#667eea');
+                        _logLine('✅ ' + (d.message || '<?= __('生成完成') ?>'), '#4ade80');
+                        if (d.iterations) _logLine('   <?= __('迭代轮次') ?>: ' + d.iterations, '#94a3b8');
+                        if (d.tool_calls_count) _logLine('   <?= __('工具调用') ?>: ' + d.tool_calls_count + ' <?= __('次') ?>', '#94a3b8');
+                        if (d.model_code) _logLine('   <?= __('模型') ?>: ' + d.model_code, '#94a3b8');
+                    } else {
+                        _logLine('[WARN] ' + (d.message || '<?= __('生成失败') ?>'), '#fbbf24');
+                        if (d.raw_content) _logLine(d.raw_content.substring(0, 500), '#6b7280');
+                    }
+                }
                 finish(true);
             });
 
@@ -2822,6 +3083,7 @@ async function generateComponentWithAgent(params) {
 
             eventSource.onerror = e => {
                 if (result && result.success) { finish(true); return; }
+                _logLine('[FAILED] <?= __('连接中断或服务器错误') ?>', '#ff6b6b');
                 finish(false, new Error('<?= __('连接中断或服务器错误') ?>'));
             };
         });
@@ -2832,23 +3094,62 @@ async function generateComponentWithAgent(params) {
             const spinnerEl = document.getElementById('ai-gen-spinner');
             if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-check-circle text-success"></i>'; }
 
-            // 构建 workshopResult 格式
+            // 获取后端返回的组件信息
+            const comp = result.component;
+            const compCode = result.component_code || '';
+            const compStyleCode = result.style_code || currentStyleCode;
+            const phtmlCode = result.phtml_code || '';
+
+            // 更新字符计数
+            const charsEl = document.getElementById('ai-gen-chars');
+            if (charsEl) charsEl.textContent = phtmlCode.length + ' <?= __('字符') ?>';
+
+            // 调用系统组件预览接口（和正式组件一样的渲染流程）
+            _logLine('▶ <?= __('正在调用组件预览接口...') ?>', '#94a3b8');
+            let previewHtml = '';
+            try {
+                const previewResp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: 'component_code=' + encodeURIComponent(compCode)
+                        + '&style_code=' + encodeURIComponent(compStyleCode)
+                });
+                const previewData = await previewResp.json();
+                if (previewData.success && previewData.html) {
+                    previewHtml = previewData.html;
+                    _logLine('✅ <?= __('组件预览渲染完成') ?> (' + previewHtml.length + ' <?= __('字符') ?>)', '#4ade80');
+                } else {
+                    _logLine('[WARN] <?= __('组件预览失败') ?>: ' + (previewData.message || '') + '<?= __('，使用原始代码') ?>', '#fbbf24');
+                    previewHtml = phtmlCode;
+                }
+            } catch (previewErr) {
+                _logLine('[WARN] <?= __('组件预览接口异常') ?>: ' + previewErr.message, '#fbbf24');
+                previewHtml = phtmlCode;
+            }
+
+            // 包裹成完整 HTML 文档供 iframe 预览
+            const fullPreviewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+:root{--pb-primary:#667eea;--pb-accent:#7c3aed;--pb-bg:#fff;--pb-text:#333;--pb-heading:#1a1a1a;--pb-link:#667eea;--pb-link-hover:#5a6fd6;--pb-text-muted:#888;--pb-border:#e5e7eb;}
+body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
+</style></head><body>${previewHtml}</body></html>`;
+
+            // 构建 workshopResult
             const wsResult = {
                 success: true,
                 component: {
-                    code: result.component_code || '',
-                    name: result.component.name || params.name,
+                    code: compCode,
+                    name: comp.name || params.name,
                     region: params.region,
-                    phtml_code: '',
-                    ai_data: result.component,
-                    ...result.component
+                    phtml_code: phtmlCode,
+                    style_code: compStyleCode,
+                    ai_data: comp,
+                    ...comp
                 },
                 validation: { valid: true },
-                preview: _buildComponentPreviewHtml(result.component),
+                preview: fullPreviewHtml,
             };
-            // 保存当前生成的组件供前端使用
             window.currentGeneratedComponent = wsResult.component;
-            setTimeout(() => { _workshopShowResult(wsResult); }, 500);
+            setTimeout(() => { _workshopShowResult(wsResult); }, 300);
         } else if (result) {
             throw new Error(result.message || '<?= __('生成失败') ?>');
         }
@@ -2886,6 +3187,33 @@ function _syncRefinePreview() {
     }
 }
 
+// 微调日志
+function _scrollRefineLogToBottom() {
+    const logEl = document.getElementById('ai-refine-log');
+    if (logEl) {
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+}
+
+function _clearRefineLog() {
+    const logEl = document.getElementById('ai-refine-log');
+    if (logEl) {
+        logEl.innerHTML = '<div class="text-muted small" style="opacity:0.8;"><i class="mdi mdi-text-box-outline"></i> <?= __('微调日志') ?></div>';
+    }
+}
+
+function _refineLogLine(text, color = '#94a3b8') {
+    const logEl = document.getElementById('ai-refine-log');
+    if (!logEl) return;
+    const line = document.createElement('div');
+    line.style.fontSize = '12px';
+    line.style.marginTop = '4px';
+    line.style.color = color;
+    line.textContent = text;
+    logEl.appendChild(line);
+    _scrollRefineLogToBottom();
+}
+
 // 微调功能
 async function _workshopRefine() {
     const input = document.getElementById('ai-refine-input')?.value.trim();
@@ -2898,6 +3226,9 @@ async function _workshopRefine() {
     const status = document.getElementById('ai-refine-status');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('微调中...') ?>'; }
     if (status) status.textContent = '<?= __('正在调用 AI 微调...') ?>';
+    _clearRefineLog();
+    _refineLogLine('▶ <?= __('开始微调') ?>', '#94a3b8');
+    _refineLogLine('• <?= __('微调描述') ?>: ' + input, '#a3a3a3');
 
     try {
         // 获取当前组件数据
@@ -2907,26 +3238,95 @@ async function _workshopRefine() {
         const existingCode = component.phtml_code || '';
         const region = component.region || _aiWorkshop.params?.region || 'content';
 
-        // 调用 refine API（使用 JSON body）
-        const refineBody = {
+        // 流式微调参数（SSE）
+        const refineParams = {
             template_content: existingCode,
             adjustment_prompt: input,
             category: region,
-            code: component.code || ''
+            code: component.code || '',
+            style_code: component.style_code || component.templateCode || currentStyleCode
         };
 
-        const resp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(refineBody)
-        });
-        const json = await resp.json();
+        const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(refineParams))));
+        const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine-stream') ?>?params=' + encodeURIComponent(paramsBase64);
 
-        if (!json.success) throw new Error(json.message || '<?= __('微调失败') ?>');
+        _refineLogLine('⚙ <?= __('正在发送微调请求...') ?>', '#94a3b8');
+
+        let streamResult = null;
+        await new Promise((resolve, reject) => {
+            const eventSource = new EventSource(streamUrl);
+            _aiWorkshop.eventSource = eventSource;
+            let isFinished = false;
+
+            function safeParseJson(str) {
+                if (!str) return null;
+                try { return JSON.parse(str); } catch (e) { return null; }
+            }
+            function finish(ok, err) {
+                if (isFinished) return;
+                isFinished = true;
+                _aiWorkshop.eventSource = null;
+                try { eventSource.close(); } catch (e) {}
+                ok ? resolve() : reject(err);
+            }
+
+            eventSource.onopen = () => {
+                _refineLogLine('▶ <?= __('开始微调') ?>', '#94a3b8');
+            };
+
+            eventSource.addEventListener('agent_status', e => {
+                const d = safeParseJson(e.data);
+                if (d?.message) _refineLogLine('⚙ ' + d.message, '#94a3b8');
+            });
+
+            eventSource.addEventListener('iteration', e => {
+                const d = safeParseJson(e.data);
+                if (d) _refineLogLine('━━━ <?= __('第') ?> ' + d.iteration + ' <?= __('轮') ?> ━━━', '#667eea');
+            });
+
+            eventSource.addEventListener('thinking', e => {
+                const d = safeParseJson(e.data);
+                if (d?.content) _refineLogLine('🤖 ' + d.content, '#cbd5f5');
+            });
+
+            eventSource.addEventListener('tool_call', e => {
+                const d = safeParseJson(e.data);
+                if (d) _refineLogLine('🔧 ' + d.name, '#fbbf24');
+            });
+
+            eventSource.addEventListener('tool_result', e => {
+                const d = safeParseJson(e.data);
+                if (d) _refineLogLine('  ✓ ' + d.name + ' (' + (d.result_size || 0) + 'B)', '#a3a3a3');
+            });
+
+            eventSource.addEventListener('complete', e => {
+                const d = safeParseJson(e.data);
+                streamResult = d;
+                finish(true);
+            });
+
+            eventSource.addEventListener('error', e => {
+                const d = safeParseJson(e.data);
+                finish(false, new Error(d?.message || '<?= __('微调失败') ?>'));
+            });
+        });
+
+        if (!streamResult?.success) throw new Error(streamResult?.message || '<?= __('微调失败') ?>');
+        _refineLogLine('✓ <?= __('微调完成，正在应用预览...') ?>', '#10b981');
+        if (streamResult.agent) {
+            const toolCalls = streamResult.agent.tool_calls || [];
+            if (streamResult.agent.iterations) {
+                _refineLogLine('↻ <?= __('智能体迭代') ?>: ' + streamResult.agent.iterations, '#a3a3a3');
+            }
+            if (toolCalls.length > 0) {
+                _refineLogLine('⚙ <?= __('工具调用记录') ?>:', '#94a3b8');
+                toolCalls.forEach((tc, idx) => {
+                    _refineLogLine(`- ${idx + 1}. ${tc.name}`, '#a3a3a3');
+                });
+            }
+        }
+
+        const json = streamResult;
 
         // 更新结果
         if (json.result) {
@@ -2940,14 +3340,19 @@ async function _workshopRefine() {
             window.currentGeneratedComponent = _aiWorkshop.result.component;
         }
         if (json.preview?.html) {
-            const previewHtml = json.preview.html;
+            // 包裹成完整 HTML 文档供 iframe 预览（和初始生成一致）
+            const renderedHtml = json.preview.html;
+            const fullPreviewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+:root{--pb-primary:#667eea;--pb-accent:#7c3aed;--pb-bg:#fff;--pb-text:#333;--pb-heading:#1a1a1a;--pb-link:#667eea;--pb-link-hover:#5a6fd6;--pb-text-muted:#888;--pb-border:#e5e7eb;}
+body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
+</style></head><body>${renderedHtml}</body></html>`;
             const dstIframe = document.getElementById('ai-ws-refine-preview');
-            if (dstIframe) dstIframe.srcdoc = previewHtml;
+            if (dstIframe) dstIframe.srcdoc = fullPreviewHtml;
             // 也更新步骤3的预览
             const srcIframe = document.getElementById('ai-ws-preview-iframe');
-            if (srcIframe) srcIframe.srcdoc = previewHtml;
+            if (srcIframe) srcIframe.srcdoc = fullPreviewHtml;
             // 更新 result 中的预览
-            _aiWorkshop.result.preview = { html: previewHtml };
+            _aiWorkshop.result.preview = fullPreviewHtml;
         }
 
         // 添加到微调历史
@@ -2967,6 +3372,7 @@ async function _workshopRefine() {
 
     } catch (e) {
         if (status) status.innerHTML = '<span style="color:#ef4444;"><?= __('微调失败') ?>: ' + e.message + '</span>';
+        _refineLogLine('[FAILED] ' + e.message, '#ef4444');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="mdi mdi-auto-fix"></i> <?= __('微调') ?>'; }
     }
@@ -3339,7 +3745,10 @@ async function generateComponentWithAi(params) {
             
             eventSource.addEventListener('start', function(e) {
                 const data = safeParseJson(e.data);
-                if (data) result = handleStreamEvent(data, result, totalChars);
+                if (data) {
+                    result = handleStreamEvent(data, result, totalChars);
+                    _logLine('▶ ' + (data.message || '<?= __('开始生成组件...') ?>'), '#4ade80');
+                }
             });
             
             eventSource.addEventListener('prompt', function(e) {
@@ -3353,13 +3762,17 @@ async function generateComponentWithAi(params) {
                     if (data.prompt_length) {
                         const lenEl = document.getElementById('ai-gen-prompt-len');
                         if (lenEl) lenEl.textContent = '(' + data.prompt_length + ' <?= __('字符') ?>)';
+                        _logLine('▶ <?= __('提示词已构建') ?> (' + data.prompt_length + ' <?= __('字符') ?>)', '#94a3b8');
                     }
                 }
             });
             
             eventSource.addEventListener('generating', function(e) {
                 const data = safeParseJson(e.data);
-                if (data) result = handleStreamEvent(data, result, totalChars);
+                if (data) {
+                    result = handleStreamEvent(data, result, totalChars);
+                    _logLine('▶ <?= __('AI 正在生成代码...') ?>', '#94a3b8');
+                }
             });
 
             // AI 思考/推理过程事件（普通模式，流式 reasoning_content 小块追加）
@@ -3376,26 +3789,42 @@ async function generateComponentWithAi(params) {
                 if (data) {
                     if (data.total_length) totalChars = data.total_length;
                     result = handleStreamEvent(data, result, totalChars);
+                    // 只更新字符计数，不逐块刷日志
+                    if (data.content) {
+                        const charsEl = document.getElementById('ai-gen-chars');
+                        if (charsEl) charsEl.textContent = (data.total_length || totalChars) + ' <?= __('字符') ?>';
+                        updateStreamStatus('<?= __('正在接收代码...') ?> ' + (data.total_length || totalChars) + ' <?= __('字符') ?>', 60);
+                    }
                 }
             });
             
             eventSource.addEventListener('parsing', function(e) {
                 const data = safeParseJson(e.data);
-                if (data) result = handleStreamEvent(data, result, totalChars);
+                if (data) {
+                    result = handleStreamEvent(data, result, totalChars);
+                    _logLine('▶ <?= __('解析 AI 响应...') ?>', '#94a3b8');
+                }
             });
             
             eventSource.addEventListener('stream_error', function(e) {
                 const data = safeParseJson(e.data);
                 if (data) {
-                    const outputEl = document.getElementById('ai-gen-output');
-                    if (outputEl) outputEl.innerHTML += `\n<span style="color:#ffa500">[WARN] ${data.message}</span>`;
+                    _logHtml('<span style="color:#ffa500">[WARN] ' + _escHtml(data.message) + '</span>');
                     updateStreamStatus('<?= __('生成出错') ?>', 50);
                 }
             });
             
             eventSource.addEventListener('complete', function(e) {
                 const data = safeParseJson(e.data);
-                if (data) result = data;
+                if (data) {
+                    result = data;
+                    _logLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '#667eea');
+                    if (data.success) {
+                        _logLine('✅ ' + (data.message || '<?= __('生成完成') ?>'), '#4ade80');
+                    } else {
+                        _logLine('[WARN] ' + (data.message || '<?= __('生成失败') ?>'), '#fbbf24');
+                    }
+                }
                 finish(true);
             });
             
@@ -3404,8 +3833,7 @@ async function generateComponentWithAi(params) {
                 if (data && data.message) {
                     lastErrorMessage = data.message;
                     updateStreamStatus('<?= __('错误') ?>: ' + data.message, 0);
-                    const outputEl = document.getElementById('ai-gen-output');
-                    if (outputEl) outputEl.innerHTML += '\n<span style="color:#ff6b6b">[ERROR] ' + data.message + '</span>';
+                    _logHtml('<span style="color:#ff6b6b">[ERROR] ' + _escHtml(data.message) + '</span>');
                     finish(false, new Error(data.message));
                 }
             });
@@ -3415,7 +3843,7 @@ async function generateComponentWithAi(params) {
             eventSource.onerror = function(e) {
                 if (result && result.success) { finish(true); return; }
                 if (lastErrorMessage) { finish(false, new Error(lastErrorMessage)); return; }
-                console.error('SSE 连接错误:', e);
+                _logLine('[FAILED] <?= __('连接中断或服务器错误') ?>', '#ff6b6b');
                 finish(false, new Error('<?= __('连接中断或服务器错误') ?>'));
             };
         });
@@ -3683,59 +4111,64 @@ async function applyJsonChanges() {
     importAndPreviewJson(jsonData);
 }
 
-// 打开全屏预览
-function openFullscreenPreview() {
-    const previewHtml = window.currentGeneratedComponent?.preview?.html || 
-                        window.currentGeneratedComponent?.preview || '';
-    
-    if (!previewHtml) {
-        Swal.fire({
-            icon: 'warning',
-            title: '<?= __('无法全屏预览') ?>',
-            text: '<?= __('预览内容为空') ?>',
-            customClass: { container: 'swal2-dark-theme' }
-        });
-        return;
+// 打开全屏预览（挂到 window 以便 Swal 内 onclick 能调用）
+window.openFullscreenPreview = function openFullscreenPreview() {
+    const overlayId = 'ai-fullscreen-preview-overlay';
+    let existing = document.getElementById(overlayId);
+    if (existing) {
+        existing.remove();
     }
-    
-    // 创建全屏预览弹窗
-    Swal.fire({
-        title: null,
-        html: `
-            <div style="position: relative; width: 100%; height: calc(90vh - 60px);">
-                <div style="position: absolute; top: 10px; right: 10px; z-index: 100; display: flex; gap: 8px;">
-                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
-                        <i class="mdi mdi-monitor"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('tablet')" title="<?= __('平板') ?>">
-                        <i class="mdi mdi-tablet"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('mobile')" title="<?= __('手机') ?>">
-                        <i class="mdi mdi-cellphone"></i>
-                    </button>
-                </div>
+    document.body.classList.add('ai-fullscreen-preview-open');
+
+    const srcIframe = document.getElementById('ai-ws-preview-iframe') || document.getElementById('ai-ws-refine-preview');
+    const previewHtml = (srcIframe && srcIframe.srcdoc) || (typeof _aiWorkshop !== 'undefined' && _aiWorkshop && (_aiWorkshop.result && _aiWorkshop.result.preview && (typeof _aiWorkshop.result.preview === 'string' ? _aiWorkshop.result.preview : _aiWorkshop.result.preview.html)));
+
+    const safeHtml = previewHtml
+        ? ('' + previewHtml).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+        : '<div style="color:#f87171;font-size:14px;padding:24px;"><?= __('无法全屏预览') ?>：<?= __('预览内容为空') ?></div>';
+
+    const overlay = document.createElement('div');
+    overlay.id = overlayId;
+    overlay.className = 'ai-fullscreen-preview-overlay';
+    overlay.innerHTML = `
+        <div class="ai-fullscreen-preview-popup">
+            <div class="ai-fullscreen-preview-toolbar">
+                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
+                    <i class="mdi mdi-monitor"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('tablet')" title="<?= __('平板') ?>">
+                    <i class="mdi mdi-tablet"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('mobile')" title="<?= __('手机') ?>">
+                    <i class="mdi mdi-cellphone"></i>
+                </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-light ai-fullscreen-preview-close" onclick="window.closeFullscreenPreview()" aria-label="<?= __('关闭') ?>" title="<?= __('关闭') ?>">
+                <i class="mdi mdi-close"></i>
+            </button>
+            <div class="ai-fullscreen-preview-body">
                 <div id="fullscreen-preview-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; background: #e0e0e0; padding: 20px; overflow: auto;">
-                    <iframe id="fullscreen-preview-iframe" srcdoc="${previewHtml.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
+                    <iframe id="fullscreen-preview-iframe" srcdoc="${safeHtml}" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
                 </div>
             </div>
-        `,
-        width: '95vw',
-        padding: '10px',
-        showCloseButton: true,
-        showConfirmButton: false,
-        customClass: { 
-            container: 'swal2-dark-theme',
-            popup: 'swal2-fullscreen-preview-popup'
-        },
-        didOpen: () => {
-            // 默认桌面模式
-            setPreviewDevice('desktop');
-        }
-    });
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    if (typeof setPreviewDevice === 'function') {
+        setPreviewDevice('desktop');
+    }
+};
+
+window.closeFullscreenPreview = function closeFullscreenPreview() {
+    const overlay = document.getElementById('ai-fullscreen-preview-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    document.body.classList.remove('ai-fullscreen-preview-open');
 }
 
-// 设置预览设备尺寸
-function setPreviewDevice(device) {
+// 设置预览设备尺寸（挂到 window 供全屏遮罩内按钮调用）
+window.setPreviewDevice = function setPreviewDevice(device) {
     const iframe = document.getElementById('fullscreen-preview-iframe');
     const container = document.getElementById('fullscreen-preview-container');
     if (!iframe || !container) return;
@@ -3919,7 +4352,7 @@ function showGeneratedComponent(result) {
                 <div class="card-header py-2 d-flex justify-content-between align-items-center">
                     <span><i class="mdi mdi-eye"></i> <?= __('预览') ?></span>
                     <div>
-                        <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="openFullscreenPreview()" title="<?= __('全屏预览') ?>">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="window.openFullscreenPreview()" title="<?= __('全屏预览') ?>">
                             <i class="mdi mdi-fullscreen"></i>
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showGeneratedCode()">
