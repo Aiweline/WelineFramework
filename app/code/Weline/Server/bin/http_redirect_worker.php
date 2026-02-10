@@ -59,6 +59,46 @@ if ($processName) {
     }
 }
 
+// 解析 --frontend 参数
+$isFrontend = \in_array('--frontend', $argv, true);
+
+// 读取环境配置
+$envConfig = null;
+$_envFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+if (\is_file($_envFile)) {
+    $envConfig = require $_envFile;
+}
+unset($_envFile);
+
+$isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
+    || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
+
+// 日志函数（格式与 Dispatcher/Worker 保持一致）
+$redirectLog = function (string $message, string $level = 'INFO') use ($isFrontend, $isDev, $httpPort) {
+    $timestamp = \date('Y-m-d H:i:s');
+    $logMessage = "[{$timestamp}] [Redirect] Port:{$httpPort} [{$level}] {$message}\n";
+
+    $color = match($level) {
+        'ERROR'   => "\033[91m",
+        'WARN'    => "\033[33m",
+        'INFO'    => "\033[36m",
+        'IPC'     => "\033[95m",
+        'DEBUG'   => "\033[90m",
+        default   => "\033[0m",
+    };
+
+    $alwaysShow = \in_array($level, ['ERROR', 'WARN', 'INFO', 'IPC'], true);
+    if ($alwaysShow || $isFrontend || $isDev) {
+        if (\defined('STDOUT') && \is_resource(STDOUT)) {
+            \fwrite(STDOUT, $color . $logMessage . "\033[0m");
+            \fflush(STDOUT);
+        } else {
+            echo $color . $logMessage . "\033[0m";
+            \flush();
+        }
+    }
+};
+
 $context = \stream_context_create([
     'socket' => [
         'backlog' => 256,
@@ -75,11 +115,16 @@ $socket = @\stream_socket_server(
 );
 
 if (!$socket) {
-    \error_log("[WLS HTTP Redirect] Failed to bind {$host}:{$httpPort}: {$errstr}");
+    $redirectLog("Failed to bind {$host}:{$httpPort}: {$errstr}", 'ERROR');
     exit(1);
 }
 
 \stream_set_blocking($socket, false);
+
+// 启动日志（与 Dispatcher/Worker 风格一致）
+$redirectLog("Started on tcp://{$host}:{$httpPort}", 'INFO');
+$redirectLog("Instance: {$instanceName}, HTTP→HTTPS 301 Redirect, Target port: {$httpsPort}, PID: " . \getmypid(), 'INFO');
+$redirectLog("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'), 'INFO');
 
 // ========== IPC 控制通道 ==========
 $ipcClient = null;
@@ -98,11 +143,11 @@ if ($controlPort <= 0) {
 if ($controlPort > 0) {
     $ipcClient = new \Weline\Server\IPC\ControlClient();
     $ipcClient->setSelfTag('Redirect');
-    $ipcClient->setLogger(function (string $line) {
-        echo "\033[95m[" . \date('Y-m-d H:i:s') . '] ' . $line . "\033[0m\n";
+    $ipcClient->setLogger(function (string $line) use ($redirectLog) {
+        $redirectLog($line, 'IPC');
     });
     // DEV 模式下输出详细 IPC SEND/RECV 明细
-    $ipcClient->setVerboseLog((\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE));
+    $ipcClient->setVerboseLog($isDev);
     if ($ipcClient->connect('127.0.0.1', $controlPort)) {
         $ipcClient->register(
             \Weline\Server\IPC\ControlMessage::ROLE_REDIRECT,
@@ -121,11 +166,11 @@ if ($controlPort > 0) {
         });
         
         // 设置断开处理器（复活优先级 1 = HTTP Redirect，延迟 1 秒）
-        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use ($instanceName, $controlPort) {
+        $ipcClient->onDisconnect(function (bool $receivedShutdown, \Weline\Server\IPC\ControlClient $client) use ($instanceName, $controlPort, $redirectLog) {
             if ($receivedShutdown) {
                 return;
             }
-            \error_log("[WLS HTTP Redirect] Master 连接意外断开，尝试复活（优先级 1，延迟 1 秒）...");
+            $redirectLog('Master 连接意外断开，尝试复活（优先级 1，延迟 1 秒）...', 'WARN');
             $resurrector = new \Weline\Server\IPC\MasterResurrector(
                 \Weline\Server\IPC\ControlMessage::RESURRECTION_REDIRECT,
                 $instanceName,
@@ -147,9 +192,9 @@ $connections = [];
 $requestBuffers = [];
 
 // 优雅退出函数（统一使用进程管理器清理）
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient) {
+$gracefulExit = function (string $reason = '') use ($socket, &$connections, $processName, &$ipcClient, $redirectLog) {
     if ($reason) {
-        \error_log("[WLS HTTP Redirect] 退出原因: {$reason}");
+        $redirectLog("退出: {$reason}", 'WARN');
     }
     
     // 关闭 IPC 客户端
@@ -210,10 +255,14 @@ while (true) {
         continue;
     }
 
-    // 处理 IPC 控制通道消息
+    // 处理 IPC 控制通道消息（处理后从 $read 移除，防止被 HTTP 连接循环误关闭）
     if ($ipcSocket && \in_array($ipcSocket, $read, true)) {
         if ($ipcClient) {
             $ipcClient->handleReadable();
+        }
+        $ipcKey = \array_search($ipcSocket, $read, true);
+        if ($ipcKey !== false) {
+            unset($read[$ipcKey]);
         }
     }
     

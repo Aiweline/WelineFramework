@@ -281,7 +281,7 @@ class MasterControlServer
 
         $data = @\fread($socket, 65536);
 
-        // 连接断开
+        // 连接断开：stream_select 已确认可读，fread 返回空即为 TCP FIN
         if ($data === '' || $data === false) {
             $this->removeClient($clientId);
             return;

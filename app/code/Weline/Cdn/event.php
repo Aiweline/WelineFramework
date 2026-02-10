@@ -86,5 +86,15 @@ action 类型说明：
 - supports_api_purge: bool 是否支持API清理（仅 check_capability 返回）'),
         'doc' => 'CDN统一请求事件.md',
     ],
+    'Weline_Cdn::provider::list' => [
+        'name' => __('CDN供应商列表'),
+        'description' => __('获取CDN供应商列表时触发，允许其他模块补充或修改供应商列表数据。事件数据包含 providers 数组。'),
+        'doc' => 'CDN供应商列表.md',
+    ],
+    'Weline_Cdn::account::list' => [
+        'name' => __('CDN账户列表'),
+        'description' => __('获取CDN账户列表时触发，允许其他模块补充或修改账户列表数据。事件数据包含 accounts 数组及 adapter 过滤条件。'),
+        'doc' => 'CDN账户列表.md',
+    ],
 ];
 

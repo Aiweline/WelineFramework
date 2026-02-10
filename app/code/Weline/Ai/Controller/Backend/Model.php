@@ -17,6 +17,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\Provider\VendorConfigManager;
+use Weline\Ai\Service\Provider\ModelSyncService;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -52,6 +53,14 @@ class Model extends BackendController
     private function getModelCollector(): ModelCollector
     {
         return \Weline\Framework\Manager\ObjectManager::getInstance(ModelCollector::class);
+    }
+
+    /**
+     * 获取模型同步服务（懒加载）
+     */
+    private function getModelSyncService(): ModelSyncService
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(ModelSyncService::class);
     }
 
     /**
@@ -264,25 +273,34 @@ class Model extends BackendController
     public function collect(): string
     {
         try {
-            $collectedModels = $this->getModelCollector()->collectAllModels();
-            
+            $result = $this->getModelSyncService()->syncAllProviders([
+                'collect' => true,
+            ]);
+            $collectedCount = (int)($result['collected_count'] ?? 0);
+            $providers = $result['providers'] ?? [];
+            $providerSummary = [];
+            foreach ($providers as $providerCode => $providerResult) {
+                if (!empty($providerResult['success'])) {
+                    $providerSummary[] = sprintf(
+                        '%s=%d',
+                        $providerCode,
+                        (int)($providerResult['count'] ?? 0)
+                    );
+                } else {
+                    $providerSummary[] = sprintf('%s=failed', $providerCode);
+                }
+            }
+
             return $this->jsonResponse([
                 'success' => true,
-                'message' => __('成功收集 %{1} 个模型', [count($collectedModels)]),
-                'count' => count($collectedModels),
-                'models' => array_map(function($model) {
-                    return [
-                        'id' => $model->getId(),
-                        'name' => $model->getData('name'),
-                        'model_code' => $model->getData('model_code'),
-                        'supplier' => $model->getData('supplier')
-                    ];
-                }, $collectedModels)
+                'message' => __('模型同步完成，收集 %{1} 个模型', [$collectedCount]),
+                'count' => $collectedCount,
+                'provider_summary' => $providerSummary,
             ]);
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('模型收集失败: %{1}', [$e->getMessage()]),
+                'message' => __('模型同步失败: %{1}', [$e->getMessage()]),
                 'error' => $e->getMessage()
             ]);
         }

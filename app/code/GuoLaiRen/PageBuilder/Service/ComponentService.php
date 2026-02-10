@@ -221,11 +221,11 @@ class ComponentService
             
             // 如果指定了布局，按区域分组（不为兼容组件生成预览）
             if ($layoutCode) {
-                $result['by_region'] = $this->groupComponentsByRegion($allComponents, $layoutCode, $includePreview);
+                $result['by_region'] = $this->groupComponentsByRegion($allComponents, $layoutCode, $includePreview, $styleCode);
             }
             
             // 按分类分组
-            $result['by_category'] = $this->groupComponentsByCategory($allComponents, $includePreview);
+            $result['by_category'] = $this->groupComponentsByCategory($allComponents, $includePreview, $styleCode);
             
             // 如果指定了页面类型，加载该页面类型的默认布局配置
             if ($pageType) {
@@ -307,7 +307,7 @@ class ComponentService
     /**
      * 按区域分组组件
      */
-    private function groupComponentsByRegion(array $allComponents, string $layoutCode, bool $includePreview = false): array
+    private function groupComponentsByRegion(array $allComponents, string $layoutCode, bool $includePreview = false, string $currentStyleCode = ''): array
     {
         $regions = Layout::getLayoutRegions($layoutCode);
         $grouped = [];
@@ -319,18 +319,40 @@ class ComponentService
             ];
         }
         
-        // 合并所有组件
-        $all = array_merge(
-            $allComponents['own'] ?? [],
-            $allComponents['shared'] ?? []
-        );
+        // 合并所有组件（当前模板 + 共享 + 其他模板）
+        $all = [];
+        $currentStyleCode = $currentStyleCode ?: (string)($allComponents['style_code'] ?? '');
+        $currentStyleName = $currentStyleCode ? $this->getTemplateName($currentStyleCode) : $currentStyleCode;
         
-        foreach ($all as $component) {
-            $category = $component->getData(Component::fields_CATEGORY);
+        foreach ($allComponents['own'] ?? [] as $component) {
+            $item = $this->toArray($component, $includePreview);
+            $item['isOwn'] = true;
+            $item['templateCode'] = $currentStyleCode;
+            $item['templateName'] = $currentStyleName;
+            $all[] = $item;
+        }
+        foreach ($allComponents['shared'] ?? [] as $component) {
+            $item = $this->toArray($component, $includePreview);
+            $item['isShared'] = true;
+            $item['templateCode'] = self::SHARED_STYLE_CODE;
+            $item['templateName'] = '通用组件';
+            $all[] = $item;
+        }
+        foreach ($allComponents['compatible'] ?? [] as $templateCode => $components) {
+            foreach ($components as $component) {
+                $item = $this->toArray($component, $includePreview);
+                $item['templateCode'] = $templateCode;
+                $item['templateName'] = $this->getTemplateName($templateCode);
+                $all[] = $item;
+            }
+        }
+        
+        foreach ($all as $item) {
+            $category = $item['category'] ?? '';
             $regionCode = $this->categoryToRegion($category);
             
             if (isset($grouped[$regionCode])) {
-                $grouped[$regionCode]['components'][] = $this->toArray($component, $includePreview);
+                $grouped[$regionCode]['components'][] = $item;
             }
         }
         
@@ -340,7 +362,7 @@ class ComponentService
     /**
      * 按分类分组组件
      */
-    private function groupComponentsByCategory(array $allComponents, bool $includePreview = false): array
+    private function groupComponentsByCategory(array $allComponents, bool $includePreview = false, string $currentStyleCode = ''): array
     {
         $categories = Component::getCategories();
         $grouped = [];
@@ -352,16 +374,38 @@ class ComponentService
             ];
         }
         
-        // 合并所有组件
-        $all = array_merge(
-            $allComponents['own'] ?? [],
-            $allComponents['shared'] ?? []
-        );
+        // 合并所有组件（当前模板 + 共享 + 其他模板）
+        $all = [];
+        $currentStyleCode = $currentStyleCode ?: (string)($allComponents['style_code'] ?? '');
+        $currentStyleName = $currentStyleCode ? $this->getTemplateName($currentStyleCode) : $currentStyleCode;
         
-        foreach ($all as $component) {
-            $category = $component->getData(Component::fields_CATEGORY);
+        foreach ($allComponents['own'] ?? [] as $component) {
+            $item = $this->toArray($component, $includePreview);
+            $item['isOwn'] = true;
+            $item['templateCode'] = $currentStyleCode;
+            $item['templateName'] = $currentStyleName;
+            $all[] = $item;
+        }
+        foreach ($allComponents['shared'] ?? [] as $component) {
+            $item = $this->toArray($component, $includePreview);
+            $item['isShared'] = true;
+            $item['templateCode'] = self::SHARED_STYLE_CODE;
+            $item['templateName'] = '通用组件';
+            $all[] = $item;
+        }
+        foreach ($allComponents['compatible'] ?? [] as $templateCode => $components) {
+            foreach ($components as $component) {
+                $item = $this->toArray($component, $includePreview);
+                $item['templateCode'] = $templateCode;
+                $item['templateName'] = $this->getTemplateName($templateCode);
+                $all[] = $item;
+            }
+        }
+        
+        foreach ($all as $item) {
+            $category = $item['category'] ?? '';
             if (isset($grouped[$category])) {
-                $grouped[$category]['components'][] = $this->toArray($component, $includePreview);
+                $grouped[$category]['components'][] = $item;
             }
         }
         
@@ -554,9 +598,19 @@ class ComponentService
         $template->assign('style', $mergedConfig);
         $template->assign('style_settings', $mergedConfig);
         $template->assign('component_config', $mergedConfig);
+        $template->assign('getConfig', static function (string $key, $default = null) use ($mergedConfig) {
+            $value = $mergedConfig;
+            foreach (explode('.', $key) as $segment) {
+                if (!is_array($value) || !array_key_exists($segment, $value)) {
+                    return $default;
+                }
+                $value = $value[$segment];
+            }
+            return $value;
+        });
         $template->assign('is_preview', true);
-        $template->assign('colors', $colors); // 颜色配置
-        $template->assign('template_code', $styleCode); // 模板代码
+        $template->assign('colors', $colors);
+        $template->assign('template_code', $styleCode);
         
         // 为预览模式提供示例数据（确保所有组件都能正常显示预览）
         $previewData = $this->getPreviewSampleData($componentCode);
@@ -659,14 +713,16 @@ class ComponentService
      * @param string $componentCode 组件代码
      * @return string 预览 HTML
      */
-    public function extractPreviewHtml(string $componentCode): string
+    public function extractPreviewHtml(Component $component): string
     {
         // 启用输出缓冲，捕获所有可能的直接输出
         ob_start();
         
         try {
-            // 直接通过模板渲染获取组件 HTML
-            $html = $this->renderPreview($componentCode, []);
+            $componentCode = $component->getData(Component::fields_CODE);
+            $styleCode = $component->getData(Component::fields_STYLE_CODE);
+            // 直接通过模板渲染获取组件 HTML（使用组件所属模板）
+            $html = $this->renderPreview($componentCode, [], $styleCode);
             
             // 获取可能的直接输出
             ob_get_clean();
@@ -743,6 +799,7 @@ class ComponentService
             'compatible_styles' => $component->getCompatibleStyles(),
             'is_system' => (bool)$component->getData(Component::fields_IS_SYSTEM),
             'is_shared' => $styleCode === self::SHARED_STYLE_CODE,
+            'is_ai_generated' => (bool)$component->getData(Component::fields_IS_AI_GENERATED),
             'sort_order' => (int)$component->getData(Component::fields_SORT_ORDER),
             'preview_html' => '',
             'preview_html_encoded' => false, // 标记预览HTML是否已编码
@@ -750,7 +807,7 @@ class ComponentService
         
         // 如果需要预览HTML，从组件文件中提取
         if ($includePreview) {
-            $previewHtml = $this->extractPreviewHtml($componentCode);
+            $previewHtml = $this->extractPreviewHtml($component);
             // 使用 Base64 编码预览HTML，防止特殊字符破坏JSON结构
             $result['preview_html'] = base64_encode($previewHtml);
             $result['preview_html_encoded'] = true;

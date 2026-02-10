@@ -375,6 +375,11 @@ Session implements SessionInterface
     public function delete(string $name): bool
     {
         $this->ensureStarted();
+        // 通过驱动删除（兼容 WLS 自定义会话和原生 $_SESSION 两种模式）
+        if (isset($this->session)) {
+            return $this->session->delete($name);
+        }
+        // 兜底：直接操作 $_SESSION
         if (isset($_SESSION[$name])) {
             unset($_SESSION[$name]);
             return true;

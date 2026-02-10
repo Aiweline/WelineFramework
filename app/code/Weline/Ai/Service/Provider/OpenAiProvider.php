@@ -15,6 +15,7 @@ namespace Weline\Ai\Service\Provider;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Http\Sse\SseContext;
 
 /**
  * OpenAI API提供者
@@ -82,26 +83,20 @@ class OpenAiProvider implements ProviderInterface
         // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
-        // 设置执行时间限制，确保有足够的时间完成请求
-        if ($timeout > 0) {
-            // 设置时间限制为 timeout + 10 秒的缓冲时间
-            $timeLimit = $timeout + 10;
-            @set_time_limit($timeLimit);
-            
-            // 检查当前剩余时间是否足够
-            $currentLimit = ini_get('max_execution_time');
-            if ($currentLimit > 0 && $currentLimit < $timeLimit) {
-                // 如果当前限制小于需要的限制，尝试增加
+        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
+        if (!SseContext::isSseEnabled()) {
+            if ($timeout > 0) {
+                $timeLimit = $timeout + 10;
                 @set_time_limit($timeLimit);
+            } else {
+                @set_time_limit(0);
             }
-        } else {
-            @set_time_limit(0);
         }
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000),
+            'max_tokens' => $this->capMaxTokens($model, $config, $params),
             'top_p' => (float)($params['top_p'] ?? $config['top_p'] ?? 1.0),
             'frequency_penalty' => (float)($params['frequency_penalty'] ?? $config['frequency_penalty'] ?? 0.0),
             'presence_penalty' => (float)($params['presence_penalty'] ?? $config['presence_penalty'] ?? 0.0),
@@ -112,6 +107,11 @@ class OpenAiProvider implements ProviderInterface
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
+        }
+
+        // JSON 模式（业界标准）：强制模型只输出合法 JSON，降低解析失败率
+        if (!empty($params['response_format']) && is_array($params['response_format'])) {
+            $requestData['response_format'] = $params['response_format'];
         }
 
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
@@ -214,7 +214,7 @@ class OpenAiProvider implements ProviderInterface
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000),
+            'max_tokens' => $this->capMaxTokens($model, $config, $params),
             'stream' => true,
         ];
 
@@ -222,6 +222,11 @@ class OpenAiProvider implements ProviderInterface
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
+        }
+
+        // JSON 模式（业界标准）：强制模型只输出合法 JSON
+        if (!empty($params['response_format']) && is_array($params['response_format'])) {
+            $requestData['response_format'] = $params['response_format'];
         }
 
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
@@ -241,6 +246,7 @@ class OpenAiProvider implements ProviderInterface
         $onReasoning = $params['on_reasoning'] ?? null;
         $onContent = $params['on_content'] ?? null;
         $onHeartbeat = $params['on_heartbeat'] ?? null;
+        $onWaiting = $params['on_waiting'] ?? null;
 
         // 累积器
         $fullContent = '';
@@ -254,6 +260,38 @@ class OpenAiProvider implements ProviderInterface
         $rawResponseBuffer = '';
         $hasValidChunk = false;
         $startTime = microtime(true);
+        $lastProgressNotify = $startTime;
+        $progressInterval = 5; // 每 5 秒发送一次等待状态
+
+        // 进度回调：在 AI 未返回数据时周期性触发，保持 SSE 活跃并显示等待状态
+        if ($onWaiting || $onHeartbeat) {
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($curl, $dlTotal, $dlNow, $ulTotal, $ulNow) use (
+                $onWaiting, $onHeartbeat, &$hasValidChunk, $startTime, &$lastProgressNotify, $progressInterval
+            ) {
+                $now = microtime(true);
+                $sinceLast = $now - $lastProgressNotify;
+
+                // AI 还没有返回有效数据时，每隔 $progressInterval 秒发送等待通知
+                if (!$hasValidChunk && $sinceLast >= $progressInterval) {
+                    $elapsed = (int)($now - $startTime);
+                    if ($onWaiting) {
+                        $onWaiting($elapsed);
+                    }
+                    if ($onHeartbeat) {
+                        $onHeartbeat();
+                    }
+                    $lastProgressNotify = $now;
+                }
+                // AI 已有数据流时，降频发送心跳（每 15 秒）
+                elseif ($hasValidChunk && $onHeartbeat && $sinceLast >= 15) {
+                    $onHeartbeat();
+                    $lastProgressNotify = $now;
+                }
+
+                return 0; // 返回 0 继续传输
+            });
+        }
 
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
             &$fullContent, &$fullReasoning, &$toolCallsAccum, &$finishReason, &$modelName,
@@ -444,37 +482,20 @@ class OpenAiProvider implements ProviderInterface
         // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
-        // 调试日志：记录超时时间的来源和值
-        if (DEV) {
-            $timeoutSource = isset($params['timeout']) ? 'params' : (isset($config['timeout']) ? 'model_config' : 'default');
-            error_log(sprintf('AI流式超时设置: %d秒 (来源: %s, model_code: %s, config_keys: %s)', 
-                $timeout, 
-                $timeoutSource, 
-                $model->getModelCode(),
-                implode(',', array_keys($config))
-            ));
-        }
-        
-        // 设置执行时间限制，确保有足够的时间完成请求
-        if ($timeout > 0) {
-            // 设置时间限制为 timeout + 10 秒的缓冲时间
-            $timeLimit = $timeout + 10;
-            @set_time_limit($timeLimit);
-            
-            // 检查当前剩余时间是否足够
-            $currentLimit = ini_get('max_execution_time');
-            if ($currentLimit > 0 && $currentLimit < $timeLimit) {
-                // 如果当前限制小于需要的限制，尝试增加
+        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
+        if (!SseContext::isSseEnabled()) {
+            if ($timeout > 0) {
+                $timeLimit = $timeout + 10;
                 @set_time_limit($timeLimit);
+            } else {
+                @set_time_limit(0);
             }
-        } else {
-            @set_time_limit(0);
         }
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
-            'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000),
+            'max_tokens' => $this->capMaxTokens($model, $config, $params),
             'stream' => true,
         ];
 
@@ -547,6 +568,16 @@ class OpenAiProvider implements ProviderInterface
         }
 
         return $result;
+    }
+
+    /**
+     * 将请求的 max_tokens 限制在模型/API 允许范围内，避免 HTTP 400（如 valid range [1, 8192]）
+     */
+    private function capMaxTokens(AiModel $model, array $config, array $params): int
+    {
+        $requested = (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 2000);
+        $modelMax = (int)($model->getData(AiModel::fields_MAX_TOKENS) ?? $config['max_tokens'] ?? 8192);
+        return min(max(1, $requested), max(1, $modelMax));
     }
 
     /**
@@ -656,10 +687,12 @@ class OpenAiProvider implements ProviderInterface
      */
     private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
     {
-        // 记录开始时间，用于检测超时（在方法开始时记录）
+        // SSE 模式下不做 PHP 层面的超时检测
+        $isSseMode = SseContext::isSseEnabled();
+        
         $startTime = microtime(true);
-        $maxExecutionTime = ini_get('max_execution_time');
-        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
+        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
         try {
             $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
@@ -679,19 +712,21 @@ class OpenAiProvider implements ProviderInterface
             
             $response = curl_exec($ch);
             
-            // 检查是否超时
-            $lastError = error_get_last();
-            if ($lastError && (
-                strpos($lastError['message'], 'Maximum execution time') !== false ||
-                strpos($lastError['message'], 'exceeded') !== false
-            )) {
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
-            }
-            
-            // 检查执行时间是否接近限制
-            $elapsedTime = microtime(true) - $startTime;
-            if ($timeLimit !== null && $elapsedTime >= ($timeLimit - 2)) {
-                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            // 检查 PHP 超时（SSE 模式下跳过）
+            if (!$isSseMode) {
+                $lastError = error_get_last();
+                if ($lastError && (
+                    strpos($lastError['message'], 'Maximum execution time') !== false ||
+                    strpos($lastError['message'], 'exceeded') !== false
+                )) {
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
+                }
+                
+                // 检查执行时间是否接近限制
+                $elapsedTime = microtime(true) - $startTime;
+                if ($timeLimit !== null && $elapsedTime >= ($timeLimit - 2)) {
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
+                }
             }
             
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -752,10 +787,12 @@ class OpenAiProvider implements ProviderInterface
      */
     private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout, ?callable $reasoningCallback = null): void
     {
-        // 记录开始时间，用于检测超时（在方法开始时记录）
+        // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
+        $isSseMode = SseContext::isSseEnabled();
+        
         $startTime = microtime(true);
-        $maxExecutionTime = ini_get('max_execution_time');
-        $timeLimit = $maxExecutionTime > 0 ? (int)$maxExecutionTime : null;
+        $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
+        $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
         $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
         
@@ -830,21 +867,23 @@ class OpenAiProvider implements ProviderInterface
         // 获取 HTTP 状态码
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        // 检查是否超时
-        $lastError = error_get_last();
-        if ($lastError && (
-            strpos($lastError['message'], 'Maximum execution time') !== false ||
-            strpos($lastError['message'], 'exceeded') !== false
-        )) {
-            curl_close($ch);
-            throw new Exception($this->getTimeoutErrorMessage($timeout));
+        // 检查 PHP 超时（SSE 模式下跳过，因为已设 set_time_limit(0)）
+        if (!$isSseMode) {
+            $lastError = error_get_last();
+            if ($lastError && (
+                strpos($lastError['message'], 'Maximum execution time') !== false ||
+                strpos($lastError['message'], 'exceeded') !== false
+            )) {
+                curl_close($ch);
+                throw new Exception($this->getTimeoutErrorMessage($timeout));
+            }
         }
         
         $error = curl_error($ch);
         curl_close($ch);
 
         if ($error) {
-            // 检查是否是超时错误
+            // curl 超时错误始终需要检测（非 PHP 层面超时）
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
@@ -941,6 +980,10 @@ class OpenAiProvider implements ProviderInterface
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
+            // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
+            // 防止 AI API 完全停止响应导致连接永久挂起
+            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
         }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证

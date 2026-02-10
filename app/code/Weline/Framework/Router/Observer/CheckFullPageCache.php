@@ -50,6 +50,11 @@ class CheckFullPageCache implements ObserverInterface
         if ($requestMethod !== 'GET') {
             return;
         }
+        
+        // 编辑器预览模式不缓存（editor_mode=1 的 iframe 请求）
+        if (isset($_GET['editor_mode']) && ($_GET['editor_mode'] === '1' || $_GET['editor_mode'] === 'true')) {
+            return;
+        }
 
         // 检查 URL 是否已经解析完成
         // 使用 WELINE_URL_PARSED 标志判断，这是最可靠的方式

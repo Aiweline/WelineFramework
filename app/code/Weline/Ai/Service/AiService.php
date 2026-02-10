@@ -29,6 +29,7 @@ use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\Env;
 
 /**
  * AI服务核心类
@@ -641,6 +642,17 @@ class AiService
                         'status' => 'success'
                     ]);
 
+                    // 非智能体生成：写入 ai_activity.log
+                    $modelCode = $model->getData(AiModel::fields_MODEL_CODE) ?? '';
+                    $reasoning = $result['reasoning_content'] ?? '';
+                    if ($reasoning !== '') {
+                        $line = '[' . date('Y-m-d H:i:s') . '][generate] model=' . $modelCode . ' reasoning=' . (mb_strlen($reasoning) > 800 ? mb_substr($reasoning, 0, 800) . '...' : $reasoning);
+                        Env::log('ai_activity.log', mb_strlen($line) > 2000 ? mb_substr($line, 0, 2000) . '...' : $line, 'INFO', true, true, 0);
+                    }
+                    $content = $result['content'] ?? '';
+                    $line = '[' . date('Y-m-d H:i:s') . '][generate] model=' . $modelCode . ' content=' . (mb_strlen($content) > 800 ? mb_substr($content, 0, 800) . '...' : $content);
+                    Env::log('ai_activity.log', mb_strlen($line) > 2000 ? mb_substr($line, 0, 2000) . '...' : $line, 'INFO', true, true, 0);
+
                     return $result['content'];
                 } catch (\Exception $eTry) {
                     $lastError = $eTry;
@@ -724,9 +736,20 @@ class AiService
             
             // 4. 获取合适的提供者
             $provider = $this->providerFactory->getProvider($model);
+
+            // 4.1 包装 callback：流式 chunk 写入 ai_activity.log
+            $modelCode = $model->getData(AiModel::fields_MODEL_CODE) ?? '';
+            $wrappedCallback = function ($chunk) use ($callback, $modelCode) {
+                $line = '[' . date('Y-m-d H:i:s') . '][stream] model=' . $modelCode . ' chunk=' . (is_string($chunk) && mb_strlen($chunk) > 500 ? mb_substr($chunk, 0, 500) . '...' : (is_string($chunk) ? $chunk : json_encode($chunk, JSON_UNESCAPED_UNICODE)));
+                if (mb_strlen($line) > 2000) {
+                    $line = mb_substr($line, 0, 2000) . '...';
+                }
+                Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
+                $callback($chunk);
+            };
             
             // 5. 流式调用API
-            $result = $provider->generateStream($model, $prompt, $callback, $params);
+            $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
             $usage = $result['usage'] ?? [];
             
             // 6. 记录使用量（兼容旧系统）
@@ -1092,8 +1115,32 @@ class AiService
         $params['resolved_config'] = $resolvedConfig;
         $params['provider_factory'] = $this->providerFactory;
 
+        // 5.1 包装 streamCallback：所有智能体事件流式写入 ai_activity.log
+        $wrappedCallback = null;
+        if ($streamCallback !== null) {
+            $wrappedCallback = function (string $eventType, array $data) use ($streamCallback) {
+                $summary = $eventType;
+                if (isset($data['content']) && is_string($data['content'])) {
+                    $len = mb_strlen($data['content']);
+                    $summary .= ' content=' . ($len > 500 ? mb_substr($data['content'], 0, 500) . '...(' . $len . ')' : $data['content']);
+                } elseif (isset($data['name'])) {
+                    $summary .= ' name=' . $data['name'];
+                } elseif (isset($data['message'])) {
+                    $summary .= ' ' . (is_string($data['message']) ? $data['message'] : json_encode($data['message']));
+                } else {
+                    $summary .= ' ' . json_encode($data, JSON_UNESCAPED_UNICODE);
+                }
+                $line = '[' . date('Y-m-d H:i:s') . '][' . $eventType . '] ' . $summary;
+                if (mb_strlen($line) > 2000) {
+                    $line = mb_substr($line, 0, 2000) . '...';
+                }
+                Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
+                $streamCallback($eventType, $data);
+            };
+        }
+
         // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
-        $result = $agent->execute($prompt, $model, $params, $streamCallback);
+        $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
         $result->agentCode = $agentCode;
         $result->modelCode = $model->getModelCode();
 

@@ -21,6 +21,7 @@ class AIComponentResult
     private array $fields = [];
     private string $prompt = '';
     private string $error = '';
+    private array $agentInfo = [];
     
     public function isSuccess(): bool
     {
@@ -120,6 +121,17 @@ class AIComponentResult
         $this->error = $error;
         return $this;
     }
+
+    public function getAgentInfo(): array
+    {
+        return $this->agentInfo;
+    }
+
+    public function setAgentInfo(array $agentInfo): self
+    {
+        $this->agentInfo = $agentInfo;
+        return $this;
+    }
     
     /**
      * 转换为数组
@@ -136,6 +148,7 @@ class AIComponentResult
             'fields' => $this->fields,
             'prompt' => $this->prompt,
             'error' => $this->error,
+            'agent' => $this->agentInfo,
         ];
     }
 }
