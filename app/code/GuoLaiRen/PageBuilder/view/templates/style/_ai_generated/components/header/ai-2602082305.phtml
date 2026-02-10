@@ -1,0 +1,422 @@
+<?php
+$component_config = $component_config ?? [];
+$getConfig = $getConfig ?? static function (string $key, $default = null) use ($component_config) {
+    $value = $component_config;
+    foreach (explode('.', $key) as $segment) {
+        if (!is_array($value) || !array_key_exists($segment, $value)) {
+            return $default;
+        }
+        $value = $value[$segment];
+    }
+    return $value;
+};
+$luxurySlogan = $getConfig('luxury.slogan', __('EXCLUSIVE LUXURY'));
+$showLogo = $getConfig('logo.show', 'yes') !== 'no';
+$logoText = $getConfig('logo.text', __('品牌名称'));
+$logoImage = $getConfig('logo.image', '');
+$showNav = $getConfig('nav.show', 'yes') !== 'no';
+$navItems = $getConfig('nav.items', []);
+$showCta = $getConfig('cta.show', 'yes') !== 'no';
+$ctaText = $getConfig('cta.text', __('立即咨询'));
+$ctaUrl = $getConfig('cta.url', '#');
+?>
+<header id="<?= $componentId ?>" class="luxury-header">
+    <div class="luxury-header__container">
+        <?php if ($showLogo): ?>
+        <div class="luxury-header__logo">
+            <?php if (!empty($logoImage)): ?>
+            <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>" loading="lazy" class="luxury-header__logo-image">
+            <?php else: ?>
+            <div class="luxury-header__logo-text">
+                <span class="luxury-header__logo-main"><?= htmlspecialchars($logoText) ?></span>
+                <span class="luxury-header__logo-sub"><?= htmlspecialchars($luxurySlogan) ?></span>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($showNav && !empty($navItems)): ?>
+        <nav class="luxury-header__nav">
+            <ul class="luxury-header__nav-list">
+                <?php foreach ($navItems as $item): ?>
+                <li class="luxury-header__nav-item">
+                    <a href="<?= htmlspecialchars($item['href']) ?>" class="luxury-header__nav-link">
+                        <span class="luxury-header__nav-text"><?= htmlspecialchars($item['text']) ?></span>
+                        <span class="luxury-header__nav-decoration"></span>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+
+        <div class="luxury-header__actions">
+            <?php if ($showCta): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="luxury-header__cta">
+                <span class="luxury-header__cta-text"><?= htmlspecialchars($ctaText) ?></span>
+                <span class="luxury-header__cta-icon">→</span>
+            </a>
+            <?php endif; ?>
+            
+            <button class="luxury-header__menu-toggle" aria-label="<?= __('菜单') ?>">
+                <span class="luxury-header__menu-icon"></span>
+            </button>
+        </div>
+    </div>
+</header>
+<style>
+#componentId {
+    --luxury-gold: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%);
+    --luxury-gold-solid: #D4AF37;
+    --luxury-dark: #0a0a0f;
+    --luxury-darker: #050508;
+    --luxury-light: #f8f8f8;
+    --luxury-muted: #b8b8d0;
+    --luxury-border: rgba(212, 175, 55, 0.2);
+    
+    background: var(--luxury-dark);
+    color: var(--luxury-light);
+    position: relative;
+    overflow: hidden;
+}
+
+#componentId::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--luxury-gold);
+    opacity: 0.3;
+}
+
+#componentId .luxury-header__container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 40px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 2;
+}
+
+#componentId .luxury-header__logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-decoration: none;
+}
+
+#componentId .luxury-header__logo-image {
+    height: 50px;
+    width: auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+#componentId .luxury-header__logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+#componentId .luxury-header__logo-main {
+    font-size: clamp(1.5rem, 2vw, 2rem);
+    font-weight: 700;
+    background: var(--luxury-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#componentId .luxury-header__logo-sub {
+    font-size: 0.75rem;
+    color: var(--luxury-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+#componentId .luxury-header__nav {
+    display: flex;
+    align-items: center;
+}
+
+#componentId .luxury-header__nav-list {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 40px;
+}
+
+#componentId .luxury-header__nav-item {
+    position: relative;
+}
+
+#componentId .luxury-header__nav-link {
+    color: var(--luxury-light);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.3s ease;
+}
+
+#componentId .luxury-header__nav-text {
+    position: relative;
+    z-index: 2;
+}
+
+#componentId .luxury-header__nav-decoration {
+    width: 0;
+    height: 2px;
+    background: var(--luxury-gold);
+    transition: width 0.3s ease;
+    border-radius: 1px;
+}
+
+#componentId .luxury-header__nav-link:hover {
+    color: var(--luxury-gold-solid);
+}
+
+#componentId .luxury-header__nav-link:hover .luxury-header__nav-decoration {
+    width: 100%;
+}
+
+#componentId .luxury-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+#componentId .luxury-header__cta {
+    background: var(--luxury-gold);
+    color: var(--luxury-darker);
+    text-decoration: none;
+    padding: 12px 28px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+}
+
+#componentId .luxury-header__cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+}
+
+#componentId .luxury-header__cta-icon {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+}
+
+#componentId .luxury-header__cta:hover .luxury-header__cta-icon {
+    transform: translateX(4px);
+}
+
+#componentId .luxury-header__menu-toggle {
+    display: none;
+    background: none;
+    border: 1px solid var(--luxury-border);
+    border-radius: 4px;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--luxury-light);
+    transition: all 0.3s ease;
+}
+
+#componentId .luxury-header__menu-toggle:hover {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: var(--luxury-gold-solid);
+}
+
+#componentId .luxury-header__menu-icon {
+    width: 20px;
+    height: 2px;
+    background: var(--luxury-light);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+#componentId .luxury-header__menu-icon::before,
+#componentId .luxury-header__menu-icon::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 2px;
+    background: var(--luxury-light);
+    left: 0;
+    transition: all 0.3s ease;
+}
+
+#componentId .luxury-header__menu-icon::before {
+    top: -6px;
+}
+
+#componentId .luxury-header__menu-icon::after {
+    bottom: -6px;
+}
+@media (max-width: 1024px) {
+    #componentId .luxury-header__container {
+        padding: 0 24px;
+        height: 80px;
+    }
+    
+    #componentId .luxury-header__nav-list {
+        gap: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    #componentId .luxury-header__container {
+        padding: 0 16px;
+        height: 70px;
+    }
+    
+    #componentId .luxury-header__nav {
+        position: fixed;
+        top: 70px;
+        left: 0;
+        right: 0;
+        background: var(--luxury-darker);
+        border-top: 1px solid var(--luxury-border);
+        padding: 20px 16px;
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.4s ease;
+        z-index: 1000;
+    }
+    
+    #componentId .luxury-header__nav--active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    #componentId .luxury-header__nav-list {
+        flex-direction: column;
+        gap: 16px;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s ease;
+    }
+    
+    #componentId .luxury-header__nav-item {
+        width: 100%;
+    }
+    
+    #componentId .luxury-header__nav-link {
+        padding: 12px 0;
+        justify-content: space-between;
+        flex-direction: row;
+    }
+    
+    #componentId .luxury-header__menu-toggle {
+        display: flex;
+    }
+    
+    #componentId .luxury-header__menu-toggle--active .luxury-header__menu-icon {
+        background: transparent;
+    }
+    
+    #componentId .luxury-header__menu-toggle--active .luxury-header__menu-icon::before {
+        transform: rotate(45deg);
+        top: 0;
+    }
+    
+    #componentId .luxury-header__menu-toggle--active .luxury-header__menu-icon::after {
+        transform: rotate(-45deg);
+        bottom: 0;
+    }
+    
+    #componentId .luxury-header__cta {
+        padding: 10px 20px;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #componentId .luxury-header__logo-main {
+        font-size: 1.25rem;
+    }
+    
+    #componentId .luxury-header__logo-sub {
+        font-size: 0.65rem;
+    }
+    
+    #componentId .luxury-header__cta {
+        padding: 8px 16px;
+        font-size: 0.8rem;
+    }
+}
+</style>
+<script>
+const menuToggle = component.querySelector('.luxury-header__menu-toggle');
+const nav = component.querySelector('.luxury-header__nav');
+const navList = component.querySelector('.luxury-header__nav-list');
+
+if (menuToggle && nav && navList) {
+    menuToggle.addEventListener('click', () => {
+        const isExpanded = menuToggle.getAttribute('aria-expanded') === 'true';
+        menuToggle.setAttribute('aria-expanded', !isExpanded);
+        nav.classList.toggle('luxury-header__nav--active');
+        menuToggle.classList.toggle('luxury-header__menu-toggle--active');
+        
+        if (!isExpanded) {
+            navList.style.maxHeight = navList.scrollHeight + 'px';
+        } else {
+            navList.style.maxHeight = null;
+        }
+    });
+}
+
+let lastScrollTop = 0;
+const header = component;
+
+window.addEventListener('scroll', () => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    if (scrollTop > 100) {
+        header.classList.add('luxury-header--scrolled');
+        
+        if (scrollTop > lastScrollTop && scrollTop > 200) {
+            header.classList.add('luxury-header--hidden');
+        } else {
+            header.classList.remove('luxury-header--hidden');
+        }
+    } else {
+        header.classList.remove('luxury-header--scrolled', 'luxury-header--hidden');
+    }
+    
+    lastScrollTop = scrollTop;
+});
+
+const navLinks = component.querySelectorAll('.luxury-header__nav-link');
+navLinks.forEach(link => {
+    link.addEventListener('mouseenter', () => {
+        link.classList.add('luxury-header__nav-link--active');
+    });
+    
+    link.addEventListener('mouseleave', () => {
+        link.classList.remove('luxury-header__nav-link--active');
+    });
+});
+</script>

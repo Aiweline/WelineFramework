@@ -17,6 +17,10 @@ abstract class AbstractPrint implements PrintInterface
     public $out;
     private ?File $file=null;
     public bool $printing = true;
+    
+    /** @var array<int,string>|null */
+    private static ?array $stickyFooterLines = null;
+    private static bool $stickyFooterEnabled = false;
 
     /**
      * @DESC         |错误
@@ -184,6 +188,62 @@ $doc_tmp
 
 COMMAND_LIST;
         echo($doc);
+        
+        if (self::$stickyFooterEnabled && self::$stickyFooterLines) {
+            $this->renderStickyFooter();
+        }
+    }
+    
+    /**
+     * 设置底部悬浮提示（不随日志滚动）
+     *
+     * @param string[] $lines
+     */
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void
+    {
+        self::$stickyFooterLines = [];
+        foreach ($lines as $line) {
+            self::$stickyFooterLines[] = $this->colorize($line, $color);
+        }
+        self::$stickyFooterEnabled = true;
+        $this->renderStickyFooter();
+    }
+    
+    /**
+     * 清除底部悬浮提示
+     */
+    public function clearStickyFooter(): void
+    {
+        self::$stickyFooterEnabled = false;
+        self::$stickyFooterLines = null;
+    }
+    
+    /**
+     * 渲染底部悬浮提示（ANSI）
+     */
+    private function renderStickyFooter(): void
+    {
+        if (!self::$stickyFooterEnabled || empty(self::$stickyFooterLines)) {
+            return;
+        }
+        $lines = self::$stickyFooterLines;
+        $count = \count($lines);
+        // 保存光标位置
+        echo "\0337";
+        // 移动到屏幕底部
+        echo "\033[999B";
+        if ($count > 1) {
+            echo "\033[" . ($count - 1) . "A";
+        }
+        foreach ($lines as $i => $line) {
+            echo "\033[2K" . $line;
+            if ($i < $count - 1) {
+                echo "\033[1B";
+            }
+        }
+        // 恢复光标位置
+        echo "\0338";
+        \flush();
     }
 
     /**

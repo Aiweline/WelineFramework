@@ -112,4 +112,16 @@ interface PrintInterface
      * @return mixed
      */
     public function printing(string $message = 'Printing!');
+    
+    /**
+     * 设置底部悬浮提示（不随日志滚动）
+     *
+     * @param string[] $lines
+     */
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void;
+    
+    /**
+     * 清除底部悬浮提示
+     */
+    public function clearStickyFooter(): void;
 }

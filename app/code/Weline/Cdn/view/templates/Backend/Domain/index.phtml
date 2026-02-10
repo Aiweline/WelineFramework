@@ -66,6 +66,7 @@ $adapters = $this->getData('adapters') ?: [];
                                 <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="btn btn-primary">
                                     <i class="mdi mdi-plus"></i> <?= __('添加域名') ?>
                                 </a>
+                                <w:hook>Weline_Cdn::backend::partials::domain::toolbar-after</w:hook>
                             </div>
                             <div>
                                 <form method="get" class="d-inline-flex gap-2">

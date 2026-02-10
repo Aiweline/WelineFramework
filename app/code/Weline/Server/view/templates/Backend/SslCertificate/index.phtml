@@ -271,6 +271,14 @@ php bin/w server:ssl:auto sync -e admin@example.com</code></pre>
                                placeholder="admin@example.com">
                         <small class="text-muted"><?= __("Let's Encrypt 要求提供联系邮箱") ?></small>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('证书提供商') ?> <span class="text-danger">*</span></label>
+                        <select class="form-select" name="provider" required>
+                            <option value="letsencrypt"><?= __("Let's Encrypt") ?></option>
+                            <option value="litessl"><?= __('LiteSSL') ?></option>
+                        </select>
+                        <small class="text-muted"><?= __('默认使用 Let\'s Encrypt，LiteSSL 可用于特定合规场景') ?></small>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -285,6 +293,11 @@ php bin/w server:ssl:auto sync -e admin@example.com</code></pre>
 
 <script>
 const baseUrl = '<?= $this->getUrl('backend/server/ssl-certificate/') ?>';
+
+function getSelectedProvider() {
+    const select = document.querySelector('#requestForm select[name="provider"]');
+    return select ? select.value : 'letsencrypt';
+}
 
 // 切换 HTTPS
 async function toggleHttps(domain, enabled) {
@@ -318,13 +331,15 @@ async function requestCertificate(domain) {
     const email = prompt('<?= __('请输入联系邮箱') ?>', 'admin@' + domain);
     if (!email) return;
     
+    const provider = getSelectedProvider();
+    
     AdminToast.info('<?= __('正在申请证书，请稍候...') ?>');
     
     try {
         const response = await fetch(baseUrl + 'request', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `domain=${encodeURIComponent(domain)}&email=${encodeURIComponent(email)}`
+            body: `domain=${encodeURIComponent(domain)}&email=${encodeURIComponent(email)}&provider=${encodeURIComponent(provider)}`
         });
         const result = await response.json();
         

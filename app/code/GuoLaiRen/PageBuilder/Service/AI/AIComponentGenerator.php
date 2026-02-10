@@ -493,22 +493,28 @@ HTML;
             $lastError = $options['last_error'] ?? '';
             $refinePrompt = $this->buildRefinePrompt($existingCode, $adjustmentPrompt, $category, $lastError);
             
-            // 调用AI服务进行微调
+            // 调用智能体进行微调（支持工具调用与结构化规划）
             $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
-            $locale = \Weline\Framework\App\State::getLang() ?: 'zh_Hans_CN';
-            
-            $aiResponse = $aiService->generate(
+            $streamCallback = $options['stream_callback'] ?? null;
+            $agentResult = $aiService->executeAgent(
+                'pagebuilder_component_refine',
                 $refinePrompt,
-                null, // 自动选择模型
-                'pagebuilder_component_generation', // 场景代码：组件生成
-                $locale,
-                ['refine_mode' => true, 'existing_code' => $existingCode], // 传递微调参数
-                null, // userId
-                true  // isBackend
+                null,
+                [
+                    'category' => $category,
+                    'style_code' => $options['style_code'] ?? '',
+                    'refine_mode' => true,
+                    'existing_code' => $existingCode,
+                ],
+                is_callable($streamCallback) ? $streamCallback : null
             );
             
+            if (!$agentResult->success) {
+                throw new \Exception($agentResult->error ?? 'AI 微调失败');
+            }
+            
             // 解析AI响应，提取组件代码
-            $refinedCode = $this->parseComponentResponse($aiResponse);
+            $refinedCode = $this->parseComponentResponse($agentResult->content);
             
             // 从现有代码中提取元数据（如果AI没有生成完整的）
             $metadata = $this->extractMetadata($existingCode);
@@ -523,6 +529,7 @@ HTML;
             $result->setTemplateContent($refinedCode);
             $result->setFields($metadata['fields'] ?? []);
             $result->setPrompt($adjustmentPrompt);
+            $result->setAgentInfo($agentResult->toArray());
             
             return $result;
             
@@ -558,6 +565,10 @@ HTML;
             $prompt .= "- 双美元符号变量（如 \$\$var 应为 \$var）\n";
             $prompt .= "- 未定义的变量或函数\n";
             $prompt .= "- 不平衡的控制结构（if/endif, foreach/endforeach）\n\n";
+            $prompt .= "修复流程：\n";
+            $prompt .= "1) 先调用 locate_template_error 提取错误文件与行号\n";
+            $prompt .= "2) 根据上下文定位需要修改的片段\n";
+            $prompt .= "3) 使用 replace_template_snippet 精准替换对应行范围\n\n";
         }
         
         $prompt .= "【现有组件代码】\n";
@@ -573,6 +584,7 @@ HTML;
         $prompt .= "6. 确保代码可以直接使用，符合PageBuilder组件规约\n";
         $prompt .= "7. php_variables 只能包含简单的变量赋值，不要包含控制结构\n";
         $prompt .= "8. js_content 必须是纯JavaScript，不能包含任何PHP代码\n";
+        $prompt .= "9. 如果是错误修复，必须使用工具做精准替换，避免重写整份代码\n";
         
         return $prompt;
     }

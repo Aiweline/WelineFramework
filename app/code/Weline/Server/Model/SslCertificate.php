@@ -32,6 +32,7 @@ class SslCertificate extends Model
     public const fields_KEY_PATH = 'key_path';          // 私钥文件路径
     public const fields_CHAIN_PATH = 'chain_path';      // 证书链路径（可选）
     public const fields_ISSUER = 'issuer';              // 颁发机构
+    public const fields_PROVIDER = 'provider';          // 证书申请服务商
     public const fields_ISSUED_AT = 'issued_at';        // 颁发时间
     public const fields_EXPIRES_AT = 'expires_at';      // 到期时间
     public const fields_STATUS = 'status';              // 状态：pending/active/expired/revoked
@@ -82,6 +83,17 @@ class SslCertificate extends Model
                 '证书类型（exact/wildcard）'
             )->alter();
         }
+        // 新增 provider 字段（证书申请服务商）
+        if (!$setup->hasField(self::fields_PROVIDER)) {
+            $setup->alterTable()->addColumn(
+                self::fields_PROVIDER,
+                self::fields_ISSUER,
+                TableInterface::column_type_VARCHAR,
+                30,
+                "default 'letsencrypt'",
+                '证书申请服务商'
+            )->alter();
+        }
     }
     
     /**
@@ -102,6 +114,7 @@ class SslCertificate extends Model
             ->addColumn(self::fields_KEY_PATH, TableInterface::column_type_VARCHAR, 500, '', '私钥文件路径')
             ->addColumn(self::fields_CHAIN_PATH, TableInterface::column_type_VARCHAR, 500, '', '证书链路径')
             ->addColumn(self::fields_ISSUER, TableInterface::column_type_VARCHAR, 100, "default 'Let''s Encrypt'", '颁发机构')
+            ->addColumn(self::fields_PROVIDER, TableInterface::column_type_VARCHAR, 30, "default 'letsencrypt'", '证书申请服务商')
             ->addColumn(self::fields_ISSUED_AT, TableInterface::column_type_DATETIME, 0, '', '颁发时间')
             ->addColumn(self::fields_EXPIRES_AT, TableInterface::column_type_DATETIME, 0, '', '到期时间')
             ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'pending'", '状态')
@@ -220,6 +233,17 @@ class SslCertificate extends Model
     public function getIssuer(): string
     {
         return (string) $this->getData(self::fields_ISSUER);
+    }
+    
+    public function setProvider(string $provider): self
+    {
+        $this->setData(self::fields_PROVIDER, \strtolower(\trim($provider)));
+        return $this;
+    }
+    
+    public function getProvider(): string
+    {
+        return (string) $this->getData(self::fields_PROVIDER);
     }
     
     public function setIssuedAt(string $datetime): self

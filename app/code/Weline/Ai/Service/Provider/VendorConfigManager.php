@@ -211,6 +211,23 @@ class VendorConfigManager
     }
 
     /**
+     * 获取供应商配置文件路径
+     *
+     * @param string $providerCode
+     * @return string|null
+     */
+    public static function getProviderConfigPath(string $providerCode): ?string
+    {
+        $currentFileDir = dirname(__FILE__); // Service/Provider
+        $serviceDir = dirname($currentFileDir); // Service
+        $moduleDir = dirname($serviceDir); // Ai
+        $configDir = $moduleDir . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'vendors';
+        $path = $configDir . DIRECTORY_SEPARATOR . $providerCode . '.json';
+
+        return file_exists($path) ? $path : null;
+    }
+
+    /**
      * 加载单个配置文件
      * 
      * @param string $filePath

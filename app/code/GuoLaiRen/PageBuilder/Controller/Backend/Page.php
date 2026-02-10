@@ -843,22 +843,7 @@ class Page extends BackendController
         $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
         $this->assign('i18n_enabled', $i18nEnabled);
 
-        // 检查未翻译的语言（仅在多语言功能开启时检查）
-        if ($i18nEnabled === '1') {
-            $missingTranslations = [];
-            foreach ($selectedLocales as $locale) {
-                if (!isset($translationsData[$locale])) {
-                    $localeName = $this->i18nModel->getLocaleName($locale);
-                    $missingTranslations[] = $localeName;
-                }
-            }
-            
-            if (!empty($missingTranslations)) {
-                MessageManager::warning(
-                    __('页面还有以下语言未翻译：%{1}', implode(', ', $missingTranslations))
-                );
-            }
-        }
+        // 未翻译语言提示已移除（页面表单内的语言 Tab 已有未翻译标记，无需重复提示）
 
         // 如果多语言功能关闭，清空active_locales和selected_locales
         if ($i18nEnabled !== '1') {

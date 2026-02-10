@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- SaaS 一站式配置顶级菜单 -->
+    <add source="Weline_Saas::saas_manager"
+         name="saas_manager"
+         title="SaaS 一站式配置"
+         action=""
+         parent="Weline_Backend::business_module"
+         icon="mdi mdi-cloud-check"
+         order="20100"/>
+
+    <!-- 配置订单子菜单 -->
+    <add source="Weline_Saas::saas_provisioning"
+         name="saas_provisioning"
+         title="配置订单"
+         action="*/backend/provisioning/index"
+         parent="Weline_Saas::saas_manager"
+         icon="mdi mdi-format-list-bulleted"
+         order="10"/>
+
+</menus>

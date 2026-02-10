@@ -956,7 +956,9 @@ class Core
         // 使用静态方法 Env::get()，使用点号分隔符访问嵌套配置
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
-        if (!$this->is_backend && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
+        // 编辑器预览模式不写入全页缓存
+        $isEditorMode = isset($_GET['editor_mode']) && ($_GET['editor_mode'] === '1' || $_GET['editor_mode'] === 'true');
+        if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 构建统一缓存结构，包含所有请求相关数据
             $unifiedCacheData = [
                 \Weline\Framework\Router\Cache\RouterCache::UNIFIED_CACHE_URL_KEY => $this->url,

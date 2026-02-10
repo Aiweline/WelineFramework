@@ -21,6 +21,25 @@
         "requests_per_minute": 60,
         "tokens_per_minute": 150000
     },
+    "models_api": {
+        "path": "/models",
+        "auth_type": "bearer",
+        "data_key": "data",
+        "id_key": "id",
+        "name_key": "id",
+        "desc_key": "description",
+        "context_key": "context_window",
+        "max_tokens_key": "max_tokens"
+    },
+    "model_config_defaults": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "stream": true,
+        "timeout": 180,
+        "max_retries": 3,
+        "capabilities": ["chat", "code"]
+    },
     "models": [
         {
             "code": "gpt-4o",
