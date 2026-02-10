@@ -20,11 +20,8 @@ class CodeValidator
             'message' => '反引号 ` 会导致模板语法错误',
             'context' => 'all',
         ],
-        'php_tag_in_html' => [
-            'pattern' => '/<\x3f/i',
-            'message' => 'HTML内容中禁止使用PHP标签',
-            'context' => 'html_content',
-        ],
+        // php_tag_in_html 已移除：phtml 模板中允许使用 PHP 标签（<?php if/foreach 等）
+        // AI 组件通过 php_variables 字段声明默认变量，html_content 中使用 PHP 条件判断是正常模式
         'this_usage' => [
             'pattern' => '/\$this\s*->/',
             'message' => '禁止直接使用$this，请使用$getConfig函数',
@@ -241,6 +238,14 @@ class CodeValidator
         if (strpos(trim($code), $phpOpen) !== 0 && strpos(trim($code), chr(60) . chr(63)) !== 0) {
             $testCode = $phpOpen . ' ' . $code;
         }
+        // #region agent log
+        $lineCount = substr_count($testCode, "\n") + 1;
+        @file_put_contents(
+            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+            json_encode(['hypothesisId' => 'H5', 'location' => 'CodeValidator::checkSyntax', 'message' => 'entry', 'data' => ['codeLen' => strlen($testCode), 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+            FILE_APPEND | LOCK_EX
+        );
+        // #endregion
 
         // 创建临时文件
         $tempFile = tempnam(sys_get_temp_dir(), 'php_syntax_check_');
@@ -260,6 +265,13 @@ class CodeValidator
 
         if ($returnCode !== 0) {
             $errorMessage = implode("\n", $output);
+            // #region agent log
+            @file_put_contents(
+                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+                json_encode(['hypothesisId' => 'H5', 'location' => 'CodeValidator::checkSyntax', 'message' => 'php -l failed', 'data' => ['rawOutput' => $output, 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+                FILE_APPEND | LOCK_EX
+            );
+            // #endregion
             $errorMessage = preg_replace('/in\s+[^\s]+\s+on\s+line/', 'on line', $errorMessage);
             $errorMessage = preg_replace('/Errors parsing [^\n]+/', '', $errorMessage);
             return [
@@ -417,6 +429,14 @@ class CodeValidator
     public function validatePhpCode(string $phpCode): array
     {
         $errors = [];
+        // #region agent log
+        $hasBrace = (strpos($phpCode, '{') !== false || strpos($phpCode, '}') !== false);
+        @file_put_contents(
+            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+            json_encode(['hypothesisId' => 'H1', 'location' => 'CodeValidator::validatePhpCode', 'message' => 'entry', 'data' => ['phpCodeLen' => strlen($phpCode), 'lines' => substr_count($phpCode, "\n") + 1, 'hasBrace' => $hasBrace], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+            FILE_APPEND | LOCK_EX
+        );
+        // #endregion
 
         $phpOpenPattern = '/<\x3f(?:php|=)?/';
         if (preg_match($phpOpenPattern, $phpCode)) {
@@ -428,11 +448,24 @@ class CodeValidator
             $errors[] = 'php_variables字段不应包含PHP结束标签';
         }
 
-        $openTag = chr(60) . chr(63) . 'php';
-        $wrappedCode = $openTag . "\n" . $phpCode . "\n" . $closeTag;
-        $syntaxResult = $this->checkSyntax($wrappedCode);
-        if (!$syntaxResult['valid']) {
-            $errors[] = $syntaxResult['error'];
+        if (strpos($phpCode, '{') !== false || strpos($phpCode, '}') !== false) {
+            $errors[] = 'php_variables 只能为简单赋值（每行 $var = ...;），禁止包含大括号 { }';
+        }
+
+        if (empty($errors)) {
+            $openTag = chr(60) . chr(63) . 'php';
+            $wrappedCode = $openTag . "\n" . $phpCode . "\n" . $closeTag;
+            $syntaxResult = $this->checkSyntax($wrappedCode);
+            if (!$syntaxResult['valid']) {
+                // #region agent log
+                @file_put_contents(
+                    (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+                    json_encode(['hypothesisId' => 'H1', 'location' => 'CodeValidator::validatePhpCode', 'message' => 'checkSyntax failed', 'data' => ['error' => $syntaxResult['error']], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+                    FILE_APPEND | LOCK_EX
+                );
+                // #endregion
+                $errors[] = $syntaxResult['error'];
+            }
         }
 
         $prohibitedResult = $this->checkProhibitedPatterns($phpCode, 'php_variables');

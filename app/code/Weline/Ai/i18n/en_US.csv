@@ -16,6 +16,12 @@
 智能体扫描完成,智能体扫描完成
 扫描智能体失败,扫描智能体失败
 错误堆栈,错误堆栈
+开始同步AI模型列表...,开始同步AI模型列表...
+"%{1} 同步成功：模型 %{2}，更新 %{3}，新增 %{4}，跳过 %{5}","%{1} 同步成功：模型 %{2}，更新 %{3}，新增 %{4}，跳过 %{5}"
+"%{1} 同步失败：%{2}","%{1} 同步失败：%{2}"
+未知错误,"Unknown error"
+"模型收集完成，共 %{1} 个模型","模型收集完成，共 %{1} 个模型"
+已跳过模型收集,已跳过模型收集
 加载A/B测试失败：%{1},加载A/B测试失败：%{1}
 适配器ID不能为空,"Adapter ID cannot be empty."
 适配器不存在,"The adapter does not exist."
@@ -110,8 +116,8 @@ API密钥保存成功,"API key saved successfully"
 加载数据分析失败：%{1},加载数据分析失败：%{1}
 模型ID不能为空,"Model ID cannot be empty."
 模型不存在,"Model does not exist"
-"成功收集 %{1} 个模型","Successfully collected %{1} models"
-"模型收集失败: %{1}","Model collection failed: %{1}"
+"模型同步完成，收集 %{1} 个模型","模型同步完成，收集 %{1} 个模型"
+"模型同步失败: %{1}","模型同步失败: %{1}"
 模型代码或ID不能为空,"Model code or ID cannot be empty."
 供应商连通性测试未通过，无法激活。请先进行连通性测试。,"The supplier connectivity test failed and cannot be activated. Please perform the connectivity test first."
 自配置连通性测试未通过，无法激活。请先进行自配置测试。,"The self-configuration connectivity test failed and cannot be activated. Please perform the self-configuration test first."
@@ -277,6 +283,8 @@ API接口,"API interface"
 翻译场景,"Translation scenario"
 流式响应,"Streaming response"
 定价信息,"Pricing Information"
+"AI模型同步完成：%{1}；收集 %{2} 个模型","AI模型同步完成：%{1}；收集 %{2} 个模型"
+AI模型同步失败：%{1},AI模型同步失败：%{1}
 AI监控告警,"AI Monitoring Alerts"
 在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。,"Triggered when an AI model monitoring alert is activated, allowing other modules to listen for and process alarm notifications. The event data includes alert information, monitoring data, model code, tenant ID, etc."
 AI翻译调用,AI翻译调用
@@ -371,6 +379,15 @@ Token价格必须是数字,"Token price must be a number"
 "不支持的供应商: %{provider}","Unsupported provider: %{provider}"
 "AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。","AI请求超时（已设置超时时间为 %d 秒）。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试增加超时时间设置；3) 简化请求内容；4) 稍后重试。"
 "AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。","AI请求超时。这可能是因为：1) 网络连接较慢；2) AI服务响应较慢；3) 请求内容较复杂。建议：1) 检查网络连接；2) 尝试设置合理的超时时间；3) 简化请求内容；4) 稍后重试。"
+"供应商 %{1} 未配置模型列表接口","供应商 %{1} 未配置模型列表接口"
+"供应商 %{1} 缺少可用API Key，无法同步模型列表","供应商 %{1} 缺少可用API Key，无法同步模型列表"
+"供应商 %{1} 未配置 base_url","供应商 %{1} 未配置 base_url"
+"供应商 %{1} 获取模型失败: %{2}","供应商 %{1} 获取模型失败: %{2}"
+"供应商 %{1} 返回模型列表为空","供应商 %{1} 返回模型列表为空"
+"未配置API Key，使用已有模型列表完成同步","未配置API Key，使用已有模型列表完成同步"
+模型列表请求失败,模型列表请求失败
+"模型列表请求失败，HTTP状态码: %{1}","模型列表请求失败，HTTP状态码: %{1}"
+"模型列表响应解析失败: %{1}","模型列表响应解析失败: %{1}"
 充值记录状态异常,"Recharge record status is abnormal"
 未配置翻译默认模型,未配置翻译默认模型
 id属性不能为空,"The id attribute cannot be empty."
@@ -403,7 +420,6 @@ id属性不能为空,"The id attribute cannot be empty."
 成功,Success
 状态已切换,状态已切换
 操作失败,"Operation failed"
-未知错误,"Unknown error"
 确定,确定
 操作失败：,"Operation failed:"
 网络错误,"Network error"
@@ -1263,6 +1279,8 @@ AI聊天助手,"AI Chat Assistant"
 请输入您的问题，我会尽力为您解答。,"Please enter your question, and I will do my best to answer it for you."
 请输入您的消息...,"Please enter your message..."
 确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
+"成功收集 %{1} 个模型","Successfully collected %{1} models"
+"模型收集失败: %{1}","Model collection failed: %{1}"
 API请求超时时间，0表示不限制，默认120秒,API请求超时时间，0表示不限制，默认120秒
 功能开发中...,"Feature under development..."
 缓存已清除！,"Cache cleared!"
@@ -1286,3 +1304,21 @@ API请求超时时间，0表示不限制，默认120秒,API请求超时时间，
 "模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>","Model code can only contain letters, numbers, periods (.), underscores (_), and hyphens (-)."
 "' . __('使用默认模型') . '","Use the default model"
 "<?= __('提示：点击选择AI模型，输入关键词搜索（800ms防抖）') ?>","<?= __('Tip: Click to select an AI model, enter keywords to search (800ms debounce)') ?>"
+????AI????...,"Starting AI model sync..."
+"%{1} ??????? %{2}??? %{3}??? %{4}??? %{5}","%{1} sync success: models %{2}, updated %{3}, created %{4}, skipped %{5}"
+"%{1} ?????%{2}","%{1} sync failed: %{2}"
+"???????? %{1} ???","Model collection completed, total %{1}"
+???????,"Model collection skipped"
+"??? %{1} ?????????","Provider %{1} has no models API configured"
+"??? %{1} ????API Key?????????","Provider %{1} has no available API key for model sync"
+"??? %{1} ??? base_url","Provider %{1} base_url is not configured"
+"??? %{1} ??????: %{2}","Provider %{1} failed to fetch models: %{2}"
+"??? %{1} ????????","Provider %{1} returned empty model list"
+????????,"Model list request failed"
+"?????????HTTP???: %{1}","Model list request failed, HTTP status: %{1}"
+"??????????: %{1}","Model list response parse failed: %{1}"
+"????????? %{1} ???","Model sync completed, collected %{1} models"
+"??????: %{1}","Model sync failed: %{1}"
+"AI???????%{1}??? %{2} ???","AI model sync done: %{1}; collected %{2} models"
+AI???????%{1},"AI model sync failed: %{1}"
+"???API Key?????????????","No API key configured, using existing model list to complete sync"

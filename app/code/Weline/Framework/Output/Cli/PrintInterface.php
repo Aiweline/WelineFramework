@@ -105,4 +105,16 @@ interface PrintInterface extends \Weline\Framework\Output\PrintInterface
      * @return mixed
      */
     public function note(string $data = 'CLI Note!', string $message = '', string $color = self::ERROR, int $pad_length = 25);
+
+    /**
+     * 设置底部悬浮提示（不随日志滚动）
+     *
+     * @param string[] $lines
+     */
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void;
+
+    /**
+     * 清除底部悬浮提示
+     */
+    public function clearStickyFooter(): void;
 }

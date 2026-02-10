@@ -348,6 +348,27 @@ class AccountService
     }
 
     /**
+     * 获取同步模型列表用的可用账户（仅要求激活）
+     *
+     * @param string $providerCode
+     * @return Account|null
+     */
+    public function getActiveAccountForSync(string $providerCode): ?Account
+    {
+        /** @var Account $accountModel */
+        $accountModel = $this->objectManager->make(Account::class);
+        $account = $accountModel->reset()
+            ->where(Account::fields_PROVIDER_CODE, $providerCode)
+            ->where(Account::fields_IS_ACTIVE, 1)
+            ->order(Account::fields_IS_DEFAULT, 'DESC')
+            ->order(Account::fields_CREATED_AT, 'DESC')
+            ->find()
+            ->fetch();
+
+        return $account && $account->getId() ? $account : null;
+    }
+
+    /**
      * 获取指定供应商支持的模型列表
      * 
      * @param string $providerCode

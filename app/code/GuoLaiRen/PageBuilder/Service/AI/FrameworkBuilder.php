@@ -75,7 +75,9 @@ class FrameworkBuilder
     public function loadFramework(string $category): string
     {
         $category = strtolower($category);
-        
+        // #region agent log
+        @file_put_contents((defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log', json_encode(['hypothesisId' => 'H4', 'location' => 'FrameworkBuilder::loadFramework', 'message' => 'entry', 'data' => ['category' => $category], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+        // #endregion
         if (!isset(self::FRAMEWORK_FILES[$category])) {
             throw new \Exception("未知的组件分类: {$category}");
         }
@@ -87,6 +89,70 @@ class FrameworkBuilder
         }
         
         return file_get_contents($frameworkFile);
+    }
+
+    /**
+     * 获取框架模板的「仅 PHP 变量定义块」（从文件头到首个 ?＞ 结束的 PHP 块），并替换 {{PHP_VARIABLES}}
+     * 用于智能体生成组件时：先输出该块再输出 AI 的 html/css/js，保证 $brandLogo 等框架变量已定义
+     *
+     * @param string $category header|footer|content
+     * @param string $phpVariables AI 的 php_variables 内容（可选）
+     * @return string 可写入 phtml 的 PHP 块（含 ?＞ 结尾）
+     */
+    public function getFrameworkPhpBlock(string $category, string $phpVariables = ''): string
+    {
+        $category = strtolower($category);
+        if (!isset(self::FRAMEWORK_FILES[$category])) {
+            return "<?php\n// unknown category: {$category}\n?>\n";
+        }
+        $framework = $this->loadFramework($category);
+        // 首个 ?> 之前为初始 PHP 块（含变量定义与 try{ {{PHP_VARIABLES}} }）
+        $closeTag = '?>';
+        $pos = strpos($framework, $closeTag);
+        if ($pos === false) {
+            return "<?php\n// no php block\n?>\n";
+        }
+        $block = substr($framework, 0, $pos + strlen($closeTag));
+        $block = str_replace('{{PHP_VARIABLES}}', $phpVariables, $block);
+        return $block;
+    }
+
+    /**
+     * 按区域返回框架已注入的变量列表（与框架 phtml 严格对齐，供校验与提示共用）
+     *
+     * @param string $category header|footer|content
+     * @return array 带 $ 前缀的变量名列表，如 ['$brandLogo', '$brandName', ...]
+     */
+    public function getFrameworkProvidedVariables(string $category): array
+    {
+        $category = strtolower($category);
+        $common = [
+            '$page', '$styleSettings', '$componentConfig', '$config', '$getConfig', '$componentId',
+        ];
+        $footer = array_merge($common, [
+            '$parseLinks', '$brandLogo', '$brandName', '$brandDesc',
+            '$col1Title', '$col1Items', '$col2Title', '$col2Items',
+            '$showSocial', '$socialLinks', '$copyrightText', '$startYear', '$currentYear', '$yearDisplay',
+            '$bgColor', '$textColor', '$titleColor', '$linkColor', '$linkHoverColor', '$accentColor',
+            '$item', '$platform', '$url',
+        ]);
+        $header = array_merge($common, [
+            '$showLogo', '$logoImage', '$logoText', '$logoWidth',
+            '$showNav', '$navItems', '$showCta', '$ctaText', '$ctaUrl',
+            '$bgColor', '$textColor', '$linkColor', '$linkHoverColor', '$accentColor',
+        ]);
+        $content = array_merge($common, [
+            '$title', '$subtitle', '$description',
+            '$containerWidth', '$paddingTop', '$paddingBottom', '$textAlign',
+            '$bgType', '$bgColor', '$bgGradient', '$bgImage', '$textColor', '$titleColor', '$accentColor',
+            '$bgStyle', '$maxWidth', '$cssPrefix',
+        ]);
+        return match ($category) {
+            'footer' => $footer,
+            'header' => $header,
+            'content' => $content,
+            default => $content,
+        };
     }
     
     /**
@@ -188,13 +254,25 @@ class FrameworkBuilder
         
         // 清理 php_variables 中的 PHP 标签
         if (isset($data['php_variables']) && is_string($data['php_variables'])) {
+            $pv = $data['php_variables'];
+            if (strpos($pv, '{') !== false || strpos($pv, '}') !== false) {
+                // php_variables 仅允许简单赋值（$var = ...;），禁止大括号。含大括号时只保留不含 { } 的行，避免生成无效 PHP 导致 Unclosed '{' on line N
+                $lines = explode("\n", $pv);
+                $safe = [];
+                foreach ($lines as $line) {
+                    if (strpos($line, '{') === false && strpos($line, '}') === false) {
+                        $safe[] = $line;
+                    }
+                }
+                $data['php_variables'] = implode("\n", $safe);
+            }
+            $pv = $data['php_variables'];
             // 移除所有 PHP 开始标签（不仅仅是开头的）
-            $data['php_variables'] = preg_replace('/<\?(?:php)?\s*/i', '', $data['php_variables']);
+            $pv = preg_replace('/<\?(?:php)?\s*/i', '', $pv);
             // 移除所有 PHP 结束标签（不仅仅是结尾的）- 这非常重要，否则会破坏模板结构
-            $data['php_variables'] = preg_replace('/\s*\?>\s*/', '', $data['php_variables']);
-            
-            // 检查并修复不平衡的控制结构
-            $data['php_variables'] = $this->balanceControlStructures($data['php_variables']);
+            $pv = preg_replace('/\s*\?>\s*/', '', $pv);
+            // 检查并修复不平衡的控制结构（仅针对 if/foreach 等，不再含 { }）
+            $data['php_variables'] = $this->balanceControlStructures($pv);
         }
         
         // 清理 CSS 相关字段中的 PHP 标签
@@ -356,7 +434,16 @@ class FrameworkBuilder
         
         // AI生成的代码
         $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($aiData['extra_fields'] ?? '');
-        $replacements['PHP_VARIABLES'] = $aiData['php_variables'] ?? '';
+        // 注入前再次移除含 { } 的行，避免 try{ {{PHP_VARIABLES}} } 内出现未闭合大括号导致 Parse error on line N
+        $pv = $aiData['php_variables'] ?? '';
+        $pvLines = explode("\n", str_replace("\r\n", "\n", $pv));
+        $pvSafe = [];
+        foreach ($pvLines as $line) {
+            if (strpos($line, '{') === false && strpos($line, '}') === false) {
+                $pvSafe[] = $line;
+            }
+        }
+        $replacements['PHP_VARIABLES'] = implode("\n", $pvSafe);
         $replacements['CSS_EXTRA'] = $aiData['css_extra'] ?? '';
         $replacements['CSS_RESPONSIVE'] = $aiData['css_responsive'] ?? '';
         $replacements['CSS_CONTENT'] = $aiData['css_content'] ?? '';
@@ -451,9 +538,29 @@ class FrameworkBuilder
         
         // 验证PHP代码语法（如果有）
         if (!empty($data['php_variables'])) {
-            $syntaxCheck = $this->checkPhpSyntax($data['php_variables']);
-            if (!$syntaxCheck['valid']) {
-                $errors[] = 'PHP代码语法错误: ' . $syntaxCheck['error'];
+            $pv = $data['php_variables'];
+            $hasBrace = (strpos($pv, '{') !== false || strpos($pv, '}') !== false);
+            // #region agent log
+            @file_put_contents(
+                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+                json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::validateAiData', 'message' => 'php_variables check', 'data' => ['pvLen' => strlen($pv), 'hasBrace' => $hasBrace, 'willCallCheckPhpSyntax' => !$hasBrace], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+                FILE_APPEND | LOCK_EX
+            );
+            // #endregion
+            if ($hasBrace) {
+                $errors[] = 'php_variables 只能为简单赋值，禁止包含大括号 { }';
+            } else {
+                $syntaxCheck = $this->checkPhpSyntax($pv);
+                if (!$syntaxCheck['valid']) {
+                    // #region agent log
+                    @file_put_contents(
+                        (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+                        json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::validateAiData', 'message' => 'checkPhpSyntax failed', 'data' => ['error' => $syntaxCheck['error']], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+                        FILE_APPEND | LOCK_EX
+                    );
+                    // #endregion
+                    $errors[] = 'PHP代码语法错误: ' . $syntaxCheck['error'];
+                }
             }
         }
         
@@ -478,6 +585,14 @@ class FrameworkBuilder
      */
     private function checkPhpSyntax(string $code): array
     {
+        // #region agent log
+        $lineCount = substr_count($code, "\n") + 2;
+        @file_put_contents(
+            (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+            json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::checkPhpSyntax', 'message' => 'entry', 'data' => ['codeLen' => strlen($code), 'lineCount' => $lineCount], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+            FILE_APPEND | LOCK_EX
+        );
+        // #endregion
         // 创建临时文件进行语法检查
         $tempFile = sys_get_temp_dir() . '/ai_php_check_' . uniqid() . '.php';
         $phpOpen = chr(60) . chr(63) . 'php';
@@ -490,6 +605,15 @@ class FrameworkBuilder
         
         unlink($tempFile);
         
+        if ($returnVar !== 0) {
+            // #region agent log
+            @file_put_contents(
+                (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log',
+                json_encode(['hypothesisId' => 'H2', 'location' => 'FrameworkBuilder::checkPhpSyntax', 'message' => 'php -l failed', 'data' => ['rawOutput' => $output], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n",
+                FILE_APPEND | LOCK_EX
+            );
+            // #endregion
+        }
         return [
             'valid' => $returnVar === 0,
             'error' => $returnVar !== 0 ? implode("\n", $output) : '',
@@ -520,7 +644,9 @@ class FrameworkBuilder
     public function getFrameworkPromptGuide(string $category): string
     {
         $category = strtolower($category);
-        
+        // #region agent log
+        @file_put_contents((defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log', json_encode(['hypothesisId' => 'H4', 'location' => 'FrameworkBuilder::getFrameworkPromptGuide', 'message' => 'entry', 'data' => ['category' => $category], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+        // #endregion
         $commonRules = <<<'RULES'
 
 【重要 - 框架已提供的变量，不要重复定义】

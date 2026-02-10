@@ -292,23 +292,31 @@ class SlotRendererService
         }
 
         // 根据配置决定如何插入内容
-        if ($isExclusive) {
-            // 独占模式：清空原内容，插入 widget
-            while ($slot->firstChild) {
-                $slot->removeChild($slot->firstChild);
-            }
-            $slot->appendChild($fragment);
-        } elseif ($isPrepend) {
-            // 前置模式：在原内容前插入 widget
+        //
+        // 策略：
+        //  - exclusive / 默认（无 append/prepend）：清空默认内容 → 替换为部件
+        //  - prepend="true"：保留默认内容，部件插到前面
+        //  - append="true"：保留默认内容，部件追加到后面
+        //
+        // 原则：插槽的默认 HTML 只是"没有部件时的回退内容"，
+        //       一旦有部件被分配给该插槽，默认内容就应该被替换掉。
+        //       只有显式声明 append/prepend 的插槽才会同时保留默认内容和部件。
+        if ($isPrepend) {
+            // 前置模式：保留默认内容，部件插到前面
             if ($slot->firstChild) {
                 $slot->insertBefore($fragment, $slot->firstChild);
             } else {
                 $slot->appendChild($fragment);
             }
-        } else {
-            // 追加模式（默认）：在原内容后插入 widget
-            // 先移除占位符
+        } elseif ($isAppend) {
+            // 追加模式（显式声明）：保留默认内容，部件追加到后面
             $this->removePlaceholderContent($slot);
+            $slot->appendChild($fragment);
+        } else {
+            // 替换模式（exclusive 和 默认都走这里）：清空默认内容 → 插入部件
+            while ($slot->firstChild) {
+                $slot->removeChild($slot->firstChild);
+            }
             $slot->appendChild($fragment);
         }
     }

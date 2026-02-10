@@ -21,6 +21,27 @@
         "requests_per_minute": 60,
         "tokens_per_minute": 200000
     },
+    "models_api": {
+        "path": "/models",
+        "auth_type": "query_key",
+        "auth_param": "key",
+        "data_key": "models",
+        "id_key": "name",
+        "name_key": "displayName",
+        "desc_key": "description",
+        "context_key": "inputTokenLimit",
+        "max_tokens_key": "outputTokenLimit",
+        "id_prefix_trim": "models/"
+    },
+    "model_config_defaults": {
+        "max_tokens": 8192,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "stream": true,
+        "timeout": 180,
+        "max_retries": 3,
+        "capabilities": ["chat", "vision", "code"]
+    },
     "models": [
         {
             "code": "gemini-2.0-flash-exp",

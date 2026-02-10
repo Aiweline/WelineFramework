@@ -1,0 +1,544 @@
+<?php
+/**
+ * AI Component Framework - Header
+ * 
+ * 头部组件框架模板，包含固定的导航结构
+ * AI只需填充特定区域的代码
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ * @var array $component_config 组件配置
+ * 
+ * @component_start
+ * name => 拜金头部
+ * name_en => Custom Component
+ * description => 拜金头部
+ * category => header
+ * type => section
+ * sort_order => 10
+ * compatible_styles => *
+ * ai_generated => true
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.image => Logo图片URL:textarea:|留空使用默认文字Logo
+ * logo.text => Logo文字:text:Brand Name
+ * logo.width => Logo宽度:number:40|px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * 
+ * group:cta => CTA按钮
+ * cta.show => 显示CTA按钮:select:yes|yes,no
+ * cta.text => 按钮文字:text:Get Started
+ * cta.url => 按钮链接:text:#contact
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0a0a0f
+ * style.text_color => 文字颜色:color:#ffffff
+ * style.link_color => 链接颜色:color:#b8b8d0
+ * style.link_hover_color => 链接悬停颜色:color:#7c3aed
+ * style.accent_color => 强调色:color:#7c3aed
+ * 
+ * * group:effect => 效果设置
+* effect.scroll_bg => 滚动后背景色:color:rgba(10,10,15,0.98)
+* effect.glow_color => 发光色:color:#7c3aed
+* effect.glow_intensity => 发光强度:number:15|min:0,max:50,step:1
+* effect.nav_animation => 导航动画:select:underline|underline,fill,slide
+* effect.sticky_header => 固定导航:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+// ===== 固定的PHP数据获取部分 =====
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$componentId = 'ai-header-' . uniqid();
+
+// Logo配置
+$showLogo = $getConfig('logo.display', 'yes') !== 'no';
+$logoImage = $getConfig('logo.image', '');
+$logoText = $getConfig('logo.text', 'Brand Name');
+$logoWidth = (int)$getConfig('logo.width', 40);
+
+// 导航配置（必须使用真实子页面）
+$showNav = $getConfig('navigation.display', 'yes') !== 'no';
+$navItems = [];
+
+if ($page) {
+    $navigationPages = $page->getNavigationPages([], 10);
+    foreach ($navigationPages as $navPage) {
+        $navItems[] = [
+            'text' => $navPage['title'] ?? '',
+            'href' => $navPage['url'] ?? '#',
+        ];
+    }
+}
+
+// 如果没有真实子页面，则不显示导航
+if (empty($navItems)) {
+    $showNav = false;
+}
+
+// CTA配置
+$showCta = $getConfig('cta.show', 'yes') !== 'no';
+$ctaText = $getConfig('cta.text', 'Get Started');
+$ctaUrl = $getConfig('cta.url', '#contact');
+
+// 样式配置
+$bgColor = $getConfig('style.bg_color', '#0a0a0f');
+$textColor = $getConfig('style.text_color', '#ffffff');
+$linkColor = $getConfig('style.link_color', '#b8b8d0');
+$linkHoverColor = $getConfig('style.link_hover_color', '#7c3aed');
+$accentColor = $getConfig('style.accent_color', '#7c3aed');
+
+// ===== AI生成的额外PHP变量 =====
+// 使用try-catch包装AI生成的代码，防止错误中断渲染
+try {
+    $scrollBg = $getConfig('effect.scroll_bg', 'rgba(10,10,15,0.98)');
+$glowColor = $getConfig('effect.glow_color', '#7c3aed');
+$glowIntensity = (int)$getConfig('effect.glow_intensity', 15);
+$navAnimation = $getConfig('effect.nav_animation', 'underline');
+$stickyHeader = $getConfig('effect.sticky_header', 'yes') === 'yes';
+} catch (\Throwable $e) {
+    // 静默处理AI生成代码的错误，记录日志
+    error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+}
+?>
+
+<!-- AI生成的CSS样式 -->
+<style>
+/* === 组件主题色变量（继承全局主题，可被组件配置覆盖） === */
+#<?= $componentId ?> {
+    --pb-primary: <?= htmlspecialchars($accentColor) ?>;
+    --pb-bg: <?= htmlspecialchars($bgColor) ?>;
+    --pb-text: <?= htmlspecialchars($textColor) ?>;
+    --pb-heading: <?= htmlspecialchars($textColor) ?>;
+    --pb-accent: <?= htmlspecialchars($accentColor) ?>;
+    --pb-link: <?= htmlspecialchars($linkColor) ?>;
+    --pb-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --pb-border: color-mix(in srgb, <?= htmlspecialchars($textColor) ?> 15%, transparent);
+
+    background: var(--pb-bg);
+    color: var(--pb-text);
+}
+
+#<?= $componentId ?> .ai-header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#<?= $componentId ?> .ai-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--pb-text);
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .ai-header-logo img {
+    height: <?= $logoWidth ?>px;
+    width: auto;
+}
+
+#<?= $componentId ?> .ai-header-nav {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+#<?= $componentId ?> .ai-header-nav-links {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 32px;
+}
+
+#<?= $componentId ?> .ai-header-nav-link {
+    color: var(--pb-link);
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+#<?= $componentId ?> .ai-header-nav-link:hover,
+#<?= $componentId ?> .ai-header-nav-link.active {
+    color: var(--pb-link-hover);
+}
+
+#<?= $componentId ?> .ai-header-cta {
+    padding: 10px 20px;
+    background: var(--pb-accent);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+#<?= $componentId ?> .ai-header-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--pb-accent) 40%, transparent);
+}
+
+#<?= $componentId ?> .ai-header-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+}
+
+#<?= $componentId ?> .ai-header-toggle span {
+    width: 24px;
+    height: 2px;
+    background: <?= htmlspecialchars($textColor) ?>;
+    transition: all 0.3s ease;
+}
+
+/* 响应式 */
+@media (max-width: 992px) {
+    #<?= $componentId ?> .ai-header-nav {
+        position: fixed;
+        top: 80px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: <?= htmlspecialchars($bgColor) ?>;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 40px 20px;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    }
+    
+    #<?= $componentId ?> .ai-header-nav.active {
+        transform: translateX(0);
+    }
+    
+    #<?= $componentId ?> .ai-header-nav-links {
+        flex-direction: column;
+        width: 100%;
+        gap: 0;
+    }
+    
+    #<?= $componentId ?> .ai-header-nav-link {
+        display: block;
+        padding: 16px 0;
+        font-size: 1.1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    #<?= $componentId ?> .ai-header-cta {
+        margin-top: 24px;
+        width: 100%;
+        text-align: center;
+        padding: 16px;
+    }
+    
+    #<?= $componentId ?> .ai-header-toggle {
+        display: flex;
+    }
+}
+
+/* AI生成的额外CSS */
+#= $componentId  {
+    --ai-glow-color: = htmlspecialchars($glowColor) ;
+    --ai-glow-intensity: = $glowIntensity px;
+    --ai-scroll-bg: = htmlspecialchars($scrollBg) ;
+    position: relative;
+    background: linear-gradient(135deg, var(--pb-bg), rgba(0, 0, 0, 0.9));
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+}
+
+#= $componentId .ai-header-scrolled {
+    background: var(--ai-scroll-bg);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+}
+
+#= $componentId .ai-header-sticky {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    animation: aiHeaderSlideDown 0.4s ease-out;
+}
+
+@keyframes aiHeaderSlideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+#= $componentId  .ai-header-logo {
+    position: relative;
+    transition: transform 0.3s ease;
+}
+
+#= $componentId  .ai-header-logo:hover {
+    transform: scale(1.05);
+}
+
+#= $componentId  .ai-header-logo::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% + var(--ai-glow-intensity));
+    height: calc(100% + var(--ai-glow-intensity));
+    background: radial-gradient(circle, var(--ai-glow-color) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: -1;
+    pointer-events: none;
+}
+
+#= $componentId  .ai-header-logo:hover::after {
+    opacity: 0.6;
+}
+
+#= $componentId  .ai-header-nav-link {
+    position: relative;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+php if ($navAnimation === 'underline'): #= $componentId  .ai-header-nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--pb-accent), var(--pb-link-hover));
+    transition: width 0.3s ease;
+}
+
+#= $componentId  .ai-header-nav-link:hover::after,
+#= $componentId  .ai-header-nav-link.active::after {
+    width: 80%;
+}
+php elseif ($navAnimation === 'fill'): #= $componentId  .ai-header-nav-link:hover,
+#= $componentId  .ai-header-nav-link.active {
+    background: rgba(var(--pb-accent-rgb, 124, 58, 237), 0.15);
+    color: var(--pb-accent);
+}
+php elseif ($navAnimation === 'slide'): #= $componentId  .ai-header-nav-link {
+    overflow: hidden;
+}
+
+#= $componentId  .ai-header-nav-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(var(--pb-accent-rgb, 124, 58, 237), 0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+#= $componentId  .ai-header-nav-link:hover::before {
+    left: 100%;
+}
+php endif; 
+
+#= $componentId  .ai-header-cta {
+    background: linear-gradient(135deg, var(--pb-accent), var(--pb-primary));
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(var(--pb-accent-rgb, 124, 58, 237), 0.3);
+}
+
+#= $componentId  .ai-header-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(var(--pb-accent-rgb, 124, 58, 237), 0.4);
+}
+
+#= $componentId  .ai-header-hamburger {
+    width: 30px;
+    height: 24px;
+    position: relative;
+    cursor: pointer;
+}
+
+#= $componentId  .ai-header-hamburger span {
+    display: block;
+    position: absolute;
+    height: 3px;
+    width: 100%;
+    background: var(--pb-text);
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+
+#= $componentId  .ai-header-hamburger span:nth-child(1) { top: 0; }
+#= $componentId  .ai-header-hamburger span:nth-child(2) { top: 10px; }
+#= $componentId  .ai-header-hamburger span:nth-child(3) { top: 20px; }
+
+#= $componentId  .ai-header-hamburger.active span:nth-child(1) {
+    transform: rotate(45deg);
+    top: 10px;
+}
+
+#= $componentId  .ai-header-hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+#= $componentId  .ai-header-hamburger.active span:nth-child(3) {
+    transform: rotate(-45deg);
+    top: 10px;
+}
+</style>
+
+<!-- Header HTML结构 -->
+<header id="<?= $componentId ?>" class="ai-component ai-header">
+    <div class="ai-header-container">
+        <!-- Logo -->
+        <?php if ($showLogo): ?>
+        <a href="/" class="ai-header-logo">
+            <?php if ($logoImage): ?>
+                <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>" loading="lazy">
+            <?php endif; ?>
+            <span><?= htmlspecialchars($logoText) ?></span>
+        </a>
+        <?php endif; ?>
+        
+        <!-- Mobile Toggle -->
+        <button class="ai-header-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $componentId ?> .ai-header-nav').classList.toggle('active');" aria-label="Toggle navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        
+        <!-- Navigation -->
+        <?php if ($showNav): ?>
+        <nav class="ai-header-nav">
+            <ul class="ai-header-nav-links">
+                <?php foreach ($navItems as $index => $navItem): ?>
+                    <?php 
+                    $navHref = $navItem['href'] ?? '#';
+                    $navText = $navItem['text'] ?? '';
+                    $isActive = $index === 0;
+                    ?>
+                    <li><a href="<?= htmlspecialchars($navHref) ?>" class="ai-header-nav-link <?= $isActive ? 'active' : '' ?>"><?= htmlspecialchars($navText) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+            
+            <?php if ($showCta): ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ai-header-cta"><?= htmlspecialchars($ctaText) ?></a>
+            <?php endif; ?>
+        </nav>
+        <?php endif; ?>
+        
+        <!-- AI生成的额外HTML -->
+        <div class="ai-header-glow"></div>
+    </div>
+</header>
+
+<!-- AI生成的JavaScript -->
+<?php 
+$_jsPlaceholder = <<<'JSEOF'
+// 滚动检测
+let lastScrollTop = 0;
+const scrollThreshold = 50;
+
+const handleScroll = () => {
+    const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // 滚动背景效果
+    const scrolled = currentScroll > scrollThreshold;
+    component.classList.toggle('ai-header-scrolled', scrolled);
+    
+    // 固定导航
+    if ( $stickyHeader ? 'true' : 'false' ) {
+        component.classList.toggle('ai-header-sticky', scrolled);
+    }
+    
+    // 滚动方向检测（可选：隐藏/显示导航）
+    if (currentScroll > lastScrollTop && currentScroll > 100) {
+        component.style.transform = 'translateY(-100%)';
+    } else {
+        component.style.transform = 'translateY(0)';
+    }
+    
+    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+};
+
+// 移动端菜单切换
+const hamburger = component.querySelector('.ai-header-hamburger');
+const navMenu = component.querySelector('.ai-header-nav-menu');
+
+if (hamburger && navMenu) {
+    hamburger.addEventListener('click', () => {
+        hamburger.classList.toggle('active');
+        navMenu.classList.toggle('active');
+        document.body.style.overflow = navMenu.classList.contains('active') ? 'hidden' : '';
+    });
+    
+    // 点击菜单项关闭菜单
+    const navLinks = navMenu.querySelectorAll('.ai-header-nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            hamburger.classList.remove('active');
+            navMenu.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+    });
+}
+
+// 初始化
+handleScroll();
+window.addEventListener('scroll', handleScroll, { passive: true });
+
+// 窗口大小变化时重置移动端菜单
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 768 && navMenu) {
+        navMenu.classList.remove('active');
+        if (hamburger) hamburger.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+});
+JSEOF;
+$jsContent = trim($_jsPlaceholder);
+// 检查是否有有效的JS内容（非空且不是未替换的占位符）
+$_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
+if ($_hasValidJs): 
+?>
+<script>
+(function() {
+    const component = document.getElementById('<?= $componentId ?>');
+    <?= $jsContent ?>
+})();
+</script>
+<?php endif; ?>

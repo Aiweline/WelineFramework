@@ -3263,6 +3263,92 @@ body{
         max-width: 320px;
     }
 }
+
+/* ========================================
+   拖拽排序 / 独占替换 / 满额提示 样式
+   ======================================== */
+
+/* 插入位置指示器 — 两端圆点 + 中间线 */
+.drag-insert-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 4px;
+    margin: 2px 0;
+    pointer-events: none;
+    animation: drag-indicator-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.drag-insert-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--te-accent, #3699ff);
+    flex-shrink: 0;
+}
+
+.drag-insert-line {
+    flex: 1;
+    height: 3px;
+    background: var(--te-accent, #3699ff);
+    border-radius: 2px;
+}
+
+@keyframes drag-indicator-pulse {
+    0% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* 空容器拖入高亮 */
+.drag-insert-empty {
+    background: var(--te-accent-light, rgba(54, 153, 255, 0.08)) !important;
+    border: 2px dashed var(--te-accent, #3699ff) !important;
+    border-radius: 6px;
+}
+
+/* 独占替换状态 */
+.preview-area.drag-replace,
+.container-slot.drag-replace,
+[data-wslot].drag-replace {
+    border-color: #f59e0b !important;
+    border-style: solid !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+
+/* 插槽状态提示标签 */
+.drag-slot-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 100;
+    pointer-events: none;
+    white-space: nowrap;
+    animation: drag-hint-fade-in 0.15s ease;
+}
+
+@keyframes drag-hint-fade-in {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 替换提示 — 橙色 */
+.drag-slot-hint-replace {
+    background: rgba(245, 158, 11, 0.9);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+/* 已满提示 — 红色 */
+.drag-slot-hint-full {
+    background: rgba(239, 68, 68, 0.9);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
 </style>
 
 <!-- 本地 Remix Icon CSS URL，禁止使用外网 CDN -->

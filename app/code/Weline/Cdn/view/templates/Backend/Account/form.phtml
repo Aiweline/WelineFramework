@@ -156,6 +156,14 @@ $isIframe = $this->request->getGet('isIframe') === 'true';
                                                                    value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>"
                                                                    placeholder="<?= __('请输入API Token') ?>">
                                                         </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label"><?= __('Account ID') ?></label>
+                                                            <input type="text" name="credentials[account_id]"
+                                                                   class="form-control"
+                                                                   value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>"
+                                                                   placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
+                                                            <small class="form-text text-muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

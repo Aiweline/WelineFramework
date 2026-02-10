@@ -92,6 +92,10 @@ class SseWriter
             return $this;
         }
         
+        // SSE 流是长连接，必须取消 PHP 执行时间限制和客户端断开中断
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+        
         // 标记 SSE 模式已启用
         SseContext::enableSse();
         

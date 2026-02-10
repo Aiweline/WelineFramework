@@ -48,8 +48,8 @@ class MessageManager
     public function addError(string $msg = '', string $title = '', string $class = 'danger'): static
     {
         $title = $title ?: __('错误！');
-        $this->session->addData('system-message', self::process_message($msg, $title, $class));
-        $this->session->setData('has-error', '1');
+        self::session()->addData('system-message', self::process_message($msg, $title, $class));
+        self::session()->setData('has-error', '1');
         return $this;
     }
 
@@ -74,7 +74,7 @@ class MessageManager
      */
     public function hasErrorMessage(): bool
     {
-        return (bool)$this->session->getData('has-error');
+        return (bool)self::session()->getData('has-error');
     }
 
     public static function has_error_message(): bool
@@ -92,8 +92,8 @@ class MessageManager
     public function addException(\Exception $exception, string $title = '', string $class = 'warning')
     {
         $msg = $exception->getMessage();
-        $this->session->addData('system-message', self::process_message($msg, __('异常警告！'), $class));
-        $this->session->setData('has-exception', '1');
+        self::session()->addData('system-message', self::process_message($msg, __('异常警告！'), $class));
+        self::session()->setData('has-exception', '1');
         return $this;
     }
 
@@ -109,7 +109,7 @@ class MessageManager
      */
     public function hasException(): bool
     {
-        return (bool)$this->session->getData('has-exception');
+        return (bool)self::session()->getData('has-exception');
     }
 
     public static function has_exception(): bool
@@ -127,8 +127,8 @@ class MessageManager
     public function addSuccess(string $msg = '', string $title = '', string $class = 'success')
     {
         $title = $title ?: __('操作成功！');
-        $this->session->addData('system-message', self::process_message($msg, $title, $class));
-        $this->session->setData('has-success', '1');
+        self::session()->addData('system-message', self::process_message($msg, $title, $class));
+        self::session()->setData('has-success', '1');
         return $this;
     }
 
@@ -145,7 +145,7 @@ class MessageManager
      */
     public function hasSuccessMessage(): bool
     {
-        return (bool)$this->session->getData('has-success');
+        return (bool)self::session()->getData('has-success');
     }
 
     public static function has_success_message(): bool
@@ -163,8 +163,8 @@ class MessageManager
     public function addWarning(string $msg = '', string $title = '', string $class = 'warning'): self
     {
         $title = $title ?: __('警告！');
-        $this->session->addData('system-message', self::process_message($msg, $title, $class));
-        $this->session->setData('has-warning', '1');
+        self::session()->addData('system-message', self::process_message($msg, $title, $class));
+        self::session()->setData('has-warning', '1');
         return $this;
     }
 
@@ -181,7 +181,7 @@ class MessageManager
      */
     public function hasWarningMessage(): bool
     {
-        return (bool)$this->session->getData('has-warning');
+        return (bool)self::session()->getData('has-warning');
     }
 
     public static function has_warning_message(): bool
@@ -199,8 +199,8 @@ class MessageManager
     public function addNotes(string $msg = '', string $title = '', string $class = 'notes')
     {
         $title = $title ?: __('提示！');
-        $this->session->addData('system-message', self::process_message($msg, $title, $class));
-        $this->session->setData('has-notes', '1');
+        self::session()->addData('system-message', self::process_message($msg, $title, $class));
+        self::session()->setData('has-notes', '1');
         return $this;
     }
 
@@ -217,7 +217,7 @@ class MessageManager
      */
     public function hasNotesMessage(): bool
     {
-        return (bool)$this->session->getData('has-notes');
+        return (bool)self::session()->getData('has-notes');
     }
 
     public static function has_notes_message(): bool
@@ -227,8 +227,13 @@ class MessageManager
 
     public function render(): string
     {
-        $html = "<div class='system message'>{$this->session->getData('system-message')}</div>";
-        $this->clear();
+        // 始终使用 self::session() 获取当前请求的 session，避免 WLS 常驻内存下实例不一致
+        $session = self::session();
+        $html = "<div class='system message'>{$session->getData('system-message')}</div>";
+        // 使用当前 session 清理，确保消息被正确消费
+        foreach (self::keys as $key) {
+            $session->delete($key);
+        }
         return $html;
     }
 
@@ -257,8 +262,10 @@ class MessageManager
 
     public function clear()
     {
+        // 始终使用 self::session()，保证和静态方法写入的是同一个 session
+        $session = self::session();
         foreach (self::keys as $key) {
-            $this->session->delete($key);
+            $session->delete($key);
         }
     }
 

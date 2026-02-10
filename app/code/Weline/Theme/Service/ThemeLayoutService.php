@@ -205,6 +205,7 @@ class ThemeLayoutService
         $slotId = $data['slot_id'] ?? null;
         $exclusive = (bool)($data['exclusive'] ?? false);
         $status = $data['status'] ?? ThemeLayout::STATUS_DRAFT;
+        $sortOrder = (int)($data['sort_order'] ?? 0);
 
         // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
         if ($exclusive && !$layoutId) {
@@ -214,6 +215,18 @@ class ThemeLayoutService
                 $data['area'],
                 $slotId,
                 $data['widget_code'],
+                $status
+            );
+        }
+
+        // 非独占插入：将插入位置及之后的部件 sort_order +1，为新部件腾出位置
+        if (!$exclusive && !$layoutId) {
+            $this->shiftSortOrder(
+                (int)$data['theme_id'],
+                $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT,
+                $data['area'],
+                $slotId,
+                $sortOrder,
                 $status
             );
         }
@@ -235,12 +248,47 @@ class ThemeLayoutService
             ->setWidgetModule($data['widget_module'])
             ->setWidgetType($data['widget_type'] ?? '')
             ->setWidgetConfig($data['config'] ?? [])
-            ->setSortOrder((int)($data['sort_order'] ?? 0))
+            ->setSortOrder($sortOrder)
             ->setIsActive((bool)($data['is_active'] ?? true))
             ->setStatus($status)
             ->save();
 
         return $this->themeLayout->getLayoutId();
+    }
+
+    /**
+     * 将指定位置及之后的部件 sort_order +1，为新插入腾出位置
+     */
+    private function shiftSortOrder(int $themeId, string $pageType, string $area, ?string $slotId, int $fromSortOrder, string $status): void
+    {
+        try {
+            $query = $this->themeLayout->clearQuery()
+                ->where(ThemeLayout::fields_THEME_ID, $themeId)
+                ->where(ThemeLayout::fields_PAGE_TYPE, $pageType)
+                ->where(ThemeLayout::fields_AREA, $area)
+                ->where(ThemeLayout::fields_STATUS, $status)
+                ->where(ThemeLayout::fields_SORT_ORDER, $fromSortOrder, '>=');
+
+            if ($slotId !== null && $slotId !== '') {
+                $query->where(ThemeLayout::fields_SLOT_ID, $slotId);
+            }
+
+            $widgets = $query->select()->fetch();
+            if (empty($widgets)) {
+                return;
+            }
+
+            foreach ($widgets as $widget) {
+                $id = (int)($widget[ThemeLayout::fields_ID] ?? 0);
+                $currentOrder = (int)($widget[ThemeLayout::fields_SORT_ORDER] ?? 0);
+                if ($id > 0) {
+                    $this->themeLayout->clearQuery()->load($id);
+                    $this->themeLayout->setSortOrder($currentOrder + 1)->save();
+                }
+            }
+        } catch (\Throwable $e) {
+            // sort_order 调整失败不阻塞保存
+        }
     }
 
     /**
@@ -587,10 +635,8 @@ class ThemeLayoutService
      */
     public function deleteWidget(int $layoutId): bool
     {
-
         $this->themeLayout->clearQuery()->load($layoutId);
         $loadedId = $this->themeLayout->getLayoutId();
-        
 
         if (!$loadedId) {
             return false;
@@ -607,8 +653,7 @@ class ThemeLayoutService
             ->where('layout_id', $layoutId)
             ->select()
             ->fetchArray();
-        
-        
+
         return empty($checkAfter);
     }
 

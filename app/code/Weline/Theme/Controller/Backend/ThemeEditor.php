@@ -476,8 +476,16 @@ class ThemeEditor extends BackendController
             $pageType = $widget->getData('page_type');
             $area = $widget->getData('area');
             
-            // 删除部件
-            $result = $this->layoutService->deleteWidget($layoutId);
+            // 如果 DB 记录不存在，使用前端提供的 fallback 数据
+            $recordExists = !empty($widget->getLayoutId());
+            if (!$recordExists) {
+                $slotId = $data['slot_id'] ?? null;
+                $area = $data['area'] ?? 'content';
+                $pageType = $data['layout_type'] ?? 'homepage';
+            }
+            
+            // 尝试删除部件（如果记录存在）
+            $result = $recordExists ? $this->layoutService->deleteWidget($layoutId) : true;
             
             $response = [
                 'success' => $result,
@@ -485,9 +493,11 @@ class ThemeEditor extends BackendController
                 'slot_id' => $slotId,
             ];
             
-            // 如果删除成功，获取插槽的原始内容
+            // 获取插槽的原始内容（无论记录是否存在，只要有足够信息就尝试恢复）
             if ($result && $themeId && $slotId) {
-                $originalHtml = $this->getOriginalSlotContent($themeId, $pageType, $slotId, $area);
+                $layoutType = $data['layout_type'] ?? $this->request->getParam('layout_type', 'homepage');
+                $layoutOption = $data['layout_option'] ?? $this->request->getParam('layout_option', 'default');
+                $originalHtml = $this->getOriginalSlotContent($themeId, $pageType, $slotId, $area, $layoutType, $layoutOption);
                 $response['original_html'] = $originalHtml;
                 $response['has_original'] = !empty($originalHtml);
             }
@@ -1759,24 +1769,25 @@ HTML;
      * @param string $area 区域
      * @return string 原始HTML内容
      */
-    private function getOriginalSlotContent(int $themeId, string $pageType, string $slotId, string $area): string
+    private function getOriginalSlotContent(int $themeId, string $pageType, string $slotId, string $area, string $layoutType = 'homepage', string $layoutOption = 'default'): string
     {
         try {
-            // 删除draft后，重新渲染布局预览（此时draft已被删除，会显示原始内容）
-            $layoutType = $this->request->getParam('layout_type', 'homepage');
-            $layoutOption = $this->request->getParam('layout_option', 'default');
-            
-            // 渲染完整的布局预览（使用draft状态，但刚才的draft已被删除）
-            $fullHtml = $this->renderLayoutPreviewHtml($themeId, $pageType, $layoutType, $layoutOption);
+            // 根据 area 决定渲染哪个模板
+            $fullHtml = '';
+            if ($area === 'header') {
+                $fullHtml = $this->renderPartialPreviewHtml($themeId, $pageType, 'header', $layoutOption);
+            } elseif ($area === 'footer') {
+                $fullHtml = $this->renderPartialPreviewHtml($themeId, $pageType, 'footer', $layoutOption);
+            } else {
+                $fullHtml = $this->renderLayoutPreviewHtml($themeId, $pageType, $layoutType, $layoutOption);
+            }
             
             if (empty($fullHtml)) {
                 return '';
             }
             
             // 从渲染的HTML中提取指定插槽的内容
-            $slotContent = $this->extractSlotContentFromHtml($fullHtml, $slotId);
-            
-            return $slotContent;
+            return $this->extractSlotContentFromHtml($fullHtml, $slotId);
         } catch (\Exception $e) {
             return '';
         }
@@ -1808,6 +1819,27 @@ HTML;
             ]);
             
             // 渲染模板（会触发插槽渲染事件，应用draft配置）
+            $html = $this->fetch($templatePath);
+            
+            return $html ?: '';
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+    
+    /**
+     * 渲染 partial 预览 HTML（header/footer 等独立区域）
+     */
+    private function renderPartialPreviewHtml(int $themeId, string $pageType, string $partialType, string $layoutOption): string
+    {
+        try {
+            $templatePath = "Weline_Theme::theme/frontend/partials/{$partialType}/{$layoutOption}.phtml";
+            
+            $this->assign('editor_mode', true);
+            $this->assign('preview_mode', true);
+            $this->assign('theme_id', $themeId);
+            $this->assign('page_type', $pageType);
+            
             $html = $this->fetch($templatePath);
             
             return $html ?: '';

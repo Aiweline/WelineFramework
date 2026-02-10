@@ -131,6 +131,7 @@ class SslCertificate extends BaseController
     {
         $domain = $this->request->getPost('domain');
         $email = $this->request->getPost('email');
+        $provider = $this->request->getPost('provider', SslCertificateService::PROVIDER_LETS_ENCRYPT);
         $websiteId = (int) $this->request->getPost('website_id', 0);
         
         if (empty($domain)) {
@@ -148,7 +149,7 @@ class SslCertificate extends BaseController
         }
         
         $webroot = BP . 'pub';
-        $result = $this->sslService->requestCertificate($domain, $webroot, $email, $websiteId);
+        $result = $this->sslService->requestCertificate($domain, $webroot, $email, $websiteId, (string) $provider);
         
         if ($result['cert']) {
             $result['cert'] = $result['cert']->getData();
@@ -329,6 +330,7 @@ class SslCertificate extends BaseController
     {
         $domains = $this->request->getPost('domains', []);
         $email = $this->request->getPost('email', '');
+        $provider = $this->request->getPost('provider', SslCertificateService::PROVIDER_LETS_ENCRYPT);
         
         if (empty($domains)) {
             return $this->fetchJson(['success' => false, 'message' => __('请选择要签发证书的域名')]);
@@ -355,7 +357,8 @@ class SslCertificate extends BaseController
                 $domain,
                 $webroot,
                 $email ?: 'admin@' . $domain,
-                0
+                0,
+                (string) $provider
             );
             
             if ($result['success']) {

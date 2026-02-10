@@ -11,4 +11,13 @@ namespace Weline\Framework\Output;
 
 class Printing extends AbstractPrint
 {
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void
+    {
+        parent::setStickyFooter($lines, $color);
+    }
+    
+    public function clearStickyFooter(): void
+    {
+        parent::clearStickyFooter();
+    }
 }

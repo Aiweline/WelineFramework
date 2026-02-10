@@ -316,6 +316,20 @@
                 }
             }
         });
+        
+        // 配置面板删除按钮（事件委托）
+        document.addEventListener('click', function(e) {
+            const deleteBtn = e.target.closest('.btn-delete-config');
+            if (deleteBtn) {
+                e.preventDefault();
+                const layoutId = deleteBtn.dataset.layoutId;
+                if (!layoutId) return;
+                // 尝试从结构面板获取 slotId
+                const structureItem = document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+                const slotId = structureItem?.closest('[data-slot]')?.dataset.slot || undefined;
+                handleWidgetDelete(layoutId, slotId);
+            }
+        });
 
         // 视图切换（实时预览 / 结构视图）
         document.querySelectorAll('.preview-tab').forEach(tab => {
@@ -429,8 +443,8 @@
                 handleSlotSelected(data.slot);
                 break;
             case 'widget-dropped':
-                // 部件被拖放到插槽
-                handleWidgetDropped(data.widget, data.slot);
+                // 部件被拖放到插槽（附带 sort_order）
+                handleWidgetDropped(data.widget, data.slot, data.sort_order);
                 break;
             case 'widget-rejected':
                 // 部件被插槽拒绝
@@ -1532,22 +1546,43 @@
                 
                 const confirmed = await showCustomConfirm(
                     '确认删除部件？',
-                    '确定要删除这个部件吗？',
+                    '删除后插槽将恢复为原始内容。',
                     '确认删除',
                     '取消'
                 );
                 if (!confirmed) return;
                 
+                // 从 iframe 获取 slot_id 和 area
+                let slotIdFb = '', areaFb = 'content';
+                try {
+                    const iframe = elements.previewFrame;
+                    if (iframe && iframe.contentDocument) {
+                        const wEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                        if (wEl) {
+                            slotIdFb = wEl.getAttribute('data-slot-id') || wEl.closest('[data-wslot]')?.getAttribute('data-wslot') || wEl.closest('[data-slot]')?.getAttribute('data-slot') || '';
+                            if (wEl.closest('header, [data-wslot-position="header"], .site-header')) areaFb = 'header';
+                            else if (wEl.closest('footer, [data-wslot-position="footer"], .site-footer')) areaFb = 'footer';
+                        }
+                    }
+                } catch (e) {}
+                
                 try {
                     const response = await fetch(config.apiDeleteWidget, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ layout_id: layoutId, theme_id: state.themeId })
+                        body: JSON.stringify({
+                            layout_id: layoutId,
+                            theme_id: state.themeId,
+                            slot_id: slotIdFb,
+                            area: areaFb,
+                            layout_type: state.layoutType || 'homepage',
+                            layout_option: state.layoutOption || 'default'
+                        })
                     });
                     const result = await response.json();
                     
                     if (result.success) {
-                        showToast('部件已删除', 'success');
+                        showToast(result.has_original ? '已恢复为原始布局' : '部件已删除', 'success');
                         
                         // 恢复iframe预览区的原始内容
                         const iframe = elements.previewFrame;
@@ -1560,13 +1595,11 @@
                                 // 移除部件元素
                                 widgetEl.remove();
                                 
-                                // 恢复原始内容
+                                // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                                 if (slot && !slot.querySelector('[data-layout-id]')) {
                                     if (result.has_original && result.original_html) {
-                                        // 有原始内容，恢复模板默认的内容
-                                        slot.innerHTML = result.original_html;
-                                        // 重新初始化恢复的部件的hover操作
-                                        initWidgetHoverActions();
+                                        // 有原始内容，恢复模板默认的内容（剥离可能混入的 widget-wrapper）
+                                        slot.innerHTML = stripWidgetWrappersFromHtml(result.original_html);
                                     } else {
                                         // 没有原始内容，显示占位符
                                         const slotName = slot.getAttribute('data-wslot-name') || slot.getAttribute('data-name') || actualSlotId;
@@ -1745,63 +1778,23 @@
     }
 
     /**
-     * 处理部件拖放到插槽
+     * 处理部件拖放到插槽（iframe 传入，委托 saveWidget）
+     * @param {object} widget - 部件数据
+     * @param {object} slot - 插槽数据 { id, position, name, exclusive }
+     * @param {number|undefined} iframeSortOrder - iframe 计算的插入位置
      */
-    async function handleWidgetDropped(widget, slot) {
-        console.log('部件拖放到插槽:', { widget, slot });
-        
+    async function handleWidgetDropped(widget, slot, iframeSortOrder) {
         const area = slot.position || slot.id;
         const slotId = slot.id;
-        // 独占判断：优先取插槽的 exclusive 属性，其次用 isExclusiveSlot 兜底
         const exclusive = slot.exclusive === true || isExclusiveSlot(slotId, widget.code);
-        
-        // 保存部件到该插槽
-        try {
-            const response = await fetch(config.apiSaveWidget, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    theme_id: state.themeId,
-                    area: area,
-                    slot_id: slotId,
-                    widget_module: widget.module,
-                    widget_code: widget.code,
-                    widget_type: widget.type || '',
-                    page_type: state.pageType,
-                    config: {},
-                    sort_order: exclusive ? 0 : getNextSlotSortOrder(slotId),
-                    exclusive: exclusive,
-                }),
-            });
 
-            const result = await response.json();
+        // sort_order 优先级：独占=0 > iframe 传入 > 结构视图计算
+        let sortOrder;
+        if (exclusive) sortOrder = 0;
+        else if (iframeSortOrder != null) sortOrder = iframeSortOrder;
+        else sortOrder = getNextSlotSortOrder(slotId);
 
-            if (result.success) {
-                showToast(exclusive 
-                    ? `${widget.name || widget.code} 已替换到 ${slot.name}` 
-                    : `${widget.name || widget.code} 已添加到 ${slot.name}`, 'success');
-                
-                // 更新结构视图：添加部件到结构面板
-                const layoutId = result.data?.layout_id;
-                if (layoutId) {
-                    addWidgetToStructureView(area, slotId, widget, layoutId, exclusive);
-                }
-                
-                // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
-                if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
-                } else {
-                    // 没有返回 preview_html，直接刷新整个预览
-                    loadLayoutPreview();
-                }
-            } else {
-                showToast(result.message || '添加失败', 'error');
-            }
-        } catch (err) {
-            console.error('保存部件失败:', err);
-            showToast('保存失败', 'error');
-        }
+        return saveWidget({ area, slotId, widgetData: widget, sortOrder, exclusive, switchToPreview: false });
     }
 
     /**
@@ -2827,6 +2820,140 @@
         slotEl.appendChild(hint);
     }
 
+    // ========== 拖拽数据工具函数（SOLID: 单一职责，共享逻辑抽取） ==========
+
+    /**
+     * 从拖拽事件提取部件数据
+     * 优先使用 state.draggingWidget（同页面拖拽），回退到 dataTransfer（跨 frame）
+     * @param {DragEvent} e
+     * @returns {Object|null}
+     */
+    function getDropWidgetData(e) {
+        let data = state.draggingWidget;
+        if (!data) {
+            try {
+                const json = e.dataTransfer.getData('application/json');
+                if (json) data = JSON.parse(json);
+            } catch (err) { /* ignore */ }
+        }
+        return data || null;
+    }
+
+    /**
+     * 解析插槽元素（向上查找最近的 [data-wslot] 或 .container-slot）
+     * @param {Element} el
+     * @returns {Element|null}
+     */
+    function resolveSlotElement(el) {
+        if (el.dataset && (el.dataset.wslot || el.classList.contains('container-slot'))) return el;
+        return el.closest('[data-wslot]') || el.closest('.container-slot');
+    }
+
+    /**
+     * 检查插槽是否接受该部件（accept/reject 规则）
+     * @param {Element} slot DOM 元素
+     * @param {Object} widgetData 部件数据
+     * @returns {boolean}
+     */
+    function isSlotAccepted(slot, widgetData) {
+        const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
+        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
+        const rejectAttr = slot.dataset.wslotReject || '';
+        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()) : [];
+        const slotId = slot.dataset.wslot || slot.dataset.slot;
+
+        const rejected = rejectCodes.includes(widgetData.type) || rejectCodes.includes(widgetData.code);
+        return !rejected && (
+            (widgetData.slot && widgetData.slot === slotId) ||
+            acceptCodes.includes(widgetData.code) ||
+            acceptCodes.length === 0
+        );
+    }
+
+    /**
+     * 统一的部件保存函数 — 所有拖拽保存的唯一出口
+     * 职责：API 持久化 + 结构视图更新 + 预览刷新
+     *
+     * @param {Object} params
+     * @param {string} params.area - 区域代码 (header/content/footer)
+     * @param {string|null} params.slotId - 插槽ID
+     * @param {Object} params.widgetData - 部件数据 {code, module, type, name, ...}
+     * @param {number} params.sortOrder - 排序顺序
+     * @param {boolean} params.exclusive - 是否独占替换
+     * @param {boolean} [params.switchToPreview=true] - 保存后是否切换到预览视图
+     * @returns {Promise<Object|null>} 保存结果，失败返回 null
+     */
+    async function saveWidget({ area, slotId, widgetData, sortOrder, exclusive, switchToPreview = true }) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:saveWidget:entry',message:'saveWidget called',data:{area:area,slotId:slotId,widgetCode:widgetData&&widgetData.code,sortOrder:sortOrder,exclusive:exclusive},timestamp:Date.now(),hypothesisId:'R1'})}).catch(function(){});
+        // #endregion
+
+        if (!state.themeId) {
+            showToast('请先选择主题', 'warning');
+            return null;
+        }
+
+        const payload = {
+            theme_id: state.themeId,
+            page_type: state.pageType,
+            area: area,
+            slot_id: slotId || null,
+            widget_code: widgetData.code,
+            widget_module: widgetData.module,
+            widget_type: widgetData.type || '',
+            config: widgetData.config || {},
+            sort_order: sortOrder,
+            exclusive: exclusive,
+        };
+
+        try {
+            const response = await fetch(config.apiSaveWidget, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await response.json();
+
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:saveWidget:response',message:'saveWidget response',data:{success:result.success,layoutId:result.data&&result.data.layout_id,hasPreviewHtml:!!result.preview_html,message:result.message||''},timestamp:Date.now(),hypothesisId:'R1'})}).catch(function(){});
+            // #endregion
+
+            if (result.success) {
+                const widgetName = widgetData.name || widgetData.code;
+                const displaySlot = slotId || area;
+                showToast(
+                    exclusive ? `${widgetName} 已替换到 ${displaySlot}` : `${widgetName} 添加成功`,
+                    'success'
+                );
+
+                const layoutId = result.data?.layout_id;
+                if (layoutId) {
+                    addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive);
+                }
+
+                if (switchToPreview) {
+                    switchPreviewView('preview');
+                }
+
+                if (result.preview_html && layoutId) {
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
+                } else {
+                    loadLayoutPreview();
+                }
+
+                return result;
+            } else {
+                showToast(result.message || '添加失败', 'error');
+                return null;
+            }
+        } catch (err) {
+            console.error('保存部件失败:', err);
+            showToast('保存部件失败', 'error');
+            return null;
+        }
+    }
+
     /**
      * 拖拽开始
      */
@@ -2908,55 +3035,87 @@
      */
     function handleDragEnd(e) {
         state.isDragging = false;
-        state.draggingWidget = null; // 清理拖拽数据
+        state.draggingWidget = null;
+        state.dragInsertIndex = null;
         this.classList.remove('dragging');
 
         // 移除区域高亮
         document.querySelectorAll('.preview-area').forEach(area => {
-            area.classList.remove('drag-over', 'drag-invalid', 'drag-allowed');
+            area.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
 
         // 移除插槽高亮（支持新旧两种标记方式）
         document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
-            slot.classList.remove('drag-over', 'drag-invalid', 'drag-allowed');
+            slot.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
+        
+        // 移除所有插入位置指示器和提示
+        removeInsertionIndicators();
     }
 
     /**
-     * 拖拽经过
+     * 拖拽经过 — 区域级别
+     * 支持：多部件区域显示插入位置指示器、独占区域显示替换提示、满额区域显示已满提示
      */
     function handleDragOver(e) {
-        // 必须调用 preventDefault 才能允许 drop
         e.preventDefault();
         e.stopPropagation();
         
-        // 如果 this 本身就是 preview-area，直接使用；否则查找父级
         const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
         if (!area) return;
         
         const areaCode = area.dataset.area;
         if (!areaCode) return;
         
-        // 使用 state 中存储的拖拽数据
         const widgetData = state.draggingWidget;
-        
-        if (widgetData) {
-            // 检查是否允许放置（传入 position 和 type，让 isAllowedArea 推断）
-            const allowed = isAllowedArea(widgetData.position, areaCode, widgetData.type);
-            if (allowed) {
-                e.dataTransfer.dropEffect = 'copy';
-                area.classList.add('drag-over');
-                area.classList.remove('drag-invalid');
-            } else {
-                e.dataTransfer.dropEffect = 'none';
-                area.classList.add('drag-invalid');
-                area.classList.remove('drag-over');
-            }
-        } else {
-            // 没有部件数据，不允许放置
+        if (!widgetData) {
             e.dataTransfer.dropEffect = 'none';
             area.classList.add('drag-invalid');
             area.classList.remove('drag-over');
+            return;
+        }
+        
+        // 检查是否允许放置
+        const allowed = isAllowedArea(widgetData.position, areaCode, widgetData.type);
+        if (!allowed) {
+            e.dataTransfer.dropEffect = 'none';
+            area.classList.add('drag-invalid');
+            area.classList.remove('drag-over');
+            removeInsertionIndicators(area);
+            return;
+        }
+        
+        // 获取插槽信息（exclusive / max / currentCount）
+        const info = getSlotInfo(area);
+        
+        // 独占插槽：显示替换提示
+        if (info.exclusive && info.currentCount > 0) {
+            e.dataTransfer.dropEffect = 'copy';
+            area.classList.add('drag-over', 'drag-replace');
+            area.classList.remove('drag-invalid');
+            removeInsertionIndicators(area);
+            showSlotHint(area, '松开替换现有部件', 'replace');
+            return;
+        }
+        
+        // 已满插槽：阻止放置
+        if (info.isFull) {
+            e.dataTransfer.dropEffect = 'none';
+            area.classList.add('drag-invalid');
+            area.classList.remove('drag-over', 'drag-replace');
+            removeInsertionIndicators(area);
+            showSlotHint(area, `已满（${info.currentCount}/${info.max}）`, 'full');
+            return;
+        }
+        
+        // 多部件区域：显示插入位置指示器
+        e.dataTransfer.dropEffect = 'copy';
+        area.classList.add('drag-over');
+        area.classList.remove('drag-invalid', 'drag-replace');
+        
+        const widgetsContainer = area.querySelector('.area-widgets');
+        if (widgetsContainer) {
+            showInsertionIndicator(widgetsContainer, e.clientY);
         }
     }
 
@@ -2964,310 +3123,207 @@
      * 拖拽离开
      */
     function handleDragLeave(e) {
-        // 如果 this 本身就是 preview-area，直接使用；否则查找父级
         const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
         if (area) {
-            // 只有当真正离开区域时才移除高亮（避免子元素触发）
+            // 只有当真正离开区域时才清理
             if (!area.contains(e.relatedTarget)) {
-                area.classList.remove('drag-over');
+                area.classList.remove('drag-over', 'drag-replace');
+                removeInsertionIndicators(area);
             }
         }
     }
 
     /**
-     * 放置
+     * 放置 — 区域级别
+     * 支持排序插入、独占替换、满额阻止
      */
     function handleDrop(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        // 检查是否是插槽区域的放置（由 handleSlotDrop 处理）
-        // 支持新旧两种插槽标记方式
-        const slot = e.target.closest('[data-wslot], .container-slot, .slot-widgets');
-        if (slot) {
-            return; // 让 handleSlotDrop 处理
-        }
-        
-        // 如果 this 本身就是 preview-area，直接使用；否则查找父级
-        const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
-        if (!area) {
-            console.error('Drop: No area found, this:', this);
-            return;
-        }
 
-        area.classList.remove('drag-over', 'drag-invalid');
+        // 检查是否是插槽区域的放置（由 handleSlotDrop 处理）
+        if (e.target.closest('[data-wslot], .container-slot, .slot-widgets')) return;
+
+        const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
+        if (!area) return;
+
+        // 清理视觉状态
+        area.classList.remove('drag-over', 'drag-invalid', 'drag-replace');
+        removeInsertionIndicators(area);
 
         const areaCode = area.dataset.area;
-        if (!areaCode) {
-            console.error('Drop: No area code found in area:', area);
-            return;
-        }
+        if (!areaCode) return;
 
-        // 优先使用 state 中存储的数据
-        let widgetData = state.draggingWidget;
-        
-        // 如果 state 中没有，尝试从 dataTransfer 获取
+        // 获取部件数据（委托 getDropWidgetData）
+        const widgetData = getDropWidgetData(e);
         if (!widgetData) {
-            try {
-                const jsonData = e.dataTransfer.getData('application/json');
-                if (jsonData) {
-                    widgetData = JSON.parse(jsonData);
-                }
-            } catch (err) {
-                console.error('Invalid widget data:', err);
-            }
-        }
-
-        if (!widgetData) {
-            console.error('Drop: No widget data available');
             showToast('无法获取部件数据', 'error');
             return;
         }
 
-        console.log('Drop - widget:', widgetData.name, 'position:', widgetData.position, 'type:', widgetData.type, 'target area:', areaCode);
-
-        // 检查是否允许放置（传入 position 和 type，让 isAllowedArea 推断）
-        const allowed = isAllowedArea(widgetData.position, areaCode, widgetData.type);
-        console.log('Drop - allowed:', allowed);
-        
-        if (!allowed) {
+        // 权限检查
+        if (!isAllowedArea(widgetData.position, areaCode, widgetData.type)) {
             showToast('该部件不能放置在此区域', 'warning');
             return;
         }
 
-        // 添加部件
-        addWidget(areaCode, widgetData);
+        // 插槽状态检查
+        const info = getSlotInfo(area);
+
+        // 满额检查（独占插槽不受此限制，会走替换逻辑）
+        if (!info.exclusive && info.isFull) {
+            showToast(`插槽已满（${info.currentCount}/${info.max}），无法添加更多部件`, 'warning');
+            return;
+        }
+
+        // 使用拖拽时计算的插入索引，如果没有则追加到末尾
+        const sortOrder = state.dragInsertIndex != null ? state.dragInsertIndex : getNextSortOrder(areaCode);
+        state.dragInsertIndex = null;
+
+        saveWidget({ area: areaCode, slotId: null, widgetData, sortOrder, exclusive: info.exclusive });
     }
 
     /**
      * 容器内插槽 - 拖拽经过
-     * 支持新旧两种插槽标记方式：
-     * - 旧版: .container-slot + data-slot + data-accept
-     * - 新版: [data-wslot] + data-wslot-accept
+     * 支持：accept/reject 过滤、独占替换提示、满额阻止、多部件排序指示
      */
     function handleSlotDragOver(e) {
         e.preventDefault();
         e.stopPropagation();
         
-        // 查找插槽元素 - 支持新旧两种方式
-        let slot = this;
-        if (!slot.dataset.wslot && !slot.classList.contains('container-slot')) {
-            slot = this.closest('[data-wslot]') || this.closest('.container-slot');
-        }
+        const slot = resolveSlotElement(this);
         if (!slot) return;
         
-        // 获取接受的部件类型（兼容新旧属性）
-        const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
-        
-        // 获取拒绝的部件类型（新属性）
-        const rejectAttr = slot.dataset.wslotReject || '';
-        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()) : [];
-        
-        // 获取插槽ID（兼容新旧属性）
-        const slotId = slot.dataset.wslot || slot.dataset.slot;
-        
         const widgetData = state.draggingWidget;
-        
-        if (widgetData) {
-            const widgetCode = widgetData.code;
-            const widgetType = widgetData.type;
-            const widgetSlot = widgetData.slot;
-            
-            // 检查部件是否被拒绝
-            // 1. 部件 type 在 reject 列表中
-            // 2. 部件 code 在 reject 列表中
-            const rejected = rejectCodes.includes(widgetType) || rejectCodes.includes(widgetCode);
-            
-            // 检查部件是否可以放入此插槽
-            const allowed = !rejected && (
-                (widgetSlot && widgetSlot === slotId) || 
-                acceptCodes.includes(widgetCode) || 
-                acceptCodes.length === 0
-            );
-            
-            if (allowed) {
-                e.dataTransfer.dropEffect = 'copy';
-                slot.classList.add('drag-over');
-                slot.classList.remove('drag-invalid');
-            } else {
-                e.dataTransfer.dropEffect = 'none';
-                slot.classList.add('drag-invalid');
-                slot.classList.remove('drag-over');
-            }
-        } else {
-            e.dataTransfer.dropEffect = 'copy';
-            slot.classList.add('drag-over');
+        if (!widgetData) {
+            e.dataTransfer.dropEffect = 'none';
+            return;
         }
+        
+        // accept / reject 检查（委托 isSlotAccepted）
+        if (!isSlotAccepted(slot, widgetData)) {
+            e.dataTransfer.dropEffect = 'none';
+            slot.classList.add('drag-invalid');
+            slot.classList.remove('drag-over', 'drag-replace');
+            removeInsertionIndicators(slot);
+            return;
+        }
+        
+        // 获取插槽容量信息
+        const info = getSlotInfo(slot);
+        
+        // 独占插槽：有部件时显示替换提示
+        if (info.exclusive && info.currentCount > 0) {
+            e.dataTransfer.dropEffect = 'copy';
+            slot.classList.add('drag-over', 'drag-replace');
+            slot.classList.remove('drag-invalid');
+            removeInsertionIndicators(slot);
+            showSlotHint(slot, '松开替换现有部件', 'replace');
+            return;
+        }
+        
+        // 已满：阻止放置
+        if (info.isFull) {
+            e.dataTransfer.dropEffect = 'none';
+            slot.classList.add('drag-invalid');
+            slot.classList.remove('drag-over', 'drag-replace');
+            removeInsertionIndicators(slot);
+            showSlotHint(slot, `已满（${info.currentCount}/${info.max}）`, 'full');
+            return;
+        }
+        
+        // 多部件插槽：显示插入位置指示器
+        e.dataTransfer.dropEffect = 'copy';
+        slot.classList.add('drag-over');
+        slot.classList.remove('drag-invalid', 'drag-replace');
+        
+        // 在插槽的部件容器中显示插入指示器
+        const widgetsContainer = slot.querySelector('.slot-widgets') || slot;
+        showInsertionIndicator(widgetsContainer, e.clientY);
     }
 
     /**
      * 容器内插槽 - 拖拽离开
-     * 支持新旧两种插槽标记方式
      */
     function handleSlotDragLeave(e) {
-        // 查找插槽元素 - 支持新旧两种方式
-        let slot = this;
-        if (!slot.dataset.wslot && !slot.classList.contains('container-slot')) {
-            slot = this.closest('[data-wslot]') || this.closest('.container-slot');
-        }
+        const slot = resolveSlotElement(this);
         if (slot) {
             if (!slot.contains(e.relatedTarget)) {
-                slot.classList.remove('drag-over', 'drag-invalid');
+                slot.classList.remove('drag-over', 'drag-invalid', 'drag-replace');
+                removeInsertionIndicators(slot);
             }
         }
     }
 
     /**
      * 容器内插槽 - 放置
-     * 支持新旧两种插槽标记方式
+     * 支持：accept/reject 过滤、独占替换、满额阻止、排序插入
      */
     function handleSlotDrop(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        // 查找插槽元素 - 支持新旧两种方式
-        let slot = this;
-        if (!slot.dataset.wslot && !slot.classList.contains('container-slot')) {
-            slot = this.closest('[data-wslot]') || this.closest('.container-slot');
-        }
-        if (!slot) {
-            console.error('SlotDrop: No slot found');
-            return;
-        }
 
-        slot.classList.remove('drag-over', 'drag-invalid');
+        const slot = resolveSlotElement(this);
+        if (!slot) return;
 
-        // 获取插槽ID和区域（兼容新旧属性）
+        // 清理视觉状态
+        slot.classList.remove('drag-over', 'drag-invalid', 'drag-replace');
+        removeInsertionIndicators(slot);
+
         const slotId = slot.dataset.wslot || slot.dataset.slot;
         const slotName = slot.dataset.wslotName || slotId;
         const areaCode = slot.dataset.area || slot.closest('.preview-area')?.dataset.area || 'content';
-        const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-        // exclusive: 优先从 DOM 属性读取，未设置时用 isExclusiveSlot() 判断
-        const exclusiveAttr = slot.dataset.wslotExclusive || slot.dataset.exclusive;
-        const exclusive = exclusiveAttr !== undefined ? exclusiveAttr === 'true' : undefined; // undefined 表示需要后续判断
-        
-        if (!slotId) {
-            console.error('SlotDrop: Missing slot id');
-            return;
-        }
+        if (!slotId) return;
 
-        // 获取部件数据
-        let widgetData = state.draggingWidget;
-        
+        // 获取部件数据（委托 getDropWidgetData）
+        const widgetData = getDropWidgetData(e);
         if (!widgetData) {
-            try {
-                const jsonData = e.dataTransfer.getData('application/json');
-                if (jsonData) {
-                    widgetData = JSON.parse(jsonData);
-                }
-            } catch (err) {
-                console.error('Invalid widget data:', err);
-            }
-        }
-
-        if (!widgetData) {
-            console.error('SlotDrop: No widget data available');
             showToast('无法获取部件数据', 'error');
             return;
         }
 
-        // 验证部件是否可以放入插槽
-        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
-        const rejectAttr = slot.dataset.wslotReject || '';
-        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()) : [];
-        
-        const widgetCode = widgetData.code;
-        const widgetType = widgetData.type;
-        const widgetSlot = widgetData.slot;
-        
-        // 检查是否被拒绝
-        const rejected = rejectCodes.includes(widgetType) || rejectCodes.includes(widgetCode);
-        
-        const allowed = !rejected && (
-            (widgetSlot && widgetSlot === slotId) || 
-            acceptCodes.includes(widgetCode) || 
-            acceptCodes.length === 0
-        );
-
-        if (!allowed) {
-            const reason = rejected ? '该类型部件不允许放入此区域' : `部件 "${widgetData.name}" 不能放入插槽 "${slotName}"`;
-            showToast(reason, 'warning');
+        // accept / reject 验证（委托 isSlotAccepted）
+        if (!isSlotAccepted(slot, widgetData)) {
+            showToast(`部件 "${widgetData.name}" 不能放入插槽 "${slotName}"`, 'warning');
             return;
         }
 
-        // 添加部件到插槽
-        addWidgetToSlot(areaCode, slotId, widgetData, { exclusive });
+        // 获取插槽容量信息
+        const info = getSlotInfo(slot);
+
+        // 独占替换
+        if (info.exclusive) {
+            saveWidget({ area: areaCode, slotId, widgetData, sortOrder: 0, exclusive: true });
+            return;
+        }
+
+        // 满额阻止
+        if (info.isFull) {
+            showToast(`插槽 "${slotName}" 已满（${info.currentCount}/${info.max}），无法添加更多部件`, 'warning');
+            return;
+        }
+
+        // 多部件插槽：使用拖拽位置决定排序
+        const sortOrder = state.dragInsertIndex != null ? state.dragInsertIndex : getNextSlotSortOrder(slotId);
+        state.dragInsertIndex = null;
+
+        saveWidget({ area: areaCode, slotId, widgetData, sortOrder, exclusive: false });
     }
 
     /**
-     * 添加部件到容器内插槽
+     * 添加部件到容器内插槽（委托 saveWidget）
      * @param {string} area 区域代码
      * @param {string} slotId 插槽ID
      * @param {object} widgetData 部件数据
-     * @param {object} options 选项 { exclusive }
+     * @param {object} options 选项 { exclusive, sort_order }
      */
     async function addWidgetToSlot(area, slotId, widgetData, options = {}) {
-        if (!state.themeId) {
-            showToast('请先选择主题', 'warning');
-            return;
-        }
-
-        // 独占插槽检查 - 优先使用传入的选项
-        const exclusive = options.exclusive !== undefined 
-            ? options.exclusive 
+        const exclusive = options.exclusive !== undefined
+            ? options.exclusive
             : (widgetData.exclusive || isExclusiveSlot(slotId, widgetData.code));
+        const sortOrder = options.sort_order != null ? options.sort_order : getNextSlotSortOrder(slotId);
 
-        const data = {
-            theme_id: state.themeId,
-            page_type: state.pageType,
-            area: area,
-            slot_id: slotId,
-            widget_code: widgetData.code,
-            widget_module: widgetData.module,
-            widget_type: widgetData.type,
-            config: {},
-            sort_order: getNextSlotSortOrder(slotId),
-            exclusive: exclusive,
-        };
-
-        try {
-            const response = await fetch(config.apiSaveWidget, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                showToast(exclusive ? `${widgetData.name} 已替换到 ${slotId}` : `${widgetData.name} 已添加到 ${slotId}`, 'success');
-                
-                // 更新结构视图：添加部件到结构面板
-                const layoutId = result.data?.layout_id;
-                if (layoutId) {
-                    addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive);
-                }
-                
-                // 切换到预览视图
-                switchPreviewView('preview');
-                // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
-                if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
-                } else {
-                    // 没有返回 preview_html，直接刷新整个预览
-                    loadLayoutPreview();
-                }
-            } else {
-                showToast(result.message || '添加失败', 'error');
-            }
-        } catch (err) {
-            console.error('Add widget to slot error:', err);
-            showToast('添加部件失败', 'error');
-        }
+        return saveWidget({ area, slotId, widgetData, sortOrder, exclusive });
     }
 
     /**
@@ -3669,77 +3725,17 @@
     }
 
     /**
-     * 添加部件
-     */
-    /**
-     * 添加部件到区域
+     * 添加部件到区域（委托 saveWidget）
      * @param {string} area 区域代码
      * @param {object} widgetData 部件数据
-     * @param {object} options 选项 { slotId, exclusive }
+     * @param {object} options 选项 { slotId, exclusive, sort_order }
      */
     async function addWidget(area, widgetData, options = {}) {
-        if (!state.themeId) {
-            showToast('请先选择主题', 'warning');
-            return;
-        }
-
-        // 获取插槽信息
         const slotId = options.slotId || widgetData.slot || null;
-        // 独占插槽：logo、search 等只能有一个
         const exclusive = options.exclusive !== undefined ? options.exclusive : isExclusiveSlot(slotId, widgetData.code);
+        const sortOrder = options.sort_order != null ? options.sort_order : getNextSortOrder(area);
 
-        const data = {
-            theme_id: state.themeId,
-            page_type: state.pageType,
-            area: area,
-            widget_code: widgetData.code,
-            widget_module: widgetData.module,
-            widget_type: widgetData.type,
-            config: {},
-            sort_order: getNextSortOrder(area),
-            slot_id: slotId,
-            exclusive: exclusive,
-        };
-
-        console.log('addWidget - data:', data);
-
-        try {
-            const response = await fetch(config.apiSaveWidget, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                showToast(exclusive ? '部件已替换' : '部件添加成功', 'success');
-                
-                // 更新结构视图：添加部件到结构面板
-                const layoutId = result.data?.layout_id;
-                if (layoutId) {
-                    addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive);
-                }
-                
-                // 切换到预览视图
-                switchPreviewView('preview');
-                // 使用返回的 preview_html 更新预览（如果有）
-                // 新添加的部件传入 isNewWidget=true，传入明确的 slotId 避免依赖全局状态
-                if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
-                } else {
-                    // 没有返回 preview_html，直接刷新整个预览
-                    loadLayoutPreview();
-                }
-            } else {
-                showToast(result.message || '添加失败', 'error');
-            }
-        } catch (err) {
-            console.error('Add widget error:', err);
-            showToast('添加部件失败', 'error');
-        }
+        return saveWidget({ area, slotId, widgetData, sortOrder, exclusive });
     }
 
     /**
@@ -4062,6 +4058,10 @@
      * 绑定部件操作按钮事件
      */
     function bindWidgetActionEvents(doc) {
+        // 防止重复绑定 — 每个 iframe document 只绑定一次
+        if (doc.body._widgetActionsEventsBound) return;
+        doc.body._widgetActionsEventsBound = true;
+        
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             const button = e.target.closest('.widget-hover-actions button');
@@ -4104,6 +4104,10 @@
      */
     function bindSlotClickEvents(doc) {
         if (!doc || !doc.body) return;
+        
+        // 防止重复绑定 — 每个 iframe document 只绑定一次
+        if (doc.body._slotClickEventsBound) return;
+        doc.body._slotClickEventsBound = true;
         
         // 使用事件委托，监听所有 slot 的点击
         doc.body.addEventListener('click', function(e) {
@@ -4255,8 +4259,25 @@
             return;
         }
         
+        // 从 iframe DOM 推断 area（header/footer/content）
+        let area = 'content';
         try {
-            // 调用删除 API
+            const iframe = elements.previewFrame;
+            if (iframe && iframe.contentDocument) {
+                const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                if (widgetEl) {
+                    // 检查是否在 header/footer 区域
+                    if (widgetEl.closest('header, [data-wslot-position="header"], .site-header')) {
+                        area = 'header';
+                    } else if (widgetEl.closest('footer, [data-wslot-position="footer"], .site-footer')) {
+                        area = 'footer';
+                    }
+                }
+            }
+        } catch (e) { /* iframe access error */ }
+        
+        try {
+            // 调用删除 API - 传递 slot_id 和 area 作为后端 fallback
             const response = await fetch(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
@@ -4265,7 +4286,11 @@
                 },
                 body: JSON.stringify({
                     layout_id: layoutId,
-                    theme_id: state.themeId
+                    theme_id: state.themeId,
+                    slot_id: slotId,
+                    area: area,
+                    layout_type: state.layoutType || 'homepage',
+                    layout_option: state.layoutOption || 'default'
                 })
             });
             
@@ -4283,15 +4308,14 @@
                         // 移除部件元素
                         widgetEl.remove();
                         
-                        // 恢复原始内容
-                        if (slot && !slot.querySelector('[data-layout-id]')) {
+                        const remainingWidgets = slot ? slot.querySelector('[data-layout-id]') : null;
+                        
+                        // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
+                        if (slot && !remainingWidgets) {
                             if (result.has_original && result.original_html) {
-                                // 有原始内容，恢复模板默认的内容
-                                slot.innerHTML = result.original_html;
-                                // 重新初始化恢复的部件的hover操作
-                                initWidgetHoverActions();
+                                // 剥离 original_html 中可能包含的 widget-wrapper（后端渲染可能带入其他 widget）
+                                slot.innerHTML = stripWidgetWrappersFromHtml(result.original_html);
                             } else {
-                                // 没有原始内容，显示占位符
                                 const slotName = slot.getAttribute('data-wslot-name') || slot.getAttribute('data-name') || actualSlotId;
                                 slot.innerHTML = `
                                     <div class="slot-placeholder" style="
@@ -4864,20 +4888,26 @@
         const savedConfig = widget.config || {};
 
         let html = `
-            <div class="config-widget-header mb-4">
-                <div class="config-widget-icon">
-                    <i class="${icon}"></i>
+            <div class="widget-config-panel">
+                <div class="config-header">
+                    <div class="config-widget-info">
+                        <div class="widget-icon">
+                            <i class="${icon}"></i>
+                        </div>
+                        <div class="widget-meta">
+                            <h4 class="widget-name">${escapeHtml(widgetName)}</h4>
+                            <p class="widget-desc">${escapeHtml(widgetDesc)}</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="config-widget-info">
-                    <h4>${escapeHtml(widgetName)}</h4>
-                    <p class="text-muted mb-0">${escapeHtml(widgetDesc)}</p>
-                </div>
-            </div>
-            <form class="config-form" id="widgetConfigFormModal" data-layout-id="${widget.layout_id}" data-widget-element-id="${widgetElement ? 'widget_' + widget.layout_id : ''}">
+                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${widget.layout_id}" data-widget-element-id="${widgetElement ? 'widget_' + widget.layout_id : ''}">
         `;
 
         if (Object.keys(params).length === 0) {
-            html += '<p class="text-muted">该部件暂无可配置参数</p>';
+            html += `<div class="config-empty-state">
+                <i class="ri-settings-3-line"></i>
+                <p>该部件暂无可配置参数</p>
+            </div>`;
         } else {
             for (const key in params) {
                 const param = params[key];
@@ -4889,11 +4919,15 @@
                 const description = param.description || '';
                 const placeholder = param.placeholder || '';
                 const options = param.options || {};
+                const translatable = param.translatable || false;
 
-                html += `<div class="form-group mb-3">`;
-                html += `<label for="config_${key}" class="form-label">${escapeHtml(label)}`;
-                if (required) html += ' <span class="text-danger">*</span>';
+                html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
+                html += `<label class="config-label" for="config_${key}">`;
+                html += escapeHtml(label);
+                if (required) html += ' <span class="required-mark">*</span>';
+                if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
                 html += `</label>`;
+                html += `<div class="config-field-input">`;
 
                 if (type === 'string') {
                     html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
@@ -4902,7 +4936,7 @@
                     html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
                              value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                 } else if (type === 'boolean') {
-                    html += `<div class="form-check">
+                    html += `<div class="form-check form-switch">
                         <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
                         <label class="form-check-label" for="config_${key}">启用</label>
                     </div>`;
@@ -4914,22 +4948,25 @@
                     }
                     html += `</select>`;
                 } else if (type === 'url') {
-                    html += `<input type="url" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
+                    html += `<div class="input-with-icon">
+                        <i class="ri-link"></i>
+                        <input type="url" class="form-control" id="config_${key}" name="${key}" 
+                               value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                    </div>`;
                 } else if (type === 'image') {
                     html += `<div class="input-group">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片URL">
-                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}">
-                            <i class="ri-image-line"></i>
+                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
+                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                            <i class="ri-image-add-line"></i>
                         </button>
                     </div>`;
                     if (value) {
-                        html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px;"></div>`;
+                        html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
                     }
                 } else if (type === 'color') {
-                    html += `<div class="input-group">
-                        <input type="color" class="form-control form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000">
+                    html += `<div class="color-picker-wrapper">
+                        <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
+                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
                     </div>`;
                 } else if (type === 'textarea') {
                     html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
@@ -4939,22 +4976,27 @@
                              value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
                 }
 
+                html += `</div>`; // .config-field-input
+
                 if (description) {
-                    html += `<small class="form-text text-muted">${escapeHtml(description)}</small>`;
+                    html += `<div class="config-field-description">${escapeHtml(description)}</div>`;
                 }
 
-                html += `</div>`;
+                html += `</div>`; // .config-field
             }
         }
 
         html += `
-            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="submit" class="btn btn-primary">
-                    <i class="ri-save-line"></i> 保存配置
-                </button>
+                    <div class="config-actions">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            <i class="ri-close-line"></i> 取消
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ri-save-line"></i> 保存配置
+                        </button>
+                    </div>
+                </form>
             </div>
-            </form>
         `;
 
         modalBody.innerHTML = html;
@@ -5027,73 +5069,122 @@
         `;
 
         if (Object.keys(params).length === 0) {
-            html += '<p class="text-muted">该部件暂无可配置参数</p>';
+            html += `<div class="config-empty-state">
+                <i class="ri-settings-3-line"></i>
+                <p>该部件暂无可配置参数</p>
+            </div>`;
         } else {
+            // 按 group 分组（默认分组为 "基础配置"）
+            const groups = {};
             for (const key in params) {
                 const param = params[key];
-                const type = param.type || 'string';
-                const label = param.label || key;
-                const defaultVal = param.default || '';
-                const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
-                const required = param.required || false;
-                const description = param.description || '';
-                const placeholder = param.placeholder || '';
-                const options = param.options || {};
-
-                html += `<div class="form-group">`;
-                html += `<label for="config_${key}">${escapeHtml(label)}`;
-                if (required) html += ' <span class="text-danger">*</span>';
-                html += `</label>`;
-
-                if (type === 'string') {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                } else if (type === 'number') {
-                    html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                } else if (type === 'boolean') {
-                    html += `<div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                        <label class="form-check-label" for="config_${key}">启用</label>
-                    </div>`;
-                } else if (type === 'select') {
-                    html += `<select class="form-control" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
-                        <option value="">-- 请选择 --</option>`;
-                    for (const optVal in options) {
-                        html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
-                    }
-                    html += `</select>`;
-                } else if (type === 'url') {
-                    html += `<input type="url" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
-                } else if (type === 'image') {
-                    html += `<div class="input-group">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片URL">
-                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}">
-                            <i class="ri-image-line"></i>
-                        </button>
-                    </div>`;
-                    if (value) {
-                        html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px;"></div>`;
-                    }
-                } else if (type === 'color') {
-                    html += `<div class="input-group">
-                        <input type="color" class="form-control form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000">
-                    </div>`;
-                } else if (type === 'textarea') {
-                    html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
-                             placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
-                } else {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                const groupName = param.group || '基础配置';
+                if (!groups[groupName]) groups[groupName] = [];
+                groups[groupName].push({ key, ...param });
+            }
+            
+            const groupIcons = {
+                '基础配置': 'ri-settings-3-line',
+                '样式': 'ri-palette-line',
+                '布局': 'ri-layout-line',
+                '数据': 'ri-database-2-line',
+                '高级': 'ri-code-s-slash-line',
+            };
+            
+            for (const groupName in groups) {
+                const groupFields = groups[groupName];
+                const groupIcon = groupIcons[groupName] || 'ri-folder-settings-line';
+                const isSingleGroup = Object.keys(groups).length === 1;
+                
+                // 单分组不显示分组标题，直接展示字段
+                if (!isSingleGroup) {
+                    html += `<div class="config-group">
+                        <h5 class="config-group-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <i class="${groupIcon}"></i> ${escapeHtml(groupName)}
+                            <i class="ri-arrow-down-s-line toggle-icon"></i>
+                        </h5>
+                        <div class="config-fields">`;
                 }
+                
+                for (const field of groupFields) {
+                    const key = field.key;
+                    const type = field.type || 'string';
+                    const label = field.label || key;
+                    const defaultVal = field.default || '';
+                    const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
+                    const required = field.required || false;
+                    const description = field.description || '';
+                    const placeholder = field.placeholder || '';
+                    const options = field.options || {};
+                    const translatable = field.translatable || false;
+                    
+                    html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
+                    html += `<label class="config-label" for="config_${key}">`;
+                    html += escapeHtml(label);
+                    if (required) html += ' <span class="required-mark">*</span>';
+                    if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
+                    html += `</label>`;
+                    html += `<div class="config-field-input">`;
 
-                if (description) {
-                    html += `<small class="form-text">${escapeHtml(description)}</small>`;
+                    if (type === 'string') {
+                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
+                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    } else if (type === 'number') {
+                        html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
+                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    } else if (type === 'boolean') {
+                        html += `<div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
+                            <label class="form-check-label" for="config_${key}">启用</label>
+                        </div>`;
+                    } else if (type === 'select') {
+                        html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+                            <option value="">-- 请选择 --</option>`;
+                        for (const optVal in options) {
+                            html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
+                        }
+                        html += `</select>`;
+                    } else if (type === 'url') {
+                        html += `<div class="input-with-icon">
+                            <i class="ri-link"></i>
+                            <input type="url" class="form-control" id="config_${key}" name="${key}" 
+                                   value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                        </div>`;
+                    } else if (type === 'image') {
+                        html += `<div class="input-group">
+                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
+                            <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                                <i class="ri-image-add-line"></i>
+                            </button>
+                        </div>`;
+                        if (value) {
+                            html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
+                        }
+                    } else if (type === 'color') {
+                        html += `<div class="color-picker-wrapper">
+                            <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
+                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
+                        </div>`;
+                    } else if (type === 'textarea') {
+                        html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
+                                 placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+                    } else {
+                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
+                                 value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                    }
+
+                    html += `</div>`; // .config-field-input
+
+                    if (description) {
+                        html += `<div class="config-field-description">${escapeHtml(description)}</div>`;
+                    }
+
+                    html += `</div>`; // .config-field
                 }
-
-                html += `</div>`;
+                
+                if (!isSingleGroup) {
+                    html += `</div></div>`; // .config-fields, .config-group
+                }
             }
         }
 
@@ -5102,8 +5193,8 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="ri-save-line"></i> 保存配置
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-reset">
-                            <i class="ri-restart-line"></i> 重置
+                        <button type="button" class="btn btn-outline-danger btn-delete-config" data-layout-id="${widget.layout_id}" title="删除此部件">
+                            <i class="ri-delete-bin-line"></i> 删除
                         </button>
                     </div>
                 </form>
@@ -5388,7 +5479,7 @@
     async function deleteWidget(widgetElement) {
         const confirmed = await showCustomConfirm(
             '确认删除部件？',
-            '确定要删除此部件吗？',
+            '删除后插槽将恢复为原始内容。',
             '确认删除',
             '取消'
         );
@@ -5399,24 +5490,81 @@
         const layoutId = widgetElement.dataset.layoutId;
         if (!layoutId) return;
 
+        // 从 widgetElement 或 iframe 获取 slot_id 和 area
+        const slotIdFromEl = widgetElement.dataset.slotId || '';
+        let areaFromEl = 'content';
+        try {
+            const iframe = elements.previewFrame;
+            if (iframe && iframe.contentDocument) {
+                const iframeWidget = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                if (iframeWidget) {
+                    if (iframeWidget.closest('header, [data-wslot-position="header"], .site-header')) {
+                        areaFromEl = 'header';
+                    } else if (iframeWidget.closest('footer, [data-wslot-position="footer"], .site-footer')) {
+                        areaFromEl = 'footer';
+                    }
+                }
+            }
+        } catch (e) { /* iframe access error */ }
+
         try {
             const response = await fetch(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ layout_id: layoutId }),
+                body: JSON.stringify({
+                    layout_id: layoutId,
+                    theme_id: state.themeId,
+                    slot_id: slotIdFromEl,
+                    area: areaFromEl,
+                    layout_type: state.layoutType || 'homepage',
+                    layout_option: state.layoutOption || 'default'
+                }),
             });
 
             const result = await response.json();
 
             if (result.success) {
+                // 从 iframe 中移除部件并恢复原始内容
+                const iframe = elements.previewFrame;
+                if (iframe && iframe.contentDocument) {
+                    const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                    if (widgetEl) {
+                        const slot = widgetEl.closest('[data-wslot], [data-slot]');
+                        
+                        // 移除部件元素
+                        widgetEl.remove();
+                        
+                        // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
+                        if (slot && !slot.querySelector('[data-layout-id]')) {
+                            if (result.has_original && result.original_html) {
+                                // 剥离可能混入的 widget-wrapper
+                                slot.innerHTML = stripWidgetWrappersFromHtml(result.original_html);
+                            } else {
+                                const slotName = slot.getAttribute('data-wslot-name') || slot.getAttribute('data-name') || result.slot_id || '';
+                                slot.innerHTML = `
+                                    <div class="slot-placeholder" style="
+                                        padding: 40px 20px;
+                                        text-align: center;
+                                        color: #999;
+                                        border: 2px dashed #ddd;
+                                        border-radius: 8px;
+                                        background: rgba(0,0,0,0.02);
+                                    ">
+                                        <i class="ri-inbox-line" style="font-size: 32px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
+                                        <p style="margin: 0; font-size: 14px;">拖入部件到此插槽</p>
+                                    </div>
+                                `;
+                            }
+                        }
+                    }
+                }
+                
+                // 从结构视图移除
                 widgetElement.remove();
-                showToast('删除成功', 'success');
+                showToast(result.has_original ? '已恢复为原始布局' : '部件已删除', 'success');
                 deselectWidget();
-                // 从 iframe 中移除对应部件
-                removeWidgetFromIframe(layoutId);
-                // 注意：不再调用 refreshPreview()
             } else {
                 showToast(result.message || '删除失败', 'error');
             }
@@ -6158,6 +6306,42 @@
             .replace(/'/g, '&#039;');
     }
 
+    /**
+     * 从 HTML 字符串中剥离 widget-wrapper 和操作按钮
+     * 
+     * 后端渲染 original_html 时，SlotRendererService 可能将其他 widget 注入到模板中，
+     * 导致 "原始内容" 实际包含 widget-wrapper 元素。
+     * 此函数将这些 wrapper 的内容提取出来（保留子内容），移除操作按钮。
+     * 
+     * @param {string} html - 原始 HTML 字符串
+     * @returns {string} - 剥离后的 HTML
+     */
+    function stripWidgetWrappersFromHtml(html) {
+        if (!html) return html;
+        
+        // 使用临时 DOM 解析
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        
+        // 移除所有 widget-hover-actions 操作按钮
+        temp.querySelectorAll('.widget-hover-actions').forEach(el => el.remove());
+        
+        // 将 widget-wrapper[data-layout-id] 替换为其内部内容（展开子节点）
+        temp.querySelectorAll('.widget-wrapper[data-layout-id]').forEach(wrapper => {
+            while (wrapper.firstChild) {
+                wrapper.parentNode.insertBefore(wrapper.firstChild, wrapper);
+            }
+            wrapper.remove();
+        });
+        
+        // 移除残留的 data-layout-id 属性（防止 initWidgetHoverActions 误识别）
+        temp.querySelectorAll('[data-layout-id]').forEach(el => {
+            el.removeAttribute('data-layout-id');
+        });
+        
+        return temp.innerHTML;
+    }
+
     // 添加 CSS 动画
     const style = document.createElement('style');
     style.textContent = `
@@ -6467,6 +6651,14 @@
             url.searchParams.set('layout_option', state.layoutOption);
 
             const response = await fetch(url);
+            const contentType = response.headers.get('Content-Type') || '';
+            if (!response.ok || contentType.indexOf('application/json') === -1) {
+                const text = await response.text();
+                if (text && text.trim().startsWith('<')) {
+                    console.warn('获取插槽信息: 接口返回非 JSON（可能为错误页或登录页），已跳过');
+                }
+                return;
+            }
             const result = await response.json();
 
             if (result.success && result.slots) {

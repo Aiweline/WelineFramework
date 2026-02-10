@@ -5,10 +5,14 @@ declare(strict_types=1);
 /**
  * AI组件预览渲染器
  * 
- * 提供模拟的 $this 上下文来渲染组件模板
+ * 使用框架 Template 编译流程渲染 AI 生成的 phtml 模板
+ * 流程：保存临时 phtml → 框架 taglib 编译 → 获取编译后 HTML
+ * 与部件预览（Widget Preview）逻辑一致
  */
 
 namespace GuoLaiRen\PageBuilder\Service\AI;
+
+use Weline\Framework\View\Template;
 
 /**
  * 模拟的 Page 对象
@@ -257,75 +261,99 @@ class PreviewRenderer
     }
     
     /**
-     * 渲染模板内容
+     * 渲染模板内容（使用框架 Template 编译流程）
      * 
-     * @param string $templateContent 模板内容
+     * 流程与部件预览一致：
+     * 1. 保存临时 phtml 文件
+     * 2. 通过 Template::tmp_replace() 编译模板标签（<lang>、taglib 等）
+     * 3. 保存编译后的文件
+     * 4. 通过 Template::ob_file() 执行并捕获 HTML 输出
+     * 
+     * @param string $templateContent 模板内容（phtml 源码）
      * @return array ['success' => bool, 'html' => string, 'error' => string]
      */
     public function render(string $templateContent): array
     {
-        // 创建临时文件
-        $tempFile = sys_get_temp_dir() . '/pb_preview_' . uniqid() . '.phtml';
-        file_put_contents($tempFile, $templateContent);
+        // 临时文件路径
+        $uid = uniqid('pb_preview_', true);
+        $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_preview';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0770, true);
+        }
+        $tplFile = $tempDir . DIRECTORY_SEPARATOR . $uid . '.phtml';
+        $comFile = $tempDir . DIRECTORY_SEPARATOR . 'com_' . $uid . '.phtml';
         
-        // 设置自定义错误处理器
-        $errorMessage = '';
-        set_error_handler(function($errno, $errstr, $errfile, $errline) use (&$errorMessage) {
-            // 忽略 Notice 和 Warning
-            if ($errno == E_NOTICE || $errno == E_WARNING) {
-                return true;
-            }
-            $errorMessage = "{$errstr} (line {$errline})";
-            return true;
-        });
-        
-        ob_start();
         try {
-            // 在 $this 上下文中渲染
-            $this->includeTemplate($tempFile);
+            // 1. 保存临时 phtml 文件
+            file_put_contents($tplFile, $templateContent);
+            
+            // 2. 获取框架 Template 实例，进行标签编译
+            $template = Template::getInstance();
+            
+            // 注入模拟数据到 Template（与部件预览一致）
+            $template->addData($this->data);
+            
+            // 3. 编译模板内容（处理 <lang>、taglib 等框架标签）
+            $compiledContent = $template->tmp_replace($templateContent, $comFile);
+            
+            // 4. 保存编译后的文件
+            file_put_contents($comFile, $compiledContent);
+            
+            // 5. 设置自定义错误处理器
+            $errorMessage = '';
+            set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$errorMessage) {
+                // 忽略 Notice 和 Warning
+                if ($errno == E_NOTICE || $errno == E_WARNING) {
+                    return true;
+                }
+                $errorMessage = "{$errstr} (line {$errline})";
+                return true;
+            });
+            
+            // 6. 通过 Template::ob_file() 执行编译后的文件并捕获输出
+            $html = $template->ob_file($comFile);
+            
+            // 恢复错误处理器
+            restore_error_handler();
+            
+            // 检查是否有错误
+            if (!empty($errorMessage)) {
+                return [
+                    'success' => false,
+                    'html' => $this->generateErrorHtml($errorMessage),
+                    'error' => '预览渲染错误: ' . $errorMessage,
+                ];
+            }
+            
+            // 检查输出是否包含 PHP 错误信息
+            if (preg_match('/<br\s*\/?>\s*<b>(?:Fatal|Parse|Warning|Notice)/i', $html)) {
+                return [
+                    'success' => false,
+                    'html' => $this->generateErrorHtml('代码执行产生了错误'),
+                    'error' => '代码执行产生了PHP错误',
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'html' => $html,
+                'error' => '',
+            ];
+            
         } catch (\Throwable $t) {
-            $errorMessage = $t->getMessage();
-        }
-        $html = ob_get_clean();
-        
-        // 恢复错误处理器
-        restore_error_handler();
-        
-        // 清理临时文件
-        @unlink($tempFile);
-        
-        // 检查是否有错误
-        if (!empty($errorMessage)) {
+            // 确保恢复错误处理器
+            restore_error_handler();
+            
             return [
                 'success' => false,
-                'html' => $this->generateErrorHtml($errorMessage),
-                'error' => '预览渲染错误: ' . $errorMessage,
+                'html' => $this->generateErrorHtml($t->getMessage()),
+                'error' => '预览渲染错误: ' . $t->getMessage(),
             ];
+        } finally {
+            // 清理临时文件
+            @unlink($tplFile);
+            @unlink($comFile);
         }
-        
-        // 检查输出是否包含PHP错误信息
-        if (preg_match('/<br\s*\/?>\s*<b>(?:Fatal|Parse|Warning|Notice)/i', $html)) {
-            return [
-                'success' => false,
-                'html' => $this->generateErrorHtml('代码执行产生了错误'),
-                'error' => '代码执行产生了PHP错误',
-            ];
-        }
-        
-        return [
-            'success' => true,
-            'html' => $html,
-            'error' => '',
-        ];
-    }
-    
-    /**
-     * 在当前对象上下文中包含模板
-     * 这样模板中的 $this 就会指向这个对象
-     */
-    private function includeTemplate(string $file): void
-    {
-        include $file;
     }
     
     /**

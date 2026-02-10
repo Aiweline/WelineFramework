@@ -124,6 +124,16 @@ class ComponentRenderer
             'style' => $styleSettings,
             'style_settings' => $styleSettings,
             'component_config' => $config,
+            'getConfig' => static function (string $key, $default = null) use ($config) {
+                $value = $config;
+                foreach (explode('.', $key) as $segment) {
+                    if (!is_array($value) || !array_key_exists($segment, $value)) {
+                        return $default;
+                    }
+                    $value = $value[$segment];
+                }
+                return $value;
+            },
             'component_code' => $componentCode,
             'component_instance_id' => $instanceId,
             'is_visual_mode' => $visualMode,

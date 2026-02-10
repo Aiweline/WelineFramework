@@ -13,6 +13,11 @@ abstract class AbstractPrint implements PrintInterface
 {
     public $out;
     
+    /** @var array<int,string>|null */
+    private static ?array $stickyFooterLines = null;
+    private static bool $stickyFooterEnabled = false;
+    private static ?bool $ansiSupported = null;
+    
     // 进度条相关属性
     private $progressBar = null;
     private $spinnerChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -22,6 +27,7 @@ abstract class AbstractPrint implements PrintInterface
     // 终端检测
     private $isTerminal = null;
     private $terminalWidth = null;
+    private $terminalHeight = null;
 
     /**
      * @DESC         |错误
@@ -213,6 +219,114 @@ abstract class AbstractPrint implements PrintInterface
 {$doc_tmp}{$enter}
 COMMAND_LIST;
         echo $doc;
+        
+    }
+
+    /**
+     * 设置底部悬浮提示（不随日志滚动）
+     *
+     * @param string[] $lines
+     */
+    public function setStickyFooter(array $lines, string $color = self::NOTE): void
+    {
+        if (!$this->supportsAnsi()) {
+            // 终端不支持 ANSI，无法固定底栏，直接禁用
+            self::$stickyFooterEnabled = false;
+            self::$stickyFooterLines = null;
+            return;
+        }
+        $height = $this->getTerminalHeight();
+        if ($height <= 0 || $height <= \count($lines) + 1) {
+            // 高度不足，避免固定底栏导致错乱
+            self::$stickyFooterEnabled = false;
+            self::$stickyFooterLines = null;
+            return;
+        }
+        self::$stickyFooterLines = [];
+        foreach ($lines as $line) {
+            self::$stickyFooterLines[] = $this->colorize($line, $color);
+        }
+        self::$stickyFooterEnabled = true;
+        $this->renderStickyFooter();
+    }
+
+    /**
+     * 清除底部悬浮提示
+     */
+    public function clearStickyFooter(): void
+    {
+        self::$stickyFooterEnabled = false;
+        self::$stickyFooterLines = null;
+        if ($this->supportsAnsi()) {
+            $height = $this->getTerminalHeight();
+            if ($height > 0) {
+                // 恢复整个滚动区域
+                echo "\033[1;{$height}r";
+                \flush();
+            }
+        }
+    }
+
+    /**
+     * 渲染底部悬浮提示（ANSI）
+     */
+    private function renderStickyFooter(): void
+    {
+        if (!self::$stickyFooterEnabled || empty(self::$stickyFooterLines) || !$this->supportsAnsi()) {
+            return;
+        }
+        $lines = self::$stickyFooterLines;
+        $count = \count($lines);
+        $height = $this->getTerminalHeight();
+        if ($height <= 0) {
+            return;
+        }
+        $footerTop = $height - $count + 1;
+        if ($footerTop < 1) {
+            return;
+        }
+        // 保存光标位置
+        echo "\033[s";
+        // 设置滚动区域为顶部到 footer 上方
+        $scrollBottom = $footerTop - 1;
+        if ($scrollBottom >= 1) {
+            echo "\033[1;{$scrollBottom}r";
+        }
+        // 绘制 footer
+        echo "\033[{$footerTop};1H";
+        foreach ($lines as $i => $line) {
+            echo "\033[2K" . $line;
+            if ($i < $count - 1) {
+                echo "\033[1B";
+            }
+        }
+        // 恢复光标位置
+        echo "\033[u";
+        \flush();
+    }
+
+    /**
+     * 判断 ANSI 是否可用
+     */
+    private function supportsAnsi(): bool
+    {
+        if (self::$ansiSupported !== null) {
+            return self::$ansiSupported;
+        }
+        if (!\defined('STDOUT') || !\is_resource(STDOUT)) {
+            return self::$ansiSupported = false;
+        }
+        if (\function_exists('stream_isatty') && !\stream_isatty(STDOUT)) {
+            return self::$ansiSupported = false;
+        }
+        if (!IS_WIN) {
+            return self::$ansiSupported = true;
+        }
+        // Windows: 需要终端支持 ANSI
+        if (\getenv('WT_SESSION') || \getenv('ANSICON') || \getenv('ConEmuANSI') === 'ON' || \getenv('TERM')) {
+            return self::$ansiSupported = true;
+        }
+        return self::$ansiSupported = false;
     }
 
     /**
@@ -412,6 +526,56 @@ COMMAND_LIST;
             }
         }
         return $this->terminalWidth;
+    }
+
+    /**
+     * 获取终端高度
+     *
+     * @return int
+     */
+    private function getTerminalHeight(): int
+    {
+        if ($this->terminalHeight === null) {
+            if ($this->isTerminal()) {
+                $height = $this->getTerminalHeightFromSystem();
+                $this->terminalHeight = $height ?: 24;
+            } else {
+                $this->terminalHeight = 24;
+            }
+        }
+        return $this->terminalHeight;
+    }
+
+    /**
+     * 从系统获取终端高度
+     *
+     * @return int
+     */
+    private function getTerminalHeightFromSystem(): int
+    {
+        if (!function_exists('shell_exec') || !is_callable('shell_exec')) {
+            return PHP_OS_FAMILY === 'Windows' ? 40 : 24;
+        }
+        if (PHP_OS_FAMILY === 'Windows') {
+            $output = \shell_exec('mode con 2>nul | findstr "行"');
+            if ($output && \preg_match('/(\d+)/', $output, $matches)) {
+                return (int)$matches[1];
+            }
+            $output = \shell_exec('powershell -Command "Write-Host $Host.UI.RawUI.WindowSize.Height" 2>nul');
+            if ($output && \is_numeric(\trim($output))) {
+                return (int)\trim($output);
+            }
+            return 40;
+        }
+        $output = \shell_exec('tput lines 2>/dev/null');
+        if ($output && \is_numeric(\trim($output))) {
+            return (int)\trim($output);
+        }
+        $output = \shell_exec('stty size 2>/dev/null');
+        if ($output && \preg_match('/(\d+)\s+\d+/', $output, $matches)) {
+            return (int)$matches[1];
+        }
+        return 24;
     }
     
     /**

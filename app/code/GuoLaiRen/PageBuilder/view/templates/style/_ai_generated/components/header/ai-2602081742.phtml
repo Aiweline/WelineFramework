@@ -1,0 +1,457 @@
+<?php
+$luxurySlogan = $getConfig('luxury.slogan', 'EXCLUSIVE LUXURY');
+$showBadge = $getConfig('luxury.show_badge', 'yes') !== 'no';
+$badgeText = $getConfig('luxury.badge_text', 'Premium');
+$enableAnimations = $getConfig('luxury.enable_animations', 'yes') !== 'no';
+?>
+<!-- 奢华装饰元素 -->
+<?php if ($enableAnimations): ?>
+<div class="luxury-header__decoration">
+    <div class="luxury-header__decoration-line"></div>
+    <div class="luxury-header__decoration-dots">
+        <span class="luxury-header__decoration-dot"></span>
+        <span class="luxury-header__decoration-dot"></span>
+        <span class="luxury-header__decoration-dot"></span>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- 奢华徽章 -->
+<?php if ($showBadge): ?>
+<div class="luxury-header__badge">
+    <svg class="luxury-header__badge-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+    </svg>
+    <span class="luxury-header__badge-text"><?= htmlspecialchars($badgeText) ?></span>
+</div>
+<?php endif; ?>
+<style>
+/* 奢华头部增强样式 */
+#<?= $componentId ?> {
+    --pb-gold: #d4af37;
+    --pb-gold-light: #f4e4a6;
+    --pb-gold-dark: #b8941f;
+    --pb-silver: #c0c0c0;
+    --pb-marble: #f5f5f5;
+    --pb-velvet: #1a1a2e;
+    --pb-diamond: #b9f2ff;
+
+    background: linear-gradient(135deg, var(--pb-velvet) 0%, #0a0a0f 100%);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        var(--pb-gold) 20%, 
+        var(--pb-gold) 80%, 
+        transparent 100%);
+    opacity: 0.5;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* 容器增强 */
+#<?= $componentId ?> .ai-header-container {
+    position: relative;
+    z-index: 2;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+/* Logo增强 */
+#<?= $componentId ?> .ai-header-logo {
+    position: relative;
+    padding: 8px 0;
+}
+
+#<?= $componentId ?> .ai-header-logo::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--pb-gold), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#<?= $componentId ?> .ai-header-logo:hover::after {
+    opacity: 1;
+}
+
+/* 导航增强 */
+#<?= $componentId ?> .ai-header-nav-links {
+    position: relative;
+}
+
+#<?= $componentId ?> .ai-header-nav-link {
+    position: relative;
+    padding: 8px 0;
+}
+
+#<?= $componentId ?> .ai-header-nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--pb-gold), var(--pb-gold-light));
+    transition: width 0.3s ease;
+    border-radius: 1px;
+}
+
+#<?= $componentId ?> .ai-header-nav-link:hover::before,
+#<?= $componentId ?> .ai-header-nav-link.active::before {
+    width: 100%;
+}
+
+/* CTA按钮增强 */
+#<?= $componentId ?> .ai-header-cta {
+    background: linear-gradient(135deg, var(--pb-gold) 0%, var(--pb-gold-dark) 100%);
+    color: var(--pb-velvet);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+    transition: all 0.3s ease;
+}
+
+#<?= $componentId ?> .ai-header-cta::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+#<?= $componentId ?> .ai-header-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+}
+
+#<?= $componentId ?> .ai-header-cta:hover::before {
+    left: 100%;
+}
+
+/* 奢华装饰元素 */
+#<?= $componentId ?> .luxury-header__decoration {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .luxury-header__decoration-line {
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent 10%, 
+        rgba(212, 175, 55, 0.2) 30%, 
+        rgba(212, 175, 55, 0.2) 70%, 
+        transparent 90%);
+    margin: 0 40px;
+}
+
+#<?= $componentId ?> .luxury-header__decoration-dots {
+    display: flex;
+    justify-content: center;
+    gap: 60px;
+    margin-top: 8px;
+}
+
+#<?= $componentId ?> .luxury-header__decoration-dot {
+    width: 4px;
+    height: 4px;
+    background: var(--pb-gold);
+    border-radius: 50%;
+    opacity: 0.3;
+}
+
+/* 奢华徽章 */
+#<?= $componentId ?> .luxury-header__badge {
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 20px;
+    color: var(--pb-gold);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    z-index: 3;
+}
+
+#<?= $componentId ?> .luxury-header__badge-icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* 图标增强 */
+#<?= $componentId ?> .ai-header-nav-link svg,
+#<?= $componentId ?> .ai-header-cta svg {
+    stroke: var(--pb-gold);
+}
+
+/* 悬停效果增强 */
+#<?= $componentId ?> .ai-header-nav-link:hover {
+    color: var(--pb-gold-light);
+}
+
+#<?= $componentId ?> .ai-header-nav-link:hover svg {
+    stroke: var(--pb-gold-light);
+}
+
+/* 动画 */
+@keyframes luxuryGlow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+#<?= $componentId ?> .luxury-header__decoration-dot {
+    animation: luxuryGlow 2s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .luxury-header__decoration-dot:nth-child(2) {
+    animation-delay: 0.5s;
+}
+
+#<?= $componentId ?> .luxury-header__decoration-dot:nth-child(3) {
+    animation-delay: 1s;
+}
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .luxury-header__badge {
+        right: 24px;
+        top: 15px;
+    }
+    
+    #<?= $componentId ?> .luxury-header__decoration-line {
+        margin: 0 24px;
+    }
+    
+    #<?= $componentId ?> .luxury-header__decoration-dots {
+        gap: 40px;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    #<?= $componentId ?>::before {
+        opacity: 0.3;
+    }
+    
+    #<?= $componentId ?> .luxury-header__decoration,
+    #<?= $componentId ?> .luxury-header__badge {
+        display: none;
+    }
+    
+    #<?= $componentId ?> .ai-header-container {
+        border-bottom: none;
+    }
+    
+    #<?= $componentId ?> .ai-header-nav-link::before {
+        display: none;
+    }
+    
+    #<?= $componentId ?> .ai-header-cta {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #<?= $componentId ?> {
+        background: linear-gradient(135deg, var(--pb-velvet) 0%, #0a0a0f 100%);
+    }
+    
+    #<?= $componentId ?> .ai-header-cta {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+    }
+}
+</style>
+<script>
+// 奢华头部交互效果
+const header = component;
+
+// 滚动效果 - 头部固定和阴影增强
+let lastScrollTop = 0;
+let ticking = false;
+
+function updateHeaderOnScroll() {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    if (scrollTop > 50) {
+        header.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.5)';
+        header.style.backdropFilter = 'blur(10px)';
+        header.style.background = 'linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%)';
+        
+        // 添加微妙的缩放效果
+        const scale = 1 - Math.min(scrollTop * 0.0005, 0.05);
+        header.style.transform = `scale(${scale})`;
+        header.style.transformOrigin = 'top center';
+    } else {
+        header.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.3)';
+        header.style.backdropFilter = 'none';
+        header.style.background = 'linear-gradient(135deg, var(--pb-velvet) 0%, #0a0a0f 100%)';
+        header.style.transform = 'none';
+    }
+    
+    // 导航链接高亮
+    const sections = document.querySelectorAll('section[id], div[id]');
+    const navLinks = header.querySelectorAll('.ai-header-nav-link');
+    
+    let current = '';
+    sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        const sectionHeight = section.clientHeight;
+        if (scrollTop >= sectionTop - 200) {
+            current = section.getAttribute('id');
+        }
+    });
+    
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+        const href = link.getAttribute('href');
+        if (href && href.includes('#')) {
+            const targetId = href.split('#')[1];
+            if (targetId === current) {
+                link.classList.add('active');
+            }
+        }
+    });
+    
+    lastScrollTop = scrollTop;
+    ticking = false;
+}
+
+window.addEventListener('scroll', function() {
+    if (!ticking) {
+        window.requestAnimationFrame(updateHeaderOnScroll);
+        ticking = true;
+    }
+});
+
+// 鼠标移动效果
+header.addEventListener('mousemove', function(e) {
+    const x = e.clientX / window.innerWidth;
+    const y = e.clientY / window.innerHeight;
+    
+    const decorationLine = header.querySelector('.luxury-header__decoration-line');
+    if (decorationLine) {
+        decorationLine.style.background = `linear-gradient(90deg, 
+            transparent 10%, 
+            rgba(212, 175, 55, ${0.1 + y * 0.2}) 30%, 
+            rgba(212, 175, 55, ${0.1 + x * 0.2}) 70%, 
+            transparent 90%)`;
+    }
+});
+
+// 导航链接悬停效果增强
+const navLinks = header.querySelectorAll('.ai-header-nav-link');
+navLinks.forEach(link => {
+    link.addEventListener('mouseenter', function() {
+        const text = this.querySelector('.ai-header-nav-link-text');
+        if (text) {
+            text.style.transform = 'translateY(-1px)';
+        }
+    });
+    
+    link.addEventListener('mouseleave', function() {
+        const text = this.querySelector('.ai-header-nav-link-text');
+        if (text) {
+            text.style.transform = 'none';
+        }
+    });
+});
+
+// CTA按钮悬停效果
+const ctaButton = header.querySelector('.ai-header-cta');
+if (ctaButton) {
+    ctaButton.addEventListener('mouseenter', function() {
+        const arrow = this.querySelector('svg');
+        if (arrow) {
+            arrow.style.transform = 'translateX(4px) rotate(-45deg)';
+        }
+    });
+    
+    ctaButton.addEventListener('mouseleave', function() {
+        const arrow = this.querySelector('svg');
+        if (arrow) {
+            arrow.style.transform = 'none';
+        }
+    });
+}
+
+// 徽章动画
+const badge = header.querySelector('.luxury-header__badge');
+if (badge) {
+    setInterval(() => {
+        badge.style.transform = 'translateY(-2px)';
+        setTimeout(() => {
+            badge.style.transform = 'none';
+        }, 300);
+    }, 5000);
+}
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+    }
+    
+    @keyframes sparkle {
+        0%, 100% { opacity: 0.3; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.1); }
+    }
+    
+    .luxury-header__badge {
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    .luxury-header__badge-icon {
+        animation: sparkle 2s ease-in-out infinite;
+    }
+`;
+document.head.appendChild(style);
+
+// 初始化
+updateHeaderOnScroll();
+</script>

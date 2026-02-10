@@ -35,6 +35,12 @@ class Processer
     private static ?bool $logEnabledCache = null;
     
     /**
+     * PowerShell 可用性缓存（仅 Windows）
+     */
+    private static ?bool $powerShellAvailableCache = null;
+    
+    
+    /**
      * 框架进程名前缀（用于安全校验，防止误杀非框架进程）
      */
     public const WELINE_PROCESS_PREFIX = 'weline-';
@@ -259,6 +265,24 @@ class Processer
         return ProcessDriverFactory::isWindows();
     }
     
+    /**
+     * 检测 PowerShell 是否可用（带缓存）
+     */
+    private static function isPowerShellAvailable(): bool
+    {
+        if (!IS_WIN) {
+            return false;
+        }
+        if (self::$powerShellAvailableCache !== null) {
+            return self::$powerShellAvailableCache;
+        }
+        $output = [];
+        $code = 0;
+        @\exec('powershell -NoProfile -Command "$PSVersionTable.PSVersion.Major" 2>NUL', $output, $code);
+        self::$powerShellAvailableCache = ($code === 0);
+        return self::$powerShellAvailableCache;
+    }
+    
     public static function parseArgs(string $pname): array
     {
         $args = explode(' ', $pname);
@@ -359,6 +383,7 @@ class Processer
             'popen' => \function_exists('popen') && !\in_array('popen', $disabledFunctions, true),
             'pclose' => \function_exists('pclose') && !\in_array('pclose', $disabledFunctions, true)
         ];
+        
         
         $pid = 0;
         
@@ -488,6 +513,14 @@ class Processer
                 
                 $pid = (int) \proc_get_status($process)['pid'];
                 
+                // Windows cmd /c start 场景：proc_get_status 可能返回 cmd.exe PID，尝试获取真实进程 PID
+                if (IS_WIN && $pid > 0 && \str_starts_with($command, 'cmd /c start')) {
+                    $realPid = self::findPhpProcessPid($pname);
+                    if ($realPid > 0) {
+                        $pid = $realPid;
+                    }
+                }
+                
                 // 关闭管道
                 if (isset($procPipes[0])) @\fclose($procPipes[0]);
                 if (isset($procPipes[1])) @\fclose($procPipes[1]);
@@ -505,8 +538,9 @@ class Processer
             }
         }
         
-        # 方案2: Windows PowerShell 启动（使用 -PassThru 直接获取 PID）
-        if (IS_WIN && $availableFunctions['exec']) {
+        # 方案2: Windows PowerShell 启动（proc_open 失败后回退）
+        $psAvailable = IS_WIN && $availableFunctions['exec'] && self::isPowerShellAvailable();
+        if (IS_WIN && $availableFunctions['exec'] && $psAvailable) {
             $phpBinary = PHP_BINARY;
             $arguments = $pname;
             
@@ -519,7 +553,6 @@ class Processer
             // PowerShell 单引号转义
             $escapedArgs = \str_replace("'", "''", $arguments);
             $escapedBP = \str_replace("'", "''", BP);
-            
             // Start-Process -PassThru 获取 PID
             $psCommand = 'powershell -NoProfile -Command "($p = Start-Process -FilePath \'' . $phpBinary . '\' -ArgumentList \'' . $escapedArgs . '\' -WorkingDirectory \'' . $escapedBP . '\' -WindowStyle Hidden -PassThru).Id"';
             $output = [];
