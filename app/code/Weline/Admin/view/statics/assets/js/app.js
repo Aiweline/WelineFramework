@@ -10,14 +10,56 @@ File: Main Js File
 
     'use strict';
 
+    /**
+     * 收起某个菜单项及其所有子菜单（移除 mm-active / mm-show）
+     * @param {jQuery} $li - 要收起的 li 元素
+     */
+    function collapseMenuItem($li) {
+        if (!$li || !$li.length) return;
+        $li.removeClass('mm-active');
+        $li.children('a').attr('aria-expanded', 'false');
+        var $sub = $li.children('ul.sub-menu');
+        if ($sub.length) {
+            $sub.removeClass('mm-show').addClass('mm-collapse').attr('aria-expanded', 'false').css({ display: '', visibility: '' });
+            $sub.find('> li').each(function() { collapseMenuItem($(this)); });
+        }
+    }
+
+    /**
+     * 左侧菜单：只保留当前点击的菜单展开，收起其他所有顶级菜单；
+     * 用户主动展开其他菜单时，去掉由路由反选的选中态（active/mm-active），避免一直显示为选中。
+     */
+    function initSidebarAccordion() {
+        var $sideMenu = $('#side-menu');
+        if (!$sideMenu.length) return;
+        $sideMenu.off('click.sidebarAccordion').on('click.sidebarAccordion', 'a.has-arrow', function(e) {
+            var $a = $(this);
+            var $li = $a.closest('li');
+            // 找到所属的顶级 li（#side-menu 下的直接子 li）
+            var $topLevelLi = $li.closest('#side-menu > li');
+            if (!$topLevelLi.length) return;
+            // 用户操作后关闭路由反选：去掉由 initActiveMenu 加上的 active，避免“当前页”一直高亮
+            $('#sidebar-menu a.active').removeClass('active');
+            // 收起除当前顶级项外的所有顶级菜单（会顺带去掉它们的 mm-active/mm-show）
+            $('#side-menu > li').each(function() {
+                var $top = $(this);
+                if ($top[0] !== $topLevelLi[0]) {
+                    collapseMenuItem($top);
+                }
+            });
+            // 由 metisMenu 在 click 里会再给当前项加 mm-active/mm-show，这里只负责清空其它
+        });
+    }
+
     function initMetisMenu() {
         //metis menu
         // 在图标模式下禁用MetisMenu，依赖CSS hover效果
         var isCollapsedMode = $('body').hasClass('vertical-collpsed');
 
         if (!isCollapsedMode) {
-            // 只在非图标模式下启用MetisMenu
-            $("#side-menu").metisMenu();
+            // 只在非图标模式下启用MetisMenu，并开启“只保留当前展开”（toggle 收拢兄弟项）
+            $("#side-menu").metisMenu({ toggle: true });
+            initSidebarAccordion();
         } else {
             // 图标模式下不初始化MetisMenu，完全依赖CSS hover
             console.log('图标模式：已禁用MetisMenu，依赖CSS hover效果');

@@ -148,12 +148,15 @@ class Template extends DataObject
             }
                 $this->getData('title') ?? $this->setData('title', $this->request->getModuleName());
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
-                $this->getData('req') ?? $this->setData('req', array_merge(
-                $this->request->getParams(), [
+                $reqParams = $this->request->getParams();
+                if (!\is_array($reqParams)) {
+                    $reqParams = [];
+                }
+                $this->getData('req') ?? $this->setData('req', array_merge($reqParams, [
                 'url' => $this->request->getUrlBuilder()->getCurrentUrl(),
                 'query' => $this->request->getQuery(),
                 'query_string' => http_build_query($this->request->getQuery()),
-                'params' => $this->request->getParams()
+                'params' => $reqParams
             ]));
                 $this->getData('env') ?? $this->setData('env', Env::getInstance()->getConfig());
                 $this->getData('local') ?? $this->setData('local', ['code' => Cookie::getLangLocal(), 'lang' => Cookie::getLang()]);

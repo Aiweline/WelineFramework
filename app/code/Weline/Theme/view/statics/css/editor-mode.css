@@ -429,11 +429,14 @@ body.editor-mode .slot-placeholder:hover {
     box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
 }
 
-/* 空插槽整体高亮 */
+/* 空插槽整体高亮（整块 footer/header 不叠加背景，避免深色底部/顶部被盖成浅色） */
 body.editor-mode [data-wslot].editor-drop-empty {
     outline-color: #10b981;
     outline-style: dashed;
     outline-width: 3px;
+}
+/* 仅对非整块区域插槽叠加浅绿高亮；footer/header 不设 background，保留主题深色 */
+body.editor-mode [data-wslot].editor-drop-empty:not([data-wslot="footer"]):not([data-wslot="header"]) {
     background-color: rgba(16, 185, 129, 0.05);
 }
 

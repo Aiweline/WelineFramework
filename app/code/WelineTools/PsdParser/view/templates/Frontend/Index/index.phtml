@@ -8,7 +8,12 @@
     <meta name="keywords" content="<?= __('PSD在线解析,在线PS,PSD查看器,图层提取,PSD转PNG,免费PSD工具,Photoshop在线') ?>">
     <style>
         body { font-family: "Microsoft YaHei", sans-serif; margin: 0; background: #2c3e50; color: #fff; height: 100vh; display: flex; flex-direction: column; }
-        header { background: #1a252f; padding: 15px; text-align: center; border-bottom: 2px solid #3498db; position: relative; }
+        header { background: #1a252f; padding: 15px; text-align: center; border-bottom: 2px solid #3498db; position: relative; transition: padding 0.25s ease; }
+        header.header--collapsed { padding: 6px 12px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
+        header.header--collapsed h2, header.header--collapsed p { display: none !important; }
+        header.header--collapsed .lang-switcher { position: static; transform: none; }
+        header.header--collapsed #drop-zone { margin: 0; padding: 6px 16px; font-size: 14px; border-radius: 6px; border: 1px solid #3498db; background: #34495e; color: #5dade2; flex-shrink: 0; }
+        header.header--collapsed #drop-zone:hover { background: #3d566e; border-color: #5dade2; color: #fff; }
         #drop-zone { border: 2px dashed #3498db; margin: 10px; padding: 20px; border-radius: 8px; cursor: pointer; background: #34495e; transition: 0.3s; }
         #drop-zone:hover { background: #3d566e; border-color: #5dade2; }
         #drop-zone.collapsed { padding: 8px 15px; margin: 5px 10px; font-size: 14px; border-style: solid; }
@@ -66,11 +71,32 @@
         .lang-switcher select { background: #34495e; color: #fff; border: 1px solid #5dade2; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
         .lang-switcher select:hover { background: #3d566e; }
         .lang-switcher select:focus { outline: none; border-color: #3498db; }
+        /* 下载确认弹窗 */
+        .psd-download-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: none; align-items: center; justify-content: center; }
+        .psd-download-overlay.show { display: flex; }
+        .psd-download-modal { background: #34495e; color: #fff; border-radius: 10px; padding: 24px; min-width: 320px; max-width: 90vw; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+        .psd-download-modal h4 { margin: 0 0 12px; font-size: 16px; color: #ecf0f1; }
+        .psd-download-modal .filename-wrap { margin: 8px 0 12px; }
+        .psd-download-modal .filename-wrap .label { color: #bdc3c7; margin-right: 6px; font-size: 13px; }
+        .psd-download-modal .filename-wrap input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #5dade2; border-radius: 4px; background: #2c3e50; color: #ecf0f1; font-size: 14px; margin-top: 4px; }
+        .psd-download-modal .filename-wrap input:focus { outline: none; border-color: #3498db; }
+        .psd-download-modal .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+        .psd-download-modal .btns button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .psd-download-modal .btn-default { background: #27ae60; color: #fff; }
+        .psd-download-modal .btn-default:hover { background: #219a52; }
+        .psd-download-modal .btn-change-dir { background: #3498db; color: #fff; }
+        .psd-download-modal .btn-change-dir:hover { background: #2980b9; }
+        .psd-download-modal .btn-cancel { background: #7f8c8d; color: #fff; }
+        .psd-download-modal .btn-cancel:hover { background: #95a5a6; }
+        .psd-download-modal .last-dir-hint { font-size: 12px; color: #bdc3c7; margin-top: 8px; }
+        .psd-download-modal .psd-download-dir-wrap { margin-top: 8px; font-size: 13px; }
+        .psd-download-modal .psd-download-dir-wrap .label { color: #bdc3c7; margin-right: 6px; }
+        .psd-download-modal .psd-download-dir-wrap .path { color: #5dade2; word-break: break-all; }
     </style>
 </head>
 <body>
 
-<header>
+<header id="psd-header">
     <div class="lang-switcher" data-i18n-switcher>
         <select id="lang-select" onchange="switchLanguage(this.value)">
             <option value="zh_Hans_CN" <?= ($this->getLocale() === 'zh_Hans_CN' ? 'selected' : '') ?>>简体中文</option>
@@ -95,6 +121,24 @@
 
 <div id="zoom-indicator">100% <span class="zoom-reset" onclick="resetZoom()"><?= __('重置') ?></span></div>
 
+<!-- 下载确认弹窗：默认/上次目录 或 更换目录并记住 -->
+<div id="psd-download-overlay" class="psd-download-overlay">
+    <div class="psd-download-modal">
+        <h4 id="psd-download-title"><?= __("确认下载") ?></h4>
+        <div class="filename-wrap">
+            <div class="label"><?= __("文件名：") ?></div>
+            <input type="text" id="psd-download-filename" placeholder="<?= __("可修改保存名称") ?>" />
+        </div>
+        <div class="psd-download-dir-wrap"><span class="label"><?= __("保存目录：") ?></span><span class="path" id="psd-download-dir-display"></span></div>
+        <p class="last-dir-hint" id="psd-download-dir-hint"></p>
+        <div class="btns">
+            <button type="button" id="psd-download-btn-default" class="btn-default"><?= __("下载到默认/上次目录") ?></button>
+            <button type="button" id="psd-download-btn-change" class="btn-change-dir"><?= __("更换目录并记住") ?></button>
+            <button type="button" id="psd-download-btn-cancel" class="btn-cancel"><?= __("取消") ?></button>
+        </div>
+    </div>
+</div>
+
 <script src="@static(WelineTools_PsdParser::js/psd.min.js)"></script>
 <script>
 (function () {
@@ -116,6 +160,166 @@
     var layerCountEl = document.getElementById('layer-count');
     var layerPanel = document.getElementById('layer-panel');
     var zoomIndicator = document.getElementById('zoom-indicator');
+
+    // ========== 下载确认与「上次目录」记忆 ==========
+    var PSD_DOWNLOAD_IDB = 'psdparser_last_dir';
+    var storedDirHandle = null;
+
+    function openDownloadIDB() {
+        return new Promise(function (resolve, reject) {
+            try {
+                var r = indexedDB.open('PsdParserDownload', 1);
+                r.onerror = function () { reject(r.error); };
+                r.onsuccess = function () { resolve(r.result); };
+                r.onupgradeneeded = function (e) {
+                    if (!e.target.result.objectStoreNames.contains('handles')) {
+                        e.target.result.createObjectStore('handles');
+                    }
+                };
+            } catch (e) { reject(e); }
+        });
+    }
+
+    function getStoredDirHandle() {
+        return openDownloadIDB().then(function (db) {
+            return new Promise(function (resolve) {
+                var tx = db.transaction('handles', 'readonly');
+                var req = tx.objectStore('handles').get(PSD_DOWNLOAD_IDB);
+                req.onsuccess = function () { resolve(req.result || null); };
+                req.onerror = function () { resolve(null); };
+            });
+        }).catch(function () { return null; });
+    }
+
+    function setStoredDirHandle(handle) {
+        if (!handle) return Promise.resolve();
+        return openDownloadIDB().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var tx = db.transaction('handles', 'readwrite');
+                var req = tx.objectStore('handles').put(handle, PSD_DOWNLOAD_IDB);
+                req.onsuccess = function () { resolve(); };
+                req.onerror = function () { reject(req.error); };
+            });
+        });
+    }
+
+    function dataUrlToBlob(dataUrl) {
+        var arr = dataUrl.split(',');
+        var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/png';
+        var bstr = atob(arr[1]);
+        var n = bstr.length;
+        var u8 = new Uint8Array(n);
+        while (n--) u8[n] = bstr.charCodeAt(n);
+        return new Blob([u8], { type: mime });
+    }
+
+    function triggerBrowserDownload(dataUrl, filename) {
+        var a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        a.click();
+    }
+
+    function writeToDirectory(handle, blob, filename) {
+        return handle.getFileHandle(filename, { create: true }).then(function (fileHandle) {
+            return fileHandle.createWritable();
+        }).then(function (writable) {
+            return writable.write(blob).then(function () { return writable.close(); });
+        });
+    }
+
+    function sanitizeFilename(name, fallback) {
+        var s = (name || '').trim().replace(/[/\\:*?"<>|]/g, '_');
+        if (!s) return fallback || 'layer.png';
+        if (!/\.png$/i.test(s)) s = s + '.png';
+        return s;
+    }
+
+    function showDownloadConfirm(dataUrl, suggestedName) {
+        var overlay = document.getElementById('psd-download-overlay');
+        var filenameInput = document.getElementById('psd-download-filename');
+        var dirDisplayEl = document.getElementById('psd-download-dir-display');
+        var hintEl = document.getElementById('psd-download-dir-hint');
+        var btnDefault = document.getElementById('psd-download-btn-default');
+        var btnChange = document.getElementById('psd-download-btn-change');
+        var btnCancel = document.getElementById('psd-download-btn-cancel');
+        if (!overlay || !filenameInput) return;
+
+        filenameInput.value = suggestedName;
+        filenameInput.type = 'text';
+        var hasStored = !!storedDirHandle;
+        if (dirDisplayEl) {
+            dirDisplayEl.textContent = hasStored ? (storedDirHandle.name || '<?= __("已选择的目录") ?>') : '<?= __("浏览器默认下载目录") ?>';
+        }
+        hintEl.textContent = hasStored ? '<?= __("如需更换请点击「更换目录并记住」。") ?>' : '<?= __("如需指定目录请点击「更换目录并记住」。") ?>';
+        overlay.classList.add('show');
+
+        function closeModal() {
+            overlay.classList.remove('show');
+        }
+
+        function getFinalFilename() {
+            return sanitizeFilename(filenameInput.value, suggestedName);
+        }
+
+        function doDownload(useStoredDir) {
+            var finalName = getFinalFilename();
+            closeModal();
+            var blob = dataUrlToBlob(dataUrl);
+            if (useStoredDir && storedDirHandle) {
+                (function requestPermissionAndWrite() {
+                    if (storedDirHandle.requestPermission) {
+                        storedDirHandle.requestPermission({ mode: 'readwrite' }).then(function (perm) {
+                            if (perm === 'granted') {
+                                writeToDirectory(storedDirHandle, blob, finalName).then(function () {
+                                    if (window.FrontendToast) window.FrontendToast.success('<?= __("已保存到上次目录") ?>');
+                                }).catch(function (err) {
+                                    triggerBrowserDownload(dataUrl, finalName);
+                                    if (window.FrontendToast) window.FrontendToast.warning('<?= __("写入目录失败，已改为浏览器下载") ?>');
+                                });
+                            } else {
+                                triggerBrowserDownload(dataUrl, finalName);
+                            }
+                        }).catch(function () { triggerBrowserDownload(dataUrl, finalName); });
+                    } else {
+                        writeToDirectory(storedDirHandle, blob, finalName).then(function () {
+                            if (window.FrontendToast) window.FrontendToast.success('<?= __("已保存到上次目录") ?>');
+                        }).catch(function () { triggerBrowserDownload(dataUrl, finalName); });
+                    }
+                })();
+            } else {
+                triggerBrowserDownload(dataUrl, finalName);
+            }
+        }
+
+        btnDefault.onclick = function () { doDownload(true); };
+        btnChange.onclick = function () {
+            var finalName = getFinalFilename();
+            if (typeof showDirectoryPicker !== 'function') {
+                triggerBrowserDownload(dataUrl, finalName);
+                closeModal();
+                return;
+            }
+            showDirectoryPicker({ mode: 'readwrite' }).then(function (handle) {
+                storedDirHandle = handle;
+                setStoredDirHandle(handle).catch(function () {});
+                closeModal();
+                var blob = dataUrlToBlob(dataUrl);
+                writeToDirectory(handle, blob, finalName).then(function () {
+                    if (window.FrontendToast) window.FrontendToast.success('<?= __("已保存并已记住该目录") ?>');
+                }).catch(function () {
+                    triggerBrowserDownload(dataUrl, finalName);
+                    if (window.FrontendToast) window.FrontendToast.warning('<?= __("写入失败，已改为浏览器下载") ?>');
+                });
+            }).catch(function () { closeModal(); });
+        };
+        btnCancel.onclick = closeModal;
+        overlay.onclick = function (e) {
+            if (e.target === overlay) closeModal();
+        };
+    }
+
+    getStoredDirHandle().then(function (h) { storedDirHandle = h; });
 
     // ========== 自定义滚轮缩放（仅缩放预览区，图层栏不受影响） ==========
     var currentZoom = 1;
@@ -227,8 +431,11 @@
     document.ondragover = function (e) { e.preventDefault(); };
     document.ondrop = function (e) { e.preventDefault(); handleFile(e.dataTransfer.files[0]); };
 
+    var psdHeader = document.getElementById('psd-header');
+
     function handleFile(file) {
         if (!file) return;
+        if (psdHeader) psdHeader.classList.remove('header--collapsed');
         dropZone.classList.remove('collapsed');
         dropZone.innerHTML = '<span class="loading"><?= __("正在努力加载: %{name} ...") ?></span>'.replace('%{name}', file.name);
         layerList.innerHTML = '<?= __("正在深度扫描图层...") ?>';
@@ -299,10 +506,14 @@
             }
 
             dropZone.classList.add('collapsed');
-            dropZone.innerHTML = '\u2713 <?= __("已加载: %{name}") ?>'.replace('%{name}', file.name) + ' <a href="#" class="reselect-link"><?= __("重新选择") ?></a>';
-            dropZone.querySelector('.reselect-link').onclick = function (e) { e.preventDefault(); e.stopPropagation(); triggerFileInput(); };
+            dropZone.innerHTML = '<?= __("重新选择") ?>';
+            dropZone.title = '<?= __("已加载: %{name}") ?>'.replace('%{name}', file.name);
+            dropZone.onclick = function (e) { e.preventDefault(); triggerFileInput(); };
+            if (psdHeader) psdHeader.classList.add('header--collapsed');
         }).catch(function (err) {
             console.error(err);
+            if (psdHeader) psdHeader.classList.remove('header--collapsed');
+            dropZone.classList.remove('collapsed');
             dropZone.innerHTML = '<?= __("解析失败！文件可能损坏或版本过高。") ?>';
             layerList.innerHTML = '<?= __("解析出错，请查看控制台 F12") ?>';
         });
@@ -757,7 +968,8 @@
                         downloadBtn.type = 'button';
                         downloadBtn.className = 'btn btn-download';
                         downloadBtn.textContent = '<?= __("下载图片") ?>';
-                        (function (du) {
+                        (function (du, name) {
+                            var filename = (name.replace(/[^\w\u4e00-\u9fa5\-]/g, '_') || 'layer') + '.png';
                             copyImgBtn.addEventListener('click', function () {
                                 fetch(du).then(function (r) { return r.blob(); }).then(function (blob) {
                                     if (navigator.clipboard && navigator.clipboard.write) {
@@ -766,12 +978,9 @@
                                 }).then(function () { copyImgBtn.textContent = '<?= __("已复制") ?>'; setTimeout(function () { copyImgBtn.textContent = '<?= __("复制图片") ?>'; }, 1500); }).catch(function () { copyImgBtn.textContent = '<?= __("复制失败") ?>'; setTimeout(function () { copyImgBtn.textContent = '<?= __("复制图片") ?>'; }, 1500); });
                             });
                             downloadBtn.addEventListener('click', function () {
-                                var a = document.createElement('a');
-                                a.href = du;
-                                a.download = (layerName.replace(/[^\w\u4e00-\u9fa5\-]/g, '_') || 'layer') + '.png';
-                                a.click();
+                                showDownloadConfirm(du, filename);
                             });
-                        })(dataUrl);
+                        })(dataUrl, layerName);
                         actions.appendChild(copyImgBtn);
                         actions.appendChild(downloadBtn);
                         wrap.appendChild(actions);
