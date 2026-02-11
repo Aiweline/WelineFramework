@@ -43,6 +43,7 @@
         previewRefreshInFlight: false,
         previewRefreshQueued: false,
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
+        saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
         versions: [], // 版本列表
         currentVersionId: null, // 当前版本ID
@@ -52,6 +53,35 @@
 
     // DOM 元素
     let elements = {};
+
+    /** 主题编辑器内联 SVG 图标（不依赖 Remix Icon 字体） */
+    var TE_ICONS = {
+        delete: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M17 6h5v2h-2v13a1 1 0 01-1 1H5a1 1 0 01-1-1V8H2V6h5V3a1 1 0 011-1h8a1 1 0 011 1v3zm1 2H6v12h12V8zm-9 3h2v6H9v-6zm4 0h2v6h-2v-6zM9 4v2h6V4H9z"/></svg>',
+        add: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>',
+        save: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M7 19V13h10v6h2V7.828l-2-2V4H5v15h2zM7 5h6v4H7V5zm0 10v-4h6v4H7z"/></svg>',
+        drag: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M8 6h2v2H8V6zm0 5h2v2H8v-2zm0 5h2v2H8v-2zm5-10h2v2h-2V6zm0 5h2v2h-2v-2zm0 5h2v2h-2v-2z"/></svg>',
+        close: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414L12 13.414l-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95L7.05 5.636z"/></svg>',
+        settings: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 1l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 1z"/></svg>',
+        edit: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M16.757 3l-2 2H5v14h14V9.243l2-2V20a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1h12.757zM20.485 2.1L21.9 3.515l-9.192 9.192-1.412.003-.003-1.417L20.485 2.1z"/></svg>',
+        arrowDown: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16 5.636 9.636 7.05 8.222z"/></svg>',
+        image: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1zm1 2v12h14V6H5zm2.5 5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm7 2l-2-2.5-3 4-2-2.5L6 17h12l-3.5-4z"/></svg>',
+        folder: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M3 3h8.414l2 2H21a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1z"/></svg>',
+        calendar: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M17 3h4a1 1 0 011 1v16a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1h4V1h2v2h6V1h2v2zm3 8H4v8h16v-8zm-5-6H9v2H7V5H4v4h16V5h-2v2h-2V5z"/></svg>',
+        info: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/></svg>',
+        layoutGrid: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>',
+        eye: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 110-10 5 5 0 010 10zm0-8a3 3 0 100 6 3 3 0 000-6z"/></svg>',
+        loader: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 2a1 1 0 011 1v2a1 1 0 11-2 0V3a1 1 0 011-1zm0 16a1 1 0 011 1v2a1 1 0 11-2 0v-2a1 1 0 011-1zm8-8a1 1 0 01-1 1h-2a1 1 0 110-2h2a1 1 0 011 1zM4 12a1 1 0 01-1 1H1a1 1 0 110-2h2a1 1 0 011 1zm14.071 5.657a1 1 0 01-1.414 1.414l-1.414-1.414a1 1 0 111.414-1.414l1.414 1.414zm-12.728 0a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 111.414 1.414l-1.414 1.414zm12.728-12.728a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 111.414 1.414l-1.414 1.414zm-12.728 0a1 1 0 01-1.414 1.414L2.343 4.929A1 1 0 113.757 3.515l1.414 1.414z"/></svg>',
+        apps: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M6.75 2.5A1.75 1.75 0 005 4.25v2.5c0 .966.784 1.75 1.75 1.75h2.5A1.75 1.75 0 0011 6.75v-2.5A1.75 1.75 0 009.25 2.5h-2.5zm9 0A1.75 1.75 0 0014 4.25v2.5c0 .966.784 1.75 1.75 1.75h2.5A1.75 1.75 0 0020 6.75v-2.5A1.75 1.75 0 0018.25 2.5h-2.5zm-9 9A1.75 1.75 0 005 13.25v2.5c0 .966.784 1.75 1.75 1.75h2.5A1.75 1.75 0 0011 15.75v-2.5A1.75 1.75 0 009.25 11.5h-2.5zm9 0A1.75 1.75 0 0014 13.25v2.5c0 .966.784 1.75 1.75 1.75h2.5A1.75 1.75 0 0020 15.75v-2.5A1.75 1.75 0 0018.25 11.5h-2.5z"/></svg>',
+        palette: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10c-1.5 0-2.5-.5-3.5-1.5l-.5-.5H6a2 2 0 01-2-2v-2.5l-.5-.5C2.5 14.5 2 13.5 2 12 2 6.477 6.477 2 12 2zm0 2a8 8 0 00-1.5 15.938V16h4v-.062A8 8 0 0012 4zm0 2a6 6 0 01.5 11.972V14h-1v-.028A6 6 0 0112 6z"/></svg>',
+        link: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M13.06 8.11l1.415 1.415a7 7 0 010 9.9l-.354.353a7 7 0 01-9.9-9.9l1.415-1.414a5 5 0 007.07 7.07l.354-.353a5 5 0 000-7.07l-1.415-1.415 1.415-1.414zm6.718 6.011l-1.414-1.414a7 7 0 010-9.9l.354-.353a7 7 0 019.9 9.9l-1.415 1.414a5 5 0 00-7.07-7.07l-.354.353a5 5 0 000 7.07l1.415 1.415-1.415 1.414zm-2.829-9.9a1 1 0 010 1.414L4.929 19.485a1 1 0 01-1.414-1.414L16.343 5.636a1 1 0 011.414 0z"/></svg>',
+        global: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-2-2.086a8 8 0 01-1.744-2.667L8 12l.256-.247A8 8 0 0110 5.086V4h4v1.086a8 8 0 011.744 2.667L16 12l-.256.247A8 8 0 0114 18.914V20h-4v-1.086z"/></svg>',
+        inbox: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M3 3h18a1 1 0 011 1v16a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1zm2 2v12h14V5H5zm2 2h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>',
+        cursor: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em"><path d="M13.85 22.25h-3.7c-.74 0-1.36-.54-1.45-1.27l-.27-1.89c-.27-.14-.53-.29-.79-.46l-1.8.72c-.7.26-1.47-.03-1.81-.65L2.2 15.53c-.35-.66-.2-1.44.36-1.88l1.53-1.19c-.01-.15-.02-.3-.02-.46 0-.6.04-1.22.04-1.87 0-.21-.15-.41-.35-.47L2.4 9.76c-.36-.12-.63-.43-.63-.83 0-.5.4-.9.9-.9h2.97c.71 0 1.32.5 1.47 1.18l1.05 4.2c.18.7.78 1.2 1.5 1.2h6.18c.45 0 .86.25 1.04.64.18.4.08.85-.25 1.12l-4.22 3.5 1.27 1.27c.39.39.39 1.02 0 1.41-.39.39-1.02.39-1.41 0l-2.12-2.12z"/></svg>'
+    };
+    function iconSvg(name) {
+        var svg = TE_ICONS[name];
+        return svg ? '<span class="te-icon te-icon-' + name + '">' + svg + '</span>' : '';
+    }
 
     // 注意：pageType 和 layoutType 现在是同一个概念
     // 之前的 layoutTypeToPageType / pageTypeToLayoutType 转换函数已移除
@@ -542,7 +572,8 @@
         
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
-        const acceptCodes = slot.accept || [];
+        const rawAccept = slot.accept;
+        const acceptCodes = Array.isArray(rawAccept) ? rawAccept : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
         
         // 显示加载状态
         elements.configContent.innerHTML = `
@@ -720,7 +751,7 @@
                         </div>
                         <div class="widget-header-right">
                             <span class="widget-type-badge">${widget.widgetType || 'widget'}</span>
-                            <i class="ri-arrow-down-s-line collapse-icon"></i>
+                            ${iconSvg('arrowDown')}
                         </div>
                     </div>
                     <div id="${collapseId}" class="slot-widget-body collapse ${isFirst ? 'show' : ''}" data-layout-id="${widget.layoutId}">
@@ -750,7 +781,7 @@
                 
                 <div class="slot-add-more">
                     <button type="button" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="ri-add-line"></i> 继续添加部件
+                        ${iconSvg('add')} 继续添加部件
                     </button>
                 </div>
             </div>
@@ -824,7 +855,7 @@
     async function generateWidgetConfigForm(layoutId, params, formConfig) {
         if (!params || Object.keys(params).length === 0) {
             return `<div class="config-empty-state">
-                <i class="ri-settings-3-line"></i>
+                ${iconSvg('settings')}
                 <p>该部件无可配置项</p>
             </div>`;
         }
@@ -928,7 +959,7 @@
                 fieldHtml += `<div class="image-picker-wrapper">
                     <div class="image-preview-container${value ? ' has-image' : ''}">
                         <div class="image-preview" id="${fieldId}_preview">
-                            ${value ? `<img src="${value}" alt="预览">` : '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>'}
+                            ${value ? `<img src="${value}" alt="预览">` : `<div class="image-placeholder">${iconSvg('image')}<span>点击选择图片</span></div>`}
                         </div>
                     </div>
                     <div class="image-url-input">
@@ -953,7 +984,7 @@
             } else if (type === 'datetime' || type === 'date' || type === 'time') {
                 const inputType = type === 'date' ? 'date' : (type === 'time' ? 'time' : 'datetime-local');
                 fieldHtml += `<div class="input-group">
-                    <span class="input-group-text"><i class="ri-calendar-event-line"></i></span>
+                    <span class="input-group-text">${iconSvg('calendar')}</span>
                     <input type="${inputType}" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}">
                 </div>`;
             } else if (type === 'array') {
@@ -963,7 +994,7 @@
                     </div>
                     <div class="array-actions">
                         <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${fieldId}">
-                            <i class="ri-add-line"></i> 添加项目
+                            ${iconSvg('add')} 添加项目
                         </button>
                     </div>
                     <input type="hidden" id="${fieldId}" name="${key}" value='${JSON.stringify(value || [])}'>
@@ -971,9 +1002,9 @@
             } else if (type === 'icon') {
                 fieldHtml += `<div class="icon-picker-wrapper">
                     <div class="icon-preview">
-                        <span class="icon-preview-display">${value ? `<i class="${value}"></i>` : '<i class="ri-add-line placeholder-icon"></i>'}</span>
+                        <span class="icon-preview-display">${value ? `<i class="${value}"></i>` : (iconSvg('add') || '<span class="te-icon placeholder-icon"></span>')}</span>
                         <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${fieldId}">
-                            <i class="ri-apps-line"></i> 选择图标
+                            ${iconSvg('apps')} 选择图标
                         </button>
                     </div>
                     <input type="hidden" id="${fieldId}" name="${key}" value="${value || ''}">
@@ -987,8 +1018,8 @@
             if (translatable) {
                 fieldHtml += `<div class="i18n-edit-panel" id="i18n_panel_${layoutId}_${key}" style="display:none;">
                     <div class="i18n-panel-header">
-                        <span><i class="ri-global-line"></i> 多语言配置</span>
-                        <button type="button" class="btn-i18n-close" data-field="${key}"><i class="ri-close-line"></i></button>
+                        <span>${iconSvg('global')} 多语言配置</span>
+                        <button type="button" class="btn-i18n-close" data-field="${key}">${iconSvg('close')}</button>
                     </div>
                     <div class="i18n-panel-body">
                         <div class="i18n-lang-row">
@@ -1002,14 +1033,14 @@
                     </div>
                     <div class="i18n-panel-footer">
                         <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-field="${key}" data-layout-id="${layoutId}">
-                            <i class="ri-save-line"></i> 保存多语言
+                            ${iconSvg('save')} 保存多语言
                         </button>
                     </div>
                 </div>`;
             }
             
             if (description) {
-                fieldHtml += `<div class="config-field-description"><i class="ri-information-line"></i> ${description}</div>`;
+                fieldHtml += `<div class="config-field-description">${iconSvg('info')} ${description}</div>`;
             }
             fieldHtml += `</div>`;
             return fieldHtml;
@@ -1028,7 +1059,7 @@
                     <h5 class="config-group-title">
                         <i class="ri-information-line"></i>
                         基本信息
-                        <i class="ri-arrow-down-s-line toggle-icon"></i>
+                        ${iconSvg('arrowDown')}
                     </h5>
                     <div class="config-fields">${fieldsHtml}</div>
                 </div>
@@ -1043,9 +1074,9 @@
             groupsHtml += `
                 <div class="config-group">
                     <h5 class="config-group-title">
-                        <i class="ri-palette-line"></i>
+                        ${iconSvg('palette')}
                         样式设置
-                        <i class="ri-arrow-down-s-line toggle-icon"></i>
+                        ${iconSvg('arrowDown')}
                     </h5>
                     <div class="config-fields">${fieldsHtml}</div>
                 </div>
@@ -1060,9 +1091,9 @@
             groupsHtml += `
                 <div class="config-group collapsed">
                     <h5 class="config-group-title">
-                        <i class="ri-links-line"></i>
+                        ${iconSvg('link')}
                         链接配置
-                        <i class="ri-arrow-down-s-line toggle-icon"></i>
+                        ${iconSvg('arrowDown')}
                     </h5>
                     <div class="config-fields">${fieldsHtml}</div>
                 </div>
@@ -1074,10 +1105,10 @@
                 ${groupsHtml}
                 <div class="config-actions">
                     <button type="submit" class="btn btn-primary">
-                        <i class="ri-save-line"></i> 保存配置
+                        ${iconSvg('save')} 保存配置
                     </button>
                     <button type="button" class="btn btn-outline-danger btn-delete-widget" data-layout-id="${layoutId}">
-                        <i class="ri-delete-bin-line"></i> 删除
+                        ${iconSvg('delete')} 删除
                     </button>
                 </div>
             </form>
@@ -1231,7 +1262,7 @@
             if (clearBtn && hidden && preview) {
                 clearBtn.addEventListener('click', function() {
                     hidden.value = '';
-                    preview.innerHTML = '<i class="ri-add-line placeholder-icon"></i>';
+                    preview.innerHTML = iconSvg('add') || '';
                     this.style.display = 'none';
                 });
             }
@@ -1292,10 +1323,10 @@
                 urlInput.addEventListener('input', function() {
                     const url = this.value.trim();
                     if (url) {
-                        preview.innerHTML = `<img src="${url}" alt="预览" onerror="this.parentElement.innerHTML='<div class=\\'image-placeholder\\'><i class=\\'ri-image-add-line\\'></i><span>图片加载失败</span></div>'">`;
+                        preview.innerHTML = `<img src="${url}" alt="预览" onerror="this.parentElement.innerHTML='<div class="image-placeholder"><span>图片加载失败</span></div>'">`;
                         preview.closest('.image-preview-container')?.classList.add('has-image');
                     } else {
-                        preview.innerHTML = '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>';
+                        preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
                         preview.closest('.image-preview-container')?.classList.remove('has-image');
                     }
                 });
@@ -1305,7 +1336,7 @@
             if (clearBtn && urlInput && preview) {
                 clearBtn.addEventListener('click', function() {
                     urlInput.value = '';
-                    preview.innerHTML = '<div class="image-placeholder"><i class="ri-image-add-line"></i><span>点击选择图片</span></div>';
+                    preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
                     preview.closest('.image-preview-container')?.classList.remove('has-image');
                 });
             }
@@ -1383,13 +1414,13 @@
                         const index = currentCount;
                         const itemHtml = `
                             <div class="array-item" data-index="${index}">
-                                <div class="array-item-handle"><i class="ri-draggable"></i></div>
+                                <div class="array-item-handle">${iconSvg('drag')}</div>
                                 <div class="array-item-content">
                                     <input type="text" class="form-control array-item-input" value="">
                                 </div>
                                 <div class="array-item-actions">
                                     <button type="button" class="btn btn-sm btn-outline-danger btn-remove-array-item">
-                                        <i class="ri-delete-bin-line"></i>
+                                        ${iconSvg('delete')}
                                     </button>
                                 </div>
                             </div>
@@ -1714,7 +1745,11 @@
     function renderSlotEmptyState(slot) {
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
-        const acceptCodes = slot.accept || [];
+        // 兼容 accept 为字符串（如 "footer-container" 或 "a,b,c"）或数组
+        const rawAccept = slot.accept;
+        const acceptCodes = Array.isArray(rawAccept)
+            ? rawAccept
+            : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
         const isExclusive = slot.exclusive === true || isExclusiveSlot(slotId, '');
         const isMultiple = slot.multiple === true;
         
@@ -2178,14 +2213,14 @@
             html += `<div class="input-group">
                 <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片URL">
                 <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}">
-                    <i class="ri-image-line"></i> 选择
+                    ${iconSvg('image')} 选择
                 </button>
             </div>`;
             if (value) {
                 html += `<div class="mt-2 image-preview-container">
                     <img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 100px;">
                     <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="document.getElementById('config_${key}').value='';this.parentElement.remove();">
-                        <i class="ri-delete-bin-line"></i>
+                        ${iconSvg('delete')}
                     </button>
                 </div>`;
             }
@@ -2193,7 +2228,7 @@
             html += `<div class="input-group">
                 <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="文件路径">
                 <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="config_${key}" data-accept="${escapeHtml(param.accept || '*')}">
-                    <i class="ri-folder-open-line"></i> 浏览
+                    ${iconSvg('folder')} 浏览
                 </button>
             </div>`;
         } else if (type === 'color') {
@@ -2341,7 +2376,7 @@
                 <div class="config-preview-area mb-3">
                     <label class="form-label">实时预览</label>
                     <div class="widget-preview-box" id="modalWidgetPreview">
-                        <div class="preview-loading"><i class="ri-loader-4-line spin"></i> 加载中...</div>
+                        <div class="preview-loading">${iconSvg('loader')} 加载中...</div>
                     </div>
                 </div>
                 <hr>
@@ -2355,7 +2390,7 @@
             formHtml += `
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" class="btn btn-primary flex-fill">
-                        <i class="ri-save-line"></i> 保存配置
+                        ${iconSvg('save')} 保存配置
                     </button>
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                         取消
@@ -2394,7 +2429,7 @@
             // T012: 使用静态预览提示代替实时 API 请求
             const previewBox = document.getElementById('modalWidgetPreview');
             if (previewBox) {
-                previewBox.innerHTML = '<div class="preview-static-hint"><i class="ri-eye-line"></i> 保存后预览更新</div>';
+                previewBox.innerHTML = '<div class="preview-static-hint">' + (iconSvg('eye') || '') + ' 保存后预览更新</div>';
             }
         }
     }
@@ -2568,14 +2603,22 @@
                         // 组装部件内容
                         wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + previewHtml + '</div>';
                         
-                        if (isExclusive) {
-                            // 独占模式：清空原内容，替换为新部件
+                        // 整块区域插槽（footer/header）：模板中整块 <footer>/<header> 带 data-wslot，
+                        // 若按独占清空会抹掉全部底部/顶部内容，导致“整块变白”。只追加到内部容器，绝不清空整块。
+                        const isContainerSlot = slotId === 'footer' || slotId === 'header' ||
+                            slotEl.querySelector('.footer-container, .header-container, .footer-inner, .header-inner');
+                        const widgetContainer = isContainerSlot
+                            ? (slotEl.querySelector('.footer-slot-widgets, .header-slot-widgets, .area-widgets, .slot-widgets') || slotEl)
+                            : slotEl;
+
+                        if (isExclusive && !isContainerSlot) {
+                            // 独占模式（且非整块区域）：清空插槽后替换为新部件
                             slotEl.innerHTML = '';
                             slotEl.appendChild(wrapper);
                         } else {
-                            // 非独占模式：移除占位符后追加新部件（保留已有部件）
-                            slotEl.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
-                            slotEl.appendChild(wrapper);
+                            // 非独占 或 整块区域插槽：只追加，保留原内容
+                            widgetContainer.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
+                            widgetContainer.appendChild(wrapper);
                         }
                         
                         // 绑定按钮事件（如果还没有绑定）
@@ -2857,13 +2900,16 @@
      */
     function isSlotAccepted(slot, widgetData) {
         const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
+        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
         const rejectAttr = slot.dataset.wslotReject || '';
-        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()) : [];
+        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
         const slotId = slot.dataset.wslot || slot.dataset.slot;
 
         const rejected = rejectCodes.includes(widgetData.type) || rejectCodes.includes(widgetData.code);
-        return !rejected && (
+        if (rejected) return false;
+        // 通配：accept="*" 表示接受任意部件
+        if (acceptCodes.includes('*')) return true;
+        return (
             (widgetData.slot && widgetData.slot === slotId) ||
             acceptCodes.includes(widgetData.code) ||
             acceptCodes.length === 0
@@ -2892,6 +2938,11 @@
             showToast('请先选择主题', 'warning');
             return null;
         }
+        if (state.saveInProgress) {
+            showToast('正在保存中，请稍候', 'info');
+            return null;
+        }
+        state.saveInProgress = true;
 
         const payload = {
             theme_id: state.themeId,
@@ -2937,7 +2988,9 @@
                 }
 
                 if (result.preview_html && layoutId) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, slotId);
+                    // 结构视图拖入时 slotId 可能为 null，用 area 推导插槽 ID，避免找不到插槽而整页刷新导致 footer 变白
+                    const targetSlotId = slotId ?? (area === 'footer' ? 'footer' : area === 'header' ? 'header' : null);
+                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, targetSlotId);
                 } else {
                     loadLayoutPreview();
                 }
@@ -2951,6 +3004,8 @@
             console.error('保存部件失败:', err);
             showToast('保存部件失败', 'error');
             return null;
+        } finally {
+            state.saveInProgress = false;
         }
     }
 
@@ -3140,6 +3195,7 @@
     function handleDrop(e) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation(); // 防止同一 drop 触发多次保存
 
         // 检查是否是插槽区域的放置（由 handleSlotDrop 处理）
         if (e.target.closest('[data-wslot], .container-slot, .slot-widgets')) return;
@@ -3262,6 +3318,7 @@
     function handleSlotDrop(e) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation(); // 防止同一 drop 触发多次保存
 
         const slot = resolveSlotElement(this);
         if (!slot) return;
@@ -3373,10 +3430,10 @@
                     </span>
                     <div class="widget-actions">
                         <button type="button" class="btn btn-sm btn-outline-primary btn-edit-widget" title="编辑">
-                            <i class="ri-edit-line"></i>
+                            ${iconSvg('edit')}
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-danger btn-delete-widget" title="删除">
-                            <i class="ri-delete-bin-line"></i>
+                            ${iconSvg('delete')}
                         </button>
                     </div>
                 </div>
@@ -4905,7 +4962,7 @@
 
         if (Object.keys(params).length === 0) {
             html += `<div class="config-empty-state">
-                <i class="ri-settings-3-line"></i>
+                ${iconSvg('settings')}
                 <p>该部件暂无可配置参数</p>
             </div>`;
         } else {
@@ -4957,7 +5014,7 @@
                     html += `<div class="input-group">
                         <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
                         <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
-                            <i class="ri-image-add-line"></i>
+                            ${iconSvg('image')}
                         </button>
                     </div>`;
                     if (value) {
@@ -4989,10 +5046,10 @@
         html += `
                     <div class="config-actions">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                            <i class="ri-close-line"></i> 取消
+                            ${iconSvg('close')} 取消
                         </button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="ri-save-line"></i> 保存配置
+                            ${iconSvg('save')} 保存配置
                         </button>
                     </div>
                 </form>
@@ -5070,7 +5127,7 @@
 
         if (Object.keys(params).length === 0) {
             html += `<div class="config-empty-state">
-                <i class="ri-settings-3-line"></i>
+                ${iconSvg('settings')}
                 <p>该部件暂无可配置参数</p>
             </div>`;
         } else {
@@ -5101,7 +5158,7 @@
                     html += `<div class="config-group">
                         <h5 class="config-group-title" onclick="this.parentElement.classList.toggle('collapsed')">
                             <i class="${groupIcon}"></i> ${escapeHtml(groupName)}
-                            <i class="ri-arrow-down-s-line toggle-icon"></i>
+                            ${iconSvg('arrowDown')}
                         </h5>
                         <div class="config-fields">`;
                 }
@@ -5154,7 +5211,7 @@
                         html += `<div class="input-group">
                             <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
                             <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
-                                <i class="ri-image-add-line"></i>
+                                ${iconSvg('image')}
                             </button>
                         </div>`;
                         if (value) {
@@ -5191,10 +5248,10 @@
         html += `
                     <div class="config-actions">
                         <button type="submit" class="btn btn-primary">
-                            <i class="ri-save-line"></i> 保存配置
+                            ${iconSvg('save')} 保存配置
                         </button>
                         <button type="button" class="btn btn-outline-danger btn-delete-config" data-layout-id="${widget.layout_id}" title="删除此部件">
-                            <i class="ri-delete-bin-line"></i> 删除
+                            ${iconSvg('delete')} 删除
                         </button>
                     </div>
                 </form>
@@ -6092,7 +6149,7 @@
         // 更新部件面板标题（如果有）
         const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
         if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `<i class="ri-apps-line"></i> 部件库 <span class="area-filter-badge" onclick="window.ThemeEditor?.deselectArea?.()">${areaName} <i class="ri-close-line" style="margin-left:4px;cursor:pointer;"></i></span>`;
+            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库 <span class="area-filter-badge" onclick="window.ThemeEditor?.deselectArea?.()">${areaName} ${iconSvg('close')}</span>`;
         }
 
         // 显示提示
@@ -6117,7 +6174,7 @@
         // 恢复部件面板标题
         const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
         if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `<i class="ri-apps-line"></i> 部件库`;
+            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库`;
         }
     }
 
@@ -6683,7 +6740,9 @@
 
         let html = '';
         for (const [slotId, slot] of Object.entries(slots)) {
-            const acceptTags = (slot.accept || []).map(code => 
+            const rawAccept = slot.accept;
+            const acceptArr = Array.isArray(rawAccept) ? rawAccept : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
+            const acceptTags = acceptArr.map(code =>
                 `<span>${escapeHtml(code)}</span>`
             ).join('');
 

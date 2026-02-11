@@ -373,13 +373,21 @@
      * 
      * @param {HTMLElement} slot - 带有 data-wslot 属性的插槽元素
      */
+    /** 带嵌套可编辑插槽的容器部件 code，这些部件内的 [data-wslot] 需要初始化为可拖放目标 */
+    var CONTAINER_WITH_NESTED_SLOTS = ['content-container', 'header-container', 'footer-container'];
+
     function initSingleSlot(slot) {
         // 防止重复初始化
         if (slot._editorSlotInitialized) return;
         
-        // 跳过 widget-content 内的嵌套 slot（这些是部件预览 HTML，不是实际可编辑插槽）
-        if (slot.closest('.widget-content') || slot.closest('.widget-wrapper')) return;
-        
+        // 部件预览（.widget-content）内的 slot：仅当外层是「带嵌套插槽的容器」时才初始化为可放置区，其余跳过
+        var inContent = slot.closest('.widget-content');
+        if (inContent) {
+            var wrapper = slot.closest('.widget-wrapper');
+            var code = (wrapper && wrapper.dataset && wrapper.dataset.widgetCode) || '';
+            if (CONTAINER_WITH_NESTED_SLOTS.indexOf(code) === -1) return;
+        }
+
         slot._editorSlotInitialized = true;
         
         // 添加选择按钮

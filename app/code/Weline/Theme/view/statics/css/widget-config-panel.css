@@ -1096,3 +1096,97 @@
     flex: 1;
     font-family: monospace;
 }
+
+/* ========================================
+   主题编辑器内表单控件（不依赖 Bootstrap）
+   form-control / array-item-input / input-group-text
+   ======================================== */
+
+.theme-editor-container .form-control,
+.theme-editor-container .array-item-input {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--te-text-primary, #1f2937);
+    background-color: var(--te-bg-card, #fff);
+    border: 1px solid var(--te-border, #d1d5db);
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+.theme-editor-container .form-control:focus,
+.theme-editor-container .array-item-input:focus {
+    border-color: var(--te-primary, #6366f1);
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.theme-editor-container .form-control::placeholder,
+.theme-editor-container .array-item-input::placeholder {
+    color: var(--te-text-tertiary, #9ca3af);
+}
+
+.theme-editor-container .array-item-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.theme-editor-container .input-group-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--te-text-secondary, #6b7280);
+    background: var(--te-bg-muted, #f3f4f6);
+    border: 1px solid var(--te-border, #d1d5db);
+    border-radius: 6px;
+}
+
+.theme-editor-container .input-group-text .te-icon {
+    display: inline-flex;
+    width: 1.25em;
+    height: 1.25em;
+}
+
+/* 内联 SVG 图标（不依赖图标字体） */
+.theme-editor-container .te-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -0.2em;
+}
+
+.theme-editor-container .te-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+
+/* 数组项一行布局（不依赖 Bootstrap） */
+.theme-editor-container .array-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.theme-editor-container .array-item-handle {
+    display: flex;
+    align-items: center;
+    cursor: grab;
+    color: var(--te-text-tertiary, #9ca3af);
+}
+
+.theme-editor-container .array-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.theme-editor-container .array-item-actions {
+    flex-shrink: 0;
+}

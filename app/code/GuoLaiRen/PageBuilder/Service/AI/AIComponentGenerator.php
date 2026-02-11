@@ -235,8 +235,54 @@ class AIComponentGenerator
      */
     public function previewTemplateContent(string $templateContent): array
     {
+        // 修复 AI 常见笔误（如 <4> 应为 <h4>、) 后缺分号导致 unexpected token if）
+        $templateContent = $this->fixCommonAiTyposInTemplate($templateContent);
+        // 移除「仅含 continue/break」的 PHP 块，避免 Fatal: 'continue' not in the 'loop' or 'switch' context（预览用模板可能未经过 FrameworkBuilder 清洗）
+        $templateContent = $this->stripInvalidContinueBreakInTemplate($templateContent);
         // 先进行基本的语法检查
         $syntaxCheck = $this->checkPHPSyntax($templateContent);
+        // 若仍报 continue/break 不在 loop 内，按错误行号替换该行为注释后重试一次
+        if (!$syntaxCheck['valid'] && preg_match("/'(?:continue|break)'\s+not\s+in\s+the\s+'loop'/i", $syntaxCheck['error'])) {
+            $lineNum = null;
+            if (preg_match('/on\s+line\s+(\d+)/i', $syntaxCheck['error'], $m)) {
+                $lineNum = (int) $m[1];
+            } elseif (preg_match('/\s+(\d+)\s*$/i', $syntaxCheck['error'], $m)) {
+                $lineNum = (int) $m[1];
+            }
+            if ($lineNum !== null && $lineNum >= 1) {
+                $templateContent = $this->replaceContinueBreakLineByNumber($templateContent, $lineNum);
+                $syntaxCheck = $this->checkPHPSyntax($templateContent);
+            }
+        }
+        // 若报 unexpected token "if"，多为 ) 后缺分号，多次尝试修复后重试
+        if (!$syntaxCheck['valid'] && preg_match('/unexpected\s+token\s+[\'"]?if[\'"]?/i', $syntaxCheck['error'])) {
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $fixed = $this->fixUnexpectedTokenIf($templateContent);
+                if ($fixed === $templateContent) {
+                    break;
+                }
+                $templateContent = $fixed;
+                $syntaxCheck = $this->checkPHPSyntax($templateContent);
+                if ($syntaxCheck['valid']) {
+                    break;
+                }
+            }
+            if (!$syntaxCheck['valid']) {
+                $lineNum = null;
+                if (preg_match('/on\s+line\s+(\d+)/i', $syntaxCheck['error'], $m)) {
+                    $lineNum = (int) $m[1];
+                }
+                for ($tryLine = 0; $tryLine < 3 && !$syntaxCheck['valid'] && $lineNum !== null && $lineNum > 1; $tryLine++) {
+                    $templateContent = $this->ensureSemicolonBeforeLine($templateContent, $lineNum);
+                    $syntaxCheck = $this->checkPHPSyntax($templateContent);
+                    if (!$syntaxCheck['valid'] && preg_match('/on\s+line\s+(\d+)/i', $syntaxCheck['error'], $m2)) {
+                        $lineNum = (int) $m2[1];
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
         if (!$syntaxCheck['valid']) {
             return [
                 'success' => false,
@@ -245,7 +291,7 @@ class AIComponentGenerator
             ];
         }
         
-        // 渲染预览
+        // 渲染预览（使用清洗后的内容）
         try {
             // 创建模拟渲染器
             $renderer = new PreviewRenderer();
@@ -282,14 +328,129 @@ class AIComponentGenerator
         
         if ($returnCode !== 0) {
             $errorOutput = implode("\n", $output);
-            // 提取错误信息
-            if (preg_match('/(?:Parse|Syntax) error[^:]*:\s*(.+?)\s+in\s+/i', $errorOutput, $matches)) {
-                return ['valid' => false, 'error' => $matches[1]];
-            }
-            return ['valid' => false, 'error' => $errorOutput];
+            // 保留完整错误信息（含 " in file on line N"），便于按行号修复
+            return ['valid' => false, 'error' => trim($errorOutput)];
         }
         
         return ['valid' => true, 'error' => ''];
+    }
+    
+    /**
+     * 从完整模板中移除「仅含 continue/break」的 PHP 块，避免 Fatal: 'continue' not in the 'loop' or 'switch' context。
+     * 预览用模板可能来自 refine/直接代码，未经过 FrameworkBuilder::sanitizeAiData，故在此做防御性清洗。
+     *
+     * @param string $code 完整 phtml 源码
+     * @return string 清洗后的源码
+     */
+    /**
+     * 修复 AI 生成模板中的常见笔误，避免预览语法错误与显示错误
+     * - <4> 修正为 <h4>（AI 常把 h4 误写成 4）
+     * - 行末 ) 后紧跟换行再 if ( 时在 ) 后补分号，避免 unexpected token "if"
+     *
+     * @param string $code 完整 phtml 源码
+     * @return string 修复后的源码
+     */
+    private function fixCommonAiTyposInTemplate(string $code): string
+    {
+        // <4> 且后面是 <?= 或 </h4> 的，视为 <h4> 笔误（AI 常把 h4 写成 4）
+        $code = preg_replace('/<4>(?=\s*<\?=|\s*<\/h4>)/i', '<h4>', $code);
+        // 跨行：上一行未以 ; } { : , 结尾且下一行以 if ( 开头 → 在上一行末补 ;（覆盖 ) 或 >5 等漏写分号导致 unexpected token "if"）
+        $lines = explode("\n", $code);
+        $i = 0;
+        while ($i < count($lines) - 1) {
+            $trimmed = rtrim($lines[$i]);
+            $next = isset($lines[$i + 1]) ? $lines[$i + 1] : '';
+            $nextTrim = trim($next);
+            $nextStartsWithIf = $nextTrim !== '' && (preg_match('/^\s*if\s*\(/i', $nextTrim) || preg_match('/^\s*<\?php\s+if\s*\(/i', $nextTrim));
+            // 已以 ; } { : , 结尾的无需补；以 ] 或数字等结尾且下一行 if 时也补（如 $_hasValidJs = ... > 5 漏写分号）
+            $lineEndsStatement = preg_match('/[;{}:,]\s*$/', $trimmed);
+            if ($trimmed !== '' && $nextTrim !== ''
+                && !$lineEndsStatement
+                && $nextStartsWithIf) {
+                $lines[$i] = rtrim($lines[$i]) . ';';
+            }
+            $i++;
+        }
+        return implode("\n", $lines);
+    }
+    
+    private function stripInvalidContinueBreakInTemplate(string $code): string
+    {
+        // 匹配 <?php 或 <? 后仅含空白 + continue/break（可选层级）+ ; + 空白 + ?> 的整块，支持多行
+        $code = preg_replace(
+            '/<\?(?:php\s+)?\s*(?:continue|break)(?:\s+\d+)?\s*;\s*\?>/i',
+            '<?php /* continue/break removed */ ?>',
+            $code
+        );
+        return $code;
+    }
+    
+    /**
+     * 按行号替换仅含 continue/break 的那一行为注释（用于语法报错时的兜底修复）
+     *
+     * @param string $code 完整源码
+     * @param int $lineNum 行号（从 1 计）
+     * @return string 替换后的源码
+     */
+    private function replaceContinueBreakLineByNumber(string $code, int $lineNum): string
+    {
+        $lines = explode("\n", $code);
+        $idx = $lineNum - 1;
+        if ($idx < 0 || $idx >= count($lines)) {
+            return $code;
+        }
+        $trimmed = trim($lines[$idx]);
+        if ($trimmed === '' || $trimmed === ';') {
+            return $code;
+        }
+        if (preg_match('/^\s*(?:continue|break)(?:\s+\d+)?\s*;\s*$/i', $trimmed)) {
+            $lines[$idx] = preg_replace('/^(\s*)(.*)$/', '$1/* continue/break removed */', $lines[$idx]);
+            return implode("\n", $lines);
+        }
+        return $code;
+    }
+    
+    /**
+     * 尝试修复「unexpected token "if"」：) 后紧跟 if 时在 ) 后补分号
+     *
+     * @param string $code 完整源码
+     * @return string 修复后的源码（无改动则返回原串）
+     */
+    private function fixUnexpectedTokenIf(string $code): string
+    {
+        // ) 后紧跟 if (：在 ) 后补分号
+        $code = (string) preg_replace('/\)(\s*)if\s*\(/i', ');$1if (', $code);
+        // 数字后紧跟 if (：如 ... > 5 if ($_hasValidJs) 漏写分号，在数字后补 ;
+        $code = (string) preg_replace('/(\d)(\s*)if\s*\(/i', '$1;$2if (', $code);
+        return $code;
+    }
+    
+    /**
+     * 在指定行（通常为报错行）的上一行末尾补分号（若该行未以 ; } { 结尾），用于修复 unexpected token
+     *
+     * @param string $code 完整源码
+     * @param int $lineNum 报错行号（从 1 计），会在 lineNum-1 行末补 ;
+     * @return string 修复后的源码
+     */
+    private function ensureSemicolonBeforeLine(string $code, int $lineNum): string
+    {
+        $lines = explode("\n", $code);
+        $idx = $lineNum - 2; // 上一行
+        if ($idx < 0 || $idx >= count($lines)) {
+            return $code;
+        }
+        $line = $lines[$idx];
+        $trimmed = rtrim($line);
+        if ($trimmed === '') {
+            return $code;
+        }
+        $last = substr($trimmed, -1);
+        if ($last === ';' || $last === '}' || $last === '{' || $last === ':' || $last === ',') {
+            return $code;
+        }
+        // 上一行以字母/数字/) 等结尾，可能缺分号
+        $lines[$idx] = rtrim($line) . ';';
+        return implode("\n", $lines);
     }
     
     /**
@@ -303,11 +464,14 @@ class AIComponentGenerator
     {
         $errorHtml = $error ? '<p style="color:#dc3545;margin-top:10px;font-size:12px;">' . htmlspecialchars($error) . '</p>' : '';
         
-        // 尝试提取组件名称
-        $name = '组件';
+        // 尝试提取组件名称（默认根据当前语言生成预置文本）
+        $name = __('Component');
         if (preg_match('/name:\s*([^\n]+)/', $code, $matches)) {
             $name = trim($matches[1]);
         }
+        
+        $msgFailed = __('Component code generated, but preview failed to render');
+        $msgHint = __('You can continue to refine or save the component directly');
         
         return <<<HTML
 <!DOCTYPE html>
@@ -338,8 +502,8 @@ class AIComponentGenerator
     <div class="preview-placeholder">
         <div class="icon">🎨</div>
         <h3>{$name}</h3>
-        <p>组件代码已生成，但预览渲染失败</p>
-        <p style="font-size: 12px; opacity: 0.7;">您可以继续微调或直接保存组件</p>
+        <p>{$msgFailed}</p>
+        <p style="font-size: 12px; opacity: 0.7;">{$msgHint}</p>
         {$errorHtml}
     </div>
 </body>

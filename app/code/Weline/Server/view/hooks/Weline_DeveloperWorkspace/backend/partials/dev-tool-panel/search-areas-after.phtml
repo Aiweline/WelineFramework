@@ -2,12 +2,17 @@
 /**
  * Weline_Server - 开发工具面板扩展搜索区与 WLS 加载逻辑
  * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::search-areas-after
- * 本模块自行判断是否为 WLS 模式，仅在此标签下且需展示时才请求并渲染。
+ * 仅 WLS 模式下输出 WLS 区块与脚本，非 WLS 时不渲染、不请求 /_wls/health。
  *
  * @hook-priority 200
  * @hook-sort-order 0
  * @hook-solo false
  */
+use Weline\Framework\Runtime\Runtime;
+
+if (!Runtime::isWls()) {
+    return;
+}
 ?>
 <!-- WLS 扩展：搜索区 -->
 <div id="dev-tool-search-area-wls" style="display: none;">
