@@ -183,12 +183,35 @@ class AiComponent extends BackendController
     }
     
     /**
+     * 根据 refine_token 从临时文件加载模板内容（微调时只传 token 不传整份代码）
+     * 使用后删除临时文件并从 session 移除
+     */
+    private function resolveTemplateContentFromRefineToken(array $body): string
+    {
+        $refineToken = $body['refine_token'] ?? '';
+        if ($refineToken === '') {
+            return $body['template_content'] ?? '';
+        }
+        $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
+        $entry = $paths[$refineToken] ?? null;
+        if (!$entry || empty($entry['path']) || !is_file($entry['path'])) {
+            return $body['template_content'] ?? '';
+        }
+        $content = file_get_contents($entry['path']);
+        @unlink($entry['path']);
+        unset($paths[$refineToken]);
+        $this->session->setData('pagebuilder_refine_paths', $paths);
+        return $content !== false ? $content : ($body['template_content'] ?? '');
+    }
+
+    /**
      * API: 微调 AI 组件
      * POST /backend/visual/api/ai-component/refine
      * 
      * 请求参数：
-     * - template_content: 现有组件代码（必填）
-     * - adjustment_prompt: 调整提示词（必填，如：颜色改为蓝色、字体加大等）
+     * - refine_token: 生成完成时返回的临时模板引用（与 template_content 二选一）
+     * - template_content: 现有组件代码（无 refine_token 时必填）
+     * - adjustment_prompt: 调整提示词（必填）
      * - category: 组件分类（可选）
      * - code: 组件代码（可选）
      */
@@ -198,12 +221,12 @@ class AiComponent extends BackendController
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
-            $templateContent = $body['template_content'] ?? '';
+            $templateContent = $this->resolveTemplateContentFromRefineToken($body);
             $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
             $category = $body['category'] ?? 'content';
             
             if (empty($templateContent)) {
-                throw new \Exception('请提供现有组件代码');
+                throw new \Exception('请提供现有组件代码或有效的 refine_token');
             }
             
             if (empty($adjustmentPrompt)) {
@@ -232,13 +255,16 @@ class AiComponent extends BackendController
             
             $newTemplateContent = $result->getTemplateContent();
             $componentCode = $body['code'] ?? '';
-            $previewHtml = '';
-            $previewSuccess = false;
-            $previewError = '';
             
-            // 如果有组件代码，更新数据库记录和实体文件，然后用系统组件预览接口渲染
+            // 预览必须走 previewTemplateContent（对模板做漏分号等修复 + 语法检查），否则 AI 漏写分号会直接报错
+            // renderPreview 从文件渲染且不抛异常只返回错误 HTML，会导致永远不走修复逻辑
+            $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
+            $previewHtml = $previewResult['html'] ?? '';
+            $previewSuccess = $previewResult['success'] ?? false;
+            $previewError = $previewResult['error'] ?? '';
+            
+            // 持久化：更新数据库和实体文件（与预览分离，预览已用上面结果）
             if (!empty($componentCode)) {
-                // 查找数据库中的组件记录
                 $componentModel = ObjectManager::getInstance(Component::class);
                 $existing = clone $componentModel;
                 $existing->clear()
@@ -248,38 +274,14 @@ class AiComponent extends BackendController
                     ->fetch();
                 
                 if ($existing->getId()) {
-                    // 更新模板内容
                     if (method_exists($existing, 'setTemplateContent')) {
                         $existing->setTemplateContent($newTemplateContent);
                     } else {
                         $existing->setData(Component::fields_TEMPLATE_CONTENT, $newTemplateContent);
                     }
                     $existing->save();
-                    
-                    // 同步实体文件
                     $this->entityFileManager->syncEntityFile($existing);
-                    
-                    // 用系统组件预览接口渲染（和正式组件一致）
-                    try {
-                        $html = $this->componentService->renderPreview(
-                            $componentCode,
-                            [],
-                            Component::STYLE_CODE_AI_GENERATED
-                        );
-                        $previewHtml = $html;
-                        $previewSuccess = true;
-                    } catch (\Throwable $e) {
-                        $previewError = $e->getMessage();
-                    }
                 }
-            }
-            
-            // 兜底：如果组件预览失败，用旧的 PreviewRenderer
-            if (!$previewSuccess) {
-                $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
-                $previewHtml = $previewResult['html'] ?? '';
-                $previewSuccess = $previewResult['success'] ?? false;
-                $previewError = $previewResult['error'] ?? '';
             }
             
             return $this->fetchJson([
@@ -325,12 +327,12 @@ class AiComponent extends BackendController
                 }
             }
 
-            $templateContent = $body['template_content'] ?? '';
+            $templateContent = $this->resolveTemplateContentFromRefineToken($body);
             $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
             $category = $body['category'] ?? 'content';
 
             if (empty($templateContent)) {
-                $sse->sendEvent('error', ['message' => __('请提供模板内容')]);
+                $sse->sendEvent('error', ['message' => __('请提供模板内容或有效的 refine_token')]);
                 $sse->close();
                 return;
             }
@@ -370,9 +372,12 @@ class AiComponent extends BackendController
 
             $newTemplateContent = $result->getTemplateContent();
             $componentCode = $body['code'] ?? '';
-            $previewHtml = '';
-            $previewSuccess = false;
-            $previewError = '';
+
+            // 预览一律走 previewTemplateContent（修复漏分号等），与 postRefine 一致
+            $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
+            $previewHtml = $previewResult['html'] ?? '';
+            $previewSuccess = $previewResult['success'] ?? false;
+            $previewError = $previewResult['error'] ?? '';
 
             if (!empty($componentCode)) {
                 $componentModel = ObjectManager::getInstance(Component::class);
@@ -391,26 +396,7 @@ class AiComponent extends BackendController
                     }
                     $existing->save();
                     $this->entityFileManager->syncEntityFile($existing);
-
-                    try {
-                        $html = $this->componentService->renderPreview(
-                            $componentCode,
-                            [],
-                            Component::STYLE_CODE_AI_GENERATED
-                        );
-                        $previewHtml = $html;
-                        $previewSuccess = true;
-                    } catch (\Throwable $e) {
-                        $previewError = $e->getMessage();
-                    }
                 }
-            }
-
-            if (!$previewSuccess) {
-                $previewResult = $this->generator->previewTemplateContent($newTemplateContent);
-                $previewHtml = $previewResult['html'] ?? '';
-                $previewSuccess = $previewResult['success'] ?? false;
-                $previewError = $previewResult['error'] ?? '';
             }
 
             $sse->sendEvent('complete', [
@@ -447,9 +433,9 @@ class AiComponent extends BackendController
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
             
-            // 如果直接提供了模板内容，使用它进行预览
+            // 如果直接提供了模板内容，必须走 previewTemplateContent（含漏分号等修复 + 语法检查），避免 unexpected token "if" 等
             if (!empty($body['template_content'])) {
-                $previewResult = $this->renderTemplateContent($body['template_content']);
+                $previewResult = $this->generator->previewTemplateContent($body['template_content']);
                 return $this->fetchJson($previewResult);
             }
             

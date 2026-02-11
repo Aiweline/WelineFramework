@@ -40,6 +40,9 @@ class SlotRendererService
     // 孤儿部件（找不到对应slot的部件）
     private array $orphanWidgets = [];
 
+    /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
+    private array $filledSlotIdsThisRun = [];
+
     public function __construct(
         ThemeLayoutService $layoutService,
         WidgetRegistry $widgetRegistry,
@@ -92,6 +95,7 @@ class SlotRendererService
         }
 
         // 使用 DOM 解析处理插槽（更可靠）
+        $this->filledSlotIdsThisRun = [];
         $html = $this->processSlotsWithDom($html, $slotWidgets);
 
         return $html;
@@ -248,6 +252,8 @@ class SlotRendererService
 
     /**
      * 处理单个插槽元素
+     * 同一 slot_id 在整棵 DOM 中只填充第一处出现，避免容器部件（如 content-container）
+     * 放入 hero 后，其内部输出的同名 widget-hero 被再次填充导致布局泄露或重复。
      */
     private function processSlotElement(\DOMElement $slot, array $slotWidgets, \DOMDocument $doc): void
     {
@@ -255,6 +261,12 @@ class SlotRendererService
         if (!$slotId) {
             return;
         }
+
+        // 该 slot_id 已在本轮被占用（文档中第一处），跳过后续同名插槽
+        if (isset($this->filledSlotIdsThisRun[$slotId])) {
+            return;
+        }
+        $this->filledSlotIdsThisRun[$slotId] = true;
 
         // 获取插槽配置
         $isExclusive = $slot->getAttribute('data-wslot-exclusive') === 'true';
@@ -297,10 +309,12 @@ class SlotRendererService
         //  - exclusive / 默认（无 append/prepend）：清空默认内容 → 替换为部件
         //  - prepend="true"：保留默认内容，部件插到前面
         //  - append="true"：保留默认内容，部件追加到后面
+        //  - footer/header 整块区域插槽：强制追加，避免清空导致整块变白
         //
         // 原则：插槽的默认 HTML 只是"没有部件时的回退内容"，
         //       一旦有部件被分配给该插槽，默认内容就应该被替换掉。
         //       只有显式声明 append/prepend 的插槽才会同时保留默认内容和部件。
+        $isAreaContainerSlot = $slotId === 'footer' || $slotId === 'header';
         if ($isPrepend) {
             // 前置模式：保留默认内容，部件插到前面
             if ($slot->firstChild) {
@@ -308,8 +322,9 @@ class SlotRendererService
             } else {
                 $slot->appendChild($fragment);
             }
-        } elseif ($isAppend) {
-            // 追加模式（显式声明）：保留默认内容，部件追加到后面
+        } elseif ($isAppend || $isAreaContainerSlot) {
+            // 追加模式（显式声明 或 整块区域插槽）：保留默认内容，部件追加到后面
+            // footer/header 整块标记了 data-wslot 时，不能清空整块，否则整页预览会整块变白
             $this->removePlaceholderContent($slot);
             $slot->appendChild($fragment);
         } else {

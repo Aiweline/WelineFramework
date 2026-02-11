@@ -106,7 +106,7 @@ class FrameworkBuilder
             return "<?php\n// unknown category: {$category}\n?>\n";
         }
         $framework = $this->loadFramework($category);
-        // 首个 ?> 之前为初始 PHP 块（含变量定义与 try{ {{PHP_VARIABLES}} }）
+        // 首个 PHP 结束标签之前为初始 PHP 块（含变量定义与 try{ {{PHP_VARIABLES}} }）
         $closeTag = '?>';
         $pos = strpos($framework, $closeTag);
         if ($pos === false) {
@@ -168,9 +168,9 @@ class FrameworkBuilder
         // 1. 预处理AI数据 - 移除危险内容
         $aiData = $this->sanitizeAiData($aiData);
         
-        // 兜底：content 组件必须有基础 HTML
+        // 兜底：content 组件必须有基础 HTML（根据当前语言生成预置文本）
         if ($category === 'content' && (empty($aiData['html_content']) || !is_string($aiData['html_content']))) {
-            $aiData['html_content'] = '<div class="ai-empty">AI content placeholder</div>';
+            $aiData['html_content'] = '<div class="ai-empty">' . __('AI content placeholder') . '</div>';
         }
         
         // 2. 验证每个字段
@@ -232,19 +232,13 @@ class FrameworkBuilder
      */
     private function sanitizeAiData(array $data): array
     {
-        // 清理 HTML 相关字段中的 PHP 标签（防止短标签触发语法错误）
-        $htmlKeys = [
-            'html_content',
-            'html_extra',
-            'html_extra_column',
-            'footer_extra_text',
-        ];
+        // HTML 相关字段会作为模板执行；移除「仅含 continue/break」的 PHP 块（含 continue N;/break N;、多行），避免 Fatal: 'continue' not in the 'loop' or 'switch' context
+        $htmlKeys = ['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'];
         foreach ($htmlKeys as $key) {
             if (isset($data[$key]) && is_string($data[$key])) {
-                $data[$key] = str_replace(['<?', '?>'], ['&lt;?', '?&gt;'], $data[$key]);
+                $data[$key] = preg_replace('/<\?(?:php\s+)?\s*(?:continue|break)(?:\s+\d+)?\s*;\s*\?>/i', '<?php /* continue/break removed */ ?>', $data[$key]);
             }
         }
-        
         // 移除所有字段中的反引号
         foreach ($data as $key => $value) {
             if (is_string($value)) {
@@ -252,11 +246,11 @@ class FrameworkBuilder
             }
         }
         
-        // 清理 php_variables 中的 PHP 标签
+        // 清理 php_variables：仅允许简单赋值，禁止控制结构
         if (isset($data['php_variables']) && is_string($data['php_variables'])) {
             $pv = $data['php_variables'];
             if (strpos($pv, '{') !== false || strpos($pv, '}') !== false) {
-                // php_variables 仅允许简单赋值（$var = ...;），禁止大括号。含大括号时只保留不含 { } 的行，避免生成无效 PHP 导致 Unclosed '{' on line N
+                // 禁止大括号，只保留不含 { } 的行
                 $lines = explode("\n", $pv);
                 $safe = [];
                 foreach ($lines as $line) {
@@ -267,11 +261,22 @@ class FrameworkBuilder
                 $data['php_variables'] = implode("\n", $safe);
             }
             $pv = $data['php_variables'];
-            // 移除所有 PHP 开始标签（不仅仅是开头的）
+            // 移除 continue/break：php_variables 注入在 try 块内无 loop/switch，会导致 Fatal error: 'continue' not in the 'loop' or 'switch' context
+            $lines = explode("\n", $pv);
+            $safe = [];
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if (preg_match('/^\s*continue\s*(;\s*|\s+\d+\s*;?\s*)$/i', $trimmed)
+                    || preg_match('/^\s*break\s*(;\s*|\s+\d+\s*;?\s*)$/i', $trimmed)) {
+                    continue;
+                }
+                $safe[] = $line;
+            }
+            $data['php_variables'] = implode("\n", $safe);
+            $pv = $data['php_variables'];
+            // 移除所有 PHP 开始/结束标签
             $pv = preg_replace('/<\?(?:php)?\s*/i', '', $pv);
-            // 移除所有 PHP 结束标签（不仅仅是结尾的）- 这非常重要，否则会破坏模板结构
             $pv = preg_replace('/\s*\?>\s*/', '', $pv);
-            // 检查并修复不平衡的控制结构（仅针对 if/foreach 等，不再含 { }）
             $data['php_variables'] = $this->balanceControlStructures($pv);
         }
         
@@ -441,6 +446,14 @@ class FrameworkBuilder
         foreach ($pvLines as $line) {
             if (strpos($line, '{') === false && strpos($line, '}') === false) {
                 $pvSafe[] = $line;
+            }
+        }
+        // 注入 try { {{PHP_VARIABLES}} } 时，末行若以 ) 或 ] 结尾且无分号，补分号，避免下一 token 为 } 或 if 时报 unexpected token
+        if (!empty($pvSafe)) {
+            $lastIdx = count($pvSafe) - 1;
+            $last = rtrim($pvSafe[$lastIdx]);
+            if ($last !== '' && !preg_match('/;\s*$/', $last)) {
+                $pvSafe[$lastIdx] = rtrim($pvSafe[$lastIdx]) . ';';
             }
         }
         $replacements['PHP_VARIABLES'] = implode("\n", $pvSafe);
@@ -644,118 +657,14 @@ class FrameworkBuilder
     public function getFrameworkPromptGuide(string $category): string
     {
         $category = strtolower($category);
-        // #region agent log
-        @file_put_contents((defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log', json_encode(['hypothesisId' => 'H4', 'location' => 'FrameworkBuilder::getFrameworkPromptGuide', 'message' => 'entry', 'data' => ['category' => $category], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
-        $commonRules = <<<'RULES'
-
-【重要 - 框架已提供的变量，不要重复定义】
-- $page, $config, $componentConfig, $styleSettings - 数据变量
-- $getConfig - 配置读取函数
-- $componentId - 组件唯一ID
-- $showLogo, $showNav, $showCta, $navItems 等 - Header框架变量
-- $title, $subtitle, $description 等 - Content框架变量
-
-【重要 - php_variables 格式要求】
-- 只用于定义简单变量，如：$myVar = $getConfig('key', 'default');
-- 每行必须是完整的语句，以分号结尾
-- 禁止包含 PHP 开始或结束标签
-- 禁止使用 if/foreach/for/while 等控制结构
-- 禁止定义函数或类
-- 如果不需要额外变量，php_variables 应该为空字符串
-
-【重要 - js_content 格式要求】
-- 只提供组件内部的JavaScript逻辑代码
-- 框架已提供 component 变量指向组件DOM元素
-- 不要包含 document.addEventListener('DOMContentLoaded', ...)
-- 不要包含 (function(){...})() 自执行函数包装
-- 直接写操作 component 元素的代码即可
-- 禁止使用任何 PHP 标签
-- js_content 必须是纯 JavaScript，不能混合 PHP 代码
-- 字符串引号必须成对且正确转义：推荐统一使用双引号，避免单引号冲突；如必须用单引号，内部单引号必须转义
-- 禁止在 js_content 中使用 $componentId 或 "# $componentId" 这样的 PHP 变量，请使用 component / component.id
-
-【正确的 js_content 示例】
-```
-const buttons = component.querySelectorAll('.btn');
-buttons.forEach(btn => {
-    btn.addEventListener('click', () => btn.classList.toggle('active'));
-});
-
-// 如需使用配置值，通过 data-* 属性获取
-const config = JSON.parse(component.dataset.config || '{}');
-```
-
-【错误的 js_content 示例 - 绝对不要这样写】
-```
-// 错误1：不要使用 DOMContentLoaded 包装
-document.addEventListener('DOMContentLoaded', function() { });
-
-// 错误2：不要在 JS 中嵌入服务端代码
-if (serverVar) { }  // 禁止在JS中使用服务端变量
-
-// 错误3：单引号不转义
-const text = 'I'm broken';
-```
-RULES;
-
-        $guides = [
-            'header' => <<<'GUIDE'
-## Header 组件框架 — 返回 JSON 格式
-
-框架已包含：Logo 区域、导航链接循环、CTA 按钮、汉堡菜单、Flex 布局、基础颜色。
-你负责用 css_extra 增强视觉（渐变背景、hover 动画、阴影、滚动效果），用 js_content 实现交互（滚动固定、菜单展开动画）。
-
-```json
-{
-    "extra_fields": "额外配置字段（可选）",
-    "php_variables": "额外 PHP 变量（可选）",
-    "css_extra": "增强样式（必填！— 让 header 看起来专业美观）",
-    "html_extra": "额外装饰 HTML（可选 — 禁止输出导航或 Logo）",
-    "js_content": "交互逻辑（可选 — 滚动固定、移动端菜单等）"
-}
-```
-GUIDE,
-            
-            'content' => <<<'GUIDE'
-## Content 组件框架 — 返回 JSON 格式
-
-框架已包含：标题/副标题/描述头部、背景色、容器布局。
-你负责用 html_content 实现核心内容（卡片、FAQ、画廊等），用 css_extra 写样式。
-
-```json
-{
-    "extra_fields": "额外配置字段（可选）",
-    "php_variables": "额外 PHP 变量（可选）",
-    "css_extra": "CSS 样式（必填）",
-    "css_responsive": "移动端样式（可选）",
-    "html_content": "核心内容 HTML（必填！— 放在 .ai-content-body 内）",
-    "js_content": "交互逻辑（可选）"
-}
-```
-GUIDE,
-            
-            'footer' => <<<'GUIDE'
-## Footer 组件框架 — 返回 JSON 格式
-
-框架已包含：品牌 Logo/描述、两列链接、社交图标、版权信息、Grid 布局。
-你负责用 css_extra 增强视觉，用 html_extra_column 添加第三列链接，用 html_extra 添加附加内容（如订阅表单）。
-
-```json
-{
-    "extra_fields": "额外配置字段（可选）",
-    "php_variables": "额外 PHP 变量（可选）",
-    "css_extra": "增强样式（必填！）",
-    "html_extra_column": "额外链接列 HTML（可选）",
-    "html_extra": "附加内容（可选 — 如订阅表单）",
-    "footer_extra_text": "底部额外文字（可选）",
-    "js_content": "交互逻辑（可选）"
-}
-```
-GUIDE,
-        ];
-        
-        $guide = $guides[$category] ?? $guides['content'];
+        $guideDir = __DIR__ . DIRECTORY_SEPARATOR . 'prompt_guides' . DIRECTORY_SEPARATOR;
+        $commonRulesFile = $guideDir . 'common_rules.md';
+        $commonRules = is_file($commonRulesFile) ? file_get_contents($commonRulesFile) : '';
+        $guideFile = $guideDir . $category . '.md';
+        if (!is_file($guideFile)) {
+            $guideFile = $guideDir . 'content.md';
+        }
+        $guide = is_file($guideFile) ? file_get_contents($guideFile) : '';
         return $guide . "\n" . $commonRules;
     }
     
