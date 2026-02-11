@@ -1218,27 +1218,58 @@ class ThemeEditor extends BackendController
 
     /**
      * 从 HTML 中提取插槽信息
+     * 同时支持旧格式（widget-slot-area + data-slot-id）和新格式（data-wslot），
+     * 否则 footer/header 等仅使用 data-wslot 的插槽不会被返回，导致 footer 布局异常。
      */
     private function extractSlots(string $html): array
     {
         $slots = [];
-        
-        // 使用正则表达式提取所有 widget-slot-area 元素的属性
+
+        // 1. 新格式：data-wslot（header、footer 及子插槽 footer-links 等均用此格式）
+        if (strpos($html, 'data-wslot') !== false) {
+            $doc = new \DOMDocument();
+            libxml_use_internal_errors(true);
+            $htmlForDom = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+            @$doc->loadHTML($htmlForDom, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            libxml_clear_errors();
+            $xpath = new \DOMXPath($doc);
+            foreach ($xpath->query("//*[@data-wslot]") ?: [] as $element) {
+                if (!$element instanceof \DOMElement) {
+                    continue;
+                }
+                $slotId = $element->getAttribute('data-wslot');
+                if ($slotId === '') {
+                    continue;
+                }
+                $acceptAttr = $element->getAttribute('data-wslot-accept') ?: $element->getAttribute('data-slot-accept') ?: '';
+                $slots[$slotId] = [
+                    'id' => $slotId,
+                    'name' => $element->getAttribute('data-wslot-name') ?: $element->getAttribute('data-slot-name') ?: $slotId,
+                    'accept' => array_values(array_filter(array_map('trim', explode(',', $acceptAttr)))),
+                    'exclusive' => ($element->getAttribute('data-wslot-exclusive') ?: $element->getAttribute('data-slot-exclusive')) === 'true',
+                    'multiple' => ($element->getAttribute('data-wslot-multiple') ?: $element->getAttribute('data-slot-multiple')) !== 'false',
+                    'position' => $element->getAttribute('data-wslot-position') ?: $element->getAttribute('data-slot-position') ?: '',
+                ];
+            }
+        }
+
+        // 2. 旧格式：widget-slot-area + data-slot-id（不覆盖已从 data-wslot 提取的插槽）
         $pattern = '/<[^>]+class="[^"]*widget-slot-area[^"]*"[^>]*data-slot-id="([^"]+)"[^>]*>/i';
-        
         if (preg_match_all($pattern, $html, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $fullTag = $match[0];
                 $slotId = $match[1];
-                
-                // 提取其他属性
+                if (isset($slots[$slotId])) {
+                    continue;
+                }
                 $slot = ['id' => $slotId];
-                
                 if (preg_match('/data-slot-name="([^"]+)"/', $fullTag, $m)) {
                     $slot['name'] = $m[1];
                 }
                 if (preg_match('/data-slot-accept="([^"]+)"/', $fullTag, $m)) {
-                    $slot['accept'] = explode(',', $m[1]);
+                    $slot['accept'] = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
+                } else {
+                    $slot['accept'] = [];
                 }
                 if (preg_match('/data-slot-position="([^"]+)"/', $fullTag, $m)) {
                     $slot['position'] = $m[1];
@@ -1246,11 +1277,10 @@ class ThemeEditor extends BackendController
                 if (preg_match('/data-slot-multiple="([^"]+)"/', $fullTag, $m)) {
                     $slot['multiple'] = $m[1] === 'true';
                 }
-                
                 $slots[$slotId] = $slot;
             }
         }
-        
+
         return $slots;
     }
 

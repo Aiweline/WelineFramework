@@ -1124,8 +1124,8 @@ class AiGenerate extends BackendController
             
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim($input['name'] ?? '');
-            $description = trim($input['description'] ?? '');
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
@@ -1269,8 +1269,37 @@ class AiGenerate extends BackendController
             // 验证组件
             $componentValidation = $this->validateGeneratedComponent($component, $styleCode);
             
+            // #region agent log（定位 Unclosed '{' on line 103：记录即将渲染的 phtml 片段）
+            $phtmlLines = explode("\n", $phtmlCode);
+            $totalLines = count($phtmlLines);
+            $snippet = array_slice($phtmlLines, 97, 16);
+            $entry = json_encode(['when' => 'before_preview', 'totalLines' => $totalLines, 'lines98to113' => $snippet, 'timestamp' => (int)(microtime(true) * 1000)]) . "\n";
+            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', $entry, FILE_APPEND | LOCK_EX);
+            $wsLog = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
+            if (is_dir(dirname($wsLog))) {
+                @file_put_contents($wsLog, $entry, FILE_APPEND | LOCK_EX);
+            }
+            // #endregion
+
             // 生成预览
             $preview = $this->generateComponentPreview($phtmlCode);
+
+            // 将当前模板写入临时文件并生成 refine_token，微调时只传 token 不再传整份代码
+            $refineToken = '';
+            try {
+                $refineToken = 'pb_refine_' . bin2hex(random_bytes(8));
+                $refineDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_refine';
+                if (!is_dir($refineDir)) {
+                    mkdir($refineDir, 0770, true);
+                }
+                $refinePath = $refineDir . DIRECTORY_SEPARATOR . $refineToken . '.phtml';
+                file_put_contents($refinePath, $phtmlCode);
+                $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
+                $paths[$refineToken] = ['path' => $refinePath, 'created' => time()];
+                $this->session->setData('pagebuilder_refine_paths', $paths);
+            } catch (\Throwable $e) {
+                // 不影响主流程，仅无 token 时微调需传 template_content
+            }
             
             // 发送完成事件
             $sse->sendEvent('complete', [
@@ -1279,7 +1308,8 @@ class AiGenerate extends BackendController
                 'validation' => $componentValidation,
                 'preview' => $preview,
                 'use_framework' => $useFramework,
-                'final_prompt' => $prompt
+                'final_prompt' => $prompt,
+                'refine_token' => $refineToken,
             ]);
             
             // 发送结束事件（使用 complete 方法）
@@ -1289,8 +1319,12 @@ class AiGenerate extends BackendController
             // 捕获 Exception 与 Error（含 ParseError），避免未捕获导致连接直接断开、前端只显示「连接中断或服务器错误」
             $cleanMsg = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             // #region agent log（Unclosed '{' 等解析错误时定位用）
-            $logPath = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
-            @file_put_contents($logPath, json_encode(['location' => 'component-stream catch', 'message' => $cleanMsg, 'data' => ['file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e)], 'timestamp' => (int)(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+            $entry = json_encode(['when' => 'catch', 'message' => $cleanMsg, 'file' => $e->getFile(), 'line' => $e->getLine(), 'class' => get_class($e), 'timestamp' => (int)(microtime(true) * 1000)]) . "\n";
+            @file_put_contents(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pagebuilder_ai_debug.log', $entry, FILE_APPEND | LOCK_EX);
+            $wsLog = (defined('BP') ? BP : dirname(__DIR__, 6)) . '/.cursor/debug.log';
+            if (is_dir(dirname($wsLog))) {
+                @file_put_contents($wsLog, $entry, FILE_APPEND | LOCK_EX);
+            }
             // #endregion
             $sse->sendEvent('error', [
                 'message' => $cleanMsg
@@ -3006,8 +3040,8 @@ PROMPT;
             $agentCode = $input['agent_code'] ?? 'pagebuilder_component';
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim($input['name'] ?? '');
-            $description = trim($input['description'] ?? '');
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';

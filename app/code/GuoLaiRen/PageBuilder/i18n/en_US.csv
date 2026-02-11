@@ -647,6 +647,8 @@ AI,AI
 标题色,标题色
 强调色,强调色
 重置为主题默认,重置为主题默认
+生成的模板文件,Generated template file
+用于排查 PHP 未渲染、代码暴露等问题,For debugging PHP not rendering / code exposed on page
 "直接调用 AI 模型生成代码，速度更快","直接调用 AI 模型生成代码，速度更快"
 暂无可用智能体,暂无可用智能体
 "智能体模式：连接 AI 服务...","智能体模式：连接 AI 服务..."
@@ -1698,3 +1700,7 @@ RTL模式,RTL模式
 "Are you sure you want to sync PageBuilder pages to SEO subjects?","Are you sure you want to sync PageBuilder pages to SEO subjects?"
 "Feature in development...","Feature in development..."
 "Are you sure you want to delete this SEO subject?","Are you sure you want to delete this SEO subject?"
+"AI content placeholder","AI content placeholder"
+"Component","Component"
+"Component code generated, but preview failed to render","Component code generated, but preview failed to render"
+"You can continue to refine or save the component directly","You can continue to refine or save the component directly"

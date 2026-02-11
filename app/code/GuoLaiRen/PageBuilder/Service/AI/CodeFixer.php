@@ -168,24 +168,16 @@ class CodeFixer
 
     /**
      * 修复HTML内容
+     * 不转义 PHP 标签，否则模板阶段 PHP 不执行、预览会显示源码（如 &lt;?= ... ?&gt;）
      */
     public function fixHtmlContent(string $html): string
     {
-        // 转义HTML中的PHP标签
-        $original = $html;
-        $phpPattern = '/<\x3f(?:php|=)?/i';
-        $html = preg_replace($phpPattern, '&lt;?', $html);
-        if ($html !== $original) {
-            $this->addFix('html_content', '转义了HTML中的PHP标签');
-        }
-        
-        // 移除反引号
+        // 移除反引号（避免破坏字符串）
         $original = $html;
         $html = str_replace('`', "'", $html);
         if ($html !== $original) {
             $this->addFix('html_content', '替换了反引号为单引号');
         }
-        
         return $html;
     }
 
