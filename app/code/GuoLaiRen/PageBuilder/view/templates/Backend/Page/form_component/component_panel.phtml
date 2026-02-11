@@ -1030,20 +1030,58 @@ let regionConfig = { ...defaultRegionConfig };
 // 当前布局的区域顺序（初始化后由 API 返回的数据更新）
 let regionOrder = ['header', 'content', 'footer'];
 
-// 安全解析 JSON（处理 BOM、夹杂日志等情况）
+// 安全解析 JSON（处理 BOM、JSON 后有多余输出如 PHP 警告等）
 function safeJsonParse(responseText) {
     if (!responseText) return null;
-    // 去除 BOM
     const text = responseText.replace(/^\uFEFF/, '');
     try {
         return JSON.parse(text);
     } catch (err) {
-        // 尝试从文本中提取 JSON 块
+        // 若错误提示 "after JSON at position N"，只取前 N 个字符再解析（去掉尾部多余输出，如 PHP Notice）
+        const posMatch = /(?:at position|position) (\d+)/i.exec(err && err.message ? err.message : '');
+        if (posMatch) {
+            const pos = parseInt(posMatch[1], 10);
+            if (pos > 0) {
+                for (let offset = 0; offset <= 3; offset++) {
+                    const cut = Math.max(0, pos - offset);
+                    const slice = text.substring(0, cut).trimEnd();
+                    if (!slice) continue;
+                    try {
+                        const out = JSON.parse(slice);
+                        if (typeof console !== 'undefined' && console.warn) {
+                            console.warn('[组件面板] JSON 尾部有多余内容，已截取前 ' + cut + ' 字符解析成功');
+                        }
+                        return out;
+                    } catch (_) {}
+                }
+            }
+        }
+        // 否则用括号匹配提取第一个完整 JSON 对象（同时跟踪 {} 与 []，避免尾部垃圾干扰）
         const firstBrace = text.indexOf('{');
-        const lastBrace = text.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-            const jsonSlice = text.slice(firstBrace, lastBrace + 1);
-            return JSON.parse(jsonSlice);
+        if (firstBrace === -1) throw err;
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let end = -1;
+        for (let i = firstBrace; i < text.length; i++) {
+            const c = text[i];
+            if (escape) { escape = false; continue; }
+            if (inString) {
+                if (c === '\\') escape = true;
+                else if (c === '"') inString = false;
+                continue;
+            }
+            if (c === '"') { inString = true; continue; }
+            if (c === '{' || c === '[') depth++;
+            else if (c === '}' || c === ']') {
+                depth--;
+                if (depth === 0) { end = i; break; }
+            }
+        }
+        if (end !== -1) {
+            try {
+                return JSON.parse(text.slice(firstBrace, end + 1));
+            } catch (_) {}
         }
         throw err;
     }
@@ -2377,12 +2415,20 @@ function _buildWorkshopHtml(s) {
             <div class="ai-ws-color-row" id="ai-ws-color-fields"></div>
         </div>
     </div>
-    <div class="ai-ws-footer">
-        <div style="display:flex;gap:8px;">
-            <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('重新描述') ?></button>
-            <button class="ai-ws-btn-danger" onclick="_workshopRegenerate()"><i class="mdi mdi-refresh"></i> <?= __('重新生成') ?></button>
+    <div class="ai-ws-footer" style="flex-direction:column;align-items:stretch;">
+        <details class="ai-ws-template-file-wrap" open style="width:100%;margin-bottom:12px;border:1px solid #444;border-radius:6px;overflow:hidden;background:#1a1a1a;">
+            <summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;color:#e2e8f0;list-style:none;display:flex;align-items:center;gap:6px;">
+                <i class="mdi mdi-file-document-outline"></i> <?= __('生成的模板文件') ?> (.phtml) — <?= __('用于排查 PHP 未渲染、代码暴露等问题') ?>
+            </summary>
+            <pre id="ai-ws-template-file-content" style="margin:0;padding:12px;max-height:220px;overflow:auto;font-size:11px;line-height:1.4;color:#94a3b8;font-family:'Consolas',monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #333;"></pre>
+        </details>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;gap:8px;">
+                <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('重新描述') ?></button>
+                <button class="ai-ws-btn-danger" onclick="_workshopRegenerate()"><i class="mdi mdi-refresh"></i> <?= __('重新生成') ?></button>
+            </div>
+            <button class="ai-ws-btn-primary" onclick="_workshopGoToStep(4)"><i class="mdi mdi-tune"></i> <?= __('下一步（微调）') ?></button>
         </div>
-        <button class="ai-ws-btn-primary" onclick="_workshopGoToStep(4)"><i class="mdi mdi-tune"></i> <?= __('下一步（微调）') ?></button>
     </div>
 </div>
 
@@ -2437,11 +2483,18 @@ async function _loadAiServiceInfo() {
         if (!resp.ok) {
             throw new Error('<?= __('AI 服务不可用') ?>');
         }
-        if (contentType.indexOf('application/json') === -1) {
-            await resp.text();
-            throw new Error('<?= __('AI 信息返回格式不正确') ?>');
+        const responseText = await resp.text();
+        let json;
+        if (contentType.indexOf('application/json') !== -1) {
+            json = JSON.parse(responseText);
+        } else {
+            try {
+                json = safeJsonParse(responseText);
+                if (!json) throw new Error('<?= __('AI 信息返回格式不正确') ?>');
+            } catch (e) {
+                throw new Error('<?= __('AI 信息返回格式不正确') ?>');
+            }
         }
-        const json = await resp.json();
         if (!json.success) {
             bar.classList.remove('ai-info-loading');
             bar.classList.add('ai-info-error');
@@ -2491,6 +2544,12 @@ function _workshopGoToStep(step) {
     // 切换到微调步骤时自动同步预览
     if (step === 4) {
         _syncRefinePreview();
+    }
+    // 切换到预览步骤时同步「生成的模板文件」内容（含微调后的最新 phtml）
+    if (step === 3) {
+        const code = _aiWorkshop.result?.component?.phtml_code || '';
+        const templateFileEl = document.getElementById('ai-ws-template-file-content');
+        if (templateFileEl) templateFileEl.textContent = code;
     }
 }
 
@@ -2720,6 +2779,11 @@ function _workshopShowResult(result) {
     if (codeEl) {
         codeEl.textContent = code;
     }
+    // 生成的模板文件（footer 内第一个区块，便于排查 PHP 未渲染、代码暴露）
+    const templateFileEl = document.getElementById('ai-ws-template-file-content');
+    if (templateFileEl) {
+        templateFileEl.textContent = code || '';
+    }
     
     // 颜色字段
     _buildColorFields(component);
@@ -2872,13 +2936,24 @@ async function generateComponentWithAgent(params) {
     try {
         updateStreamStatus('<?= __('智能体模式：连接 AI 服务...') ?>', 15);
 
-        // 构建参数
+        // 优先从工坊步骤 1 面板内取表单值（避免多处同名 id 取到空）
+        let name = params.name || '';
+        let description = params.description || '';
+        const step1 = document.getElementById('ai-ws-step1');
+        const nameEl = step1 ? step1.querySelector('#aiComponentName') : document.getElementById('aiComponentName');
+        const descEl = step1 ? step1.querySelector('#aiComponentDesc') : document.getElementById('aiComponentDesc');
+        if (nameEl && (nameEl.value || '').trim()) name = nameEl.value.trim();
+        if (descEl && (descEl.value || '').trim()) description = descEl.value.trim();
+        if (!name || !description) {
+            updateStreamStatus('<?= __('请输入组件名称和描述') ?>', 0);
+            throw new Error('<?= __('组件名称和描述不能为空') ?>');
+        }
         const streamParams = {
             agent_code: params.agent_code || 'pagebuilder_component',
             style_code: currentStyleCode,
             region: params.region,
-            name: params.name,
-            description: params.description,
+            name: name,
+            description: description,
             style: params.style,
             fields: params.fields,
             reference_component: params.referenceComponent,
@@ -2886,7 +2961,10 @@ async function generateComponentWithAgent(params) {
         };
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
 
-        const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agent-component-stream') ?>?params=' + encodeURIComponent(paramsBase64);
+        const baseUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/agent-component-stream') ?>';
+        const streamUrl = baseUrl + '?params=' + encodeURIComponent(paramsBase64)
+            + '&name=' + encodeURIComponent(name)
+            + '&description=' + encodeURIComponent(description);
 
         let result = null;
 
@@ -3133,7 +3211,7 @@ async function generateComponentWithAgent(params) {
 body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
 </style></head><body>${previewHtml}</body></html>`;
 
-            // 构建 workshopResult
+            // 构建 workshopResult（保存 refine_token，微调时只传 token 不传整份代码）
             const wsResult = {
                 success: true,
                 component: {
@@ -3147,6 +3225,7 @@ body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
                 },
                 validation: { valid: true },
                 preview: fullPreviewHtml,
+                refine_token: result.refine_token || '',
             };
             window.currentGeneratedComponent = wsResult.component;
             setTimeout(() => { _workshopShowResult(wsResult); }, 300);
@@ -3235,17 +3314,21 @@ async function _workshopRefine() {
         const component = _aiWorkshop.result?.component;
         if (!component) throw new Error('<?= __('无组件数据') ?>');
 
-        const existingCode = component.phtml_code || '';
         const region = component.region || _aiWorkshop.params?.region || 'content';
+        const refineToken = _aiWorkshop.result?.refine_token || '';
 
-        // 流式微调参数（SSE）
+        // 流式微调参数（SSE）：有 refine_token 时只传 token，不传整份 template_content
         const refineParams = {
-            template_content: existingCode,
             adjustment_prompt: input,
             category: region,
             code: component.code || '',
             style_code: component.style_code || component.templateCode || currentStyleCode
         };
+        if (refineToken) {
+            refineParams.refine_token = refineToken;
+        } else {
+            refineParams.template_content = component.phtml_code || '';
+        }
 
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(refineParams))));
         const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine-stream') ?>?params=' + encodeURIComponent(paramsBase64);
@@ -3328,7 +3411,7 @@ async function _workshopRefine() {
 
         const json = streamResult;
 
-        // 更新结果
+        // 更新结果；微调后 token 已消费，后续微调改传 template_content
         if (json.result) {
             const r = json.result;
             if (r.template_content) {
@@ -3337,6 +3420,7 @@ async function _workshopRefine() {
             if (r.component) {
                 _aiWorkshop.result.component = { ..._aiWorkshop.result.component, ...r.component };
             }
+            if (_aiWorkshop.result) _aiWorkshop.result.refine_token = '';
             window.currentGeneratedComponent = _aiWorkshop.result.component;
         }
         if (json.preview?.html) {
@@ -3703,12 +3787,23 @@ async function generateComponentWithAi(params) {
         
         updateStreamStatus('<?= __('连接 AI 服务...') ?>', 15);
         
-        // 构建参数并 base64 编码
+        // 优先从工坊步骤 1 面板内取表单值（避免多处同名 id 取到空）
+        let name = params.name || '';
+        let description = params.description || '';
+        const step1 = document.getElementById('ai-ws-step1');
+        const nameEl = step1 ? step1.querySelector('#aiComponentName') : document.getElementById('aiComponentName');
+        const descEl = step1 ? step1.querySelector('#aiComponentDesc') : document.getElementById('aiComponentDesc');
+        if (nameEl && (nameEl.value || '').trim()) name = nameEl.value.trim();
+        if (descEl && (descEl.value || '').trim()) description = descEl.value.trim();
+        if (!name || !description) {
+            updateStreamStatus('<?= __('请输入组件名称和描述') ?>', 0);
+            throw new Error('<?= __('组件名称和描述不能为空') ?>');
+        }
         const streamParams = {
             style_code: currentStyleCode,
             region: params.region,
-            name: params.name,
-            description: params.description,
+            name: name,
+            description: description,
             style: params.style,
             fields: params.fields,
             reference_component: params.referenceComponent,
@@ -3716,8 +3811,11 @@ async function generateComponentWithAi(params) {
         };
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(streamParams))));
         
-        // 使用 EventSource 进行流式请求（GET）
-        const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/component-stream') ?>?params=' + encodeURIComponent(paramsBase64);
+        // 使用 EventSource 进行流式请求（GET）；name/description 单独传参兜底，避免 base64 解码或 URL 截断导致后端收不到
+        const baseUrl = '<?= $this->getBackendUrl('pagebuilder/backend/ai-generate/component-stream') ?>';
+        const streamUrl = baseUrl + '?params=' + encodeURIComponent(paramsBase64)
+            + '&name=' + encodeURIComponent(name)
+            + '&description=' + encodeURIComponent(description);
         
         let result = null;
         let totalChars = 0;
@@ -4490,9 +4588,10 @@ async function executeInlineRefine() {
     }
     
     const currentComponent = window.currentGeneratedComponent;
+    const refineToken = _aiWorkshop.result?.refine_token || '';
     const templateContent = currentComponent.templateContent || currentComponent.component?.phtml_code || '';
     
-    if (!templateContent) {
+    if (!refineToken && !templateContent) {
         Swal.showValidationMessage('<?= __('找不到组件代码') ?>');
         return;
     }
@@ -4513,6 +4612,14 @@ async function executeInlineRefine() {
         fullPrompt = `【渲染错误】${lastError}\n\n【用户要求】${prompt}`;
     }
     
+    const refineBody = {
+        adjustment_prompt: fullPrompt,
+        category: currentComponent.component?.region || currentComponent.component?.category || 'content',
+        code: currentComponent.component?.code || '',
+        last_error: lastError
+    };
+    if (refineToken) refineBody.refine_token = refineToken; else refineBody.template_content = templateContent;
+    
     try {
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
             method: 'POST',
@@ -4521,13 +4628,7 @@ async function executeInlineRefine() {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({
-                template_content: templateContent,
-                adjustment_prompt: fullPrompt,
-                category: currentComponent.component?.region || currentComponent.component?.category || 'content',
-                code: currentComponent.component?.code || '',
-                last_error: lastError  // 额外传递错误信息
-            })
+            body: JSON.stringify(refineBody)
         });
         
         if (!response.ok) {
@@ -4550,7 +4651,7 @@ async function executeInlineRefine() {
         // 保存微调历史
         saveRefineHistory(prompt);
         
-        // 更新当前组件数据
+        // 更新当前组件数据；微调后 token 已消费
         if (result.result) {
             const refinedComponent = {
                 ...window.currentGeneratedComponent.component,
@@ -4562,6 +4663,7 @@ async function executeInlineRefine() {
             window.currentGeneratedComponent.templateContent = result.result.template_content || templateContent;
             window.currentGeneratedComponent.preview = result.preview?.html || '';
             window.currentGeneratedComponent.validation = result.validation || { valid: true };
+            if (_aiWorkshop.result) _aiWorkshop.result.refine_token = '';
         }
         
         // 关闭当前弹窗并重新显示（更新后的预览）
@@ -4821,9 +4923,10 @@ async function refineComponentWithAi(adjustmentPrompt) {
     }
     
     const currentComponent = window.currentGeneratedComponent;
+    const refineToken = _aiWorkshop.result?.refine_token || '';
     const templateContent = currentComponent.templateContent || currentComponent.component?.phtml_code || '';
     
-    if (!templateContent) {
+    if (!refineToken && !templateContent) {
         Swal.fire({
             icon: 'error',
             title: '<?= __('错误') ?>',
@@ -4848,6 +4951,13 @@ async function refineComponentWithAi(adjustmentPrompt) {
         customClass: { container: 'swal2-dark-theme' }
     });
     
+    const refineBody = {
+        adjustment_prompt: adjustmentPrompt,
+        category: currentComponent.component?.region || currentComponent.component?.category || 'content',
+        code: currentComponent.component?.code || ''
+    };
+    if (refineToken) refineBody.refine_token = refineToken; else refineBody.template_content = templateContent;
+    
     try {
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
             method: 'POST',
@@ -4856,12 +4966,7 @@ async function refineComponentWithAi(adjustmentPrompt) {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({
-                template_content: templateContent,
-                adjustment_prompt: adjustmentPrompt,
-                category: currentComponent.component?.region || currentComponent.component?.category || 'content',
-                code: currentComponent.component?.code || ''
-            })
+            body: JSON.stringify(refineBody)
         });
         
         // 检查响应状态
@@ -4889,7 +4994,7 @@ async function refineComponentWithAi(adjustmentPrompt) {
         // 保存微调历史
         saveRefineHistory(adjustmentPrompt);
         
-        // 更新当前组件数据
+        // 更新当前组件数据；微调后 token 已消费
         if (result.result) {
             const refinedComponent = {
                 ...window.currentGeneratedComponent.component,
@@ -4900,6 +5005,7 @@ async function refineComponentWithAi(adjustmentPrompt) {
             window.currentGeneratedComponent.component = refinedComponent;
             window.currentGeneratedComponent.templateContent = result.result.template_content || templateContent;
             window.currentGeneratedComponent.preview = result.preview?.html || '';
+            if (_aiWorkshop.result) _aiWorkshop.result.refine_token = '';
             
             // 重新显示生成结果（带微调后的内容）
             showGeneratedComponent({

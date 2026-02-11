@@ -42,3 +42,20 @@
 右键点击：另存为图片,"Right-click to save as image"
 "图层过多（%{count} 个），仅显示前 %{max} 个","Too many layers (%{count}). Showing first %{max} only."
 加载图片,"Load image"
+确认下载,Confirm download
+文件名：,File name:
+可修改保存名称,Edit name before save
+下载到默认/上次目录,Download to default/last folder
+更换目录并记住,Change folder and remember
+取消,Cancel
+保存目录：,Save to:
+浏览器默认下载目录,Browser default download folder
+已选择的目录,Selected folder
+如需更换请点击「更换目录并记住」。,Click "Change folder and remember" to change.
+如需指定目录请点击「更换目录并记住」。,Click "Change folder and remember" to choose a folder.
+将保存到上次选择的目录；如需更换请点击「更换目录并记住」。,Will save to last chosen folder. Click "Change folder and remember" to change.
+将保存到浏览器默认下载目录；如需指定目录请点击「更换目录并记住」。,Will save to browser default download folder. Click "Change folder and remember" to choose a folder.
+已保存到上次目录,Saved to last folder
+已保存并已记住该目录,Saved and folder remembered
+写入目录失败，已改为浏览器下载,Write to folder failed, using browser download
+写入失败，已改为浏览器下载,Write failed, using browser download
