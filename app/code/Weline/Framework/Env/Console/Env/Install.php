@@ -435,6 +435,9 @@ class Install extends CommandAbstract
             $this->printer->note(__('后台管理: 登录后台 → 系统 → 环境管理，可查看详情和手动安装'));
             $this->printer->note(__('强制重试: php bin/w env:install --force'));
         }
+        if ($failCount > 0) {
+            exit(1);
+        }
     }
 
     /**

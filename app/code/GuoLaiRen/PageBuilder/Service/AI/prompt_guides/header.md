@@ -1,7 +1,7 @@
 ## Header 组件框架 — 返回 JSON 格式
 
-框架已包含：Logo 区域、导航链接循环、CTA 按钮、汉堡菜单、Flex 布局、基础颜色。
-你负责用 css_extra 增强视觉（渐变背景、hover 动画、阴影、滚动效果），用 js_content 实现交互（滚动固定、菜单展开动画）。
+框架已包含：Logo 区域、导航链接循环、CTA 按钮、汉堡菜单、Flex 布局、基础颜色。框架类名为 **ai-header-***。
+你负责用 css_extra 增强视觉（渐变背景、hover 动画、阴影、滚动效果），用 js_content 实现交互（滚动固定、菜单展开动画）。**HTML、CSS、JS 中必须使用与框架相同的类名**（ai-header-*），禁止 invent 与现有 HTML 不一致的类。
 
 ```json
 {

@@ -1,0 +1,236 @@
+<?php
+/**
+ * AI Component Framework - Footer
+ * 
+ * 底部组件框架模板，包含固定的版权和链接结构
+ * AI只需填充特定区域的代码
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ * @var array $component_config 组件配置
+ * 
+ * @component_start
+ * name => {{COMPONENT_NAME}}
+ * name_en => {{COMPONENT_NAME_EN}}
+ * description => {{COMPONENT_DESC}}
+ * category => footer
+ * type => section
+ * sort_order => 90
+ * compatible_styles => *
+ * ai_generated => true
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:brand => 品牌信息
+ * brand.logo => Logo图片:textarea:|留空使用文字
+ * brand.name => 品牌名称:text:Brand Name
+ * brand.description => 品牌描述:textarea:Your trusted partner for quality services.
+ * 
+ * group:links => 链接设置
+ * links.column1_title => 第一列标题:text:Quick Links
+ * links.column1_items => 第一列链接:textarea:Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact|格式：名称=>链接
+ * links.column2_title => 第二列标题:text:Legal
+ * links.column2_items => 第二列链接:textarea:Privacy Policy=>/privacy\nTerms of Service=>/terms|格式：名称=>链接
+ * 
+ * group:social => 社交媒体
+ * social.show => 显示社交图标:select:yes|yes,no
+ * social.facebook => Facebook链接:text:
+ * social.twitter => Twitter链接:text:
+ * social.instagram => Instagram链接:text:
+ * social.linkedin => LinkedIn链接:text:
+ * 
+ * group:copyright => 版权信息
+ * copyright.text => 版权文字:text:All rights reserved.
+ * copyright.year => 起始年份:text:2024
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0a0a0f
+ * style.text_color => 文字颜色:color:#b8b8d0
+ * style.title_color => 标题颜色:color:#ffffff
+ * style.link_color => 链接颜色:color:#b8b8d0
+ * style.link_hover_color => 链接悬停颜色:color:#7c3aed
+ * style.accent_color => 强调色:color:#7c3aed
+ * 
+ * {{EXTRA_FIELDS}}
+ * 
+ * @fields_end
+ */
+
+// ===== 固定的PHP数据获取部分 =====
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+// 解析链接列表的辅助函数
+$parseLinks = function($raw) {
+    $items = [];
+    $lines = preg_split('/\r?\n/', $raw);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        if (strpos($line, '=>') !== false) {
+            $parts = explode('=>', $line, 2);
+            $text = trim($parts[0]);
+            $href = trim($parts[1] ?? '#');
+            if (!empty($text)) {
+                $items[] = ['text' => $text, 'href' => $href ?: '#'];
+            }
+        }
+    }
+    return $items;
+};
+
+$componentId = 'ai-footer-' . uniqid();
+
+// 品牌配置
+$brandLogo = $getConfig('brand.logo', '');
+$brandName = $getConfig('brand.name', 'Brand Name');
+$brandDesc = $getConfig('brand.description', 'Your trusted partner for quality services.');
+
+// 链接配置
+$col1Title = $getConfig('links.column1_title', 'Quick Links');
+$col1Items = $parseLinks($getConfig('links.column1_items', "Home=>/\nAbout=>/about\nServices=>/services\nContact=>/contact"));
+$col2Title = $getConfig('links.column2_title', 'Legal');
+$col2Items = $parseLinks($getConfig('links.column2_items', "Privacy Policy=>/privacy\nTerms of Service=>/terms"));
+
+// 社交媒体配置
+$showSocial = $getConfig('social.show', 'yes') !== 'no';
+$socialLinks = [];
+if ($getConfig('social.facebook')) $socialLinks['facebook'] = $getConfig('social.facebook');
+if ($getConfig('social.twitter')) $socialLinks['twitter'] = $getConfig('social.twitter');
+if ($getConfig('social.instagram')) $socialLinks['instagram'] = $getConfig('social.instagram');
+if ($getConfig('social.linkedin')) $socialLinks['linkedin'] = $getConfig('social.linkedin');
+
+// 版权配置
+$copyrightText = $getConfig('copyright.text', 'All rights reserved.');
+$startYear = $getConfig('copyright.year', date('Y'));
+$currentYear = date('Y');
+$yearDisplay = $startYear == $currentYear ? $currentYear : $startYear . '-' . $currentYear;
+
+// 样式配置
+$bgColor = $getConfig('style.bg_color', '#0a0a0f');
+$textColor = $getConfig('style.text_color', '#b8b8d0');
+$titleColor = $getConfig('style.title_color', '#ffffff');
+$linkColor = $getConfig('style.link_color', '#b8b8d0');
+$linkHoverColor = $getConfig('style.link_hover_color', '#7c3aed');
+$accentColor = $getConfig('style.accent_color', '#7c3aed');
+
+// ===== AI生成的额外PHP变量 =====
+// 使用try-catch包装AI生成的代码，防止错误中断渲染
+try {
+    
+} catch (\Throwable $e) {
+    // 静默处理AI生成代码的错误，记录日志
+    error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
+}
+?>
+<footer id="<?= $componentId ?>" class="ai-footer-luxury">
+    <div class="ai-footer-container">
+        <div class="ai-footer-top">
+            <div class="ai-footer-brand">
+                <?php if ($brandLogo): ?>
+                    <div class="ai-footer-logo">
+                        <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" loading="lazy">
+                    </div>
+                <?php endif; ?>
+                <div class="ai-footer-brand-info">
+                    <h3 class="ai-footer-brand-name"><?= htmlspecialchars($brandName) ?></h3>
+                    <p class="ai-footer-brand-desc"><?= htmlspecialchars($brandDesc) ?></p>
+                </div>
+            </div>
+            
+            <div class="ai-footer-links-grid">
+                <div class="ai-footer-column">
+                    <h4 class="ai-footer-column-title"><?= htmlspecialchars($col1Title) ?></h4>
+                    <ul class="ai-footer-column-links">
+                        <?php foreach ($col1Items as $item): ?>
+                            <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                
+                <div class="ai-footer-column">
+                    <h4 class="ai-footer-column-title"><?= htmlspecialchars($col2Title) ?></h4>
+                    <ul class="ai-footer-column-links">
+                        <?php foreach ($col2Items as $item): ?>
+                            <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                
+                <div class="ai-footer-column">
+                    <h4 class="ai-footer-column-title">关于我们</h4>
+                    <ul class="ai-footer-column-links">
+                        <li><a href="/about">公司简介</a></li>
+                        <li><a href="/team">团队介绍</a></li>
+                        <li><a href="/history">发展历程</a></li>
+                        <li><a href="/honors">荣誉资质</a></li>
+                        <li><a href="/contact">联系我们</a></li>
+                    </ul>
+                </div>
+                
+                <div class="ai-footer-column">
+                    <h4 class="ai-footer-column-title">政策条款</h4>
+                    <ul class="ai-footer-column-links">
+                        <li><a href="/privacy">隐私政策</a></li>
+                        <li><a href="/terms">服务条款</a></li>
+                        <li><a href="/responsible">责任博彩</a></li>
+                        <li><a href="/aml">反洗钱政策</a></li>
+                        <li><a href="/kyc">KYC验证</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ai-footer-middle">
+            <div class="ai-footer-games">
+                <h4 class="ai-footer-games-title">热门棋牌游戏</h4>
+                <div class="ai-footer-games-grid">
+                    <div class="ai-footer-game-item">
+                        <div class="ai-footer-game-icon">♠️</div>
+                        <span class="ai-footer-game-name">德州扑克</span>
+                    </div>
+                    <div class="ai-footer-game-item">
+                        <div class="ai-footer-game-icon">🃏</div>
+                        <span class="ai-footer-game-name">21点</span>
+                    </div>
+                    <div class="ai-footer-game-item">
+                        <div class="ai-footer-game-icon">🎲</div>
+                        <span class="ai-footer-game-name">骰宝</span>
+                    </div>
+                    <div class="ai-footer-game-item">
+                        <div class="ai-footer-game-icon">🀄</div>
+                        <span class="ai-footer-game-name">麻将</span>
+                    </div>
+                    <div class="ai-footer-game-item">
+                        <div class="ai-footer-game-icon">♣️</div>
+                        <span class="ai-footer-game-name">百家乐</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ai-footer-bottom">
+            <div class="ai-footer-copyright">
+                <p>&copy; <?= htmlspecialchars($yearDisplay) ?> <?= htmlspecialchars($brandName) ?>. <?= htmlspecialchars($copyrightText) ?></p>
+                <p class="ai-footer-disclaimer">本网站仅供娱乐参考，请理性参与游戏。未满18岁禁止访问。</p>
+            </div>
+            
+            <?php if ($showSocial && !empty($socialLinks)): ?>
+                <div class="ai-footer-social">
+                    <?php foreach ($socialLinks as $platform => $url): ?>
+                        <a href="<?= htmlspecialchars($url) ?>" class="ai-footer-social-link" target="_blank" rel="noopener noreferrer">
+                            <span class="ai-footer-social-icon"><?= htmlspecialchars($platform === 'facebook' ? 'f' : ($platform === 'twitter' ? 't' : ($platform === 'instagram' ? 'i' : 'l'))) ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</footer>

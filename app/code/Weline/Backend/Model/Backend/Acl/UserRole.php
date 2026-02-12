@@ -14,6 +14,7 @@ namespace Weline\Backend\Model\Backend\Acl;
 
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
@@ -71,14 +72,16 @@ class UserRole extends \Weline\Framework\Database\Model
                   )
                   ->addAdditional('ENGINE=MyIsam;')
                   ->create();
-            // 分配超管
-            $this->setData(self::fields_ID, 1)
-                 ->setData(self::fields_ROLE_ID, 1)
-                 ->save(true);
-            // 分配管理
-            $this->setData(self::fields_ID, 2)
-                 ->setData(self::fields_ROLE_ID, 2)
-                 ->save(true);
+            // 仅在管理员真实存在时分配默认角色，避免安装阶段外键错误
+            /** @var BackendUser $backendUser */
+            $backendUser = ObjectManager::getInstance(BackendUser::class);
+            $backendUser->reset()->load(1);
+            if ($backendUser->getId()) {
+                $this->clear()
+                     ->setData(self::fields_ID, (int)$backendUser->getId())
+                     ->setData(self::fields_ROLE_ID, 1)
+                     ->save(true);
+            }
         }
     }
 

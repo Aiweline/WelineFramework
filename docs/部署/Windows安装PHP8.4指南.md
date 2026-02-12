@@ -7,14 +7,36 @@
 
 ## 目录
 
-1. [系统要求](#系统要求)
-2. [下载 PHP 8.4](#下载-php-84)
-3. [安装步骤](#安装步骤)
-4. [配置 PHP](#配置-php)
-5. [配置环境变量](#配置环境变量)
-6. [启用必需扩展](#启用必需扩展)
-7. [验证安装](#验证安装)
-8. [常见问题](#常见问题)
+1. [使用 install 命令（推荐）](#使用-install-命令推荐)
+2. [系统要求](#系统要求)
+3. [下载 PHP 8.4](#下载-php-84)
+4. [安装步骤](#安装步骤)
+5. [配置 PHP](#配置-php)
+6. [配置环境变量](#配置环境变量)
+7. [启用必需扩展](#启用必需扩展)
+8. [验证安装](#验证安装)
+9. [常见问题](#常见问题)
+
+---
+
+## 使用 install 命令（推荐）
+
+项目在 **bin** 目录下提供了不依赖 PHP 的安装脚本，可将 PHP（及可选 pgsql、mysql）安装到 **extend/server/** 并自动配置用户 PATH。
+
+1. 在项目根目录打开 CMD 或 PowerShell（无需管理员）。
+2. 执行：
+   ```bat
+   bin\install.bat
+   ```
+   默认会下载并安装 PHP（版本从 **composer.json** 的 `require.php` 解析，如 `^8.4` → 8.4），解压到 `extend\server\php`，并写入用户环境变量 PATH。
+3. 若需同时准备 pgsql/mysql 或仅配置 PATH，可执行：
+   ```bat
+   bin\install.bat php pgsql mysql
+   bin\install.bat --path-only php
+   ```
+4. 安装完成后**重新打开终端**，执行 `php -v` 验证。
+
+pgsql、mysql 的版本等可在项目根 **weline.env** 中配置（可复制 `weline.env.sample` 为 `weline.env` 后修改）。详见项目根部署文档或 README 中的 install 说明。
 
 ---
 

@@ -308,24 +308,6 @@ class WlsInstanceRegistry
      */
     protected function getPidByPort(int $port): int
     {
-        $isWindows = \strtoupper(\substr(\PHP_OS, 0, 3)) === 'WIN';
-
-        if ($isWindows) {
-            $output = [];
-            @\exec("netstat -ano | findstr :{$port} 2>NUL", $output);
-            foreach ($output as $line) {
-                if (\preg_match('/LISTENING\s+(\d+)$/', \trim($line), $matches)) {
-                    return (int) $matches[1];
-                }
-            }
-        } else {
-            $output = [];
-            @\exec("lsof -ti:{$port} 2>/dev/null", $output);
-            if (!empty($output[0]) && \is_numeric(\trim($output[0]))) {
-                return (int) \trim($output[0]);
-            }
-        }
-
-        return 0;
+        return Processer::getProcessIdByPort($port);
     }
 }
