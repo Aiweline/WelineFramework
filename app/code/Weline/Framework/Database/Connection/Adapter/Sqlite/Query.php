@@ -19,6 +19,15 @@ use Weline\Framework\Database\Compiler\SqliteCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * SQLite 查询构建器
+ *
+ * 继承自 QueryAst 的方法：
+ * @method void reorderWhereByIndexes() 重新排序 where 条件（按索引优化）
+ * @method void buildAst(string $action) 构建 AST 结构
+ *
+ * @see \Weline\Framework\Database\Connection\Api\Sql\QueryAst
+ */
 abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\QueryAst
 {
     use SqlTrait;
@@ -86,6 +95,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             Debug::target('pre_fetch', $msg);
+        }
+        // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
+        if ($this->fetch_type === '' && trim($this->sql) !== '') {
+            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
+            if (str_starts_with($sqlUpper, 'INSERT')) {
+                $this->fetch_type = 'insert';
+            } elseif (str_starts_with($sqlUpper, 'SELECT')) {
+                $this->fetch_type = 'select';
+            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
+                $this->fetch_type = 'update';
+            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
+                $this->fetch_type = 'delete';
+            }
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             // 使用重试机制执行批量插入
@@ -214,7 +236,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $result = (bool)$data;
                 break;
             default:
-                throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。'));
+                // fetch_type 仍为空时返回安全值，避免链式 insert()->fetch() 在部分环境下中断升级
+                if ($this->fetch_type === '') {
+                    $result = is_array($data) ? $data : [];
+                } else {
+                    throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。'));
+                }
+                break;
         }
         $this->fetch_type = '';
         
@@ -331,7 +359,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->sql = trim($this->sql);
 
         if (!empty($this->sql)) {
-            $this->PDOStatement = $this->getLink()->prepare($this->sql);
+            $stmt = $this->getLink()->prepare($this->sql);
+            if ($stmt === false) {
+                $err = $this->getLink()->errorInfo();
+                throw new Exception(__('SQL 准备失败：%{1}。SQL: %{2}', [$err[2] ?? 'Unknown', substr($this->sql, 0, 200)]));
+            }
+            $this->PDOStatement = $stmt;
         } else {
             $this->PDOStatement = null;
         }

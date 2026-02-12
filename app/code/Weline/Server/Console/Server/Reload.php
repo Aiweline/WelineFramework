@@ -85,10 +85,10 @@ class Reload extends CommandAbstract
         $method = '';
         
         $masterPids = $registry->getRunningMasterPids();
-        if (!empty($masterPids) && !IS_WIN && \function_exists('posix_kill')) {
+        if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
-                if ($pid > 0 && @\posix_kill($pid, 0) && @\posix_kill($pid, SIGHUP)) {
+                if ($pid > 0 && Processer::isRunningByPid($pid) && Processer::sendSignal($pid, SIGHUP, true)) {
                     $notified++;
                     $this->printer->note(__('已向 Master (PID: %{1}) 发送 SIGHUP 信号', [$pid]));
                 }
@@ -103,16 +103,16 @@ class Reload extends CommandAbstract
             }
         }
         
-        if (!IS_WIN && \function_exists('posix_kill')) {
-            $workerPids = $registry->getRunningWorkerPids();
+        $workerPids = $registry->getRunningWorkerPids();
+        if (\defined('SIGUSR1')) {
             foreach ($workerPids as $pid) {
                 $pid = (int) $pid;
-                if ($pid > 0 && @\posix_kill($pid, 0) && @\posix_kill($pid, SIGUSR1)) {
+                if ($pid > 0 && Processer::isRunningByPid($pid) && Processer::sendSignal($pid, SIGUSR1, true)) {
                     $notified++;
                 }
             }
-            $method = __('SIGUSR1 信号');
         }
+        $method = __('SIGUSR1 信号');
         
         if ($notified === 0) {
             $this->printer->warning(__('所有重载方式均失败，请检查 Master 是否运行'));

@@ -197,55 +197,8 @@ class Stop implements CommandInterface
      */
     private function getProcessIdByPort(int $port): ?int
     {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // Windows系统 - 直接执行管道命令，不使用 cmd /c 避免引号转义问题
-            $output = [];
-            // 在 Windows 中，exec 可以直接执行管道命令
-            // 使用单引号避免 PHP 解析变量，然后使用转义的双引号
-            $cmd = 'netstat -ano | findstr ":'.$port.'" | findstr "LISTENING"';
-            @exec($cmd, $output, $returnVar);
-            
-            if (!empty($output)) {
-                foreach ($output as $line) {
-                    $line = trim($line);
-                    // 匹配格式：TCP    127.0.0.1:9981         0.0.0.0:0              LISTENING       22296
-                    // LISTENING 后面可能有多个空格，然后才是 PID
-                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
-                        $pid = (int)$matches[1];
-                        if ($pid > 0) {
-                            return $pid;
-                        }
-                    }
-                    // 备用匹配：如果上面匹配失败，尝试匹配行尾的数字（最后一个字段）
-                    if (preg_match('/LISTENING.*?(\d+)\s*$/', $line, $matches)) {
-                        $pid = (int)$matches[1];
-                        if ($pid > 0) {
-                            return $pid;
-                        }
-                    }
-                    // 最后尝试：匹配行尾的数字（netstat 输出的最后一个字段是 PID）
-                    if (preg_match('/(\d+)\s*$/', $line, $matches)) {
-                        $pid = (int)$matches[1];
-                        if ($pid > 0) {
-                            return $pid;
-                        }
-                    }
-                }
-            }
-        } else {
-            // Unix/Linux系统
-            $output = [];
-            @exec("lsof -ti:{$port} 2>/dev/null", $output);
-            
-            if (!empty($output)) {
-                $pid = (int)trim($output[0]);
-                if ($pid > 0) {
-                    return $pid;
-                }
-            }
-        }
-        
-        return null;
+        $pid = Processer::getProcessIdByPort($port);
+        return $pid > 0 ? $pid : null;
     }
 
     /**

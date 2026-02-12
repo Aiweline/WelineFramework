@@ -47,6 +47,10 @@ class I18n
 
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
+        // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
+        if (!extension_loaded('intl')) {
+            $lang_code = 'en';
+        }
         $cache_key = 'getLocals' . $lang_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
@@ -58,6 +62,9 @@ class I18n
 
     public function getLocaleName(string $locale_code, string $displace_locale_code = 'zh_Hans_CN'): string
     {
+        if (!extension_loaded('intl')) {
+            $displace_locale_code = 'en';
+        }
         $name = $locale_code;
         if (Locales::exists($locale_code)) {
             $name = Locales::getName($locale_code, $displace_locale_code);
@@ -67,6 +74,9 @@ class I18n
 
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
     {
+        if (!extension_loaded('intl')) {
+            $lang_code = 'en';
+        }
         $cache_key = 'getLocalesWithFlags' . $lang_code . $width . $height . (string)$installed;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
@@ -429,7 +439,7 @@ class I18n
             }
         }
         
-        $locals_names = Locales::getNames();
+        $locals_names = extension_loaded('intl') ? Locales::getNames() : Locales::getNames('en');
         if (!isset($locals_words)) {
             $locals_words = [];
         }

@@ -259,6 +259,24 @@ class LinuxProcessDriver extends AbstractProcessDriver
     }
     
     /**
+     * @inheritDoc
+     */
+    public function sendSignal(int $pid, int $signal): bool
+    {
+        if (!$this->isValidPid($pid)) {
+            return false;
+        }
+        $functions = $this->detectAvailableFunctions();
+        if ($functions['posix_kill']) {
+            return @\posix_kill($pid, $signal);
+        }
+        $output = [];
+        $exitCode = 0;
+        $this->executeCommand("kill -{$signal} {$pid} 2>/dev/null", $output, $exitCode);
+        return $exitCode === 0;
+    }
+    
+    /**
      * 获取进程树中所有子进程的 PID（递归）
      * 
      * 策略（快→慢）：

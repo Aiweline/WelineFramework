@@ -157,32 +157,8 @@ class CliServerService
      */
     protected function getProcessIdByPort(int $port): ?int
     {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            @exec('netstat -ano | findstr ":' . $port . '"', $output);
-            
-            if (!empty($output)) {
-                foreach ($output as $line) {
-                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
-                        $pid = (int) $matches[1];
-                        if ($pid > 0) {
-                            return $pid;
-                        }
-                    }
-                }
-            }
-        } else {
-            $output = [];
-            @exec("lsof -ti:{$port} 2>/dev/null", $output);
-            
-            if (!empty($output)) {
-                $pid = (int) trim($output[0]);
-                if ($pid > 0) {
-                    return $pid;
-                }
-            }
-        }
-        
-        return null;
+        $pid = Processer::getProcessIdByPort($port);
+        return $pid > 0 ? $pid : null;
     }
     
     /**

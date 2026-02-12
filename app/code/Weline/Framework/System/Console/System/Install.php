@@ -197,9 +197,9 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             // Windows PowerShell 格式 - 使用反引号或单行
             $examples = [
                 '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
-                '使用 MySQL 数据库安装（生产环境推荐）' => 
+                '使用 PgSql/MySQL 数据库安装（生产环境推荐）' => 
                     'php bin/w system:install `' . "\n" .
-                    '  --db-type=mysql `' . "\n" .
+                    '  --db-type=pgsql `' . "\n" .
                     '  --db-hostname=127.0.0.1 `' . "\n" .
                     '  --db-hostport=3306 `' . "\n" .
                     '  --db-database=weline `' . "\n" .
@@ -213,9 +213,9 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             // Unix/Linux/Mac 格式 - 使用反斜杠
             $examples = [
                 '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
-                '使用 MySQL 数据库安装（生产环境推荐）' => 
+                '使用 PgSql/MySQL 数据库安装（生产环境推荐）' => 
                     'php bin/w system:install \\' . "\n" .
-                    '  --db-type=mysql \\' . "\n" .
+                    '  --db-type=pgsql \\' . "\n" .
                     '  --db-hostname=127.0.0.1 \\' . "\n" .
                     '  --db-hostport=3306 \\' . "\n" .
                     '  --db-database=weline \\' . "\n" .
@@ -232,12 +232,12 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             'system:install',
             $this->tip(),
             [
-                '--db-type' => '数据库类型（mysql/sqlite，默认：sqlite）',
+                '--db-type' => '数据库类型（pgsql/mysql/sqlite，默认：sqlite）',
                 '--db-hostname' => '数据库主机地址（默认：127.0.0.1）',
                 '--db-hostport' => '数据库端口（默认：3306）',
-                '--db-database' => '数据库名称（MySQL必填）',
-                '--db-username' => '数据库用户名（MySQL必填）',
-                '--db-password' => '数据库密码（MySQL必填）',
+                '--db-database' => '数据库名称（PgSql/MySQL必填）',
+                '--db-username' => '数据库用户名（PgSql/MySQL必填）',
+                '--db-password' => '数据库密码（PgSql/MySQL必填）',
                 '--db-prefix' => '表前缀（默认：w_）',
                 '--db-charset' => '字符集（默认：utf8mb4）',
                 '--db-collate' => '排序规则（默认：utf8mb4_general_ci）',
@@ -246,7 +246,7 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             ],
             [
                 '注意事项：',
-                '  1. 生产环境强烈推荐使用 MySQL 数据库',
+                '  1. 生产环境强烈推荐使用 PgSql/MySQL 数据库',
                 '  2. 安装前请确保数据库已创建',
                 '  3. 安装完成后会生成随机的后台入口密钥',
                 '  4. 安装成功后使用 php bin/w server:start 启动服务',
@@ -257,5 +257,5 @@ class Install extends \Weline\Framework\Console\CommandAbstract
     }
 }
 /*
-php bin/w system:install  --db-type=mysql  --db-hostname=127.0.0.1  --db-database=weline  --db-username=weline  --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci
+php bin/w system:install  --db-type=pgsql  --db-hostname=127.0.0.1  --db-database=weline  --db-username=weline  --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci
 */

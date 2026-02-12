@@ -35,9 +35,17 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    /** @inheritDoc */
+    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface
+    {
+        return parent::whereRaw($sql, $where_logic);
+    }
+
     public function __construct(
         private readonly ?ConfigProvider $configProvider
     ) {
+        // FIXME 停止使用，适配不完全，仅提供Pgsql适配器，后续版本可能移除
+        throw new \Exception('MySQL 数据库连接适配器已停止使用，请使用 Pgsql。');
         $identifierFormatter = new DefaultIdentifierFormatter();
         $tableStrategy = new DefaultTableNameStrategy(
             $identifierFormatter,
@@ -48,6 +56,12 @@ final class Connector extends Query implements ConnectorInterface
             $tableStrategy
         );
         $this->db_name = $this->configProvider->getDatabase();
+    }
+
+    /** Connector 自身即持有连接，作为 Query 使用时直接返回，避免依赖 SqlTrait 的 $this->connection */
+    public function getConnectionInterface(): DbConnectionInterface
+    {
+        return $this->getWrappedConnection();
     }
 
     protected ?PDO $link = null;

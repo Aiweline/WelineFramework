@@ -19,6 +19,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\System\Process\Processer;
+
 /**
  * 文件监控服务（高性能版）
  * 
@@ -393,35 +395,33 @@ class FileWatcher
         
         // 回退：信号方式
         $registry = new WlsInstanceRegistry();
-        $isWin = \strtolower(\substr(\PHP_OS, 0, 3)) === 'win';
-        
-        // 尝试向 Master 发送 SIGHUP（仅 Linux/Mac）
+        // 尝试向 Master 发送 SIGHUP
         $masterPids = $registry->getRunningMasterPids();
-        if (!empty($masterPids) && !$isWin && \function_exists('posix_kill')) {
+        if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
-                if ($pid > 0 && @\posix_kill($pid, 0)) {
-                    @\posix_kill($pid, SIGHUP);
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    Processer::sendSignal($pid, SIGHUP, true);
                     echo "[FileWatcher] 已向 Master (PID: {$pid}) 发送 SIGHUP 信号\n";
                 }
             }
             return;
         }
         
-        // 无 Master 或 Windows：直接向 Worker 发送信号（仅 Linux/Mac）
+        // 无 Master 时回退：直接向 Worker 发送信号
         $allWorkerPids = $registry->getRunningWorkerPids();
-        if (!$isWin && \function_exists('posix_kill')) {
-            $signalCount = 0;
+        $signalCount = 0;
+        if (\defined('SIGUSR1')) {
             foreach ($allWorkerPids as $pid) {
                 $pid = (int) $pid;
-                if ($pid > 0 && @\posix_kill($pid, 0)) {
-                    @\posix_kill($pid, \SIGUSR1);
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    Processer::sendSignal($pid, \SIGUSR1, true);
                     $signalCount++;
                 }
             }
-            if ($signalCount > 0) {
-                echo "[FileWatcher] 已向 {$signalCount} 个 Worker 发送 SIGUSR1 信号\n";
-            }
+        }
+        if ($signalCount > 0) {
+            echo "[FileWatcher] 已向 {$signalCount} 个 Worker 发送 SIGUSR1 信号\n";
         }
     }
 

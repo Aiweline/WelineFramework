@@ -99,9 +99,9 @@ class ModelCollector
             try {
                 $modelData = $this->parseModelConfig($configFile);
                 if ($modelData) {
-                    $model = $this->registerModel($modelData);
-                    if ($model) {
-                        $collectedModels[] = $model;
+                    $result = $this->registerModel($modelData);
+                    if (!empty($result['model'])) {
+                        $collectedModels[] = $result['model'];
                     }
                 }
             } catch (\Exception $e) {
@@ -111,6 +111,24 @@ class ModelCollector
         }
 
         return $collectedModels;
+    }
+
+    /**
+     * 按数组直接注册/更新模型到数据库（不读写 etc/models 文件）
+     * 供同步服务等调用，入参与 parseModelConfig / buildModelConfig 产出结构兼容。
+     *
+     * @param array $modelData 须含 model_code、vendor；可选 name/model_name、config、token_price 等
+     * @return array{model: AiModel|null, created: bool}
+     */
+    public function registerModelFromArray(array $modelData): array
+    {
+        if (empty($modelData['model_code']) || empty($modelData['vendor'])) {
+            return ['model' => null, 'created' => false];
+        }
+        if (isset($modelData['model_name']) && !isset($modelData['name'])) {
+            $modelData['name'] = $modelData['model_name'];
+        }
+        return $this->registerModel($modelData);
     }
 
     /**
@@ -298,14 +316,14 @@ class ModelCollector
 
     /**
      * 注册模型到数据库
-     * 
+     *
      * @param array $modelData
-     * @return AiModel|null
+     * @return array{model: AiModel|null, created: bool}
      */
-    private function registerModel(array $modelData): ?AiModel
+    private function registerModel(array $modelData): array
     {
         $modelCode = $modelData['model_code'];
-        
+
         // 先查询是否存在同 model_code 的多条记录，若有则去重（兼容不同返回类型）
         $items = [];
         $maybeCollection = $this->aiModel->reset()
@@ -325,7 +343,7 @@ class ModelCollector
         }
 
         // 过滤无效项
-        $items = array_values(array_filter($items, function($m) {
+        $items = array_values(array_filter($items, function ($m) {
             return $m && is_object($m) && method_exists($m, 'getId') && $m->getId();
         }));
 
@@ -333,11 +351,17 @@ class ModelCollector
             /** @var AiModel $keep */
             $keep = array_shift($items);
             foreach ($items as $dup) {
-                try { $dup->delete(); } catch (\Exception $e) { /* ignore */ }
+                try {
+                    $dup->delete();
+                } catch (\Exception $e) { /* ignore */
+                }
             }
-            return $this->updateExistingModel($keep, $modelData);
-        } elseif (count($items) === 1) {
-            return $this->updateExistingModel($items[0], $modelData);
+            $model = $this->updateExistingModel($keep, $modelData);
+            return ['model' => $model, 'created' => false];
+        }
+        if (count($items) === 1) {
+            $model = $this->updateExistingModel($items[0], $modelData);
+            return ['model' => $model, 'created' => false];
         }
 
         // 若不存在任何记录，则单独查询一条（兼容不同驱动返回）
@@ -347,11 +371,13 @@ class ModelCollector
             ->fetch();
 
         if ($existingModel && $existingModel->getId()) {
-            return $this->updateExistingModel($existingModel, $modelData);
+            $model = $this->updateExistingModel($existingModel, $modelData);
+            return ['model' => $model, 'created' => false];
         }
 
         // 创建新模型
-        return $this->createNewModel($modelData);
+        $model = $this->createNewModel($modelData);
+        return ['model' => $model, 'created' => true];
     }
 
     /**
