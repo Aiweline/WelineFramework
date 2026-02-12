@@ -1373,6 +1373,25 @@ class Processer
         }
         return $result;
     }
+    
+    /**
+     * 向指定进程发送信号（跨平台委托到驱动）
+     *
+     * @param int $pid 进程 ID
+     * @param int $signal 信号值（如 SIGTERM/SIGUSR1/SIGHUP）
+     * @param bool $skipCheck 是否跳过己方进程校验
+     * @return bool 是否发送成功
+     */
+    public static function sendSignal(int $pid, int $signal, bool $skipCheck = false): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
+            return false;
+        }
+        return self::getDriver()->sendSignal($pid, $signal);
+    }
 
     /**
      * 检查端口是否被占用（是否有进程在监听该端口，可用于判断能否 bind）

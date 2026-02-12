@@ -1,5 +1,6 @@
 <?php
 /** @var \GuoLaiRen\Blog\Model\Post[] $posts */
+$aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词兜底模式'));
 ?>
 <w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
@@ -30,9 +31,10 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="mb-0"><lang>博客文章列表</lang></h4>
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-success" id="btnTriggerAi" title="<?= __('从趋势增长词中取词，调用 AI 生成文章（草稿）') ?>">
+                <button type="button" class="btn btn-outline-success" id="btnTriggerAi" title="<?= __('当前模式：%{mode}', ['mode' => $aiModeLabel]) ?>">
                     <i class="mdi mdi-robot"></i> <lang>生成SEO文章</lang>
                 </button>
+                <span class="badge bg-light text-dark d-flex align-items-center"><?= htmlspecialchars($aiModeLabel) ?></span>
                 <a href="<?= $this->getBackendUrl('blog/backend/post/create') ?>"
                    class="btn btn-primary">
                     <i class="mdi mdi-plus"></i> <lang>新建博客</lang>

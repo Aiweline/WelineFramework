@@ -12,15 +12,13 @@ namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\ModelCollector;
-use Weline\Framework\App\Env;
 
 /**
  * AI 供应商模型同步服务
  *
  * 功能：
  * - 调用供应商模型列表 API
- * - 自动更新 vendors 配置
- * - 自动生成/更新 models 配置文件
+ * - 将合并后的模型仅写入数据库（不写 etc/models / etc/vendors 配置文件）
  * - 支持批量同步与干跑模式
  */
 class ModelSyncService
@@ -52,15 +50,16 @@ class ModelSyncService
             $results[$providerCode] = $this->syncProvider($providerCode, $options);
         }
 
-        $collectedCount = null;
-        if (($options['collect'] ?? true) === true) {
-            $collected = $this->modelCollector->collectAllModels();
-            $collectedCount = is_array($collected) ? count($collected) : 0;
+        $dbUpdatedCount = 0;
+        foreach ($results as $res) {
+            if (is_array($res) && isset($res['updated'], $res['created'])) {
+                $dbUpdatedCount += (int)($res['updated'] ?? 0) + (int)($res['created'] ?? 0);
+            }
         }
 
         return [
             'providers' => $results,
-            'collected_count' => $collectedCount,
+            'collected_count' => $dbUpdatedCount,
         ];
     }
 
@@ -148,13 +147,6 @@ class ModelSyncService
         $created = 0;
         $skipped = 0;
 
-        if (!($options['dry_run'] ?? false)) {
-            $writeResult = $this->writeVendorConfig($providerCode, $providerConfig, $mergedModels);
-            if (!$writeResult) {
-                Env::log('ai_model_sync.log', sprintf('[syncProvider] provider=%s write_vendor_config_failed', $providerCode), 'WARNING');
-            }
-        }
-
         $modelDefaults = $providerConfig['model_config_defaults'] ?? [];
         foreach ($mergedModels as $modelMeta) {
             $modelCode = (string)($modelMeta['code'] ?? '');
@@ -164,16 +156,17 @@ class ModelSyncService
             }
 
             $modelConfig = $this->buildModelConfig($providerCode, $modelMeta, $providerConfig, $modelDefaults);
-            $fileName = $this->buildModelConfigFileName($providerCode, $modelCode);
             if (!($options['dry_run'] ?? false)) {
-                $result = $this->modelCollector->createModelConfigFile($fileName, $modelConfig);
-                if ($result) {
-                    $updated++;
+                $result = $this->modelCollector->registerModelFromArray($modelConfig);
+                if (!empty($result['model'])) {
+                    if ($result['created']) {
+                        $created++;
+                    } else {
+                        $updated++;
+                    }
                 } else {
                     $skipped++;
                 }
-            } else {
-                $created++;
             }
         }
 
@@ -202,13 +195,6 @@ class ModelSyncService
         $created = 0;
         $skipped = 0;
 
-        if (!($options['dry_run'] ?? false)) {
-            $writeResult = $this->writeVendorConfig($providerCode, $providerConfig, $mergedModels);
-            if (!$writeResult) {
-                Env::log('ai_model_sync.log', sprintf('[syncProvider] provider=%s write_vendor_config_failed', $providerCode), 'WARNING');
-            }
-        }
-
         $modelDefaults = $providerConfig['model_config_defaults'] ?? [];
         foreach ($mergedModels as $modelMeta) {
             $modelCode = (string)($modelMeta['code'] ?? '');
@@ -217,16 +203,17 @@ class ModelSyncService
                 continue;
             }
             $modelConfig = $this->buildModelConfig($providerCode, $modelMeta, $providerConfig, $modelDefaults);
-            $fileName = $this->buildModelConfigFileName($providerCode, $modelCode);
             if (!($options['dry_run'] ?? false)) {
-                $result = $this->modelCollector->createModelConfigFile($fileName, $modelConfig);
-                if ($result) {
-                    $updated++;
+                $result = $this->modelCollector->registerModelFromArray($modelConfig);
+                if (!empty($result['model'])) {
+                    if ($result['created']) {
+                        $created++;
+                    } else {
+                        $updated++;
+                    }
                 } else {
                     $skipped++;
                 }
-            } else {
-                $created++;
             }
         }
 

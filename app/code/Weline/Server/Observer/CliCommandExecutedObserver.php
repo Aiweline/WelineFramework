@@ -17,6 +17,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\WlsInstanceRegistry;
 
@@ -120,11 +121,11 @@ class CliCommandExecutedObserver implements ObserverInterface
         // IPC 失败：回退到信号方式
         if ($reloadType === self::RELOAD_TYPE_CODE) {
             $masterPids = $registry->getRunningMasterPids();
-            if (!empty($masterPids) && !IS_WIN && \function_exists('posix_kill')) {
+            if (!empty($masterPids) && \defined('SIGHUP')) {
                 $notified = 0;
                 foreach ($masterPids as $pid) {
                     $pid = (int) $pid;
-                    if ($pid > 0 && @\posix_kill($pid, SIGHUP)) {
+                    if ($pid > 0 && Processer::sendSignal($pid, SIGHUP, true)) {
                         $notified++;
                     }
                 }
@@ -146,13 +147,13 @@ class CliCommandExecutedObserver implements ObserverInterface
         $totalWorkers = $stats['workers'];
         $reloadedWorkers = 0;
 
-        if ($reloadType === self::RELOAD_TYPE_CODE && !IS_WIN && \function_exists('posix_kill')) {
+        if ($reloadType === self::RELOAD_TYPE_CODE && \defined('SIGUSR1')) {
             foreach ($allWorkerPids as $pid) {
                 $pid = (int)$pid;
                 if ($pid <= 0) {
                     continue;
                 }
-                if (@\posix_kill($pid, 0) && @\posix_kill($pid, SIGUSR1)) {
+                if (Processer::isRunningByPid($pid) && Processer::sendSignal($pid, SIGUSR1, true)) {
                     $reloadedWorkers++;
                 }
             }

@@ -246,19 +246,7 @@ class ServerInstanceService
      */
     public function isProcessRunning(int $pid): bool
     {
-        if ($pid <= 0) {
-            return false;
-        }
-        
-        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        
-        if ($isWindows) {
-            $output = [];
-            exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-            return count($output) > 1;
-        } else {
-            return posix_kill($pid, 0);
-        }
+        return Processer::isRunningByPid($pid);
     }
     
     /**

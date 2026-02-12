@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Server;
 
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Connection\TcpConnection;
 use Weline\Server\Event\EventInterface;
 
@@ -1054,7 +1055,7 @@ class Worker
             // 发送 SIGTERM 给所有子进程
             foreach (static::$pidMap as $workerPids) {
                 foreach ($workerPids as $pid) {
-                    posix_kill($pid, SIGTERM);
+                    Processer::sendSignal((int)$pid, SIGTERM, true);
                 }
             }
             
@@ -1093,7 +1094,7 @@ class Worker
         $pid = static::getMasterPid();
         
         if ($pid > 0) {
-            posix_kill($pid, SIGUSR1);
+            Processer::sendSignal($pid, SIGUSR1, true);
             return;
         }
         
@@ -1107,7 +1108,7 @@ class Worker
     {
         $pid = static::getMasterPid();
         
-        if ($pid > 0 && (self::$isWindows || posix_kill($pid, 0))) {
+        if ($pid > 0 && Processer::isRunningByPid($pid)) {
             echo \__('Weline Server 正在运行，Master PID：%{1}', [$pid]) . "\n";
         } else {
             echo \__('Weline Server 未运行') . "\n";
@@ -1125,18 +1126,8 @@ class Worker
         
         $pid = (int) file_get_contents(static::$pidFile);
         
-        if ($pid > 0) {
-            if (self::$isWindows) {
-                // Windows 下检查进程是否存在
-                exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-                if (count($output) > 1) {
-                    return $pid;
-                }
-            } else {
-                if (posix_kill($pid, 0)) {
-                    return $pid;
-                }
-            }
+        if ($pid > 0 && Processer::isRunningByPid($pid)) {
+            return $pid;
         }
         
         return 0;

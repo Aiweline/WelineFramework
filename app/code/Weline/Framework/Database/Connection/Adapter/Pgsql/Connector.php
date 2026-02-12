@@ -35,6 +35,12 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    /** @inheritDoc */
+    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface
+    {
+        return parent::whereRaw($sql, $where_logic);
+    }
+
     public function __construct(
         private readonly ?ConfigProvider $configProvider
     ) {
@@ -49,6 +55,12 @@ final class Connector extends Query implements ConnectorInterface
             $tableStrategy
         );
         $this->db_name = $this->configProvider->getDatabase() ?: 'public';
+    }
+
+    /** Connector 自身即持有连接，作为 Query 使用时直接返回，避免依赖 SqlTrait 的 $this->connection */
+    public function getConnectionInterface(): DbConnectionInterface
+    {
+        return $this->getWrappedConnection();
     }
 
     protected ?PDO $link = null;
