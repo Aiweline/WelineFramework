@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+
 interface QueryInterface
 {
     public const attr_IDENTITY_FIELD = 'identity_field';

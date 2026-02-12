@@ -41,6 +41,11 @@ v1.1 解决初始化安装问题以及升级框架内核。
 ### 使用本地命令行环境，快速开始
 
 【注意】此环境仅用于快速搭建开发环境，不可直接用于生产环境。
+
+若本机尚未安装 PHP，可先在项目根执行 **install** 脚本安装 PHP 到 extend/server 并配置环境变量：  
+- Windows：`bin\install.bat`  
+- Linux/Mac：`chmod +x bin/install.sh && ./bin/install.sh`
+
 运行命令：
 
 ```shell

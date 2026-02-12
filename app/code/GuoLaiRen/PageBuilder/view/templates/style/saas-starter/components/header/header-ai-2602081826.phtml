@@ -114,6 +114,9 @@ $stickyHeader = $getConfig('effect.sticky_header', 'yes') === 'yes';
     // 静默处理AI生成代码的错误，记录日志
     error_log('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
+if (!isset($stickyHeader)) {
+    $stickyHeader = true;
+}
 ?>
 
 <!-- AI生成的CSS样式 -->
@@ -531,6 +534,8 @@ window.addEventListener('resize', () => {
 });
 JSEOF;
 $jsContent = trim($_jsPlaceholder);
+// 将 PHP 变量注入到 JS（heredoc 不解析变量，需手动替换）
+$jsContent = str_replace('$stickyHeader', ($stickyHeader ?? true) ? 'true' : 'false', $jsContent);
 // 检查是否有有效的JS内容（非空且不是未替换的占位符）
 $_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
 if ($_hasValidJs): 

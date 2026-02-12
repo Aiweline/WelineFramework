@@ -77,6 +77,7 @@ final class SqliteCompiler extends AbstractCompiler
             $insertFieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $insertFields);
             $sql .= 'INSERT INTO ' . $table . ' (' . implode(',', $insertFieldsQuoted) . ') VALUES ' . $values;
 
+            // 仅当调用方显式设置 exist_update_sql 时才加 ON CONFLICT（SQLite 要求冲突列必须是 PRIMARY KEY 或 UNIQUE，不能为无约束列自动加）
             if ($existUpdateSql !== '') {
                 $conflictFields = [];
                 foreach ($insertUpdateWhereFields as $f) {

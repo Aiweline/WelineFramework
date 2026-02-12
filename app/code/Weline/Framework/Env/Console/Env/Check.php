@@ -65,9 +65,10 @@ class Check extends CommandAbstract
         $this->printer->note('');
         $this->printResult($result, $jsonOutput);
 
-        // 如果有错误，给出手动修复指引
+        // 如果有错误，给出手动修复指引并非零退出（安装脚本可据此终止）
         if ($result->hasError()) {
             $this->printManualFixGuide($result);
+            exit(1);
         }
     }
 

@@ -305,6 +305,26 @@
             "ai_generated_at": "2026-02-08T10:44:53.056Z",
             "css_prefix": "ai-header-ai-2602081826",
             "created_at": "2026-02-08 18:44:53"
+        },
+        "footer-ai-2602121438": {
+            "name": "拜金风格",
+            "name_en": "",
+            "description": "",
+            "region": "footer",
+            "category": "footer",
+            "type": "section",
+            "icon": "bi-robot",
+            "sort_order": 100,
+            "is_default": false,
+            "compatible_styles": [
+                "*"
+            ],
+            "file": "footer\/footer-ai-2602121438.phtml",
+            "config_schema": [],
+            "ai_generated": true,
+            "ai_generated_at": "2026-02-12T06:39:51.998Z",
+            "css_prefix": "ai-footer-ai-2602121438",
+            "created_at": "2026-02-12 14:39:52"
         }
     },
     "nav_config": {

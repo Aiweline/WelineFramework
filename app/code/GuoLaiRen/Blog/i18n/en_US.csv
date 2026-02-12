@@ -12,12 +12,15 @@ URL别名已存在，请更换一个,"URL slug already exists"
 该分类下还有文章，无法删除,"Cannot delete category with posts"
 分类已删除,"Category deleted successfully"
 内容管理,内容管理
+趋势增长词模式,"Trend Growth Mode"
+画像关键词兜底模式,"Profile Keyword Fallback Mode"
 新建博客,"Create Blog"
 标题和URL别名不能为空,"Title and URL slug cannot be empty"
 博客文章已创建,"Blog post created successfully"
 博客文章不存在,"Blog post not found"
 编辑博客,"Edit Blog"
 博客文章已保存,"Blog post saved successfully"
+当前模式：%{mode}；%{result},"Current mode: %{mode}; %{result}"
 执行失败：%{error},"Execution failed: %{error}"
 该文章已经是发布状态,"This article is already published"
 文章已审批发布,"Article approved and published"
@@ -168,7 +171,7 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布,Publish
 博客文章管理,博客文章管理
 博客文章,"Blog Post"
-"从趋势增长词中取词，调用 AI 生成文章（草稿）","Pick trending keywords and generate articles via AI (as draft)"
+当前模式：%{mode},"Current mode: %{mode}"
 按标题或URL别名搜索,"Search by title or URL slug"
 搜索,Search
 当前还没有博客文章，请点击右上角“新建博客”创建。,当前还没有博客文章，请点击右上角“新建博客”创建。
@@ -269,6 +272,7 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
+"从趋势增长词中取词，调用 AI 生成文章（草稿）","Pick trending keywords and generate articles via AI (as draft)"
 "在 serpapi.com 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at serpapi.com and get API Key for Google Trends data."
 "1. 访问 https://serpapi.com 注册账号；","1. Visit https://serpapi.com to register;"
 新建画像,"New Profile"

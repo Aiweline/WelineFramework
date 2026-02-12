@@ -17,9 +17,11 @@ use Weline\I18n\LocalModelInterface;
 use GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator;
 use GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry;
 use GuoLaiRen\PageBuilder\Service\AI\EntityFileManager;
+use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use GuoLaiRen\PageBuilder\Service\ComponentService;
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Component\LocalDescription;
+use GuoLaiRen\PageBuilder\Model\AiComponentDraft;
 
 class AiComponent extends BackendController
 {
@@ -203,6 +205,92 @@ class AiComponent extends BackendController
         $this->session->setData('pagebuilder_refine_paths', $paths);
         return $content !== false ? $content : ($body['template_content'] ?? '');
     }
+    
+    /**
+     * 仅根据 refine_token 解析出 phtml 文件路径（不读内容、不删文件），供「写文件后 ob 渲染」使用
+     */
+    private function getRefineTokenPath(string $refineToken): ?string
+    {
+        if ($refineToken === '') {
+            return null;
+        }
+        $paths = $this->session->getData('pagebuilder_refine_paths') ?: [];
+        $entry = $paths[$refineToken] ?? null;
+        if (!$entry || empty($entry['path']) || !is_file($entry['path'])) {
+            return null;
+        }
+        return $entry['path'];
+    }
+
+    /**
+     * 统一解析 POST body 为关联数组（支持 array/string JSON）
+     */
+    private function getJsonBody(): array
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_array($bodyParams)) {
+            return $bodyParams;
+        }
+        if (is_string($bodyParams)) {
+            $decoded = json_decode($bodyParams, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
+    }
+
+    /**
+     * 从请求 body 解析出待渲染的 phtml 内容：draft_id / component_id 从 DB 取，或 body 中 template_content。
+     * 不处理 refine_token（由调用方按路径分支处理）。
+     */
+    private function resolveTemplateContent(array $body): string
+    {
+        $draftId = isset($body['draft_id']) ? (int) $body['draft_id'] : 0;
+        $componentId = isset($body['component_id']) ? (int) $body['component_id'] : 0;
+        $templateContent = trim((string) ($body['template_content'] ?? ''));
+
+        if ($draftId > 0) {
+            $draft = ObjectManager::getInstance(AiComponentDraft::class);
+            $draft->load($draftId);
+            if ($draft->getId()) {
+                return (string) $draft->getData(AiComponentDraft::fields_TEMPLATE_CONTENT);
+            }
+        }
+        if ($componentId > 0) {
+            $component = ObjectManager::getInstance(Component::class);
+            $component->load($componentId);
+            if ($component->getId()) {
+                return $component->getTemplateContent();
+            }
+        }
+        return $templateContent;
+    }
+
+    /**
+     * 将 phtml 内容修复、写临时文件、ob 渲染，返回 [ success, html, error ]；可选包一层完整 HTML 文档。
+     */
+    private function renderPhtmlToPreviewHtml(string $phtmlContent, bool $wrapFullDocument = true): array
+    {
+        $phtmlContent = $this->generator->prepareTemplateForPreview($phtmlContent);
+        $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pb_preview';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0770, true);
+        }
+        $uid = uniqid('pb_preview_', true);
+        $phtmlPath = $tempDir . DIRECTORY_SEPARATOR . $uid . '.phtml';
+        file_put_contents($phtmlPath, $phtmlContent);
+        try {
+            $renderer = ObjectManager::getInstance(PreviewRenderer::class);
+            $result = $renderer->renderFromFile($phtmlPath);
+            if ($wrapFullDocument && $result['success'] && !empty($result['html'])) {
+                $result['html'] = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+                    . '<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f5f5f5;}</style>'
+                    . '</head><body>' . $result['html'] . '</body></html>';
+            }
+            return $result;
+        } finally {
+            @unlink($phtmlPath);
+        }
+    }
 
     /**
      * API: 微调 AI 组件
@@ -283,11 +371,23 @@ class AiComponent extends BackendController
                     $this->entityFileManager->syncEntityFile($existing);
                 }
             }
+
+            // 草稿未保存前：微调后更新同一 draft_id，便于反复预览/微调
+            $draftId = isset($body['draft_id']) ? (int) $body['draft_id'] : 0;
+            if ($draftId > 0) {
+                $draft = ObjectManager::getInstance(AiComponentDraft::class);
+                $draft->load($draftId);
+                if ($draft->getId()) {
+                    $draft->setData(AiComponentDraft::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    $draft->save();
+                }
+            }
             
             return $this->fetchJson([
                 'success' => true,
                 'result' => $result->toArray(),
                 'agent' => $result->getAgentInfo(),
+                'draft_id' => $draftId,
                 'preview' => [
                     'html' => $previewHtml,
                     'success' => $previewSuccess,
@@ -330,6 +430,7 @@ class AiComponent extends BackendController
             $templateContent = $this->resolveTemplateContentFromRefineToken($body);
             $adjustmentPrompt = $body['adjustment_prompt'] ?? '';
             $category = $body['category'] ?? 'content';
+            $draftId = isset($body['draft_id']) ? (int) $body['draft_id'] : 0;
 
             if (empty($templateContent)) {
                 $sse->sendEvent('error', ['message' => __('请提供模板内容或有效的 refine_token')]);
@@ -399,10 +500,21 @@ class AiComponent extends BackendController
                 }
             }
 
+            // 草稿未保存前：微调后更新同一 draft_id，便于反复预览/微调
+            if ($draftId > 0) {
+                $draft = ObjectManager::getInstance(AiComponentDraft::class);
+                $draft->load($draftId);
+                if ($draft->getId()) {
+                    $draft->setData(AiComponentDraft::fields_TEMPLATE_CONTENT, $newTemplateContent);
+                    $draft->save();
+                }
+            }
+
             $sse->sendEvent('complete', [
                 'success' => true,
                 'result' => $result->toArray(),
                 'agent' => $result->getAgentInfo(),
+                'draft_id' => $draftId,
                 'preview' => [
                     'html' => $previewHtml,
                     'success' => $previewSuccess,
@@ -469,6 +581,99 @@ class AiComponent extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'html' => '',
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * API: 将本次 AI 生成的组件写入 phtml 文件后，用 ob 服务渲染该文件，返回 HTML 预览。
+     * 供 component-stream 完成后调用：先写 phtml，再 ob 渲染，返回预览内容。
+     * POST /backend/visual/api/ai-component/render-preview
+     * 请求参数：template_content（原始 phtml）或 refine_token（component-stream 完成时返回的临时文件引用）
+     */
+    public function postRenderPreview()
+    {
+        try {
+            $body = $this->getJsonBody();
+            $refineToken = $body['refine_token'] ?? '';
+            if ($refineToken !== '') {
+                $phtmlPath = $this->getRefineTokenPath($refineToken);
+                if ($phtmlPath !== null && is_file($phtmlPath)) {
+                    $renderer = ObjectManager::getInstance(PreviewRenderer::class);
+                    return $this->fetchJson($renderer->renderFromFile($phtmlPath));
+                }
+            }
+            $templateContent = $this->resolveTemplateContent($body);
+            if ($templateContent === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'html' => '',
+                    'error' => __('请提供 template_content 或有效的 refine_token'),
+                ]);
+            }
+            return $this->fetchJson($this->renderPhtmlToPreviewHtml($templateContent, false));
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'html' => '',
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * API: 按 draft_id 或 component_id 从数据库取内容，写 phtml 后 ob 渲染，返回真实预览 HTML。
+     * POST /backend/visual/api/ai-component/preview-by-id
+     * 请求体：draft_id（component-stream 草稿）或 component_id（agent 已保存组件）二选一。
+     */
+    public function postPreviewById()
+    {
+        try {
+            $body = $this->getJsonBody();
+            $templateContent = $this->resolveTemplateContent($body);
+            if ($templateContent === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'html' => '',
+                    'error' => __('请提供有效的 draft_id 或 component_id'),
+                ]);
+            }
+            return $this->fetchJson($this->renderPhtmlToPreviewHtml($templateContent, true));
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'html' => '',
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * API: 按 draft_id 或 component_id 返回原始草稿/组件模板内容（供调试复制，不渲染）。
+     * POST /backend/visual/api/ai-component/draft-content-by-id
+     * 请求体：draft_id（草稿）或 component_id（已保存组件）二选一。
+     */
+    public function postDraftContentById()
+    {
+        try {
+            $body = $this->getJsonBody();
+            $content = $this->resolveTemplateContent($body);
+            if ($content === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'content' => '',
+                    'error' => __('请提供有效的 draft_id 或 component_id'),
+                ]);
+            }
+            return $this->fetchJson([
+                'success' => true,
+                'content' => $content,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'content' => '',
                 'error' => $e->getMessage(),
             ]);
         }

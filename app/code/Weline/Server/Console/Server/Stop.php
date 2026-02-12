@@ -334,12 +334,8 @@ class Stop extends CommandAbstract
             }
         }
         
-        // 强制终止
-        if (IS_WIN) {
-            @\exec("taskkill /F /PID {$masterPid} 2>NUL");
-        } else {
-            @\posix_kill($masterPid, SIGKILL);
-        }
+        // 强制终止（统一委托 Processer 驱动）
+        Processer::killByPid($masterPid, true);
         
         $this->printer->warning(__('  └─ Master 进程已强制终止'));
         echo "\n";

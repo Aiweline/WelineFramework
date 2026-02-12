@@ -19,6 +19,16 @@ use Weline\Framework\Module\Dependency\Sort;
 
 class Register implements RegisterDataInterface
 {
+    /** 阶段：仅执行 MODULE 类型注册（用于升级时先装模块再刷新依赖再注册其余） */
+    public const PHASE_MODULE_ONLY = 'module_only';
+    /** 阶段：执行所有类型注册（默认） */
+    public const PHASE_ALL = 'all';
+
+    /** 当前注册阶段，由 Upgrade 在两阶段流程中设置 */
+    private static string $registerPhase = self::PHASE_ALL;
+    /** 在 MODULE_ONLY 阶段被延后的非 MODULE 注册项（待依赖刷新后执行） */
+    private static array $pendingRegistrations = [];
+
     private array $original_module_data = [];
 
     /**
@@ -37,6 +47,10 @@ class Register implements RegisterDataInterface
      */
     public static function register(string $type, string $module_name, array|string $param, string $version = '', string $description = '', array $dependencies = []): mixed
     {
+        if (self::$registerPhase === self::PHASE_MODULE_ONLY && $type !== self::MODULE) {
+            self::$pendingRegistrations[] = func_get_args();
+            return null;
+        }
         $install_params = func_get_args();
         switch ($type) {
             // 模块安装
@@ -77,6 +91,39 @@ class Register implements RegisterDataInterface
         } else {
             throw new ConsoleException($installer_class . __('安装器必须继承：') . RegisterInterface::class);
         }
+    }
+
+    /**
+     * 设置注册阶段（仅 Upgrade 两阶段流程使用）
+     * PHASE_MODULE_ONLY：只执行 MODULE，其余入队；切换到此阶段时会清空待执行队列。
+     */
+    public static function setRegisterPhase(string $phase): void
+    {
+        self::$registerPhase = $phase;
+        if ($phase === self::PHASE_MODULE_ONLY) {
+            self::$pendingRegistrations = [];
+        }
+    }
+
+    /**
+     * 执行所有延后的注册项（依赖刷新后由 Upgrade 调用）
+     */
+    public static function runPendingRegistrations(): void
+    {
+        self::$registerPhase = self::PHASE_ALL;
+        foreach (self::$pendingRegistrations as $args) {
+            self::register(...$args);
+        }
+        self::$pendingRegistrations = [];
+    }
+
+    /**
+     * 恢复默认阶段并清空待执行队列
+     */
+    public static function clearRegisterPhase(): void
+    {
+        self::$registerPhase = self::PHASE_ALL;
+        self::$pendingRegistrations = [];
     }
 
     /**

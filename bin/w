@@ -40,5 +40,5 @@ CLI_E;
         echo PHP_EOL."{$chr}[0m";
         $e = $e->getPrevious();
     }
-    exit(0);
+    exit(1);
 }

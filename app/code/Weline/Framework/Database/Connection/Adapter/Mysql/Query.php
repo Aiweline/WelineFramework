@@ -21,6 +21,16 @@ use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * MySQL 查询构建器
+ *
+ * 继承自 QueryAst 的方法：
+ * @method void reorderWhereByIndexes() 重新排序 where 条件（按索引优化）
+ * @method void buildAst(string $action) 构建 AST 结构
+ * @method string normalizeFieldName(string $field) 规范化字段名
+ *
+ * @see \Weline\Framework\Database\Connection\Api\Sql\QueryAst
+ */
 abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\QueryAst
 {
     use SqlTrait;
@@ -113,28 +123,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface
-    {
-        if ($field) {
-            # 单条记录更新
-            if (is_string($field)) {
-                $this->single_updates[$field] = $value_or_condition_field;
-            } else {
-                // 设置数据更新依赖条件主键
-                if ($this->identity_field !== $value_or_condition_field) {
-                    $this->identity_field = $value_or_condition_field;
-                }
-                if (is_string(array_key_first($field))) {
-                    $this->updates[] = $field;
-                } else {
-                    $this->updates = $field;
-                }
-            }
-        }
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
+    /**
+     * update/find/select/delete 统一走 QueryAst，仅在本适配器实现 prepareSql 将 AST 编译为方言 SQL
+     */
 
     public function alias(string $table_alias_name): QueryInterface
     {
@@ -221,35 +212,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public function having(string $having): QueryInterface
     {
         $this->having = 'having ' . $having;
-        return $this;
-    }
-
-    public function find(string $find_fields = ''): QueryInterface
-    {
-        if ($find_fields) {
-            $this->find_fields = $find_fields;
-            $this->fields($find_fields);
-        }
-        $this->limit(1, 0);
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
-
-    public function select(string $fields = ''): QueryInterface
-    {
-        if ($fields) {
-            $this->fields($fields);
-        }
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
-
-    public function delete(): QueryInterface
-    {
-        $this->fetch_type = __FUNCTION__;
-        $this->prepareSql(__FUNCTION__);
         return $this;
     }
 

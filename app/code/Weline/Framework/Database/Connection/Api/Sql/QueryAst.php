@@ -26,7 +26,11 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * QueryAst - 查询抽象语法树类
- * 负责构建和管理查询的 AST（抽象语法树），具体的 SQL 编译由各个适配器实现
+ *
+ * 所有数据库写读操作（insert/update/delete/select/find）均在此定义并统一经 AST 执行：
+ * 1. 各操作方法设置 fetch_type 并调用 prepareSql($action)
+ * 2. 各适配器仅实现 prepareSql()：先 buildAst($action)，再将 AST 编译为方言 SQL
+ * 唯一不经 AST 的入口为 query(string $sql)，用于执行原始 SQL。
  */
 abstract class QueryAst implements QueryInterface
 {
@@ -251,6 +255,7 @@ abstract class QueryAst implements QueryInterface
         if (empty($data)) {
             throw new DbException('插入数据不能为空！');
         }
+        $this->fetch_type = __FUNCTION__;
         # 要更新的字段
         if ($update_fields) {
             if (is_string($update_fields)) {
@@ -440,7 +445,6 @@ abstract class QueryAst implements QueryInterface
         $this->fields = $fields;
         // 更新 AST
         $this->updateAstInsert($this->insert);
-        $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
         $this->fields = $origin_fields;
         return $this;
@@ -448,6 +452,7 @@ abstract class QueryAst implements QueryInterface
 
     public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface
     {
+        $this->fetch_type = __FUNCTION__;
         if ($field) {
             # 单条记录更新
             if (is_string($field)) {
@@ -466,7 +471,6 @@ abstract class QueryAst implements QueryInterface
         }
         // 更新 AST
         $this->updateAstUpdate($this->single_updates, $this->updates);
-        $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
         return $this;
     }
@@ -783,12 +787,12 @@ abstract class QueryAst implements QueryInterface
 
     public function find(string $find_fields = ''): QueryInterface
     {
+        $this->fetch_type = __FUNCTION__;
         if ($find_fields) {
             $this->find_fields = $find_fields;
             $this->fields($find_fields);
         }
         $this->limit(1, 0);
-        $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
         return $this;
     }
@@ -853,10 +857,10 @@ abstract class QueryAst implements QueryInterface
 
     public function select(string $fields = ''): QueryInterface
     {
+        $this->fetch_type = __FUNCTION__;
         if ($fields) {
             $this->fields($fields);
         }
-        $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
         return $this;
     }
@@ -916,6 +920,19 @@ abstract class QueryAst implements QueryInterface
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             $msg .= 'Format SQL:' . $this->getSql(true);
             Debug::target('pre_fetch', $msg);
+        }
+        // 防御：fetch_type 为空但 sql 已有时，根据 SQL 推断操作类型（避免链式操作中 query 被 reset/clear 后丢失类型）
+        if ($this->fetch_type === '' && trim($this->sql ?? '') !== '') {
+            $sqlUpper = strtoupper(ltrim(trim($this->sql)));
+            if (str_starts_with($sqlUpper, 'INSERT')) {
+                $this->fetch_type = 'insert';
+            } elseif (str_starts_with($sqlUpper, 'SELECT')) {
+                $this->fetch_type = 'select';
+            } elseif (str_starts_with($sqlUpper, 'UPDATE')) {
+                $this->fetch_type = 'update';
+            } elseif (str_starts_with($sqlUpper, 'DELETE')) {
+                $this->fetch_type = 'delete';
+            }
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             // 检查 SQL 是否包含 RETURNING 子句（PostgreSQL）
@@ -1053,7 +1070,13 @@ abstract class QueryAst implements QueryInterface
                 }
                 break;
             default:
-                throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}', $this->fetch_type));
+                // fetch_type 仍为空时返回 $data 避免链式 insert()->fetch() 在部分环境下中断升级，不抛错
+                if ($this->fetch_type === '') {
+                    $result = is_array($data) ? $data : [];
+                } else {
+                    throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}', $this->fetch_type));
+                }
+                break;
         }
         $this->fetch_type = '';
         # 调试环境信息

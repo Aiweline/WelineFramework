@@ -469,7 +469,13 @@ abstract class AbstractModel extends DataObject
                 if (!$keep_condition) {
                     $this->current_query->clearQuery();
                 }
-                $query = $this->current_query->table($tableName)->identity($this->_primary_key);
+                // 已有 SQL 时直接返回，避免 table()/identity() 在部分适配器下覆盖或清空 fetch_type/sql（链式 insert()->fetch() 必须用同一 query）
+                $existingSql = $this->current_query->sql ?? '';
+                if ($keep_condition && trim((string)$existingSql) !== '') {
+                    $query = $this->current_query;
+                } else {
+                    $query = $this->current_query->table($tableName)->identity($this->_primary_key);
+                }
             } else {
                 // 区分是否保持查询
                 $connection = $this->getConnection();
@@ -522,7 +528,8 @@ abstract class AbstractModel extends DataObject
         # 如果绑定了查询
         if ($this->_bind_query) {
             $this->_bind_query = $query;
-        } elseif ($this->current_query) {
+        } else {
+            # 必须保存操作后的 query，否则链式 insert()->fetch() 时 fetch 会拿到新 query 导致 fetch_type 丢失
             $this->current_query = $query;
         }
         return $this;

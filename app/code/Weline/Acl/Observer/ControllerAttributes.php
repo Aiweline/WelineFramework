@@ -519,9 +519,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 🔧 修复：使用 insertOrUpdate 语法，如果 source_id 已存在则更新，否则插入
-            // 第二个参数指定冲突检测字段（数组格式），第三个参数指定要更新的字段（空字符串表示更新所有字段）
-            // 这样可以避免唯一约束违反错误
+            // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+            $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
             $this->acl->insert($deduplicatedAcls, 'source_id', '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {
@@ -646,9 +645,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
         try {
-            // 🔧 修复：使用 insertOrUpdate 语法，如果 source_id 已存在则更新，否则插入
-            // 第二个参数指定冲突检测字段（数组格式），第三个参数指定要更新的字段（空字符串表示更新所有字段）
-            // 这样可以避免唯一约束违反错误
+            // acl 表对 source_id 有 UNIQUE，显式设置 exist_update_sql 后 Sqlite 会生成 ON CONFLICT(source_id) DO UPDATE，避免 UNIQUE 违反
+            $this->acl->getQuery()->exist_update_sql = 'DO UPDATE SET ALL_FIELDS';
             $this->acl->insert($deduplicatedAcls, ['source_id'], '')->fetch();
             $this->acl->commit();
         } catch (\Exception $exception) {

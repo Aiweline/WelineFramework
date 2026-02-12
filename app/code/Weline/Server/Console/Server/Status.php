@@ -285,44 +285,14 @@ class Status extends CommandAbstract
      */
     protected function showWorkerMemory(int $port, string $prefix): void
     {
-        $isWindows = \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
-        
-        if ($isWindows) {
-            // Windows: 通过端口找到 PID，然后获取内存
-            $output = [];
-            @\exec("netstat -ano | findstr :{$port} 2>NUL", $output);
-            
-            foreach ($output as $line) {
-                if (\preg_match('/LISTENING\s+(\d+)$/', \trim($line), $matches)) {
-                    $pid = (int) $matches[1];
-                    $memOutput = [];
-                    $psCmd = "powershell -NoProfile -Command \"(Get-Process -Id {$pid} -ErrorAction SilentlyContinue).WorkingSet64\" 2>NUL";
-                    @\exec($psCmd, $memOutput);
-                    
-                    if (!empty($memOutput[0]) && \is_numeric(\trim($memOutput[0]))) {
-                        $memory = (int) \trim($memOutput[0]);
-                        $memoryMB = \round($memory / 1024 / 1024, 2);
-                        $this->printer->note("  {$prefix}  └─ 内存：{$memoryMB} MB (PID: {$pid})");
-                    }
-                    break;
-                }
-            }
-        } else {
-            // Linux/Mac: 类似方式
-            $output = [];
-            @\exec("lsof -ti:{$port} 2>/dev/null", $output);
-            
-            if (!empty($output[0]) && \is_numeric(\trim($output[0]))) {
-                $pid = (int) \trim($output[0]);
-                $memOutput = [];
-                @\exec("ps -p {$pid} -o rss= 2>/dev/null", $memOutput);
-                
-                if (!empty($memOutput[0])) {
-                    $memoryKB = (int) \trim($memOutput[0]);
-                    $memoryMB = \round($memoryKB / 1024, 2);
-                    $this->printer->note("  {$prefix}  └─ 内存：{$memoryMB} MB (PID: {$pid})");
-                }
-            }
+        $pid = Processer::getProcessIdByPort($port);
+        if ($pid <= 0) {
+            return;
+        }
+        $info = Processer::getProcessInfo($pid);
+        $memory = (string)($info['memory'] ?? '');
+        if ($memory !== '') {
+            $this->printer->note("  {$prefix}  └─ 内存：{$memory} (PID: {$pid})");
         }
     }
     
@@ -334,28 +304,10 @@ class Status extends CommandAbstract
         if ($pid <= 0) {
             return;
         }
-        
-        $isWindows = \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
-        
-        if ($isWindows) {
-            $memOutput = [];
-            $psCmd = "powershell -NoProfile -Command \"(Get-Process -Id {$pid} -ErrorAction SilentlyContinue).WorkingSet64\" 2>NUL";
-            @\exec($psCmd, $memOutput);
-            
-            if (!empty($memOutput[0]) && \is_numeric(\trim($memOutput[0]))) {
-                $memory = (int) \trim($memOutput[0]);
-                $memoryMB = \round($memory / 1024 / 1024, 2);
-                $this->printer->note("{$prefix}└─ 内存：{$memoryMB} MB");
-            }
-        } else {
-            $memOutput = [];
-            @\exec("ps -p {$pid} -o rss= 2>/dev/null", $memOutput);
-            
-            if (!empty($memOutput[0])) {
-                $memoryKB = (int) \trim($memOutput[0]);
-                $memoryMB = \round($memoryKB / 1024, 2);
-                $this->printer->note("{$prefix}└─ 内存：{$memoryMB} MB");
-            }
+        $info = Processer::getProcessInfo($pid);
+        $memory = (string)($info['memory'] ?? '');
+        if ($memory !== '') {
+            $this->printer->note("{$prefix}└─ 内存：{$memory}");
         }
     }
     

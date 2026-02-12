@@ -33,9 +33,9 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 class PageBuilderAgent implements AgentInterface
 {
     /**
-     * 安全上限：防止死循环（正常任务不应触及此值）
+     * 安全上限：防止死循环（计划规定 7 轮）
      */
-    private const MAX_ITERATIONS = 20;
+    private const MAX_ITERATIONS = 7;
 
     /**
      * @var ToolInterface[]|null
@@ -122,6 +122,8 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 
 ### CSS
 - 选择器一律以 `#componentId` 开头（运行时注入），实现样式隔离。
+- **在最终 phtml 中**选择器必须写成完整 PHP 短标签 `#<?= $componentId ?>`，禁止写成 `#= $componentId`（缺 <? 和 ?> 会导致选择器无效、样式不生效）。
+- 类名与框架一致：footer 框架使用 ai-footer-*（如 ai-footer-social、ai-footer-brand、ai-footer-links），header 使用 ai-header-*。你输出的 HTML、CSS、JS 必须使用与框架相同的类名；禁止为框架已有结构 invent 不存在的类（例如框架已有 .ai-footer-social 时禁止写 .pb-footer-social-icons，JS/CSS 选择器应使用 .ai-footer-social）。
 - 类名 BEM + 组件前缀；用 clamp() 做响应式字体；布局用 Grid 或 Flexbox。
 - 颜色用主题变量：var(--pb-primary)、var(--pb-accent)、var(--pb-bg)、var(--pb-text)、var(--pb-heading)、var(--pb-link)、var(--pb-link-hover)、var(--pb-text-muted)、var(--pb-border)。禁止硬编码色值。
 - 移动端样式写在 css_responsive 字段。
@@ -136,10 +138,13 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 
 ### js_content
 - 框架已提供变量 `component`（当前组件 DOM）；用 component.id，禁止写 $componentId 或 PHP。
+- 选择器必须与 HTML 中的 class 一致（如框架为 .ai-footer-social 则用 component.querySelectorAll('.ai-footer-social a')，禁止写不存在的 .pb-footer-social-icons 等）。
+- 禁止使用 alert()；请使用 FrontendToast.warning / .error 或主题提供的 toast（若存在）。
 - 直接写逻辑，不要 DOMContentLoaded 或 IIFE 包裹。不需要时填 ""。
 
 ### extra_fields
 - 一行一条：group:组名 => 组标题，或 key => 标签:类型:默认值|选项；类型为 text、textarea、number、color、select、image。不需要时填 ""。
+- 每行仅一个星号开头（* key => ...），禁止 "* * key" 双星号开头。
 
 ## 五、一次性生成流程（第一轮就按此执行，勿探讨）
 
@@ -154,6 +159,7 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 - 禁止在 JSON 前加「好的，以下是…」等说明。
 - 禁止用 \`\`\`json 包裹。
 - 禁止在 JSON 后加任何文字。
+- 在 JSON 中，所有字符串值内**禁止使用真实换行**；换行必须写成 \n。如 extra_fields 等多行内容，用 \n 连接成一行，不要在多行字符串里写真实换行。
 系统会对整条消息做 JSON 解析，非 JSON 会导致失败。
 
 必需字段（均为字符串）：name, description, html_content（必填不能为空）, css_content, css_responsive, js_content, php_variables（仅简单赋值每行分号结尾，禁止含大括号 { }）, extra_fields。
@@ -442,7 +448,7 @@ SYSTEM_PROMPT;
                 $finalMessages = $messages;
                 $finalMessages[] = [
                     'role' => 'user',
-                    'content' => 'Validation passed. Reply with ONLY the component JSON object. No explanation, no markdown, no text before or after. The entire message must be a single valid JSON object starting with { and ending with }.',
+                    'content' => 'Validation passed. Reply with ONLY the component JSON object. No explanation, no markdown, no text before or after. The entire message must be a single valid JSON object starting with { and ending with }. In JSON string values use \n for newlines; do not use literal line breaks.',
                 ];
                 $jsonOnlyParams = [
                     'messages' => $finalMessages,
@@ -516,7 +522,7 @@ SYSTEM_PROMPT;
                 $finalMessages = $messages;
                 $finalMessages[] = [
                     'role' => 'user',
-                    'content' => 'Reply with ONLY the component JSON object. No explanation, no markdown. The entire message must be a single valid JSON starting with { and ending with }. html_content must contain full HTML.',
+                    'content' => 'Reply with ONLY the component JSON object. No explanation, no markdown. The entire message must be a single valid JSON starting with { and ending with }. html_content must contain full HTML. In JSON string values use \n for newlines; do not use literal line breaks.',
                 ];
 
                 if ($useStreamFull) {

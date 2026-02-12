@@ -17,6 +17,7 @@ namespace Weline\Server\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\WlsInstanceRegistry;
 
@@ -71,11 +72,11 @@ class CacheFlushedObserver implements ObserverInterface
 
         // 回退：向 Master 发 SIGHUP
         $masterPids = $registry->getRunningMasterPids();
-        if (!empty($masterPids) && !IS_WIN && \function_exists('posix_kill')) {
+        if (!empty($masterPids) && \defined('SIGHUP')) {
             foreach ($masterPids as $pid) {
                 $pid = (int) $pid;
                 if ($pid > 0) {
-                    @\posix_kill($pid, SIGHUP);
+                    Processer::sendSignal($pid, SIGHUP, true);
                 }
             }
             return;
@@ -83,11 +84,11 @@ class CacheFlushedObserver implements ObserverInterface
 
         // 无 Master 时回退：直接向 Worker 发 SIGUSR1
         $allWorkerPids = $registry->getRunningWorkerPids();
-        if (!IS_WIN && \function_exists('posix_kill')) {
+        if (\defined('SIGUSR1')) {
             foreach ($allWorkerPids as $pid) {
                 $pid = (int) $pid;
-                if ($pid > 0 && @\posix_kill($pid, 0)) {
-                    @\posix_kill($pid, \SIGUSR1);
+                if ($pid > 0 && Processer::isRunningByPid($pid)) {
+                    Processer::sendSignal($pid, \SIGUSR1, true);
                 }
             }
         }

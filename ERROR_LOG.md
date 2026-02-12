@@ -86,3 +86,65 @@ CLI 输出体系使用 `Weline\Framework\Output\Cli\AbstractPrint`，新增的
 
 **相关文件**:
 - `app/code/Weline/Server/Service/MasterProcess.php`
+
+---
+
+## 2026-02-12 BackendUserRole 安装阶段外键失败（PostgreSQL）
+
+**错误类型**: 数据库外键约束 / 初始化数据设计  
+**错误信息**:
+```
+SQLSTATE[23503]: Foreign key violation
+insert or update on table "m_backend_acl_user_role" violates foreign key constraint "USER_ID"
+DETAIL: Key (user_id)=(2) is not present in table "m_backend_user".
+```
+
+**根本原因**:
+`Weline\Backend\Model\Backend\Acl\UserRole::install()` 在建表后固定写入 `user_id=2` 的角色数据，
+但 `BackendUser::install()` 默认只创建了一个后台用户（通常为 id=1），导致安装阶段外键失败。
+
+**解决方案**:
+- `UserRole::install()` 改为“仅在管理员用户真实存在时分配默认角色”。
+- 使用 `BackendUser->load(1)` 判定存在性，存在才插入角色映射，避免硬编码依赖不存在用户。
+
+**验证结果**:
+- `php -l app/code/Weline/Backend/Model/Backend/Acl/UserRole.php` 语法检查通过。
+- `setup:upgrade` 运行被已有锁文件阻断（`var/process/setup_upgrade.lock`），未完成端到端验证。
+
+**预防措施**:
+1. 安装种子数据不要硬编码跨表外键 ID（如 `user_id=2`）。
+2. 需要跨表初始化时，先做存在性检查或拆分到专门的数据初始化阶段。
+
+**相关文件**:
+- `app/code/Weline/Backend/Model/Backend/Acl/UserRole.php`
+
+---
+
+## 2026-02-12 Pgsql 回退 exec() 占位符未替换导致语法错误
+
+**错误类型**: PostgreSQL 参数规范化状态不一致  
+**错误信息**:
+```
+SQLSTATE[42601]: Syntax error: 7 ERROR:  syntax error at or near ":"
+LINE 1: ... VALUES (:2a92c4a34...
+```
+
+**根本原因**:
+`preparePgsql()` 会规范化参数名（如 `:2xxx` -> `:p2xxx`），并修改 `bound_values`，
+但未同步对象中的 SQL 状态；当后续走 `exec()` 回退路径时，`getSqlWithBounds($this->sql)`
+使用的是旧占位符 SQL，导致绑定键与 SQL 占位符不一致，替换失败，原始 `:xxx` 被发送到 PostgreSQL。
+
+**解决方案**:
+- 在 `preparePgsql()` 参数名规范化后，立即同步 `$this->sql = $sql`，
+  保证后续 `exec()` 回退路径中 SQL 与 `bound_values` 键一致。
+
+**验证结果**:
+- `php -l app/code/Weline/Framework/Database/Connection/Adapter/Pgsql/Query.php` 语法检查通过。
+- `setup:upgrade` 运行被已有锁文件阻断（`var/process/setup_upgrade.lock`），未完成端到端验证。
+
+**预防措施**:
+1. 任何 SQL/绑定参数规范化必须保持“同源一致”（SQL 占位符与绑定键同一套命名）。
+2. `prepare` 与 `exec` 双路径并存时，必须保证回退路径复用一致状态。
+
+**相关文件**:
+- `app/code/Weline/Framework/Database/Connection/Adapter/Pgsql/Query.php`
