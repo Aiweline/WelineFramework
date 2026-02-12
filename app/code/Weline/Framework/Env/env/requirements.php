@@ -27,6 +27,7 @@ return [
         'dom',
         'libxml',
         'simplexml',
+        'intl',  // I18n 多语言排序等需要；未安装时 Symfony Polyfill 仅支持 en，zh_Hans_CN 会报错
     ],
 
     // 必需的函数（须未被 disable_functions）

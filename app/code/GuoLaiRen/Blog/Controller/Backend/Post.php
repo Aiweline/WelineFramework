@@ -12,6 +12,7 @@ namespace GuoLaiRen\Blog\Controller\Backend;
 use GuoLaiRen\Blog\Cron\AiPublish;
 use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
+use GuoLaiRen\Blog\Model\TrendsConfig;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -91,6 +92,8 @@ class Post extends BackendController
 
         $this->assign('posts', $posts->getItems());
         $this->assign('pagination', $posts->getPagination());
+        $hasTrendSource = TrendsConfig::useSerpApi() || TrendsConfig::useOfficialApi();
+        $this->assign('ai_mode_label', $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式'));
 
         return $this->fetch('index');
     }
@@ -280,13 +283,16 @@ class Post extends BackendController
     public function postTriggerAiPublish(): string
     {
         try {
+            $hasTrendSource = TrendsConfig::useSerpApi() || TrendsConfig::useOfficialApi();
+            $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
             /** @var AiPublish $cron */
             $cron = ObjectManager::getInstance(AiPublish::class);
             $result = $cron->execute();
 
             return json_encode([
                 'success' => true,
-                'message' => $result,
+                'mode' => $modeText,
+                'message' => __('当前模式：%{mode}；%{result}', ['mode' => $modeText, 'result' => $result]),
             ], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
             return json_encode([

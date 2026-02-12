@@ -614,6 +614,10 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     background: #eef2ff;
     color: #4f46e5;
 }
+.component-tag.ai-cyan {
+    background: #ccfbf1;
+    color: #0f766e;
+}
 
 /* 暗色模式标签调整 */
 @media (prefers-color-scheme: dark) {
@@ -636,6 +640,10 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
     .component-tag.ai-secondary {
         background: rgba(99, 102, 241, 0.15);
         color: #c7d2fe;
+    }
+    .component-tag.ai-cyan {
+        background: rgba(45, 212, 191, 0.2);
+        color: #5eead4;
     }
 }
 
@@ -680,6 +688,14 @@ html[data-theme="dark"] .component-tag.ai-secondary,
 .visual-config-wrapper[data-theme="dark"] .component-tag.ai-secondary {
     background: rgba(99, 102, 241, 0.15);
     color: #c7d2fe;
+}
+body.dark-mode .component-tag.ai-cyan,
+body[data-theme="dark"] .component-tag.ai-cyan,
+html[data-theme="dark"] .component-tag.ai-cyan,
+.dark-theme .component-tag.ai-cyan,
+.visual-config-wrapper[data-theme="dark"] .component-tag.ai-cyan {
+    background: rgba(45, 212, 191, 0.2);
+    color: #5eead4;
 }
 
 /* 放置区域提示 */
@@ -1087,6 +1103,26 @@ function safeJsonParse(responseText) {
     }
 }
 
+// 全局：安全解析 SSE 返回的 JSON（Agent/微调/非 Agent 流共用）
+function safeParseJson(str) {
+    if (!str) return null;
+    try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+// 全局：流结束守卫，统一「结束标记 + eventSource 置空」，避免重复结束与重复关闭
+function createStreamFinishGuard() {
+    let isFinished = false;
+    return {
+        finish(ok, err) {
+            if (isFinished) return null;
+            isFinished = true;
+            _aiWorkshop.eventSource = null;
+            return { ok, err };
+        },
+        isFinished() { return isFinished; }
+    };
+}
+
 // 初始化组件面板
 async function initComponentPanel() {
     const apiUrl = '<?= $componentsApiUrl ?>';
@@ -1411,7 +1447,9 @@ function renderComponentCard(component, region) {
         : (component.isShared 
             ? '<span class="component-tag shared"><?= __('通用') ?></span>'
             : '<span class="component-tag other"><?= __('兼容') ?></span>');
-    const tagHtml = baseTagHtml;
+    const tagHtml = baseTagHtml + ((!component.isOwn && !component.isShared && component.is_ai_generated)
+        ? '<span class="component-tag ai-cyan">AI</span>'
+        : '');
     const aiBadgeHtml = component.is_ai_generated
         ? '<div class="component-ai-badge"><span class="component-tag ai">AI</span><span class="component-tag ai-secondary"><?= __('生成') ?></span></div>'
         : '';
@@ -2091,6 +2129,7 @@ async function openRefineForSavedComponent(code, styleCode) {
                 _loadAiServiceInfo();
                 _loadAgentList();
                 _recoverToWorkshop(recoverable);
+                setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
             }
         });
     } catch (e) {
@@ -2106,7 +2145,7 @@ function openAiGenerateComponent() {
     const saved = loadAiGenerationParams();
     const s = saved || {};
     
-    // 检查是否有本地保存的未提交组件（可直接恢复到微调阶段）
+    // 检查是否有本地保存的未提交组件（可直接恢复到预览阶段）
     const recoverable = loadGeneratedComponentFromLocal();
     
     Swal.fire({
@@ -2118,14 +2157,42 @@ function openAiGenerateComponent() {
         allowOutsideClick: false,
         customClass: { container: 'swal2-dark-theme', popup: 'ai-workshop-popup' },
         didOpen: () => {
-            _workshopGoToStep(1);
             loadReferenceComponents(s.region || 'content', s.referenceComponent || '');
             _loadAiServiceInfo();
             _loadAgentList();
-            // 如果有可恢复的组件，显示恢复提示横幅
             if (recoverable && recoverable.component) {
-                _showRecoveryBanner(recoverable);
+                _recoverToWorkshop(recoverable);
+                if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已恢复未保存的组件到预览') ?>');
+            } else {
+                _workshopGoToStep(1);
             }
+            setTimeout(function() { _bindWorkshopPreviewButtons(); }, 50);
+        }
+    });
+}
+
+// 工坊弹窗内「刷新预览」「全屏预览」事件委托（Swal 内 inline onclick 可能不执行）
+function _bindWorkshopPreviewButtons() {
+    let popup = typeof Swal !== 'undefined' && Swal.getPopup ? Swal.getPopup() : null;
+    popup = popup || document.querySelector('.swal2-popup') || document.querySelector('.ai-workshop-popup');
+    if (!popup || popup._aiWorkshopPreviewBound) return;
+    popup._aiWorkshopPreviewBound = true;
+    popup.addEventListener('click', function(e) {
+        const refreshBtn = e.target.closest('[data-ai-action="refresh-preview"]');
+        if (refreshBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            var fn = window._refreshPreviewFromDraft || (typeof _refreshPreviewFromDraft !== 'undefined' ? _refreshPreviewFromDraft : null);
+            if (typeof fn === 'function') fn();
+            return;
+        }
+        const fullscreenBtn = e.target.closest('[data-ai-action="fullscreen-preview"]');
+        if (fullscreenBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            var fn = window.openFullscreenPreview || (typeof openFullscreenPreview !== 'undefined' ? openFullscreenPreview : null);
+            if (typeof fn === 'function') fn();
+            return;
         }
     });
 }
@@ -2149,7 +2216,7 @@ function _showRecoveryBanner(recoverable) {
     };
 }
 
-// 恢复组件数据到工坊，直接跳转到步骤3（微调/预览）
+// 恢复组件数据到工坊，并停留在步骤 3（预览）
 function _recoverToWorkshop(recoverable) {
     const comp = recoverable.component || {};
     const validation = recoverable.validation || { valid: true };
@@ -2182,13 +2249,8 @@ function _recoverToWorkshop(recoverable) {
     const bar = document.getElementById('ai-ws-recovery-bar');
     if (bar) bar.style.display = 'none';
     
-    // 调用 _workshopShowResult 填充步骤3的UI
+    // 调用 _workshopShowResult 填充步骤3的UI（其内部已 _workshopGoToStep(3)，不再切到步骤4）
     _workshopShowResult(wsResult);
-    // 然后跳转到微调步骤（步骤4）
-    setTimeout(() => {
-        _syncRefinePreview();
-        _workshopGoToStep(4);
-    }, 100);
 }
 
 // 构建工坊完整 HTML
@@ -2402,7 +2464,10 @@ function _buildWorkshopHtml(s) {
             <button class="ai-ws-console-tab" onclick="_wsPreviewTab('colors',this)"><i class="mdi mdi-palette"></i> <?= __('颜色') ?></button>
         </div>
         <div id="ai-ws-tab-preview" style="background:#fff;min-height:280px;max-height:400px;overflow:auto;position:relative;">
-            <button type="button" class="ai-ws-btn-secondary" onclick="window.openFullscreenPreview()" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
+            <button type="button" class="ai-ws-btn-secondary" data-ai-action="refresh-preview" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;" title="<?= __('从服务器重新拉取当前草稿预览') ?>">
+                <i class="mdi mdi-refresh"></i> <?= __('刷新预览') ?>
+            </button>
+            <button type="button" class="ai-ws-btn-secondary" data-ai-action="fullscreen-preview" style="position:absolute;right:90px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
                 <i class="mdi mdi-fullscreen"></i> <?= __('全屏预览') ?>
             </button>
             <iframe id="ai-ws-preview-iframe" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:280px;" srcdoc=""></iframe>
@@ -2417,17 +2482,23 @@ function _buildWorkshopHtml(s) {
     </div>
     <div class="ai-ws-footer" style="flex-direction:column;align-items:stretch;">
         <details class="ai-ws-template-file-wrap" open style="width:100%;margin-bottom:12px;border:1px solid #444;border-radius:6px;overflow:hidden;background:#1a1a1a;">
-            <summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;color:#e2e8f0;list-style:none;display:flex;align-items:center;gap:6px;">
-                <i class="mdi mdi-file-document-outline"></i> <?= __('生成的模板文件') ?> (.phtml) — <?= __('用于排查 PHP 未渲染、代码暴露等问题') ?>
+            <summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;color:#e2e8f0;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span style="display:flex;align-items:center;gap:6px;"><i class="mdi mdi-file-document-outline"></i> <?= __('AI 生成的草稿内容') ?> (.phtml) — <?= __('可复制，便于调试') ?></span>
+                <button type="button" class="btn btn-sm btn-outline-light" onclick="event.preventDefault();event.stopPropagation();_copyDraftContent(this);" title="<?= __('复制草稿内容') ?>">
+                    <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
+                </button>
             </summary>
-            <pre id="ai-ws-template-file-content" style="margin:0;padding:12px;max-height:220px;overflow:auto;font-size:11px;line-height:1.4;color:#94a3b8;font-family:'Consolas',monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #333;"></pre>
+            <pre id="ai-ws-template-file-content" style="margin:0;padding:12px;max-height:280px;overflow:auto;font-size:11px;line-height:1.4;color:#94a3b8;font-family:'Consolas',monospace;white-space:pre-wrap;word-break:break-word;border-top:1px solid #333;user-select:all;-webkit-user-select:all;"></pre>
         </details>
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="display:flex;gap:8px;">
                 <button class="ai-ws-btn-secondary" onclick="_workshopGoToStep(1)"><i class="mdi mdi-arrow-left"></i> <?= __('重新描述') ?></button>
                 <button class="ai-ws-btn-danger" onclick="_workshopRegenerate()"><i class="mdi mdi-refresh"></i> <?= __('重新生成') ?></button>
             </div>
-            <button class="ai-ws-btn-primary" onclick="_workshopGoToStep(4)"><i class="mdi mdi-tune"></i> <?= __('下一步（微调）') ?></button>
+            <div style="display:flex;gap:8px;">
+                <button class="ai-ws-btn-success" onclick="_workshopSave()"><i class="mdi mdi-content-save"></i> <?= __('保存组件') ?></button>
+                <button class="ai-ws-btn-primary" onclick="_workshopGoToStep(4)"><i class="mdi mdi-tune"></i> <?= __('下一步（微调）') ?></button>
+            </div>
         </div>
     </div>
 </div>
@@ -2438,7 +2509,7 @@ function _buildWorkshopHtml(s) {
         <!-- 左侧：实时预览 -->
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
             <div style="border-radius:8px;overflow:hidden;border:1px solid #444;background:#fff;min-height:260px;max-height:350px;position:relative;">
-<button type="button" class="ai-ws-btn-secondary" onclick="window.openFullscreenPreview()" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
+<button type="button" class="ai-ws-btn-secondary" data-ai-action="fullscreen-preview" style="position:absolute;right:8px;top:8px;z-index:2;padding:4px 10px;font-size:11px;">
                 <i class="mdi mdi-fullscreen"></i> <?= __('全屏预览') ?>
             </button>
                 <iframe id="ai-ws-refine-preview" class="ai-ws-preview-frame" style="border:none;width:100%;min-height:260px;" srcdoc=""></iframe>
@@ -2545,10 +2616,12 @@ function _workshopGoToStep(step) {
     if (step === 4) {
         _syncRefinePreview();
     }
-    // 切换到预览步骤时同步「生成的模板文件」内容（含微调后的最新 phtml）
-    if (step === 3) {
-        const code = _aiWorkshop.result?.component?.phtml_code || '';
+    // 切换到预览步骤时同步「代码」与「草稿内容」（含微调后的最新 phtml），保证未保存前反复预览/微调都看到最新
+    if (step === 3 && _aiWorkshop.result) {
+        const code = _aiWorkshop.result.component?.phtml_code || '';
+        const codeEl = document.getElementById('ai-ws-code-content');
         const templateFileEl = document.getElementById('ai-ws-template-file-content');
+        if (codeEl) codeEl.textContent = code;
         if (templateFileEl) templateFileEl.textContent = code;
     }
 }
@@ -2728,8 +2801,9 @@ function _workshopAbort() {
     _workshopGoToStep(1);
 }
 
-// 重新生成
+// 重新生成（视为新流程，清除旧未保存数据）
 function _workshopRegenerate() {
+    clearGeneratedComponentFromLocal();
     if (_aiWorkshop.params) {
         _workshopGoToStep(2);
         const outputEl = document.getElementById('ai-gen-output');
@@ -2750,6 +2824,11 @@ function _workshopSave() {
 
 // 生成完成后切换到预览步骤
 function _workshopShowResult(result) {
+    // #region agent log
+    try {
+        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'component_panel:_workshopShowResult', message: 'entry', data: { draft_id: result.draft_id ?? null, component_id: result.component_id ?? null, keys: result ? Object.keys(result) : [] }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+    } catch (e) {}
+    // #endregion
     _aiWorkshop.result = result;
     const component = result.component || {};
     const validation = result.validation || {};
@@ -2774,15 +2853,21 @@ function _workshopShowResult(result) {
         iframe.srcdoc = preview;
     }
     
-    // 代码
+    // 代码与草稿内容（可复制，便于调试）
     const codeEl = document.getElementById('ai-ws-code-content');
-    if (codeEl) {
-        codeEl.textContent = code;
-    }
-    // 生成的模板文件（footer 内第一个区块，便于排查 PHP 未渲染、代码暴露）
     const templateFileEl = document.getElementById('ai-ws-template-file-content');
-    if (templateFileEl) {
-        templateFileEl.textContent = code || '';
+    if (codeEl) codeEl.textContent = code;
+    if (templateFileEl) templateFileEl.textContent = code || '';
+    // 若有 draft_id 或 component_id，从后端拉取草稿内容并填入，避免每次重新生成才能复制
+    const draftId = result.draft_id || 0;
+    const componentId = result.component_id || 0;
+    if ((draftId || componentId) && (codeEl || templateFileEl)) {
+        const payload = draftId ? { draft_id: draftId } : { component_id: componentId };
+        _fetchDraftContentById(payload).then(function(content) {
+            if (!content) return;
+            if (codeEl) codeEl.textContent = content;
+            if (templateFileEl) templateFileEl.textContent = content;
+        });
     }
     
     // 颜色字段
@@ -2790,6 +2875,21 @@ function _workshopShowResult(result) {
     
     // 切换到预览步骤
     _workshopGoToStep(3);
+    
+    // 生成完成即写入 localStorage，便于关闭后再打开能恢复到预览（仅当有 component 时写入）
+    if (result && result.component) {
+        try {
+            saveGeneratedComponentToLocal({
+                component: result.component,
+                preview: result.preview?.html || result.preview || '',
+                validation: result.validation || {},
+                templateContent: code,
+                finalPrompt: result.final_prompt || ''
+            });
+        } catch (e) {
+            console.warn('保存生成组件到本地失败:', e);
+        }
+    }
 }
 
 // 构建颜色微调字段
@@ -2971,18 +3071,13 @@ async function generateComponentWithAgent(params) {
         await new Promise((resolve, reject) => {
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
-            let isFinished = false;
-
-            function safeParseJson(str) {
-                if (!str) return null;
-                try { return JSON.parse(str); } catch(e) { return null; }
-            }
+            const guard = createStreamFinishGuard();
             function finish(ok, err) {
-                if (isFinished) return;
-                isFinished = true;
-                _aiWorkshop.eventSource = null;
-                try { eventSource.close(); } catch(e) {}
-                ok ? resolve() : reject(err);
+                const r = guard.finish(ok, err);
+                if (r) {
+                    try { eventSource.close(); } catch(e) {}
+                    r.ok ? resolve() : reject(r.err);
+                }
             }
 
             eventSource.onopen = () => updateStreamStatus('<?= __('智能体正在工作...') ?>', 20);
@@ -3134,6 +3229,7 @@ async function generateComponentWithAgent(params) {
                 const d = safeParseJson(e.data);
                 if (d) {
                     result = d;
+                    try { fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'component_panel:agent complete', message: 'received', data: { component_id: d.component_id ?? null, keys: Object.keys(d || {}) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {}); } catch (err) {}
                     if (d.success) {
                         _logLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '#667eea');
                         _logLine('✅ ' + (d.message || '<?= __('生成完成') ?>'), '#4ade80');
@@ -3182,36 +3278,42 @@ async function generateComponentWithAgent(params) {
             const charsEl = document.getElementById('ai-gen-chars');
             if (charsEl) charsEl.textContent = phtmlCode.length + ' <?= __('字符') ?>';
 
-            // 调用系统组件预览接口（和正式组件一样的渲染流程）
-            _logLine('▶ <?= __('正在调用组件预览接口...') ?>', '#94a3b8');
-            let previewHtml = '';
-            try {
-                const previewResp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
-                    body: 'component_code=' + encodeURIComponent(compCode)
-                        + '&style_code=' + encodeURIComponent(compStyleCode)
-                });
-                const previewData = await previewResp.json();
-                if (previewData.success && previewData.html) {
-                    previewHtml = previewData.html;
-                    _logLine('✅ <?= __('组件预览渲染完成') ?> (' + previewHtml.length + ' <?= __('字符') ?>)', '#4ade80');
-                } else {
-                    _logLine('[WARN] <?= __('组件预览失败') ?>: ' + (previewData.message || '') + '<?= __('，使用原始代码') ?>', '#fbbf24');
+            // 优先按 component_id 请求预览 API（写 phtml + ob 渲染），否则回退到组件预览接口
+            let fullPreviewHtml = '';
+            if (result.component_id) {
+                _logLine('▶ <?= __('正在按 ID 请求预览...') ?>', '#94a3b8');
+                fullPreviewHtml = await _fetchPreviewById({ component_id: result.component_id });
+                if (fullPreviewHtml) _logLine('✅ <?= __('组件预览渲染完成') ?>', '#4ade80');
+            }
+            if (!fullPreviewHtml) {
+                _logLine('▶ <?= __('正在调用组件预览接口...') ?>', '#94a3b8');
+                let previewHtml = '';
+                try {
+                    const previewResp = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/component/preview') ?>', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                        body: 'component_code=' + encodeURIComponent(compCode)
+                            + '&style_code=' + encodeURIComponent(compStyleCode)
+                    });
+                    const previewData = await previewResp.json();
+                    if (previewData.success && previewData.html) {
+                        previewHtml = previewData.html;
+                        _logLine('✅ <?= __('组件预览渲染完成') ?> (' + previewHtml.length + ' <?= __('字符') ?>)', '#4ade80');
+                    } else {
+                        _logLine('[WARN] <?= __('组件预览失败') ?>: ' + (previewData.message || '') + '<?= __('，使用原始代码') ?>', '#fbbf24');
+                        previewHtml = phtmlCode;
+                    }
+                } catch (previewErr) {
+                    _logLine('[WARN] <?= __('组件预览接口异常') ?>: ' + previewErr.message, '#fbbf24');
                     previewHtml = phtmlCode;
                 }
-            } catch (previewErr) {
-                _logLine('[WARN] <?= __('组件预览接口异常') ?>: ' + previewErr.message, '#fbbf24');
-                previewHtml = phtmlCode;
-            }
-
-            // 包裹成完整 HTML 文档供 iframe 预览
-            const fullPreviewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                fullPreviewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 :root{--pb-primary:#667eea;--pb-accent:#7c3aed;--pb-bg:#fff;--pb-text:#333;--pb-heading:#1a1a1a;--pb-link:#667eea;--pb-link-hover:#5a6fd6;--pb-text-muted:#888;--pb-border:#e5e7eb;}
 body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--pb-text);background:var(--pb-bg);}
 </style></head><body>${previewHtml}</body></html>`;
+            }
 
-            // 构建 workshopResult（保存 refine_token，微调时只传 token 不传整份代码）
+            // 构建 workshopResult（保存 refine_token、component_id/draft_id 供刷新预览与微调）
             const wsResult = {
                 success: true,
                 component: {
@@ -3226,8 +3328,22 @@ body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
                 validation: { valid: true },
                 preview: fullPreviewHtml,
                 refine_token: result.refine_token || '',
+                draft_id: result.draft_id || 0,
+                component_id: result.component_id || 0,
             };
             window.currentGeneratedComponent = wsResult.component;
+            // 立即同步写入 localStorage，不依赖 300ms 后的 _workshopShowResult
+            if (wsResult.component) {
+                try {
+                    saveGeneratedComponentToLocal({
+                        component: wsResult.component,
+                        preview: wsResult.preview?.html || wsResult.preview || '',
+                        validation: wsResult.validation || {},
+                        templateContent: wsResult.component.phtml_code || '',
+                        finalPrompt: wsResult.final_prompt || ''
+                    });
+                } catch (e) { console.warn('同步保存组件到本地失败:', e); }
+            }
             setTimeout(() => { _workshopShowResult(wsResult); }, 300);
         } else if (result) {
             throw new Error(result.message || '<?= __('生成失败') ?>');
@@ -3240,6 +3356,101 @@ body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
         if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-alert-circle text-danger"></i>'; }
         _logLine('[FAILED] ' + error.message, '#ff6b6b');
     }
+}
+
+// 按 draft_id 或 component_id 请求预览 API，返回完整 HTML 或空字符串
+async function _fetchPreviewById(payload) {
+    const draftId = payload.draft_id || 0;
+    const componentId = payload.component_id || 0;
+    if (!draftId && !componentId) return '';
+    try {
+        const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/preview-by-id') ?>';
+        const body = draftId ? { draft_id: draftId } : { component_id: componentId };
+        const res = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
+        const text = await res.text();
+        if (!res.ok || !text || text.trim().startsWith('<')) {
+            if (text.trim().startsWith('<')) console.warn('Preview-by-id: 接口返回了 HTML 而非 JSON，可能未登录或路由错误');
+            return '';
+        }
+        const data = JSON.parse(text);
+        if (data && data.success && data.html) return data.html;
+        return '';
+    } catch (e) {
+        console.warn('Preview-by-id failed:', e);
+        return '';
+    }
+}
+
+// 按 draft_id 或 component_id 请求原始草稿内容（供调试复制，不渲染）
+async function _fetchDraftContentById(payload) {
+    const draftId = payload.draft_id || 0;
+    const componentId = payload.component_id || 0;
+    if (!draftId && !componentId) return '';
+    try {
+        const url = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/draft-content-by-id') ?>';
+        const body = draftId ? { draft_id: draftId } : { component_id: componentId };
+        const res = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
+        const text = await res.text();
+        if (!res.ok || !text || text.trim().startsWith('<')) {
+            if (text.trim().startsWith('<')) console.warn('Draft-content-by-id: 接口返回了 HTML 而非 JSON，可能未登录或路由错误');
+            return '';
+        }
+        const data = JSON.parse(text);
+        if (data && data.success && data.content !== undefined) return data.content;
+        return '';
+    } catch (e) {
+        console.warn('Draft-content-by-id failed:', e);
+        return '';
+    }
+}
+
+// 从服务器重新拉取当前草稿/组件的预览（未保存前可反复点「刷新预览」查看最新）
+async function _refreshPreviewFromDraft() {
+    const draftId = _aiWorkshop?.result?.draft_id || 0;
+    const componentId = _aiWorkshop?.result?.component_id || 0;
+    const iframe = document.getElementById('ai-ws-preview-iframe');
+    const wrap = (h) => '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;}</style></head><body>' + h + '</body></html>';
+    if (!draftId && !componentId) {
+        // 无 ID 时用当前 result.preview 重新填入 iframe，保证按钮有可见效果
+        const cached = (_aiWorkshop?.result?.preview != null) ? (_aiWorkshop.result.preview?.html || _aiWorkshop.result.preview) : '';
+        if (iframe && cached) {
+            iframe.srcdoc = (String(cached).indexOf('<!DOCTYPE') === 0 || String(cached).indexOf('<!doctype') === 0) ? cached : wrap(cached);
+            if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已使用当前预览刷新') ?>');
+        } else {
+            if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('当前无草稿 ID，无法刷新预览') ?>');
+        }
+        return;
+    }
+    const payload = draftId ? { draft_id: draftId } : { component_id: componentId };
+    const html = await _fetchPreviewById(payload);
+    if (!html) {
+        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('预览拉取失败') ?>');
+        return;
+    }
+    if (iframe) iframe.srcdoc = (html.indexOf('<!DOCTYPE') === 0 || html.indexOf('<!doctype') === 0) ? html : wrap(html);
+    if (_aiWorkshop?.result) _aiWorkshop.result.preview = html;
+    if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('预览已更新') ?>');
+}
+if (typeof window !== 'undefined') window._refreshPreviewFromDraft = _refreshPreviewFromDraft;
+
+// 复制草稿内容到剪贴板（用于「AI 生成的草稿内容」区块）
+function _copyDraftContent(btnEl) {
+    const pre = document.getElementById('ai-ws-template-file-content');
+    if (!pre || !pre.textContent) {
+        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('暂无草稿内容可复制') ?>');
+        return;
+    }
+    navigator.clipboard.writeText(pre.textContent).then(function() {
+        if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已复制草稿内容') ?>');
+        if (btnEl) {
+            const icon = btnEl.querySelector('.mdi');
+            const orig = btnEl.innerHTML;
+            btnEl.innerHTML = '<i class="mdi mdi-check"></i>';
+            setTimeout(function() { btnEl.innerHTML = orig; }, 1500);
+        }
+    }).catch(function() {
+        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('复制失败') ?>');
+    });
 }
 
 // 从 AI 生成的组件数据构建预览 HTML
@@ -3317,7 +3528,7 @@ async function _workshopRefine() {
         const region = component.region || _aiWorkshop.params?.region || 'content';
         const refineToken = _aiWorkshop.result?.refine_token || '';
 
-        // 流式微调参数（SSE）：有 refine_token 时只传 token，不传整份 template_content
+        // 流式微调参数（SSE）：有 refine_token 时只传 token，不传整份 template_content；传 draft_id 便于后端更新草稿，未保存前可反复预览/微调
         const refineParams = {
             adjustment_prompt: input,
             category: region,
@@ -3329,6 +3540,8 @@ async function _workshopRefine() {
         } else {
             refineParams.template_content = component.phtml_code || '';
         }
+        const draftId = _aiWorkshop.result?.draft_id || 0;
+        if (draftId) refineParams.draft_id = draftId;
 
         const paramsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(refineParams))));
         const streamUrl = '<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine-stream') ?>?params=' + encodeURIComponent(paramsBase64);
@@ -3339,18 +3552,13 @@ async function _workshopRefine() {
         await new Promise((resolve, reject) => {
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
-            let isFinished = false;
-
-            function safeParseJson(str) {
-                if (!str) return null;
-                try { return JSON.parse(str); } catch (e) { return null; }
-            }
+            const guard = createStreamFinishGuard();
             function finish(ok, err) {
-                if (isFinished) return;
-                isFinished = true;
-                _aiWorkshop.eventSource = null;
-                try { eventSource.close(); } catch (e) {}
-                ok ? resolve() : reject(err);
+                const r = guard.finish(ok, err);
+                if (r) {
+                    try { eventSource.close(); } catch (e) {}
+                    r.ok ? resolve() : reject(r.err);
+                }
             }
 
             eventSource.onopen = () => {
@@ -3421,6 +3629,7 @@ async function _workshopRefine() {
                 _aiWorkshop.result.component = { ..._aiWorkshop.result.component, ...r.component };
             }
             if (_aiWorkshop.result) _aiWorkshop.result.refine_token = '';
+            if (json.draft_id !== undefined && _aiWorkshop.result) _aiWorkshop.result.draft_id = json.draft_id;
             window.currentGeneratedComponent = _aiWorkshop.result.component;
         }
         if (json.preview?.html) {
@@ -3823,22 +4032,16 @@ async function generateComponentWithAi(params) {
         await new Promise((resolve, reject) => {
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
-            let isFinished = false;
             let lastErrorMessage = '';
-            
-            function safeParseJson(str) {
-                if (!str) return null;
-                try { return JSON.parse(str); } catch (e) { console.warn('SSE JSON 解析失败:', e); return null; }
-            }
-            
+            const guard = createStreamFinishGuard();
             function finish(isSuccess, error) {
-                if (isFinished) return;
-                isFinished = true;
-                _aiWorkshop.eventSource = null;
-                try { eventSource.close(); } catch(e) {}
-                if (isSuccess) resolve(); else reject(error);
+                const r = guard.finish(isSuccess, error);
+                if (r) {
+                    try { eventSource.close(); } catch(e) {}
+                    r.ok ? resolve() : reject(r.err);
+                }
             }
-            
+
             eventSource.onopen = function() { updateStreamStatus('<?= __('AI 正在生成...') ?>', 20); };
             
             eventSource.addEventListener('start', function(e) {
@@ -3916,6 +4119,7 @@ async function generateComponentWithAi(params) {
                 const data = safeParseJson(e.data);
                 if (data) {
                     result = data;
+                    try { fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'component_panel:nonAgent complete', message: 'received', data: { draft_id: data.draft_id ?? null, keys: Object.keys(data || {}) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {}); } catch (err) {}
                     _logLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '#667eea');
                     if (data.success) {
                         _logLine('✅ ' + (data.message || '<?= __('生成完成') ?>'), '#4ade80');
@@ -3946,11 +4150,27 @@ async function generateComponentWithAi(params) {
             };
         });
         
-        // 生成完成 — 切换到预览步骤
+        // 生成完成 — 若有 draft_id 则请求预览 API 再展示，否则用 complete 内嵌 preview
         if (result && result.success) {
             updateStreamStatus('<?= __('生成完成！') ?>', 100);
             const spinnerEl = document.getElementById('ai-gen-spinner');
             if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-check-circle text-success"></i>'; }
+            if (result.draft_id) {
+                const previewHtml = await _fetchPreviewById({ draft_id: result.draft_id });
+                if (previewHtml) result.preview = previewHtml;
+            }
+            // 立即同步写入 localStorage，不依赖 500ms 后的 _workshopShowResult
+            if (result.component) {
+                try {
+                    saveGeneratedComponentToLocal({
+                        component: result.component,
+                        preview: result.preview?.html || result.preview || '',
+                        validation: result.validation || {},
+                        templateContent: result.component.phtml_code || '',
+                        finalPrompt: result.final_prompt || ''
+                    });
+                } catch (e) { console.warn('同步保存组件到本地失败:', e); }
+            }
             setTimeout(() => { _workshopShowResult(result); }, 500);
         } else if (result && result.message) {
             throw new Error(result.message);
@@ -4209,35 +4429,42 @@ async function applyJsonChanges() {
     importAndPreviewJson(jsonData);
 }
 
-// 打开全屏预览（挂到 window 以便 Swal 内 onclick 能调用）
+// 打开全屏预览（挂到 window 以便 Swal 内 onclick 能调用）；优先用当前 document 保证遮罩与按钮同文档、必能展示
 window.openFullscreenPreview = function openFullscreenPreview() {
     const overlayId = 'ai-fullscreen-preview-overlay';
-    let existing = document.getElementById(overlayId);
+    const targetDoc = document;
+    if (typeof window.__aiFullscreenPreviewDoc !== 'undefined') window.__aiFullscreenPreviewDoc = undefined;
+    window.__aiFullscreenPreviewDoc = targetDoc;
+    let existing = targetDoc.getElementById(overlayId);
     if (existing) {
         existing.remove();
     }
-    document.body.classList.add('ai-fullscreen-preview-open');
+    targetDoc.body.classList.add('ai-fullscreen-preview-open');
 
     const srcIframe = document.getElementById('ai-ws-preview-iframe') || document.getElementById('ai-ws-refine-preview');
     const previewHtml = (srcIframe && srcIframe.srcdoc) || (typeof _aiWorkshop !== 'undefined' && _aiWorkshop && (_aiWorkshop.result && _aiWorkshop.result.preview && (typeof _aiWorkshop.result.preview === 'string' ? _aiWorkshop.result.preview : _aiWorkshop.result.preview.html)));
 
-    const safeHtml = previewHtml
-        ? ('' + previewHtml).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-        : '<div style="color:#f87171;font-size:14px;padding:24px;"><?= __('无法全屏预览') ?>：<?= __('预览内容为空') ?></div>';
+    const fullscreenPlaceholder = '<div style="color:#f87171;font-size:14px;padding:24px;"><?= __("无法全屏预览") ?>：<?= __("预览内容为空") ?></div>';
 
-    const overlay = document.createElement('div');
+    if (!targetDoc.getElementById('ai-fullscreen-preview-styles')) {
+        const styleEl = targetDoc.createElement('style');
+        styleEl.id = 'ai-fullscreen-preview-styles';
+        styleEl.textContent = '.ai-fullscreen-preview-open{overflow:hidden}.ai-fullscreen-preview-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,10,0.85);display:flex;align-items:center;justify-content:center}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup{width:95vw;height:95vh;background:#0f0f12;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:10px;position:relative}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-close{position:absolute;top:12px;right:12px;z-index:110}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar{position:absolute;top:12px;right:60px;z-index:110;display:flex;gap:8px}.ai-fullscreen-preview-overlay .ai-fullscreen-preview-body{position:relative;width:100%;height:100%}';
+        targetDoc.head.appendChild(styleEl);
+    }
+    const overlay = targetDoc.createElement('div');
     overlay.id = overlayId;
     overlay.className = 'ai-fullscreen-preview-overlay';
     overlay.innerHTML = `
         <div class="ai-fullscreen-preview-popup">
             <div class="ai-fullscreen-preview-toolbar">
-                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
+                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('desktop')" title="<?= __('桌面') ?>">
                     <i class="mdi mdi-monitor"></i>
                 </button>
-                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('tablet')" title="<?= __('平板') ?>">
+                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('tablet')" title="<?= __('平板') ?>">
                     <i class="mdi mdi-tablet"></i>
                 </button>
-                <button type="button" class="btn btn-sm btn-light" onclick="setPreviewDevice('mobile')" title="<?= __('手机') ?>">
+                <button type="button" class="btn btn-sm btn-light" onclick="window.setPreviewDevice('mobile')" title="<?= __('手机') ?>">
                     <i class="mdi mdi-cellphone"></i>
                 </button>
             </div>
@@ -4246,29 +4473,39 @@ window.openFullscreenPreview = function openFullscreenPreview() {
             </button>
             <div class="ai-fullscreen-preview-body">
                 <div id="fullscreen-preview-container" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; background: #e0e0e0; padding: 20px; overflow: auto;">
-                    <iframe id="fullscreen-preview-iframe" srcdoc="${safeHtml}" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
+                    <iframe id="fullscreen-preview-iframe" style="width: 100%; height: 100%; border: none; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px;"></iframe>
                 </div>
             </div>
         </div>
     `;
-    document.body.appendChild(overlay);
+    targetDoc.body.appendChild(overlay);
+    var fullscreenIframe = targetDoc.getElementById('fullscreen-preview-iframe');
+    if (fullscreenIframe) {
+        fullscreenIframe.srcdoc = (previewHtml && typeof previewHtml === 'string') ? previewHtml : fullscreenPlaceholder;
+    }
     if (typeof setPreviewDevice === 'function') {
         setPreviewDevice('desktop');
+    } else if (typeof window.setPreviewDevice === 'function') {
+        window.setPreviewDevice('desktop');
     }
 };
 
 window.closeFullscreenPreview = function closeFullscreenPreview() {
-    const overlay = document.getElementById('ai-fullscreen-preview-overlay');
-    if (overlay) {
-        overlay.remove();
+    const doc = window.__aiFullscreenPreviewDoc || document;
+    try {
+        const overlay = doc.getElementById('ai-fullscreen-preview-overlay');
+        if (overlay) overlay.remove();
+        doc.body.classList.remove('ai-fullscreen-preview-open');
+    } finally {
+        if (typeof window.__aiFullscreenPreviewDoc !== 'undefined') window.__aiFullscreenPreviewDoc = undefined;
     }
-    document.body.classList.remove('ai-fullscreen-preview-open');
-}
+};
 
 // 设置预览设备尺寸（挂到 window 供全屏遮罩内按钮调用）
 window.setPreviewDevice = function setPreviewDevice(device) {
-    const iframe = document.getElementById('fullscreen-preview-iframe');
-    const container = document.getElementById('fullscreen-preview-container');
+    const doc = window.__aiFullscreenPreviewDoc || document;
+    const iframe = doc.getElementById('fullscreen-preview-iframe');
+    const container = doc.getElementById('fullscreen-preview-container');
     if (!iframe || !container) return;
     
     // 移除所有设备按钮的激活状态
@@ -4619,6 +4856,8 @@ async function executeInlineRefine() {
         last_error: lastError
     };
     if (refineToken) refineBody.refine_token = refineToken; else refineBody.template_content = templateContent;
+    const draftIdForRefine = (typeof _aiWorkshop !== 'undefined' && _aiWorkshop?.result?.draft_id) ? _aiWorkshop.result.draft_id : 0;
+    if (draftIdForRefine) refineBody.draft_id = draftIdForRefine;
     
     try {
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {
@@ -4957,6 +5196,8 @@ async function refineComponentWithAi(adjustmentPrompt) {
         code: currentComponent.component?.code || ''
     };
     if (refineToken) refineBody.refine_token = refineToken; else refineBody.template_content = templateContent;
+    const draftIdForRefine = (typeof _aiWorkshop !== 'undefined' && _aiWorkshop?.result?.draft_id) ? _aiWorkshop.result.draft_id : 0;
+    if (draftIdForRefine) refineBody.draft_id = draftIdForRefine;
     
     try {
         const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/visual/api/ai-component/refine') ?>', {

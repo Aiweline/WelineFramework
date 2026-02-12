@@ -418,6 +418,18 @@ class WindowsProcessDriver extends AbstractProcessDriver
     
     /**
      * @inheritDoc
+     */
+    public function sendSignal(int $pid, int $signal): bool
+    {
+        if (!$this->isValidPid($pid)) {
+            return false;
+        }
+        // Windows 不支持 POSIX 信号语义：统一退化为强制终止
+        return $this->killProcess($pid);
+    }
+    
+    /**
+     * @inheritDoc
      * 
      * 端口检测策略（快→慢）：
      * 1. 缓存（< 0.01ms）

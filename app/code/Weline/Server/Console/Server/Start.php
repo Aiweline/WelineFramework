@@ -328,6 +328,9 @@ class Start extends CommandAbstract
             if (\version_compare($release, '3.9', '>=')) {
                 $supportsReusePort = true;
             }
+        } elseif (!IS_WIN && PHP_OS === 'Darwin') {
+            // macOS 也支持 SO_REUSEPORT（默认走直连模式）
+            $supportsReusePort = true;
         }
         
         // 决定使用哪种架构
@@ -933,16 +936,24 @@ class Start extends CommandAbstract
         
         $config = $defaults;
         
+        // 1. 加载已保存的实例配置（配置记忆）
+        // 优先级：命令行参数 > env 配置 > 已保存实例配置 > 默认值
+        $savedConfig = $this->loadSavedInstanceConfig($instanceName);
+        if ($savedConfig) {
+            $config = \array_merge($config, $savedConfig);
+            $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
+        }
+        
         // 读取 env 配置
         $envConfig = Env::getInstance()->getConfig();
         
-        // 1. 检查多实例配置 servers[实例名]
+        // 2. 检查多实例配置 servers[实例名]
         if ($instanceName !== 'default' && isset($envConfig['servers'][$instanceName])) {
             $instanceConfig = $envConfig['servers'][$instanceName];
             $config = \array_merge($config, $instanceConfig);
             $config['source'] = __('env.servers.%{1}', [$instanceName]);
         }
-        // 2. 检查默认服务器配置 server
+        // 3. 检查默认服务器配置 server
         elseif (isset($envConfig['server']) && \is_array($envConfig['server'])) {
             $config = \array_merge($config, $envConfig['server']);
             $config['source'] = __('env.server');
@@ -952,15 +963,7 @@ class Start extends CommandAbstract
             $config['no_ssl'] = true;
         }
         
-        // 2.5 加载已保存的实例配置（配置记忆：首次 server:start api -p 8443 后自动保存，下次直接用）
-        // 优先级：命令行参数 > 已保存实例配置 > env 配置 > 默认值
-        $savedConfig = $this->loadSavedInstanceConfig($instanceName);
-        if ($savedConfig) {
-            $config = \array_merge($config, $savedConfig);
-            $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
-        }
-        
-        // 3. 命令行参数覆盖（最高优先级）
+        // 4. 命令行参数覆盖（最高优先级）
         $hasCliOverride = false;
         if (isset($args['host']) || isset($args['h'])) {
             $config['host'] = $args['host'] ?? $args['h'];
@@ -1777,6 +1780,15 @@ class Start extends CommandAbstract
             // 进程日志开关（-log 参数或 env 配置 system.processer.log）
             'enable_log' => $enableLog,
         ];
+
+        // 直连模式：Master 需按 linux-direct 管理（共用主端口 + reuseport）
+        if (!$dispatcherEnabled) {
+            $instanceData['master_mode'] = MasterProcess::MODE_LINUX_DIRECT;
+            $instanceData['main_port'] = $port;
+        } else {
+            $instanceData['master_mode'] = MasterProcess::MODE_LEGACY;
+            $instanceData['main_port'] = 0;
+        }
         
         \file_put_contents($instanceFile, \json_encode($instanceData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
@@ -1848,7 +1860,7 @@ class Start extends CommandAbstract
         $savedConfig = [];
         
         // 从当前合并后的配置中提取可复用项
-        $persistKeys = ['host', 'port', 'worker_count', 'mode', 'no_ssl', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
+        $persistKeys = ['host', 'port', 'mode', 'no_ssl', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
@@ -2805,7 +2817,7 @@ PHP;
     }
 
     /**
-     * 显示使用说明
+     * 显示使用说明（含各区域入口地址）
      */
     protected function showUsageInfo(string $host, int $port, string $instanceName, bool $sslEnabled = false): void
     {
@@ -2813,21 +2825,36 @@ PHP;
         // 默认端口（HTTP 80 或 HTTPS 443）不在 URL 中显示
         $portNum = (int)$port;
         $portSuffix = (($portNum == 80 && !$sslEnabled) || ($portNum == 443 && $sslEnabled)) ? '' : ':' . $port;
-        $testUrl = $scheme . '://' . $host . $portSuffix . '/';
-        
+        $baseUrl = $scheme . '://' . $host . $portSuffix . '/';
+        $testUrl = $baseUrl;
+
+        $backendPrefix = Env::getAreaRoutePrefix('backend') ?? '';
+        $restBackendPrefix = Env::getAreaRoutePrefix('rest_backend') ?? '';
+        $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?? 'api';
+
+        $urlFrontend = rtrim($baseUrl, '/') . '/';
+        $urlBackend = rtrim($baseUrl, '/') . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '');
+        $urlRestBackend = rtrim($baseUrl, '/') . '/' . ($restBackendPrefix !== '' ? $restBackendPrefix . '/' : '');
+        $urlRestFrontend = rtrim($baseUrl, '/') . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix . '/' : '');
+
         echo "\n";
         $usageLines = [
             __('╔══════════════════════════════════════════════════════════════╗'),
             __('║                      使用说明                                  ║'),
             __('╠══════════════════════════════════════════════════════════════╣'),
-            __('║  测试请求：curl %{1}                      ║', [$testUrl]),
+            __('║  前台/首页：%{1}  ║', [$urlFrontend]),
+            __('║  后台入口：%{1}  ║', [$urlBackend]),
+            __('║  后台 REST 接口：%{1}  ║', [$urlRestBackend]),
+            __('║  前台 REST 接口：%{1}  ║', [$urlRestFrontend]),
+            __('╠══════════════════════════════════════════════════════════════╣'),
+            __('║  测试请求：curl %{1}  ║', [$testUrl]),
             __('║  查看状态：php bin/w server:status %{1}                    ║', [$instanceName]),
             __('║  停止服务：php bin/w server:stop %{1}                      ║', [$instanceName]),
             __('║  压力测试：php bin/w server:benchmark                       ║'),
             __('║  优化指南：php bin/w server:doc                             ║'),
             __('╚══════════════════════════════════════════════════════════════╝'),
         ];
-        
+
         foreach ($usageLines as $line) {
             $this->printer->note($line);
         }

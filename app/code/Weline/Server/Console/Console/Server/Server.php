@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Console\Server;
 
+use Weline\Framework\System\Process\Processer;
+
 /**
  * PHP 内置 Web 服务器启动类
  * 从 Framework 迁入 Server 模块
@@ -19,49 +21,14 @@ class Server
         $command = PHP_BINARY . ' -S ' . $host . ':' . $port . ' -t ' . PUB . ' ' . PUB . 'index.php';
 
         if ($backend) {
-            // 后台运行模式
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                $tempDir = sys_get_temp_dir();
-                $vbsFile = $tempDir . DS . 'start_server_' . uniqid() . '.vbs';
-
-                $phpBinary = str_replace('/', '\\', PHP_BINARY);
-                $pubPath = rtrim(str_replace('/', '\\', PUB), '\\');
-                $indexPath = $pubPath . '\\index.php';
-                $cmdLine = sprintf('"%s" -S %s:%d -t "%s" "%s"', $phpBinary, $host, $port, $pubPath, $indexPath);
-
-                $cmdLineEscaped = str_replace('"', '""', $cmdLine);
-                $vbsContent = 'Set WshShell = CreateObject("WScript.Shell")' . "\n";
-                $vbsContent .= 'WshShell.Run "' . $cmdLineEscaped . '", 0, False' . "\n";
-
-                file_put_contents($vbsFile, $vbsContent);
-
-                $output = [];
-                $returnVar = 0;
-                @exec('cscript //nologo "' . $vbsFile . '"', $output, $returnVar);
-
-                sleep(3);
-
-                $pid = self::getProcessIdByPort($port);
-
-                if ($pid) {
-                    @unlink($vbsFile);
-                }
-
-                return $pid;
-            } else {
-                $command .= ' > /dev/null 2>&1 & echo $!';
-                $output = [];
-                exec($command, $output);
-                $pid = isset($output[0]) ? (int)$output[0] : null;
-
-                sleep(1);
-
-                if ($pid && function_exists('posix_kill') && !posix_kill($pid, 0)) {
-                    $pid = self::getProcessIdByPort($port);
-                }
-
+            $processName = 'weline-cli-server-' . $port;
+            $command .= ' --name=' . $processName;
+            $pid = Processer::create($command, false, false);
+            if ($pid > 0) {
                 return $pid;
             }
+            sleep(1);
+            return self::getProcessIdByPort($port);
         } else {
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
                 exec($command);
@@ -78,24 +45,24 @@ class Server
                         posix_setpgid($pid, $pid);
 
                         pcntl_signal(SIGINT, function () use ($pid) {
-                            posix_killpg($pid, SIGTERM);
+                            self::terminateProcessGroup($pid, SIGTERM);
                             exit(0);
                         });
 
                         pcntl_signal(SIGTERM, function () use ($pid) {
-                            posix_killpg($pid, SIGTERM);
+                            self::terminateProcessGroup($pid, SIGTERM);
                             exit(0);
                         });
 
                         register_shutdown_function(function () use ($pid) {
                             if ($pid) {
-                                posix_killpg($pid, SIGTERM);
+                                self::terminateProcessGroup($pid, SIGTERM);
                             }
                         });
 
                         sleep(1);
 
-                        if (posix_kill($pid, 0)) {
+                        if (Processer::isRunningByPid($pid)) {
                             return $pid;
                         } else {
                             throw new \Exception('子进程启动失败');
@@ -113,31 +80,22 @@ class Server
 
     private static function getProcessIdByPort(int $port): ?int
     {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            @exec('netstat -ano | findstr ":' . $port . '"', $output);
+        $pid = Processer::getProcessIdByPort($port);
+        return $pid > 0 ? $pid : null;
+    }
 
-            if (!empty($output)) {
-                foreach ($output as $line) {
-                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
-                        $pid = (int)$matches[1];
-                        if ($pid > 0) {
-                            return $pid;
-                        }
-                    }
-                }
-            }
-        } else {
-            $output = [];
-            @exec("lsof -ti:{$port} 2>/dev/null", $output);
-
-            if (!empty($output)) {
-                $pid = (int)trim($output[0]);
-                if ($pid > 0) {
-                    return $pid;
-                }
-            }
+    /**
+     * 通过 Processer 发送终止信号
+     */
+    private static function terminateProcessGroup(int $pid, int $signal): void
+    {
+        if ($pid <= 0) {
+            return;
         }
-
-        return null;
+        if ($signal === SIGKILL) {
+            Processer::killProcessTreeByPid($pid, true);
+            return;
+        }
+        Processer::sendSignal($pid, $signal, true);
     }
 }

@@ -72,6 +72,15 @@ interface ProcessDriverInterface
     public function killProcessTree(int $pid): bool;
     
     /**
+     * 向进程发送指定信号
+     *
+     * @param int $pid 进程 ID
+     * @param int $signal 信号值（如 SIGTERM/SIGUSR1/SIGHUP）
+     * @return bool 是否发送成功
+     */
+    public function sendSignal(int $pid, int $signal): bool;
+    
+    /**
      * 检查端口是否被占用（是否有进程在监听）
      * 
      * @param int $port 端口号

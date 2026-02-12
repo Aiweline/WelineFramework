@@ -366,6 +366,73 @@ class PreviewRenderer
     }
     
     /**
+     * 从已存在的 phtml 文件渲染预览（先编译再 ob_file）
+     * 用于 component-stream 完成后：先写入 phtml 文件，再调用本方法由 ob 服务渲染返回 HTML
+     *
+     * @param string $phtmlPath 已存在的 phtml 模板文件路径
+     * @return array ['success' => bool, 'html' => string, 'error' => string]
+     */
+    public function renderFromFile(string $phtmlPath): array
+    {
+        if (!is_file($phtmlPath)) {
+            return [
+                'success' => false,
+                'html' => $this->generateErrorHtml('模板文件不存在: ' . $phtmlPath),
+                'error' => '模板文件不存在',
+            ];
+        }
+        $templateContent = file_get_contents($phtmlPath);
+        if ($templateContent === false) {
+            return [
+                'success' => false,
+                'html' => $this->generateErrorHtml('无法读取模板文件'),
+                'error' => '无法读取模板文件',
+            ];
+        }
+        $comFile = dirname($phtmlPath) . DIRECTORY_SEPARATOR . 'com_' . basename($phtmlPath);
+        try {
+            $template = Template::getInstance();
+            $template->addData($this->data);
+            $compiledContent = $template->tmp_replace($templateContent, $comFile);
+            file_put_contents($comFile, $compiledContent);
+            $errorMessage = '';
+            set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$errorMessage) {
+                if ($errno == E_NOTICE || $errno == E_WARNING) {
+                    return true;
+                }
+                $errorMessage = "{$errstr} (line {$errline})";
+                return true;
+            });
+            $html = $template->ob_file($comFile);
+            restore_error_handler();
+            if (!empty($errorMessage)) {
+                return [
+                    'success' => false,
+                    'html' => $this->generateErrorHtml($errorMessage),
+                    'error' => '预览渲染错误: ' . $errorMessage,
+                ];
+            }
+            if (preg_match('/<br\s*\/?>\s*<b>(?:Fatal|Parse|Warning|Notice)/i', $html)) {
+                return [
+                    'success' => false,
+                    'html' => $this->generateErrorHtml('代码执行产生了错误'),
+                    'error' => '代码执行产生了PHP错误',
+                ];
+            }
+            return ['success' => true, 'html' => $html, 'error' => ''];
+        } catch (\Throwable $t) {
+            restore_error_handler();
+            return [
+                'success' => false,
+                'html' => $this->generateErrorHtml($t->getMessage()),
+                'error' => '预览渲染错误: ' . $t->getMessage(),
+            ];
+        } finally {
+            @unlink($comFile);
+        }
+    }
+    
+    /**
      * 生成错误HTML
      */
     private function generateErrorHtml(string $error): string

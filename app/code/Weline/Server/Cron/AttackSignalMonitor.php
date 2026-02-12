@@ -82,6 +82,15 @@ class AttackSignalMonitor implements CronTaskInterface
     
     /**
      * @inheritDoc
+     * 任务锁定后自动解锁时间（分钟）
+     */
+    public function unlock_timeout(int $minute = 30): int
+    {
+        return 10;
+    }
+    
+    /**
+     * @inheritDoc
      */
     public function execute(): string
     {
